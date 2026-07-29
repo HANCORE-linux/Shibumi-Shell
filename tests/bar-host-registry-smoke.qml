@@ -53,6 +53,16 @@ ShellRoot {
   }
 
   QtObject {
+    id: fakePopout
+    property int closeCount: 0
+
+    function close() {
+      closeCount++
+      hostBar.releasePopout(fakePopout)
+    }
+  }
+
+  QtObject {
     id: fakeShell
 
     property var bar: null
@@ -181,6 +191,7 @@ ShellRoot {
       if (root.screensaverStage === 0) {
         if (hostBar.barHidden)
           return root.fail("bar started hidden without a toggle or screensaver")
+        hostBar.requestPopout(fakePopout)
         idleService.screensaverStartedThisCycle = true
         root.screensaverStage = 1
         return
@@ -189,6 +200,8 @@ ShellRoot {
       if (root.screensaverStage === 1) {
         if (!hostBar.screensaverPreHidden || !hostBar.barHidden)
           return root.fail("bar did not pre-hide for the screensaver cycle")
+        if (fakePopout.closeCount !== 1 || hostBar.activePopout !== null)
+          return root.fail("screensaver pre-hide did not dismiss the active popout")
         idleService.screensaverStartedThisCycle = false
         root.screensaverStage = 2
         return
@@ -197,6 +210,7 @@ ShellRoot {
       if (root.screensaverStage === 2) {
         if (hostBar.screensaverPreHidden || hostBar.barHidden)
           return root.fail("bar did not restore after the screensaver cycle")
+        hostBar.requestPopout(fakePopout)
         hostBar.barToggledOff = true
         idleService.screensaverStartedThisCycle = true
         root.screensaverStage = 3
@@ -204,6 +218,8 @@ ShellRoot {
       }
 
       if (root.screensaverStage === 3) {
+        if (fakePopout.closeCount !== 2 || hostBar.activePopout !== null)
+          return root.fail("persistent bar hide did not dismiss the active popout")
         idleService.screensaverStartedThisCycle = false
         root.screensaverStage = 4
         return

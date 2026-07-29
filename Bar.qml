@@ -388,6 +388,19 @@ Item {
     if (activePopout === owner) activePopout = null
   }
 
+  function dismissActivePopout() {
+    const owner = activePopout
+    if (!owner) return false
+    activePopout = null
+    clearConnectedPanel(owner)
+    if (typeof owner.close === "function") owner.close()
+    return true
+  }
+
+  onBarHiddenChanged: {
+    if (barHidden) dismissActivePopout()
+  }
+
   function publishConnectedPanel(owner, screenName, resolvedX, reveal) {
     if (!owner) return false
     const progress = Math.max(0, Math.min(1, Number(reveal) || 0))

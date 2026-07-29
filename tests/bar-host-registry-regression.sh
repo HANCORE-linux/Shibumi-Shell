@@ -24,7 +24,7 @@ done
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
-mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
+mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
@@ -44,6 +44,7 @@ sed "s#testOmarchyPath#\"${omarchy_path//\\/\\\\}\"#" \
 
 set +e
 output=$(timeout 6 env \
+  HOME="$tmpdir/home" \
   QT_QPA_PLATFORM=offscreen \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
   /usr/bin/quickshell -p "$tmpdir" 2>&1)
