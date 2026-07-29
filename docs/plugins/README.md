@@ -67,3 +67,6 @@ verify, roll back, and remove them together.
 Individual plugin directories are not advertised as unsupported ad hoc
 installs. Use the suite adapter so dependencies, ownership markers, config
 continuity, and runtime verification remain intact.
+
+Read [plugin compatibility](../plugin-compatibility.md) before using the App
+Menu or visible Shibumi widgets with another bar host.

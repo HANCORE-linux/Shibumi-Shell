@@ -46,6 +46,7 @@ Remove all managed Shibumi plugins and restore the stock Omarchy bar with
 - [Install, update, repair, or remove Shibumi](docs/install.md)
 - [Configure the shell](docs/configuration.md)
 - [Explore the plugin catalog](docs/plugins/README.md)
+- [Use Shibumi plugins with other bars](docs/plugin-compatibility.md)
 - [Troubleshoot a problem](docs/development/troubleshooting.md)
 - [Understand the architecture](docs/architecture/overview.md)
 - [Review current release readiness](docs/release-readiness.md)

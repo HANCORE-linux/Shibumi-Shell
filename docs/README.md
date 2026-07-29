@@ -15,7 +15,8 @@ For users:
 2. [Install and update](install.md)
 3. [Configuration](configuration.md)
 4. [Plugin catalog](plugins/README.md)
-5. [Troubleshooting](development/troubleshooting.md)
+5. [Plugin compatibility](plugin-compatibility.md)
+6. [Troubleshooting](development/troubleshooting.md)
 
 For maintainers:
 
@@ -63,6 +64,7 @@ For parity and release evidence:
 | [Install and update](install.md) | Install, migrate, activate, update, deactivate, and remove the suite |
 | [Configuration](configuration.md) | Omarchy shell settings, Shibumi state, and ownership |
 | [Plugin catalog](plugins/README.md) | The 25 plugin roots, roles, and host dependencies |
+| [Plugin compatibility](plugin-compatibility.md) | Supported use with stock, Shibumi-compatible, and third-party bars |
 | [Architecture overview](architecture/overview.md) | Short runtime and ownership map |
 | [Testing](development/testing.md) | Machine2-only validation workflow |
 | [Packaging and AUR strategy](development/packaging.md) | Public AUR and private-alpha package boundary |

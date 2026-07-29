@@ -13,6 +13,7 @@ CURRENT_DOCUMENTS = (
     "docs/README.md",
     "docs/getting-started.md",
     "docs/install.md",
+    "docs/plugin-compatibility.md",
     "docs/configuration.md",
     "docs/release-readiness.md",
     "docs/architecture/overview.md",
@@ -79,6 +80,8 @@ def main() -> None:
         fail("README landing page is missing the private-alpha install command")
     if "`./scripts/shibumi-suite uninstall`" not in readme:
         fail("README landing page is missing the uninstall command")
+    if "docs/plugin-compatibility.md" not in readme:
+        fail("README landing page is missing the plugin compatibility guide")
 
     print("documentation regression passed")
 
