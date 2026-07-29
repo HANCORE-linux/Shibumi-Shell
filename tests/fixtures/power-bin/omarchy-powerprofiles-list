@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+[[ ${1:-} == --active-state ]] || exit 2
+active=$(<"${SHIBUMI_POWER_FIXTURE_STATE:?}")
+for profile in power-saver balanced performance; do
+  [[ $profile == "$active" ]] && state=1 || state=0
+  printf '%s\t%s\n' "$profile" "$state"
+done

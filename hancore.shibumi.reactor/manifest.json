@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.reactor",
+  "name": "Shibumi Reactor",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi event and quote Reactor service for compatible bar styles.",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "core",
+    "role": "reactor",
+    "requires": [
+      "hancore.shibumi.state"
+    ],
+    "recommends": [
+      "hancore.shibumi.workspaces",
+      "hancore.shibumi.status",
+      "hancore.shibumi.power-state",
+      "hancore.shibumi.ai",
+      "hancore.shibumi.network",
+      "hancore.shibumi.audio",
+      "hancore.shibumi.update-center"
+    ],
+    "hostContracts": [
+      "omarchy.media"
+    ]
+  }
+}

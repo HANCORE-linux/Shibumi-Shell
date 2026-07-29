@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+omarchy_path=${OMARCHY_PATH:-/home/hancore/Projects/omarchy-updates-pr}
+quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
+tmpdir=$(mktemp -d /tmp/shibumi-quick-access-plugin.XXXXXX)
+trap 'rm -rf -- "$tmpdir"' EXIT
+
+fail() {
+  printf 'quick access plugin regression failed: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
+[[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
+
+mkdir -p "$tmpdir/runtime" "$tmpdir/bin"
+chmod 700 "$tmpdir/runtime"
+cat >"$tmpdir/bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >>"$SHIBUMI_NOTIFY_LOG"
+EOF
+chmod 700 "$tmpdir/bin/notify-send"
+notify_log="$tmpdir/notify.log"
+cp -a -- "$repo_root/hancore.shibumi.quick-access" "$tmpdir/quickaccess"
+cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
+install -m 0644 "$repo_root/tests/quick-access-plugin-smoke.qml" "$tmpdir/shell.qml"
+
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  PATH="$tmpdir/bin:$PATH" \
+  SHIBUMI_NOTIFY_LOG="$notify_log" \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+rc=$?
+set -e
+
+printf '%s\n' "$output"
+[[ $rc -eq 0 ]] || fail "component smoke exited $rc"
+grep -F 'quick access plugin smoke passed' <<<"$output" >/dev/null \
+  || fail "success marker missing"
+for _ in {1..20}; do
+  [[ -s $notify_log ]] && break
+  sleep 0.05
+done
+grep -Fx 'Wallpaper change failed' "$notify_log" >/dev/null \
+  || fail "wallpaper failure notification title is missing"
+grep -F 'Could not apply broken.jpg. denied by fixture' "$notify_log" >/dev/null \
+  || fail "wallpaper failure notification detail is missing"
+grep -Fx 'Theme change failed' "$notify_log" >/dev/null \
+  || fail "theme failure notification title is missing"
+grep -F 'Could not apply broken-theme. theme denied by fixture' \
+  "$notify_log" >/dev/null \
+  || fail "theme failure notification detail is missing"
+
+plugin="$repo_root/hancore.shibumi.quick-access"
+widget="$plugin/BarWidget.qml"
+service="$plugin/Service.qml"
+
+rg -q 'readonly property bool textMode: displayMode === "text"' "$widget" \
+  || fail "quick access does not expose text display mode"
+for label in IDLE MEDIA THEME; do
+  rg -Fq "label: \"$label\"" "$widget" \
+    || fail "quick-access text mode is missing action: $label"
+done
+rg -q 'serviceFor\("hancore\.shibumi\.quick-access"\)' "$widget" \
+  || fail "widget does not resolve the shared quick-access service"
+rg -q 'serviceFor\("hancore\.shibumi\.state"\)' "$service" \
+  || fail "service does not resolve the state owner"
+for setter in setImagePickerStyle setMediaPickerStyle; do
+  rg -q "stateService\\.$setter" "$service" \
+    || fail "picker style persistence bypasses the state owner: $setter"
+done
+for command in omarchy-theme-switcher omarchy-theme-bg-switcher; do
+  rg -Fq "\"$command\"" "$service" \
+    || fail "official Omarchy image picker adapter is missing: $command"
+done
+rg -Fq '["omarchy-shell", "image-selector", "cancel"]' "$service" \
+  || fail "official Omarchy image picker cannot be cancelled"
+rg -q 'usingOfficialPicker' "$service" \
+  || fail "official image picker is not isolated from the Shibumi overlay"
+if rg -q 'bar\.(pickerService|mutateShibumiConfig|idleInhibited)' "$plugin" \
+    --glob '*.qml'; then
+  fail "plugin consumes transitional bar-owned feature state"
+fi
+rg -q 'IdleInhibitor \{' "$widget" \
+  || fail "screen-local idle inhibitor is missing"
+rg -q 'window: root\.targetWindow' "$widget" \
+  || fail "idle inhibitor is not bound to its bar window"
+rg -q 'String\.fromCodePoint\(0xF06E8\)' "$widget" \
+  || fail "active idle-inhibitor glyph drifted from V1"
+rg -q 'String\.fromCodePoint\(0xF06E9\)' "$widget" \
+  || fail "inactive idle-inhibitor glyph drifted from V1"
+rg -q 'font\.pixelSize: Commons\.Style\.space\(14\)' "$widget" \
+  || fail "idle-inhibitor glyph size drifted from V1"
+[[ $(rg -c 'Qt\.resolvedUrl\("PickerOverlay\.qml"\)' "$service") -eq 1 ]] \
+  || fail "picker overlay does not have exactly one lazy service owner"
+rg -q 'target: "shibumi-picker"' "$service" \
+  || fail "picker IPC is not owned by the extracted service"
+if rg -q 'Process \{|Timer \{|FileView \{' "$widget" \
+    "$plugin/PickerOverlay.qml" "$plugin/TanzakuPickerView.qml" \
+    "$plugin/HearthstonePickerView.qml" \
+    "$plugin/CarouselPickerView.qml" \
+    "$plugin/PickerImage.qml"; then
+  fail "screen-local quick-access presentation owns background workers"
+fi
+[[ -s $plugin/CarouselPickerView.qml ]] \
+  || fail "V2 carousel picker is not packaged"
+rg -q 'CarouselPickerView' "$plugin/PickerOverlay.qml" \
+  || fail "V2 carousel picker is not reachable from the overlay"
+rg -q '"carousel"' "$plugin/Service.qml" \
+  || fail "V2 carousel picker is not reachable from the service"
+rg -q 'centerY: height / 2 - Commons\.Style\.space\(10\)' \
+  "$plugin/TanzakuPickerView.qml" \
+  || fail "Tanzaku stage no longer matches the V1 vertical center"
+rg -q 'y: root\.centerY - height / 2$' "$plugin/TanzakuPickerView.qml" \
+  || fail "Tanzaku strips are no longer vertically aligned"
+rg -q 'readonly property int maxVisible: 5' \
+  "$plugin/TanzakuPickerView.qml" \
+  || fail "Tanzaku visible-strip contract drifted"
+rg -q 'function itemWidth\(relative\)' \
+  "$plugin/TanzakuPickerView.qml" \
+  || fail "Tanzaku does not resolve final target widths independently"
+rg -q 'x: root\.itemX\(relative\)$' \
+  "$plugin/TanzakuPickerView.qml" \
+  || fail "Tanzaku x target depends on an animated item width"
+if rg -q 'itemX\(relative,[[:space:]]*width\)' \
+    "$plugin/TanzakuPickerView.qml"; then
+  fail "Tanzaku navigation retargets x during its width animation"
+fi
+rg -q 'id: tanzakuFooter' "$plugin/PickerOverlay.qml" \
+  || fail "Tanzaku V1 footer hierarchy is missing"
+rg -U -q 'text: root\.controller\.selectedEntry\n[[:space:]]*\? String\(root\.controller\.selectedEntry\.label' \
+  "$plugin/PickerOverlay.qml" \
+  || fail "Tanzaku footer dereferences an empty selection"
+rg -q 'visible: !root\.tanzakuActive' "$plugin/PickerOverlay.qml" \
+  || fail "generic footer still overlaps the Tanzaku presentation"
+rg -q 'import QtQuick\.Shapes' "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone lost its V1 rounded passepartout renderer"
+rg -q 'readonly property real focusScale: 1\.24' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone focus geometry drifted from V1"
+rg -q 'readonly property real spreadDegrees: 6' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone card fan geometry drifted from V1"
+rg -q 'fillRule: ShapePath\.OddEvenFill' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone photo passepartout is missing"
+rg -q 'Qt\.rgba\(0\.035, 0\.035, 0\.05, 0\.975\)' \
+  "$plugin/PickerOverlay.qml" \
+  || fail "Hearthstone felt backdrop drifted from V1"
+rg -q 'requestSerial\+\+' "$service" \
+  || fail "picker requests are not generation guarded"
+rg -q 'stopForegroundWorkers\(\)' "$service" \
+  || fail "picker close does not cancel foreground workers"
+rg -Fq '[scriptPath, "cleanup"]' "$service" \
+  || fail "picker close does not reconcile interrupted scan artifacts"
+rg -q 'activeScreenName' "$service" \
+  || fail "picker does not retain focused-output routing"
+rg -q 'ClippingRectangle \{' "$plugin/PickerImage.qml" \
+  || fail "picker images lost the V1 anti-aliased rounded mask"
+rg -q 'radius: Math\.max\(0, root\.imageRadius - anchors\.margins\)' \
+  "$plugin/PickerImage.qml" \
+  || fail "picker image mask is no longer concentric with the outer frame"
+rg -q 'function startSelectionAction\(' "$service" \
+  || fail "picker actions do not share one guarded process path"
+rg -Fq '["notify-send", "-a", "Shibumi"' "$service" \
+  || fail "failed picker actions have no visible user feedback"
+
+cmp -s -- "$repo_root/shared/quick-access/PickerModel.js" \
+  "$plugin/PickerModel.js" || fail "vendored picker model drift"
+cmp -s -- "$repo_root/shared/quick-access/shibumi-picker" \
+  "$plugin/scripts/shibumi-picker" || fail "vendored picker helper drift"
+[[ -x $plugin/scripts/shibumi-picker ]] || fail "picker helper is not executable"
+
+PICKER_HELPER="$plugin/scripts/shibumi-picker" \
+  "$repo_root/tests/picker-helper-regression.sh" >/dev/null
+
+printf 'quick access plugin regression passed\n'

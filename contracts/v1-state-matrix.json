@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "reference": "Quickshell-Dots/versions/V1",
+  "candidate": "Shibumi",
+  "policy": {
+    "sameTheme": true,
+    "sameWallpaper": true,
+    "sameOutput": true,
+    "sameScale": true,
+    "positions": ["top", "bottom"],
+    "requiredVisualStates": ["closed", "open", "hover", "active", "empty", "populated", "error", "degraded"]
+  },
+  "rows": [
+    {"id":"bar.closed","group":"bar","surface":"bar","states":["closed","hover","active"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"bar.edit","group":"bar","surface":"split and drag editor","states":["open","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G1.control","group":"G1","surface":"Control Center","states":["closed","open","hover","active"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G1.menu","group":"G1","surface":"application menu","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G2.workspaces","group":"G2","surface":"workspace bar and panel","states":["empty","populated","hover","active"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G3.updates","group":"G3","surface":"update center","states":["empty","populated","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G3.tray","group":"G3","surface":"tray drawer and item menu","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G3.notifications","group":"G3","surface":"notification center","states":["empty","populated","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G4.memory","group":"G4","surface":"memory widget and panel","states":["closed","open","hover","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G5.cpu","group":"G5","surface":"CPU widget and panel","states":["closed","open","hover","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G6.audio","group":"G6","surface":"audio widget and mixer","states":["empty","populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G7.ai","group":"G7","surface":"AI usage widget and panel","states":["empty","populated","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G8.clock","group":"G8","surface":"clock, date and calendar","states":["closed","open","hover","active"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G8.weather","group":"G8","surface":"weather widget and panel","states":["empty","populated","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G8.status","group":"G8","surface":"idle, DND, recording and Voxtype","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G9.media","group":"G9","surface":"media widget and player panel","states":["empty","populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G10.quick-access","group":"G10","surface":"quick access widget","states":["closed","hover","active"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G10.theme-picker","group":"G10","surface":"theme picker","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G10.wallpaper-picker","group":"G10","surface":"wallpaper picker","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G10.screenshots","group":"G10","surface":"screenshot browser","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"open"},
+    {"id":"G10.videos","group":"G10","surface":"video browser","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"open"},
+    {"id":"G11.network","group":"G11","surface":"network widget and panel","states":["empty","populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G12.battery","group":"G12","surface":"battery widget and panel","states":["populated","hover","active","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G13.brightness","group":"G13","surface":"brightness widget and display panel","states":["populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G14.power-profile","group":"G14","surface":"power profile widget and panel","states":["populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"G15.bluetooth","group":"G15","surface":"Bluetooth widget and panel","states":["empty","populated","hover","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
+    {"id":"shared.tooltip","group":"shared","surface":"tooltip","states":["open","error","degraded"],"positions":["top","bottom"],"status":"open"},
+    {"id":"shared.focus","group":"shared","surface":"keyboard focus and selection","states":["hover","active","error"],"positions":["top","bottom"],"status":"open"}
+  ],
+  "finalHardwareGates": [
+    {"id":"hardware.monitor","phase":"final","states":["second-output","mixed-scale","hotplug","unplug-during-drag"]},
+    {"id":"hardware.enterprise-wifi","phase":"final","states":["connect","authentication-error","reconnect"]},
+    {"id":"hardware.bluetooth-device","phase":"final","states":["pair","connect","audio-route","disconnect","forget"]}
+  ]
+}

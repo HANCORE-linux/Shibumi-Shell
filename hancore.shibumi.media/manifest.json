@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.media",
+  "name": "Shibumi Media",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi media controls over Omarchy's MPRIS service.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi media",
+    "description": "Now playing, transport controls, sources, and spectrum",
+    "category": "Media",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G9",
+    "capabilities": ["media"],
+    "preferredRegion": "right",
+    "requires": [],
+    "recommends": []
+  }
+}

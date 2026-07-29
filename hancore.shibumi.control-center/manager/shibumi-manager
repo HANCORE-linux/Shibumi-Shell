@@ -1,0 +1,655 @@
+#!/usr/bin/env python3
+"""Persistent, dependency-free Shibumi/Omarchy continuity manager."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import fcntl
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Any
+
+
+REGIONS = ("left", "center", "right")
+SUITE_ID = "hancore.shibumi"
+
+
+class ManagerError(RuntimeError):
+    pass
+
+
+def discover_omarchy_root(
+    home: Path, system_root: Path = Path("/usr/share/omarchy")
+) -> Path:
+    override = os.environ.get("OMARCHY_PATH")
+    candidates = [
+        Path(override) if override else None,
+        system_root,
+        home / ".local/share/omarchy",
+    ]
+    for candidate in candidates:
+        if candidate and (candidate / "config/omarchy/shell.json").is_file():
+            return candidate
+    if override:
+        return Path(override)
+    return home / ".local/share/omarchy"
+
+
+def paths() -> dict[str, Path]:
+    home = Path.home()
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config"))
+    state_home = Path(os.environ.get("XDG_STATE_HOME", home / ".local/state"))
+    runtime_home = Path(
+        os.environ.get("XDG_RUNTIME_DIR", f"/tmp/shibumi-{os.getuid()}")
+    )
+    omarchy_root = discover_omarchy_root(home)
+    default_override = os.environ.get("SHIBUMI_DEFAULT_CONFIG")
+    return {
+        "config": Path(
+            os.environ.get(
+                "SHIBUMI_CONFIG_FILE", config_home / "omarchy/shell.json"
+            )
+        ),
+        "defaults": Path(default_override)
+        if default_override
+        else omarchy_root / "config/omarchy/shell.json",
+        "state": Path(
+            os.environ.get("SHIBUMI_STATE_DIR", state_home / "shibumi")
+        ),
+        "lock": Path(
+            os.environ.get(
+                "SHIBUMI_LOCK_FILE", runtime_home / "shibumi-suite.lock"
+            )
+        ),
+        "omarchy_root": omarchy_root,
+        "shell": omarchy_root / "bin/omarchy-shell",
+        "restart_shell": omarchy_root / "bin/omarchy-restart-shell",
+    }
+
+
+def read_json(path: Path, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ManagerError(f"cannot read {label}: {error}") from error
+    if not isinstance(value, dict):
+        raise ManagerError(f"{label} must be a JSON object")
+    return value
+
+
+def atomic_write(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def encode(value: dict[str, Any]) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def entry_id(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return str(value.get("id") or "")
+    return ""
+
+
+def normalize(config: dict[str, Any]) -> dict[str, Any]:
+    result = copy.deepcopy(config)
+    result["version"] = 1
+    if not isinstance(result.get("bar"), dict):
+        result["bar"] = {}
+    bar = result["bar"]
+    if not isinstance(bar.get("layout"), dict):
+        bar["layout"] = {}
+    for region in REGIONS:
+        if not isinstance(bar["layout"].get(region), list):
+            bar["layout"][region] = []
+    if not isinstance(result.get("plugins"), list):
+        result["plugins"] = []
+    return result
+
+
+def copy_layout(layout: Any) -> dict[str, list[Any]]:
+    source = layout if isinstance(layout, dict) else {}
+    return {
+        region: copy.deepcopy(source.get(region))
+        if isinstance(source.get(region), list)
+        else []
+        for region in REGIONS
+    }
+
+
+def profile_path(runtime_paths: dict[str, Path]) -> Path:
+    return runtime_paths["state"] / "shell-layout-profiles.json"
+
+
+def load_layout_profiles(runtime_paths: dict[str, Path]) -> dict[str, Any]:
+    path = profile_path(runtime_paths)
+    if not path.is_file():
+        return {"schemaVersion": 1, "layouts": {}}
+    value = read_json(path, "shell layout profiles")
+    layouts = value.get("layouts")
+    if value.get("schemaVersion") != 1 or not isinstance(layouts, dict):
+        raise ManagerError("shell layout profiles are malformed")
+    result: dict[str, Any] = {"schemaVersion": 1, "layouts": {}}
+    for shell_id in ("shibumi", "omarchy"):
+        if shell_id in layouts:
+            result["layouts"][shell_id] = copy_layout(layouts[shell_id])
+    return result
+
+
+def initial_layout(
+    target: str, defaults: dict[str, Any], state: dict[str, Any]
+) -> dict[str, list[Any]]:
+    if target == "shibumi":
+        return {
+            region: [
+                {"id": plugin_id}
+                for plugin_id in state["activation"]["layout"][region]
+            ]
+            for region in REGIONS
+        }
+    return copy_layout(defaults.get("bar", {}).get("layout", {}))
+
+
+def snapshot_layout(
+    config: dict[str, Any],
+    shell_id: str,
+    state: dict[str, Any],
+    *,
+    legacy: bool,
+) -> dict[str, list[Any]]:
+    layout = copy_layout(config["bar"]["layout"])
+    if shell_id != "shibumi" or not legacy:
+        return layout
+    managed = set(state["plugins"])
+    # Pre-profile continuity builds merged the complete stock layout into
+    # Shibumi as "extras". Clean that one legacy snapshot; later intentional
+    # Omarchy widgets are retained because they live in a real Shibumi profile.
+    return {
+        region: [
+            entry
+            for entry in layout[region]
+            if entry_id(entry) in managed
+            or not entry_id(entry).startswith("omarchy.")
+        ]
+        for region in REGIONS
+    }
+
+
+def load_state(runtime_paths: dict[str, Path]) -> dict[str, Any]:
+    state = read_json(runtime_paths["state"] / "install.json", "install state")
+    activation = state.get("activation")
+    if (
+        state.get("suiteId") != SUITE_ID
+        or not isinstance(state.get("plugins"), list)
+        or not isinstance(activation, dict)
+        or not isinstance(activation.get("layout"), dict)
+        or not isinstance(activation.get("enableServices"), list)
+    ):
+        raise ManagerError(
+            "installed suite predates the continuity contract; update Shibumi first"
+        )
+    for region in REGIONS:
+        if not isinstance(activation["layout"].get(region), list):
+            raise ManagerError("activation layout is malformed")
+    return state
+
+
+def current_config(runtime_paths: dict[str, Path]) -> dict[str, Any]:
+    config_path = runtime_paths["config"]
+    if config_path.is_symlink():
+        raise ManagerError(f"refusing symlinked shell config: {config_path}")
+    source = (
+        config_path
+        if config_path.is_file() and config_path.stat().st_size
+        else runtime_paths["defaults"]
+    )
+    return normalize(read_json(source, "shell config"))
+
+
+def activate_config(
+    config: dict[str, Any],
+    state: dict[str, Any],
+    target_layout: dict[str, list[Any]] | None = None,
+) -> dict[str, Any]:
+    result = normalize(config)
+    activation = state["activation"]
+    managed_ids = set(state["plugins"])
+    selected_layout = target_layout or {
+        region: [{"id": plugin_id} for plugin_id in activation["layout"][region]]
+        for region in REGIONS
+    }
+    result["bar"]["layout"] = copy_layout(selected_layout)
+
+    service_ids = list(activation["enableServices"])
+    existing_services = {
+        entry_id(entry): copy.deepcopy(entry)
+        for entry in result["plugins"]
+        if entry_id(entry) in service_ids
+    }
+    extras = [
+        copy.deepcopy(entry)
+        for entry in result["plugins"]
+        if entry_id(entry) not in managed_ids
+    ]
+    result["plugins"] = extras + [
+        existing_services.get(plugin_id, {"id": plugin_id})
+        for plugin_id in service_ids
+    ]
+    result["bar"]["id"] = str(activation["activeBar"])
+    result["bar"]["centerAnchor"] = "hancore.shibumi.center"
+    result["bar"]["style"] = "shibumi"
+    return result
+
+
+def deactivate_config(
+    config: dict[str, Any],
+    defaults: dict[str, Any],
+    state: dict[str, Any],
+    target_layout: dict[str, list[Any]] | None = None,
+) -> dict[str, Any]:
+    result = normalize(config)
+    managed_ids = set(state["plugins"])
+    activation = state["activation"]
+    preserved = set(activation.get("continuityPlugins") or [])
+    result["bar"]["layout"] = copy_layout(
+        target_layout
+        if target_layout is not None
+        else defaults.get("bar", {}).get("layout", {})
+    )
+    # In the stock Omarchy bar the continuity entry is a quiet return anchor,
+    # not Shibumi's primary left-side wordmark. Keep exactly one instance at
+    # the far right; BarWidget renders its dedicated mark on the stock host.
+    continuity_widget = "hancore.shibumi.control-center"
+    for region in REGIONS:
+        result["bar"]["layout"][region] = [
+            entry
+            for entry in result["bar"]["layout"][region]
+            if entry_id(entry) != continuity_widget
+        ]
+    if continuity_widget in preserved:
+        result["bar"]["layout"]["right"].append({"id": continuity_widget})
+    result["plugins"] = [
+        copy.deepcopy(entry)
+        for entry in result["plugins"]
+        if entry_id(entry) not in managed_ids or entry_id(entry) in preserved
+    ]
+    if result["bar"].get("id") == activation["activeBar"]:
+        result["bar"].pop("id", None)
+    if result["bar"].get("centerAnchor") == "hancore.shibumi.center":
+        default_bar = defaults.get("bar")
+        anchor = (
+            str(default_bar.get("centerAnchor") or "")
+            if isinstance(default_bar, dict)
+            else ""
+        )
+        if anchor:
+            result["bar"]["centerAnchor"] = anchor
+        else:
+            result["bar"].pop("centerAnchor", None)
+    if result["bar"].get("style") == "shibumi":
+        result["bar"].pop("style", None)
+    return result
+
+
+def shell_call(
+    runtime_paths: dict[str, Path], arguments: list[str], *, check: bool = False
+) -> subprocess.CompletedProcess[str]:
+    shell = runtime_paths["shell"]
+    if not shell.is_file():
+        raise ManagerError(f"Omarchy shell command is missing: {shell}")
+    try:
+        result = subprocess.run(
+            [str(shell), *arguments],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            env=runtime_environment(runtime_paths),
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ManagerError(f"cannot run Omarchy shell command: {error}") from error
+    if check and result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ManagerError(detail or "Omarchy shell command failed")
+    return result
+
+
+def reload_shell(runtime_paths: dict[str, Path], timeout: float = 30) -> None:
+    restart = runtime_paths.get("restart_shell")
+    if restart is not None and restart.is_file():
+        try:
+            result = subprocess.run(
+                [str(restart)],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=runtime_environment(runtime_paths),
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ManagerError(f"cannot restart Omarchy shell: {error}") from error
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise ManagerError(detail or "Omarchy shell restart failed")
+        return
+
+    # Compatibility path for older Omarchy installations that predate the
+    # dedicated restart command.
+    deadline = time.monotonic() + timeout
+    detail = "shell did not answer"
+    while time.monotonic() < deadline:
+        result = shell_call(runtime_paths, ["shell", "reloadConfig"])
+        response = result.stdout.strip()
+        if result.returncode == 0 and response in ("", "ok"):
+            return
+        detail = (result.stderr or result.stdout).strip() or str(result.returncode)
+        time.sleep(0.15)
+    raise ManagerError(f"reload did not settle: {detail}")
+
+
+def runtime_environment(runtime_paths: dict[str, Path]) -> dict[str, str]:
+    environment = os.environ.copy()
+    omarchy_root = runtime_paths.get("omarchy_root")
+    if omarchy_root is None:
+        shell = runtime_paths.get("shell")
+        if shell is not None:
+            omarchy_root = shell.parent.parent
+    if omarchy_root is not None:
+        environment["OMARCHY_PATH"] = str(omarchy_root)
+        environment["PATH"] = (
+            str(omarchy_root / "bin")
+            + os.pathsep
+            + environment.get("PATH", "")
+        )
+    return environment
+
+
+def plugin_snapshot(runtime_paths: dict[str, Path]) -> dict[str, dict[str, Any]]:
+    result = shell_call(runtime_paths, ["shell", "listPlugins"])
+    try:
+        values = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ManagerError("shell returned malformed plugin state") from error
+    if not isinstance(values, list):
+        raise ManagerError("shell plugin state is not an array")
+    return {
+        str(value["id"]): value
+        for value in values
+        if isinstance(value, dict) and value.get("id")
+    }
+
+
+def verify(
+    runtime_paths: dict[str, Path],
+    state: dict[str, Any],
+    target: str,
+    timeout: float = 30,
+) -> None:
+    deadline = time.monotonic() + timeout
+    managed = set(state["plugins"])
+    activation = state["activation"]
+    allowed = set(activation.get("continuityPlugins") or [])
+    detail = "plugin registry is not ready"
+    while time.monotonic() < deadline:
+        try:
+            plugins = plugin_snapshot(runtime_paths)
+            if target == "shibumi":
+                missing = managed - plugins.keys()
+                disabled = {
+                    plugin_id
+                    for plugin_id in managed
+                    if plugins.get(plugin_id, {}).get("enabled") is not True
+                }
+                active = (
+                    plugins.get(str(activation["activeBar"]), {}).get("active")
+                    is True
+                )
+                ready = not missing and not disabled and active
+                detail = (
+                    f"missing={sorted(missing)}, disabled={sorted(disabled)}, "
+                    f"active={active}"
+                )
+            else:
+                enabled = {
+                    plugin_id
+                    for plugin_id in managed
+                    if plugins.get(plugin_id, {}).get("enabled") is True
+                } - allowed
+                stock = plugins.get("omarchy.bar", {}).get("active") is True
+                active = (
+                    plugins.get(str(activation["activeBar"]), {}).get("active")
+                    is True
+                )
+                ready = stock and not active and not enabled
+                detail = (
+                    f"stock={stock}, shibumi={active}, enabled={sorted(enabled)}"
+                )
+            if ready:
+                ping = shell_call(runtime_paths, ["shell", "ping"])
+                if ping.returncode == 0 and ping.stdout.strip() == "ok":
+                    return
+        except ManagerError as error:
+            detail = str(error)
+        time.sleep(0.15)
+    raise ManagerError(f"{target} verification failed: {detail}")
+
+
+def status_path(runtime_paths: dict[str, Path]) -> Path:
+    return runtime_paths["state"] / "switch-status.json"
+
+
+def write_status(
+    runtime_paths: dict[str, Path], target: str, phase: str, detail: str = ""
+) -> None:
+    atomic_write(
+        status_path(runtime_paths),
+        encode(
+            {
+                "schemaVersion": 1,
+                "target": target,
+                "phase": phase,
+                "detail": detail,
+                "updatedEpoch": int(time.time()),
+            }
+        ),
+    )
+
+
+def perform(target: str) -> int:
+    runtime_paths = paths()
+    runtime_paths["lock"].parent.mkdir(parents=True, exist_ok=True)
+    with runtime_paths["lock"].open("a+") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ManagerError("another Shibumi lifecycle operation is running") from error
+
+        state = load_state(runtime_paths)
+        current = current_config(runtime_paths)
+        defaults = normalize(read_json(runtime_paths["defaults"], "shell defaults"))
+        profiles = load_layout_profiles(runtime_paths)
+        layouts = profiles["layouts"]
+        current_shell = (
+            "shibumi"
+            if str(current["bar"].get("id") or "omarchy.bar")
+            == str(state["activation"]["activeBar"])
+            else "omarchy"
+        )
+        layouts[current_shell] = snapshot_layout(
+            current,
+            current_shell,
+            state,
+            legacy=current_shell not in profiles["layouts"],
+        )
+        target_layout = layouts.get(target)
+        if target_layout is None:
+            target_layout = initial_layout(target, defaults, state)
+            layouts[target] = copy_layout(target_layout)
+        desired = (
+            activate_config(current, state, target_layout)
+            if target == "shibumi"
+            else deactivate_config(current, defaults, state, target_layout)
+        )
+        transaction = runtime_paths["state"] / "switch-transaction"
+        if transaction.exists():
+            raise ManagerError(
+                "an unfinished shell switch exists; run recover before retrying"
+            )
+        transaction.mkdir(parents=True)
+        snapshot = transaction / "shell.json.before"
+        config_path = runtime_paths["config"]
+        existed = config_path.is_file()
+        if existed:
+            snapshot.write_bytes(config_path.read_bytes())
+        atomic_write(
+            transaction / "journal.json",
+            encode({"schemaVersion": 1, "target": target, "configExisted": existed}),
+        )
+        try:
+            write_status(runtime_paths, target, "snapshot")
+            atomic_write(config_path, encode(desired))
+            write_status(runtime_paths, target, "apply")
+            reload_shell(runtime_paths)
+            write_status(runtime_paths, target, "verify")
+            verify(runtime_paths, state, target)
+            atomic_write(profile_path(runtime_paths), encode(profiles))
+        except Exception:
+            if existed:
+                atomic_write(config_path, snapshot.read_bytes())
+            else:
+                config_path.unlink(missing_ok=True)
+            try:
+                reload_shell(runtime_paths)
+            except ManagerError:
+                pass
+            raise
+        finally:
+            for child in transaction.iterdir():
+                child.unlink(missing_ok=True)
+            transaction.rmdir()
+        write_status(runtime_paths, target, "complete")
+    return 0
+
+
+def recover() -> int:
+    runtime_paths = paths()
+    transaction = runtime_paths["state"] / "switch-transaction"
+    if not transaction.is_dir():
+        return 0
+    journal = read_json(transaction / "journal.json", "switch journal")
+    snapshot = transaction / "shell.json.before"
+    if journal.get("configExisted") is True:
+        if not snapshot.is_file():
+            raise ManagerError("switch snapshot is missing")
+        atomic_write(runtime_paths["config"], snapshot.read_bytes())
+    else:
+        runtime_paths["config"].unlink(missing_ok=True)
+    reload_shell(runtime_paths)
+    for child in transaction.iterdir():
+        child.unlink(missing_ok=True)
+    transaction.rmdir()
+    write_status(runtime_paths, str(journal.get("target") or ""), "recovered")
+    return 0
+
+
+def request(target: str) -> int:
+    runtime_paths = paths()
+    load_state(runtime_paths)
+    write_status(runtime_paths, target, "queued")
+    try:
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "_worker", target],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
+    except OSError as error:
+        raise ManagerError(f"cannot launch switch worker: {error}") from error
+    print(json.dumps({"accepted": True, "target": target}))
+    return 0
+
+
+def show_status() -> int:
+    runtime_paths = paths()
+    state = load_state(runtime_paths)
+    config = current_config(runtime_paths)
+    active = str(config["bar"].get("id") or "omarchy.bar")
+    switch_status: dict[str, Any] = {}
+    if status_path(runtime_paths).is_file():
+        switch_status = read_json(status_path(runtime_paths), "switch status")
+    print(
+        json.dumps(
+            {
+                "active": "shibumi"
+                if active == state["activation"]["activeBar"]
+                else "omarchy",
+                "barId": active,
+                "switch": switch_status,
+            }
+        )
+    )
+    return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(prog="shibumi-manager")
+    commands = result.add_subparsers(dest="command", required=True)
+    for name in ("activate", "deactivate", "request"):
+        command = commands.add_parser(name)
+        if name == "request":
+            command.add_argument("target", choices=("shibumi", "omarchy"))
+    worker = commands.add_parser("_worker")
+    worker.add_argument("target", choices=("shibumi", "omarchy"))
+    commands.add_parser("status")
+    commands.add_parser("recover")
+    return result
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        if args.command == "activate":
+            return perform("shibumi")
+        if args.command == "deactivate":
+            return perform("omarchy")
+        if args.command == "request":
+            return request(args.target)
+        if args.command == "_worker":
+            try:
+                return perform(args.target)
+            except ManagerError as error:
+                write_status(paths(), args.target, "error", str(error))
+                return 1
+        if args.command == "recover":
+            return recover()
+        return show_status()
+    except ManagerError as error:
+        print(f"shibumi-manager: {error}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

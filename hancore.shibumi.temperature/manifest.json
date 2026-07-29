@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.temperature",
+  "name": "Shibumi Temperature",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Demand-driven hardware temperature widget and sensor panel.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi Temperature",
+    "description": "Hardware temperature and sensor inventory",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G16",
+    "requires": ["hancore.shibumi.telemetry"],
+    "recommends": []
+  }
+}

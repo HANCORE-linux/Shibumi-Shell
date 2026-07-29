@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.status",
+  "name": "Shibumi Status",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi tray and notification composition with shared desktop status state.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi status",
+    "description": "System tray, hidden apps, notifications, and desktop status",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G3",
+    "capabilities": ["indicators", "notifications", "tray"],
+    "preferredRegion": "left",
+    "requires": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.update-center"
+    ],
+    "recommends": []
+  }
+}

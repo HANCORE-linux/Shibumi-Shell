@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.power-state",
+  "name": "Shibumi Power State",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shared battery and power-profile state for Shibumi widgets.",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "core",
+    "role": "power-state",
+    "requires": [],
+    "recommends": []
+  }
+}

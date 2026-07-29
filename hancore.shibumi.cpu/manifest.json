@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.cpu",
+  "name": "Shibumi CPU",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi CPU widget, GPU sampler, and detailed usage panel.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi CPU",
+    "description": "CPU activity with optional GPU details",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G5",
+    "requires": [
+      "hancore.shibumi.telemetry"
+    ],
+    "recommends": []
+  }
+}

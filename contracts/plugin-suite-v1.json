@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "hancore.shibumi",
+  "suiteVersion": "0.1.0",
+  "hostContract": "contracts/host-facade-v1.json",
+  "plugins": [
+    {
+      "id": "hancore.shibumi.bar",
+      "kinds": ["bar"],
+      "role": "bar-host",
+      "bundle": "core",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": ["hancore.shibumi.reactor"]
+    },
+    {
+      "id": "hancore.shibumi.state",
+      "kinds": ["service"],
+      "role": "state",
+      "bundle": "core",
+      "requires": [],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.control-center",
+      "kinds": ["bar-widget"],
+      "role": "G1",
+      "bundle": "core",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.menu",
+      "kinds": ["menu", "service"],
+      "role": "app-menu",
+      "bundle": "core",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": ["hancore.shibumi.control-center"]
+    },
+    {
+      "id": "hancore.shibumi.reactor",
+      "kinds": ["service"],
+      "role": "reactor",
+      "bundle": "core",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": [
+        "hancore.shibumi.workspaces",
+        "hancore.shibumi.status",
+        "hancore.shibumi.power-state",
+        "hancore.shibumi.ai",
+        "hancore.shibumi.network",
+        "hancore.shibumi.audio",
+        "hancore.shibumi.update-center"
+      ],
+      "hostContracts": ["omarchy.media"]
+    },
+    {
+      "id": "hancore.shibumi.telemetry",
+      "kinds": ["service"],
+      "role": "telemetry",
+      "bundle": "core",
+      "requires": [],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.power-state",
+      "kinds": ["service"],
+      "role": "power-state",
+      "bundle": "core",
+      "requires": [],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.workspaces",
+      "kinds": ["bar-widget", "service"],
+      "role": "G2",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.update-center",
+      "kinds": ["bar-widget", "service"],
+      "role": "update-center",
+      "bundle": "default",
+      "requires": [],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.status",
+      "kinds": ["bar-widget", "service"],
+      "role": "G3",
+      "bundle": "default",
+      "requires": [
+        "hancore.shibumi.state",
+        "hancore.shibumi.update-center"
+      ],
+      "recommends": [],
+      "hostContracts": ["omarchy.notifications", "omarchy.tray"]
+    },
+    {
+      "id": "hancore.shibumi.memory",
+      "kinds": ["bar-widget"],
+      "role": "G4",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.telemetry"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.cpu",
+      "kinds": ["bar-widget", "service"],
+      "role": "G5",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.telemetry"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.audio",
+      "kinds": ["bar-widget", "service"],
+      "role": "G6",
+      "bundle": "default",
+      "requires": [],
+      "recommends": [],
+      "hostContracts": ["omarchy.audio", "omarchy.media"]
+    },
+    {
+      "id": "hancore.shibumi.ai",
+      "kinds": ["bar-widget", "service"],
+      "role": "G7",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.center",
+      "kinds": ["bar-widget", "service"],
+      "role": "G8",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.state", "hancore.shibumi.status"],
+      "recommends": [],
+      "hostContracts": [
+        "omarchy.idle",
+        "omarchy.notifications",
+        "omarchy.system-update",
+        "omarchy.weather"
+      ]
+    },
+    {
+      "id": "hancore.shibumi.media",
+      "kinds": ["bar-widget", "service"],
+      "role": "G9",
+      "bundle": "default",
+      "requires": [],
+      "recommends": [],
+      "hostContracts": ["omarchy.media"]
+    },
+    {
+      "id": "hancore.shibumi.quick-access",
+      "kinds": ["bar-widget", "service"],
+      "role": "G10",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.state"],
+      "recommends": [],
+      "hostContracts": ["omarchy.background"]
+    },
+    {
+      "id": "hancore.shibumi.network",
+      "kinds": ["bar-widget", "service"],
+      "role": "G11",
+      "bundle": "default",
+      "requires": [],
+      "recommends": [],
+      "hostContracts": ["omarchy.network"]
+    },
+    {
+      "id": "hancore.shibumi.battery",
+      "kinds": ["bar-widget"],
+      "role": "G12",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.power-state"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.brightness",
+      "kinds": ["bar-widget", "service"],
+      "role": "G13",
+      "bundle": "default",
+      "requires": [],
+      "recommends": [],
+      "hostContracts": ["omarchy.monitor"]
+    },
+    {
+      "id": "hancore.shibumi.power-profile",
+      "kinds": ["bar-widget"],
+      "role": "G14",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.power-state"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.bluetooth",
+      "kinds": ["bar-widget", "service"],
+      "role": "G15",
+      "bundle": "default",
+      "requires": [],
+      "recommends": [],
+      "hostContracts": ["omarchy.bluetooth"]
+    },
+    {
+      "id": "hancore.shibumi.temperature",
+      "kinds": ["bar-widget"],
+      "role": "G16",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.telemetry"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.gpu",
+      "kinds": ["bar-widget"],
+      "role": "G17",
+      "bundle": "default",
+      "requires": ["hancore.shibumi.cpu"],
+      "recommends": []
+    },
+    {
+      "id": "hancore.shibumi.storage",
+      "kinds": ["bar-widget", "service"],
+      "role": "G18",
+      "bundle": "default",
+      "requires": [],
+      "recommends": []
+    }
+  ],
+  "profiles": [
+    {
+      "id": "default",
+      "activeBar": "hancore.shibumi.bar",
+      "install": [
+        "hancore.shibumi.bar",
+        "hancore.shibumi.state",
+        "hancore.shibumi.control-center",
+        "hancore.shibumi.menu",
+        "hancore.shibumi.reactor",
+        "hancore.shibumi.telemetry",
+        "hancore.shibumi.power-state",
+        "hancore.shibumi.workspaces",
+        "hancore.shibumi.update-center",
+        "hancore.shibumi.status",
+        "hancore.shibumi.memory",
+        "hancore.shibumi.cpu",
+        "hancore.shibumi.audio",
+        "hancore.shibumi.ai",
+        "hancore.shibumi.center",
+        "hancore.shibumi.media",
+        "hancore.shibumi.quick-access",
+        "hancore.shibumi.network",
+        "hancore.shibumi.battery",
+        "hancore.shibumi.brightness",
+        "hancore.shibumi.power-profile",
+        "hancore.shibumi.bluetooth",
+        "hancore.shibumi.temperature",
+        "hancore.shibumi.gpu",
+        "hancore.shibumi.storage"
+      ],
+      "enableServices": [
+        "hancore.shibumi.state",
+        "hancore.shibumi.menu",
+        "hancore.shibumi.reactor",
+        "hancore.shibumi.telemetry",
+        "hancore.shibumi.power-state",
+        "hancore.shibumi.update-center"
+      ],
+      "layout": {
+        "left": [
+          "hancore.shibumi.control-center",
+          "hancore.shibumi.workspaces",
+          "hancore.shibumi.status",
+          "hancore.shibumi.memory",
+          "hancore.shibumi.cpu",
+          "hancore.shibumi.audio",
+          "hancore.shibumi.ai"
+        ],
+        "center": [
+          "hancore.shibumi.center"
+        ],
+        "right": [
+          "hancore.shibumi.media",
+          "hancore.shibumi.quick-access",
+          "hancore.shibumi.network",
+          "hancore.shibumi.power-profile",
+          "hancore.shibumi.battery",
+          "hancore.shibumi.brightness",
+          "hancore.shibumi.bluetooth",
+          "hancore.shibumi.temperature",
+          "hancore.shibumi.gpu",
+          "hancore.shibumi.storage"
+        ]
+      },
+      "disabledByDefault": [
+        "hancore.shibumi.ai",
+        "hancore.shibumi.power-profile",
+        "hancore.shibumi.bluetooth"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.update-center",
+  "name": "Shibumi Update Center",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Safe repository package and user theme update status for Shibumi.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi update center",
+    "description": "Review repository package and user theme updates",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "update-center",
+    "requires": [],
+    "recommends": []
+  }
+}

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+cat <<'JSON'
+{"current_condition":[{"weatherCode":"113","temp_C":"21","temp_F":"70","FeelsLikeC":"20","FeelsLikeF":"68","weatherDesc":[{"value":"Clear"}],"humidity":"50","windspeedKmph":"10","windspeedMiles":"6"}],"nearest_area":[{"areaName":[{"value":"Testville"}],"country":[{"value":"Testland"}]}],"weather":[{"date":"2026-07-20","mintempC":"14","maxtempC":"24","mintempF":"57","maxtempF":"75","astronomy":[{"sunrise":"06:00 AM","sunset":"09:00 PM"}],"hourly":[{"time":"1200","weatherCode":"113","chanceofrain":"0"}]}]}
+JSON

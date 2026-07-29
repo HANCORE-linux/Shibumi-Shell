@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.control-center",
+  "name": "Shibumi Control Center",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi G1 presentation and bar configuration panel.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi settings",
+    "description": "Configure Shibumi layout, widgets, and appearance",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "core",
+    "role": "G1",
+    "requires": [
+      "hancore.shibumi.state"
+    ],
+    "recommends": []
+  }
+}

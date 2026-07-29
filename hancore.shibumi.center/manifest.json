@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.center",
+  "name": "Shibumi Center",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi clock, calendar, weather, status, and update center.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi center",
+    "description": "Clock, date, calendar, weather, status, and updates",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G8",
+    "capabilities": ["clock", "weather", "system-update"],
+    "preferredRegion": "center",
+    "requires": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.status"
+    ],
+    "recommends": []
+  }
+}

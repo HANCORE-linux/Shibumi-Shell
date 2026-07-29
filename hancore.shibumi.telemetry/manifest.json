@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.telemetry",
+  "name": "Shibumi Telemetry",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Demand-driven CPU and memory telemetry shared by Shibumi widgets.",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "core",
+    "role": "telemetry",
+    "requires": [],
+    "recommends": []
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "referenceRoot": "../Quickshell-Dots/versions/V2",
+  "sourceGlobs": ["*.qml", "*.js", "modules/*.qml", "panels/*.qml", "panels/*.js"],
+  "features": [
+    {
+      "id": "shell-host-lifecycle",
+      "strategy": "adapt",
+      "sources": ["shell.qml", "VariantRoot.qml"],
+      "implementation": ["hancore.shibumi.bar/Bar.qml", "hancore.shibumi.bar/core/WindowRecovery.qml", "scripts/shibumi_suite/runtime.py"],
+      "evidence": ["tests/bar-host-registry-smoke.qml", "tests/shibumi-suite-quattro-runtime.sh"]
+    },
+    {
+      "id": "bar-slot-layout",
+      "strategy": "adapt",
+      "sources": ["BarSlot.qml"],
+      "implementation": ["core/GroupSlot.qml", "core/WidgetSlot.qml", "core/LayoutController.qml"],
+      "evidence": ["tests/group-renderer-regression.qml", "tests/shibumi-config-regression.qml"]
+    },
+    {
+      "id": "state-and-theme",
+      "strategy": "adapt",
+      "sources": ["Theme.qml", "Palette.js"],
+      "implementation": ["hancore.shibumi.state/ShibumiConfig.js", "hancore.shibumi.state/Service.qml", "hancore.shibumi.state/ThemePalette.qml"],
+      "evidence": ["tests/state-service-smoke.qml", "tests/shibumi-config-regression.qml", "tests/theme-palette-runtime-regression.sh"]
+    },
+    {
+      "id": "icon-semantics",
+      "strategy": "adapt",
+      "sources": ["IconMap.js"],
+      "implementation": ["shared/presentation/IconText.qml", "hancore.shibumi.control-center/ControlSettings.qml"],
+      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/control-center-smoke.qml"]
+    },
+    {
+      "id": "power-actions",
+      "strategy": "adapt",
+      "sources": ["OmarchyPower.js"],
+      "implementation": ["hancore.shibumi.power-state/Service.qml", "hancore.shibumi.power-profile/PowerProfilePanel.qml"],
+      "evidence": ["tests/power-plugins-regression.sh", "tests/power-plugins-smoke.qml"]
+    },
+    {
+      "id": "connected-surfaces",
+      "strategy": "port",
+      "sources": ["modules/AiBarInset.qml", "modules/AiPanelSurface.qml", "modules/ConnectedBarInset.qml", "modules/ConnectedPanelSurface.qml", "modules/PanelPointer.qml"],
+      "implementation": ["styles/shibumi/RunChrome.qml", "shared/presentation/ShibumiPanel.qml"],
+      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/panel-surface-smoke.qml", "tests/panel-routing-regression.qml"]
+    },
+    {
+      "id": "control-center",
+      "strategy": "port",
+      "sources": ["modules/LauncherWidget.qml", "panels/ControlPanel.qml"],
+      "implementation": ["hancore.shibumi.control-center/BarWidget.qml", "hancore.shibumi.control-center/ControlCenterPanel.qml"],
+      "evidence": ["tests/control-center-regression.sh", "tests/control-center-smoke.qml"]
+    },
+    {
+      "id": "updates",
+      "strategy": "port",
+      "sources": ["modules/ArchUpdaterWidget.qml", "modules/UpdateWidget.qml", "panels/ArchUpdaterPanel.qml"],
+      "implementation": ["hancore.shibumi.update-center/BarWidget.qml", "hancore.shibumi.update-center/UpdateCenterPanel.qml", "hancore.shibumi.update-center/Service.qml"],
+      "evidence": ["tests/update-center-regression.sh", "tests/update-center-ui-smoke.qml"]
+    },
+    {
+      "id": "shell-update-lifecycle",
+      "strategy": "adapt",
+      "sources": ["panels/ShellUpdateTab.qml"],
+      "implementation": ["scripts/shibumi-suite", "scripts/shibumi_suite/cli.py", "scripts/shibumi_suite/transaction.py"],
+      "evidence": ["tests/test_shibumi_suite.py", "tests/shibumi-suite-quattro-runtime.sh", "tests/quattro-contract-regression.sh"]
+    },
+    {
+      "id": "audio",
+      "strategy": "port",
+      "sources": ["modules/AudioData.qml", "modules/AudioWidget.qml", "panels/MicrophonePeakMonitor.qml", "panels/VolumePanel.qml"],
+      "implementation": ["hancore.shibumi.audio/BarWidget.qml", "hancore.shibumi.audio/AudioPanel.qml", "hancore.shibumi.audio/Service.qml"],
+      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/audio-plugin-smoke.qml"]
+    },
+    {
+      "id": "battery",
+      "strategy": "port",
+      "sources": ["modules/BatteryWidget.qml", "panels/BatteryPanel.qml"],
+      "implementation": ["hancore.shibumi.battery/BarWidget.qml", "hancore.shibumi.battery/BatteryPanel.qml"],
+      "evidence": ["tests/power-plugins-regression.sh", "tests/power-widgets-smoke.qml"]
+    },
+    {
+      "id": "bluetooth",
+      "strategy": "port",
+      "sources": ["modules/BluetoothWidget.qml", "panels/BluetoothPanel.qml"],
+      "implementation": ["hancore.shibumi.bluetooth/BarWidget.qml", "hancore.shibumi.bluetooth/BluetoothPanelBridge.qml", "hancore.shibumi.bluetooth/Service.qml"],
+      "evidence": ["tests/bluetooth-plugin-regression.sh", "tests/bluetooth-plugin-smoke.qml"]
+    },
+    {
+      "id": "brightness",
+      "strategy": "port",
+      "sources": ["modules/BrightnessWidget.qml", "panels/BrightnessPanel.qml"],
+      "implementation": ["hancore.shibumi.brightness/BarWidget.qml", "hancore.shibumi.brightness/MonitorPanelBridge.qml"],
+      "evidence": ["tests/brightness-plugin-regression.sh", "tests/brightness-plugin-smoke.qml"]
+    },
+    {
+      "id": "calendar-clock",
+      "strategy": "port",
+      "sources": ["modules/ClockWidget.qml", "panels/CalendarPopup.qml"],
+      "implementation": ["hancore.shibumi.center/ClockWidget.qml", "hancore.shibumi.center/CalendarPanel.qml"],
+      "evidence": ["tests/center-plugin-regression.sh", "tests/clock-widget-smoke.qml"]
+    },
+    {
+      "id": "ai-usage",
+      "strategy": "port",
+      "sources": ["modules/ClaudeWidget.qml", "panels/AiUsagePanel.qml"],
+      "implementation": ["hancore.shibumi.ai/BarWidget.qml", "hancore.shibumi.ai/AiUsagePanel.qml", "hancore.shibumi.ai/Service.qml"],
+      "evidence": ["tests/ai-plugin-regression.sh", "tests/ai-plugin-smoke.qml"]
+    },
+    {
+      "id": "network",
+      "strategy": "port",
+      "sources": ["modules/CloudflareSpeedTest.qml", "modules/NetworkWidget.qml", "panels/NetworkManagerAdapter.qml", "panels/NetworkPanel.qml"],
+      "implementation": ["hancore.shibumi.network/BarWidget.qml", "hancore.shibumi.network/NetworkPanel.qml", "hancore.shibumi.network/Service.qml"],
+      "evidence": ["tests/network-plugin-regression.sh", "tests/network-plugin-smoke.qml"]
+    },
+    {
+      "id": "shared-text",
+      "strategy": "port",
+      "sources": ["modules/IconText.qml", "modules/UiText.qml"],
+      "implementation": ["shared/presentation/IconText.qml"],
+      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/style-contract-regression.sh"]
+    },
+    {
+      "id": "status-indicators",
+      "strategy": "port",
+      "sources": ["modules/IdleWidget.qml", "modules/NotificationSilenceWidget.qml", "modules/NotificationWidget.qml", "modules/ScreenRecordWidget.qml", "modules/VoxtypeWidget.qml", "panels/NotificationPanel.qml"],
+      "implementation": ["hancore.shibumi.status/BarWidget.qml", "hancore.shibumi.status/NotificationPanel.qml", "hancore.shibumi.status/Service.qml"],
+      "evidence": ["tests/status-plugin-regression.sh", "tests/status-plugin-smoke.qml"]
+    },
+    {
+      "id": "idle-inhibitor",
+      "strategy": "port",
+      "sources": ["modules/IdleInhibitorWidget.qml"],
+      "implementation": ["hancore.shibumi.status/Service.qml", "hancore.shibumi.quick-access/Service.qml"],
+      "evidence": ["tests/status-plugin-regression.sh", "tests/quick-access-plugin-regression.sh"]
+    },
+    {
+      "id": "image-picker",
+      "strategy": "port",
+      "sources": ["panels/ImageCarouselCarousel.qml", "panels/ImageCarouselHearthstone.qml", "panels/ImageCarouselPanel.qml", "panels/ImagePickerModel.js"],
+      "implementation": ["hancore.shibumi.quick-access/CarouselPickerView.qml", "hancore.shibumi.quick-access/HearthstonePickerView.qml", "hancore.shibumi.quick-access/TanzakuPickerView.qml"],
+      "evidence": ["tests/quick-access-plugin-regression.sh", "tests/picker-model-regression.qml"]
+    },
+    {
+      "id": "media-browser",
+      "strategy": "port",
+      "sources": ["modules/MediaBrowserWidget.qml", "panels/MediaBrowserCarousel.qml", "panels/MediaBrowserHearthstone.qml", "panels/MediaBrowserPanel.qml"],
+      "implementation": ["hancore.shibumi.quick-access/BarWidget.qml", "hancore.shibumi.quick-access/PickerOverlay.qml", "hancore.shibumi.quick-access/Service.qml"],
+      "evidence": ["tests/quick-access-plugin-regression.sh", "tests/quick-access-plugin-smoke.qml"]
+    },
+    {
+      "id": "memory",
+      "strategy": "port",
+      "sources": ["modules/MemoryWidget.qml", "panels/MemoryPanel.qml"],
+      "implementation": ["hancore.shibumi.memory/BarWidget.qml", "hancore.shibumi.memory/MemoryPanel.qml", "hancore.shibumi.telemetry/Service.qml"],
+      "evidence": ["tests/telemetry-plugins-regression.sh", "tests/telemetry-plugins-smoke.qml"]
+    },
+    {
+      "id": "cpu",
+      "strategy": "port",
+      "sources": ["modules/CpuWidget.qml", "panels/CpuPanel.qml"],
+      "implementation": ["hancore.shibumi.cpu/BarWidget.qml", "hancore.shibumi.cpu/CpuPanel.qml", "hancore.shibumi.telemetry/Service.qml"],
+      "evidence": ["tests/telemetry-plugins-regression.sh", "tests/telemetry-plugins-smoke.qml"]
+    },
+    {
+      "id": "temperature",
+      "strategy": "port",
+      "sources": ["modules/CpuTemperatureWidget.qml", "panels/ThermalsPanel.qml"],
+      "implementation": ["hancore.shibumi.temperature/BarWidget.qml", "hancore.shibumi.temperature/TemperaturePanel.qml", "hancore.shibumi.telemetry/ThermalTelemetry.qml"],
+      "evidence": ["tests/telemetry-plugins-regression.sh", "tests/telemetry-plugins-smoke.qml"]
+    },
+    {
+      "id": "gpu",
+      "strategy": "port",
+      "sources": ["modules/GpuWidget.qml", "panels/GpuPanel.qml"],
+      "implementation": ["hancore.shibumi.gpu/BarWidget.qml", "hancore.shibumi.gpu/GpuPanel.qml"],
+      "evidence": ["tests/telemetry-plugins-regression.sh", "tests/telemetry-plugins-smoke.qml"]
+    },
+    {
+      "id": "storage",
+      "strategy": "port",
+      "sources": ["modules/StorageWidget.qml", "panels/StoragePanel.qml"],
+      "implementation": ["hancore.shibumi.storage/BarWidget.qml", "hancore.shibumi.storage/StoragePanel.qml"],
+      "evidence": ["tests/telemetry-plugins-regression.sh", "tests/telemetry-plugins-smoke.qml"]
+    },
+    {
+      "id": "media-player",
+      "strategy": "port",
+      "sources": ["modules/MprisArtwork.qml", "modules/MprisSelect.qml", "modules/MprisWidget.qml", "panels/MprisPanel.qml"],
+      "implementation": ["hancore.shibumi.media/BarWidget.qml", "hancore.shibumi.media/MediaPanel.qml", "hancore.shibumi.media/Service.qml"],
+      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/media-plugin-smoke.qml"]
+    },
+    {
+      "id": "surface-shadow",
+      "strategy": "port",
+      "sources": ["modules/PillShadow.qml"],
+      "implementation": ["shared/presentation/PillSurface.qml", "styles/shibumi/RunChrome.qml"],
+      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/run-geometry-regression.qml"]
+    },
+    {
+      "id": "power-profile",
+      "strategy": "port",
+      "sources": ["modules/PowerProfileWidget.qml", "panels/PowerProfilePanel.qml"],
+      "implementation": ["hancore.shibumi.power-profile/BarWidget.qml", "hancore.shibumi.power-profile/PowerProfilePanel.qml", "hancore.shibumi.power-state/Service.qml"],
+      "evidence": ["tests/power-plugins-regression.sh", "tests/power-plugins-smoke.qml"]
+    },
+    {
+      "id": "theme-display",
+      "strategy": "port",
+      "sources": ["modules/ThemeDisplayWidget.qml"],
+      "implementation": ["hancore.shibumi.quick-access/BarWidget.qml", "hancore.shibumi.quick-access/Service.qml"],
+      "evidence": ["tests/quick-access-plugin-regression.sh", "tests/quick-access-plugin-smoke.qml"]
+    },
+    {
+      "id": "tooltip",
+      "strategy": "port",
+      "sources": ["modules/TooltipMixin.qml", "panels/TooltipOverlay.qml"],
+      "implementation": ["shared/presentation/ShibumiPanelToolTip.qml", "hancore.shibumi.bar/Bar.qml"],
+      "evidence": ["tests/panel-surface-smoke.qml", "tests/shibumi-presentation-smoke.qml"]
+    },
+    {
+      "id": "tray",
+      "strategy": "port",
+      "sources": ["modules/TrayWidget.qml", "panels/TrayMenu.qml", "panels/TrayPanel.qml"],
+      "implementation": ["hancore.shibumi.status/TrayStatusView.qml", "hancore.shibumi.status/TrayDrawerPanel.qml", "hancore.shibumi.status/TrayAppMenuPanel.qml"],
+      "evidence": ["tests/status-plugin-regression.sh", "tests/tray-app-menu-smoke.qml"]
+    },
+    {
+      "id": "weather",
+      "strategy": "port",
+      "sources": ["modules/WeatherWidget.qml", "panels/WeatherPanel.qml"],
+      "implementation": ["hancore.shibumi.center/WeatherWidget.qml", "hancore.shibumi.center/WeatherPanel.qml", "hancore.shibumi.center/WeatherService.qml"],
+      "evidence": ["tests/center-plugin-regression.sh", "tests/weather-service-start-smoke.qml"]
+    },
+    {
+      "id": "workspaces",
+      "strategy": "port",
+      "sources": ["modules/WorkspaceWidget.qml", "panels/WorkspacePanel.qml"],
+      "implementation": ["hancore.shibumi.workspaces/BarWidget.qml", "hancore.shibumi.workspaces/WorkspacePanel.qml", "hancore.shibumi.workspaces/WorkspaceService.qml"],
+      "evidence": ["tests/workspaces-plugin-regression.sh", "tests/workspaces-plugin-smoke.qml"]
+    }
+  ]
+}

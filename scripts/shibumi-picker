@@ -1,0 +1,381 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cache_home=${XDG_CACHE_HOME:-$HOME/.cache}
+cache_root=$cache_home/shibumi/picker
+thumb_root=$cache_root/thumbs
+hash_file=$cache_root/image-hashes.tsv
+
+mkdir -p "$cache_root" "$thumb_root"
+
+die() {
+  printf 'shibumi-picker: %s\n' "$*" >&2
+  exit 1
+}
+
+valid_mode() {
+  case "$1" in
+    theme|wallpaper|screenshots|videos) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+cache_file_for() {
+  printf '%s/%s.tsv' "$cache_root" "$1"
+}
+
+remove_mode_temps() {
+  local mode=$1 lock_fd
+  valid_mode "$mode" || return 0
+  exec {lock_fd}>"$cache_root/$mode.scan.lock"
+  flock "$lock_fd"
+  rm -f -- "$cache_root/$mode.raw."?????? "$cache_root/$mode."??????
+  flock -u "$lock_fd"
+  exec {lock_fd}>&-
+}
+
+path_supported() {
+  [[ $1 != *$'\t'* && $1 != *$'\n'* ]]
+}
+
+declare -A cached_hashes=()
+hashes_dirty=false
+declare -a temporary_files=()
+
+cleanup_temporary_files() {
+  local path
+  for path in "${temporary_files[@]}"; do
+    [[ -n $path ]] && rm -f -- "$path"
+  done
+}
+
+trap cleanup_temporary_files EXIT
+trap 'cleanup_temporary_files; exit 143' TERM
+trap 'cleanup_temporary_files; exit 130' INT
+
+load_hashes() {
+  local key hash
+  [[ -f $hash_file ]] || return 0
+  while IFS=$'\t' read -r key hash; do
+    [[ -n $key && $hash =~ ^[0-9a-f]{64}$ ]] || continue
+    cached_hashes["$key"]=$hash
+  done <"$hash_file"
+}
+
+save_hashes() {
+  local tmp key disk_key disk_hash
+  [[ $hashes_dirty == true ]] || return 0
+  exec 8>"$cache_root/image-hashes.lock"
+  flock 8
+  if [[ -f $hash_file ]]; then
+    while IFS=$'\t' read -r disk_key disk_hash; do
+      [[ -n $disk_key && $disk_hash =~ ^[0-9a-f]{64}$ ]] || continue
+      [[ -n ${cached_hashes[$disk_key]:-} ]] || cached_hashes["$disk_key"]=$disk_hash
+    done <"$hash_file"
+  fi
+  tmp=$(mktemp "$cache_root/image-hashes.XXXXXX")
+  temporary_files+=("$tmp")
+  for key in "${!cached_hashes[@]}"; do
+    printf '%s\t%s\n' "$key" "${cached_hashes[$key]}"
+  done | sort >"$tmp"
+  mv -f "$tmp" "$hash_file"
+  flock -u 8
+}
+
+image_hash() {
+  local source=$1 resolved signature key hash
+  resolved=$(readlink -f -- "$source" 2>/dev/null || printf '%s' "$source")
+  signature=$(stat -Lc '%s:%Y:%Z' -- "$source" 2>/dev/null) || return 1
+  key="$resolved|$signature"
+  hash=${cached_hashes[$key]:-}
+  if [[ -z $hash ]]; then
+    hash=$(sha256sum -- "$source" 2>/dev/null | cut -d ' ' -f 1)
+    [[ $hash =~ ^[0-9a-f]{64}$ ]] || return 1
+    cached_hashes["$key"]=$hash
+    hashes_dirty=true
+  fi
+  printf '%s' "$hash"
+}
+
+video_hash() {
+  local source=$1 resolved signature
+  resolved=$(readlink -f -- "$source" 2>/dev/null || printf '%s' "$source")
+  signature=$(stat -Lc '%s:%Y:%Z' -- "$source" 2>/dev/null) || return 1
+  printf '%s|%s' "$resolved" "$signature" | sha256sum | cut -d ' ' -f 1
+}
+
+thumb_for() {
+  local mode=$1 source=$2 hash
+  if [[ $mode == videos ]]; then
+    hash=$(video_hash "$source") || return 1
+  else
+    hash=$(image_hash "$source") || return 1
+  fi
+  printf '%s/%s-512.jpg' "$thumb_root" "$hash"
+}
+
+emit_row() {
+  local mode=$1 source=$2 label=${3:-} directory=${4:-} thumb ready=0
+  [[ -f $source ]] || return 0
+  path_supported "$source" && path_supported "$label" && path_supported "$directory" || return 0
+  thumb=$(thumb_for "$mode" "$source") || return 0
+  [[ -s $thumb ]] && ready=1
+  printf '%s\t%s\t%s\t%s\t%s\n' "$source" "$thumb" "$label" "$directory" "$ready"
+}
+
+first_preview() {
+  local theme_dir=$1 candidate
+  for candidate in \
+    "$theme_dir/preview.png" "$theme_dir/preview.jpg" "$theme_dir/preview.jpeg" \
+    "$theme_dir/preview.webp" "$theme_dir/preview.gif" "$theme_dir/preview.bmp"; do
+    [[ -f $candidate ]] && { printf '%s' "$candidate"; return 0; }
+  done
+  find -L "$theme_dir/backgrounds" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+       -o -iname '*.webp' -o -iname '*.gif' -o -iname '*.bmp' \) \
+    -print0 2>/dev/null | sort -z | while IFS= read -r -d '' candidate; do
+      printf '%s' "$candidate"
+      break
+    done
+}
+
+scan_themes() {
+  local omarchy_path=$1 root theme_dir name preview
+  declare -A seen=()
+  for root in "$HOME/.config/omarchy/themes" "$omarchy_path/themes"; do
+    [[ -d $root ]] || continue
+    while IFS= read -r -d '' theme_dir; do
+      name=${theme_dir##*/}
+      [[ $name =~ ^[A-Za-z0-9._-]+$ && -z ${seen[$name]:-} ]] || continue
+      preview=$(first_preview "$theme_dir")
+      if [[ -z $preview && $root == "$HOME/.config/omarchy/themes" ]]; then
+        preview=$(first_preview "$omarchy_path/themes/$name")
+      fi
+      [[ -n $preview && -f $preview ]] || continue
+      seen["$name"]=1
+      emit_row theme "$preview" "$name" "$theme_dir"
+    done < <(find -L "$root" -mindepth 1 -maxdepth 1 \
+      \( -type d -o -type l \) -print0 2>/dev/null | sort -z)
+  done
+}
+
+scan_wallpapers() {
+  local theme_name root source
+  theme_name=$(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  [[ $theme_name =~ ^[A-Za-z0-9._-]+$ ]] || theme_name=""
+  for root in \
+    "$HOME/.local/state/omarchy/current/theme/backgrounds" \
+    "$HOME/.config/omarchy/backgrounds/$theme_name"; do
+    [[ -d $root ]] || continue
+    while IFS= read -r -d '' source; do
+      emit_row wallpaper "$source" "${source##*/}" "$root"
+    done < <(find -L "$root" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+         -o -iname '*.webp' -o -iname '*.gif' -o -iname '*.bmp' \) \
+      -print0 2>/dev/null | sort -z)
+  done
+}
+
+media_root() {
+  local mode=$1 value
+  if [[ $mode == videos ]]; then
+    value=${OMARCHY_SCREENRECORD_DIR:-${XDG_VIDEOS_DIR:-}}
+    [[ -n $value ]] || value=$(xdg-user-dir VIDEOS 2>/dev/null || true)
+    [[ -n $value && $value != "$HOME" ]] || value=$HOME/Videos
+  else
+    value=${OMARCHY_SCREENSHOT_DIR:-${XDG_PICTURES_DIR:-}}
+    [[ -n $value ]] || value=$(xdg-user-dir PICTURES 2>/dev/null || true)
+    [[ -n $value && $value != "$HOME" ]] || value=$HOME/Pictures
+  fi
+  printf '%s' "$value"
+}
+
+scan_media() {
+  local mode=$1 root source
+  root=$(media_root "$mode")
+  [[ -d $root ]] || return 0
+  if [[ $mode == videos ]]; then
+    while IFS= read -r source; do
+      [[ -n $source ]] && emit_row videos "$source" "${source##*/}" "$root"
+    done < <(find "$root" -maxdepth 1 -type f \
+      \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.webm' \
+         -o -iname '*.mov' -o -iname '*.avi' -o -iname '*.m4v' \) \
+      -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n 100 | cut -f2-)
+  else
+    while IFS= read -r source; do
+      [[ -n $source ]] && emit_row screenshots "$source" "${source##*/}" "$root"
+    done < <(find "$root" -maxdepth 1 -type f \
+      \( -iname 'screenshot-*.png' -o -iname 'screenshot-*.jpg' \
+         -o -iname 'screenshot-*.jpeg' -o -iname 'screenshot-*.webp' \) \
+      -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n 100 | cut -f2-)
+  fi
+}
+
+scan_mode() {
+  local mode=$1 omarchy_path=$2 target raw tmp lock_fd
+  valid_mode "$mode" || die "unsupported mode: $mode"
+  exec {lock_fd}>"$cache_root/$mode.scan.lock"
+  flock "$lock_fd"
+  rm -f -- "$cache_root/$mode.raw."?????? "$cache_root/$mode."??????
+  target=$(cache_file_for "$mode")
+  raw=$(mktemp "$cache_root/$mode.raw.XXXXXX")
+  tmp=$(mktemp "$cache_root/$mode.XXXXXX")
+  temporary_files+=("$raw" "$tmp")
+  load_hashes
+  case "$mode" in
+    theme) scan_themes "$omarchy_path" ;;
+    wallpaper) scan_wallpapers ;;
+    screenshots|videos) scan_media "$mode" ;;
+  esac >"$raw"
+  awk -F '\t' '!seen[$1]++' "$raw" >"$tmp"
+  rm -f "$raw"
+  save_hashes
+  mv -f "$tmp" "$target"
+  cat "$target"
+  flock -u "$lock_fd"
+  exec {lock_fd}>&-
+}
+
+cached_mode() {
+  local mode=$1 source thumb label directory _ready ready
+  valid_mode "$mode" || die "unsupported mode: $mode"
+  [[ -f $(cache_file_for "$mode") ]] || return 0
+  while IFS=$'\t' read -r source thumb label directory _ready; do
+    [[ -f $source && -n $thumb ]] || continue
+    ready=0
+    [[ -s $thumb ]] && ready=1
+    printf '%s\t%s\t%s\t%s\t%s\n' "$source" "$thumb" "$label" "$directory" "$ready"
+  done <"$(cache_file_for "$mode")"
+}
+
+generate_thumb() {
+  local mode=$1 source=$2 target=$3 tmp lock attempt
+  [[ -f $source ]] || return 0
+  [[ -s $target ]] && { printf '%s\n' "$target"; return 0; }
+  lock=$target.lock
+  if ! mkdir "$lock" 2>/dev/null; then
+    for ((attempt = 0; attempt < 300; attempt++)); do
+      [[ -s $target ]] && { printf '%s\n' "$target"; return 0; }
+      [[ -d $lock ]] || break
+      sleep 0.01
+    done
+    return 0
+  fi
+  tmp="$target.$$.tmp.jpg"
+  trap 'rm -f "$tmp"; rmdir "$lock" 2>/dev/null || true' RETURN
+  trap 'rm -f "$tmp"; rmdir "$lock" 2>/dev/null || true; exit 143' TERM INT
+  rm -f "$tmp"
+  if [[ $mode == videos ]]; then
+    command -v ffmpegthumbnailer >/dev/null 2>&1 || return 0
+    ffmpegthumbnailer -i "$source" -o "$tmp" -s 512 -q 8 >/dev/null 2>&1 || true
+  else
+    command -v magick >/dev/null 2>&1 || return 0
+    magick -define jpeg:size=1024x1024 "${source}[0]" -auto-orient -strip \
+      -thumbnail '512x512^' -quality 82 "$tmp" >/dev/null 2>&1 || true
+  fi
+  if [[ -s $tmp ]]; then
+    mv -f "$tmp" "$target"
+    printf '%s\n' "$target"
+  else
+    rm -f "$tmp"
+  fi
+  rmdir "$lock" 2>/dev/null || true
+  trap - RETURN TERM INT
+}
+
+terminate_process_tree() {
+  local parent=$1 child
+  while IFS= read -r child; do
+    [[ -n $child ]] || continue
+    terminate_process_tree "$child"
+  done < <(pgrep -P "$parent" 2>/dev/null || true)
+  kill -TERM "$parent" 2>/dev/null || true
+}
+
+terminate_workers() {
+  local worker
+  while IFS= read -r worker; do
+    [[ -n $worker ]] || continue
+    terminate_process_tree "$worker"
+  done < <(jobs -pr)
+  wait 2>/dev/null || true
+}
+
+warm_mode() {
+  local mode=$1 nice_level=$2 source target active=0
+  shift 2
+  valid_mode "$mode" || die "unsupported mode: $mode"
+  [[ $nice_level == 10 || $nice_level == 19 ]] || die "invalid nice level"
+  trap 'terminate_workers; cleanup_temporary_files; exit 143' TERM
+  trap 'terminate_workers; cleanup_temporary_files; exit 130' INT
+  trap 'terminate_workers; cleanup_temporary_files' EXIT
+  load_hashes
+  for source in "$@"; do
+    [[ -f $source ]] || continue
+    target=$(thumb_for "$mode" "$source") || continue
+    [[ -s $target ]] && continue
+    # The single-quoted worker body is intentionally expanded by the child shell.
+    # shellcheck disable=SC2016
+    nice -n "$nice_level" bash -c \
+      'source_script=$1; mode=$2; source_path=$3; target_path=$4; source "$source_script" __worker "$mode" "$source_path" "$target_path"' \
+      shibumi-picker "$0" "$mode" "$source" "$target" &
+    ((active += 1))
+    if (( active >= 3 )); then
+      wait -n || true
+      ((active -= 1))
+    fi
+  done
+  save_hashes
+  wait || true
+  trap 'cleanup_temporary_files; exit 143' TERM
+  trap 'cleanup_temporary_files; exit 130' INT
+  trap cleanup_temporary_files EXIT
+}
+
+prewarm_mode() {
+  local mode=$1 omarchy_path=$2 source _rest
+  scan_mode "$mode" "$omarchy_path" >/dev/null
+  local -a sources=()
+  while IFS=$'\t' read -r source _rest; do
+    [[ -f $source ]] && sources+=("$source")
+  done <"$(cache_file_for "$mode")"
+  warm_mode "$mode" 19 "${sources[@]}"
+}
+
+if [[ ${1:-} == __worker ]]; then
+  generate_thumb "${2:-}" "${3:-}" "${4:-}"
+  exit 0
+fi
+
+command=${1:-}
+case "$command" in
+  scan)
+    [[ $# -eq 3 ]] || die "usage: shibumi-picker scan MODE OMARCHY_PATH"
+    scan_mode "$2" "$3"
+    ;;
+  cached)
+    [[ $# -eq 2 ]] || die "usage: shibumi-picker cached MODE"
+    cached_mode "$2"
+    ;;
+  warm)
+    [[ $# -ge 3 ]] || die "usage: shibumi-picker warm MODE NICE [PATH ...]"
+    mode=$2
+    nice_level=$3
+    shift 3
+    warm_mode "$mode" "$nice_level" "$@"
+    ;;
+  prewarm)
+    [[ $# -eq 3 ]] || die "usage: shibumi-picker prewarm MODE OMARCHY_PATH"
+    prewarm_mode "$2" "$3"
+    ;;
+  cleanup)
+    [[ $# -eq 1 ]] || die "usage: shibumi-picker cleanup"
+    for mode in theme wallpaper screenshots videos; do
+      remove_mode_temps "$mode"
+    done
+    ;;
+  *)
+    die "usage: shibumi-picker {scan|cached|warm|prewarm|cleanup} ..."
+    ;;
+esac

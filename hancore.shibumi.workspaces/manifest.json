@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.workspaces",
+  "name": "Shibumi Workspaces",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shared Hyprland workspace state with the Shibumi workspace presentation.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "WorkspaceService.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi workspaces",
+    "description": "Workspace state, switching, styles, and detail panel",
+    "category": "Desktop",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G2",
+    "capabilities": ["workspaces"],
+    "preferredRegion": "left",
+    "requires": [
+      "hancore.shibumi.state"
+    ],
+    "recommends": []
+  }
+}

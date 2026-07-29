@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "embeddedRoot": "../Quickshell-Dots/versions/V1/variants/V2",
+  "standaloneRoot": "../Quickshell-Dots/versions/V2",
+  "standaloneOnly": [
+    {
+      "source": "shell.qml",
+      "reason": "The embedded variant is hosted by V1 VariantHost instead of a second ShellRoot.",
+      "implementation": ["hancore.shibumi.bar/Bar.qml"],
+      "evidence": ["tests/bar-host-registry-smoke.qml"]
+    }
+  ],
+  "differences": [
+    {
+      "source": "Theme.qml",
+      "impact": "comment-only",
+      "decision": "equivalent",
+      "implementation": ["hancore.shibumi.state/ShibumiConfig.js"],
+      "evidence": ["tests/shibumi-config-regression.qml"]
+    },
+    {
+      "source": "modules/CloudflareSpeedTest.qml",
+      "impact": "whitespace-only",
+      "decision": "equivalent",
+      "implementation": ["hancore.shibumi.network/Service.qml"],
+      "evidence": ["tests/network-plugin-regression.sh"]
+    },
+    {
+      "source": "modules/MprisWidget.qml",
+      "impact": "cava-process-lifecycle",
+      "decision": "adapt-safer",
+      "implementation": ["hancore.shibumi.media/Service.qml", "hancore.shibumi.media/BarWidget.qml"],
+      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/media-widget-smoke.qml"]
+    },
+    {
+      "source": "modules/WorkspaceWidget.qml",
+      "impact": "frame-and-aurora-streak-presentations",
+      "decision": "port-both-alongside-standalone-styles",
+      "implementation": ["hancore.shibumi.workspaces/BarWidget.qml", "hancore.shibumi.workspaces/WorkspaceService.qml", "hancore.shibumi.control-center/BarFunctionsPage.qml"],
+      "evidence": ["tests/workspaces-plugin-regression.sh", "tests/workspaces-plugin-smoke.qml", "tests/shibumi-config-regression.qml"]
+    },
+    {
+      "source": "panels/ArchUpdaterPanel.qml",
+      "impact": "omarchy-update-owner-adapter",
+      "decision": "adapt-to-quattro-owner",
+      "implementation": ["hancore.shibumi.update-center/Service.qml", "hancore.shibumi.update-center/UpdateCenterPanel.qml"],
+      "evidence": ["tests/update-center-regression.sh", "tests/update-center-package-regression.sh"]
+    },
+    {
+      "source": "panels/ControlPanel.qml",
+      "impact": "active-host-switch-guards-and-frame-label",
+      "decision": "port",
+      "implementation": ["hancore.shibumi.control-center/HostIdentity.js", "hancore.shibumi.control-center/ControlCenterPanel.qml", "hancore.shibumi.control-center/BarFunctionsPage.qml"],
+      "evidence": ["tests/control-center-regression.sh", "tests/control-center-smoke.qml"]
+    },
+    {
+      "source": "panels/MprisPanel.qml",
+      "impact": "cava-process-lifecycle",
+      "decision": "adapt-safer",
+      "implementation": ["hancore.shibumi.media/Service.qml", "hancore.shibumi.media/MediaPanel.qml"],
+      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/media-plugin-smoke.qml"]
+    }
+  ]
+}

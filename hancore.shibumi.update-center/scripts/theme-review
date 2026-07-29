@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# omarchy:summary=Review a pinned user-theme update
+# omarchy:hidden=true
+
+set -euo pipefail
+
+STATE="${OMARCHY_THEME_UPDATE_STATE:-$HOME/.cache/omarchy/theme-updates.json}"
+THEMES_DIR="${OMARCHY_THEME_UPDATE_DIR:-$HOME/.config/omarchy/themes}"
+
+name=${1:-}
+target=${2:-}
+
+[[ $name =~ ^[A-Za-z0-9._-]+$ && $name != "." && $name != ".." ]] || {
+  printf 'Invalid theme name.\n' >&2
+  exit 64
+}
+[[ $target =~ ^[0-9A-Fa-f]{40}$ || $target =~ ^[0-9A-Fa-f]{64}$ ]] || {
+  printf 'Invalid target commit.\n' >&2
+  exit 64
+}
+[[ -r $STATE ]] || {
+  printf 'Theme update state is unavailable. Run a new check.\n' >&2
+  exit 1
+}
+
+reviewed_target=$(jq -er --arg name "$name" \
+  '.themes[] | select(.name == $name and .behind > 0) | .targetCommit' \
+  "$STATE") || {
+  printf 'Theme is not present in the reviewed update state.\n' >&2
+  exit 1
+}
+[[ $reviewed_target == "$target" ]] || {
+  printf 'Reviewed target changed. Run a new check.\n' >&2
+  exit 1
+}
+
+directory="$THEMES_DIR/$name"
+[[ -d $directory/.git && ! -L $directory ]] || {
+  printf 'Theme repository not found.\n' >&2
+  exit 1
+}
+
+git_theme=(git -C "$directory"
+  -c core.fsmonitor=
+  -c core.hooksPath=/dev/null
+  -c credential.helper=
+  -c protocol.allow=never
+  -c protocol.ext.allow=never
+  -c protocol.file.allow=always
+  -c protocol.git.allow=always
+  -c protocol.http.allow=always
+  -c protocol.https.allow=always
+  -c protocol.ssh.allow=always)
+
+"${git_theme[@]}" cat-file -e "$target^{commit}" 2>/dev/null || {
+  printf 'Reviewed target is not available locally. Run a new check.\n' >&2
+  exit 1
+}
+
+printf 'Theme changes: %s\n\n' "$name"
+printf 'Commits:\n'
+"${git_theme[@]}" --no-pager log --oneline --decorate "HEAD..$target"
+printf '\nChanged files:\n'
+"${git_theme[@]}" --no-pager diff --no-ext-diff --no-textconv \
+  --stat "HEAD..$target"

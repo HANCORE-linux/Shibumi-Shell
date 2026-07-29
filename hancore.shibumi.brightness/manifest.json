@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.brightness",
+  "name": "Shibumi Brightness",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi brightness and display presentation over Omarchy's monitor owner.",
+  "kinds": ["bar-widget", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi brightness",
+    "description": "Brightness, display scale, and monitor controls",
+    "category": "Hardware",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G13",
+    "capabilities": ["display"],
+    "preferredRegion": "right",
+    "requires": [],
+    "recommends": []
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.memory",
+  "name": "Shibumi Memory",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi memory widget and detailed memory panel.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi memory",
+    "description": "Memory usage with compact and detailed views",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G4",
+    "requires": [
+      "hancore.shibumi.telemetry"
+    ],
+    "recommends": []
+  }
+}

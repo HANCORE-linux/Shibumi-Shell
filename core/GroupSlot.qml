@@ -1,0 +1,190 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import "GroupRegistry.js" as GroupRegistry
+
+Item {
+  id: root
+
+  required property var bar
+  required property string groupId
+  property string screenName: ""
+  property real availableWidth: 0
+  readonly property var stateService: bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.state") : null
+  readonly property var stateConfig: stateService && stateService.config
+    ? stateService.config : ({})
+  readonly property var groupSettings: stateConfig.widgets
+    ? stateConfig.widgets[groupId] || ({}) : ({})
+  readonly property bool groupEnabled: groupSettings.enabled !== false
+  readonly property bool appearanceFill: !!(bar.visualTokens
+    && typeof bar.visualTokens.widgetHasFill === "function"
+    && bar.visualTokens.widgetHasFill(groupSettings))
+  readonly property bool appearanceBorder: !!(bar.visualTokens
+    && typeof bar.visualTokens.widgetHasBorder === "function"
+    && bar.visualTokens.widgetHasBorder(groupSettings))
+  readonly property bool decorated: appearanceFill || appearanceBorder
+  readonly property bool v2Shell: !!(bar.visualTokens
+    && bar.visualTokens.v2Shell === true)
+  readonly property real appearancePadding: bar.visualTokens
+    && typeof bar.visualTokens.widgetPadding === "function"
+    ? bar.visualTokens.widgetPadding(groupSettings, decorated)
+    : decorated ? 3 : 0
+  readonly property real appearancePaddingX: appearancePadding
+  readonly property real appearancePaddingY: appearancePadding > 0
+    ? Math.max(1, appearancePadding - 1) : 0
+  // Keep the Repeater model independent from widget settings. Replacing this
+  // model for a value-only settings update destroys the live widget and any
+  // open panel it owns.
+  readonly property var moduleIds: GroupRegistry.moduleIdsFor(
+    groupId, bar.layoutConfig)
+  readonly property int moduleCount: moduleIds.length
+  readonly property var contentItem: content.item
+  readonly property real v2SurfaceHeight: bar.visualTokens
+    && bar.visualTokens.pillHeight !== undefined
+    ? Number(bar.visualTokens.pillHeight) || 24 : 24
+  readonly property Item visualSurfaceItem: widgetSurface
+  readonly property bool hasContent: implicitWidth > 0.5 && implicitHeight > 0.5
+  readonly property real minimumResponsiveWidth: contentItem
+    && "minimumResponsiveWidth" in contentItem
+      ? Math.max(0, Number(contentItem.minimumResponsiveWidth) || 0)
+      : implicitWidth
+
+  implicitWidth: contentItem
+    ? contentItem.implicitWidth + appearancePaddingX * 2 : 0
+  implicitHeight: contentItem
+    ? v2Shell
+      ? Math.max(contentItem.implicitHeight,
+          decorated ? v2SurfaceHeight : 0)
+      : contentItem.implicitHeight + appearancePaddingY * 2
+    : 0
+  width: implicitWidth
+  height: implicitHeight
+
+  function resolvedEntry(moduleId) {
+    return GroupRegistry.entryFor(groupId, moduleId, groupSettings,
+      bar.layoutConfig)
+  }
+
+  Rectangle {
+    id: widgetSurface
+
+    anchors.verticalCenter: parent.verticalCenter
+    width: parent.width
+    height: root.v2Shell
+      ? Math.min(parent.height, root.v2SurfaceHeight) : parent.height
+    visible: root.decorated
+    radius: root.bar.visualTokens
+      && typeof root.bar.visualTokens.widgetRadius === "function"
+      ? root.bar.visualTokens.widgetRadius(root.groupSettings)
+      : root.bar.visualTokens
+        && root.bar.visualTokens.tileRadius !== undefined
+        ? root.bar.visualTokens.tileRadius : 0
+    opacity: root.bar.visualTokens
+      && typeof root.bar.visualTokens.widgetSurfaceOpacity === "function"
+      ? root.bar.visualTokens.widgetSurfaceOpacity(root.groupSettings) : 1
+    color: root.appearanceFill
+      && typeof root.bar.visualTokens.widgetFillColor === "function"
+      ? root.bar.visualTokens.widgetFillColor(root.groupSettings)
+      : "transparent"
+    border.width: root.appearanceBorder && root.bar.visualTokens
+      && typeof root.bar.visualTokens.widgetBorderWidth === "function"
+      ? root.bar.visualTokens.widgetBorderWidth(root.groupSettings)
+      : root.appearanceBorder ? 1 : 0
+    border.color: root.appearanceBorder
+      && typeof root.bar.visualTokens.widgetBorderColor === "function"
+      ? root.bar.visualTokens.widgetBorderColor(root.groupSettings)
+      : "transparent"
+  }
+
+  Loader {
+    id: content
+    x: root.appearancePaddingX
+    y: root.v2Shell
+      ? Math.round((root.height - (root.contentItem
+          ? root.contentItem.implicitHeight : 0)) / 2)
+      : root.appearancePaddingY
+    active: root.groupEnabled
+    sourceComponent: !active ? null
+      : root.bar.vertical ? verticalContent : horizontalContent
+  }
+
+  Component {
+    id: horizontalContent
+
+    Item {
+      id: horizontalRoot
+
+      readonly property real minimumResponsiveWidth: {
+        void(moduleRow.implicitWidth)
+        var total = 0
+        for (var i = 0; i < moduleRepeater.count; i++) {
+          var item = moduleRepeater.itemAt(i)
+          if (item) total += Number(item["minimumResponsiveWidth"]) || 0
+        }
+        return total
+      }
+
+      function siblingWidth(excludedIndex) {
+        // Re-evaluate when any asynchronously loaded sibling changes size.
+        void(moduleRow.implicitWidth)
+        var total = 0
+        for (var i = 0; i < moduleRepeater.count; i++) {
+          if (i === excludedIndex) continue
+          var item = moduleRepeater.itemAt(i)
+          if (item) total += item.implicitWidth
+        }
+        return total
+      }
+
+      implicitWidth: moduleRow.childrenRect.width
+      implicitHeight: moduleRow.childrenRect.height
+
+      Row {
+        id: moduleRow
+
+        Repeater {
+          id: moduleRepeater
+          model: root.moduleIds
+          WidgetSlot {
+            required property string modelData
+            required property int index
+            bar: root.bar
+            entry: root.resolvedEntry(modelData)
+            region: root.groupId
+            screenName: root.screenName
+            availableWidth: root.availableWidth > 0
+              ? Math.max(0, root.availableWidth - horizontalRoot.siblingWidth(index)) : 0
+          }
+        }
+      }
+    }
+  }
+
+  Component {
+    id: verticalContent
+
+    Item {
+      implicitWidth: moduleColumn.childrenRect.width
+      implicitHeight: moduleColumn.childrenRect.height
+
+      Column {
+        id: moduleColumn
+
+        Repeater {
+          id: moduleRepeater
+          model: root.moduleIds
+          WidgetSlot {
+            required property string modelData
+            bar: root.bar
+            entry: root.resolvedEntry(modelData)
+            region: root.groupId
+            screenName: root.screenName
+            availableWidth: root.availableWidth
+          }
+        }
+      }
+    }
+  }
+}

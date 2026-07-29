@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.storage",
+  "name": "Shibumi Storage",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Demand-driven root storage widget and drive inventory.",
+  "kinds": ["bar-widget", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi Storage",
+    "description": "Filesystem usage and mounted drive inventory",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G18",
+    "requires": [],
+    "recommends": []
+  }
+}

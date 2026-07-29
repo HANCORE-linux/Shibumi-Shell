@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.ai",
+  "name": "Shibumi AI Usage",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi Claude, Codex, and OpenCode usage presentation.",
+  "kinds": ["bar-widget", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi AI usage",
+    "description": "Selected AI provider usage and detailed limits",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G7",
+    "capabilities": ["model-usage"],
+    "preferredRegion": "left",
+    "requires": ["hancore.shibumi.state"],
+    "recommends": [],
+    "hostContracts": ["omarchy.model-usage"]
+  }
+}

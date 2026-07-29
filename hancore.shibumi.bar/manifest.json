@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.bar",
+  "name": "Shibumi Bar",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "The Shibumi full-bar host for Omarchy Shell.",
+  "kinds": [
+    "bar"
+  ],
+  "entryPoints": {
+    "bar": "Bar.qml"
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "core",
+    "role": "bar-host",
+    "requires": [
+      "hancore.shibumi.state"
+    ],
+    "recommends": [
+      "hancore.shibumi.reactor"
+    ]
+  }
+}

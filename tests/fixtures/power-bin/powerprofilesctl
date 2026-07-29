@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+[[ ${1:-} == set && $# -eq 2 ]] || exit 2
+case $2 in
+  power-saver|balanced|performance) ;;
+  *) exit 3 ;;
+esac
+printf '%s\n' "$2" >"${SHIBUMI_POWER_FIXTURE_STATE:?}.tmp"
+mv -f -- "${SHIBUMI_POWER_FIXTURE_STATE}.tmp" "$SHIBUMI_POWER_FIXTURE_STATE"

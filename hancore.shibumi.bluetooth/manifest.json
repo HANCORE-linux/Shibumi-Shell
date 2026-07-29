@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.bluetooth",
+  "name": "Shibumi Bluetooth",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi Bluetooth presentation over Omarchy's BlueZ and audio owner.",
+  "kinds": ["bar-widget", "service"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi Bluetooth",
+    "description": "Bluetooth radio, discovery, pairing, and devices",
+    "category": "Hardware",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G15",
+    "capabilities": ["bluetooth"],
+    "preferredRegion": "right",
+    "requires": [],
+    "recommends": []
+  }
+}

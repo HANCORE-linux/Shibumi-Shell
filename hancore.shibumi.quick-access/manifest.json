@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "hancore.shibumi.quick-access",
+  "name": "Shibumi Quick Access",
+  "version": "0.1.0",
+  "author": "HANCORE",
+  "license": "MIT",
+  "description": "Shibumi idle inhibitor and theme, wallpaper, screenshot, and video pickers.",
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "barWidget": {
+    "displayName": "Shibumi quick access",
+    "description": "Idle inhibitor and image/media picker shortcuts",
+    "category": "Utilities",
+    "allowMultiple": false
+  },
+  "x-shibumi": {
+    "suiteId": "hancore.shibumi",
+    "bundle": "default",
+    "role": "G10",
+    "requires": [
+      "hancore.shibumi.state"
+    ],
+    "recommends": []
+  }
+}
