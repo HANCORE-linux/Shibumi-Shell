@@ -1,0 +1,82 @@
+# Configuration
+
+Status: user reference
+
+Shibumi keeps Omarchy-owned shell configuration and suite bookkeeping
+separate.
+
+## Omarchy shell configuration
+
+The active bar, plugin activation, bar layout, and Shibumi settings live in:
+
+```text
+~/.config/omarchy/shell.json
+```
+
+Shibumi settings are stored under `bar.shibumi`. The state service validates
+and normalizes this branch before using it. It includes:
+
+- V1 and V2 widget order and split boundaries;
+- per-widget enabled state and appearance;
+- bar style, semantic accent, borders, frost, shadow, and radius;
+- workspace mode and presentation;
+- App Menu favorites, hidden entries, launcher identity, and presentation;
+- image and media picker styles;
+- Reactor mode.
+
+Use the Control Center for normal changes. Manual JSON edits can be rejected or
+normalized when they violate the schema.
+
+## Bar ownership
+
+`bar.id` selects the active full-bar host. Shibumi and Omarchy retain separate
+layout snapshots through the suite's continuity manager.
+
+- **Bars** in the Control Center switches hosts.
+- `shibumi-suite deactivate` selects Omarchy while retaining Shibumi.
+- `shibumi-suite activate` restores Shibumi and its managed layout.
+- `omarchy bar reset` selects the stock host without a full defaults reset.
+- `omarchy bar defaults` replaces the complete `bar` object, including
+  `bar.shibumi`.
+
+## Plugin installation and suite state
+
+Installed plugin payloads live under:
+
+```text
+${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/hancore.shibumi.*/
+```
+
+Suite ownership, revision, payload hashes, and transaction recovery data live
+under:
+
+```text
+${XDG_STATE_HOME:-$HOME/.local/state}/shibumi/
+```
+
+Transient cache data lives under:
+
+```text
+${XDG_CACHE_HOME:-$HOME/.cache}/shibumi/
+```
+
+Do not copy repository-relative imports or state paths into installed plugins.
+Every plugin must be self-contained at runtime.
+
+## Theme ownership
+
+Omarchy owns the active theme and its color files. Shibumi maps those colors to
+semantic presentation tokens and owns its geometry, typography, component
+states, and interaction behavior.
+
+The configured accent stores a semantic role such as `color01`, not a raw
+color value. Theme changes therefore update Shibumi without rewriting personal
+settings.
+
+## Defaults
+
+The current defaults are defined by
+[`hancore.shibumi.state/ShibumiConfig.js`](../hancore.shibumi.state/ShibumiConfig.js)
+and the suite profile in
+[`contracts/plugin-suite-v1.json`](../contracts/plugin-suite-v1.json).
+Machine-readable contracts, not prose examples, are authoritative.

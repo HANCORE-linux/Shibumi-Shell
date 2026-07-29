@@ -1,109 +1,104 @@
-# Shibumi documentation index
+# Shibumi documentation
 
-> **Document status: Canonical documentation index.** Start with
-> [`../ARCHITECTURE.md`](../ARCHITECTURE.md). It is the only document that may
-> define or change the product-wide Shibumi contract.
+Status: canonical documentation index
 
-This index separates binding contracts from current validation evidence and
-historical implementation records. A detail document never overrides
-`ARCHITECTURE.md`.
+Shibumi separates user guides, stable architecture contracts, current
+validation evidence, contributor workflows, and historical implementation
+records. Supporting documents never override the canonical
+[architecture contract](../ARCHITECTURE.md).
 
-## Status definitions
+## Reading paths
 
-- **Canonical contract**: defines product-wide premises and release rules
-- **Normative supporting contract**: defines one bounded surface in more detail
-- **Current validation gate**: records the latest proven and unproven behavior
-- **Validation evidence**: records a test run or audit that supports a gate
-- **Historical record**: preserves decisions or migration evidence but does not
-  describe the current release state
-- **External dependency register**: tracks missing host contracts and bounded
+For users:
+
+1. [Install and update](install.md)
+2. [Configuration](configuration.md)
+3. [Plugin catalog](plugins/README.md)
+4. [Troubleshooting](development/troubleshooting.md)
+
+For maintainers:
+
+1. [Architecture overview](architecture/overview.md)
+2. [Canonical architecture contract](../ARCHITECTURE.md)
+3. [Host facade](host-facade-v1.md)
+4. [Plugin suite migration and lifecycle](plugin-suite-migration-plan.md)
+5. [Testing](development/testing.md)
+6. [Release workflow](development/release.md)
+7. [Current release readiness](release-readiness.md)
+
+For design and UI work:
+
+1. [Shibumi design entry point](../DESIGN.md)
+2. [V1 presentation contract](v1-presentation-contract.md)
+3. [Control Center contract](control-center-v4.md)
+4. [Style extension guide](../styles/README.md)
+5. [Screenshot plan](screenshots/README.md)
+
+For parity and release evidence:
+
+1. [V1 parity matrix](v1-parity-matrix.md)
+2. [V1 widget parity audit](v1-widget-parity-audit.md)
+3. [V1 output lifecycle audit](v1-output-lifecycle-audit.md)
+4. [Current V1 discrepancy audit](current-v1-discrepancy-audit.md)
+5. [Quattro contract gaps](omarchy-quattro-contract-gaps.md)
+
+## Document classes
+
+- **Canonical contract:** product-wide premises and release rules
+- **Supporting contract:** one bounded interface or presentation surface
+- **Current validation gate:** latest proven and unproven release behavior
+- **Validation evidence:** dated test or audit evidence
+- **Historical record:** implementation or migration context that may no
+  longer describe the current tree
+- **External dependency register:** missing host contracts and bounded
   workarounds
 
-## Required reading order
-
-1. [`../ARCHITECTURE.md`](../ARCHITECTURE.md): product boundary, premises,
-   ownership, lifecycle, performance, safety, and release gates
-2. [`v1-presentation-contract.md`](v1-presentation-contract.md): binding V1
-   visual and interaction contract
-3. [`phase2-ownership-map.md`](phase2-ownership-map.md): binding G1-G15 state,
-   action, widget, and panel ownership
-4. [`host-facade-v1.md`](host-facade-v1.md): versioned contract between feature
-   plugins and selectable bar hosts
-5. [`plugin-suite-migration-plan.md`](plugin-suite-migration-plan.md): plugin
-   boundaries, repository layout, bundle lifecycle, and migration rules
-6. [`multi-bar-extension-plan.md`](multi-bar-extension-plan.md): supported
-   procedure and release gates for additional Shibumi bar hosts
-7. [`release-readiness.md`](release-readiness.md): current private release gate
-
-## Normative supporting contracts
-
-| Document | Binding scope |
-| --- | --- |
-| [`v1-presentation-contract.md`](v1-presentation-contract.md) | Binding QS Rise V1 reference geometry, surfaces, controls, typography, icons, motion, and interaction for Shibumi parity |
-| [`phase2-ownership-map.md`](phase2-ownership-map.md) | G1-G15 owners, adapters, actions, and configuration boundaries |
-| [`host-facade-v1.md`](host-facade-v1.md) | Reusable widget-to-bar application programming interface (API) |
-| [`plugin-suite-migration-plan.md`](plugin-suite-migration-plan.md) | Independent plugin boundaries, packaging, installation, update, rollback, and removal |
-| [`control-center-v4.md`](control-center-v4.md) | ContextOwl/shadcn control-center design, Quattro plugin management contract, security confirmation, runtime evidence, and remaining gates |
-| [`multi-bar-extension-plan.md`](multi-bar-extension-plan.md) | Quattro-compatible registration, shared ownership, switching, fallback, and validation rules for additional Shibumi bars |
-| [`app-menu-integration-plan.md`](app-menu-integration-plan.md) | Independent App Menu ownership and its separation from G1 |
-| [`v1-output-lifecycle-audit.md`](v1-output-lifecycle-audit.md) | Multi-output, hotplug, Display Power Management Signaling (DPMS), suspend, hibernate, and resume requirements |
-| [`../styles/README.md`](../styles/README.md) | Rules for adding another selectable Shibumi bar presentation |
-
-Machine-readable contracts under [`../contracts/`](../contracts/) and current
-source code define exact schema fields, plugin IDs, and executable defaults.
-
-## Current status and release evidence
+## Current references
 
 | Document | Purpose |
 | --- | --- |
-| [`release-readiness.md`](release-readiness.md) | Current `v0.1.0` alpha evidence, private acceptance, and public-release blockers |
-| [`../CHANGELOG.md`](../CHANGELOG.md) | User-visible changes by version |
-| [`project-state-2026-07-27.md`](project-state-2026-07-27.md) | Earlier V1, V2, Quattro, Shibumi, and Machine2 continuation snapshot |
-| [`v1-parity-matrix.md`](v1-parity-matrix.md) | Product-wide QS Rise V1 outcome and current Shibumi status by feature |
-| [`v1-widget-parity-audit.md`](v1-widget-parity-audit.md) | G1-G15 capability, presentation, and runtime evidence |
-| [`current-v1-discrepancy-audit.md`](current-v1-discrepancy-audit.md) | Dated comparison between the current read-only V1 worktree and the Shibumi contract |
-| [`phase3-validation.md`](phase3-validation.md) | Split, drag-and-drop, persistence, and interaction evidence |
+| [Install and update](install.md) | Install, migrate, activate, update, deactivate, and remove the suite |
+| [Configuration](configuration.md) | Omarchy shell settings, Shibumi state, and ownership |
+| [Plugin catalog](plugins/README.md) | The 25 plugin roots, roles, and host dependencies |
+| [Architecture overview](architecture/overview.md) | Short runtime and ownership map |
+| [Testing](development/testing.md) | Machine2-only validation workflow |
+| [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
+| [Release workflow](development/release.md) | Private-alpha preparation and publication gates |
+| [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
+| [Changelog](../CHANGELOG.md) | User-visible changes by version |
 
-When status summaries disagree, `release-readiness.md` is current. The other
-files retain the detailed evidence behind that summary.
+Machine-readable contracts under [`../contracts/`](../contracts/) and the
+current source define exact schema fields, plugin IDs, and executable defaults.
 
-## Historical validation and migration records
+## Supporting contracts
 
-| Document | Historical scope |
+| Document | Scope |
 | --- | --- |
-| [`project-state-2026-07-29.md`](project-state-2026-07-29.md) | Pre-alpha Control Center `color08` and shadowless V2 Notch handoff |
-| [`runtime-validation.md`](runtime-validation.md) | Phase 1 combined-plugin and early Machine2 runtime evidence |
-| [`phase2-validation.md`](phase2-validation.md) | Phase 2 combined-plugin and feature-slice evidence |
-| [`plugin-suite-inventory.md`](plugin-suite-inventory.md) | File ownership ledger used during extraction into independent plugins |
-| [`qs-rise-predecessor-release-evidence.md`](qs-rise-predecessor-release-evidence.md) | Last full Machine2 release evidence for the pre-rename `hancore.qsrise.*` suite |
+| [V1 presentation contract](v1-presentation-contract.md) | Geometry, surfaces, controls, typography, icons, motion, and interaction |
+| [Phase 2 ownership map](phase2-ownership-map.md) | G1-G18 state, action, widget, and panel ownership |
+| [Host facade v1](host-facade-v1.md) | Reusable widget-to-bar API |
+| [Widget provider contract](widget-provider-contract.md) | Widget registration and provider behavior |
+| [Control Center v4](control-center-v4.md) | Control Center design and runtime contract |
+| [Multi-bar extension plan](multi-bar-extension-plan.md) | Registration and validation rules for additional bar hosts |
+| [App Menu integration](app-menu-integration-plan.md) | App Menu ownership and separation from G1 |
+| [V1 output lifecycle audit](v1-output-lifecycle-audit.md) | Multi-output, scale, hotplug, DPMS, suspend, and resume behavior |
 
-These documents may describe transitional paths or incomplete phases that no
-longer match the current tree. Use them to understand provenance, not to decide
-whether the current release passes.
+## Validation and historical records
 
-## External dependency register
-
-[`omarchy-quattro-contract-gaps.md`](omarchy-quattro-contract-gaps.md) records
-host capabilities that Quattro does not expose through a stable plugin API.
-Each entry states the current workaround and whether the gap blocks release.
-
-## Local reports
-
-Files under `~/Projects/Reports` contain V1 audits, measurements, architecture
-options, pull request reviews, and earlier decisions. They remain useful
-evidence, but they are outside this repository and are not normative. Any
-decision that still applies must also appear in `ARCHITECTURE.md` or a linked
-normative supporting contract.
+The dated project-state, phase-validation, inventory, migration, and
+predecessor-evidence documents remain in this directory so existing links stay
+valid. Use them for provenance, not for the current release decision. When
+summaries disagree, [release readiness](release-readiness.md) is current.
 
 ## Updating the contract
 
-Every change to a Shibumi premise must update:
+Every product-level behavior change must update:
 
-1. `ARCHITECTURE.md`
-2. the affected normative supporting contract
-3. the relevant parity or release gate
-4. executable defaults or machine-readable contracts when behavior changes
-5. regression and runtime evidence required by the blast radius
+1. `ARCHITECTURE.md`;
+2. the affected supporting contract;
+3. the relevant parity or release gate;
+4. executable defaults or machine-readable contracts when behavior changes;
+5. regression and runtime evidence appropriate to the change.
 
-A conversation, test note, or phase report alone does not change the product
+A discussion, screenshot, or test note alone does not change the product
 contract.

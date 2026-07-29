@@ -2,7 +2,10 @@
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `v0.1.0` is ready for a private alpha commit. Machine2 passes the complete automated contract and the affected live Wayland workflows. Physical multi-monitor, enterprise Wi-Fi, and Bluetooth-device acceptance still block a public release.
+Shibumi `v0.1.0` is ready for private alpha testing. Machine2 passes the
+complete automated contract and the affected live Wayland workflows. Physical
+multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
+block a public release.
 
 ## Current test target
 
@@ -38,6 +41,8 @@ The 2026-07-29 audit produced these results:
 | Runtime process count | Passed: one Quickshell process after each switch |
 | Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error |
 | Control Center **Bars** view | Passed on the physical Wayland session |
+| Bluetooth connection and panel | Passed with a live connected phone |
+| Idle/screensaver panel cleanup | Passed in the bar-host regression and deployed live |
 | Temperature sources | Passed: CPU and core live; absent sources disabled |
 | Workspace styles | Passed: eight supported styles and geometry checks |
 
@@ -55,6 +60,8 @@ The audit fixed these release blockers:
 - The Appearance page waits for all eight workspace-style controls
 - V1 and V2 evidence covers every source surface instead of selected feature samples
 - The center smoke rejects missing production panel types
+- Bluetooth reports the live connection without presenting an untrusted phone battery value
+- Active panels close before an idle or screensaver bar pre-hide can invalidate their anchor
 
 ## Lifecycle and supply-chain boundary
 
@@ -80,10 +87,14 @@ The alpha may be committed and pushed to the private repository with these limit
 - The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
 - Machine2 has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
 - No enterprise Wi-Fi credentials were supplied for a real authentication test
-- No paired Bluetooth device was available for pair, audio-route, disconnect, and forget tests
+- A live Bluetooth phone connection and panel pass; pairing, audio routing,
+  disconnect, and forget still need complete physical acceptance
 - A Shibumi update starts from a trusted repository checkout
 
 Fixtures cover unavailable and error behavior, but they don't replace the physical gates.
+The predecessor's multi-monitor and mixed-scale implementation is mapped into
+the Shibumi source and automated contracts, but inherited behavior does not
+replace a physical Shibumi run on the target Quattro release.
 
 ## Public release blockers
 

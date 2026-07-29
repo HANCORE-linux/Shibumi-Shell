@@ -1,22 +1,54 @@
-# Shibumi
+# Shibumi Shell for Omarchy
 
-Shibumi is an independent bar and plugin suite for Omarchy Quattro. It ports the approved QS Rise V1 and V2 behavior into Quattro's native plugin runtime. Shibumi is not an official Omarchy project.
+Shibumi is a native bar and plugin suite for Omarchy Quattro. It brings the
+approved QS Rise V1 and V2 layouts, controls, widgets, panels, and interaction
+model into Omarchy's existing shell process. Shibumi is an independent
+third-party project, not an official Omarchy product.
 
-## Project status
+> [!IMPORTANT]
+> Version `0.1.0` is a private alpha. Keep the repository private until the
+> physical multi-monitor, enterprise Wi-Fi, and remaining Bluetooth workflow
+> gates in [release readiness](docs/release-readiness.md) pass.
 
-Version `0.1.0` is a private alpha. The repository contains one full-bar plugin and 24 widget, menu, and service plugins. All 25 plugins run inside the existing Omarchy Shell process.
+> **Screenshot placeholder:** Shibumi desktop overview with the default bar,
+> Control Center, and one connected panel. Target:
+> `docs/screenshots/readme/shibumi-desktop.webp`.
 
-Machine2 passes the complete source contract against Omarchy Quattro `4.0.0.r1441.g9174fbf-1`. Physical multi-monitor, enterprise Wi-Fi, and Bluetooth-device gates remain open. Keep the repository private while those public-release gates are open.
+## What Shibumi changes
 
-## Why installation uses a suite adapter
+Shibumi provides a complete bar experience without replacing Omarchy's plugin
+system or starting a second Quickshell process.
 
-Quattro's `omarchy plugin add` command reads one root `manifest.json` and installs one plugin ID. Shibumi has 25 plugin roots, so the repository root has no installable manifest.
+- One selectable Shibumi bar with Top and Bottom placement
+- V1 and V2 layouts, split controls, drag-and-drop, and responsive hiding
+- Control Center pages for bars, widgets, appearance, layout, and advanced
+  settings
+- App Menu, workspace, notification, telemetry, media, quick-access, network,
+  Bluetooth, power, brightness, temperature, GPU, and storage surfaces
+- Theme-aware Shibumi colors, borders, radii, typography, and panel behavior
+- Transactional install, migration, update, activation, rollback, and removal
+- Per-bar layout continuity when switching between Shibumi and Omarchy
 
-Each child plugin passes `omarchy plugin validate`. The bundled `shibumi-suite` command stages, activates, updates, rolls back, and removes all 25 plugins as one transaction. Don't run `omarchy plugin add` against this repository.
+> **Screenshot placeholder:** Side-by-side captures of the Bars page and
+> Appearance page. Targets:
+> `docs/screenshots/readme/shibumi-bars.webp` and
+> `docs/screenshots/readme/shibumi-appearance.webp`.
 
-## Install the private alpha
+## Requirements
 
-Install from a trusted checkout on an Omarchy Quattro system:
+- An up-to-date Omarchy Quattro installation
+- Git for installation from this private repository
+- A trusted local checkout; Shibumi does not fetch its own source updates
+
+The current alpha is validated on Machine2 against Omarchy Quattro
+`4.0.0.r1441.g9174fbf-1`. See
+[release readiness](docs/release-readiness.md) for the exact environment and
+remaining physical gates.
+
+## Install
+
+Clone the private repository on the target Omarchy system, preview the
+transaction, and install:
 
 ```bash
 git clone git@github.com:HANCORE-linux/Shibumi-Shell.git
@@ -25,22 +57,46 @@ cd Shibumi-Shell
 ./scripts/shibumi-suite install
 ```
 
-The installer validates every plugin, snapshots `shell.json`, stages the complete payload, and verifies the running shell. A failed gate restores the previous plugins and configuration.
+The suite adapter validates and stages all 25 plugin roots, snapshots the
+current shell configuration, activates the complete payload, reloads Omarchy
+Shell, and verifies the running revision. A failed gate restores the previous
+plugins and configuration.
 
-## Migrate from QS Rise
+Do not run `omarchy plugin add` against the repository root. Quattro installs
+one root manifest at a time, while Shibumi is one managed suite of 25
+independent plugins.
 
-Use the migration command only for a suite-managed QS Rise predecessor:
+See [install and update](docs/install.md) for migration, recovery, and removal
+details.
 
-```bash
-./scripts/shibumi-suite migrate --dry-run
-./scripts/shibumi-suite migrate
-```
+## After installation
 
-Migration preserves unrelated `shell.json` data, layout order, widget options, and Shibumi settings. It refuses unmanaged directories and ambiguous old/new state.
+- Open the Shibumi wordmark to reach the Control Center.
+- Use **Bars** to switch between the Shibumi and Omarchy bar hosts.
+- Use **Widgets** to enable, disable, configure, or place bar widgets.
+- Use **Appearance** for color, border, radius, style, and workspace controls.
+- Use **Layout** for split and separator behavior.
+- Continue changing themes and wallpapers through Omarchy; Shibumi follows the
+  active theme.
 
-## Update the alpha
+Shibumi stores its configuration under `bar.shibumi` in Omarchy's
+`~/.config/omarchy/shell.json`. Read [configuration](docs/configuration.md) for
+the ownership and persistence model.
 
-Quattro doesn't provide a multi-plugin repository updater. Update the trusted checkout, review the plan, then apply one suite transaction:
+## Make it yours
+
+The Control Center exposes the supported product settings:
+
+- switch between the V1 and V2-derived shell styles;
+- choose the Shibumi accent from Omarchy's semantic theme colors;
+- enable borders, panel borders, frost, and supported radius modes;
+- choose workspace presentation, picker style, and per-widget appearance;
+- rearrange widgets and control split or separator boundaries;
+- keep independent layouts for the Shibumi and Omarchy bars.
+
+## Update
+
+Update the trusted checkout, preview the suite transaction, and apply it:
 
 ```bash
 git pull --ff-only
@@ -48,47 +104,70 @@ git pull --ff-only
 ./scripts/shibumi-suite update
 ```
 
-The Update Center covers Arch packages and installed Git themes. It doesn't fetch Shibumi source revisions.
+The Update Center handles Arch packages and installed Git themes. It does not
+download Shibumi source revisions.
 
-## Manage the active bar
+## Switch, reset, and remove
 
-Use these commands to inspect or change the installed suite:
+Inspect or change the installed suite:
 
 ```bash
 ./scripts/shibumi-suite status
-./scripts/shibumi-suite activate --dry-run
-./scripts/shibumi-suite activate
 ./scripts/shibumi-suite deactivate --dry-run
 ./scripts/shibumi-suite deactivate
+./scripts/shibumi-suite activate --dry-run
+./scripts/shibumi-suite activate
 ./scripts/shibumi-suite uninstall --dry-run
 ./scripts/shibumi-suite uninstall
 ```
 
-The Control Center's **Bars** page also switches between Shibumi and Omarchy. It stores each bar layout separately and keeps the return path available.
+`deactivate` restores the stock Omarchy bar while retaining the managed
+plugins and Shibumi settings. `activate` restores the Shibumi bar and its
+managed layout.
 
-`omarchy bar reset` selects the built-in bar but retains the Shibumi layout and settings. Run `shibumi-suite activate` to select Shibumi again.
-
-`omarchy bar defaults` replaces the complete `bar` object with Omarchy defaults. This also removes `bar.shibumi` and its personal settings. `shibumi-suite activate` restores the managed Shibumi layout, but it cannot reconstruct settings that the defaults command deleted.
+`omarchy bar reset` also selects the stock bar and preserves the current
+layout. `omarchy bar defaults` replaces the complete Omarchy `bar` object,
+including `bar.shibumi`; use it only when you intentionally want to discard
+those settings.
 
 ## Security boundary
 
-Quattro plugins execute unsandboxed in the desktop shell. Install Shibumi and third-party catalog plugins only from sources you trust.
+Omarchy plugins execute unsandboxed inside the desktop shell. Install Shibumi
+and third-party catalog plugins only from sources you trust.
 
-Shibumi rejects symlinked plugin payloads, special files, foreign ownership markers, unsafe manifest entry points, and unreviewed replacement directories. Theme updates disable Git hooks and filters, require an unchanged reviewed target, and apply fast-forward updates only.
+The suite adapter rejects symlinked payloads, special files, unsafe manifest
+entry points, foreign ownership markers, and unknown replacement directories.
+It hashes the staged payload and verifies the running revision before
+committing a transaction.
 
-## Alpha limitations
+## Project status
 
-Version `0.1.0` has these acceptance limits:
+Version `0.1.0` contains one full-bar plugin and 24 widget, menu, and service
+plugins. The complete source and runtime contract passes on Machine2.
 
-- Machine2 has one `1920x1080` output at scale `1.0`, so physical mixed-scale and hotplug tests remain open
-- No enterprise Wi-Fi credentials were supplied for a real authentication test
-- No paired Bluetooth test device was available for pairing and audio-route tests
-- Shibumi updates require a trusted source checkout and `shibumi-suite update`
+Current private-alpha limits:
 
-Fixtures cover unavailable, degraded, and error states where hardware isn't available. They don't replace physical acceptance.
+- physical mixed-scale, hotplug, and unplug-during-drag acceptance is open;
+- enterprise Wi-Fi authentication and recovery need real credentials;
+- a live Bluetooth connection and panel behavior pass, while pairing, audio
+  routing, disconnect, and forget still need complete acceptance;
+- source updates require a trusted checkout and `shibumi-suite update`.
+
+Fixtures cover unavailable, degraded, and error states. They do not replace
+physical hardware acceptance.
 
 ## Documentation
 
-`/home/hancore/Projects/Quickshell-Dots` is a read-only QS Rise V1 reference during this work. Shibumi may port approved host-neutral behavior from it, but it must not share runtime paths, lifecycle state, or platform ownership.
+Start with the [documentation map](docs/README.md). The
+[architecture contract](ARCHITECTURE.md) defines the product boundary, and
+[release readiness](docs/release-readiness.md) records the current validation
+evidence.
 
-Read [`ARCHITECTURE.md`](ARCHITECTURE.md) for the product contract, [`docs/release-readiness.md`](docs/release-readiness.md) for current evidence, and [`docs/README.md`](docs/README.md) for the documentation map.
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing QML, plugin contracts,
+tests, or documentation. Shibumi tests run only on Machine2.
+
+## License
+
+Shibumi is released under the [MIT License](LICENSE).

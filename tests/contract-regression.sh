@@ -12,7 +12,9 @@ fail() {
 
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 command -v rg >/dev/null 2>&1 || fail "rg is required"
+command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
+"$repo_root/tests/documentation-regression.py"
 "$repo_root/tests/state-matrix-contract-regression.sh"
 "$repo_root/tests/v1-feature-evidence-regression.sh"
 "$repo_root/tests/v2-source-evidence-regression.sh"
