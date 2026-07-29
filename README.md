@@ -27,6 +27,13 @@ git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && 
 
 [Installation, updates, recovery, and removal](docs/install.md)
 
+### Uninstall
+
+Remove all managed Shibumi plugins and restore the stock Omarchy bar with
+`./scripts/shibumi-suite uninstall`.
+
+[Uninstall options and settings preservation](docs/install.md#uninstall)
+
 <p align="center">
   <img src="docs/mockups/control-center-color08-appearance-machine2.png"
        alt="Shibumi Appearance controls"

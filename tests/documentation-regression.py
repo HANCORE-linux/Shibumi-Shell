@@ -77,6 +77,8 @@ def main() -> None:
     )
     if install_command not in bash_blocks[0]:
         fail("README landing page is missing the private-alpha install command")
+    if "`./scripts/shibumi-suite uninstall`" not in readme:
+        fail("README landing page is missing the uninstall command")
 
     print("documentation regression passed")
 
