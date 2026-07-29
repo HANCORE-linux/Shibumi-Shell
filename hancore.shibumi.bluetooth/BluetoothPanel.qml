@@ -42,7 +42,10 @@ ShibumiPanel {
   }
 
   function sectionStarts(index) {
-    return index === 0 || rows[index - 1].section !== rows[index].section
+    const current = rowAt(index)
+    if (!current) return false
+    const previous = rowAt(index - 1)
+    return !previous || previous.section !== current.section
   }
 
   function rowAt(index) {
@@ -68,6 +71,17 @@ ShibumiPanel {
     return canForget(row) && bluetoothService.forgetDevice(row.device)
   }
 
+  function batteryStatusText(device) {
+    if (!device || !device.batteryAvailable) return ""
+    const icon = String(device.icon || "").toLowerCase()
+    // BlueZ may expose coarse or stale phone charge without provenance, and
+    // Quickshell does not expose Battery1.Source or an update timestamp.
+    if (icon === "phone" || icon === "smartphone") return ""
+    const battery = Number(device.battery)
+    if (!Number.isFinite(battery) || battery < 0 || battery > 1) return ""
+    return Math.round(battery * 100) + "%"
+  }
+
   function statusText(row) {
     if (!row || !row.device) return ""
     void(bluetoothService.pendingActions)
@@ -79,8 +93,8 @@ ShibumiPanel {
     if (pending === "connecting" || Number(device.state) === 3
         || device.pairing === true) return "Connecting..."
     if (device.connected) {
-      if (device.batteryAvailable)
-        return "Connected · " + Math.round(Number(device.battery || 0) * 100) + "%"
+      const batteryText = batteryStatusText(device)
+      if (batteryText !== "") return "Connected · " + batteryText
       return "Connected"
     }
     return row.section === "paired" ? "Paired" : "Available"
@@ -208,8 +222,6 @@ ShibumiPanel {
             onClicked: panel.bluetoothService.restartDiscovery()
           }
 
-          PowerToggle {}
-
           IconAction {
             icon: "close"
             tooltip: "Close"
@@ -236,7 +248,7 @@ ShibumiPanel {
         }
 
         Column {
-          width: parent.width - x
+          width: parent.width - x - heroPowerToggle.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(2)
 
@@ -263,6 +275,11 @@ ShibumiPanel {
             elide: Text.ElideRight
             renderType: Text.NativeRendering
           }
+        }
+
+        PowerToggle {
+          id: heroPowerToggle
+          anchors.verticalCenter: parent.verticalCenter
         }
       }
 
@@ -329,14 +346,6 @@ ShibumiPanel {
         }
       }
 
-      Ui.PanelSeparator { width: parent.width }
-
-      PanelButton {
-        width: parent.width
-        icon: "settings_bluetooth"
-        label: "Bluetooth settings"
-        onClicked: panel.ownerWidget.launchBluetooth()
-      }
     }
   }
 
@@ -435,45 +444,6 @@ ShibumiPanel {
       visible: powerMouse.containsMouse
       text: panel.bluetoothService.radioEnabled
         ? "Turn Bluetooth off" : "Turn Bluetooth on"
-    }
-  }
-
-  component PanelButton: Ui.CursorSurface {
-    id: button
-    property string icon: ""
-    property string label: ""
-    signal clicked()
-    implicitHeight: Commons.Style.space(30)
-    radius: panel.controlRadius
-    bordered: true
-    foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-    accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
-
-    Row {
-      anchors.centerIn: parent
-      spacing: Commons.Style.space(6)
-      IconText {
-        anchors.verticalCenter: parent.verticalCenter
-        text: button.icon
-        color: button.foreground
-        font.pixelSize: Commons.Style.font.body
-      }
-      Text {
-        anchors.verticalCenter: parent.verticalCenter
-        text: button.label
-        color: button.foreground
-        font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: Commons.Style.font.caption
-        renderType: Text.NativeRendering
-      }
-    }
-
-    MouseArea {
-      anchors.fill: parent
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onContainsMouseChanged: button.hasCursor = containsMouse
-      onClicked: button.clicked()
     }
   }
 

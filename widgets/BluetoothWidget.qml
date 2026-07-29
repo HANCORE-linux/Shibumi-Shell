@@ -76,13 +76,6 @@ Ui.Panel {
     return bluetoothService && bluetoothService.toggleBluetooth()
   }
 
-  function launchBluetooth() {
-    if (!bar || typeof bar.run !== "function") return false
-    close()
-    bar.run("omarchy-launch-bluetooth")
-    return true
-  }
-
   onOpenedChanged: syncPanelLoader()
   onBluetoothReadyChanged: syncPanelLoader()
   onAdapterAvailableChanged: syncPanelLoader()
@@ -138,7 +131,6 @@ Ui.Panel {
       tooltipText: root.tooltipText
       onPressed: function(button) {
         if (button === Qt.RightButton) root.toggleBluetooth()
-        else if (button === Qt.MiddleButton) root.launchBluetooth()
         else root.toggle()
       }
     }

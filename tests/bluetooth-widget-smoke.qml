@@ -12,7 +12,6 @@ ShellRoot {
   property real fullWidth: 0
   property var clickTargets: []
   property int summonCount: 0
-  property string launchedCommand: ""
 
   function fail(message) {
     console.error("bluetooth-widget-smoke:", message)
@@ -73,7 +72,6 @@ ShellRoot {
     function releasePopout(owner) { if (activePopout === owner) activePopout = null }
     function switchPanelFrom(_owner, _direction) { return false }
     function targetBelongsToWindow(_target, _window) { return true }
-    function run(command) { root.launchedCommand = command }
     function summonBarWidget(id) {
       if (id !== "omarchy.bluetooth") return false
       root.summonCount++
@@ -187,11 +185,9 @@ ShellRoot {
         if (root.phaseTicks < 2) return
         first.interactionTarget.triggerPress(Qt.MiddleButton)
         if (root.summonCount !== 1 || backend.opened
-            || backend.toggleCount !== 2 || !first.radioEnabled
-            || root.launchedCommand !== "omarchy-launch-bluetooth")
-          return root.fail("legacy route, radio, or launcher forwarding")
+            || backend.toggleCount !== 2 || !first.radioEnabled || !first.opened)
+          return root.fail("official pointer route, radio, or panel forwarding")
 
-        first.interactionTarget.triggerPress(Qt.LeftButton)
         second.open()
         root.phase++
         root.phaseTicks = 0

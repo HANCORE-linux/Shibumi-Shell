@@ -44,6 +44,7 @@ grep -F 'bluetooth plugin smoke passed' <<<"$output" >/dev/null \
 widget="$repo_root/hancore.shibumi.bluetooth/BarWidget.qml"
 service="$repo_root/hancore.shibumi.bluetooth/Service.qml"
 bridge="$repo_root/hancore.shibumi.bluetooth/BluetoothPanelBridge.qml"
+panel="$repo_root/hancore.shibumi.bluetooth/BluetoothPanel.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.bluetooth"\)' "$widget" \
   || fail "Bluetooth widget does not resolve the shared service"
 if rg -q 'bar\.bluetoothService' "$repo_root/hancore.shibumi.bluetooth"; then
@@ -63,8 +64,21 @@ rg -q 'property var sessionOwners: \[\]' "$service" \
 rg -q 'bridge\.stopDiscovery\(\)' "$service" \
   || fail "Bluetooth discovery lacks final-close cleanup"
 if rg -q 'Quickshell\.Bluetooth|Bluez|Process \{' \
-    "$widget" "$repo_root/hancore.shibumi.bluetooth/BluetoothPanel.qml"; then
+    "$widget" "$panel"; then
   fail "screen-local Bluetooth presentation owns backend work"
+fi
+rg -q 'id: heroPowerToggle' "$panel" \
+  || fail "Bluetooth radio toggle is not grouped with adapter status"
+if sed -n '/id: headerActions/,/^        }/p' "$panel" \
+    | rg -q 'PowerToggle'; then
+  fail "Bluetooth radio toggle must not split refresh and close actions"
+fi
+rg -Fq 'const current = rowAt(index)' "$panel" \
+  || fail "Bluetooth section boundaries do not guard transient model rows"
+rg -Fq 'if (icon === "phone" || icon === "smartphone") return ""' "$panel" \
+  || fail "Bluetooth phone rows expose untrusted battery precision"
+if rg -q 'omarchy-launch-bluetooth|Bluetooth settings' "$widget" "$panel"; then
+  fail "Bluetooth presentation retains a launcher absent from current Quattro"
 fi
 
 printf 'bluetooth plugin regression passed\n'
