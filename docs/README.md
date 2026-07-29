@@ -11,10 +11,11 @@ records. Supporting documents never override the canonical
 
 For users:
 
-1. [Install and update](install.md)
-2. [Configuration](configuration.md)
-3. [Plugin catalog](plugins/README.md)
-4. [Troubleshooting](development/troubleshooting.md)
+1. [Get started](getting-started.md)
+2. [Install and update](install.md)
+3. [Configuration](configuration.md)
+4. [Plugin catalog](plugins/README.md)
+5. [Troubleshooting](development/troubleshooting.md)
 
 For maintainers:
 
@@ -58,6 +59,7 @@ For parity and release evidence:
 
 | Document | Purpose |
 | --- | --- |
+| [Get started](getting-started.md) | Control Center, bar switching, customization, and saved state |
 | [Install and update](install.md) | Install, migrate, activate, update, deactivate, and remove the suite |
 | [Configuration](configuration.md) | Omarchy shell settings, Shibumi state, and ownership |
 | [Plugin catalog](plugins/README.md) | The 25 plugin roots, roles, and host dependencies |

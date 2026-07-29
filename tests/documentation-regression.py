@@ -11,6 +11,7 @@ CURRENT_DOCUMENTS = (
     "CONTRIBUTING.md",
     "DESIGN.md",
     "docs/README.md",
+    "docs/getting-started.md",
     "docs/install.md",
     "docs/configuration.md",
     "docs/release-readiness.md",
@@ -53,13 +54,29 @@ def main() -> None:
     if "/home/hancore/Projects/Quickshell-Dots" in readme:
         fail("README exposes the internal QS Rise worktree path")
 
-    for placeholder in (
-        "docs/screenshots/readme/shibumi-desktop.webp",
-        "docs/screenshots/readme/shibumi-bars.webp",
-        "docs/screenshots/readme/shibumi-appearance.webp",
-    ):
-        if placeholder not in readme:
-            fail(f"README screenshot placeholder is missing: {placeholder}")
+    readme_images = [
+        match.group(1) or match.group(2)
+        for match in re.finditer(
+            r"!\[[^\]]*\]\(([^)]+)\)|<img\s+[^>]*src=\"([^\"]+)\"",
+            readme,
+        )
+    ]
+    if not 2 <= len(readme_images) <= 4:
+        fail("README landing page must contain between two and four images")
+    for raw_target in readme_images:
+        target = local_target(REPO_ROOT / "README.md", raw_target)
+        if target is not None and not target.is_file():
+            fail(f"broken README image: {raw_target}")
+
+    bash_blocks = re.findall(r"```bash\n.*?\n```", readme, flags=re.DOTALL)
+    if len(bash_blocks) != 1:
+        fail("README landing page must contain exactly one Bash command block")
+    install_command = (
+        "git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && "
+        "cd Shibumi-Shell && ./scripts/shibumi-suite install --yes"
+    )
+    if install_command not in bash_blocks[0]:
+        fail("README landing page is missing the private-alpha install command")
 
     print("documentation regression passed")
 

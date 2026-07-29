@@ -6,7 +6,24 @@ Shibumi installs 25 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
+## Requirements
+
+- An up-to-date Omarchy Quattro installation
+- Git and SSH access to the private Shibumi repository
+- A trusted local checkout
+
+The current alpha is validated on Machine2 against the exact environment in
+[release readiness](release-readiness.md).
+
 ## Install from the private repository
+
+For an intentional non-interactive installation:
+
+```bash
+git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
+```
+
+To inspect the transaction before installing:
 
 ```bash
 git clone git@github.com:HANCORE-linux/Shibumi-Shell.git
@@ -27,11 +44,9 @@ system. The real transaction:
 7. reloads the shell and verifies the running payload;
 8. restores the previous state if a gate fails.
 
-Pass `--yes` only for an intentional non-interactive install:
-
-```bash
-./scripts/shibumi-suite install --yes
-```
+Pass `--yes` only when you intentionally want to skip the confirmation prompt.
+Do not run `omarchy plugin add` against the repository root. Quattro installs
+one root manifest at a time, while Shibumi is a managed suite.
 
 ## Migrate a managed QS Rise installation
 
@@ -148,3 +163,18 @@ If an operation fails:
 3. rerun the same suite command so automatic recovery can complete;
 4. use [troubleshooting](development/troubleshooting.md) before removing files
    manually.
+
+## Security boundary
+
+Omarchy plugins execute unsandboxed inside the desktop shell. Install Shibumi
+and third-party catalog plugins only from sources you trust.
+
+The suite adapter rejects symlinked payloads, special files, unsafe manifest
+entry points, foreign ownership markers, and unknown replacement directories.
+It hashes the staged payload and verifies the running revision before
+committing a transaction.
+
+Shibumi does not fetch its own source updates. During the private alpha, update
+only from a trusted checkout. The planned public AUR boundary and one-command
+stable installation are documented in
+[packaging and AUR strategy](development/packaging.md).
