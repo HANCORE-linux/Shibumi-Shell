@@ -25,6 +25,7 @@
       "kinds": ["bar-widget"],
       "role": "G1",
       "bundle": "core",
+      "defaultSection": "left",
       "requires": ["hancore.shibumi.state"],
       "recommends": []
     },
@@ -74,6 +75,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G2",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": ["hancore.shibumi.state"],
       "recommends": []
     },
@@ -82,6 +84,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "update-center",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": []
     },
@@ -90,6 +93,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G3",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": [
         "hancore.shibumi.state",
         "hancore.shibumi.update-center"
@@ -102,6 +106,7 @@
       "kinds": ["bar-widget"],
       "role": "G4",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": ["hancore.shibumi.telemetry"],
       "recommends": []
     },
@@ -110,6 +115,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G5",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": ["hancore.shibumi.telemetry"],
       "recommends": []
     },
@@ -118,6 +124,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G6",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": [],
       "recommends": [],
       "hostContracts": ["omarchy.audio", "omarchy.media"]
@@ -127,6 +134,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G7",
       "bundle": "default",
+      "defaultSection": "left",
       "requires": ["hancore.shibumi.state"],
       "recommends": []
     },
@@ -135,6 +143,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G8",
       "bundle": "default",
+      "defaultSection": "center",
       "requires": ["hancore.shibumi.state", "hancore.shibumi.status"],
       "recommends": [],
       "hostContracts": [
@@ -149,6 +158,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G9",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": [],
       "hostContracts": ["omarchy.media"]
@@ -158,6 +168,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G10",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": ["hancore.shibumi.state"],
       "recommends": [],
       "hostContracts": ["omarchy.background"]
@@ -167,6 +178,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G11",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": [],
       "hostContracts": ["omarchy.network"]
@@ -176,6 +188,7 @@
       "kinds": ["bar-widget"],
       "role": "G12",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": ["hancore.shibumi.power-state"],
       "recommends": []
     },
@@ -184,6 +197,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G13",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": [],
       "hostContracts": ["omarchy.monitor"]
@@ -193,6 +207,7 @@
       "kinds": ["bar-widget"],
       "role": "G14",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": ["hancore.shibumi.power-state"],
       "recommends": []
     },
@@ -201,6 +216,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G15",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": [],
       "hostContracts": ["omarchy.bluetooth"]
@@ -210,6 +226,7 @@
       "kinds": ["bar-widget"],
       "role": "G16",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": ["hancore.shibumi.telemetry"],
       "recommends": []
     },
@@ -218,6 +235,7 @@
       "kinds": ["bar-widget"],
       "role": "G17",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": ["hancore.shibumi.cpu"],
       "recommends": []
     },
@@ -226,6 +244,7 @@
       "kinds": ["bar-widget", "service"],
       "role": "G18",
       "bundle": "default",
+      "defaultSection": "right",
       "requires": [],
       "recommends": []
     }

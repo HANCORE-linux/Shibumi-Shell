@@ -13,7 +13,7 @@ Column {
   property string selectedProvider: "All"
   readonly property var widgetEntries: (controller.pluginEntries || [])
     .filter(function(entry) {
-      return entry.barWidget === true
+      return entry.userToggleable === true
         && (root.selectedProvider === "All"
           || entry.provider === root.selectedProvider)
     })

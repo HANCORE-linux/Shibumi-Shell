@@ -38,7 +38,7 @@ Item {
     const needle = query.trim().toLowerCase()
     const entries = (controller.pluginEntries || []).filter(
       function(entry) {
-        return entry.barWidget === true
+        return entry.userToggleable === true
           && (root.pickerProvider === "All"
             || entry.provider === root.pickerProvider)
       })

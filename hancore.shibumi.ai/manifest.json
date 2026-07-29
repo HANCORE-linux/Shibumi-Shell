@@ -16,6 +16,7 @@
     "displayName": "Shibumi AI usage",
     "description": "Selected AI provider usage and detailed limits",
     "category": "System",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

@@ -12,7 +12,7 @@ block a public release.
 The current acceptance target is Machine2:
 
 - **Host**: `drdeltree@192.168.2.202`
-- **Omarchy**: `4.0.0.r1441.g9174fbf-1`
+- **Omarchy**: `4.0.0.r1458.gfa6b5fc-1`
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `eDP-1`, `1920x1080`, scale `1.0`
 - **Candidate**: 25 plugins under `hancore.shibumi.*`
@@ -22,19 +22,21 @@ The current acceptance target is Machine2:
 
 ## Alpha acceptance summary
 
-The 2026-07-29 audit produced these results:
+The 2026-07-29 audit plus the 2026-07-30 Quattro plugin-manager revalidation
+produced these results:
 
 | Gate | Result |
 | --- | --- |
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 7 intentional differences classified |
-| Quattro compatibility | Passed against `4.0.0.r1441.g9174fbf-1` |
+| Quattro compatibility | Passed against `4.0.0.r1458.gfa6b5fc-1` |
 | Plugin validation and self-containment | Passed for all 25 plugins |
 | Complete repository contract | Passed on Machine2 |
-| Suite lifecycle unit tests | Passed: 22 of 22 |
+| Suite lifecycle unit tests | Passed: 27 of 27 |
 | Control Center manager tests | Passed: 7 of 7 |
 | Transactional live update | Passed for all 25 plugins |
+| Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: 25 markerless alpha plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
 | Configuration continuity | Passed: `shell.json` returned byte-identically |

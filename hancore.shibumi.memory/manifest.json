@@ -16,6 +16,7 @@
     "displayName": "Shibumi memory",
     "description": "Memory usage with compact and detailed views",
     "category": "System",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

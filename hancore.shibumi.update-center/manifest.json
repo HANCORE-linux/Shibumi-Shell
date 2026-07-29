@@ -19,6 +19,7 @@
     "displayName": "Shibumi update center",
     "description": "Review repository package and user theme updates",
     "category": "System",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

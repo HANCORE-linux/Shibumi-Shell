@@ -19,6 +19,7 @@
     "displayName": "Shibumi workspaces",
     "description": "Workspace state, switching, styles, and detail panel",
     "category": "Desktop",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

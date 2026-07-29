@@ -5,7 +5,7 @@
 > [`../ARCHITECTURE.md`](../ARCHITECTURE.md), and it does not modify the V1
 > reference repository.
 
-Date: 2026-07-29
+Date: 2026-07-30
 
 ## Audit basis
 
@@ -17,7 +17,7 @@ Date: 2026-07-29
   `origin/feat/integrated-variants` remains at `e7a5d24`
 - Shibumi target: the current source tree and the contract in
   [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
-- Quattro host: package `4.0.0.r1441.g9174fbf-1` on Machine2
+- Quattro host: package `4.0.0.r1458.gfa6b5fc-1` on Machine2
 
 The previous inspection found mutable palette and MPRIS work. That work is now
 published in commit `1d764328431c6307eb24628a0d6efd5b231c45d4`; the two later
@@ -36,6 +36,11 @@ same-output closed-bar reference at
 `docs/mockups/shibumi-v1-reference.png`; the restored Shibumi state is captured
 at `docs/mockups/shibumi-v1-current-same-session.png`. The temporary reference
 run did not modify the user's persisted V1 or Shibumi configuration.
+
+On 2026-07-30 the unchanged source inventories and complete Shibumi contract
+were revalidated after Machine2 moved to Quattro
+`4.0.0.r1458.gfa6b5fc-1`. This host-only revalidation does not replace the
+dated physical V1 captures.
 
 ## Findings
 

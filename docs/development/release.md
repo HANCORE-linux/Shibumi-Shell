@@ -16,6 +16,8 @@ all 25 plugin manifests, the changelog, release commit, and Git tag must agree.
    screenshot placeholders or captures affected by the release.
 5. Confirm the repository remains private while public-release blockers are
    open.
+6. Keep AUR publication behind the source and clean-build gates in
+   [packaging and AUR strategy](packaging.md).
 
 ## Validate the source tree
 

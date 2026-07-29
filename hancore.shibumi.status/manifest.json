@@ -19,6 +19,7 @@
     "displayName": "Shibumi status",
     "description": "System tray, hidden apps, notifications, and desktop status",
     "category": "System",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

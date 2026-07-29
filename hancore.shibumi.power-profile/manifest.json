@@ -14,6 +14,7 @@
     "displayName": "Shibumi power profile",
     "description": "Active power profile with quick cycling and selection",
     "category": "System",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

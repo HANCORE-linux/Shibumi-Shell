@@ -16,6 +16,7 @@
     "displayName": "Shibumi Bluetooth",
     "description": "Bluetooth radio, discovery, pairing, and devices",
     "category": "Hardware",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

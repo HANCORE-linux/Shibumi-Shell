@@ -70,6 +70,23 @@ Status reports the source and installed revision, managed plugin count,
 modified or missing payloads, active bar, and configuration drift. A nonzero
 exit indicates a state that needs attention.
 
+## Repair a partial suite
+
+Omarchy's generic plugin manager sees the 25 Shibumi roots as individual
+third-party plugins. Do not remove or disable Shibumi internals individually.
+If one was removed, disabled, or modified, restore the complete payload and
+managed profile with:
+
+```bash
+./scripts/shibumi-suite repair --dry-run
+./scripts/shibumi-suite repair
+./scripts/shibumi-suite status
+```
+
+Repair validates and stages all current plugin roots, restores the selected
+Shibumi profile, verifies the running payload, and rolls back to the exact
+pre-repair state if a gate fails. It refuses to overwrite a foreign directory.
+
 ## Switch bar hosts
 
 Keep Shibumi installed but return to the stock Omarchy bar:

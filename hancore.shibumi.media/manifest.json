@@ -19,6 +19,7 @@
     "displayName": "Shibumi media",
     "description": "Now playing, transport controls, sources, and spectrum",
     "category": "Media",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

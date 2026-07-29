@@ -21,6 +21,20 @@ If Shibumi is installed but inactive:
 Do not use `omarchy plugin add` on the repository root. It is a 25-plugin suite,
 not one root plugin.
 
+## A Shibumi plugin was removed or disabled individually
+
+The generic Omarchy plugin menu manages one plugin root at a time and does not
+know Shibumi's suite dependencies. Restore the complete suite:
+
+```bash
+./scripts/shibumi-suite status
+./scripts/shibumi-suite repair --dry-run
+./scripts/shibumi-suite repair
+```
+
+Repair is transactional and refuses foreign replacement targets. Do not try to
+recreate missing suite directories by hand.
+
 ## The Omarchy bar is active
 
 Open Control Center **Bars** and select Shibumi, or run:
@@ -57,7 +71,8 @@ transition. A panel that remains open with a lost anchor is a product bug.
 - invalid or inconsistent install state.
 
 Run `status` and resolve the reported drift. Use `activate` before `update` when
-the suite is intentionally installed but inactive.
+the suite is intentionally installed but inactive. Use `repair` when payloads
+are missing, modified, ownership-mismatched, or were disabled individually.
 
 ## An operation was interrupted
 

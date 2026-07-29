@@ -25,11 +25,13 @@ provenance but is not normative for the current tree.
 
 ## Verified Host Constraint
 
-Machine2's Omarchy Quattro package `4.0.0.r1441.g9174fbf-1` implements
+Machine2's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` implements
 `omarchy plugin add` as a one-Git-repository-to-one-plugin operation. The
 command clones a repository and validates `manifest.json` at its root. It does
 not install a repository containing several top-level plugin manifests.
-The contract was rechecked on 2026-07-29 and retains the same constraint.
+The contract was rechecked on 2026-07-30. Its new setup menu also enables,
+disables, or removes one root at a time, so it retains the same suite
+constraint.
 
 Lacuna and Whiterose demonstrate the desired plugin-suite source layout, but
 they use repository-owned installation logic to stage multiple plugin

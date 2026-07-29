@@ -13,6 +13,15 @@ from . import SUITE_ID
 
 
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+DEFAULT_SECTIONS = {"left", "center", "right"}
+KIND_ENTRY_POINTS = {
+    "bar": "bar",
+    "bar-widget": "barWidget",
+    "menu": "menu",
+    "overlay": "overlay",
+    "panel": "panel",
+    "service": "service",
+}
 
 
 class ContractError(RuntimeError):
@@ -74,6 +83,17 @@ def _strings(value: Any, label: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _safe_menu_label(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value.strip())
+        and all(
+            ord(character) >= 32 and ord(character) != 127
+            for character in value
+        )
+    )
+
+
 @dataclass(frozen=True)
 class PluginSpec:
     id: str
@@ -82,6 +102,7 @@ class PluginSpec:
     bundle: str
     requires: tuple[str, ...]
     recommends: tuple[str, ...]
+    default_section: str
     source: Path
 
     @property
@@ -146,6 +167,7 @@ class Suite:
                 bundle=str(item.get("bundle") or ""),
                 requires=_strings(item.get("requires", []), f"{plugin_id}.requires"),
                 recommends=_strings(item.get("recommends", []), f"{plugin_id}.recommends"),
+                default_section=str(item.get("defaultSection") or ""),
                 source=source,
             )
             cls._validate_manifest(spec)
@@ -199,11 +221,13 @@ class Suite:
         except (OSError, json.JSONDecodeError) as error:
             raise ContractError(f"cannot read {manifest_path}: {error}") from error
         meta = manifest.get("x-shibumi")
+        entry_points = manifest.get("entryPoints")
         if (
             manifest.get("schemaVersion") != 1
             or manifest.get("id") != spec.id
+            or not _safe_menu_label(manifest.get("name"))
             or tuple(manifest.get("kinds") or ()) != spec.kinds
-            or not isinstance(manifest.get("entryPoints"), dict)
+            or not isinstance(entry_points, dict)
             or not isinstance(meta, dict)
             or meta.get("suiteId") != SUITE_ID
             or meta.get("role") != spec.role
@@ -211,7 +235,27 @@ class Suite:
             or tuple(meta.get("requires") or ()) != spec.requires
         ):
             raise ContractError(f"manifest drifts from suite contract: {spec.id}")
-        for entry_point in manifest["entryPoints"].values():
+        for kind in spec.kinds:
+            expected = KIND_ENTRY_POINTS.get(kind)
+            if expected is None or expected not in entry_points:
+                raise ContractError(
+                    f"missing {kind} entry point in {spec.id}"
+                )
+        if spec.is_bar_widget:
+            bar_widget = manifest.get("barWidget")
+            if (
+                spec.default_section not in DEFAULT_SECTIONS
+                or not isinstance(bar_widget, dict)
+                or bar_widget.get("defaultSection") != spec.default_section
+            ):
+                raise ContractError(
+                    f"bar widget placement drifts from suite contract: {spec.id}"
+                )
+        elif spec.default_section:
+            raise ContractError(
+                f"non-widget plugin declares defaultSection: {spec.id}"
+            )
+        for entry_point in entry_points.values():
             if not isinstance(entry_point, str) or not entry_point:
                 raise ContractError(f"invalid entry point in {spec.id}")
             candidate = (spec.source / entry_point).resolve(strict=False)

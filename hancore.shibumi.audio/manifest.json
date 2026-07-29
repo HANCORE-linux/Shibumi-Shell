@@ -19,6 +19,7 @@
     "displayName": "Shibumi audio",
     "description": "Volume, mute, microphone, devices, and application streams",
     "category": "Audio",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

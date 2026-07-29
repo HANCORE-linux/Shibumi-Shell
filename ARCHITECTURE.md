@@ -228,11 +228,12 @@ Shibumi controls the bar window.
 ## Verified Host Contract
 
 The installed loader and installation contracts were rechecked against
-Machine2's Omarchy Quattro package `4.0.0.r1441.g9174fbf-1` on 2026-07-29.
+Machine2's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` on 2026-07-30.
 The plugin registry, validator, installer, bar selector, bar loader, and
-manifest contract remain compatible. Quattro still discovers plugins but
-doesn't update a multi-plugin repository. Shibumi therefore owns its
-transactional source-update adapter. Shibumi consumes the extracted
+manifest contract remain compatible. Quattro now provides per-plugin setup
+menus and `barWidget.defaultSection`, but still does not update or protect a
+multi-plugin repository as one dependency set. Shibumi therefore owns its
+transactional source-update and repair adapter. Shibumi consumes the extracted
 `omarchy.notifications` service directly instead of loading its removed bar
 widget, and delegates enterprise 802.1X credentials to Quattro's official
 network owner. The complete contract suite and focused real-session adapter
@@ -245,6 +246,8 @@ checks pass.
 - Shibumi therefore uses a repository-owned transactional bundle installer to
   stage its independently validated plugin directories until Omarchy provides
   a supported multi-plugin source command.
+- Generic Omarchy plugin enable, disable, and remove actions operate on one
+  Shibumi root and do not replace the bundle lifecycle.
 - The bar entry point is an `Item`, not a `ShellRoot`.
 - Omarchy loads third-party bars asynchronously and then injects supported
   properties.
@@ -283,6 +286,10 @@ host API; it must not maintain a competing `shell.json` representation.
   removes Shibumi layout and personal `bar.shibumi` settings by host design.
   `shibumi-suite activate` restores the managed default layout but cannot
   reconstruct settings deleted by that command.
+- Generic per-plugin enable, disable, and remove actions do not own Shibumi's
+  suite lifecycle. Shibumi roots must be managed as one dependency set;
+  `shibumi-suite repair` transactionally restores a partial payload and its
+  selected profile.
 - Uninstall removes Shibumi plugin references and selects the built-in bar.
   It removes `bar.shibumi` unless `--keep-settings` is explicit.
 
@@ -797,7 +804,7 @@ cleaner Shibumi architecture alone is not sufficient justification.
 These projects are evidence sources, not code templates:
 
 - Official Omarchy Quattro host and built-in bar: Machine2 package
-  `4.0.0.r1441.g9174fbf-1`
+  `4.0.0.r1458.gfa6b5fc-1`
 - ThinkOodle `omarchy-shell-plugins`, commit
   `352b8d69017adae0074453f49dd9bac36cf07a15`
 - Whiterose roadmap and widget architecture, commit

@@ -14,6 +14,7 @@
     "displayName": "Shibumi GPU",
     "description": "GPU activity and VRAM details",
     "category": "System",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

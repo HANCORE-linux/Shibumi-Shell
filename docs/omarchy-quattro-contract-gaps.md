@@ -57,6 +57,30 @@ retains its transactional `shibumi-suite` source updater. The current registry,
 manifest, bar loader, service injection, and third-party discovery contracts
 pass the complete 25-plugin regression.
 
+Reviewed on 2026-07-30 against upstream commit
+[`09b955dc751c4282e893dc753788f335b0dcae57`](https://github.com/basecamp/omarchy/commit/09b955dc751c4282e893dc753788f335b0dcae57).
+The new Setup > Plugins menu adds generic enable, disable, and remove actions
+and a `barWidget.defaultSection` placement hint. Machine2's packaged
+`4.0.0.r1441.g9174fbf-1` does not yet contain that menu. The change improves
+single-plugin management but does not add suite, dependency, or external
+lifecycle ownership metadata: every Shibumi root is still shown as an
+independently removable third-party plugin, and selecting a full bar changes
+`bar.id` without Shibumi's per-bar continuity transaction. Shibumi now declares
+and validates every widget's default section, keeps suite-internal helpers out
+of its own free-toggle catalog, and provides `shibumi-suite repair` for an
+accidental partial removal. QTR-001 and QTR-002 remain open.
+
+Machine2 then updated to package `4.0.0.r1458.gfa6b5fc-1`, which contains this
+menu. All 25 manifests and the complete Shibumi contract pass. A real
+individual disable of `hancore.shibumi.bluetooth` was detected as profile
+drift and repaired transactionally. The live test also confirmed a mixed-kind
+edge case: when a third-party plugin is both `bar-widget` and `service`, is
+present only in `plugins[]`, and absent from the bar, `list --json` reports the
+widget disabled but `enable` finds the existing service entry and does not add
+the widget. Shibumi's service-only Update Center intentionally occupies that
+state, so its suite verification distinguishes discovery/service activation
+from the host's widget-enabled flag.
+
 Priority meanings:
 
 - **P0**: blocks a clean, native third-party plugin suite or safe provider
@@ -69,7 +93,7 @@ Priority meanings:
 
 | ID | Priority | Requested host contract | Current Shibumi impact |
 | --- | --- | --- | --- |
-| QTR-001 | P0 | Multi-plugin repository source | One release needs a custom transactional suite installer. |
+| QTR-001 | P0 | Multi-plugin repository and lifecycle source | One release needs a custom transactional installer, updater, repair path, and remover. |
 | QTR-002 | P0 | Enforced dependencies and service readiness | Shibumi must resolve, order, and protect dependencies itself. |
 | QTR-003 | P0 | Configurable default menu provider | Standard Omarchy menu commands remain hard-coded to `omarchy.menu`. |
 | QTR-004 | P0 | Exclusive capability providers | Notification/OSD replacement can create duplicate global owners. |
@@ -87,12 +111,15 @@ Priority meanings:
 `omarchy plugin add` defines a plugin as one Git repository, validates one root
 `manifest.json`, and installs it into one directory named after that manifest
 ID. Third-party discovery scans only direct children of
-`~/.config/omarchy/plugins/`.
+`~/.config/omarchy/plugins/`. The generic Setup > Plugins menu also enables,
+disables, or removes one discovered root at a time; it has no externally
+managed bundle marker.
 
 Evidence:
 
 - [`bin/omarchy-plugin`, add path](https://github.com/basecamp/omarchy/blob/4a02da20d58d912a74748845bc55b5ec73acd65f/bin/omarchy-plugin#L178-L264)
 - [`PluginRegistry.qml`, third-party scan depth](https://github.com/basecamp/omarchy/blob/4a02da20d58d912a74748845bc55b5ec73acd65f/shell/services/PluginRegistry.qml#L296-L319)
+- [`bin/omarchy-menu-plugin`, generic per-root actions](https://github.com/basecamp/omarchy/blob/09b955dc751c4282e893dc753788f335b0dcae57/bin/omarchy-menu-plugin)
 
 **Impact**
 
@@ -107,6 +134,8 @@ update, rollback, profile, and uninstall layer.
 - A repository root may contain an explicit suite index, for example
   `omarchy-plugin-suite.json`.
 - The index lists plugin directories and optional install profiles.
+- A plugin may declare an externally managed suite and the host delegates
+  suite-level enable, disable, repair, and remove actions to that owner.
 - `omarchy plugin add/update/remove` validates and mutates the selected set as
   one transaction.
 - Partial failure restores every affected plugin and the previous

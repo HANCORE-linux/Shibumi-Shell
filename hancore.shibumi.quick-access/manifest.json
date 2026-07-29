@@ -19,6 +19,7 @@
     "displayName": "Shibumi quick access",
     "description": "Idle inhibitor and image/media picker shortcuts",
     "category": "Utilities",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

@@ -63,9 +63,11 @@ ShibumiPanel {
   readonly property int enabledPluginCount: pluginEntries.filter(
     function(entry) { return entry.enabled }).length
   readonly property int availableWidgetCount: pluginEntries.filter(
-    function(entry) { return entry.barWidget }).length
+    function(entry) { return entry.userToggleable }).length
   readonly property int enabledWidgetCount: pluginEntries.filter(
-    function(entry) { return entry.barWidget && entry.installedInBar }).length
+    function(entry) {
+      return entry.userToggleable && entry.installedInBar
+    }).length
   readonly property int nativePluginCount: pluginEntries.filter(
     function(entry) { return entry.firstParty }).length
   readonly property int shibumiPluginCount: pluginEntries.filter(
@@ -235,6 +237,15 @@ ShibumiPanel {
       const id = ids[index]
       const manifest = installed[id] || ({})
       const kinds = Array.isArray(manifest.kinds) ? manifest.kinds : []
+      const shibumi = manifest["x-shibumi"] || ({})
+      const suiteManaged = String(shibumi.suiteId || "")
+        === "hancore.shibumi"
+      const group = shibumiWidgetGroup(id)
+      const barWidget = kinds.indexOf("bar-widget") >= 0
+      const placement = manifest.barWidget
+        && ["left", "center", "right"].indexOf(
+          String(manifest.barWidget.defaultSection || "")) >= 0
+        ? String(manifest.barWidget.defaultSection) : "center"
       // A full bar is a mutually exclusive shell host, not a widget/plugin
       // toggle. It must only be changed through a dedicated bar selector.
       if (kinds.indexOf("bar") >= 0) continue
@@ -248,9 +259,12 @@ ShibumiPanel {
         kinds: kinds,
         glyph: pluginGlyph(id, kinds),
         enabled: enabled,
-        barWidget: kinds.indexOf("bar-widget") >= 0,
-        installedInBar: kinds.indexOf("bar-widget") >= 0
+        barWidget: barWidget,
+        installedInBar: barWidget
           ? widgetInstalled(id) : enabled,
+        suiteManaged: suiteManaged,
+        userToggleable: barWidget && (!suiteManaged || group !== ""),
+        defaultSection: placement,
         compatibility: pluginCompatibility(manifest),
         firstParty: manifest.__isFirstParty === true,
         provider: pluginCompatibility(manifest) === "Native"
@@ -276,6 +290,10 @@ ShibumiPanel {
       console.warn("Control Center rejected full-bar toggle:", id)
       return false
     }
+    const shibumi = manifest && manifest["x-shibumi"]
+      ? manifest["x-shibumi"] : ({})
+    const suiteManaged = String(shibumi.suiteId || "")
+      === "hancore.shibumi"
     if (kinds.indexOf("bar-widget") >= 0) {
       const group = shibumiWidgetGroup(id)
       if (group !== "") {
@@ -284,8 +302,22 @@ ShibumiPanel {
           bar.removeWidgetFamilyAlternatives(group)
         return setGroupSetting(group, "enabled", enabled === true)
       }
+      if (suiteManaged) {
+        console.warn(
+          "Control Center rejected suite-internal plugin toggle:", id)
+        return false
+      }
+      const section = manifest.barWidget
+        && ["left", "center", "right"].indexOf(
+          String(manifest.barWidget.defaultSection || "")) >= 0
+        ? String(manifest.barWidget.defaultSection) : "center"
       return bar && typeof bar.setBarWidgetInstalled === "function"
-        ? bar.setBarWidgetInstalled(id, enabled === true, "right") : false
+        ? bar.setBarWidgetInstalled(id, enabled === true, section) : false
+    }
+    if (suiteManaged) {
+      console.warn(
+        "Control Center rejected suite-internal plugin toggle:", id)
+      return false
     }
     return pluginRegistry.setEnabled(id, enabled === true)
   }

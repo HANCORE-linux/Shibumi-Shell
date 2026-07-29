@@ -243,6 +243,18 @@ for provider in All Shibumi 'Omarchy Quattro' Third-party; do
   rg -Fq "\"$provider\"" "$control_dir/ProviderFilter.qml" \
     || fail "missing widget provider filter: $provider"
 done
+for suite_boundary in \
+    'userToggleable: barWidget && (!suiteManaged || group !== "")' \
+    'Control Center rejected suite-internal plugin toggle:' \
+    '? String(manifest.barWidget.defaultSection) : "center"' \
+    'bar.setBarWidgetInstalled(id, enabled === true, section)'; do
+  rg -Fq "$suite_boundary" "$control_dir/ControlCenterPanel.qml" \
+    || fail "plugin-manager suite boundary drifted: $suite_boundary"
+done
+for widget_surface in PluginCatalogPage.qml ControlSettings.qml; do
+  rg -Fq 'entry.userToggleable === true' "$control_dir/$widget_surface" \
+    || fail "$widget_surface exposes suite-internal helper plugins"
+done
 if rg -q 'model: 5' "$control_dir/WidgetModuleTile.qml"; then
   fail "decorative connector contacts remain on widget tiles"
 fi

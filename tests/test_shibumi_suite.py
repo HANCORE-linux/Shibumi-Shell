@@ -22,6 +22,7 @@ from shibumi_suite.cli import (  # noqa: E402
     command_deactivate,
     command_install,
     command_migrate,
+    command_repair,
     command_status,
     command_uninstall,
     command_update,
@@ -153,8 +154,13 @@ class FakeOmarchyRuntime(OmarchyRuntime):
             plugin_id = str(manifest["id"])
             kinds = list(manifest.get("kinds") or [])
             is_bar = "bar" in kinds
-            enabled = active_bar == plugin_id if is_bar else (
-                plugin_id in layout_ids or plugin_id in service_ids
+            is_bar_widget = "bar-widget" in kinds
+            enabled = (
+                active_bar == plugin_id
+                if is_bar
+                else plugin_id in layout_ids
+                if is_bar_widget
+                else plugin_id in service_ids
             )
             result[plugin_id] = {
                 "id": plugin_id,
@@ -523,8 +529,18 @@ class SuiteLifecycleTests(unittest.TestCase):
                 self.suite.plugins[plugin_id].payload_digest(target),
             )
             self.assertEqual(marker["suitePayloadDigest"], state["payloadDigest"])
-        self.assertEqual(len(self.runtime.list_plugins()), len(self.suite.plugins))
-        self.assertTrue(all(item["enabled"] for item in self.runtime.list_plugins().values()))
+        runtime_plugins = self.runtime.list_plugins()
+        self.assertEqual(len(runtime_plugins), len(self.suite.plugins))
+        self.assertFalse(
+            runtime_plugins["hancore.shibumi.update-center"]["enabled"]
+        )
+        self.assertTrue(
+            all(
+                item["enabled"]
+                for plugin_id, item in runtime_plugins.items()
+                if plugin_id != "hancore.shibumi.update-center"
+            )
+        )
         self.assertFalse(self.hidden_transaction_paths())
 
         config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
@@ -655,6 +671,116 @@ class SuiteLifecycleTests(unittest.TestCase):
             <= restored_ids
         )
         self.assertEqual(command_status(self.suite, self.paths), 0)
+
+    def test_repair_restores_plugin_removed_by_generic_plugin_manager(self) -> None:
+        self.install()
+        state_before = load_install_state(self.paths, self.suite)
+        plugin_id = "hancore.shibumi.bluetooth"
+        shutil.rmtree(self.paths.plugin_dir / plugin_id)
+
+        config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        for region in ("left", "center", "right"):
+            config["bar"]["layout"][region] = [
+                entry
+                for entry in config["bar"]["layout"][region]
+                if entry_id(entry) != plugin_id
+            ]
+        config["plugins"] = [
+            entry for entry in config["plugins"] if entry_id(entry) != plugin_id
+        ]
+        atomic_write(self.paths.config_file, encode_config(config))
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(command_status(self.suite, self.paths), 1)
+        self.assertIn(f"Missing: {plugin_id}", output.getvalue())
+        self.assertIn("Repair with: shibumi-suite repair", output.getvalue())
+        with self.assertRaisesRegex(CliError, "inactive"):
+            command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(
+            command_repair(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        self.assertTrue((self.paths.plugin_dir / plugin_id).is_dir())
+        repaired = load_install_state(self.paths, self.suite)
+        self.assertEqual(set(repaired["plugins"]), set(state_before["plugins"]))
+        self.assertEqual(command_status(self.suite, self.paths), 0)
+
+    def test_failed_repair_restores_the_pre_repair_partial_state(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.bluetooth"
+        target = self.paths.plugin_dir / plugin_id
+        shutil.rmtree(target)
+        original_config = self.paths.config_file.read_bytes()
+        original_state = (self.paths.state_dir / "install.json").read_bytes()
+        self.runtime.fail_payload_reload = True
+
+        with self.assertRaises(RuntimeFailure):
+            command_repair(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertFalse(target.exists())
+        self.assertEqual(self.paths.config_file.read_bytes(), original_config)
+        self.assertEqual(
+            (self.paths.state_dir / "install.json").read_bytes(),
+            original_state,
+        )
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_repair_removes_suite_helper_enabled_as_a_generic_widget(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.update-center"
+        config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        config["bar"]["layout"]["right"].append({"id": plugin_id})
+        atomic_write(self.paths.config_file, encode_config(config))
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(command_status(self.suite, self.paths), 1)
+        self.assertIn(f"unexpected widgets: {plugin_id}", output.getvalue())
+
+        self.assertEqual(
+            command_repair(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        repaired = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        layout_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in repaired["bar"]["layout"][region]
+        }
+        service_ids = {entry_id(entry) for entry in repaired["plugins"]}
+        self.assertNotIn(plugin_id, layout_ids)
+        self.assertIn(plugin_id, service_ids)
+        self.assertEqual(command_status(self.suite, self.paths), 0)
+
+    def test_suite_contract_requires_quattro_widget_default_section(self) -> None:
+        manifest_path = (
+            self.source / "hancore.shibumi.bluetooth" / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["barWidget"].pop("defaultSection")
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ContractError, "placement"):
+            Suite.load(self.source)
+
+    def test_suite_contract_rejects_plugin_menu_control_characters(self) -> None:
+        manifest_path = (
+            self.source / "hancore.shibumi.bluetooth" / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["name"] = "Bluetooth\tInjected row"
+        manifest_path.write_text(
+            json.dumps(manifest, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ContractError, "manifest drifts"):
+            Suite.load(self.source)
 
     def test_deactivate_activate_round_trip_preserves_user_state_and_payload(self) -> None:
         self.install()

@@ -41,7 +41,7 @@ system or starting a second Quickshell process.
 - A trusted local checkout; Shibumi does not fetch its own source updates
 
 The current alpha is validated on Machine2 against Omarchy Quattro
-`4.0.0.r1441.g9174fbf-1`. See
+`4.0.0.r1458.gfa6b5fc-1`. See
 [release readiness](docs/release-readiness.md) for the exact environment and
 remaining physical gates.
 
@@ -64,10 +64,15 @@ plugins and configuration.
 
 Do not run `omarchy plugin add` against the repository root. Quattro installs
 one root manifest at a time, while Shibumi is one managed suite of 25
-independent plugins.
+independent plugins. Likewise, do not remove or disable Shibumi roots
+individually in the generic Omarchy plugin menu.
 
 See [install and update](docs/install.md) for migration, recovery, and removal
 details.
+
+The stable public release will use an AUR package and a single copyable install
+command. The private alpha retains the trusted-checkout workflow until the
+public source archive and packaging gates are ready.
 
 ## After installation
 
@@ -113,6 +118,8 @@ Inspect or change the installed suite:
 
 ```bash
 ./scripts/shibumi-suite status
+./scripts/shibumi-suite repair --dry-run
+./scripts/shibumi-suite repair
 ./scripts/shibumi-suite deactivate --dry-run
 ./scripts/shibumi-suite deactivate
 ./scripts/shibumi-suite activate --dry-run
@@ -123,7 +130,9 @@ Inspect or change the installed suite:
 
 `deactivate` restores the stock Omarchy bar while retaining the managed
 plugins and Shibumi settings. `activate` restores the Shibumi bar and its
-managed layout.
+managed layout. `repair` transactionally restores the complete payload and
+profile after an accidental individual plugin removal, disable, or local
+modification.
 
 `omarchy bar reset` also selects the stock bar and preserves the current
 layout. `omarchy bar defaults` replaces the complete Omarchy `bar` object,

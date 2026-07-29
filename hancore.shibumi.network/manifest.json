@@ -16,6 +16,7 @@
     "displayName": "Shibumi network",
     "description": "Network status, Wi-Fi profiles, DNS, and speed test",
     "category": "Network",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

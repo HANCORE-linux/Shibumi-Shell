@@ -229,16 +229,46 @@ def activation_drift(
         profile.layout["left"] + profile.layout["center"] + profile.layout["right"]
     )
     expected_services = set(profile.enable_services)
-    if managed_ids is not None:
-        expected_widgets &= managed_ids
-        expected_services &= managed_ids
+    managed = set(suite.plugins) if managed_ids is None else managed_ids
+    expected_widgets &= managed
+    expected_services &= managed
     missing_widgets = expected_widgets - layout_ids
     if missing_widgets:
         drift.append(f"missing widgets: {', '.join(sorted(missing_widgets))}")
+    unexpected_widgets = (layout_ids & managed) - expected_widgets
+    if unexpected_widgets:
+        drift.append(
+            f"unexpected widgets: {', '.join(sorted(unexpected_widgets))}"
+        )
     missing_services = expected_services - service_ids
     if missing_services:
         drift.append(f"missing services: {', '.join(sorted(missing_services))}")
+    unexpected_services = (service_ids & managed) - expected_services
+    if unexpected_services:
+        drift.append(
+            f"unexpected services: {', '.join(sorted(unexpected_services))}"
+        )
     return drift
+
+
+def runtime_enabled_plugin_ids(
+    suite: Suite,
+    profile_id: str,
+) -> set[str]:
+    """Return IDs whose enabled flag is meaningful in Quattro's plugin list."""
+    profile = suite.profile(profile_id)
+    enabled = {
+        plugin_id
+        for region in ("left", "center", "right")
+        for plugin_id in profile.layout[region]
+    }
+    enabled.add(profile.active_bar)
+    enabled.update(
+        plugin_id
+        for plugin_id in profile.enable_services
+        if not suite.plugins[plugin_id].is_bar_widget
+    )
+    return enabled
 
 
 def command_install(
@@ -287,7 +317,12 @@ def command_install(
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.verify_install(
-            set(profile.install), profile.active_bar, payload_digest
+            set(profile.install),
+            profile.active_bar,
+            payload_digest,
+            enabled_plugin_ids=runtime_enabled_plugin_ids(
+                suite, profile.id
+            ),
         )
         transaction.finish(desired_state, archive_previous=True)
     print(f"Installed and activated Shibumi ({len(specs)} plugins).")
@@ -354,7 +389,12 @@ def command_migrate(
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.verify_install(
-            set(profile.install), profile.active_bar, payload_digest
+            set(profile.install),
+            profile.active_bar,
+            payload_digest,
+            enabled_plugin_ids=runtime_enabled_plugin_ids(
+                suite, profile.id
+            ),
         )
         transaction.stage_legacy_removal(old_plugin_ids)
         runtime.rescan()
@@ -438,9 +478,84 @@ def command_update(
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.reload_payload()
-        runtime.verify_update(set(plugin_ids), payload_digest)
+        runtime.verify_update(
+            set(plugin_ids),
+            payload_digest,
+            enabled_plugin_ids=runtime_enabled_plugin_ids(
+                suite, profile_id
+            ),
+        )
         transaction.finish(desired_state, archive_previous=True)
     print(f"Updated Shibumi ({len(specs)} plugins).")
+    return 0
+
+
+def command_repair(
+    args: argparse.Namespace,
+    suite: Suite,
+    paths: RuntimePaths,
+    runtime: OmarchyRuntime,
+) -> int:
+    """Restore the complete suite payload and its active profile atomically."""
+    state = load_install_state(paths, suite)
+    profile_id = str(state.get("profile") or "default")
+    profile = suite.profile(profile_id)
+    plugin_ids = list(profile.install)
+    specs = suite.selected(profile.install)
+    validate_sources(runtime, specs)
+    current, _ = read_config(paths.config_file, paths.defaults_file)
+    desired = apply_identity_contract(
+        apply_profile(current, profile, suite.plugins)
+    )
+    adoptable_plugin_ids = set(state["plugins"])
+    preflight_replacements(
+        paths.plugin_dir, specs, adoptable_plugin_ids
+    )
+    print_plan(
+        f"Repair Shibumi profile {profile.id}",
+        specs,
+        paths,
+    )
+    if args.dry_run:
+        print("Dry run complete; no files changed.")
+        return 0
+    confirm(
+        "Repair the complete Shibumi payload and restore its managed layout",
+        args.yes,
+    )
+
+    revision = suite.revision()
+    with PluginTransaction(paths, runtime) as transaction:
+        transaction.preflight_targets(specs, adoptable_plugin_ids)
+        payload_digest, plugin_digests = transaction.stage(
+            specs, revision=revision, suite_version=suite.version
+        )
+        desired_state = make_install_state(
+            suite,
+            plugin_ids,
+            profile_id,
+            profile.active_bar,
+            revision,
+            payload_digest,
+            plugin_digests,
+        )
+        transaction.expose()
+        runtime.rescan()
+        transaction.write_config(encode_config(desired))
+        runtime.reload_config()
+        runtime.reload_payload()
+        runtime.verify_install(
+            set(plugin_ids),
+            profile.active_bar,
+            payload_digest,
+            enabled_plugin_ids=runtime_enabled_plugin_ids(
+                suite, profile_id
+            ),
+        )
+        transaction.finish(desired_state, archive_previous=True)
+    print(
+        f"Repaired and activated Shibumi ({len(specs)} plugins)."
+    )
     return 0
 
 
@@ -472,6 +587,9 @@ def command_activate(
             set(profile.install),
             str(state.get("activeBar") or profile.active_bar),
             str(state["payloadDigest"]),
+            enabled_plugin_ids=runtime_enabled_plugin_ids(
+                suite, profile_id
+            ),
         )
         transaction.finish(state, archive_previous=False)
     print("Activated Shibumi and restored its configured layout.")
@@ -625,8 +743,12 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
             print(f"Configuration drift: {'; '.join(drift)}")
     except ConfigError as error:
         print(f"Config: invalid ({error})")
+        print("Repair with: shibumi-suite repair")
         return 1
-    return 1 if missing or unmanaged or modified or drift else 0
+    unhealthy = bool(missing or unmanaged or modified or drift)
+    if unhealthy:
+        print("Repair with: shibumi-suite repair")
+    return 1 if unhealthy else 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -650,6 +772,13 @@ def parser() -> argparse.ArgumentParser:
     update = subparsers.add_parser("update", help="update the installed plugin set")
     update.add_argument("--dry-run", action="store_true")
     update.add_argument("--yes", "-y", action="store_true")
+
+    repair = subparsers.add_parser(
+        "repair",
+        help="restore the complete suite payload and activate its managed layout",
+    )
+    repair.add_argument("--dry-run", action="store_true")
+    repair.add_argument("--yes", "-y", action="store_true")
 
     activate = subparsers.add_parser(
         "activate", help="activate Shibumi and restore its managed layout"
@@ -693,6 +822,8 @@ def main(argv: list[str] | None = None) -> int:
                 return command_migrate(args, suite, paths, runtime)
             if args.command == "update":
                 return command_update(args, suite, paths, runtime)
+            if args.command == "repair":
+                return command_repair(args, suite, paths, runtime)
             if args.command == "activate":
                 return command_activate(args, suite, paths, runtime)
             if args.command == "deactivate":

@@ -231,8 +231,12 @@ class OmarchyRuntime:
         active_bar: str,
         payload_digest: str,
         *,
+        enabled_plugin_ids: set[str] | None = None,
         timeout: float = 60,
     ) -> None:
+        expected_enabled = (
+            plugin_ids if enabled_plugin_ids is None else enabled_plugin_ids
+        )
         deadline = time.monotonic() + timeout
         detail = "plugins were not visible"
         while time.monotonic() < deadline:
@@ -241,7 +245,7 @@ class OmarchyRuntime:
                 missing = plugin_ids - plugins.keys()
                 disabled = {
                     plugin_id
-                    for plugin_id in plugin_ids
+                    for plugin_id in expected_enabled
                     if plugin_id in plugins and plugins[plugin_id].get("enabled") is not True
                 }
                 active = plugins.get(active_bar, {}).get("active") is True
@@ -263,8 +267,12 @@ class OmarchyRuntime:
         plugin_ids: set[str],
         payload_digest: str,
         *,
+        enabled_plugin_ids: set[str] | None = None,
         timeout: float = 60,
     ) -> None:
+        expected_enabled = (
+            plugin_ids if enabled_plugin_ids is None else enabled_plugin_ids
+        )
         deadline = time.monotonic() + timeout
         detail = "plugins were not visible"
         while time.monotonic() < deadline:
@@ -273,7 +281,7 @@ class OmarchyRuntime:
                 missing = plugin_ids - plugins.keys()
                 disabled = {
                     plugin_id
-                    for plugin_id in plugin_ids
+                    for plugin_id in expected_enabled
                     if plugin_id in plugins and plugins[plugin_id].get("enabled") is not True
                 }
                 payload_ready = self.payload_ready(payload_digest)

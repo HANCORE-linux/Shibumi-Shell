@@ -19,6 +19,7 @@
     "displayName": "Shibumi CPU",
     "description": "CPU activity with optional GPU details",
     "category": "System",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

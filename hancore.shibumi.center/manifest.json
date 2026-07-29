@@ -19,6 +19,7 @@
     "displayName": "Shibumi center",
     "description": "Clock, date, calendar, weather, status, and updates",
     "category": "System",
+    "defaultSection": "center",
     "allowMultiple": false
   },
   "x-shibumi": {

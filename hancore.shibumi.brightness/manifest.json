@@ -16,6 +16,7 @@
     "displayName": "Shibumi brightness",
     "description": "Brightness, display scale, and monitor controls",
     "category": "Hardware",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

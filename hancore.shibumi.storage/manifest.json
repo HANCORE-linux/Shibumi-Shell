@@ -16,6 +16,7 @@
     "displayName": "Shibumi Storage",
     "description": "Filesystem usage and mounted drive inventory",
     "category": "System",
+    "defaultSection": "right",
     "allowMultiple": false
   },
   "x-shibumi": {

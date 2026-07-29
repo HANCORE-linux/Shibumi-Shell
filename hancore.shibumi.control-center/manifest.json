@@ -16,6 +16,7 @@
     "displayName": "Shibumi settings",
     "description": "Configure Shibumi layout, widgets, and appearance",
     "category": "System",
+    "defaultSection": "left",
     "allowMultiple": false
   },
   "x-shibumi": {

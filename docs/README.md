@@ -23,8 +23,9 @@ For maintainers:
 3. [Host facade](host-facade-v1.md)
 4. [Plugin suite migration and lifecycle](plugin-suite-migration-plan.md)
 5. [Testing](development/testing.md)
-6. [Release workflow](development/release.md)
-7. [Current release readiness](release-readiness.md)
+6. [Packaging and AUR strategy](development/packaging.md)
+7. [Release workflow](development/release.md)
+8. [Current release readiness](release-readiness.md)
 
 For design and UI work:
 
@@ -62,6 +63,7 @@ For parity and release evidence:
 | [Plugin catalog](plugins/README.md) | The 25 plugin roots, roles, and host dependencies |
 | [Architecture overview](architecture/overview.md) | Short runtime and ownership map |
 | [Testing](development/testing.md) | Machine2-only validation workflow |
+| [Packaging and AUR strategy](development/packaging.md) | Public AUR and private-alpha package boundary |
 | [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
 | [Release workflow](development/release.md) | Private-alpha preparation and publication gates |
 | [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
