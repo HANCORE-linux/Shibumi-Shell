@@ -105,6 +105,9 @@ ShibumiPanel {
   readonly property string activeShell: HostIdentity.shellName(bar)
   readonly property bool v2LayoutActive: bar && bar.layoutController
     ? bar.layoutController.v2Mode === true : false
+  readonly property var activeWidgetOrder: bar && bar.layoutController
+    && bar.layoutController.order
+    ? bar.layoutController.order : ({ left: [], center: [], right: [] })
   readonly property var v2LayoutSlots: bar && bar.layoutController
     ? bar.layoutController.v2Slots
     : ({ left: [], center: [], right: [] })
@@ -671,7 +674,7 @@ ShibumiPanel {
               : settings.restorePage === "workspaces" ? "WORKSPACES"
               : settings.restorePage === "pickers" ? "PICKERS"
               : settings.restorePage === "logo" ? "LOGO"
-              : settings.restorePage === "functions" ? "APPEARANCE"
+              : settings.restorePage === "functions" ? "ICONS"
               : settings.restorePage === "splits" ? "LAYOUT"
               : settings.restorePage === "preferences" ? "ADVANCED"
               : "OVERVIEW")

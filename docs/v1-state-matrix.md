@@ -28,7 +28,7 @@ gates.
 
 - `G2.workspaces` populated Top and Bottom now use the original compact panel
   instead of duplicating display-mode and style settings that belong in
-  Appearance. V1 and Shibumi both render a 240×95 outer card (238×93
+  Icons. V1 and Shibumi both render a 240×95 outer card (238×93
   contiguous fill), with a 24 px heading, one separator, 30 px rows at 4 px
   spacing, numeric window counts, and the original text close affordance.
   Quattro keyboard navigation and the capped scrolling extension remain

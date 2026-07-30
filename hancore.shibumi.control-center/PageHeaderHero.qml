@@ -15,9 +15,11 @@ Item {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property real uiScale: 1
+  property real preferredHeight: Commons.Style.space(112)
+  property real previewWidth: Commons.Style.space(220)
 
   width: parent ? parent.width : implicitWidth
-  implicitHeight: Commons.Style.space(112)
+  implicitHeight: preferredHeight
 
   Row {
     anchors.fill: parent
@@ -65,7 +67,7 @@ Item {
 
     PageMotionStage {
       id: motionStage
-      width: Math.min(Commons.Style.space(220), parent.width * 0.43)
+      width: Math.min(root.previewWidth, parent.width * 0.43)
       height: parent.height
       controller: root.controller
       active: root.active

@@ -118,7 +118,8 @@ Item {
     if (ShibumiConfig.GroupIds.indexOf(group) < 0) return false
     const appearanceKeys = [
       "displayMode", "compact", "color", "colorMode", "tone",
-      "widgetBorder", "widgetBorderWidth", "widgetPadding",
+      "widgetBorder", "widgetBorderWidth",
+      "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
       "widgetRadius", "surfaceOpacity"
     ]
     return commit(function(next) {

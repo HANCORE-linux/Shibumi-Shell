@@ -89,7 +89,7 @@ Retained visual evidence:
 
 1. Treat the square `color08` button system and shadowless V2 Notch as the
    current accepted baseline.
-2. Continue the Control Center simplification and remaining Appearance/widget
+2. Continue the Control Center simplification and remaining Icons/widget
    controls without reintroducing card-colored buttons, rounded button chrome,
    or a V2 panel shadow.
 3. Preserve V1/Shibumi behavior separately from V2-only features and capability

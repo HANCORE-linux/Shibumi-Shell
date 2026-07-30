@@ -13,16 +13,17 @@ Column {
   property color accent: Commons.Color.menu.selectedText
   property string selectedWidgetGroup: "G4"
   property string selectedWidgetId: ""
-  property string providerFilter: "All"
   property bool advancedOpen: false
   property bool editorOnly: false
+  property bool detailOpen: false
   property string scopeMode: "shared"
+  signal widgetRequested(string groupId, string pluginId)
+  signal overviewRequested()
 
-  readonly property var providerOptions: [
-    { value: "All", label: "All" },
-    { value: "Shibumi", label: "Shibumi" },
-    { value: "Omarchy Quattro", label: "Omarchy" },
-    { value: "Third-party", label: "Third" }
+  readonly property var displayModeOptions: [
+    { value: "full", label: "Icon + text" },
+    { value: "icon", label: "Icon only" },
+    { value: "text", label: "Text only" }
   ]
   readonly property var colorOptions: [
     { value: "inherit", label: "Auto" },
@@ -36,8 +37,7 @@ Column {
     { value: "color08", label: "08" },
     { value: "foreground", label: "FG" }
   ]
-  readonly property var appearanceOptions: buildAppearanceOptions()
-  readonly property var filteredOptions: optionsForProvider(providerFilter)
+  readonly property var activeOptions: buildActiveOptions()
   readonly property var selectedWidget: optionForSelection(
     selectedWidgetGroup, selectedWidgetId)
   readonly property bool selectedSupported: selectedWidget
@@ -48,6 +48,18 @@ Column {
     ? String(widgetSetting(selectedWidget.group, "colorMode", "fill")) : "none"
   readonly property string selectedColor: selectedSupported
     ? String(widgetSetting(selectedWidget.group, "color", "inherit")) : "inherit"
+  readonly property string selectedContentTone: selectedSupported
+    ? String(widgetSetting(selectedWidget.group, "tone", "auto")) : "auto"
+  readonly property real selectedSurfaceOpacity: selectedSupported
+    ? Number(widgetSetting(selectedWidget.group, "surfaceOpacity", 1)) : 1
+  readonly property real selectedOutlineWidth: selectedSupported
+    ? Number(widgetSetting(selectedWidget.group, "widgetBorderWidth", 1)) : 1
+  readonly property string selectedOutlineColor: selectedSupported
+    ? String(widgetSetting(selectedWidget.group, "widgetBorderColor",
+        widgetSetting(selectedWidget.group,
+          "widgetBorderUsesSurfaceColor", false) === true
+            ? selectedColor : "inherit"))
+    : "inherit"
   readonly property bool selectedHasFill:
     selectedSurfaceMode === "fill" || selectedSurfaceMode === "both"
   readonly property bool selectedHasBorder:
@@ -55,29 +67,67 @@ Column {
   readonly property color selectedFillColor: selectedColor === "inherit"
     ? controller.controlHoverFillColor
     : controller.accentColor(selectedColor)
-  readonly property int visibleOptionCount: filteredOptions.length
-  readonly property bool ready: providerRepeater.count === providerOptions.length
-    && widgetRepeater.count === filteredOptions.length
-    && displayModeRepeater.count === 3
-    && surfaceModeRepeater.count === 4
-    && widgetColorRepeater.count === colorOptions.length
+  readonly property color selectedBorderColor:
+    selectedOutlineColor !== "inherit"
+      ? controller.accentColor(selectedOutlineColor)
+      : controller.controlBorderColor
+  readonly property real choiceControlHeight: Commons.Style.space(40)
+  readonly property real choiceListHeight: Commons.Style.space(48)
+  readonly property real choiceRowHeight: Commons.Style.space(16)
+  readonly property real surfaceChoiceHeight: choiceRowHeight * 4
+  readonly property real choiceFontSize:
+    Commons.Style.font.caption * uiScale
+  readonly property int visibleOptionCount: activeOptions.length
+  readonly property bool ready: widgetRepeater.count === activeOptions.length
+    && contentModeChoices.ready
+    && contentToneChoices.ready
+    && surfaceModeChoices.ready
+    && outlineChoices.ready
+    && fillColorPalette.ready
+    && outlineColorPalette.ready
+    && opacityChoices.ready
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(8)
 
+  onActiveOptionsChanged: {
+    if (!detailOpen) return
+    const selectedGroup = String(selectedWidgetGroup || "")
+    const stillActive = activeOptions.some(function(option) {
+      return String(option.group || "") === selectedGroup
+    })
+    if (!stillActive) overviewRequested()
+  }
+
   function optionForSelection(groupValue, idValue) {
     const group = String(groupValue || "")
     const id = String(idValue || "")
-    for (let index = 0; index < appearanceOptions.length; index++) {
-      const option = appearanceOptions[index]
+    for (let index = 0; index < activeOptions.length; index++) {
+      const option = activeOptions[index]
       if (group !== "" && String(option.group || "") === group)
         return option
       if (group === "" && id !== "" && String(option.id || "") === id)
-        return appearanceOptions[index]
+        return option
     }
-    return appearanceOptions.length > 0 ? appearanceOptions[0] : ({
+    for (let catalogIndex = 0;
+        catalogIndex < widgetOptions.length; catalogIndex++) {
+      const catalogOption = widgetOptions[catalogIndex]
+      if (group !== "" && String(catalogOption.group || "") === group) {
+        const plugin = pluginForGroup(group)
+        return {
+          group: group,
+          id: plugin ? String(plugin.id || "") : id,
+          label: catalogOption.label,
+          glyph: catalogOption.glyph,
+          modes: catalogOption.modes,
+          region: "",
+          supported: true
+        }
+      }
+    }
+    return activeOptions.length > 0 ? activeOptions[0] : ({
       group: "", id: "", label: "Widget", glyph: "widgets",
-      modes: ["full"], provider: "Third-party"
+      modes: ["full"], region: "", supported: false
     })
   }
 
@@ -91,69 +141,124 @@ Column {
     return null
   }
 
-  function buildAppearanceOptions() {
-    void(controller.pluginEntries)
-    const result = []
-    const knownIds = ({})
+  function catalogOptionForGroup(groupValue) {
+    const group = String(groupValue || "")
     for (let index = 0; index < widgetOptions.length; index++) {
-      const source = widgetOptions[index]
-      const plugin = pluginForGroup(source.group)
-      const id = plugin ? String(plugin.id || "") : ""
-      if (id !== "") knownIds[id] = true
-      result.push({
-        group: source.group,
-        id: id,
-        label: source.label,
-        glyph: source.glyph,
-        modes: source.modes,
-        provider: "Shibumi",
-        supported: true
-      })
+      if (String(widgetOptions[index].group || "") === group)
+        return widgetOptions[index]
     }
+    return null
+  }
 
-    const entries = controller.pluginEntries || []
-    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
-      const entry = entries[entryIndex]
-      if (!entry.barWidget || !entry.installedInBar || knownIds[entry.id])
-        continue
-      result.push({
-        group: "",
-        id: entry.id,
-        label: entry.name,
-        glyph: entry.glyph || "widgets",
-        modes: ["full"],
-        provider: entry.provider || "Third-party",
-        supported: false
-      })
+  function activeOrder() {
+    const source = controller.activeWidgetOrder || ({})
+    const regions = ["left", "center", "right"]
+    const valid = regions.every(function(region) {
+      return Array.isArray(source[region])
+    })
+    if (valid) return source
+    return controller.v2LayoutActive === true
+      ? {
+          left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
+          center: ["G8"],
+          right: [
+            "G9", "G10", "G11", "G14", "G12", "G13",
+            "G16", "G18", "G17", "G15"
+          ]
+        }
+      : {
+          left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+          center: ["G8"],
+          right: ["G9", "G10", "G11", "G12", "G13", "G14", "G15"]
+        }
+  }
+
+  function buildActiveOptions() {
+    void(controller.activeWidgetOrder)
+    void(controller.v2LayoutActive)
+    const result = []
+    const order = activeOrder()
+    const regions = ["left", "center", "right"]
+    for (let regionIndex = 0; regionIndex < regions.length; regionIndex++) {
+      const region = regions[regionIndex]
+      const groups = order[region] || []
+      for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        const group = String(groups[groupIndex] || "")
+        const source = catalogOptionForGroup(group)
+        if (!source
+            || controller.groupSetting(group, "enabled", true) === false)
+          continue
+        const plugin = pluginForGroup(group)
+        result.push({
+          group: group,
+          id: plugin ? String(plugin.id || "") : "",
+          label: source.label,
+          glyph: source.glyph,
+          modes: source.modes,
+          region: region,
+          supported: true
+        })
+      }
     }
     return result
-  }
-
-  function optionsForProvider(provider) {
-    const value = String(provider || "All")
-    if (value === "All") return appearanceOptions
-    return appearanceOptions.filter(function(option) {
-      return String(option.provider || "") === value
-    })
-  }
-
-  function chooseProvider(provider) {
-    const nextOptions = optionsForProvider(provider)
-    providerFilter = String(provider)
-    if (nextOptions.length > 0) {
-      selectedWidgetGroup = String(nextOptions[0].group || "")
-      selectedWidgetId = String(nextOptions[0].id || "")
-    }
   }
 
   function widgetSetting(group, key, fallback) {
     return controller.groupSetting(group, key, fallback)
   }
 
+  function widgetAppearanceSettings(groupValue) {
+    const widgets = controller.stateConfig
+      && controller.stateConfig.widgets
+      ? controller.stateConfig.widgets : ({})
+    const settings = widgets[String(groupValue || "")]
+    return settings && typeof settings === "object" ? settings : ({})
+  }
+
+  function widgetAppearanceChanged(groupValue) {
+    const settings = widgetAppearanceSettings(groupValue)
+    const keys = [
+      "displayMode", "compact", "color", "colorMode", "tone",
+      "widgetBorder", "widgetBorderWidth",
+      "widgetBorderUsesSurfaceColor", "widgetPadding",
+      "widgetRadius", "surfaceOpacity"
+    ]
+    return keys.some(function(key) {
+      return Object.prototype.hasOwnProperty.call(settings, key)
+    })
+  }
+
+  function widgetAppearanceIndicatorColor(groupValue) {
+    const settings = widgetAppearanceSettings(groupValue)
+    const fillColor = settings.color !== undefined
+      ? String(settings.color) : "inherit"
+    const outlineColor = settings.widgetBorderColor !== undefined
+      ? String(settings.widgetBorderColor) : "inherit"
+    const colorId = fillColor !== "inherit" ? fillColor : outlineColor
+    return colorId !== "inherit"
+      ? controller.accentColor(colorId) : accent
+  }
+
+  function isActiveWidget(groupValue) {
+    const group = String(groupValue || "")
+    return activeOptions.some(function(option) {
+      return String(option.group || "") === group
+    })
+  }
+
   function widgetMode(group) {
     const stored = String(widgetSetting(group, "displayMode", ""))
     if (stored !== "") return stored
     return widgetSetting(group, "compact", false) === true ? "icon" : "full"
+  }
+
+  function displayModeLabel(mode) {
+    const value = String(mode || "")
+    for (let index = 0; index < displayModeOptions.length; index++) {
+      if (displayModeOptions[index].value === value)
+        return displayModeOptions[index].label
+    }
+    return "Icon + text"
   }
 
   function setWidgetMode(mode) {
@@ -165,6 +270,36 @@ Column {
     return true
   }
 
+  function cycleWidgetMode() {
+    if (!selectedSupported) return false
+    let currentIndex = 0
+    for (let index = 0; index < displayModeOptions.length; index++) {
+      if (displayModeOptions[index].value === selectedDisplayMode) {
+        currentIndex = index
+        break
+      }
+    }
+    const nextIndex = (currentIndex + 1) % displayModeOptions.length
+    return setWidgetMode(displayModeOptions[nextIndex].value)
+  }
+
+  function cycleWidgetOpacity() {
+    if (!selectedSupported) return false
+    const current = selectedSurfaceOpacity
+    const next = current > 0.9 ? 0.8
+      : current > 0.7 ? 0.6 : current > 0.5 ? 0.4 : 1
+    controller.setGroupSetting(selectedWidget.group, "surfaceOpacity", next)
+    return true
+  }
+
+  function cycleWidgetSurface() {
+    if (!selectedSupported) return false
+    const next = selectedSurfaceMode === "none" ? "fill"
+      : selectedSurfaceMode === "fill" ? "border"
+      : selectedSurfaceMode === "border" ? "both" : "none"
+    return setWidgetSurface(next)
+  }
+
   function setWidgetSurface(mode) {
     if (!selectedSupported) return false
     const value = String(mode)
@@ -174,135 +309,166 @@ Column {
     return true
   }
 
-  Rectangle {
+  Item {
     width: parent.width
-    height: Commons.Style.space(54)
-    radius: root.controller.controlRadius
-    color: "transparent"
-    border.width: 1
-    border.color: root.controller.controlBorderColor
+    readonly property real overviewHeight: Math.max(
+      Commons.Style.space(180),
+      widgetList.implicitHeight + Commons.Style.space(45))
+    readonly property real routeHeight: root.detailOpen && !root.editorOnly
+      ? Commons.Style.space(34) : 0
+    readonly property real inspectorHeight: root.editorOnly
+      ? Commons.Style.space(356)
+      : inspector.implicitHeight + Commons.Style.space(20)
+    height: root.editorOnly ? inspectorHeight
+      : root.detailOpen
+        ? routeHeight + Commons.Style.space(8) + inspectorHeight
+        : overviewHeight
 
-    Rectangle {
+    Item {
+      id: detailRoute
+      visible: root.detailOpen && !root.editorOnly
       anchors.left: parent.left
       anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      anchors.margins: Commons.Style.space(10)
-      height: Commons.Style.space(26)
-      radius: root.controller.controlRadius
-      color: root.controller.marketPanel
-      border.width: 1
-      border.color: root.controller.controlBorderColor
+      anchors.top: parent.top
+      height: parent.routeHeight
 
-      Rectangle {
-        anchors.centerIn: parent
-        width: Math.min(parent.width - Commons.Style.space(20),
-          previewContent.implicitWidth + Commons.Style.space(18))
-        height: Commons.Style.space(24)
-        radius: root.selectedHasFill
-          ? Commons.Style.space(12) : root.controller.controlRadius
-        color: root.selectedHasFill ? root.selectedFillColor : "transparent"
-        opacity: Number(root.widgetSetting(root.selectedWidget.group,
-          "surfaceOpacity", 1))
-        border.width: root.selectedHasBorder ? Number(root.widgetSetting(
-          root.selectedWidget.group, "widgetBorderWidth", 1)) : 0
-        border.color: root.selectedHasBorder
-          ? root.selectedFillColor : "transparent"
+      Row {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        height: parent.height
+        spacing: Commons.Style.space(7)
 
-        Row {
-          id: previewContent
-          anchors.centerIn: parent
-          spacing: Commons.Style.space(5)
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(7)
+          height: width
+          radius: width / 2
+          color: allWidgetsPointer.containsMouse
+            ? root.accent : root.controller.controlBorderColor
+        }
 
-          IconText {
-            visible: root.selectedDisplayMode !== "text"
-            text: root.selectedWidget.glyph
-            color: root.selectedHasFill && root.selectedColor !== "inherit"
-              ? root.controller.contrastColor(root.selectedColor)
-              : root.foreground
-            font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
-          }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: "ALL WIDGETS"
+          color: allWidgetsPointer.containsMouse
+            ? root.accent : root.foreground
+          opacity: allWidgetsPointer.containsMouse ? 1 : 0.62
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: Font.DemiBold
+          font.letterSpacing: 0.8
+        }
 
-          Text {
-            visible: root.selectedDisplayMode !== "icon"
-            text: root.selectedWidget.label
-            color: root.selectedHasFill && root.selectedColor !== "inherit"
-              ? root.controller.contrastColor(root.selectedColor)
-              : root.foreground
-            font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-            font.weight: Font.Medium
-          }
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(42)
+          height: 1
+          color: root.controller.controlBorderColor
+        }
+
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(7)
+          height: width
+          radius: width / 2
+          color: root.accent
+        }
+
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          text: root.selectedWidget.label.toUpperCase()
+          color: root.foreground
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: Font.DemiBold
+          font.letterSpacing: 0.8
         }
       }
-    }
-  }
 
-  Row {
-    visible: !root.editorOnly
-    width: parent.width
-    spacing: Commons.Style.space(4)
-
-    Repeater {
-      id: providerRepeater
-      model: root.providerOptions
-
-      delegate: CompactSettingChoice {
-        required property var modelData
-        width: (parent.width - parent.spacing * 3) / 4
-        controller: root.controller
-        label: modelData.label
-        selected: root.providerFilter === modelData.value
-        foreground: root.foreground
-        accent: root.accent
-        uiScale: root.uiScale
-        onClicked: root.chooseProvider(modelData.value)
+      MouseArea {
+        id: allWidgetsPointer
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: Commons.Style.space(116)
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.overviewRequested()
       }
     }
-  }
-
-  Row {
-    width: parent.width
-    height: root.editorOnly
-      ? Commons.Style.space(356) : Commons.Style.space(310)
-    spacing: Commons.Style.space(10)
 
     Rectangle {
-      visible: !root.editorOnly
-      width: root.editorOnly ? 0 : Math.round(parent.width * 0.34)
-      height: parent.height
+      visible: !root.editorOnly && !root.detailOpen
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      height: parent.overviewHeight
       radius: root.controller.controlRadius
       color: root.controller.controlFillColor
       border.width: 1
       border.color: root.controller.controlBorderColor
       clip: true
 
+      Text {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.topMargin: Commons.Style.space(9)
+        anchors.leftMargin: Commons.Style.space(10)
+        text: "ACTIVE WIDGETS"
+        color: root.foreground
+        opacity: 0.54
+        font.family: root.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+        font.weight: Font.DemiBold
+        font.letterSpacing: 1
+      }
+
+      Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: Commons.Style.space(29)
+        height: 1
+        color: root.controller.dividerColor
+      }
+
       Flickable {
         id: widgetListFlick
-        anchors.fill: parent
-        anchors.margins: Commons.Style.space(5)
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Commons.Style.space(5)
+        anchors.rightMargin: Commons.Style.space(5)
+        anchors.topMargin: Commons.Style.space(35)
+        anchors.bottomMargin: Commons.Style.space(5)
         contentWidth: width
         contentHeight: widgetList.implicitHeight
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
         clip: true
 
-        Column {
+        Grid {
           id: widgetList
           width: parent.width
-          spacing: Commons.Style.space(3)
+          columns: 4
+          columnSpacing: Commons.Style.space(4)
+          rowSpacing: Commons.Style.space(3)
 
           Repeater {
             id: widgetRepeater
-            model: root.filteredOptions
+            model: root.activeOptions
 
             delegate: Rectangle {
               id: widgetRow
               required property var modelData
               readonly property bool selected:
-                root.selectedWidgetGroup === String(modelData.group || "")
-                  && (String(modelData.group || "") !== ""
-                    || root.selectedWidgetId === modelData.id)
-              width: parent.width
+                root.detailOpen
+                  && String(root.selectedWidget.group || "")
+                  === String(modelData.group || "")
+              readonly property bool appearanceChanged:
+                root.widgetAppearanceChanged(modelData.group)
+              width: (parent.width - parent.columnSpacing * 3) / 4
               height: Commons.Style.space(38)
               radius: root.controller.controlRadius
               color: selected
@@ -315,7 +481,8 @@ Column {
               Row {
                 anchors.fill: parent
                 anchors.leftMargin: Commons.Style.space(8)
-                anchors.rightMargin: Commons.Style.space(7)
+                anchors.rightMargin: widgetRow.appearanceChanged
+                  ? Commons.Style.space(16) : Commons.Style.space(7)
                 spacing: Commons.Style.space(7)
 
                 IconText {
@@ -345,8 +512,9 @@ Column {
                   Text {
                     width: parent.width
                     text: widgetRow.modelData.supported
-                      ? root.widgetMode(widgetRow.modelData.group)
-                      : widgetRow.modelData.provider
+                      ? root.displayModeLabel(
+                          root.widgetMode(widgetRow.modelData.group))
+                      : ""
                     color: widgetRow.selected ? root.accent : root.foreground
                     opacity: widgetRow.selected ? 0.9 : 0.42
                     elide: Text.ElideRight
@@ -355,6 +523,20 @@ Column {
                       * root.uiScale * 0.86
                   }
                 }
+              }
+
+              Rectangle {
+                id: appearanceStateDot
+                visible: widgetRow.appearanceChanged
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: Commons.Style.space(6)
+                anchors.rightMargin: Commons.Style.space(6)
+                width: Commons.Style.space(6)
+                height: width
+                radius: width / 2
+                color: root.widgetAppearanceIndicatorColor(
+                  widgetRow.modelData.group)
               }
 
               MouseArea {
@@ -366,22 +548,32 @@ Column {
                   root.selectedWidgetGroup =
                     String(widgetRow.modelData.group || "")
                   root.selectedWidgetId = String(widgetRow.modelData.id || "")
+                  root.widgetRequested(
+                    root.selectedWidgetGroup, root.selectedWidgetId)
                 }
               }
             }
           }
 
-          Text {
-            width: parent.width
-            visible: root.filteredOptions.length === 0
-            text: "No active widgets from this provider"
-            color: root.foreground
-            opacity: 0.46
-            wrapMode: Text.WordWrap
-            horizontalAlignment: Text.AlignHCenter
-            font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-          }
+        }
+      }
+
+      Text {
+        anchors.centerIn: parent
+        visible: root.activeOptions.length === 0
+        text: "No editable widgets are active. Enable one under Widgets."
+        color: root.foreground
+        opacity: 0.46
+        wrapMode: Text.WordWrap
+        horizontalAlignment: Text.AlignHCenter
+        font.family: root.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+
+        MouseArea {
+          anchors.fill: parent
+          anchors.margins: -Commons.Style.space(6)
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.controller.showSettingsPage("plugins")
         }
       }
 
@@ -390,7 +582,7 @@ Column {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.topMargin: Commons.Style.space(6)
+        anchors.topMargin: Commons.Style.space(36)
         anchors.rightMargin: 1
         anchors.bottomMargin: Commons.Style.space(6)
         flickable: widgetListFlick
@@ -400,8 +592,14 @@ Column {
     }
 
     Rectangle {
-      width: parent.width - x
-      height: parent.height
+      id: inspectorCard
+      visible: root.editorOnly || root.detailOpen
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: detailRoute.bottom
+      anchors.topMargin: root.detailOpen && !root.editorOnly
+        ? Commons.Style.space(8) : 0
+      height: parent.inspectorHeight
       radius: root.controller.controlRadius
       color: root.controller.controlFillColor
       border.width: 1
@@ -416,6 +614,7 @@ Column {
         contentHeight: inspector.implicitHeight
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
+        interactive: root.editorOnly
         clip: true
 
         Column {
@@ -425,10 +624,13 @@ Column {
 
           Item {
             width: parent.width
-            height: Commons.Style.space(24)
+            height: Commons.Style.space(32)
 
             Row {
+              id: selectedTitle
               anchors.left: parent.left
+              anchors.right: editorHeaderActions.left
+              anchors.rightMargin: Commons.Style.space(10)
               height: parent.height
               spacing: Commons.Style.space(6)
 
@@ -441,32 +643,121 @@ Column {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - x
                 text: root.selectedWidget.label
                 color: root.foreground
+                elide: Text.ElideRight
                 font.family: root.controller.marketFont
                 font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
                 font.weight: Font.DemiBold
               }
             }
 
-            Text {
+            Row {
+              id: editorHeaderActions
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              visible: root.selectedSupported && root.scopeMode === "shared"
-              text: "Reset ↺"
-              color: resetPointer.containsMouse ? root.accent : root.foreground
-              opacity: resetPointer.containsMouse ? 1 : 0.58
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
+              height: parent.height
+              spacing: Commons.Style.space(10)
 
-              MouseArea {
-                id: resetPointer
-                anchors.fill: parent
-                anchors.margins: -Commons.Style.space(6)
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.controller.resetGroupAppearance(
-                  root.selectedWidget.group)
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.detailOpen && !root.editorOnly
+                text: root.controller.v2LayoutActive
+                  ? "V2 ACTIVE" : "V1 ACTIVE"
+                color: root.accent
+                font.family: root.controller.marketFont
+                font.pixelSize:
+                  Commons.Style.font.caption * root.uiScale * 0.9
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.8
+              }
+
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(Commons.Style.space(90),
+                  integratedPreviewContent.implicitWidth
+                    + Commons.Style.space(10))
+                height: Commons.Style.space(20)
+                radius: root.selectedHasFill
+                  ? Commons.Style.space(10) : root.controller.controlRadius
+                color: root.selectedHasFill
+                  ? root.selectedFillColor : "transparent"
+                opacity: Number(root.widgetSetting(
+                  root.selectedWidget.group, "surfaceOpacity", 1))
+                border.width: root.selectedHasBorder
+                  ? Number(root.widgetSetting(root.selectedWidget.group,
+                      "widgetBorderWidth", 1)) : 0
+                border.color: root.selectedHasBorder
+                  ? root.selectedBorderColor : "transparent"
+
+                Item {
+                  id: integratedPreviewContent
+                  anchors.centerIn: parent
+                  width: implicitWidth
+                  height: parent.height
+                  implicitWidth: (previewGlyph.visible
+                      ? previewGlyph.implicitWidth : 0)
+                    + (previewGlyph.visible && previewLabel.visible
+                      ? Commons.Style.space(5) : 0)
+                    + (previewLabel.visible ? previewLabel.implicitWidth : 0)
+
+                  IconText {
+                    id: previewGlyph
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.selectedDisplayMode !== "text"
+                    text: root.selectedWidget.glyph
+                    color: root.selectedHasFill
+                        && root.selectedColor !== "inherit"
+                      ? root.controller.contrastColor(root.selectedColor)
+                      : root.foreground
+                    font.pixelSize:
+                      Commons.Style.font.iconLarge * root.uiScale * 0.76
+                  }
+
+                  Text {
+                    id: previewLabel
+                    anchors.left: previewGlyph.visible
+                      ? previewGlyph.right : parent.left
+                    anchors.leftMargin: previewGlyph.visible
+                      ? Commons.Style.space(5) : 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.selectedDisplayMode !== "icon"
+                    text: root.selectedWidget.label
+                    color: root.selectedHasFill
+                        && root.selectedColor !== "inherit"
+                      ? root.controller.contrastColor(root.selectedColor)
+                      : root.foreground
+                    elide: Text.ElideRight
+                    font.family: root.controller.marketFont
+                    font.pixelSize:
+                      Commons.Style.font.caption * root.uiScale * 0.86
+                    font.weight: Font.Medium
+                  }
+                }
+              }
+
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.selectedSupported
+                  && root.scopeMode === "shared"
+                text: "Reset ↺"
+                color: resetPointer.containsMouse
+                  ? root.accent : root.foreground
+                opacity: resetPointer.containsMouse ? 1 : 0.58
+                font.family: root.controller.marketFont
+                font.pixelSize: Commons.Style.font.caption * root.uiScale
+
+                MouseArea {
+                  id: resetPointer
+                  anchors.fill: parent
+                  anchors.margins: -Commons.Style.space(6)
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.controller.resetGroupAppearance(
+                    root.selectedWidget.group)
+                }
               }
             }
           }
@@ -483,140 +774,148 @@ Column {
             font.pixelSize: Commons.Style.font.caption * root.uiScale
           }
 
-          SectionLabel {
+          Row {
             visible: root.selectedSupported && root.scopeMode === "shared"
-            text: "DISPLAY"
+            width: parent.width
+            spacing: Commons.Style.space(8)
+
+            Column {
+              width: (parent.width - parent.spacing * 2) / 3
+              spacing: Commons.Style.space(4)
+
+              FieldLabel { text: "SURFACE" }
+
+              SurfaceChoiceList {
+                id: surfaceModeChoices
+                height: root.surfaceChoiceHeight
+                currentValue: root.selectedSurfaceMode
+                onChosen: value => root.setWidgetSurface(value)
+              }
+            }
+
+            Column {
+              width: (parent.width - parent.spacing * 2) / 3
+              spacing: Commons.Style.space(4)
+
+              FieldLabel {
+                text: "OUTLINE"
+                opacity: root.selectedHasBorder ? 0.4 : 0.2
+              }
+
+              RadioChoiceList {
+                id: outlineChoices
+                height: root.choiceRowHeight * 4
+                options: [
+                  { value: 0.5, label: "0.5 px" },
+                  { value: 1, label: "1 px" },
+                  { value: 1.5, label: "1.5 px" },
+                  { value: 2, label: "2 px" }
+                ]
+                currentValue: root.selectedOutlineWidth
+                enabled: root.selectedHasBorder
+                onChosen: value => root.controller.setGroupSetting(
+                  root.selectedWidget.group, "widgetBorderWidth", value)
+              }
+            }
+
+            Column {
+              width: (parent.width - parent.spacing * 2) / 3
+              spacing: Commons.Style.space(4)
+
+              FieldLabel { text: "OPACITY" }
+
+              OpacityChoiceList {
+                id: opacityChoices
+                height: root.choiceRowHeight * 4
+                currentValue: root.selectedSurfaceOpacity
+                onChosen: value => root.controller.setGroupSetting(
+                  root.selectedWidget.group, "surfaceOpacity", value)
+              }
+            }
+          }
+
+          Column {
+            visible: root.selectedSupported && root.scopeMode === "shared"
+              && root.selectedHasFill
+            width: parent.width
+            spacing: Commons.Style.space(4)
+
+            SectionLabel { text: "FILL COLOR" }
+
+            ColorPalette {
+              id: fillColorPalette
+              selectedValue: root.selectedColor
+              onChosen: value => root.controller.setGroupSetting(
+                root.selectedWidget.group, "color", value)
+            }
+          }
+
+          Column {
+            visible: root.selectedSupported && root.scopeMode === "shared"
+              && root.selectedHasBorder
+            width: parent.width
+            spacing: Commons.Style.space(4)
+
+            SectionLabel { text: "OUTLINE COLOR" }
+
+            ColorPalette {
+              id: outlineColorPalette
+              selectedValue: root.selectedOutlineColor
+              onChosen: value => {
+                root.controller.setGroupSetting(
+                  root.selectedWidget.group, "widgetBorderColor", value)
+                root.controller.setGroupSetting(
+                  root.selectedWidget.group,
+                  "widgetBorderUsesSurfaceColor", false)
+              }
+            }
           }
 
           Row {
             visible: root.selectedSupported && root.scopeMode === "shared"
             width: parent.width
-            spacing: Commons.Style.space(4)
+            spacing: Commons.Style.space(8)
 
-            Repeater {
-              id: displayModeRepeater
-              model: ["full", "icon", "text"]
+            Column {
+              width: (parent.width - parent.spacing * 2) / 3 * 2
+                + parent.spacing
+              spacing: Commons.Style.space(4)
 
-              delegate: CompactSettingChoice {
-                required property string modelData
-                width: (parent.width - parent.spacing * 2) / 3
-                controller: root.controller
-                label: modelData.charAt(0).toUpperCase() + modelData.slice(1)
-                selected: root.selectedDisplayMode === modelData
-                foreground: root.foreground
-                accent: root.accent
-                uiScale: root.uiScale
-                onClicked: root.setWidgetMode(modelData)
+              FieldLabel { text: "CONTENT" }
+
+              RadioChoiceList {
+                id: contentModeChoices
+                height: root.choiceListHeight
+                options: root.displayModeOptions
+                currentValue: root.selectedDisplayMode
+                onChosen: value => root.setWidgetMode(value)
               }
             }
-          }
 
-          SectionLabel {
-            visible: root.selectedSupported && root.scopeMode === "shared"
-            text: "SURFACE"
-          }
+            Column {
+              width: (parent.width - parent.spacing * 2) / 3
+              spacing: Commons.Style.space(4)
 
-          Row {
-            visible: root.selectedSupported && root.scopeMode === "shared"
-            width: parent.width
-            spacing: Commons.Style.space(4)
+              FieldLabel { text: "CONTENT TONE" }
 
-            Repeater {
-              id: surfaceModeRepeater
-              model: [
-                { value: "none", label: "None" },
-                { value: "fill", label: "Fill" },
-                { value: "border", label: "Outline" },
-                { value: "both", label: "Both" }
-              ]
-
-              delegate: CompactSettingChoice {
-                required property var modelData
-                width: (parent.width - parent.spacing * 3) / 4
-                controller: root.controller
-                label: modelData.label
-                selected: root.selectedSurfaceMode === modelData.value
-                foreground: root.foreground
-                accent: root.accent
-                fontSize: Commons.Style.font.caption * root.uiScale * 0.92
-                onClicked: root.setWidgetSurface(modelData.value)
-              }
-            }
-          }
-
-          SectionLabel {
-            visible: root.selectedSupported && root.selectedHasFill
-              && root.scopeMode === "shared"
-            text: "COLOR"
-          }
-
-          Grid {
-            visible: root.selectedSupported && root.selectedHasFill
-              && root.scopeMode === "shared"
-            width: parent.width
-            columns: 10
-            columnSpacing: Commons.Style.space(4)
-            rowSpacing: Commons.Style.space(4)
-
-            Repeater {
-              id: widgetColorRepeater
-              model: root.colorOptions
-
-              delegate: Rectangle {
-                id: widgetSwatch
-                required property var modelData
-                readonly property bool selected:
-                  root.selectedColor === modelData.value
-                width: (parent.width - parent.columnSpacing * 9) / 10
-                height: Commons.Style.space(25)
-                radius: root.controller.controlRadius
-                color: modelData.value === "inherit"
-                  ? root.controller.controlHoverFillColor
-                  : root.controller.accentColor(modelData.value)
-                border.width: selected ? 2 : 1
-                border.color: selected ? root.accent
-                  : root.controller.controlBorderColor
-
-                Text {
-                  anchors.centerIn: parent
-                  text: widgetSwatch.modelData.label
-                  color: widgetSwatch.modelData.value === "inherit"
-                    ? root.foreground
-                    : root.controller.contrastColor(
-                        widgetSwatch.modelData.value)
-                  font.family: root.controller.marketFont
-                  font.pixelSize: Commons.Style.font.caption
-                    * root.uiScale * 0.9
-                  font.weight: Font.Medium
-                }
-
-                Rectangle {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  anchors.bottom: parent.bottom
-                  anchors.bottomMargin: 2
-                  visible: widgetSwatch.selected
-                  width: Commons.Style.space(9)
-                  height: 2
-                  radius: 1
-                  color: widgetSwatch.modelData.value === "inherit"
-                    ? root.accent
-                    : root.controller.contrastColor(
-                        widgetSwatch.modelData.value)
-                }
-
-                MouseArea {
-                  anchors.fill: parent
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.controller.setGroupSetting(
-                    root.selectedWidget.group, "color",
-                    widgetSwatch.modelData.value)
-                }
+              RadioChoiceList {
+                id: contentToneChoices
+                height: root.choiceListHeight
+                options: [
+                  { value: "auto", label: "Auto" },
+                  { value: "background", label: "BG" },
+                  { value: "foreground", label: "FG" }
+                ]
+                currentValue: root.selectedContentTone
+                onChosen: value => root.controller.setGroupSetting(
+                  root.selectedWidget.group, "tone", value)
               }
             }
           }
 
           Rectangle {
-            visible: root.selectedSupported && root.scopeMode === "shared"
+            visible: root.editorOnly && root.selectedSupported
+              && root.scopeMode === "shared"
             width: parent.width
             height: Commons.Style.space(31)
             radius: root.controller.controlRadius
@@ -629,7 +928,7 @@ Column {
               anchors.left: parent.left
               anchors.leftMargin: Commons.Style.space(9)
               anchors.verticalCenter: parent.verticalCenter
-              text: root.advancedOpen ? "Advanced" : "More"
+              text: root.advancedOpen ? "Less settings" : "More settings"
               color: root.foreground
               font.family: root.controller.marketFont
               font.pixelSize: Commons.Style.font.caption * root.uiScale
@@ -655,78 +954,49 @@ Column {
           }
 
           Column {
-            visible: root.selectedSupported && root.advancedOpen
+            visible: root.selectedSupported
+              && (root.detailOpen || root.advancedOpen)
               && root.scopeMode === "shared"
             width: parent.width
             spacing: Commons.Style.space(7)
 
-            SectionLabel { text: "CONTENT TONE" }
-            OptionRow {
-              options: [
-                { value: "auto", label: "Auto" },
-                { value: "background", label: "Background" },
-                { value: "foreground", label: "Foreground" }
-              ]
-              currentValue: String(root.widgetSetting(
-                root.selectedWidget.group, "tone", "auto"))
-              onChosen: value => root.controller.setGroupSetting(
-                root.selectedWidget.group, "tone", value)
-            }
+            GroupDivider {}
 
-            SectionLabel { text: "SHAPE" }
-            OptionRow {
-              options: [
-                { value: "auto", label: "Default" },
-                { value: "square", label: "Square" },
-                { value: "soft", label: "Soft" },
-                { value: "round", label: "Round" }
-              ]
-              currentValue: String(root.widgetSetting(
-                root.selectedWidget.group, "widgetRadius", "auto"))
-              onChosen: value => root.controller.setGroupSetting(
-                root.selectedWidget.group, "widgetRadius", value)
-            }
+            SectionLabel { text: "GEOMETRY" }
 
-            SectionLabel { text: "SPACING" }
-            OptionRow {
-              options: [
-                { value: "auto", label: "Auto" },
-                { value: "none", label: "None" },
-                { value: "compact", label: "Compact" },
-                { value: "roomy", label: "Roomy" }
-              ]
-              currentValue: String(root.widgetSetting(
-                root.selectedWidget.group, "widgetPadding", "auto"))
-              onChosen: value => root.controller.setGroupSetting(
-                root.selectedWidget.group, "widgetPadding", value)
-            }
-
-            SectionLabel { text: "OPACITY" }
-            OptionRow {
-              options: [
-                { value: 1, label: "100%" },
-                { value: 0.8, label: "80%" },
-                { value: 0.6, label: "60%" }
-              ]
-              currentValue: Number(root.widgetSetting(
-                root.selectedWidget.group, "surfaceOpacity", 1))
-              onChosen: value => root.controller.setGroupSetting(
-                root.selectedWidget.group, "surfaceOpacity", value)
-            }
-
-            CompactSettingChoice {
+            Row {
               width: parent.width
-              controller: root.controller
-              label: "2 px outline"
-              selected: Number(root.widgetSetting(root.selectedWidget.group,
-                "widgetBorderWidth", 1)) === 2
-              foreground: root.foreground
-              accent: root.accent
-              uiScale: root.uiScale
-              onClicked: root.controller.setGroupSetting(
-                root.selectedWidget.group, "widgetBorderWidth",
-                selected ? 1 : 2)
+              spacing: Commons.Style.space(8)
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Commons.Style.space(4)
+
+                FieldLabel { text: "SHAPE" }
+
+                ShapeRow {
+                  currentValue: String(root.widgetSetting(
+                    root.selectedWidget.group, "widgetRadius", "auto"))
+                  onChosen: value => root.controller.setGroupSetting(
+                    root.selectedWidget.group, "widgetRadius", value)
+                }
+              }
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Commons.Style.space(4)
+
+                FieldLabel { text: "INNER SPACE · AROUND CONTENT" }
+
+                SpacingRow {
+                  currentValue: String(root.widgetSetting(
+                    root.selectedWidget.group, "widgetPadding", "auto"))
+                  onChosen: value => root.controller.setGroupSetting(
+                    root.selectedWidget.group, "widgetPadding", value)
+                }
+              }
             }
+
           }
 
           Column {
@@ -843,12 +1113,958 @@ Column {
     }
   }
 
+  component ContentCycleChoice: Rectangle {
+    id: contentCycle
+
+    required property string mode
+    readonly property bool ready: true
+    readonly property bool hovered: contentCyclePointer.containsMouse
+    signal chosen()
+
+    width: parent ? parent.width : 0
+    height: root.choiceControlHeight
+    radius: root.controller.controlRadius
+    color: hovered ? root.controller.buttonHoverFillColor
+      : root.controller.buttonFillColor
+    border.width: 1
+    border.color: root.accent
+
+    Item {
+      anchors.left: parent.left
+      anchors.leftMargin: Commons.Style.space(12)
+      anchors.verticalCenter: parent.verticalCenter
+      width: implicitWidth
+      height: parent.height
+      implicitWidth: (contentCycleGlyph.visible
+          ? contentCycleGlyph.implicitWidth : 0)
+        + (contentCycleGlyph.visible && contentCycleText.visible
+          ? Commons.Style.space(5) : 0)
+        + (contentCycleText.visible ? contentCycleText.implicitWidth : 0)
+
+      IconText {
+        id: contentCycleGlyph
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        visible: contentCycle.mode !== "text"
+        text: root.selectedWidget.glyph
+        color: root.accent
+        font.pixelSize: Commons.Style.font.iconLarge * root.uiScale * 0.78
+      }
+
+      Text {
+        id: contentCycleText
+        anchors.left: contentCycleGlyph.visible
+          ? contentCycleGlyph.right : parent.left
+        anchors.leftMargin: contentCycleGlyph.visible
+          ? Commons.Style.space(5) : 0
+        anchors.verticalCenter: parent.verticalCenter
+        visible: contentCycle.mode !== "icon"
+        text: "Aa"
+        color: root.accent
+        font.family: root.controller.marketFont
+        font.pixelSize: root.choiceFontSize
+        font.weight: Font.Medium
+        font.letterSpacing: 0.35
+      }
+    }
+
+    Text {
+      anchors.centerIn: parent
+      text: root.displayModeLabel(contentCycle.mode)
+      color: root.accent
+      font.family: root.controller.marketFont
+      font.pixelSize: root.choiceFontSize
+      font.weight: Font.DemiBold
+      font.letterSpacing: 0.35
+    }
+
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: Commons.Style.space(12)
+      anchors.verticalCenter: parent.verticalCenter
+      text: "↻"
+      color: contentCycle.hovered ? root.accent : root.foreground
+      opacity: contentCycle.hovered ? 1 : 0.58
+      font.pixelSize: Commons.Style.font.body * root.uiScale
+    }
+
+    MouseArea {
+      id: contentCyclePointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: contentCycle.chosen()
+    }
+  }
+
+  component SurfaceCycleChoice: Rectangle {
+    id: surfaceCycle
+
+    required property string mode
+    required property bool colorSelected
+    readonly property bool ready: true
+    readonly property bool hovered: surfaceCyclePointer.containsMouse
+    readonly property bool hasFill:
+      mode === "fill" || mode === "both"
+    readonly property bool hasBorder:
+      mode === "border" || mode === "both"
+    signal chosen()
+    signal colorRequested()
+
+    width: parent ? parent.width : 0
+    height: root.choiceControlHeight
+    color: "transparent"
+
+    Rectangle {
+      id: surfaceCycleButton
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      height: parent.height * 2 / 3
+      radius: root.controller.controlRadius
+      color: surfaceCycle.hovered
+        ? root.controller.buttonHoverFillColor
+        : root.controller.buttonFillColor
+      border.width: 1
+      border.color: root.accent
+    }
+
+    Item {
+      parent: surfaceCycleButton
+      anchors.left: parent.left
+      anchors.leftMargin: Commons.Style.space(12)
+      anchors.verticalCenter: parent.verticalCenter
+      width: Commons.Style.space(18)
+      height: Commons.Style.space(14)
+
+      Rectangle {
+        anchors.centerIn: parent
+        width: Commons.Style.space(18)
+        height: Commons.Style.space(11)
+        radius: Math.min(root.controller.controlRadius,
+          Commons.Style.space(4))
+        color: surfaceCycle.hasFill
+          ? root.controller.controlHoverFillColor : "transparent"
+        border.width: surfaceCycle.hasBorder ? 1 : 0
+        border.color: root.accent
+      }
+
+      Rectangle {
+        anchors.centerIn: parent
+        visible: surfaceCycle.mode === "none"
+        width: Commons.Style.space(14)
+        height: 1
+        color: root.foreground
+        opacity: 0.5
+        rotation: -20
+      }
+    }
+
+    Text {
+      parent: surfaceCycleButton
+      anchors.centerIn: parent
+      text: surfaceCycle.mode === "none" ? "None"
+        : surfaceCycle.mode === "fill" ? "Fill"
+        : surfaceCycle.mode === "border" ? "Outline" : "Both"
+      color: root.accent
+      font.family: root.controller.marketFont
+      font.pixelSize: root.choiceFontSize
+      font.weight: Font.DemiBold
+      font.letterSpacing: 0.35
+    }
+
+    Text {
+      parent: surfaceCycleButton
+      anchors.right: parent.right
+      anchors.rightMargin: Commons.Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      text: "↻"
+      color: root.accent
+      opacity: surfaceCycle.hovered ? 1 : 0.58
+      font.pixelSize: Commons.Style.font.body * root.uiScale
+    }
+
+    MouseArea {
+      id: surfaceCyclePointer
+      anchors.fill: surfaceCycleButton
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: surfaceCycle.chosen()
+    }
+
+    Item {
+      id: surfaceColorRow
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: surfaceCycleButton.bottom
+      anchors.bottom: parent.bottom
+      opacity: surfaceCycle.hasFill ? 1 : 0.34
+
+      Rectangle {
+        anchors.fill: parent
+        radius: Math.min(root.controller.controlRadius,
+          Commons.Style.space(4))
+        color: surfaceColorPointer.containsMouse
+          ? root.controller.buttonHoverFillColor : "transparent"
+      }
+
+      Rectangle {
+        id: surfaceColorMarker
+        anchors.left: parent.left
+        anchors.leftMargin: Commons.Style.space(3)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Commons.Style.space(10)
+        height: width
+        radius: width / 2
+        color: "transparent"
+        border.width: 1
+        border.color: surfaceCycle.colorSelected
+            || surfaceColorPointer.containsMouse
+          ? root.accent : root.controller.controlBorderColor
+
+        Rectangle {
+          anchors.centerIn: parent
+          visible: surfaceCycle.colorSelected
+          width: Commons.Style.space(4)
+          height: width
+          radius: width / 2
+          color: root.accent
+        }
+      }
+
+      Text {
+        anchors.left: surfaceColorMarker.right
+        anchors.leftMargin: Commons.Style.space(7)
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        text: "Color"
+        color: surfaceCycle.colorSelected
+            || surfaceColorPointer.containsMouse
+          ? root.accent : root.foreground
+        font.family: root.controller.marketFont
+        font.pixelSize: root.choiceFontSize
+        font.weight: surfaceCycle.colorSelected
+          ? Font.DemiBold : Font.Normal
+        font.letterSpacing: 0.35
+      }
+
+      MouseArea {
+        id: surfaceColorPointer
+        anchors.fill: parent
+        enabled: surfaceCycle.hasFill
+        hoverEnabled: true
+        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onClicked: surfaceCycle.colorRequested()
+      }
+    }
+  }
+
+  component RadioChoiceList: Column {
+    id: radioList
+
+    required property var options
+    required property var currentValue
+    readonly property bool ready: radioRepeater.count === options.length
+    signal chosen(var value)
+
+    width: parent ? parent.width : 0
+    opacity: enabled ? 1 : 0.34
+    spacing: 0
+
+    Repeater {
+      id: radioRepeater
+      model: radioList.options
+
+      delegate: Item {
+        id: radioRow
+
+        required property var modelData
+        readonly property bool selected:
+          radioList.currentValue === modelData.value
+        width: parent.width
+        height: (radioList.height - radioList.spacing
+          * (radioList.options.length - 1)) / radioList.options.length
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Math.min(root.controller.controlRadius,
+            Commons.Style.space(4))
+          color: radioPointer.containsMouse
+            ? root.controller.buttonHoverFillColor : "transparent"
+        }
+
+        Rectangle {
+          id: radioMarker
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(10)
+          height: width
+          radius: width / 2
+          color: "transparent"
+          border.width: 1
+          border.color: radioRow.selected || radioPointer.containsMouse
+            ? root.accent : root.controller.controlBorderColor
+
+          Rectangle {
+            anchors.centerIn: parent
+            visible: radioRow.selected
+            width: Commons.Style.space(4)
+            height: width
+            radius: width / 2
+            color: root.accent
+          }
+        }
+
+        Text {
+          anchors.left: radioMarker.right
+          anchors.leftMargin: Commons.Style.space(7)
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: radioRow.modelData.label
+          color: radioRow.selected || radioPointer.containsMouse
+            ? root.accent : root.foreground
+          font.family: root.controller.marketFont
+          font.pixelSize: root.choiceFontSize
+          font.weight: radioRow.selected ? Font.DemiBold : Font.Normal
+          font.letterSpacing: 0.35
+          elide: Text.ElideRight
+        }
+
+        MouseArea {
+          id: radioPointer
+          anchors.fill: parent
+          enabled: radioList.enabled
+          hoverEnabled: true
+          cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+          onClicked: radioList.chosen(radioRow.modelData.value)
+        }
+      }
+    }
+  }
+
+  component SurfaceChoiceList: Column {
+    id: surfaceList
+
+    required property string currentValue
+    readonly property bool ready: surfaceRepeater.count === 4
+    signal chosen(string value)
+
+    width: parent ? parent.width : 0
+    spacing: 0
+
+    Repeater {
+      id: surfaceRepeater
+      model: [
+        { value: "none", label: "None" },
+        { value: "fill", label: "Fill" },
+        { value: "border", label: "Outline" },
+        { value: "both", label: "Both" }
+      ]
+
+      delegate: Item {
+        id: surfaceRow
+
+        required property var modelData
+        readonly property bool selected:
+          surfaceList.currentValue === modelData.value
+        readonly property bool hasFill:
+          modelData.value === "fill" || modelData.value === "both"
+        readonly property bool hasBorder:
+          modelData.value === "border" || modelData.value === "both"
+        width: parent.width
+        height: surfaceList.height / 4
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Math.min(root.controller.controlRadius,
+            Commons.Style.space(4))
+          color: surfacePointer.containsMouse
+            ? root.controller.buttonHoverFillColor : "transparent"
+        }
+
+        Rectangle {
+          id: surfaceMarker
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(10)
+          height: width
+          radius: width / 2
+          color: "transparent"
+          border.width: 1
+          border.color: surfaceRow.selected
+              || surfacePointer.containsMouse
+            ? root.accent : root.controller.controlBorderColor
+
+          Rectangle {
+            anchors.centerIn: parent
+            visible: surfaceRow.selected
+            width: Commons.Style.space(4)
+            height: width
+            radius: width / 2
+            color: root.accent
+          }
+        }
+
+        Rectangle {
+          id: surfaceSymbol
+          visible: surfaceRow.modelData.value !== "none"
+          anchors.left: surfaceMarker.right
+          anchors.leftMargin: Commons.Style.space(7)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(16)
+          height: Commons.Style.space(9)
+          radius: Math.min(root.controller.controlRadius,
+            Commons.Style.space(3))
+          color: surfaceRow.hasFill
+            ? root.selectedFillColor : "transparent"
+          border.width: surfaceRow.hasBorder ? 1 : 0
+          border.color: root.selectedBorderColor
+        }
+
+        Text {
+          anchors.left: surfaceSymbol.visible
+            ? surfaceSymbol.right : surfaceMarker.right
+          anchors.leftMargin: Commons.Style.space(
+            surfaceSymbol.visible ? 5 : 7)
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: surfaceRow.modelData.label
+          color: surfaceRow.selected || surfacePointer.containsMouse
+            ? root.accent : root.foreground
+          font.family: root.controller.marketFont
+          font.pixelSize: root.choiceFontSize
+          font.weight: surfaceRow.selected ? Font.DemiBold : Font.Normal
+          font.letterSpacing: 0.35
+          elide: Text.ElideRight
+        }
+
+        MouseArea {
+          id: surfacePointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: surfaceList.chosen(
+            String(surfaceRow.modelData.value))
+        }
+      }
+    }
+  }
+
+  component ColorPalette: Grid {
+    id: colorPalette
+
+    required property string selectedValue
+    readonly property bool ready:
+      colorRepeater.count === root.colorOptions.length
+    signal chosen(string value)
+
+    width: parent ? parent.width : 0
+    height: Commons.Style.space(25)
+    columns: 10
+    columnSpacing: Commons.Style.space(4)
+    rowSpacing: Commons.Style.space(4)
+
+    Repeater {
+      id: colorRepeater
+      model: root.colorOptions
+
+      delegate: Rectangle {
+        id: colorSwatch
+
+        required property var modelData
+        readonly property bool selected:
+          colorPalette.selectedValue === modelData.value
+        readonly property bool hovered: colorPointer.containsMouse
+        width: (colorPalette.width - colorPalette.columnSpacing * 9) / 10
+        height: colorPalette.height
+        radius: root.controller.controlRadius
+        color: modelData.value === "inherit"
+          ? root.controller.controlHoverFillColor
+          : root.controller.accentColor(modelData.value)
+        border.width: 1
+        border.color: root.controller.controlBorderColor
+        scale: hovered ? 1.04 : 1
+        z: hovered ? 1 : 0
+
+        Behavior on scale {
+          NumberAnimation {
+            duration: 120
+            easing.type: Easing.OutCubic
+          }
+        }
+
+        Text {
+          anchors.centerIn: parent
+          text: colorSwatch.modelData.label
+          color: colorSwatch.modelData.value === "inherit"
+            ? root.foreground
+            : root.controller.contrastColor(
+                colorSwatch.modelData.value)
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption
+            * root.uiScale * 0.9
+          font.weight: Font.Medium
+        }
+
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: Commons.Style.space(3)
+          visible: colorSwatch.selected
+          width: Commons.Style.space(16)
+          height: 2
+          radius: 1
+          color: colorSwatch.modelData.value === "inherit"
+            ? root.accent
+            : root.controller.contrastColor(
+                colorSwatch.modelData.value)
+        }
+
+        MouseArea {
+          id: colorPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: colorPalette.chosen(
+            String(colorSwatch.modelData.value))
+        }
+      }
+    }
+  }
+
+  component OpacityChoiceList: Column {
+    id: opacityList
+
+    required property real currentValue
+    readonly property bool ready: opacityRepeater.count === 4
+    signal chosen(real value)
+
+    width: parent ? parent.width : 0
+    spacing: 0
+
+    Repeater {
+      id: opacityRepeater
+      model: [
+        { value: 1, label: "100%" },
+        { value: 0.8, label: "80%" },
+        { value: 0.6, label: "60%" },
+        { value: 0.4, label: "40%" }
+      ]
+
+      delegate: Item {
+        id: opacityRow
+
+        required property var modelData
+        readonly property bool selected:
+          Math.abs(opacityList.currentValue - modelData.value) < 0.01
+        width: parent.width
+        height: opacityList.height / 4
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Math.min(root.controller.controlRadius,
+            Commons.Style.space(4))
+          color: opacityPointer.containsMouse
+            ? root.controller.buttonHoverFillColor : "transparent"
+        }
+
+        Rectangle {
+          id: opacityMarker
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(10)
+          height: width
+          radius: width / 2
+          color: "transparent"
+          border.width: 1
+          border.color: opacityRow.selected
+              || opacityPointer.containsMouse
+            ? root.accent : root.controller.controlBorderColor
+
+          Rectangle {
+            anchors.centerIn: parent
+            visible: opacityRow.selected
+            width: Commons.Style.space(4)
+            height: width
+            radius: width / 2
+            color: root.accent
+          }
+        }
+
+        Text {
+          anchors.left: opacityMarker.right
+          anchors.leftMargin: Commons.Style.space(7)
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: opacityRow.modelData.label
+          color: opacityRow.selected || opacityPointer.containsMouse
+            ? root.accent : root.foreground
+          opacity: Math.max(0.6, opacityRow.modelData.value)
+          font.family: root.controller.marketFont
+          font.pixelSize: root.choiceFontSize
+          font.weight: opacityRow.selected ? Font.DemiBold : Font.Normal
+          font.letterSpacing: 0.35
+        }
+
+        MouseArea {
+          id: opacityPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: opacityList.chosen(
+            Number(opacityRow.modelData.value))
+        }
+      }
+    }
+  }
+
+  component OutlineChoiceList: Column {
+    id: outlineList
+
+    required property real currentWidth
+    required property bool colorSelected
+    readonly property bool ready: outlineRepeater.count === 3
+    signal widthChosen(real value)
+    signal colorRequested()
+
+    width: parent ? parent.width : 0
+    opacity: enabled ? 1 : 0.34
+    spacing: 0
+
+    Repeater {
+      id: outlineRepeater
+      model: [
+        { kind: "width", value: 1, label: "1 px" },
+        { kind: "width", value: 2, label: "2 px" },
+        { kind: "color", value: 0, label: "Color" }
+      ]
+
+      delegate: Item {
+        id: outlineRow
+
+        required property var modelData
+        readonly property bool selected: modelData.kind === "color"
+          ? outlineList.colorSelected
+          : outlineList.currentWidth === modelData.value
+        width: parent.width
+        height: outlineList.height / 3
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Math.min(root.controller.controlRadius,
+            Commons.Style.space(4))
+          color: outlinePointer.containsMouse
+            ? root.controller.buttonHoverFillColor : "transparent"
+        }
+
+        Rectangle {
+          id: outlineMarker
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(3)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Commons.Style.space(10)
+          height: width
+          radius: width / 2
+          color: "transparent"
+          border.width: 1
+          border.color: outlineRow.selected
+              || outlinePointer.containsMouse
+            ? root.accent : root.controller.controlBorderColor
+
+          Rectangle {
+            anchors.centerIn: parent
+            visible: outlineRow.selected
+            width: Commons.Style.space(4)
+            height: width
+            radius: width / 2
+            color: root.accent
+          }
+        }
+
+        Text {
+          anchors.left: outlineMarker.right
+          anchors.leftMargin: Commons.Style.space(7)
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          text: outlineRow.modelData.label
+          color: outlineRow.selected || outlinePointer.containsMouse
+            ? root.accent : root.foreground
+          font.family: root.controller.marketFont
+          font.pixelSize: root.choiceFontSize
+          font.weight: outlineRow.selected ? Font.DemiBold : Font.Normal
+          font.letterSpacing: 0.35
+          elide: Text.ElideRight
+        }
+
+        MouseArea {
+          id: outlinePointer
+          anchors.fill: parent
+          enabled: outlineList.enabled
+          hoverEnabled: true
+          cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+          onClicked: {
+            if (outlineRow.modelData.kind === "color")
+              outlineList.colorRequested()
+            else
+              outlineList.widthChosen(outlineRow.modelData.value)
+          }
+        }
+      }
+    }
+  }
+
+  component OpacityCycleChoice: Rectangle {
+    id: opacityCycle
+
+    required property real currentValue
+    readonly property bool hovered: opacityCyclePointer.containsMouse
+    signal chosen()
+
+    width: parent ? parent.width : 0
+    height: root.choiceControlHeight
+    radius: root.controller.controlRadius
+    opacity: Math.max(0.6, Math.min(1, currentValue))
+    color: hovered ? root.controller.buttonHoverFillColor
+      : root.controller.buttonFillColor
+    border.width: 1
+    border.color: root.accent
+
+    Behavior on opacity {
+      NumberAnimation {
+        duration: 120
+        easing.type: Easing.OutCubic
+      }
+    }
+
+    Text {
+      anchors.centerIn: parent
+      text: Math.round(opacityCycle.currentValue * 100) + "%"
+      color: root.accent
+      font.family: root.controller.marketFont
+      font.pixelSize: root.choiceFontSize
+      font.weight: Font.DemiBold
+      font.letterSpacing: 0.35
+    }
+
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: Commons.Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      text: "↻"
+      color: root.accent
+      opacity: opacityCycle.hovered ? 1 : 0.58
+      font.pixelSize: Commons.Style.font.body * root.uiScale
+    }
+
+    MouseArea {
+      id: opacityCyclePointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: opacityCycle.chosen()
+    }
+  }
+
   component SectionLabel: Text {
     color: root.foreground
     opacity: 0.48
     font.family: root.controller.marketFont
     font.pixelSize: Commons.Style.font.caption * root.uiScale
     font.letterSpacing: 1
+  }
+
+  component ShapeRow: Row {
+    id: shapeRow
+
+    required property var currentValue
+    signal chosen(var value)
+
+    width: parent.width
+    height: root.choiceControlHeight
+    spacing: Commons.Style.space(4)
+
+    readonly property var options: [
+      { value: "auto", label: "Auto" },
+      { value: "square", label: "Square" },
+      { value: "soft", label: "Soft" },
+      { value: "round", label: "Round" }
+    ]
+
+    Repeater {
+      model: shapeRow.options
+
+      delegate: ShapeChoice {
+        required property var modelData
+        width: (parent.width - parent.spacing
+          * (shapeRow.options.length - 1)) / shapeRow.options.length
+        option: modelData
+        selected: shapeRow.currentValue === modelData.value
+        onChosen: shapeRow.chosen(modelData.value)
+      }
+    }
+  }
+
+  component ShapeChoice: Rectangle {
+    id: shapeChoice
+
+    required property var option
+    property bool selected: false
+    readonly property bool hovered: shapeChoicePointer.containsMouse
+    signal chosen()
+
+    height: parent ? parent.height : root.choiceControlHeight
+    radius: option.value === "square" ? 0
+      : option.value === "soft" ? Commons.Style.space(5)
+      : option.value === "round" ? height / 2
+      : root.controller.controlRadius
+    color: hovered ? root.controller.buttonHoverFillColor
+      : root.controller.buttonFillColor
+    border.width: 1
+    border.color: selected ? root.accent
+      : hovered ? root.controller.buttonHoverBorderColor
+      : root.controller.controlBorderColor
+
+    Text {
+      anchors.centerIn: parent
+      width: parent.width - Commons.Style.space(4)
+      text: shapeChoice.option.label
+      color: shapeChoice.selected || shapeChoice.hovered
+        ? root.accent : root.foreground
+      font.family: root.controller.marketFont
+      font.pixelSize: root.choiceFontSize
+      font.weight: shapeChoice.selected ? Font.DemiBold : Font.Normal
+      font.letterSpacing: 0.35
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+    }
+
+    MouseArea {
+      id: shapeChoicePointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: shapeChoice.chosen()
+    }
+  }
+
+  component SpacingRow: Row {
+    id: spacingRow
+
+    required property var currentValue
+    signal chosen(var value)
+
+    width: parent.width
+    height: root.choiceControlHeight
+    spacing: Commons.Style.space(4)
+
+    readonly property var options: [
+      { value: "auto", label: "Auto", frameWidth: 22, frameHeight: 12 },
+      { value: "none", label: "None", frameWidth: 10, frameHeight: 7 },
+      { value: "compact", label: "Compact", frameWidth: 20, frameHeight: 11 },
+      { value: "roomy", label: "Roomy", frameWidth: 30, frameHeight: 17 }
+    ]
+
+    Repeater {
+      model: spacingRow.options
+
+      delegate: SpacingChoice {
+        required property var modelData
+        width: (parent.width - parent.spacing
+          * (spacingRow.options.length - 1)) / spacingRow.options.length
+        option: modelData
+        selected: spacingRow.currentValue === modelData.value
+        onChosen: spacingRow.chosen(modelData.value)
+      }
+    }
+  }
+
+  component SpacingChoice: Rectangle {
+    id: spacingChoice
+
+    required property var option
+    property bool selected: false
+    readonly property bool hovered: spacingChoicePointer.containsMouse
+    signal chosen()
+
+    height: parent ? parent.height : root.choiceControlHeight
+    radius: root.controller.controlRadius
+    color: hovered ? root.controller.buttonHoverFillColor
+      : root.controller.buttonFillColor
+    border.width: 1
+    border.color: selected ? root.accent
+      : hovered ? root.controller.buttonHoverBorderColor
+      : root.controller.controlBorderColor
+
+    Item {
+      anchors.top: parent.top
+      anchors.topMargin: Commons.Style.space(3)
+      anchors.horizontalCenter: parent.horizontalCenter
+      width: Commons.Style.space(32)
+      height: Commons.Style.space(19)
+
+      Rectangle {
+        anchors.centerIn: parent
+        width: Commons.Style.space(spacingChoice.option.frameWidth)
+        height: Commons.Style.space(spacingChoice.option.frameHeight)
+        radius: Math.min(root.controller.controlRadius,
+          Commons.Style.space(3))
+        color: "transparent"
+        border.width: 1
+        border.color: spacingChoice.selected || spacingChoice.hovered
+          ? root.accent : root.controller.controlBorderColor
+
+        Rectangle {
+          anchors.centerIn: parent
+          width: Commons.Style.space(6)
+          height: Commons.Style.space(3)
+          radius: height / 2
+          color: spacingChoice.selected || spacingChoice.hovered
+            ? root.accent : root.foreground
+        }
+      }
+    }
+
+    Text {
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: Commons.Style.space(4)
+      anchors.horizontalCenter: parent.horizontalCenter
+      width: parent.width - Commons.Style.space(4)
+      text: spacingChoice.option.label
+      color: spacingChoice.selected || spacingChoice.hovered
+        ? root.accent : root.foreground
+      font.family: root.controller.marketFont
+      font.pixelSize: root.choiceFontSize
+      font.weight: spacingChoice.selected ? Font.DemiBold : Font.Normal
+      font.letterSpacing: 0.35
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+    }
+
+    MouseArea {
+      id: spacingChoicePointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: spacingChoice.chosen()
+    }
+  }
+
+  component FieldLabel: Text {
+    color: root.foreground
+    opacity: 0.4
+    font.family: root.controller.marketFont
+    font.pixelSize: Commons.Style.font.caption * root.uiScale * 0.88
+    font.letterSpacing: 0.7
+  }
+
+  component GroupDivider: Rectangle {
+    width: parent ? parent.width : 0
+    height: 1
+    color: root.controller.controlBorderColor
+    opacity: 0.6
   }
 
   component OptionRow: Row {
@@ -872,7 +2088,7 @@ Column {
         selected: optionRow.currentValue === modelData.value
         foreground: root.foreground
         accent: root.accent
-        fontSize: Commons.Style.font.caption * root.uiScale * 0.9
+        fontSize: root.choiceFontSize
         onClicked: optionRow.chosen(modelData.value)
       }
     }

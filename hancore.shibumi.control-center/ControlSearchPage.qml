@@ -38,7 +38,7 @@ Column {
       workspaces: "workspace workspaces count active marker style navigation",
       pickers: "picker pickers theme wallpaper screenshot video media browser",
       logo: "logo launcher identity wordmark icon",
-      functions: "appearance widget color surface style",
+      functions: "icons icon appearance widget color surface style",
       preferences: "advanced reload reset power lock suspend reboot shutdown"
     }
     for (let pageIndex = 0; pageIndex < pageOptions.length; pageIndex++) {

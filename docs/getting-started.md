@@ -13,15 +13,16 @@ product, official Omarchy bar, or Basecamp-maintained plugin.
 ## Open the Control Center
 
 Select the **Shibumi** wordmark in the bar. The Control Center keeps the
-supported shell settings in six pages:
+supported shell settings in seven focused pages:
 
-- **Overview** summarizes the active bar, widgets, and discovered plugins.
-- **Bars** switches between the Shibumi and stock Omarchy bar hosts.
+- **Bars** switches bar hosts and configures the active bar layout and surface.
+- **Icons** controls the icon/content mode and visual presentation of widgets
+  active in the current bar layout.
+- **Logo** selects the launcher wordmark or icon.
+- **Workspaces** controls workspace count and marker style.
+- **Pickers** selects the theme, wallpaper, screenshot, and video browser.
 - **Widgets** enables, configures, and places compatible bar widgets.
-- **Appearance** controls bar style, semantic colors, surfaces, and individual
-  widget presentation.
-- **Layout** controls widget order, split boundaries, and separators.
-- **Advanced** contains the remaining supported shell preferences.
+- **Advanced** contains maintenance and session actions.
 
 ## Switch bar hosts
 

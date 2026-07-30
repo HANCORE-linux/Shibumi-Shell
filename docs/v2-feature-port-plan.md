@@ -59,7 +59,7 @@ The corrected live captures are
 `docs/mockups/shibumi-v2-fit-closed-frame-machine2.png`,
 `docs/mockups/shibumi-v2-dock-open-edge-machine2.png`, and
 `docs/mockups/shibumi-v2-notch-open-edge-machine2.png`. A direct
-Shibumi-to-Full transition retained the open Appearance page (`opened=true`,
+Shibumi-to-Full transition retained the open Icons page (`opened=true`,
 `panelLoaded=true`) and is captured in
 `docs/mockups/shibumi-control-center-survives-shell-switch-machine2.png`.
 

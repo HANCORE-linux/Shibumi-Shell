@@ -81,7 +81,7 @@ Column {
     NavRow {
       visible: root.hasPage("functions")
       pageId: "functions"
-      label: "Appearance"
+      label: "Icons"
       glyph: "brush"
       indented: true
     }

@@ -239,10 +239,44 @@ ShellRoot {
             || !panel.settingsPageItem.ready
             || !panel.settingsPageItem.workbenchReady
             || panel.settingsPageItem.widgetOptionCount !== 18
+            || panel.settingsPageItem.activeWidgetCount !== 12
             || !panel.settingsPageItem.allWidgetModesReady)
           return root.fail("appearance page did not instantiate")
 
         const appearance = panel.settingsPageItem
+        if (appearance.widgetDetailOpen
+            || !appearance.openWidgetDetails("G4", "")
+            || !appearance.widgetDetailOpen)
+          return root.fail("Icons overview did not drill into one widget")
+        const modeBeforeCycle = appearance.selectedWidgetMode
+        const expectedModeAfterCycle = modeBeforeCycle === "full" ? "icon"
+          : modeBeforeCycle === "icon" ? "text" : "full"
+        if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== expectedModeAfterCycle)
+          return root.fail("single Content button did not cycle the widget mode")
+        const opacityBeforeCycle = appearance.selectedWidgetOpacity
+        const expectedOpacityAfterCycle = opacityBeforeCycle > 0.9 ? 0.8
+          : opacityBeforeCycle > 0.7 ? 0.6
+          : opacityBeforeCycle > 0.5 ? 0.4 : 1
+        if (!appearance.cycleSelectedWidgetOpacity()
+            || appearance.selectedWidgetOpacity !== expectedOpacityAfterCycle)
+          return root.fail("single Opacity button did not cycle its value")
+        const surfaceBeforeCycle = appearance.selectedWidgetSurface
+        const expectedSurfaceAfterCycle = surfaceBeforeCycle === "none" ? "fill"
+          : surfaceBeforeCycle === "fill" ? "border"
+          : surfaceBeforeCycle === "border" ? "both" : "none"
+        if (!appearance.cycleSelectedWidgetSurface()
+            || appearance.selectedWidgetSurface !== expectedSurfaceAfterCycle)
+          return root.fail("single Surface button did not cycle its value")
+        if (appearance.selectedWidgetSurface !== "border"
+            && appearance.selectedWidgetSurface !== "both")
+          appearance.cycleSelectedWidgetSurface()
+        if (appearance.selectedWidgetSurface !== "border"
+            && appearance.selectedWidgetSurface !== "both")
+          appearance.cycleSelectedWidgetSurface()
+        if (appearance.selectedWidgetSurface !== "border"
+            && appearance.selectedWidgetSurface !== "both")
+          return root.fail("Surface cycle could not enable an outline")
         appearance.setWidgetMode("G18", "text")
         appearance.setWidgetSurface("G18", "both")
         appearance.controller.setGroupSetting("G18", "color", "color05")
@@ -251,7 +285,9 @@ ShellRoot {
         appearance.controller.setGroupSetting("G18", "widgetPadding", "roomy")
         appearance.controller.setGroupSetting("G18", "surfaceOpacity", 0.8)
         appearance.controller.setGroupSetting("G18", "separator", true)
-        appearance.controller.setGroupSetting("G18", "widgetBorderWidth", 2)
+        appearance.controller.setGroupSetting("G18", "widgetBorderWidth", 1.5)
+        appearance.controller.setGroupSetting(
+          "G18", "widgetBorderColor", "color03")
 
         if (stateService.groupSetting("G18", "displayMode", "") !== "text"
             || stateService.groupSetting("G18", "compact", true) !== false
@@ -263,12 +299,16 @@ ShellRoot {
             || stateService.groupSetting("G18", "widgetPadding", "") !== "roomy"
             || stateService.groupSetting("G18", "surfaceOpacity", 0) !== 0.8
             || stateService.groupSetting("G18", "separator", false) !== true
-            || stateService.groupSetting("G18", "widgetBorderWidth", 0) !== 2)
+            || stateService.groupSetting("G18", "widgetBorderWidth", 0) !== 1.5
+            || stateService.groupSetting(
+              "G18", "widgetBorderColor", "") !== "color03")
           return root.fail("per-widget appearance contract did not persist")
         if (!appearance.controller.resetGroupAppearance("G18")
             || stateService.groupSetting("G18", "displayMode", "full") !== "full"
             || stateService.groupSetting("G18", "color", "inherit") !== "inherit"
             || stateService.groupSetting("G18", "widgetPadding", "auto") !== "auto"
+            || stateService.groupSetting(
+              "G18", "widgetBorderColor", "inherit") !== "inherit"
             || stateService.groupSetting("G18", "separator", false) !== true
             || !panel.editWidget(
               "G18", "hancore.shibumi.storage"))

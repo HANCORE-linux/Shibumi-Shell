@@ -143,7 +143,7 @@ Column {
     CompactSettingChoice {
       width: (parent.width - parent.spacing * 2) / 3
       controller: root.controller
-      label: "Appearance"
+      label: "Icons"
       foreground: root.foreground
       accent: root.accent
       uiScale: root.uiScale

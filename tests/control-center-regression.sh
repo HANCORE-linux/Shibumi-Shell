@@ -156,6 +156,21 @@ for page in quick configure main bars plugins workspaces pickers logo splits \
     || fail "missing control-center page: $page"
 done
 
+configure_page_order=$(
+  sed -n '/const pages = \[/,/^    \]/p' \
+    "$control_dir/ControlSettings.qml" \
+    | sed -n 's/.*{ id: "\([^"]*\)".*/\1/p' \
+    | paste -sd, -
+)
+[[ $configure_page_order == \
+  "bars,functions,logo,workspaces,pickers,plugins,preferences" ]] \
+  || fail "Configure page order drifted: $configure_page_order"
+rg -Fq '{ id: "functions", label: "Icons"' \
+  "$control_dir/ControlSettings.qml" \
+  || fail "Configure Icons route lost its user-facing label"
+rg -Fq 'title: "Icons"' "$control_dir/BarFunctionsPage.qml" \
+  || fail "Icons page title drifted"
+
 [[ -f $control_dir/ConfigureLandingPage.qml ]] \
   || fail "Configure landing page is missing"
 [[ -f $control_dir/ActiveBarSettingsPage.qml ]] \
@@ -726,13 +741,30 @@ if rg -q 'model: 5' "$control_dir/BarsPage.qml"; then
   fail "ambiguous five-box decoration remains in the shell preview"
 fi
 for visual_contract in \
-    'value: "none", label: "None"' \
-    'value: "border", label: "Outline"' \
+    'value: "full", label: "Icon + text"' \
+    'value: "icon", label: "Icon only"' \
+    'value: "text", label: "Text only"' \
+    'text: "CONTENT"' \
+    'id: integratedPreviewContent' \
+    'text: "FILL COLOR"' \
+    'text: "OUTLINE COLOR"' \
+    'root.displayModeLabel(' \
+    'root.widgetMode(widgetRow.modelData.group))' \
+    '{ value: "none", label: "None" }' \
+    '{ value: "fill", label: "Fill" }' \
+    '{ value: "border", label: "Outline" }' \
+    '{ value: "both", label: "Both" }' \
+    'visible: surfaceRow.modelData.value !== "none"' \
     'text: "CONTENT TONE"' \
+    'text: "GEOMETRY"' \
     'text: "SHAPE"' \
-    'text: "SPACING"' \
+    'text: "INNER SPACE · AROUND CONTENT"' \
     'text: "OPACITY"' \
-    'label: "2 px outline"'; do
+    'text: "OUTLINE"' \
+    '{ value: 0.5, label: "0.5 px" }' \
+    '{ value: 1, label: "1 px" }' \
+    '{ value: 1.5, label: "1.5 px" }' \
+    '{ value: 2, label: "2 px" }'; do
   rg -Fq "$visual_contract" "$control_dir/WidgetAppearanceWorkbench.qml" \
     || fail "Appearance is missing widget visual control: $visual_contract"
 done
@@ -765,17 +797,209 @@ workbench="$control_dir/WidgetAppearanceWorkbench.qml"
 [[ -f $workbench ]] \
   || fail "direct widget Appearance workbench is missing"
 for workbench_contract in \
-    'property string providerFilter: "All"' \
-    'readonly property var filteredOptions:' \
+    'readonly property var activeOptions: buildActiveOptions()' \
+    'function buildActiveOptions()' \
+    'void(controller.activeWidgetOrder)' \
+    'text: "ACTIVE WIDGETS"' \
+    'model: root.activeOptions' \
+    'id: inspectorCard' \
+    'property bool detailOpen: false' \
+    'signal widgetRequested(string groupId, string pluginId)' \
+    'signal overviewRequested()' \
+    'text: "ALL WIDGETS"' \
+    'visible: !root.editorOnly && !root.detailOpen' \
+    'visible: root.editorOnly || root.detailOpen' \
+    'interactive: root.editorOnly' \
+    'columns: 4' \
     'property bool editorOnly: false' \
     'property string scopeMode: "shared"' \
-    'id: displayModeRepeater' \
-    'id: surfaceModeRepeater' \
-    'id: widgetColorRepeater' \
-    'text: root.advancedOpen ? "Advanced" : "More"' \
+    'id: contentModeChoices' \
+    'id: contentToneChoices' \
+    'id: surfaceModeChoices' \
+    'id: outlineChoices' \
+    'id: fillColorPalette' \
+    'id: outlineColorPalette' \
+    'id: opacityChoices' \
+    'text: root.advancedOpen ? "Less settings" : "More settings"' \
+    'visible: root.editorOnly && root.selectedSupported' \
+    '&& (root.detailOpen || root.advancedOpen)' \
+    'enabled: root.selectedHasBorder' \
+    'component GroupDivider: Rectangle' \
+    'component SurfaceChoiceList: Column' \
+    'component ColorPalette: Grid' \
+    'component RadioChoiceList: Column' \
+    'component OpacityChoiceList: Column' \
+    'component ShapeRow: Row' \
+    'component ShapeChoice: Rectangle' \
+    'component SpacingRow: Row' \
+    'component SpacingChoice: Rectangle' \
+    'readonly property real choiceControlHeight:' \
+    'readonly property real choiceListHeight:' \
+    'readonly property real choiceRowHeight:' \
+    'readonly property real choiceFontSize:' \
+    'function widgetAppearanceChanged(groupValue)' \
+    'function widgetAppearanceIndicatorColor(groupValue)' \
+    'id: appearanceStateDot' \
+    'visible: widgetRow.appearanceChanged' \
     'root.controller.resetGroupAppearance('; do
   rg -Fq "$workbench_contract" "$workbench" \
     || fail "widget Appearance workbench contract drifted: $workbench_contract"
+done
+if rg -Fq 'text: "FINISH"' "$workbench"; then
+  fail "Icons still exposes the redundant Finish section"
+fi
+for compact_surface_row_contract in \
+    'width: (parent.width - parent.spacing * 2) / 3' \
+    'width: (parent.width - parent.spacing * 2) / 3 * 2' \
+    '+ parent.spacing' \
+    'height: root.choiceRowHeight * 4' \
+    'readonly property real surfaceChoiceHeight: choiceRowHeight * 4'; do
+  rg -Fq "$compact_surface_row_contract" "$workbench" \
+    || fail "Surface/Outline/Opacity row alignment drifted: $compact_surface_row_contract"
+done
+choice_height_uses=$(rg -c 'height: root\.choiceControlHeight' "$workbench")
+choice_font_uses=$(rg -c 'font\.(pixelSize|Size): root\.choiceFontSize' \
+  "$workbench")
+[[ $choice_height_uses -ge 4 ]] \
+  || fail "Icons visual choices no longer share one control height"
+[[ $choice_font_uses -ge 5 ]] \
+  || fail "Icons visual choices no longer share one font size"
+for content_cycle_contract in \
+    'BarFunctionsPage.qml:readonly property string selectedWidgetMode:' \
+    'BarFunctionsPage.qml:function cycleSelectedWidgetMode()' \
+    'WidgetAppearanceWorkbench.qml:id: contentModeChoices' \
+    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetMode(value)' \
+    'control-center-smoke.qml:single Content button did not cycle the widget mode'; do
+  file=${content_cycle_contract%%:*}
+  label=${content_cycle_contract#*:}
+  if [[ $file == control-center-smoke.qml ]]; then
+    target="$repo_root/tests/$file"
+  else
+    target="$control_dir/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "single Content cycle contract drifted: $label"
+done
+for compact_cycle_contract in \
+    'BarFunctionsPage.qml:function cycleSelectedWidgetSurface()' \
+    'WidgetAppearanceWorkbench.qml:id: surfaceModeChoices' \
+    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetSurface(value)' \
+    'control-center-smoke.qml:single Surface button did not cycle its value'; do
+  file=${compact_cycle_contract%%:*}
+  label=${compact_cycle_contract#*:}
+  if [[ $file == control-center-smoke.qml ]]; then
+    target="$repo_root/tests/$file"
+  else
+    target="$control_dir/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "compact widget cycle contract drifted: $label"
+done
+for radio_choice_contract in \
+    'id: outlineChoices' \
+    'id: contentToneChoices' \
+    'id: radioMarker' \
+    'visible: radioRow.selected' \
+    'font.pixelSize: root.choiceFontSize' \
+    'font.weight: radioRow.selected ? Font.DemiBold : Font.Normal'; do
+  rg -Fq "$radio_choice_contract" "$workbench" \
+    || fail "compact radio-choice contract drifted: $radio_choice_contract"
+done
+for outline_color_contract in \
+    'readonly property string selectedOutlineColor:' \
+    '"widgetBorderColor"' \
+    'id: fillColorPalette' \
+    'id: outlineColorPalette' \
+    'text: "FILL COLOR"' \
+    'text: "OUTLINE COLOR"' \
+    '&& root.selectedHasFill' \
+    '&& root.selectedHasBorder' \
+    'component ColorPalette: Grid'; do
+  rg -Fq "$outline_color_contract" "$workbench" \
+    || fail "independent fill/outline color choice drifted: $outline_color_contract"
+done
+for preview_center_contract in \
+    'id: previewGlyph' \
+    'id: previewLabel' \
+    'anchors.verticalCenter: parent.verticalCenter'; do
+  rg -Fq "$preview_center_contract" "$workbench" \
+    || fail "integrated widget preview centering drifted: $preview_center_contract"
+done
+for opacity_cycle_contract in \
+    'BarFunctionsPage.qml:readonly property real selectedWidgetOpacity:' \
+    'BarFunctionsPage.qml:function cycleSelectedWidgetOpacity()' \
+    'WidgetAppearanceWorkbench.qml:id: opacityChoices' \
+    'WidgetAppearanceWorkbench.qml:component OpacityChoiceList: Column' \
+    'WidgetAppearanceWorkbench.qml:{ value: 1, label: "100%" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: 0.8, label: "80%" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: 0.6, label: "60%" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: 0.4, label: "40%" }' \
+    'control-center-smoke.qml:single Opacity button did not cycle its value'; do
+  file=${opacity_cycle_contract%%:*}
+  label=${opacity_cycle_contract#*:}
+  if [[ $file == control-center-smoke.qml ]]; then
+    target="$repo_root/tests/$file"
+  else
+    target="$control_dir/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "single Opacity cycle contract drifted: $label"
+done
+color_palette_line=$(rg -n -m1 'text: "FILL COLOR"' "$workbench" \
+  | cut -d: -f1)
+content_line=$(rg -n -m1 'text: "CONTENT"' "$workbench" | cut -d: -f1)
+[[ -n $color_palette_line && -n $content_line \
+    && $color_palette_line -lt $content_line ]] \
+  || fail "Fill/Outline Color must sit directly before Content"
+if rg -Fq 'visible: modeChoice.selected' "$workbench" \
+    || rg -Fq 'visible: surfaceChoice.selected' "$workbench"; then
+  fail "Icons choice buttons must not use palette-style selection underlines"
+fi
+for icons_drilldown_contract in \
+    'BarFunctionsPage.qml:property bool widgetDetailOpen: false' \
+    'BarFunctionsPage.qml:function openWidgetDetails(groupId, pluginId)' \
+    'BarFunctionsPage.qml:function showWidgetOverview()' \
+    'BarFunctionsPage.qml:visible: !root.widgetDetailOpen' \
+    'BarFunctionsPage.qml:detailOpen: root.widgetDetailOpen' \
+    'WidgetAppearanceWorkbench.qml:? "V2 ACTIVE" : "V1 ACTIVE"'; do
+  file=${icons_drilldown_contract%%:*}
+  label=${icons_drilldown_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Icons drill-down contract drifted: $label"
+done
+for icons_hero_contract in \
+    'PageHeaderHero.qml:property real preferredHeight:' \
+    'PageHeaderHero.qml:property real previewWidth:' \
+    'BarFunctionsPage.qml:preferredHeight: Commons.Style.space(80)' \
+    'BarFunctionsPage.qml:previewWidth: Commons.Style.space(150)'; do
+  file=${icons_hero_contract%%:*}
+  label=${icons_hero_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Icons compact hero contract drifted: $label"
+done
+if rg -q 'providerFilter|providerOptions|providerRepeater|chooseProvider' \
+    "$workbench"; then
+  fail "Icons editor still exposes provider filtering"
+fi
+for active_order_contract in \
+    'ControlCenterPanel.qml:readonly property var activeWidgetOrder:' \
+    'ControlCenterPanel.qml:bar.layoutController.order' \
+    'WidgetAppearanceWorkbench.qml:controller.groupSetting(group, "enabled", true)' \
+    'WidgetAppearanceWorkbench.qml:region: region'; do
+  file=${active_order_contract%%:*}
+  label=${active_order_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Icons active-order contract drifted: $label"
+done
+for palette_contract in \
+    'readonly property bool hovered:' \
+    'border.width: 1' \
+    'border.color: root.controller.controlBorderColor' \
+    'scale: hovered ? 1.04 : 1' \
+    'duration: 120' \
+    'width: Commons.Style.space(16)'; do
+  rg -Fq "$palette_contract" "$workbench" \
+    || fail "Icons palette no longer matches Bars: $palette_contract"
 done
 for editor_contract in \
     'WidgetEditorPage.qml:BOTH · V1 + V2' \
@@ -794,6 +1018,9 @@ done
 rg -Fq 'function resetGroupAppearance(groupId)' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "widget Appearance reset is not atomic in the state service"
+rg -Fq '"widgetBorderColor"' \
+  "$repo_root/hancore.shibumi.state/Service.qml" \
+  || fail "widget outline-color choice is not covered by appearance reset"
 
 if rg -q 'Regular|Minimal|heightGroup|barPresentation\.height|Ui\.Toggle|Ui\.Dropdown' \
     "$control_dir" --glob '*.qml'; then

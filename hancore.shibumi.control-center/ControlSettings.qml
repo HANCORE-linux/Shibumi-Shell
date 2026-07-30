@@ -29,11 +29,11 @@ Item {
   readonly property var pageOptions: {
     const pages = [
       { id: "bars", label: "Bars", glyph: "align_vertical_center" },
-      { id: "plugins", label: "Widgets", glyph: "widgets" },
+      { id: "functions", label: "Icons", glyph: "brush" },
+      { id: "logo", label: "Logo", glyph: "branding_watermark" },
       { id: "workspaces", label: "Workspaces", glyph: "grid_view" },
       { id: "pickers", label: "Pickers", glyph: "collections" },
-      { id: "logo", label: "Logo", glyph: "branding_watermark" },
-      { id: "functions", label: "Appearance", glyph: "brush" },
+      { id: "plugins", label: "Widgets", glyph: "widgets" },
       { id: "preferences", label: "Advanced", glyph: "settings" }
     ]
     return controller.stockOmarchyHost

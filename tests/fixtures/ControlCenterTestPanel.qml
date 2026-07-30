@@ -39,6 +39,20 @@ Item {
   readonly property bool stockOmarchyHost: false
   readonly property string activeShell: "shibumi"
   property bool v2LayoutActive: false
+  readonly property var activeWidgetOrder: v2LayoutActive
+    ? {
+        left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
+        center: ["G8"],
+        right: [
+          "G9", "G10", "G11", "G14", "G12", "G13", "G16",
+          "G18", "G17", "G15"
+        ]
+      }
+    : {
+        left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+        center: ["G8"],
+        right: ["G9", "G10", "G11", "G12", "G13", "G14", "G15"]
+      }
   readonly property bool quickNetworkAvailable: true
   readonly property bool quickNetworkEnabled: true
   readonly property string quickNetworkLabel: "Fixture Wi-Fi"

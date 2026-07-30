@@ -13,7 +13,7 @@ data visible.
 | --- | --- |
 | `readme/shibumi-desktop.webp` | Full desktop with the default Shibumi bar and one connected panel |
 | `readme/shibumi-bars.webp` | Control Center **Bars** page with Shibumi and Omarchy choices |
-| `readme/shibumi-appearance.webp` | Control Center **Appearance** page with the current palette and style controls |
+| `readme/shibumi-appearance.webp` | Control Center **Icons** page with the current palette and style controls |
 
 ## Reference images
 

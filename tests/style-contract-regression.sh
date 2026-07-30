@@ -455,6 +455,21 @@ for palette_contract in \
   rg -Fq "$palette_contract" styles/shibumi/VisualTokens.qml \
     || fail "Shibumi bypasses the canonical Quattro palette: $palette_contract"
 done
+for widget_outline_contract in \
+  'function widgetBorderColorId(settings)' \
+  'settings.widgetBorderColor !== undefined' \
+  'function widgetBorderWidth(settings)' \
+  'return Math.round(bounded * 2) / 2' \
+  'function widgetBorderColor(settings)' \
+  'if (!widgetHasBorder(settings)) return "transparent"' \
+  'settings.widgetBorderUsesSurfaceColor === true' \
+  'return id !== "inherit" && stateService' \
+  '? stateService.paletteColor(id) : panelBorder'; do
+  rg -Fq "$widget_outline_contract" styles/shibumi/VisualTokens.qml \
+    || fail "widget outline no longer consumes its selected palette color: $widget_outline_contract"
+  rg -Fq "$widget_outline_contract" shared/presentation/HostTokens.qml \
+    || fail "host-neutral widget outline color drifted: $widget_outline_contract"
+done
 for extra_swatch_contract in \
   'color01: values.color1 || values.red || ""' \
   'color02: values.color2 || values.green || ""' \

@@ -26,7 +26,7 @@ Column {
       workspaces: "Count and marker style",
       pickers: "Image and media browsers",
       logo: "Wordmark and icon previews",
-      functions: "Per-widget presentation",
+      functions: "Widget icons and presentation",
       bars: "Shibumi and Omarchy handoff",
       preferences: "Maintenance and session"
     }

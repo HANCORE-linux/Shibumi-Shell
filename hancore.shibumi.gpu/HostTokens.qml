@@ -106,6 +106,17 @@ Item {
         ? value : "inherit"
   }
 
+  function widgetBorderColorId(settings) {
+    const legacySurfaceColor = settings
+      && settings.widgetBorderUsesSurfaceColor === true
+    const value = settings && settings.widgetBorderColor !== undefined
+      ? String(settings.widgetBorderColor)
+      : legacySurfaceColor ? widgetColorId(settings) : "inherit"
+    return value === "inherit" ? "inherit"
+      : stateService && typeof stateService.paletteColor === "function"
+        ? value : "inherit"
+  }
+
   function widgetColorMode(settings) {
     const value = settings && settings.colorMode !== undefined
       ? String(settings.colorMode) : "fill"
@@ -152,7 +163,9 @@ Item {
   function widgetBorderWidth(settings) {
     const value = settings && settings.widgetBorderWidth !== undefined
       ? Number(settings.widgetBorderWidth) : 1
-    return Math.max(1, Math.min(2, Math.round(value) || 1))
+    const bounded = Math.max(0.5, Math.min(2,
+      Number.isFinite(value) ? value : 1))
+    return Math.round(bounded * 2) / 2
   }
 
   function widgetFillColor(settings) {
@@ -162,7 +175,10 @@ Item {
   }
 
   function widgetBorderColor(settings) {
-    return widgetHasBorder(settings) ? panelBorder : "transparent"
+    if (!widgetHasBorder(settings)) return "transparent"
+    const id = widgetBorderColorId(settings)
+    return id !== "inherit" && stateService
+      ? stateService.paletteColor(id) : panelBorder
   }
 
   function widgetContentColor(settings, fallback) {

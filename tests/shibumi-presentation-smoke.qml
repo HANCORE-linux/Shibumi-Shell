@@ -26,6 +26,14 @@ ShellRoot {
       }
     })
     property color selectedColor: "#88aaff"
+
+    function paletteColor(id) {
+      return id === "color05" ? selectedColor : "#ffffff"
+    }
+
+    function paletteContrastColor(id) {
+      return id === "color05" ? "#111111" : "#ffffff"
+    }
   }
 
   QtObject {
@@ -132,6 +140,47 @@ ShellRoot {
           || style.visualTokens.tooltipPaddingY !== 4
           || style.tooltipGap !== 6)
         return root.fail("V1 surface token contract changed")
+      const outlineSettings = {
+        colorMode: "border",
+        color: "color01",
+        widgetBorder: true,
+        widgetBorderColor: "color05"
+      }
+      if (style.visualTokens.widgetBorderColor(outlineSettings)
+          !== fakeStateService.selectedColor)
+        return root.fail("widget outline ignored its selected palette color")
+      if (style.visualTokens.widgetBorderColor({
+            colorMode: "border",
+            color: "color05",
+            widgetBorder: true
+          }) !== style.visualTokens.panelBorder)
+        return root.fail("widget outline used the surface color without consent")
+      if (style.visualTokens.widgetBorderColor({
+            colorMode: "border",
+            color: "inherit",
+            widgetBorder: true,
+            widgetBorderColor: "inherit"
+          }) !== style.visualTokens.panelBorder)
+        return root.fail("inherited widget outline lost the panel border token")
+      if (style.visualTokens.widgetBorderColor({
+            colorMode: "border",
+            color: "color05",
+            widgetBorder: true,
+            widgetBorderUsesSurfaceColor: true
+          }) !== fakeStateService.selectedColor)
+        return root.fail("legacy coupled widget outline lost compatibility")
+      if (style.visualTokens.widgetBorderWidth({
+            widgetBorderWidth: 1.5
+          }) !== 1.5)
+        return root.fail("half-pixel widget outline width was rounded away")
+      if (style.visualTokens.widgetBorderWidth({
+            widgetBorderWidth: 0.5
+          }) !== 0.5)
+        return root.fail("minimum widget outline width was clamped away")
+      if (style.visualTokens.widgetSurfaceOpacity({
+            surfaceOpacity: 0.4
+          }) !== 0.4)
+        return root.fail("40 percent widget opacity was clamped away")
       if (memoryCompact.implicitWidth >= memoryFull.implicitWidth)
         return root.fail("memory compact presentation did not reduce width")
       if (cpuCompact.implicitWidth >= cpuFull.implicitWidth)

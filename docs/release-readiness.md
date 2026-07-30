@@ -59,7 +59,7 @@ The audit fixed these release blockers:
 - Markerless suite-owned alpha installs can update without accepting foreign plugin directories
 - Temperature selection supports CPU package, hottest core, GPU, NVMe, and memory sources
 - The standalone and embedded V2 workspace styles remain available, including Frame and Aurora streak
-- The Appearance page waits for all eight workspace-style controls
+- The Control Center waits for all eight workspace-style controls
 - V1 and V2 evidence covers every source surface instead of selected feature samples
 - The center smoke rejects missing production panel types
 - Bluetooth reports the live connection without presenting an untrusted phone battery value

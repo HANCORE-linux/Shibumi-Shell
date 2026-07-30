@@ -12,8 +12,8 @@ language:
   header beside Quick/Configure links to Widgets with its active/available
   count and shows the passive Shibumi/Omarchy/external plugin breakdown. The
   redundant bar-position statistic is omitted.
-- **Configure** opens a route landing page for Bars, Widgets, Workspaces,
-  Pickers, Logo, Appearance, and Advanced. Focusing a route updates its
+- **Configure** opens a route landing page for Bars, Icons, Logo, Workspaces,
+  Pickers, Widgets, and Advanced. Focusing a route updates its
   semantic preview at the right. Selecting a route fades the
   landing graph and moves the complete route list into a compact left-hand
   master column while revealing the matching editor on the right. Every route
@@ -136,7 +136,7 @@ restore, and all nine gap-animation modes. V2 exposes divider editing, layout
 restore, and left/center/right slot capacity with valid minimum and maximum
 limits. V2 never exposes V1 gap-animation or split-island controls. The former
 Layout route remains only as an internal compatibility target and is absent
-from Configure, search, Appearance, and Bars navigation.
+from Configure, search, Icons, and Bars navigation.
 
 Accent swatches keep a neutral one-pixel border. Selection is communicated by
 the QS-Dots two-pixel underline beneath the palette number or `FG`, while a
@@ -195,7 +195,7 @@ rendering contract and do not expose Shibumi-only appearance controls.
 ## Workspaces and pickers
 
 Workspace navigation and picker presentation are first-class Configure routes,
-not secondary sections inside Appearance:
+not secondary sections inside Icons:
 
 - **Workspaces** exclusively owns the visible-workspace count and marker style.
   Every marker choice is shown as a themed three-workspace preview with an
@@ -212,8 +212,55 @@ not secondary sections inside Appearance:
   presented as editable settings;
   the same tokens are consumed by both the V1 and V2 renderers.
 - **Logo** owns launcher wordmark/icon format and visual choices.
-- **Appearance** owns only per-widget surfaces, colors, shape, spacing, and
-  opacity.
+- **Icons** owns per-widget icon/content modes plus their surfaces, colors,
+  shape, spacing, and opacity. It follows the active bar's canonical
+  left/center/right layout order and lists only enabled groups that implement
+  the Shibumi appearance contract. Provider filters do not appear in this
+  editor; unsupported stock or third-party widgets remain in Widgets. The
+  selected widget's live preview shares the inspector header, content and
+  surface choices use visual samples, and the surface palette uses the same
+  neutral-border, underline-selection, and hover-motion contract as Bars.
+  Regular choices use compact radio rows without a palette underline. Surface
+  exposes None, Fill, Outline, and Both directly; Fill, Outline, and Both carry
+  a silhouette while None deliberately has no decorative symbol. The 0.5 px,
+  1 px, 1.5 px, and 2 px outline widths remain simultaneously visible beside
+  it. Fill shows one
+  Fill Color palette, Outline shows one Outline Color palette, and Both shows
+  both independent palettes. `Auto` retains the relevant themed default.
+  Content and Content Tone form a second equal-height row: Content exposes
+  Icon + text, Icon only, and Text only as radio choices, while Tone exposes
+  Auto, BG, and FG in the same form. Content spans the first two columns;
+  Content Tone occupies the third so its left edge aligns exactly with
+  Opacity.
+  Surface Color remains directly above that row. The integrated widget preview
+  centers its icon and label independently on one shared vertical axis.
+  Both bar generations consume the independent fill and outline values. The
+  legacy coupled-outline flag remains read-compatible, but every new edit
+  persists the dedicated outline color.
+  Opacity sits directly to the right of Outline, so Surface, Outline, and
+  Opacity form one compact three-column group with equal-height hover rows.
+  Geometry communicates shape through the
+  actual button silhouette and inner spacing through a progressively larger
+  frame around a fixed content mark. The separate Finish section is omitted;
+  100%, 80%, 60%, and 40% remain direct Opacity radio choices whose labels
+  preview the respective strength.
+  Content, Surface, Shape, and Inner Space share one control height, caption
+  size, selection weight, border strength, and hover/active language; only a
+  Shape button's radius intentionally changes. This preserves the compact
+  QS-Dots control rhythm without relying on unexplained text-only choices.
+  Its first state is a compact four-column active-widget grid. A small state
+  point marks widgets with stored appearance changes, using their selected
+  Surface Color when available and the Shibumi accent for non-color changes.
+  Activation and V2-divider state do not trigger that point. Selecting one
+  widget hides every other widget and opens a full-width editor; an explicit
+  `ALL WIDGETS` connection node returns to the grid without a chevron or nested
+  menu. The focused editor exposes every applicable shared visual setting
+  without a collapsed `More` section or a second scroll surface. Surface color
+  and outline width remain visible but disabled when the selected surface
+  cannot consume them. A V1/V2 Active label communicates the current
+  capability context; split, gap, slot, and bar-divider ownership remains in
+  Bars and is not duplicated here. Icons alone uses a shorter semantic page
+  preview, which disappears during focused editing.
 
 The Workspaces and Pickers controls are not repeated on another page. Quick
 may still expose whether the Workspaces widget is shown; that is widget
