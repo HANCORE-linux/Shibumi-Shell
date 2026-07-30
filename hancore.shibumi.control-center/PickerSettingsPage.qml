@@ -34,7 +34,7 @@ Column {
 
   Row {
     width: parent.width
-    spacing: Commons.Style.space(4)
+    spacing: Commons.Style.space(7)
 
     Repeater {
       id: imagePickerRepeater
@@ -44,16 +44,19 @@ Column {
         { value: "hearthstone", label: "Hearthstone" }
       ]
 
-      delegate: CompactSettingChoice {
+      delegate: PickerPreviewCard {
         required property var modelData
         width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         label: modelData.label
-        selected: root.controller.imagePickerStyle === modelData.value
+        styleValue: modelData.value
+        selectedValue: root.controller.imagePickerStyle
         foreground: root.foreground
         accent: root.accent
         uiScale: root.uiScale
-        onClicked: root.controller.setImagePickerStyle(modelData.value)
+        onChosen: function(styleValue) {
+          root.controller.setImagePickerStyle(styleValue)
+        }
       }
     }
   }
@@ -62,26 +65,29 @@ Column {
 
   Row {
     width: parent.width
-    spacing: Commons.Style.space(4)
+    spacing: Commons.Style.space(7)
 
     Repeater {
       id: mediaPickerRepeater
       model: [
+        { value: "carousel", label: "Carousel" },
         { value: "tanzaku", label: "Tanzaku" },
-        { value: "hearthstone", label: "Hearthstone" },
-        { value: "carousel", label: "Carousel" }
+        { value: "hearthstone", label: "Hearthstone" }
       ]
 
-      delegate: CompactSettingChoice {
+      delegate: PickerPreviewCard {
         required property var modelData
         width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         label: modelData.label
-        selected: root.controller.mediaPickerStyle === modelData.value
+        styleValue: modelData.value
+        selectedValue: root.controller.mediaPickerStyle
         foreground: root.foreground
         accent: root.accent
         uiScale: root.uiScale
-        onClicked: root.controller.setMediaPickerStyle(modelData.value)
+        onChosen: function(styleValue) {
+          root.controller.setMediaPickerStyle(styleValue)
+        }
       }
     }
   }

@@ -23,6 +23,10 @@ class RuntimePaths:
     cache_dir: Path
     lock_file: Path
 
+    @property
+    def menu_extension_file(self) -> Path:
+        return self.config_file.parent / "extensions/omarchy-menu.jsonc"
+
     @classmethod
     def from_environment(cls) -> "RuntimePaths":
         home = Path.home()
@@ -85,6 +89,12 @@ class RuntimePaths:
         if self.config_file.is_symlink():
             raise RuntimeFailure(
                 f"refusing to replace symlinked Omarchy shell config: {self.config_file}"
+            )
+        if self.menu_extension_file.is_symlink() \
+                or self.menu_extension_file.parent.is_symlink():
+            raise RuntimeFailure(
+                "refusing symlinked Omarchy menu extension path: "
+                f"{self.menu_extension_file}"
             )
 
 
@@ -199,6 +209,28 @@ class OmarchyRuntime:
             "the running Shibumi state service cannot reload updated QML; "
             f"restart the Omarchy Shell once and retry ({detail})"
         )
+
+    def refresh_menu(self, *, timeout: float = 8) -> None:
+        command = [
+            self.command("omarchy-shell"),
+            "shell",
+            "call",
+            "omarchy.menu",
+            "refresh",
+            "{}",
+        ]
+        deadline = time.monotonic() + timeout
+        detail = "Omarchy menu is not ready"
+        while time.monotonic() < deadline:
+            result = self.run(command, check=False)
+            response = result.stdout.strip()
+            if result.returncode == 0 and response in ("", "ok"):
+                return
+            detail = (result.stderr or result.stdout).strip() or (
+                f"exit {result.returncode}"
+            )
+            time.sleep(0.1)
+        raise RuntimeFailure(f"Omarchy menu refresh did not settle: {detail}")
 
     def ping(self) -> None:
         result = self.run([self.command("omarchy-shell"), "shell", "ping"])
@@ -356,7 +388,12 @@ class OmarchyRuntime:
         raise RuntimeFailure(f"Shibumi uninstall verification failed: {detail}")
 
     def reconcile_best_effort(self) -> None:
-        for action in (self.rescan, self.reload_config, self.reload_payload):
+        for action in (
+            self.rescan,
+            self.reload_config,
+            self.reload_payload,
+            self.refresh_menu,
+        ):
             try:
                 action()
             except RuntimeFailure:

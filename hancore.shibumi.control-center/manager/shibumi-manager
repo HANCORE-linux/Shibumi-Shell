@@ -271,6 +271,16 @@ def deactivate_config(
     result = normalize(config)
     managed_ids = set(state["plugins"])
     activation = state["activation"]
+    shibumi = result["bar"].get("shibumi")
+    if isinstance(shibumi, dict):
+        picker = shibumi.get("picker")
+        if not isinstance(picker, dict):
+            picker = {}
+            shibumi["picker"] = picker
+        # The stock Omarchy bar owns the stock theme/wallpaper picker. Media
+        # browser selection remains independent because Quattro has no native
+        # screenshots/videos replacement for it.
+        picker["imageStyle"] = "omarchy"
     result["bar"]["layout"] = copy_layout(
         target_layout
         if target_layout is not None

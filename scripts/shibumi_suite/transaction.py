@@ -169,13 +169,21 @@ class PluginTransaction:
         self.transaction_dir = paths.state_dir / "transactions" / self.token
         self.journal_file = self.transaction_dir / "journal.json"
         self.snapshot_file = self.transaction_dir / "shell.json.before"
+        self.menu_extension_snapshot_file = (
+            self.transaction_dir / "omarchy-menu.jsonc.before"
+        )
         self.records: list[dict[str, Any]] = []
         self.finished = False
         self.config_existed = paths.config_file.is_file()
+        self.menu_extension_existed = paths.menu_extension_file.is_file()
 
         self.transaction_dir.mkdir(parents=True, exist_ok=False)
         if self.config_existed:
             self.snapshot_file.write_bytes(paths.config_file.read_bytes())
+        if self.menu_extension_existed:
+            self.menu_extension_snapshot_file.write_bytes(
+                paths.menu_extension_file.read_bytes()
+            )
         self._write_journal("prepared")
 
     def _journal(self, phase: str, desired_state: Any = "unchanged") -> dict[str, Any]:
@@ -187,6 +195,10 @@ class PluginTransaction:
             "pluginRoot": str(self.paths.plugin_dir.resolve(strict=False)),
             "configPath": str(self.paths.config_file.resolve(strict=False)),
             "configExisted": self.config_existed,
+            "menuExtensionPath": str(
+                self.paths.menu_extension_file.resolve(strict=False)
+            ),
+            "menuExtensionExisted": self.menu_extension_existed,
             "records": self.records,
         }
         if desired_state != "unchanged":
@@ -346,6 +358,26 @@ class PluginTransaction:
         atomic_write(self.paths.config_file, payload)
         self._write_journal("configured")
 
+    def write_menu_extension(self, payload: bytes | None) -> None:
+        path = self.paths.menu_extension_file
+        if path.is_symlink() or path.parent.is_symlink():
+            raise TransactionError(f"refusing symlinked Omarchy menu extension: {path}")
+        if payload is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            atomic_write(path, payload)
+        self._write_journal("menu-configured")
+
+    def _restore_menu_extension(self) -> None:
+        path = self.paths.menu_extension_file
+        if self.menu_extension_existed:
+            atomic_write(path, self.menu_extension_snapshot_file.read_bytes())
+        else:
+            path.unlink(missing_ok=True)
+            if path.parent.is_dir() and not any(path.parent.iterdir()):
+                path.parent.rmdir()
+
     def rollback(self) -> None:
         if self.finished:
             return
@@ -355,6 +387,7 @@ class PluginTransaction:
                 atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
             else:
                 self.paths.config_file.unlink(missing_ok=True)
+            self._restore_menu_extension()
             self.runtime.reconcile_best_effort()
         finally:
             self._cleanup_transaction()
@@ -491,9 +524,19 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
             raise TransactionError(f"transaction token mismatch: {directory}")
         plugin_root = Path(str(journal.get("pluginRoot") or ""))
         config_path = Path(str(journal.get("configPath") or ""))
+        menu_extension_value = journal.get("menuExtensionPath")
+        menu_extension_path = (
+            Path(str(menu_extension_value))
+            if menu_extension_value else paths.menu_extension_file
+        )
         if (
             plugin_root.resolve(strict=False) != paths.plugin_dir.resolve(strict=False)
             or config_path.resolve(strict=False) != paths.config_file.resolve(strict=False)
+            or (
+                menu_extension_value
+                and menu_extension_path.resolve(strict=False)
+                != paths.menu_extension_file.resolve(strict=False)
+            )
         ):
             raise TransactionError(f"transaction path mismatch: {directory}")
         records = journal.get("records")
@@ -526,6 +569,15 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 atomic_write(config_path, snapshot.read_bytes())
             else:
                 config_path.unlink(missing_ok=True)
+            if menu_extension_value:
+                menu_snapshot = directory / "omarchy-menu.jsonc.before"
+                if journal.get("menuExtensionExisted") is True:
+                    atomic_write(menu_extension_path, menu_snapshot.read_bytes())
+                else:
+                    menu_extension_path.unlink(missing_ok=True)
+                    if menu_extension_path.parent.is_dir() \
+                            and not any(menu_extension_path.parent.iterdir()):
+                        menu_extension_path.parent.rmdir()
             runtime.reconcile_best_effort()
         shutil.rmtree(directory)
         recovered += 1

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import io
+import re
 import shutil
 import sys
 import tempfile
@@ -12,6 +13,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +44,12 @@ from shibumi_suite.model import (  # noqa: E402
     Suite,
     suite_payload_digest,
 )
+from shibumi_suite.menu_extension import (  # noqa: E402
+    END_MARKER,
+    START_MARKER,
+    install_picker_routing,
+    remove_picker_routing,
+)
 from shibumi_suite.runtime import OmarchyRuntime, RuntimeFailure, RuntimePaths  # noqa: E402
 from shibumi_suite.transaction import (  # noqa: E402
     PluginTransaction,
@@ -62,6 +70,7 @@ class FakeOmarchyRuntime(OmarchyRuntime):
         self.payload_reloads = 0
         self.fail_payload_reload = False
         self.fail_deactivation_verify = False
+        self.menu_refreshes = 0
 
     def validate_plugin(self, directory: Path) -> None:
         manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
@@ -87,6 +96,9 @@ class FakeOmarchyRuntime(OmarchyRuntime):
         self.payload_reloads += 1
         if self.fail_payload_reload:
             raise RuntimeFailure("injected payload reload failure")
+
+    def refresh_menu(self) -> None:
+        self.menu_refreshes += 1
 
     def ping(self) -> None:
         return
@@ -355,6 +367,93 @@ class SuiteLifecycleTests(unittest.TestCase):
         if not self.paths.plugin_dir.is_dir():
             return []
         return sorted(self.paths.plugin_dir.glob(".shibumi-*"))
+
+    def test_menu_extension_merge_is_idempotent_and_reversible(self) -> None:
+        original = (
+            "{\n"
+            "  // user extension remains byte-identical\n"
+            '  "style.theme-hooks": {"label":"Theme Hooks"}\n'
+            "}\n"
+        )
+        installed = install_picker_routing(original)
+        self.assertIn(START_MARKER, installed)
+        self.assertIn(END_MARKER, installed)
+        self.assertIn("shibumi-picker-route", installed)
+        self.assertIn('"aliases":["theme","themes"]', installed)
+        self.assertIn('"aliases":["background","wallpaper"]', installed)
+        # Quattro accepts full-line comments and trailing commas, but not
+        # inline comments. Parse the generated result with the same contract.
+        quattro_json = re.sub(
+            r",(\s*[}\]])",
+            r"\1",
+            re.sub(r"^\s*//[^\n]*(?:\n|$)", "", installed, flags=re.MULTILINE),
+        )
+        self.assertIsInstance(json.loads(quattro_json), dict)
+        self.assertEqual(install_picker_routing(installed), installed)
+        self.assertEqual(remove_picker_routing(installed), original)
+
+    def test_menu_extension_supports_items_wrapper(self) -> None:
+        original = (
+            "{\n"
+            '  "version": 1,\n'
+            '  "items": {\n'
+            '    "personal": {"label":"Personal"}\n'
+            "  }\n"
+            "}\n"
+        )
+        installed = install_picker_routing(original)
+        self.assertIn('"style.background"', installed)
+        self.assertEqual(remove_picker_routing(installed), original)
+
+    def test_menu_refresh_retries_quattro_not_ready_response(self) -> None:
+        runtime = OmarchyRuntime()
+        runtime.run = Mock(side_effect=[
+            SimpleNamespace(
+                returncode=0,
+                stdout="Not ready to accept queries yet.\n",
+                stderr="",
+            ),
+            SimpleNamespace(returncode=0, stdout="ok\n", stderr=""),
+        ])
+        with patch("shibumi_suite.runtime.time.sleep"):
+            runtime.refresh_menu(timeout=1)
+        self.assertEqual(runtime.run.call_count, 2)
+
+    def test_install_and_uninstall_manage_picker_routes(self) -> None:
+        self.install()
+        extension = self.paths.menu_extension_file
+        self.assertIn(START_MARKER, extension.read_text(encoding="utf-8"))
+        state = load_install_state(self.paths, self.suite)
+        self.assertTrue(state["menuExtension"]["createdFile"])
+        self.assertEqual(command_update(
+            self.args(), self.suite, self.paths, self.runtime
+        ), 0)
+        self.assertEqual(
+            extension.read_text(encoding="utf-8").count(START_MARKER), 1
+        )
+        self.assertEqual(command_uninstall(
+            self.args(), self.suite, self.paths, self.runtime
+        ), 0)
+        self.assertFalse(extension.exists())
+
+    def test_uninstall_preserves_existing_menu_extension(self) -> None:
+        extension = self.paths.menu_extension_file
+        extension.parent.mkdir(parents=True)
+        original = (
+            "{\n"
+            "  // thpm-menu-start\n"
+            '  "style.theme-hooks": {"label":"Theme Hooks"},\n'
+            "  // thpm-menu-end\n"
+            "}\n"
+        )
+        extension.write_text(original, encoding="utf-8")
+        self.install()
+        state = load_install_state(self.paths, self.suite)
+        self.assertFalse(state["menuExtension"]["createdFile"])
+        self.assertEqual(command_uninstall(
+            self.args(), self.suite, self.paths, self.runtime
+        ), 0)
+        self.assertEqual(extension.read_text(encoding="utf-8"), original)
 
     def test_profile_keeps_visually_disabled_plugins_registry_enabled(self) -> None:
         base = json.loads(self.defaults.read_text(encoding="utf-8"))

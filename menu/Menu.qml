@@ -33,6 +33,9 @@ Item {
       : null
   }
   readonly property var actions: actionAdapter || defaultActions
+  readonly property var pickerRouter: shell
+    && typeof shell.serviceFor === "function"
+    ? shell.serviceFor("hancore.shibumi.quick-access") : null
   readonly property bool serviceReady: !!appMenuService && appMenuService.ready === true
   readonly property bool appMode: activeRoute === "apps"
   readonly property var menuConfig: serviceReady ? appMenuService.menuConfig : ({})
@@ -483,7 +486,10 @@ Item {
     surfaceLoader.setSource(surfaceSource, { controller: root })
   }
 
-  MenuActions { id: defaultActions }
+  MenuActions {
+    id: defaultActions
+    pickerRouter: root.pickerRouter
+  }
 
   Loader {
     id: surfaceLoader

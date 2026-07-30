@@ -186,6 +186,16 @@ Item {
     return openMode(nextMode, screen)
   }
 
+  // Optional host-facing provider contract. Callers keep their native Omarchy
+  // action and execute it when this returns "native" or "unavailable".
+  function routeOmarchyAction(nextMode, screen) {
+    const candidate = String(nextMode || "")
+    if (candidate !== "theme" && candidate !== "wallpaper")
+      return "unavailable"
+    if (!available || imagePickerStyle === "omarchy") return "native"
+    return openMode(candidate, screen) ? "handled" : "unavailable"
+  }
+
   function close() {
     if (!opened) return
     requestSerial++
@@ -669,6 +679,9 @@ Item {
 
     function theme(): void { root.openMode("theme", null) }
     function wallpaper(): void { root.openMode("wallpaper", null) }
+    function route(mode: string): string {
+      return root.routeOmarchyAction(mode, null)
+    }
     function screenshots(): void { root.openMode("screenshots", null) }
     function videos(): void { root.openMode("videos", null) }
     function close(): void { root.close() }

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons as Commons
+import "PickerModel.js" as PickerModel
 
 PanelWindow {
   id: root
@@ -19,6 +20,20 @@ PanelWindow {
         === String(controller.currentSelection || "")
       : String(controller.selectedEntry.sourcePath || "")
         === String(controller.currentSelection || ""))
+
+  function selectedLabel() {
+    const entry = controller.selectedEntry
+    if (!entry) return controller.emptyText
+    return controller.mediaMode
+      ? PickerModel.mediaLabel(entry.sourcePath)
+      : String(entry.label || "")
+  }
+
+  function selectedHeadline() {
+    const label = selectedLabel()
+    return controller.mediaMode
+      ? controller.title + " · " + label : label
+  }
 
   screen: controller.activeScreen
   visible: controller.opened && validScreen
@@ -129,8 +144,7 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: root.controller.selectedEntry
-          ? String(root.controller.selectedEntry.label || "") : ""
+        text: root.selectedHeadline()
         color: root.bar.foreground
         font.family: root.bar.fontFamily
         font.pixelSize: Commons.Style.space(22)
@@ -238,7 +252,9 @@ PanelWindow {
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: "← →  navigate     Enter apply     Esc cancel     type to filter     Tab style"
+        text: "← →  navigate     Enter "
+          + (root.controller.mediaMode ? "open" : "apply")
+          + "     Esc cancel     type to filter     Tab style"
         color: root.bar.visualTokens ? root.bar.visualTokens.mutedInk
           : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
             root.bar.foreground.b, 0.45)
@@ -271,8 +287,7 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: root.controller.selectedEntry
-          ? String(root.controller.selectedEntry.label || "") : root.controller.emptyText
+        text: root.selectedHeadline()
         color: root.controller.selectedEntry ? "#ececee"
           : Qt.rgba(0.92, 0.92, 0.94, 0.55)
         font.family: root.bar.fontFamily
@@ -348,7 +363,8 @@ PanelWindow {
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: "← →  scroll navigate     Enter apply     Esc cancel"
+        text: "← →  scroll navigate     Enter "
+          + (root.controller.mediaMode ? "open" : "apply") + "     Esc cancel"
           + "     type to filter     Tab switch style"
         color: Qt.rgba(0.92, 0.92, 0.94, 0.55)
         font.family: root.bar.fontFamily
@@ -358,12 +374,11 @@ PanelWindow {
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.controller.filterText !== "" || root.controller.mediaMode
+        visible: root.controller.filterText !== ""
+          || root.controller.confirmDelete
         text: root.controller.filterText !== ""
           ? "Filter: " + root.controller.filterText
-          : root.controller.confirmDelete
-            ? "Press Delete again to move this file to Trash"
-            : "Enter open  ·  Ctrl+C copy  ·  Delete trash"
+          : "Press Delete again to move this file to Trash"
         color: root.controller.confirmDelete ? root.bar.urgent
           : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
             root.bar.foreground.b, 0.62)

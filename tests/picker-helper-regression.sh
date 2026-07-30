@@ -16,6 +16,7 @@ omarchy_path=$tmp/omarchy
 
 mkdir -p "$HOME/.config/omarchy/themes/shared/backgrounds" \
   "$HOME/.config/omarchy/themes/user-only/backgrounds" \
+  "$HOME/.config/omarchy/themes/no-preview" \
   "$HOME/.config/omarchy/themes/invalid theme/backgrounds" \
   "$omarchy_path/themes/shared/backgrounds" \
   "$omarchy_path/themes/official/backgrounds" \
@@ -72,6 +73,9 @@ fail() {
 theme_rows=$($helper scan theme "$omarchy_path")
 [[ $(printf '%s\n' "$theme_rows" | wc -l) -eq 3 ]] \
   || fail "theme scan did not de-duplicate user override"
+if printf '%s\n' "$theme_rows" | grep -Fq 'no-preview'; then
+  fail "theme without displayable preview leaked into rows"
+fi
 printf '%s\n' "$theme_rows" | grep -Fq "$HOME/.config/omarchy/themes/shared/preview.png" \
   || fail "user theme did not override official theme"
 if printf '%s\n' "$theme_rows" | grep -Fq "$omarchy_path/themes/shared/preview.png"; then

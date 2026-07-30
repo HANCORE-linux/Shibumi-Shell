@@ -8,6 +8,8 @@ ShellRoot {
   property int attempts: 0
   property int phase: 0
   property var capturedAction: null
+  property string routedPickerMode: ""
+  property bool pickerRouteAvailable: true
 
   function fail(message) {
     console.error("app menu runtime smoke failed: " + message)
@@ -20,6 +22,14 @@ ShellRoot {
     function execute() { executeCount++ }
   }
 
+  QtObject {
+    id: fakePickerRouter
+    function routeOmarchyAction(mode, _screen) {
+      root.routedPickerMode = mode
+      return root.pickerRouteAvailable ? "handled" : "unavailable"
+    }
+  }
+
   AppMenu.AppMenuService {
     id: service
     omarchyPath: Quickshell.env("OMARCHY_PATH")
@@ -27,6 +37,7 @@ ShellRoot {
 
   AppMenu.MenuActions {
     id: actions
+    pickerRouter: fakePickerRouter
     detachedRunner: function(command) { root.capturedAction = command }
   }
 
@@ -133,6 +144,20 @@ ShellRoot {
     if (!actions.runAction("printf shibumi-runtime-smoke")
         || capturedAction !== "printf shibumi-runtime-smoke")
       return fail("action adapter dispatch")
+    capturedAction = null
+    if (!actions.runAction(
+          'theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"')
+        || routedPickerMode !== "theme" || capturedAction !== null)
+      return fail("theme action did not use configured picker route")
+    if (!actions.runAction(
+          'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"')
+        || routedPickerMode !== "wallpaper" || capturedAction !== null)
+      return fail("wallpaper action did not use configured picker route")
+    pickerRouteAvailable = false
+    const fallbackAction = "omarchy-theme-switcher"
+    if (!actions.runAction(fallbackAction)
+        || capturedAction !== fallbackAction)
+      return fail("unavailable picker route did not retain Omarchy fallback")
     if (actions.runAction("") || actions.runAction("bad\u0000action"))
       return fail("action adapter input validation")
     if (!actions.launchApplication(fakeEntry) || fakeEntry.executeCount !== 1)

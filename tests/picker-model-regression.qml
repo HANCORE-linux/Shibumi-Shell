@@ -24,6 +24,15 @@ QtObject {
         || PickerModel.clampIndex(8, 2) !== 1
         || PickerModel.clampIndex(-2, 2) !== 0)
       return fail("selection helpers")
+    if (PickerModel.mediaLabel(
+          "/Pictures/screenshot-2026-07-30_12-12-08.png")
+        !== "2026-07-30  12:12"
+        || PickerModel.mediaLabel(
+          "/Videos/screenrecording-2026-07-30-12-14-16.mp4")
+        !== "2026-07-30  12:14"
+        || PickerModel.mediaLabel("/Videos/custom capture.webm")
+        !== "custom capture")
+      return fail("V1 media label formatting")
     const ready = PickerModel.replaceThumbnailReady(entries, "/cache/b.jpg")
     if (!ready[1].thumbnailReady || entries[1].thumbnailReady)
       return fail("immutable thumbnail update")

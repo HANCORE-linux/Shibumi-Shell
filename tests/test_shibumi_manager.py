@@ -65,7 +65,14 @@ class ContinuityManagerTests(unittest.TestCase):
                 "id": "hancore.shibumi.bar",
                 "centerAnchor": "hancore.shibumi.center",
                 "style": "shibumi",
-                "shibumi": {"scale": 1.25},
+                "shibumi": {
+                    "scale": 1.25,
+                    "picker": {
+                        "style": "hearthstone",
+                        "imageStyle": "hearthstone",
+                        "mediaStyle": "hearthstone",
+                    },
+                },
                 "layout": {
                     "left": [
                         {"id": "hancore.shibumi.control-center"},
@@ -96,7 +103,15 @@ class ContinuityManagerTests(unittest.TestCase):
         )
         self.assertEqual(inactive["bar"].get("id", "omarchy.bar"), "omarchy.bar")
         self.assertEqual(inactive["bar"]["centerAnchor"], "omarchy.clock")
-        self.assertEqual(inactive["bar"]["shibumi"], {"scale": 1.25})
+        self.assertEqual(inactive["bar"]["shibumi"]["scale"], 1.25)
+        self.assertEqual(
+            inactive["bar"]["shibumi"]["picker"],
+            {
+                "style": "hearthstone",
+                "imageStyle": "omarchy",
+                "mediaStyle": "hearthstone",
+            },
+        )
         self.assertEqual(
             {
                 self.module["entry_id"](entry)
@@ -125,7 +140,10 @@ class ContinuityManagerTests(unittest.TestCase):
             inactive, self.state, shibumi_layout
         )
         self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
-        self.assertEqual(active["bar"]["shibumi"], {"scale": 1.25})
+        self.assertEqual(active["bar"]["shibumi"]["scale"], 1.25)
+        self.assertEqual(
+            active["bar"]["shibumi"]["picker"]["imageStyle"], "omarchy"
+        )
         user_widget = next(
             entry
             for entry in active["bar"]["layout"]["left"]

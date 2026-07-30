@@ -29,6 +29,32 @@ and normalizes this branch before using it. It includes:
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema.
 
+## Picker routing
+
+The **Themes & Wallpapers** choice is also the provider used by the Shibumi
+App Menu:
+
+- **Omarchy** runs the original Quattro carousel action;
+- **Tanzaku** opens the Shibumi Tanzaku picker;
+- **Hearthstone** opens the Shibumi Hearthstone picker.
+
+During installation, Shibumi adds reversible overrides for Quattro's
+authoritative `style.theme` and `style.background` actions to the official
+user extension at `~/.config/omarchy/extensions/omarchy-menu.jsonc`. Existing
+user and plugin entries remain in place, updates are idempotent, and uninstall
+removes only the Shibumi-managed block. Shibumi does not patch Quattro,
+Hyprland bindings, or files below `/usr/share/omarchy`.
+
+The existing Quattro shortcuts and App Menu actions therefore open the chosen
+Shibumi provider. If the quick-access service is unavailable, declines the
+request, or **Omarchy** is selected, routing falls back to the native Omarchy
+picker.
+
+Switching to the stock Omarchy bar resets the Theme & Wallpaper provider to
+**Omarchy** automatically. The Screenshots & Videos choice is independent and
+is retained. When Shibumi is activated again, Theme & Wallpaper remains on
+**Omarchy** until Tanzaku or Hearthstone is selected explicitly.
+
 ## Bar ownership
 
 `bar.id` selects the active full-bar host. Shibumi and Omarchy retain separate

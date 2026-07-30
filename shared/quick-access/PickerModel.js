@@ -21,6 +21,16 @@ function parseRows(text) {
   return result
 }
 
+function mediaLabel(path) {
+  var name = String(path || "").split("/").pop().replace(/\.[^.]+$/, "")
+  var match = name.match(
+    /(\d{4})-(\d{2})-(\d{2})[_-](\d{2})-(\d{2})-(\d{2})/)
+  return match
+    ? match[1] + "-" + match[2] + "-" + match[3]
+      + "  " + match[4] + ":" + match[5]
+    : name
+}
+
 function filtered(entries, text) {
   var needle = String(text || "").trim().toLowerCase()
   if (!needle) return Array.isArray(entries) ? entries.slice() : []

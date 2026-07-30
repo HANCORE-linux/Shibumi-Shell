@@ -148,9 +148,12 @@ scan_themes() {
     while IFS= read -r -d '' theme_dir; do
       name=${theme_dir##*/}
       [[ $name =~ ^[A-Za-z0-9._-]+$ && -z ${seen[$name]:-} ]] || continue
-      preview=$(first_preview "$theme_dir")
+      # A valid Omarchy theme may intentionally ship without a preview or
+      # backgrounds. That theme is not displayable in an image picker, but it
+      # must not abort discovery of every later theme under `set -e`.
+      preview=$(first_preview "$theme_dir" || true)
       if [[ -z $preview && $root == "$HOME/.config/omarchy/themes" ]]; then
-        preview=$(first_preview "$omarchy_path/themes/$name")
+        preview=$(first_preview "$omarchy_path/themes/$name" || true)
       fi
       [[ -n $preview && -f $preview ]] || continue
       seen["$name"]=1

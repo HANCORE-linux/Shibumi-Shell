@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons as Commons
+import "PickerModel.js" as PickerModel
 
 Item {
   id: root
@@ -155,7 +156,10 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: Commons.Style.space(12)
-            text: card.modelData ? String(card.modelData.label || "") : ""
+            text: !card.modelData ? ""
+              : root.controller.mediaMode
+                ? PickerModel.mediaLabel(card.modelData.sourcePath)
+                : String(card.modelData.label || "")
             color: root.textColor
             font.family: root.bar.fontFamily
             font.pixelSize: Commons.Style.space(13)

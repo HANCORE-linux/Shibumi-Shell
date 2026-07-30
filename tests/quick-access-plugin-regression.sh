@@ -103,6 +103,8 @@ rg -q 'font\.pixelSize: Commons\.Style\.space\(14\)' "$widget" \
   || fail "picker overlay does not have exactly one lazy service owner"
 rg -q 'target: "shibumi-picker"' "$service" \
   || fail "picker IPC is not owned by the extracted service"
+rg -Fq 'function route(mode: string): string' "$service" \
+  || fail "picker provider route IPC is missing"
 if rg -q 'Process \{|Timer \{|FileView \{' "$widget" \
     "$plugin/PickerOverlay.qml" "$plugin/TanzakuPickerView.qml" \
     "$plugin/HearthstonePickerView.qml" \
@@ -136,9 +138,19 @@ if rg -q 'itemX\(relative,[[:space:]]*width\)' \
 fi
 rg -q 'id: tanzakuFooter' "$plugin/PickerOverlay.qml" \
   || fail "Tanzaku V1 footer hierarchy is missing"
-rg -U -q 'text: root\.controller\.selectedEntry\n[[:space:]]*\? String\(root\.controller\.selectedEntry\.label' \
+rg -q 'function selectedHeadline\(\)' \
   "$plugin/PickerOverlay.qml" \
   || fail "Tanzaku footer dereferences an empty selection"
+rg -Fq 'PickerModel.mediaLabel(entry.sourcePath)' \
+  "$plugin/PickerOverlay.qml" \
+  || fail "media footer does not use the V1 date/time label"
+if rg -Fq 'Enter open  ·  Ctrl+C copy  ·  Delete trash' \
+    "$plugin/PickerOverlay.qml"; then
+  fail "media footer repeats shortcuts already shown in the primary hint row"
+fi
+if rg -Fq 'Enter apply     Esc cancel' "$plugin/PickerOverlay.qml"; then
+  fail "Tanzaku labels media activation as apply instead of open"
+fi
 rg -q 'visible: !root\.tanzakuActive' "$plugin/PickerOverlay.qml" \
   || fail "generic footer still overlaps the Tanzaku presentation"
 rg -q 'import QtQuick\.Shapes' "$plugin/HearthstonePickerView.qml" \
@@ -152,6 +164,9 @@ rg -q 'readonly property real spreadDegrees: 6' \
 rg -q 'fillRule: ShapePath\.OddEvenFill' \
   "$plugin/HearthstonePickerView.qml" \
   || fail "Hearthstone photo passepartout is missing"
+rg -Fq 'PickerModel.mediaLabel(card.modelData.sourcePath)' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone media cards do not use the V1 date/time label"
 rg -q 'Qt\.rgba\(0\.035, 0\.035, 0\.05, 0\.975\)' \
   "$plugin/PickerOverlay.qml" \
   || fail "Hearthstone felt backdrop drifted from V1"
@@ -175,9 +190,20 @@ rg -Fq '["notify-send", "-a", "Shibumi"' "$service" \
 
 cmp -s -- "$repo_root/shared/quick-access/PickerModel.js" \
   "$plugin/PickerModel.js" || fail "vendored picker model drift"
+rg -Fq 'function mediaLabel(path)' "$plugin/PickerModel.js" \
+  || fail "picker model is missing V1 media label formatting"
 cmp -s -- "$repo_root/shared/quick-access/shibumi-picker" \
   "$plugin/scripts/shibumi-picker" || fail "vendored picker helper drift"
 [[ -x $plugin/scripts/shibumi-picker ]] || fail "picker helper is not executable"
+[[ -x $plugin/scripts/shibumi-picker-route ]] \
+  || fail "Omarchy menu picker router is not executable"
+for route_contract in \
+    'omarchy-shell shibumi-picker route "$mode"' \
+    'omarchy-theme-switcher' \
+    'omarchy-theme-bg-switcher'; do
+  rg -Fq "$route_contract" "$plugin/scripts/shibumi-picker-route" \
+    || fail "missing Omarchy menu picker route contract: $route_contract"
+done
 
 PICKER_HELPER="$plugin/scripts/shibumi-picker" \
   "$repo_root/tests/picker-helper-regression.sh" >/dev/null

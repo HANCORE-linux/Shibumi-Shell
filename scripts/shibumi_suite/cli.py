@@ -22,12 +22,19 @@ from .config import (
     reconcile_profile_additions,
     reconcile_profile_services,
     remove_suite,
+    select_omarchy_image_picker,
 )
 from .model import (
     ContractError,
     PluginSpec,
     Suite,
     suite_payload_digest,
+)
+from .menu_extension import (
+    generated_extension_is_empty,
+    install_picker_routing,
+    read_extension,
+    remove_picker_routing,
 )
 from .runtime import OmarchyRuntime, RuntimeFailure, RuntimePaths
 from .transaction import (
@@ -53,6 +60,7 @@ CONTINUITY_PLUGIN_IDS = {
     "hancore.shibumi.control-center",
     "hancore.shibumi.state",
 }
+PICKER_PLUGIN_ID = "hancore.shibumi.quick-access"
 
 
 def repository_root() -> Path:
@@ -216,6 +224,52 @@ def print_plan(label: str, specs: list[PluginSpec], paths: RuntimePaths) -> None
     print(f"  plugins:          {len(specs)}")
     for spec in specs:
         print(f"    {spec.id}")
+
+
+def install_picker_menu_extension(
+    transaction: PluginTransaction,
+    runtime: OmarchyRuntime,
+    previous_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw = read_extension(transaction.paths.menu_extension_file)
+    payload = install_picker_routing(raw).encode("utf-8")
+    transaction.write_menu_extension(payload)
+    runtime.refresh_menu()
+    previous = (
+        previous_state.get("menuExtension")
+        if isinstance(previous_state, dict) else None
+    )
+    created_file = (
+        bool(previous.get("createdFile"))
+        if isinstance(previous, dict)
+        else not transaction.menu_extension_existed
+    )
+    if not transaction.menu_extension_existed:
+        created_file = True
+    return {
+        "schemaVersion": 1,
+        "createdFile": created_file,
+    }
+
+
+def remove_picker_menu_extension(
+    transaction: PluginTransaction,
+    runtime: OmarchyRuntime,
+    state: dict[str, Any],
+) -> None:
+    raw = read_extension(transaction.paths.menu_extension_file)
+    if raw is None:
+        return
+    payload = remove_picker_routing(raw)
+    metadata = state.get("menuExtension")
+    created_file = bool(metadata.get("createdFile")) \
+        if isinstance(metadata, dict) else False
+    transaction.write_menu_extension(
+        None
+        if created_file and generated_extension_is_empty(payload)
+        else payload.encode("utf-8")
+    )
+    runtime.refresh_menu()
 
 
 def activation_drift(
@@ -415,6 +469,10 @@ def command_install(
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
+        if PICKER_PLUGIN_ID in profile.install:
+            desired_state["menuExtension"] = install_picker_menu_extension(
+                transaction, runtime
+            )
         if external:
             runtime.verify_update(
                 set(profile.install),
@@ -502,6 +560,10 @@ def command_migrate(
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
+        if PICKER_PLUGIN_ID in profile.install:
+            desired_state["menuExtension"] = install_picker_menu_extension(
+                transaction, runtime
+            )
         runtime.verify_install(
             set(profile.install),
             profile.active_bar,
@@ -604,6 +666,10 @@ def command_update(
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.reload_payload()
+        if PICKER_PLUGIN_ID in plugin_ids:
+            desired_state["menuExtension"] = install_picker_menu_extension(
+                transaction, runtime, state
+            )
         runtime.verify_update(
             set(plugin_ids),
             payload_digest,
@@ -684,6 +750,10 @@ def command_repair(
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.reload_payload()
+        if PICKER_PLUGIN_ID in plugin_ids:
+            desired_state["menuExtension"] = install_picker_menu_extension(
+                transaction, runtime, state
+            )
         if external:
             runtime.verify_update(
                 set(plugin_ids),
@@ -768,7 +838,9 @@ def command_deactivate(
     profile_id = str(state.get("profile") or "default")
     profile = suite.profile(profile_id)
     if args.keep_layout:
-        desired = preserve_external_bar(current, profile)
+        desired = select_omarchy_image_picker(
+            preserve_external_bar(current, profile)
+        )
         bar = desired.get("bar")
         if isinstance(bar, dict) and str(bar.get("id") or "") == active_bar:
             bar.pop("id", None)
@@ -779,13 +851,15 @@ def command_deactivate(
         activation["configuredBar"] = configured_bar_id(desired)
         desired_state["updatedEpoch"] = int(time.time())
     else:
-        desired = remove_suite(
-            current,
-            suite.plugins,
-            active_bar,
-            default_center_anchor(defaults),
-            True,
-            CONTINUITY_PLUGIN_IDS,
+        desired = select_omarchy_image_picker(
+            remove_suite(
+                current,
+                suite.plugins,
+                active_bar,
+                default_center_anchor(defaults),
+                True,
+                CONTINUITY_PLUGIN_IDS,
+            )
         )
         desired_state = state
     print_plan(
@@ -850,12 +924,14 @@ def command_uninstall(
     specs = suite.selected(tuple(plugin_ids))
     current, _ = read_config(paths.config_file, paths.defaults_file)
     defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
-    desired = remove_suite(
-        current,
-        suite.plugins,
-        str(state.get("activeBar") or "hancore.shibumi.bar"),
-        default_center_anchor(defaults),
-        args.keep_settings,
+    desired = select_omarchy_image_picker(
+        remove_suite(
+            current,
+            suite.plugins,
+            str(state.get("activeBar") or "hancore.shibumi.bar"),
+            default_center_anchor(defaults),
+            args.keep_settings,
+        )
     )
     preflight_removals(paths.plugin_dir, specs)
     print_plan("Uninstall Shibumi", specs, paths)
@@ -865,6 +941,7 @@ def command_uninstall(
     confirm("Uninstall Shibumi and restore the stock bar", args.yes)
 
     with PluginTransaction(paths, runtime) as transaction:
+        remove_picker_menu_extension(transaction, runtime, state)
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         transaction.stage_removal(specs)

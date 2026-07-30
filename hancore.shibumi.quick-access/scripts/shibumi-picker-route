@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mode=${1:-}
+case "$mode" in
+  theme | wallpaper) ;;
+  *)
+    printf 'usage: shibumi-picker-route {theme|wallpaper}\n' >&2
+    exit 2
+    ;;
+esac
+
+if [[ -z ${OMARCHY_PATH:-} ]]; then
+  for candidate in /usr/share/omarchy "$HOME/.local/share/omarchy"; do
+    if [[ -f $candidate/config/omarchy/shell.json ]]; then
+      export OMARCHY_PATH=$candidate
+      break
+    fi
+  done
+fi
+
+route=$(omarchy-shell shibumi-picker route "$mode" 2>/dev/null || true)
+[[ $route == handled ]] && exit 0
+
+if [[ $mode == theme ]]; then
+  selection=$(omarchy-theme-switcher) || exit 0
+  [[ -n $selection ]] && omarchy-theme-set "$selection"
+else
+  selection=$(omarchy-theme-bg-switcher) || exit 0
+  [[ -n $selection ]] && omarchy-theme-bg-set "$selection"
+fi

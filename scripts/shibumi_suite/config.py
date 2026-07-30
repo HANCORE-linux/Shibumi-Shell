@@ -224,6 +224,19 @@ def reconcile_profile_additions(
     return result
 
 
+def select_omarchy_image_picker(config: dict[str, Any]) -> dict[str, Any]:
+    """Route theme/wallpaper selection back to Quattro on the stock bar."""
+    result = _normalize(config)
+    shibumi = result["bar"].get("shibumi")
+    if isinstance(shibumi, dict):
+        picker = shibumi.get("picker")
+        if not isinstance(picker, dict):
+            picker = {}
+            shibumi["picker"] = picker
+        picker["imageStyle"] = "omarchy"
+    return result
+
+
 def remove_suite(
     config: dict[str, Any],
     plugins: dict[str, PluginSpec],

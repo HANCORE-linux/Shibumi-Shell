@@ -689,6 +689,24 @@ fi
 rg -Fq 'readonly property bool ready: imagePickerRepeater.count === 3' \
   "$control_dir/PickerSettingsPage.qml" \
   || fail "theme/wallpaper picker exposes more than three choices"
+rg -U -q 'id: mediaPickerRepeater[\s\S]*model: \[\n[[:space:]]*\{ value: "carousel", label: "Carousel" \},\n[[:space:]]*\{ value: "tanzaku", label: "Tanzaku" \},\n[[:space:]]*\{ value: "hearthstone", label: "Hearthstone" \}' \
+  "$control_dir/PickerSettingsPage.qml" \
+  || fail "media picker choices are not ordered Carousel, Tanzaku, Hearthstone"
+[[ -f $control_dir/PickerPreviewCard.qml ]] \
+  || fail "picker preview card is missing"
+if [[ $(rg -F -c 'delegate: PickerPreviewCard {' \
+    "$control_dir/PickerSettingsPage.qml") -ne 2 ]]; then
+  fail "picker choices remain text-only controls"
+fi
+for picker_preview in \
+    'root.styleValue === "omarchy"' \
+    'root.styleValue === "carousel"' \
+    'root.styleValue === "tanzaku"' \
+    'function hearthCard(' \
+    'larger, lifted focus card'; do
+  rg -Fq "$picker_preview" "$control_dir/PickerPreviewCard.qml" \
+    || fail "missing picker preview contract: $picker_preview"
+done
 
 [[ -f $control_dir/WorkspaceMarkerPreviewCard.qml ]] \
   || fail "workspace marker preview card is missing"
