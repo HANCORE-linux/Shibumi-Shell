@@ -145,8 +145,14 @@ if ! {
 fi
 rg -q '^PanelWindow \{' core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
-rg -Fq ': validScreen ? screen.height : bar.barSize' core/BarPanel.qml \
-  || fail "horizontal bar window must remain screen-high for stable drag input"
+rg -Fq 'implicitHeight: bar.vertical ? 0 : bar.barSize' core/BarPanel.qml \
+  || fail "horizontal host window must expose the real bar height to Omarchy panels"
+rg -q '^PanelWindow \{' core/EditBackdropPanel.qml \
+  || fail "edit backdrop must be isolated from the edge-local bar window"
+rg -q '^PanelWindow \{' core/DragGhostPanel.qml \
+  || fail "drag ghost must be isolated from the edge-local bar window"
+rg -q 'mask: Region \{\}' core/DragGhostPanel.qml \
+  || fail "drag ghost overlay must remain input-transparent"
 rg -Fq 'y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
   core/BarPanel.qml \
   || fail "bottom bar surface must use stable explicit placement"
@@ -194,6 +200,56 @@ rg -q 'sourceComponent: root\.resolvedComponent' core/WidgetSlot.qml \
 rg -q 'active: root\.moduleEnabled && root\.resolvedComponent !== null' \
   core/WidgetSlot.qml \
   || fail "disabled widgets remain instantiated"
+for compatibility_contract in \
+    'fallbackTooltipText' \
+    'findCompatibilityPanel' \
+    'findCompatibilityCard' \
+    'hostedModule' \
+    'hostPanelChromeEnabled' \
+    'publishCompatibilityConnection'; do
+  rg -Fq "$compatibility_contract" core/WidgetSlot.qml \
+    || fail "third-party host compatibility lost $compatibility_contract"
+done
+rg -q 'readonly property bool hostedModule: !suiteNativeModule' \
+  core/WidgetSlot.qml \
+  || fail "hosted panel adapter is restricted to one external provider"
+rg -Fq 'if (root.bar.pendingTooltipTarget || root.bar.tooltipTarget) return' \
+  core/WidgetSlot.qml \
+  || fail "manifest tooltip fallback can override a plugin tooltip"
+rg -Fq 'Binding.RestoreBindingOrValue' core/WidgetSlot.qml \
+  || fail "third-party panel chrome cannot restore native bindings"
+rg -q '^PanelWindow \{' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret overlay is missing"
+rg -q 'mask: Region \{\}' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret overlay must remain input-transparent"
+rg -q 'width: 26' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret does not retain the native panel-edge span"
+rg -q 'joinStyle: ShapePath\.MiterJoin' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret does not retain the native panel join"
+awk '
+  /Rectangle \{/ { bridge = 1 }
+  bridge && /z: 1/ { found = 1; exit }
+  END { exit(found ? 0 : 1) }
+' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret bridge must remain below the replacement edge"
+awk '
+  /Shape \{/ { shape = 1 }
+  shape && /z: 2/ { found = 1; exit }
+  END { exit(found ? 0 : 1) }
+' core/HostedPanelConnector.qml \
+  || fail "hosted V2 caret must remain above the foreign-border bridge"
+connector_path_count="$(
+  awk '
+    /ShapePath \{/ { count += 1 }
+    END { print count + 0 }
+  ' core/HostedPanelConnector.qml
+)"
+[[ "$connector_path_count" -eq 1 ]] \
+  || fail "hosted V2 caret must be one continuous panel-edge path"
+rg -Fq 'HostedPanelConnector {' core/BarPanel.qml \
+  || fail "bar output does not own its screen-local hosted connector"
+rg -Fq 'connectedPanelHostCaret' Bar.qml \
+  || fail "bar facade does not distinguish host-drawn panel carets"
 rg -q 'active: root\.groupEnabled' core/GroupSlot.qml \
   || fail "disabled multi-module groups remain instantiated"
 if rg -q 'visible: activeItem' core/WidgetSlot.qml; then

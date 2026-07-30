@@ -12,6 +12,7 @@ Item {
   property string eyebrow: ""
   property string title: ""
   property string description: ""
+  property bool descriptionWrap: false
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property real uiScale: 1
@@ -61,8 +62,8 @@ Item {
         text: root.description
         color: root.foreground
         opacity: 0.58
-        wrapMode: Text.NoWrap
-        maximumLineCount: 1
+        wrapMode: root.descriptionWrap ? Text.WordWrap : Text.NoWrap
+        maximumLineCount: root.descriptionWrap ? 2 : 1
         elide: Text.ElideRight
         font.family: root.controller.marketFont
         font.pixelSize: Commons.Style.font.caption * root.uiScale
@@ -118,6 +119,7 @@ Item {
             font.family: root.controller.marketFont
             font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
             font.weight: Font.Medium
+            renderType: Text.NativeRendering
           }
         }
 

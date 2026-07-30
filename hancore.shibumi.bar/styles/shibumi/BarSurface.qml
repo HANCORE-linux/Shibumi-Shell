@@ -46,11 +46,6 @@ Item {
     }
   }
 
-  Shibumi.DragGhost {
-    bar: root.bar
-    layoutSession: root.layoutSession
-  }
-
   Keys.onEscapePressed: {
     if (root.layoutSession) root.layoutSession.setEditing(false)
   }

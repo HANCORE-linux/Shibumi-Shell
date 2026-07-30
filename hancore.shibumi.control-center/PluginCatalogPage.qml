@@ -86,6 +86,12 @@ Column {
     return entry.installedInBar === true
   }).length
   readonly property int availableCount: allEntries.length - activeCount
+  readonly property var installedEntries: allEntries.filter(function(entry) {
+    return entry.installedInBar === true
+  })
+  readonly property var inactiveEntries: allEntries.filter(function(entry) {
+    return entry.installedInBar !== true
+  })
   readonly property int favoriteCount: allEntries.filter(function(entry) {
     return controller.pluginFavorite(entry.id)
   }).length
@@ -111,6 +117,40 @@ Column {
         return root.allEntries[index]
     }
     return null
+  }
+
+  function providerCountSummary(entries) {
+    const source = Array.isArray(entries) ? entries : []
+    const providers = [
+      { id: "Shibumi", label: "Shibumi" },
+      { id: "Omarchy Quattro", label: "Omarchy" },
+      { id: "Third-party", label: "third-party" }
+    ]
+    const parts = []
+    for (let index = 0; index < providers.length; index++) {
+      const provider = providers[index]
+      const count = source.filter(function(entry) {
+        return String(entry.provider || "") === provider.id
+      }).length
+      if (count > 0) parts.push(count + " " + provider.label)
+    }
+    return parts.join(" + ")
+  }
+
+  function catalogSummary() {
+    const installed = providerCountSummary(installedEntries)
+    const available = providerCountSummary(inactiveEntries)
+    const shibumiOnly = installedEntries.length > 0
+      && installedEntries.every(function(entry) {
+        return String(entry.provider || "") === "Shibumi"
+      })
+    const installedText = shibumiOnly
+      ? installedEntries.length + " Shibumi plugins installed"
+      : installedEntries.length + " plugins installed"
+        + (installed !== "" ? " — " + installed : "")
+    const availableText = inactiveEntries.length + " available"
+      + (available !== "" ? " — " + available : "")
+    return installedText + "\n" + availableText
   }
 
   function acceptSearchSuggestion(index) {
@@ -340,13 +380,16 @@ Column {
     title: root.favoritesOnly ? "Favorites" : "Plugins"
     description: root.favoritesOnly
       ? root.favoriteCount + " saved plugins"
-      : root.activeCount + " active · " + root.availableCount + " available"
+      : root.catalogSummary()
+    descriptionWrap: !root.favoritesOnly
+    preferredHeight: root.favoritesOnly
+      ? Commons.Style.space(80) : Commons.Style.space(92)
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
     actionLabel: "Add plugin"
     actionGlyph: "add"
-    onActionRequested: root.controller.openWidgetPicker()
+    onActionRequested: root.controller.openPluginInstaller()
   }
 
   Rectangle {

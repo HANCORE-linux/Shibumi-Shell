@@ -24,11 +24,10 @@ PanelWindow {
 
   visible: bar.hostReady && bar.styleReady && validScreen && !bar.barHidden
   implicitWidth: bar.vertical ? bar.barSize : 0
-  // Keep the horizontal layer surface stable like V1. Edit mode expands only
-  // the input mask; resizing a bottom-anchored surface during interaction can
-  // invalidate the compositor-side pointer sequence.
-  implicitHeight: bar.vertical ? 0
-    : validScreen ? screen.height : bar.barSize
+  // Keep the host window edge-local so Omarchy KeyboardPanel consumers see
+  // the real perpendicular bar size through anchorItem.QsWindow.window.
+  // Edit and drag feedback live in separate fixed-geometry overlay windows.
+  implicitHeight: bar.vertical ? 0 : bar.barSize
   color: bar.vertical && !bar.transparent ? bar.background : "transparent"
   surfaceFormat.opaque: false
 
@@ -47,12 +46,9 @@ PanelWindow {
 
   mask: Region {
     x: 0
-    y: barWindow.bar.vertical || dragSession.editing
-      || barWindow.bar.position === "top"
-      ? 0 : Math.max(0, barWindow.height - barWindow.bar.barSize)
+    y: 0
     width: barWindow.width
-    height: dragSession.editing ? barWindow.height
-      : barWindow.bar.vertical ? barWindow.height : barWindow.bar.barSize
+    height: barWindow.height
   }
 
   WindowRecovery {
@@ -72,20 +68,21 @@ PanelWindow {
   Component.onCompleted: bar.registerLayoutSession(dragSession)
   Component.onDestruction: bar.unregisterLayoutSession(dragSession)
 
-  Rectangle {
-    anchors.fill: parent
-    visible: !barWindow.bar.vertical && dragSession.editing
-    color: "#000000"
-    opacity: visible ? 0.34 : 0
-    z: 0
+  EditBackdropPanel {
+    bar: barWindow.bar
+    layoutSession: dragSession
+    targetScreen: barWindow.screen
+  }
 
-    Behavior on opacity { NumberAnimation { duration: 160 } }
+  DragGhostPanel {
+    bar: barWindow.bar
+    layoutSession: dragSession
+    targetScreen: barWindow.screen
+  }
 
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.LeftButton
-      onClicked: dragSession.setEditing(false)
-    }
+  HostedPanelConnector {
+    bar: barWindow.bar
+    targetScreen: barWindow.screen
   }
 
   Loader {

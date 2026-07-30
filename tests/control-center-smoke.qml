@@ -337,6 +337,11 @@ ShellRoot {
             || !panel.settingsPageItem.ready)
           return root.fail("Plugins page did not instantiate")
         const plugins = panel.settingsPageItem
+        if (plugins.catalogSummary()
+            !== "2 Shibumi plugins installed\n"
+              + "2 available — 1 Omarchy + 1 third-party")
+          return root.fail("plugin provider summary is ambiguous: "
+            + plugins.catalogSummary())
         if (!plugins.togglePluginById("omarchy.audio")
             || !plugins.feedbackVisible
             || !plugins.feedbackCountdownRunning

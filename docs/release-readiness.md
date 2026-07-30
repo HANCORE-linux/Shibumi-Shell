@@ -11,7 +11,9 @@ block a public release.
 
 The current acceptance target is Machine2:
 
-- **Host**: `drdeltree@192.168.2.202`
+- **Host account**: `drdeltree`
+- **Address**: DHCP-managed; resolve or confirm the current Machine2 address
+  before connecting instead of relying on a saved IP
 - **Omarchy**: `4.0.0.r1458.gfa6b5fc-1`
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `eDP-1`, `1920x1080`, scale `1.0`
@@ -64,6 +66,11 @@ The audit fixed these release blockers:
 - The center smoke rejects missing production panel types
 - Bluetooth reports the live connection without presenting an untrusted phone battery value
 - Active panels close before an idle or screensaver bar pre-hide can invalidate their anchor
+- Standard non-Shibumi panels use one provider-neutral hosted-panel adapter;
+  WireGuard proves the same V2 bar cutout and native panel-tip geometry used
+  for compatible Quattro built-ins and future third-party plugins
+- The Plugins page opens a direct, validation-gated Git installer and reports
+  real Shibumi, Omarchy, and third-party provider counts
 
 ## Lifecycle and supply-chain boundary
 

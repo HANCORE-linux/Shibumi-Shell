@@ -124,6 +124,12 @@ ownership is [`docs/multi-bar-extension-plan.md`](docs/multi-bar-extension-plan.
   the selected Top or Bottom bar position.
 - Panels use one routed popout owner per output. Opening a sibling replaces the
   current panel; unrelated outputs retain independent state.
+- Non-Shibumi widgets hosted by the Shibumi bar use one provider-neutral
+  compatibility adapter for standard Omarchy panels. Quattro built-ins and
+  third-party plugins receive the same active bar connection, panel surface,
+  border, radius, and tooltip treatment without plugin-specific patches.
+  Plugins that do not expose the standard panel contract require an explicit
+  host-wrapper contract rather than visual heuristics.
 - Icons must use the approved V1 asset or icon family and preserve V1 optical
   size and alignment. A semantically similar stock icon is not sufficient when
   it changes the Shibumi identity.

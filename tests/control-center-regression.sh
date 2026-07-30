@@ -149,6 +149,20 @@ rg -Fq 'typeof bar.setBarWidgetInstalled' \
   || fail "Add plugin does not mutate the Quattro bar layout"
 rg -Fq 'AVAILABLE PLUGINS' "$control_dir/ControlSettings.qml" \
   || fail "plugin picker does not expose the available bar-plugin catalog"
+for installer_contract in \
+  'property bool installerDirect: false' \
+  'function openPluginInstaller()' \
+  'installMode = true' \
+  'installerDirect = true' \
+  'label: root.installerDirect ? "Cancel" : "Back"' \
+  'root.controller.accentColor("color03")' \
+  'root.controller.accentColor("color01")' \
+  'opacity: root.validInstallUrl ? 1 : 0.32' \
+  'loops: 2' \
+  'renderType: Text.NativeRendering'; do
+  rg -Fq "$installer_contract" "$control_dir/ControlSettings.qml" \
+    || fail "direct Git installer contract drifted: $installer_contract"
+done
 
 for page in quick configure main bars plugins workspaces pickers logo splits \
     functions preferences; do
@@ -563,8 +577,9 @@ for header_contract in \
     'property real preferredHeight: Commons.Style.space(80)' \
     'property real previewWidth: Commons.Style.space(150)' \
     'anchors.topMargin: Commons.Style.space(5)' \
-    'wrapMode: Text.NoWrap' \
-    'maximumLineCount: 1' \
+    'property bool descriptionWrap: false' \
+    'wrapMode: root.descriptionWrap ? Text.WordWrap : Text.NoWrap' \
+    'maximumLineCount: root.descriptionWrap ? 2 : 1' \
     'property string actionLabel: ""' \
     'signal actionRequested()'; do
   rg -Fq "$header_contract" "$control_dir/PageHeaderHero.qml" \
@@ -879,7 +894,11 @@ for plugin_contract in \
     'interval: 7000' \
     'function undoLastChange()' \
     'controller.restoreShibumiProvider(undoGroup)' \
-    'actionLabel: "Add plugin"'; do
+    'actionLabel: "Add plugin"' \
+    'onActionRequested: root.controller.openPluginInstaller()' \
+    'function providerCountSummary(entries)' \
+    'return parts.join(" + ")' \
+    'root.catalogSummary()'; do
   rg -Fq "$plugin_contract" "$control_dir/PluginCatalogPage.qml" \
     || fail "plugin provider-feedback contract drifted: $plugin_contract"
 done

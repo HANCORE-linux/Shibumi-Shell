@@ -144,19 +144,21 @@ for v2_shadow_contract in \
     || fail "original V2 shell shadow drifted: $v2_shadow_contract"
 done
 for v2_edge_contract in \
-  'visible: root.shellStyle === "full"' \
-  'visible: root.shellStyle === "fit"' \
-  'border.width: root.bar.visualTokens.pillBorderWidth' \
+  'visible: (root.shellStyle === "full" || root.shellStyle === "fit")' \
+  'strokeWidth: root.shellStyle === "fit"' \
   '&& (root.shellStyle === "dock" || root.shellStyle === "notch")' \
   'readonly property real desktopEdgeInset:' \
   'y: root.atTop ? root.height - 1 : 0' \
-  'width: Math.max(0, root.width - 2 * root.desktopEdgeInset)'; do
+  ': Math.max(0, root.width - 2 * root.desktopEdgeInset)'; do
   rg -Fq "$v2_edge_contract" styles/shibumi/RunChrome.qml \
     || fail "V2 open-edge contour contract drifted: $v2_edge_contract"
 done
-full_block=$(sed -n '/visible: root.shellStyle === "full"/,/^  }/p' \
-  styles/shibumi/RunChrome.qml)
-if grep -Fq 'border.width:' <<<"$full_block"; then
+if awk '
+  /^  Rectangle \{/ { in_rectangle=1 }
+  in_rectangle && /visible: root.shellStyle === "full"/ { found=1 }
+  in_rectangle && /^  }/ { in_rectangle=0 }
+  END { exit !found }
+' styles/shibumi/RunChrome.qml; then
   fail "Full regained a closed Rectangle border"
 fi
 rg -Fq 'return groupSpacing + (separated ? splitGrow : 0)' \
@@ -323,6 +325,22 @@ fi
   || fail "Shibumi panel must render at most one matching shadow contour"
 rg -Fq '&& root.shellStyle === "shibumi"' "$panel_surface" \
   || fail "V2 connected panels still cast a shadow into the bar notch"
+run_chrome=styles/shibumi/RunChrome.qml
+for negative_space_contract in \
+  'readonly property real connectedCurveHalfWidth: 7 * connectedReveal' \
+  'readonly property real connectedDepth: 5 * connectedReveal' \
+  'x: root.connectedCenterX + root.connectedCurveHalfWidth' \
+  'x: root.connectedCenterX - root.connectedCurveHalfWidth' \
+  'root.connectedCenterX - 12 - x' \
+  'root.connectedCenterX + 12' \
+  'the fill itself owns the negative-space'; do
+  rg -Fq "$negative_space_contract" "$run_chrome" \
+    || fail "V2 connected bar cutout drifted: $negative_space_contract"
+done
+if awk '/V2.s connected popover contract:/{seen=1} seen && /color: root.bar.background/{found=1} END{exit !found}' \
+    "$run_chrome"; then
+  fail "V2 connected notch is painted with bar color instead of transparent"
+fi
 for panel_contract in \
   'readonly property int renderedSurfaceCount: 1' \
   'root.shibumiTokens.panelRadius' \

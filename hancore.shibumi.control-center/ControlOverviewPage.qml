@@ -178,7 +178,7 @@ Column {
 
       Text {
         width: parent.width
-        text: "Shibumi plugins use every design token. Compatible Omarchy widgets inherit bar and tooltip chrome; third-party panels retain their own surface."
+        text: "Shibumi plugins use every design token. Standard Omarchy KeyboardPanel widgets inherit bar, tooltip, and panel chrome; custom panel implementations keep their own surface."
         color: root.foreground
         opacity: 0.62
         wrapMode: Text.WordWrap

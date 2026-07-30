@@ -20,6 +20,18 @@ host's foreground, background, accent, font, and bar size. Tooltip, popout,
 screen ownership, and click routing still come from the active bar's standard
 Quattro widget interface.
 
+When the Shibumi V2 bar hosts a non-Shibumi widget, one generic hosted-panel
+adapter discovers the standard Omarchy `KeyboardPanel`/card contract. It
+applies the active Shibumi panel color, border, radius, tooltip behavior, bar
+cutout, and native connected panel tip. The path is provider-neutral: Quattro
+built-ins and third-party plugins use the same adapter, so adding another
+compatible plugin does not require a panel-specific geometry patch.
+
+A plugin with fully custom panel objects that do not expose the standard
+contract cannot be adapted safely by guessing its visual tree. Such a plugin
+needs the explicit host-wrapper contract tracked in
+[issue #1](https://github.com/HANCORE-linux/Shibumi-Shell/issues/1).
+
 Advanced Shibumi-only shell surfaces, split editing, and layout mutation require
 the complete [Shibumi host facade V1](host-facade-v1.md). The Control Center
 hides unsupported layout controls while a standard external host is active.

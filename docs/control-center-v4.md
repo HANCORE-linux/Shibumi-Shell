@@ -215,7 +215,14 @@ the banner is hovered or the Undo action has keyboard focus. A new provider
 mutation replaces the previous banner, so only the latest change is reversible
 and statuses never stack. Remove confirmation remains exclusive and clears an
 existing Undo state. `Add plugin` remains in the compact page header rather
-than consuming a catalog tile.
+than consuming a catalog tile. It opens the Git installer directly; it never
+repeats the installed-plugin catalog. The repository field initially uses the
+neutral input border. A syntactically valid HTTPS, SSH, or `git@` repository
+changes that border to theme `color03` and enables the risk-confirmation
+control. Before validation the confirmation remains visibly disabled. After
+the explicit risk acknowledgement, the install action delegates to Omarchy's
+plugin command. URL validation is syntactic and does not claim that the remote
+repository exists before Omarchy performs the installation.
 
 The provider filter is followed by one fixed-height interaction slot. In its
   idle state it searches plugin names, IDs, providers, authors, categories,
@@ -232,6 +239,10 @@ downward. Active and available sections expose counts and can be expanded
 independently. Both start collapsed so a large catalog does not instantiate or
 display every card on page open. A search temporarily reveals matching entries
 regardless of section state.
+
+The page summary reports installed and available plugin counts by actual
+provider family. It never labels an active third-party or Omarchy plugin as a
+Shibumi plugin merely because it appears in the same catalog.
 
 Every plugin card, including a card revealed by search, exposes a star action.
 Starred plugin IDs are persisted in `bar.shibumi.plugins.favorites`. The

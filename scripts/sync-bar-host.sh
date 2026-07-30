@@ -19,7 +19,9 @@ files=(
   core/BarPanel.qml
   core/BarSection.qml
   core/CenterSection.qml
+  core/DragGhostPanel.qml
   core/DragSession.qml
+  core/EditBackdropPanel.qml
   core/GroupRegistry.js
   core/GroupSlot.qml
   core/LayoutController.qml
@@ -28,6 +30,7 @@ files=(
   core/PanelRouting.js
   core/ResponsiveLayout.js
   core/RunGeometry.js
+  core/HostedPanelConnector.qml
   core/WidgetSlot.qml
   core/WindowRecovery.qml
   services/HostWidgetResolver.qml

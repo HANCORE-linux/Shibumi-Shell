@@ -18,6 +18,7 @@ Item {
   property alias settingsQuery: settingsSearch.text
   property bool paletteOpen: false
   property bool installMode: false
+  property bool installerDirect: false
   property bool installConfirmed: false
   property string query: ""
   property string pickerProvider: "All"
@@ -296,6 +297,7 @@ Item {
     query = ""
     pickerProvider = "All"
     installMode = false
+    installerDirect = false
     installConfirmed = false
     installStatus = ""
     paletteOpen = true
@@ -303,16 +305,30 @@ Item {
     return true
   }
 
+  function openPluginInstaller() {
+    query = ""
+    pickerProvider = "All"
+    installMode = true
+    installerDirect = true
+    installConfirmed = false
+    installStatus = ""
+    paletteOpen = true
+    Qt.callLater(function() { installInput.forceActiveFocus() })
+    return true
+  }
+
   function closeWidgetPicker() {
     if (pluginInstall.running) return false
     paletteOpen = false
     installMode = false
+    installerDirect = false
     installConfirmed = false
     return true
   }
 
   function showInstaller() {
     installMode = true
+    installerDirect = false
     installConfirmed = false
     installStatus = ""
     Qt.callLater(function() { installInput.forceActiveFocus() })
@@ -767,6 +783,7 @@ Item {
             font.family: Commons.Style.font.menuFamily
             font.pixelSize: Commons.Style.font.heading * root.uiScale
             font.weight: Font.DemiBold
+            renderType: Text.NativeRendering
           }
 
           Text {
@@ -775,7 +792,7 @@ Item {
             text: "ESC"
             color: root.foreground
             opacity: 0.42
-            font.family: "monospace"
+            font.family: root.controller.marketFont
             font.pixelSize: Commons.Style.font.caption * root.uiScale
           }
         }
@@ -786,8 +803,10 @@ Item {
           radius: root.controller.controlRadius
           color: root.controller.controlFillColor
           border.width: 1
-          border.color: root.installMode && installInput.activeFocus
-            || !root.installMode && paletteSearch.activeFocus
+          border.color: root.installMode && root.validInstallUrl
+            ? root.controller.accentColor("color03")
+            : root.installMode && installInput.activeFocus
+              || !root.installMode && paletteSearch.activeFocus
             ? root.accent : root.controller.controlBorderColor
 
           TextInput {
@@ -804,6 +823,8 @@ Item {
             text: root.query
             font.family: Commons.Style.font.menuFamily
             font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+            font.weight: Font.Normal
+            renderType: Text.NativeRendering
             onTextEdited: root.query = text
             Keys.onEscapePressed: function(event) {
               root.closeWidgetPicker()
@@ -835,7 +856,9 @@ Item {
             clip: true
             text: root.installUrl
             font.family: "monospace"
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
+            font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+            font.weight: Font.Normal
+            renderType: Text.NativeRendering
             onTextEdited: {
               root.installUrl = text
               root.installConfirmed = false
@@ -1014,18 +1037,58 @@ Item {
               wrapMode: Text.WordWrap
               font.family: Commons.Style.font.menuFamily
               font.pixelSize: Commons.Style.font.caption * root.uiScale
+              font.weight: Font.Normal
+              renderType: Text.NativeRendering
             }
 
             Rectangle {
+              id: riskConfirmation
               width: parent.width
               height: Commons.Style.space(32)
               radius: root.controller.controlRadius
+              opacity: root.validInstallUrl ? 1 : 0.32
               color: root.installConfirmed
                 ? Commons.Util.alpha(root.accent, 0.15)
                 : root.controller.controlFillColor
               border.width: 1
               border.color: root.installConfirmed
-                ? root.accent : root.controller.controlBorderColor
+                ? root.accent : root.validInstallUrl
+                  ? root.controller.accentColor("color01")
+                  : root.controller.controlBorderColor
+
+              Behavior on opacity {
+                NumberAnimation {
+                  duration: 140
+                  easing.type: Easing.OutCubic
+                }
+              }
+
+              Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: "transparent"
+                border.width: 1
+                border.color: root.controller.accentColor("color01")
+                visible: root.validInstallUrl && !root.installConfirmed
+
+                SequentialAnimation on opacity {
+                  running: root.paletteOpen && root.installMode
+                    && root.validInstallUrl && !root.installConfirmed
+                  loops: 2
+                  NumberAnimation {
+                    from: 0.28
+                    to: 1
+                    duration: 420
+                    easing.type: Easing.InOutSine
+                  }
+                  NumberAnimation {
+                    from: 1
+                    to: 0.28
+                    duration: 420
+                    easing.type: Easing.InOutSine
+                  }
+                }
+              }
 
               Text {
                 anchors.centerIn: parent
@@ -1033,9 +1096,11 @@ Item {
                   ? "✓ Risk understood"
                   : "Understand and confirm the risk"
                 color: root.installConfirmed ? root.accent : root.foreground
-                font.family: Commons.Style.font.menuFamily
-                font.pixelSize: Commons.Style.font.caption * root.uiScale
+                font.family: root.controller.marketFont
+                font.pixelSize:
+                  Commons.Style.font.bodySmall * root.uiScale
                 font.weight: Font.Medium
+                renderType: Text.NativeRendering
               }
 
               MouseArea {
@@ -1053,11 +1118,15 @@ Item {
               CompactSettingChoice {
                 width: (parent.width - parent.spacing) / 2
                 controller: root.controller
-                label: "Back"
+                label: root.installerDirect ? "Cancel" : "Back"
                 foreground: root.foreground
                 accent: root.accent
                 uiScale: root.uiScale
                 onClicked: {
+                  if (root.installerDirect) {
+                    root.closeWidgetPicker()
+                    return
+                  }
                   root.installMode = false
                   root.installConfirmed = false
                   Qt.callLater(function() {

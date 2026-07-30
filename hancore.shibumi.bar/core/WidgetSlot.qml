@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
+import qs.Commons as Commons
 
 Item {
   id: root
@@ -27,6 +29,47 @@ Item {
   readonly property var activeItem: widgetLoader.item
   readonly property var containingWindow: activeItem && activeItem.QsWindow
     ? activeItem.QsWindow.window : null
+  readonly property var moduleManifest: {
+    void(resolverRevision)
+    const registry = bar ? bar.pluginRegistry : null
+    const installed = registry && registry.installedPlugins
+      ? registry.installedPlugins : null
+    return installed ? installed[moduleName] || null : null
+  }
+  // Every non-Shibumi widget is hosted through the same compatibility
+  // adapter. This intentionally covers both Omarchy/Quattro built-ins and
+  // third-party plugins; no provider-specific panel patch is required.
+  readonly property bool suiteNativeModule:
+    moduleName.indexOf("hancore.shibumi.") === 0
+  readonly property bool hostedModule: !suiteNativeModule
+  readonly property string fallbackTooltipText: {
+    const manifest = moduleManifest
+    const metadata = manifest && manifest.barWidget
+      && typeof manifest.barWidget === "object"
+      ? manifest.barWidget : null
+    return metadata && String(metadata.displayName || "").trim() !== ""
+      ? String(metadata.displayName).trim()
+      : manifest && String(manifest.name || "").trim() !== ""
+        ? String(manifest.name).trim() : moduleName
+  }
+  property var compatibilityPanel: null
+  property var compatibilityCard: null
+  readonly property bool hostPanelChromeEnabled: hostedModule
+    && compatibilityPanel !== null
+    && compatibilityCard !== null
+    && bar && bar.visualTokens !== null
+  readonly property bool v2PanelConnectionEnabled: hostPanelChromeEnabled
+    && String(bar.visualTokens.shellStyle || "shibumi") !== "shibumi"
+    && (bar.position === "top" || bar.position === "bottom")
+  property real compatibilityConnectionReveal:
+    v2PanelConnectionEnabled && compatibilityPanel.open ? 1 : 0
+  property var connectedCompatibilityOwner: null
+  readonly property point slotWindowPosition: {
+    slotTransformWatcher.transform
+    return root.mapToItem(null, 0, 0)
+  }
+  readonly property real compatibilityAnchorX:
+    slotWindowPosition.x + width / 2
   property bool activeItemVisible: false
   property real activeItemImplicitWidth: 0
   property real activeItemImplicitHeight: 0
@@ -47,6 +90,7 @@ Item {
     bar.registerModuleSlot(root)
   }
   Component.onDestruction: {
+    clearCompatibilityConnection()
     if (bar.activePopout === activeItem) bar.releasePopout(activeItem)
     bar.hideTooltip(activeItem)
     bar.unregisterModuleSlot(root)
@@ -72,9 +116,18 @@ Item {
   }
   onAvailableWidthChanged: injectProperties()
   onActiveItemChanged: {
+    if (connectedCompatibilityOwner
+        && connectedCompatibilityOwner !== activeItem)
+      clearCompatibilityConnection()
+    compatibilityPanel = null
+    compatibilityCard = null
     syncActiveItemMetrics()
     deferredSync.restart()
   }
+  onCompatibilityConnectionRevealChanged:
+    publishCompatibilityConnection()
+  onCompatibilityAnchorXChanged:
+    publishCompatibilityConnection()
 
   function syncActiveItemMetrics() {
     const target = activeItem
@@ -102,6 +155,79 @@ Item {
     }
   }
 
+  function findCompatibilityPanel(owner) {
+    const objects = owner && owner.data ? owner.data : []
+    for (let index = 0; index < objects.length; index++) {
+      const candidate = objects[index]
+      if (!candidate
+          || !("anchorItem" in candidate)
+          || !("cardOrigin" in candidate)
+          || !("borderSpec" in candidate)
+          || !("contentWidth" in candidate)
+          || !("contentHeight" in candidate)
+          || !("open" in candidate)) continue
+      return candidate
+    }
+    return null
+  }
+
+  function findCompatibilityCard(panel) {
+    const objects = panel && panel.data ? panel.data : []
+    for (let index = 0; index < objects.length; index++) {
+      const candidate = objects[index]
+      if (!candidate
+          || !("contentTopInset" in candidate)
+          || !("borderSpec" in candidate)
+          || !("radius" in candidate)
+          || !("color" in candidate)) continue
+      return candidate
+    }
+    return null
+  }
+
+  function resolveCompatibilitySurface() {
+    const panel = findCompatibilityPanel(activeItem)
+    compatibilityPanel = panel
+    compatibilityCard = findCompatibilityCard(panel)
+    publishCompatibilityConnection()
+  }
+
+  function clearCompatibilityConnection() {
+    const owner = connectedCompatibilityOwner
+    connectedCompatibilityOwner = null
+    if (owner && bar && typeof bar.clearConnectedPanel === "function")
+      bar.clearConnectedPanel(owner)
+  }
+
+  function publishCompatibilityConnection() {
+    const owner = activeItem
+    if (!owner || !bar
+        || typeof bar.publishConnectedPanel !== "function") return false
+    if (!v2PanelConnectionEnabled) {
+      if (connectedCompatibilityOwner === owner
+          && compatibilityConnectionReveal <= 0.001)
+        clearCompatibilityConnection()
+      return false
+    }
+    const card = compatibilityCard
+    if (!card || compatibilityAnchorX <= 0 || screenName === "")
+      return false
+    const published = bar.publishConnectedPanel(owner, screenName,
+      compatibilityAnchorX, compatibilityConnectionReveal, {
+        hostCaret: true,
+        cardX: Number(card.x) || 0,
+        cardY: Number(card.y) || 0,
+        cardWidth: Number(card.width) || 0,
+        cardHeight: Number(card.height) || 0
+      })
+    if (published && compatibilityConnectionReveal > 0.001)
+      connectedCompatibilityOwner = owner
+    else if (compatibilityConnectionReveal <= 0.001
+        && connectedCompatibilityOwner === owner)
+      connectedCompatibilityOwner = null
+    return published
+  }
+
   function injectProperties() {
     const target = activeItem
     if (!target) return
@@ -111,6 +237,78 @@ Item {
     if ("availableWidth" in target) target.availableWidth = availableWidth
   }
 
+  TransformWatcher {
+    id: slotTransformWatcher
+
+    a: root.containingWindow ? root.containingWindow.contentItem : null
+    b: root
+  }
+
+  HoverHandler {
+    id: fallbackTooltipHover
+
+    enabled: root.hostedModule && root.fallbackTooltipText !== ""
+    onHoveredChanged: {
+      if (hovered) fallbackTooltipProbe.restart()
+      else {
+        fallbackTooltipProbe.stop()
+        if (root.bar) root.bar.hideTooltip(root)
+      }
+    }
+  }
+
+  Timer {
+    id: fallbackTooltipProbe
+
+    interval: 0
+    repeat: false
+    onTriggered: {
+      if (!fallbackTooltipHover.hovered || !root.bar) return
+      // A plugin-provided WidgetButton tooltip wins. The manifest fallback
+      // only fills the deliberate/accidental empty-tooltip case.
+      if (root.bar.pendingTooltipTarget || root.bar.tooltipTarget) return
+      root.bar.showTooltip(root, root.fallbackTooltipText)
+    }
+  }
+
+  Behavior on compatibilityConnectionReveal {
+    NumberAnimation {
+      duration: root.compatibilityPanel && root.compatibilityPanel.open
+        ? 160 : 120
+      easing.type: root.compatibilityPanel && root.compatibilityPanel.open
+        ? Easing.OutCubic : Easing.InCubic
+    }
+  }
+
+  Binding {
+    target: root.compatibilityPanel
+    property: "borderSpec"
+    value: root.bar && root.bar.visualTokens
+      ? Commons.Border.flat(root.bar.visualTokens.panelBorder,
+          root.bar.visualTokens.panelBorderWidth)
+      : Commons.Border.flat("transparent", 0)
+    when: root.hostPanelChromeEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
+  Binding {
+    target: root.compatibilityCard
+    property: "color"
+    value: root.bar && root.bar.visualTokens
+      ? root.bar.visualTokens.panelBackground : "transparent"
+    when: root.hostPanelChromeEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
+  Binding {
+    target: root.compatibilityCard
+    property: "radius"
+    value: root.bar && root.bar.visualTokens
+      ? root.bar.visualTokens.panelRadius : 0
+    when: root.hostPanelChromeEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
   Connections {
     target: root.activeItem
     ignoreUnknownSignals: true
@@ -118,6 +316,17 @@ Item {
     function onVisibleChanged() { root.syncActiveItemMetrics() }
     function onImplicitWidthChanged() { root.syncActiveItemMetrics() }
     function onImplicitHeightChanged() { root.syncActiveItemMetrics() }
+    function onOpenedChanged() { root.publishCompatibilityConnection() }
+  }
+
+  Connections {
+    target: root.compatibilityCard
+    ignoreUnknownSignals: true
+
+    function onXChanged() { root.publishCompatibilityConnection() }
+    function onYChanged() { root.publishCompatibilityConnection() }
+    function onWidthChanged() { root.publishCompatibilityConnection() }
+    function onHeightChanged() { root.publishCompatibilityConnection() }
   }
 
 
@@ -133,6 +342,7 @@ Item {
     onTriggered: {
       root.injectProperties()
       root.syncActiveItemMetrics()
+      root.resolveCompatibilitySurface()
     }
   }
 

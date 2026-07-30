@@ -44,6 +44,7 @@ Rectangle {
     font.pixelSize: root.fontSize
     font.weight: root.textWeight
     font.letterSpacing: 0.35
+    renderType: Text.NativeRendering
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight
     maximumLineCount: 1

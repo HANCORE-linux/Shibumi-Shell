@@ -8,6 +8,7 @@ suite="$repo_root/contracts/plugin-suite-v1.json"
 registry="$omarchy_path/shell/services/PluginRegistry.qml"
 shell_root="$omarchy_path/shell/shell.qml"
 plugin_cli="$omarchy_path/bin/omarchy-plugin"
+keyboard_panel="$omarchy_path/shell/Ui/KeyboardPanel.qml"
 
 fail() {
   printf 'Quattro contract regression failed: %s\n' "$*" >&2
@@ -18,7 +19,7 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required'
 command -v rg >/dev/null 2>&1 || fail 'ripgrep is required'
 [[ -x $omarchy_path/bin/omarchy ]] || fail "missing Omarchy CLI below $omarchy_path"
 [[ -x $omarchy_path/bin/omarchy-plugin-validate ]] || fail 'missing official plugin validator'
-[[ -f $registry && -f $shell_root && -x $plugin_cli ]] \
+[[ -f $registry && -f $shell_root && -f $keyboard_panel && -x $plugin_cli ]] \
   || fail 'Omarchy Quattro plugin host sources are incomplete'
 
 [[ ! -e $repo_root/manifest.json ]] \
@@ -90,6 +91,16 @@ for needle in \
   'target.barConfig = shell.barConfig' \
   'falling back to'; do
   rg -Fq "$needle" "$shell_root" || fail "shell host contract drift: $needle"
+done
+
+for needle in \
+  'property var borderSpec:' \
+  'readonly property point cardOrigin:' \
+  'BorderSurface {' \
+  'id: card' \
+  'radius: Style.cornerRadius'; do
+  rg -Fq "$needle" "$keyboard_panel" \
+    || fail "KeyboardPanel compatibility surface drift: $needle"
 done
 
 printf 'Quattro contract regression passed (%s, %d plugins)\n' \

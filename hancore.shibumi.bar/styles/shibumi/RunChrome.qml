@@ -41,6 +41,13 @@ Item {
     ? Math.max(0, Math.min(1, Number(bar.connectedPanelReveal) || 0)) : 0
   readonly property real connectedCenterX: Math.max(13,
     Math.min(width - 13, Number(bar.connectedPanelX || 0) - screenX))
+  readonly property real connectedCurveHalfWidth: 7 * connectedReveal
+  readonly property real connectedTangentControl: 4.25 * connectedReveal
+  readonly property real connectedTipControl: 2 * connectedReveal
+  readonly property real connectedDepth: 5 * connectedReveal
+  readonly property real connectedEdgeY: atTop ? height : 0
+  readonly property real connectedInnerY: atTop
+    ? height - connectedDepth : connectedDepth
 
   // V2 owns one shadow for the complete shell. Individual widget shadows are
   // a V1/Shibumi presentation option and must not fragment Full/Fit/Dock.
@@ -77,20 +84,148 @@ Item {
     }
   }
 
-  Rectangle {
+  Shape {
     anchors.fill: parent
-    visible: root.shellStyle === "full"
-    radius: 0
-    color: root.bar.background
+    visible: (root.shellStyle === "full" || root.shellStyle === "fit")
+      && root.atTop
+    antialiasing: true
+    preferredRendererType: Shape.CurveRenderer
+
+    ShapePath {
+      id: topCompactPath
+      readonly property real r: root.shellStyle === "fit"
+        ? root.cornerRadius : 0
+      strokeColor: root.shellStyle === "fit"
+        && root.bar.visualTokens.pillBorderWidth > 0
+        ? root.shellBorder : "transparent"
+      strokeWidth: root.shellStyle === "fit"
+        ? root.bar.visualTokens.pillBorderWidth : 0
+      fillColor: root.bar.background
+      capStyle: ShapePath.FlatCap
+      joinStyle: ShapePath.RoundJoin
+      startX: topCompactPath.r
+      startY: 0
+      PathLine { x: root.width - topCompactPath.r; y: 0 }
+      PathQuad {
+        x: root.width
+        y: topCompactPath.r
+        controlX: root.width
+        controlY: 0
+      }
+      PathLine { x: root.width; y: root.height - topCompactPath.r }
+      PathQuad {
+        x: root.width - topCompactPath.r
+        y: root.height
+        controlX: root.width
+        controlY: root.height
+      }
+      PathLine {
+        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        y: root.height
+      }
+      PathCubic {
+        x: root.connectedCenterX
+        y: root.connectedInnerY
+        control1X: root.connectedCenterX + root.connectedTangentControl
+        control1Y: root.height
+        control2X: root.connectedCenterX + root.connectedTipControl
+        control2Y: root.connectedInnerY
+      }
+      PathCubic {
+        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        y: root.height
+        control1X: root.connectedCenterX - root.connectedTipControl
+        control1Y: root.connectedInnerY
+        control2X: root.connectedCenterX - root.connectedTangentControl
+        control2Y: root.height
+      }
+      PathLine { x: topCompactPath.r; y: root.height }
+      PathQuad {
+        x: 0
+        y: root.height - topCompactPath.r
+        controlX: 0
+        controlY: root.height
+      }
+      PathLine { x: 0; y: topCompactPath.r }
+      PathQuad {
+        x: topCompactPath.r
+        y: 0
+        controlX: 0
+        controlY: 0
+      }
+    }
   }
 
-  Rectangle {
+  Shape {
     anchors.fill: parent
-    visible: root.shellStyle === "fit"
-    radius: root.cornerRadius
-    color: root.bar.background
-    border.width: root.bar.visualTokens.pillBorderWidth
-    border.color: root.shellBorder
+    visible: (root.shellStyle === "full" || root.shellStyle === "fit")
+      && !root.atTop
+    antialiasing: true
+    preferredRendererType: Shape.CurveRenderer
+
+    ShapePath {
+      id: bottomCompactPath
+      readonly property real r: root.shellStyle === "fit"
+        ? root.cornerRadius : 0
+      strokeColor: root.shellStyle === "fit"
+        && root.bar.visualTokens.pillBorderWidth > 0
+        ? root.shellBorder : "transparent"
+      strokeWidth: root.shellStyle === "fit"
+        ? root.bar.visualTokens.pillBorderWidth : 0
+      fillColor: root.bar.background
+      capStyle: ShapePath.FlatCap
+      joinStyle: ShapePath.RoundJoin
+      startX: bottomCompactPath.r
+      startY: 0
+      PathLine {
+        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        y: 0
+      }
+      PathCubic {
+        x: root.connectedCenterX
+        y: root.connectedInnerY
+        control1X: root.connectedCenterX - root.connectedTangentControl
+        control1Y: 0
+        control2X: root.connectedCenterX - root.connectedTipControl
+        control2Y: root.connectedInnerY
+      }
+      PathCubic {
+        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        y: 0
+        control1X: root.connectedCenterX + root.connectedTipControl
+        control1Y: root.connectedInnerY
+        control2X: root.connectedCenterX + root.connectedTangentControl
+        control2Y: 0
+      }
+      PathLine { x: root.width - bottomCompactPath.r; y: 0 }
+      PathQuad {
+        x: root.width
+        y: bottomCompactPath.r
+        controlX: root.width
+        controlY: 0
+      }
+      PathLine { x: root.width; y: root.height - bottomCompactPath.r }
+      PathQuad {
+        x: root.width - bottomCompactPath.r
+        y: root.height
+        controlX: root.width
+        controlY: root.height
+      }
+      PathLine { x: bottomCompactPath.r; y: root.height }
+      PathQuad {
+        x: 0
+        y: root.height - bottomCompactPath.r
+        controlX: 0
+        controlY: root.height
+      }
+      PathLine { x: 0; y: bottomCompactPath.r }
+      PathQuad {
+        x: bottomCompactPath.r
+        y: 0
+        controlX: 0
+        controlY: 0
+      }
+    }
   }
 
   Shape {
@@ -112,6 +247,26 @@ Item {
         y: root.height
         controlX: root.width
         controlY: root.height
+      }
+      PathLine {
+        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        y: root.height
+      }
+      PathCubic {
+        x: root.connectedCenterX
+        y: root.connectedInnerY
+        control1X: root.connectedCenterX + root.connectedTangentControl
+        control1Y: root.height
+        control2X: root.connectedCenterX + root.connectedTipControl
+        control2Y: root.connectedInnerY
+      }
+      PathCubic {
+        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        y: root.height
+        control1X: root.connectedCenterX - root.connectedTipControl
+        control1Y: root.connectedInnerY
+        control2X: root.connectedCenterX - root.connectedTangentControl
+        control2Y: root.height
       }
       PathLine { x: root.cornerRadius; y: root.height }
       PathQuad {
@@ -136,6 +291,26 @@ Item {
       fillColor: root.bar.background
       startX: root.cornerRadius
       startY: 0
+      PathLine {
+        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        y: 0
+      }
+      PathCubic {
+        x: root.connectedCenterX
+        y: root.connectedInnerY
+        control1X: root.connectedCenterX - root.connectedTangentControl
+        control1Y: 0
+        control2X: root.connectedCenterX - root.connectedTipControl
+        control2Y: root.connectedInnerY
+      }
+      PathCubic {
+        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        y: 0
+        control1X: root.connectedCenterX + root.connectedTipControl
+        control1Y: root.connectedInnerY
+        control2X: root.connectedCenterX + root.connectedTangentControl
+        control2Y: 0
+      }
       PathLine { x: root.width - root.cornerRadius; y: 0 }
       PathQuad {
         x: root.width
@@ -185,6 +360,26 @@ Item {
         control2X: root.width - root.wing
           + (1 - root.notchCurveKappa) * root.notchBodyRadius
         control2Y: root.atTop ? root.height : 0
+      }
+      PathLine {
+        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        y: root.connectedEdgeY
+      }
+      PathCubic {
+        x: root.connectedCenterX
+        y: root.connectedInnerY
+        control1X: root.connectedCenterX + root.connectedTangentControl
+        control1Y: root.connectedEdgeY
+        control2X: root.connectedCenterX + root.connectedTipControl
+        control2Y: root.connectedInnerY
+      }
+      PathCubic {
+        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        y: root.connectedEdgeY
+        control1X: root.connectedCenterX - root.connectedTipControl
+        control1Y: root.connectedInnerY
+        control2X: root.connectedCenterX - root.connectedTangentControl
+        control2Y: root.connectedEdgeY
       }
       PathLine {
         x: root.wing + root.notchBodyRadius
@@ -300,25 +495,29 @@ Item {
       && root.bar.visualTokens.pillBorderWidth > 0
     x: root.desktopEdgeInset
     y: root.atTop ? root.height - 1 : 0
-    width: Math.max(0, root.width - 2 * root.desktopEdgeInset)
+    width: root.connectedPanelActive
+      ? Math.max(0, root.connectedCenterX - 12 - x)
+      : Math.max(0, root.width - 2 * root.desktopEdgeInset)
     height: 1
     color: root.shellBorder
     z: 6
   }
 
-  // V2's connected popover contract: erase the panel-facing edge below the
-  // active widget and redraw it as one inward cubic. This is intentionally not
-  // enabled for the restored V1/Shibumi shell.
   Rectangle {
     visible: root.connectedPanelActive
-    x: Math.round(root.connectedCenterX - 13)
-    y: root.atTop ? Math.max(0, root.height - 2) : 0
-    width: 26
-    height: 2
-    color: root.bar.background
-    z: 20
+      && root.bar.visualTokens.pillBorderWidth > 0
+    x: Math.max(root.desktopEdgeInset,
+      root.connectedCenterX + 12)
+    y: root.atTop ? root.height - 1 : 0
+    width: Math.max(0, root.width - root.desktopEdgeInset - x)
+    height: 1
+    color: root.shellBorder
+    z: 6
   }
 
+  // V2's connected popover contract: the fill itself owns the negative-space
+  // cutout. Splitting the straight edge keeps that space genuinely transparent
+  // instead of painting it with the bar color, which looked like a shadow.
   Shape {
     id: connectedInset
     visible: root.connectedPanelActive

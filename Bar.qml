@@ -89,6 +89,11 @@ Item {
   property string connectedPanelScreenName: ""
   property real connectedPanelX: 0
   property real connectedPanelReveal: 0
+  property bool connectedPanelHostCaret: false
+  property real connectedPanelCardX: 0
+  property real connectedPanelCardY: 0
+  property real connectedPanelCardWidth: 0
+  property real connectedPanelCardHeight: 0
   property var moduleSlots: []
   property var clickTargets: []
   property var layoutSessions: []
@@ -413,7 +418,8 @@ Item {
     if (barHidden) dismissActivePopout()
   }
 
-  function publishConnectedPanel(owner, screenName, resolvedX, reveal) {
+  function publishConnectedPanel(owner, screenName, resolvedX, reveal,
+      options) {
     if (!owner) return false
     const progress = Math.max(0, Math.min(1, Number(reveal) || 0))
     const x = Number(resolvedX) || 0
@@ -423,6 +429,11 @@ Item {
       connectedPanelScreenName = ""
       connectedPanelX = 0
       connectedPanelReveal = 0
+      connectedPanelHostCaret = false
+      connectedPanelCardX = 0
+      connectedPanelCardY = 0
+      connectedPanelCardWidth = 0
+      connectedPanelCardHeight = 0
       return true
     }
     if (x <= 0 || String(screenName || "") === "") return false
@@ -432,6 +443,14 @@ Item {
     connectedPanelScreenName = String(screenName)
     connectedPanelX = x
     connectedPanelReveal = progress
+    const geometry = options && typeof options === "object" ? options : null
+    connectedPanelHostCaret = !!(geometry && geometry.hostCaret === true)
+    connectedPanelCardX = geometry ? Number(geometry.cardX) || 0 : 0
+    connectedPanelCardY = geometry ? Number(geometry.cardY) || 0 : 0
+    connectedPanelCardWidth = geometry
+      ? Math.max(0, Number(geometry.cardWidth) || 0) : 0
+    connectedPanelCardHeight = geometry
+      ? Math.max(0, Number(geometry.cardHeight) || 0) : 0
     return true
   }
 
@@ -441,6 +460,11 @@ Item {
     connectedPanelScreenName = ""
     connectedPanelX = 0
     connectedPanelReveal = 0
+    connectedPanelHostCaret = false
+    connectedPanelCardX = 0
+    connectedPanelCardY = 0
+    connectedPanelCardWidth = 0
+    connectedPanelCardHeight = 0
     return true
   }
 

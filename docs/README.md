@@ -28,6 +28,7 @@ For maintainers:
 6. [Packaging and AUR strategy](development/packaging.md)
 7. [Release workflow](development/release.md)
 8. [Current release readiness](release-readiness.md)
+9. [Current development handoff](project-state-2026-07-30.md)
 
 For design and UI work:
 
@@ -71,6 +72,7 @@ For parity and release evidence:
 | [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
 | [Release workflow](development/release.md) | Private-alpha preparation and publication gates |
 | [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
+| [Development handoff](project-state-2026-07-30.md) | Resume coordinates, latest implementation slice, open issues, and next work |
 | [Changelog](../CHANGELOG.md) | User-visible changes by version |
 
 Machine-readable contracts under [`../contracts/`](../contracts/) and the

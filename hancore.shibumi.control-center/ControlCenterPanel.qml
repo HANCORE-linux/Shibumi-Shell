@@ -763,6 +763,11 @@ ShibumiPanel {
     return settings.openWidgetPicker()
   }
 
+  function openPluginInstaller() {
+    settings.setPage("plugins")
+    return settings.openPluginInstaller()
+  }
+
   Item {
     width: 0
     height: 0

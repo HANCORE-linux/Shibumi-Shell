@@ -416,6 +416,11 @@ Item {
     return settings.openWidgetPicker()
   }
 
+  function openPluginInstaller() {
+    settings.setPage("plugins")
+    return settings.openPluginInstaller()
+  }
+
   function setPluginEnabled(pluginId, enabled) {
     const id = String(pluginId || "")
     const next = JSON.parse(JSON.stringify(pluginEntries))

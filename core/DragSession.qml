@@ -23,6 +23,7 @@ Item {
   property real ghostHeight: 0
   property real ghostHomeX: 0
   property real ghostHomeY: 0
+  property url ghostImageUrl: ""
 
   visible: false
   width: 0
@@ -139,6 +140,15 @@ Item {
         ? Number(windowX) - ghostWidth / 2 : ghostHomeX
       ghostY = Number.isFinite(Number(windowY))
         ? Number(windowY) - ghostHeight / 2 : ghostHomeY
+      if (sourceItem.window
+          && typeof sourceItem.grabToImage === "function") {
+        const capturedItem = sourceItem
+        sourceItem.grabToImage(function(result) {
+          if (root.sourceItem === capturedItem && result && result.url)
+            root.ghostImageUrl = result.url
+        }, Qt.size(Math.max(1, Math.ceil(ghostWidth)),
+          Math.max(1, Math.ceil(ghostHeight))))
+      }
     }
     active = true
     return true
@@ -222,6 +232,7 @@ Item {
     ghostHeight = 0
     ghostHomeX = 0
     ghostHomeY = 0
+    ghostImageUrl = ""
   }
 
   Component.onDestruction: {
