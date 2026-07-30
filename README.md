@@ -18,7 +18,10 @@ panels, and interaction model into Omarchy's existing shell process.
 <p align="center">
   <img src="docs/mockups/control-center-configure-machine2.png"
        alt="Shibumi Configure landing page"
-       width="100%">
+       width="49%">
+  <img src="docs/mockups/control-center-bars-v2-machine2.png"
+       alt="Shibumi V2 bar form controls"
+       width="49%">
 </p>
 
 ## Install
@@ -42,12 +45,6 @@ Remove all managed Shibumi plugins and restore the stock Omarchy bar:
 ```
 
 [Uninstall options and settings preservation](docs/install.md#uninstall)
-
-<p align="center">
-  <img src="docs/mockups/control-center-bars-v2-machine2.png"
-       alt="Shibumi V2 bar form controls"
-       width="100%">
-</p>
 
 ## Documentation
 
