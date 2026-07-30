@@ -66,6 +66,7 @@ function defaultConfig() {
     presentation: defaultPresentationConfig(),
     workspace: defaultWorkspaceConfig(),
     menu: defaultMenuConfig(),
+    plugins: defaultPluginConfig(),
     picker: defaultPickerConfig(),
     reactor: defaultReactorConfig()
   }
@@ -115,6 +116,10 @@ function defaultMenuConfig() {
       background: "off"
     }
   }
+}
+
+function defaultPluginConfig() {
+  return { favorites: [] }
 }
 
 function defaultLauncherConfig() {
@@ -324,6 +329,28 @@ function normalizedDesktopIds(value) {
   return result
 }
 
+function normalizedPluginIds(value) {
+  if (!Array.isArray(value)) return []
+  var result = []
+  var seen = {}
+  for (var i = 0; i < value.length && result.length < 256; i++) {
+    var id = String(value[i] || "").trim()
+    var key = "$" + id
+    if (!id || id.length > 255 || /[\x00-\x1f\x7f/\\]/.test(id)
+        || seen[key]) continue
+    seen[key] = true
+    result.push(id)
+  }
+  return result
+}
+
+function normalizePlugins(value) {
+  var result = defaultPluginConfig()
+  if (!isPlainObject(value)) return result
+  result.favorites = normalizedPluginIds(value.favorites)
+  return result
+}
+
 function normalizeMenu(value) {
   var result = defaultMenuConfig()
   if (!isPlainObject(value) || Number(value.version) !== MenuSchemaVersion) return result
@@ -419,6 +446,7 @@ function normalize(value) {
   result.presentation = normalizePresentation(value.presentation)
   result.workspace = normalizeWorkspace(value.workspace)
   result.menu = normalizeMenu(value.menu)
+  result.plugins = normalizePlugins(value.plugins)
   // Initial pre-release Shibumi payloads inherited the predecessor's Omarchy
   // wordmark. Migrate that one default once, while retaining Omarchy as an
   // explicit choice after the identity contract has been recorded.

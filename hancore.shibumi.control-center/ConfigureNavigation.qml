@@ -26,8 +26,7 @@ Column {
   }
 
   function activeIn(ids) {
-    const page = currentPage === "widget-editor" ? "plugins" : currentPage
-    return ids.indexOf(page) >= 0
+    return ids.indexOf(currentPage) >= 0
   }
 
   NavRow {
@@ -52,8 +51,8 @@ Column {
     NavRow {
       visible: root.hasPage("plugins")
       pageId: "plugins"
-      label: "Widgets"
-      glyph: "widgets"
+      label: "Plugins"
+      glyph: "extension"
       indented: true
     }
 
@@ -185,8 +184,6 @@ Column {
     property bool indented: false
     readonly property bool active:
       root.currentPage === navRow.pageId
-      || (root.currentPage === "widget-editor"
-        && navRow.pageId === "plugins")
 
     width: root.width
     height: Commons.Style.space(34)

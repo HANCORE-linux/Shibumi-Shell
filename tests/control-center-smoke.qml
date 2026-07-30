@@ -12,8 +12,6 @@ ShellRoot {
   property int ticks: 0
   property var clickTargets: []
   property bool surfaceScrollRequested: false
-  readonly property bool holdWidgetEditor:
-    Quickshell.env("SHIBUMI_SMOKE_HOLD_EDITOR") === "1"
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -277,42 +275,54 @@ ShellRoot {
         if (appearance.selectedWidgetSurface !== "border"
             && appearance.selectedWidgetSurface !== "both")
           return root.fail("Surface cycle could not enable an outline")
-        appearance.setWidgetMode("G18", "text")
-        appearance.setWidgetSurface("G18", "both")
-        appearance.controller.setGroupSetting("G18", "color", "color05")
-        appearance.controller.setGroupSetting("G18", "tone", "background")
-        appearance.controller.setGroupSetting("G18", "widgetRadius", "round")
-        appearance.controller.setGroupSetting("G18", "widgetPadding", "roomy")
-        appearance.controller.setGroupSetting("G18", "surfaceOpacity", 0.8)
-        appearance.controller.setGroupSetting("G18", "separator", true)
-        appearance.controller.setGroupSetting("G18", "widgetBorderWidth", 1.5)
+        appearance.controller.setGroupSetting("G4", "displayMode", "text")
+        appearance.controller.setGroupSetting("G4", "compact", false)
+        appearance.controller.setGroupSetting("G4", "colorMode", "both")
+        appearance.controller.setGroupSetting("G4", "widgetBorder", true)
+        appearance.controller.setGroupSetting("G4", "color", "color05")
+        appearance.controller.setGroupSetting("G4", "tone", "background")
+        appearance.controller.setGroupSetting("G4", "widgetRadius", "round")
+        appearance.controller.setGroupSetting("G4", "widgetPadding", "roomy")
+        appearance.controller.setGroupSetting("G4", "surfaceOpacity", 0.8)
+        appearance.controller.setGroupSetting("G4", "widgetBorderWidth", 1.5)
         appearance.controller.setGroupSetting(
-          "G18", "widgetBorderColor", "color03")
+          "G4", "widgetBorderColor", "color03")
 
-        if (stateService.groupSetting("G18", "displayMode", "") !== "text"
-            || stateService.groupSetting("G18", "compact", true) !== false
-            || stateService.groupSetting("G18", "colorMode", "") !== "both"
-            || stateService.groupSetting("G18", "widgetBorder", false) !== true
-            || stateService.groupSetting("G18", "color", "") !== "color05"
-            || stateService.groupSetting("G18", "tone", "") !== "background"
-            || stateService.groupSetting("G18", "widgetRadius", "") !== "round"
-            || stateService.groupSetting("G18", "widgetPadding", "") !== "roomy"
-            || stateService.groupSetting("G18", "surfaceOpacity", 0) !== 0.8
-            || stateService.groupSetting("G18", "separator", false) !== true
-            || stateService.groupSetting("G18", "widgetBorderWidth", 0) !== 1.5
+        if (stateService.groupSetting("G4", "displayMode", "") !== "text"
+            || stateService.groupSetting("G4", "compact", true) !== false
+            || stateService.groupSetting("G4", "colorMode", "") !== "both"
+            || stateService.groupSetting("G4", "widgetBorder", false) !== true
+            || stateService.groupSetting("G4", "color", "") !== "color05"
+            || stateService.groupSetting("G4", "tone", "") !== "background"
+            || stateService.groupSetting("G4", "widgetRadius", "") !== "round"
+            || stateService.groupSetting("G4", "widgetPadding", "") !== "roomy"
+            || stateService.groupSetting("G4", "surfaceOpacity", 0) !== 0.8
+            || stateService.groupSetting("G4", "widgetBorderWidth", 0) !== 1.5
             || stateService.groupSetting(
-              "G18", "widgetBorderColor", "") !== "color03")
+              "G4", "widgetBorderColor", "") !== "color03")
           return root.fail("per-widget appearance contract did not persist")
-        if (!appearance.controller.resetGroupAppearance("G18")
-            || stateService.groupSetting("G18", "displayMode", "full") !== "full"
-            || stateService.groupSetting("G18", "color", "inherit") !== "inherit"
-            || stateService.groupSetting("G18", "widgetPadding", "auto") !== "auto"
+        if (!appearance.controller.resetGroupAppearance("G4")
+            || stateService.groupSetting("G4", "displayMode", "full") !== "full"
+            || stateService.groupSetting("G4", "color", "inherit") !== "inherit"
+            || stateService.groupSetting("G4", "widgetPadding", "auto") !== "auto"
             || stateService.groupSetting(
-              "G18", "widgetBorderColor", "inherit") !== "inherit"
-            || stateService.groupSetting("G18", "separator", false) !== true
-            || !panel.editWidget(
-              "G18", "hancore.shibumi.storage"))
+              "G4", "widgetBorderColor", "inherit") !== "inherit")
           return root.fail("appearance reset did not preserve nonvisual state")
+        appearance.showWidgetOverview()
+        if (appearance.openWidgetDetails(
+              "G18", "hancore.shibumi.storage"))
+          return root.fail("V1 Icons exposed a V2-only widget")
+        panel.v2LayoutActive = true
+        if (appearance.activeWidgetCount !== 15
+            || !appearance.openWidgetDetails(
+              "G18", "hancore.shibumi.storage"))
+          return root.fail("V2 Icons did not expose its active widget set")
+        panel.v2LayoutActive = false
+        if (appearance.activeWidgetCount !== 12
+            || appearance.widgetDetailOpen)
+          return root.fail("Icons retained V2-only state after switching to V1")
+        if (!panel.showSettingsPage("plugins"))
+          return root.fail("Plugins page rejected")
         root.phase++
         root.ticks = 0
         return
@@ -322,15 +332,109 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "widget-editor"
+            || panel.settingsPage !== "plugins"
             || !panel.settingsPageItem
-            || panel.settingsPageItem.selectedWidgetGroup !== "G18"
-            || panel.settingsPageItem.scopeMode !== "shared"
             || !panel.settingsPageItem.ready)
-          return root.fail("widget editor drill-down did not instantiate")
-        if (root.holdWidgetEditor) return
+          return root.fail("Plugins page did not instantiate")
+        const plugins = panel.settingsPageItem
+        if (!plugins.togglePluginById("omarchy.audio")
+            || !plugins.feedbackVisible
+            || !plugins.feedbackCountdownRunning
+            || plugins.feedbackProgress <= 0
+            || plugins.feedbackTitle !== "Omarchy Audio activated"
+            || plugins.feedbackDetail.indexOf("hidden") < 0
+            || panel.pluginEntries[0].installedInBar
+            || !panel.pluginEntries[0].replaced
+            || !panel.pluginEntries[1].installedInBar
+            || !panel.pluginEntries[1].replacementInEffect)
+          return root.fail(
+            "provider switch did not expose replacement feedback")
+        if (!plugins.undoLastChange()
+            || plugins.feedbackVisible
+            || plugins.feedbackCountdownRunning
+            || plugins.feedbackProgress !== 0
+            || !panel.pluginEntries[0].installedInBar
+            || panel.pluginEntries[0].replaced
+            || panel.pluginEntries[1].installedInBar)
+          return root.fail("provider-switch undo did not restore Shibumi")
+        if (plugins.activeExpanded || plugins.availableExpanded
+            || plugins.displayedActiveEntries.length !== 0
+            || plugins.displayedAvailableEntries.length !== 0)
+          return root.fail("large plugin catalog is not collapsed by default")
+        plugins.focusPluginSearch()
+        plugins.setPluginSearchQuery("shi")
+        if (plugins.searchSuggestions.length < 2
+            || plugins.searchGhostText === "")
+          return root.fail("plugin search did not expose ranked completions")
+        if (!plugins.blurPluginSearch()
+            || plugins.pluginQuery !== "shi"
+            || plugins.searchSuggestions.length !== 0)
+          return root.fail(
+            "plugin search click-away semantics did not preserve the query")
+        plugins.focusPluginSearch()
+        plugins.setPluginSearchQuery("shi")
+        if (!plugins.moveSearchSuggestion(1)
+            || plugins.activeSearchSuggestion !== 1
+            || !plugins.acceptSearchSuggestion(
+              plugins.activeSearchSuggestion)
+            || plugins.pluginQuery === "")
+          return root.fail("plugin completion selection failed")
+        plugins.setPluginSearchQuery("audio")
+        if (plugins.filteredEntries.length !== 2
+            || plugins.filteredEntries.some(function(entry) {
+              return entry.id === "hancore.shibumi.bluetooth"
+            }))
+          return root.fail(
+            "description-only Bluetooth relation polluted Audio search")
+        plugins.selectedProvider = "Active"
+        plugins.setPluginSearchQuery("acme")
+        if (plugins.selectedProvider !== "All"
+            || plugins.filteredEntries.length !== 1
+            || plugins.filteredEntries[0].id !== "acme.weather")
+          return root.fail(
+            "search did not reveal a disabled plugin behind Active")
+        plugins.setPluginSearchQuery("marchy aud")
+        if (plugins.filteredEntries.length !== 1
+            || plugins.filteredEntries[0].id !== "omarchy.audio")
+          return root.fail("multi-fragment plugin search did not rank Audio")
+        plugins.setPluginSearchQuery("acm wthr")
+        if (plugins.filteredEntries.length !== 1
+            || plugins.filteredEntries[0].id !== "acme.weather")
+          return root.fail("fuzzy fallback did not find the weather plugin")
+        plugins.setPluginSearchQuery("shi")
+        if (plugins.dismissPluginSearch() !== "suggestions"
+            || plugins.pluginQuery !== "shi"
+            || plugins.searchSuggestions.length !== 0
+            || plugins.dismissPluginSearch() !== "clear"
+            || plugins.pluginQuery !== "")
+          return root.fail("plugin search Escape staging failed")
+        plugins.setPluginSearchQuery("acme")
+        if (plugins.filteredEntries.length !== 1
+            || plugins.displayedAvailableEntries.length !== 1)
+          return root.fail("plugin search did not reveal the matching entry")
+        if (!plugins.toggleFavoriteById("acme.weather")
+            || !panel.pluginFavorite("acme.weather")
+            || stateService.config.plugins.favorites.indexOf(
+              "acme.weather") < 0)
+          return root.fail("plugin favorite was not persisted")
+        plugins.setPluginSearchQuery("")
+        plugins.favoritesOnly = true
+        if (plugins.filteredEntries.length !== 1
+            || plugins.filteredEntries[0].id !== "acme.weather")
+          return root.fail("Favorites route did not scope the plugin catalog")
+        if (!plugins.toggleFavoriteById("acme.weather")
+            || panel.pluginFavorite("acme.weather")
+            || plugins.filteredEntries.length !== 0)
+          return root.fail("plugin favorite could not be removed")
+        plugins.favoritesOnly = false
+        if (!plugins.requestPluginRemovalById("acme.weather")
+            || !plugins.removalConfirmationVisible
+            || !plugins.confirmPluginRemoval()
+            || plugins.entryById("acme.weather") !== null
+            || plugins.feedbackTitle !== "Acme Weather removed")
+          return root.fail("third-party plugin removal flow failed")
         if (!panel.showSettingsPage("splits"))
-          return root.fail("widget editor did not return to layout")
+          return root.fail("Plugins page did not open layout")
         root.phase++
         root.ticks = 0
         return
@@ -412,6 +516,31 @@ ShellRoot {
         if (!panel || !panel.settingsPageReady || panel.settingsPage !== "main"
             || !widget.iconMode || widget.launcherConfig.icon !== "hyprland")
           return root.fail("overview page or G1 presentation did not restore")
+        if (!panel.focusPredictiveSettingsSearch()
+            || !panel.setPredictiveSettingsQuery("audio")
+            || panel.settingsSearchResults.some(function(entry) {
+              return entry.id === "hancore.shibumi.bluetooth"
+            }))
+          return root.fail(
+            "global Audio search included description-only Bluetooth relation")
+        if (!panel.blurPredictiveSettingsSearch()
+            || panel.settingsSearchSuggestions.length !== 0
+            || panel.settingsSearchResults.length === 0)
+          return root.fail(
+            "settings search click-away semantics did not preserve results")
+        panel.focusPredictiveSettingsSearch()
+        panel.dismissSettingsSearch()
+        panel.dismissSettingsSearch()
+        if (!panel.focusPredictiveSettingsSearch()
+            || !panel.setPredictiveSettingsQuery("sur")
+            || panel.settingsSearchSuggestions.length < 1
+            || panel.settingsSearchResults.length < 2)
+          return root.fail("settings search did not expose shared completions")
+        if (panel.dismissSettingsSearch() !== "suggestions"
+            || panel.settingsSearchSuggestions.length !== 0
+            || panel.dismissSettingsSearch() !== "clear"
+            || panel.settingsSearchResults.length !== 0)
+          return root.fail("settings search Escape staging failed")
         widget.close()
         root.phase++
         root.ticks = 0

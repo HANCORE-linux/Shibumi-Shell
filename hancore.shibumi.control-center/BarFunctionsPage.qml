@@ -38,19 +38,6 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
 
-  function setWidgetMode(group, mode) {
-    controller.setGroupSetting(group, "displayMode", String(mode))
-    controller.setGroupSetting(group, "compact",
-      group === "G9" ? mode === "full" : mode === "icon")
-  }
-
-  function setWidgetSurface(group, mode) {
-    const value = String(mode)
-    controller.setGroupSetting(group, "colorMode", value)
-    controller.setGroupSetting(group, "widgetBorder",
-      value === "border" || value === "both")
-  }
-
   function cycleSelectedWidgetMode() {
     return appearanceWorkbench.cycleWidgetMode()
   }

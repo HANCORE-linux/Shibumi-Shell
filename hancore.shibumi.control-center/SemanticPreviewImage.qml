@@ -13,7 +13,7 @@ Item {
   readonly property string semanticRoute: {
     const route = String(routeId || "").split(":")[0]
     if (route === "quick" || route === "layout") return "bars"
-    if (route === "plugins" || route === "widget-editor") return "widgets"
+    if (route === "plugins") return "widgets"
     if (route === "functions") return "appearance"
     if (route === "overview") return "advanced"
     return route

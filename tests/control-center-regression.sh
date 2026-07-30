@@ -146,9 +146,9 @@ if rg -q 'centerOnBar:[[:space:]]*true' \
 fi
 rg -Fq 'typeof bar.setBarWidgetInstalled' \
   "$control_dir/ControlCenterPanel.qml" \
-  || fail "Add widget does not mutate the Quattro bar layout"
-rg -Fq 'AVAILABLE WIDGETS' "$control_dir/ControlSettings.qml" \
-  || fail "widget picker does not expose the available widget catalog"
+  || fail "Add plugin does not mutate the Quattro bar layout"
+rg -Fq 'AVAILABLE PLUGINS' "$control_dir/ControlSettings.qml" \
+  || fail "plugin picker does not expose the available bar-plugin catalog"
 
 for page in quick configure main bars plugins workspaces pickers logo splits \
     functions preferences; do
@@ -202,9 +202,9 @@ for configure_contract in \
   'ConfigureLandingPage.qml:return 0' \
   'ConfigureLandingPage.qml:context.lineTo(nodeX, lastY)' \
   'ConfigureLandingPage.qml:context.arc(nodeX, nodeY, 3.6, 0, Math.PI * 2)' \
-  'ConfigureLandingPage.qml:text: "Surface & Color"' \
+  'ConfigureLandingPage.qml:text: root.pluginFavoritesVisible ? "Favorites" : "Surface & Color"' \
   'ConfigureLandingPage.qml:activeFocusOnTab: visible' \
-  'ConfigureLandingPage.qml:if (root.surfaceRouteActive) {' \
+  'ConfigureLandingPage.qml:if (root.childRouteActive) {' \
   'ConfigureLandingPage.qml:context.lineTo(railX, nodeY)' \
   'ConfigureLandingPage.qml:root.pageRequested(routeCard.modelData.id)' \
   'ConfigureLandingPage.qml:? root.targetY(modelData.id) + homeY : homeY' \
@@ -216,7 +216,7 @@ for configure_contract in \
   'ConfigureLandingPage.qml:interval: 330' \
   'ActiveBarSettingsPage.qml:surfaceSectionY: barAccentSettings.y' \
   'ActiveBarSettingsPage.qml:V1 split/gap controls stay hidden.' \
-  'ControlSearchPage.qml:id: page.id === "main" ? "configure" : page.id' \
+  'ControlSettings.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
   label=${configure_contract#*:}
@@ -257,8 +257,8 @@ fi
 
 for contract in \
   'ControlOverviewPage.qml:Control Center' \
-  'PluginCatalogPage.qml:title: "Widgets"' \
-  'ControlSettings.qml:Add widget' \
+  'PluginCatalogPage.qml:title: root.favoritesOnly ? "Favorites" : "Plugins"' \
+  'ControlSettings.qml:Add plugin' \
   'ControlSettings.qml:Install plugin from Git' \
   'ControlSettings.qml:Plugins run as unsandboxed code'; do
   file=${contract%%:*}
@@ -269,7 +269,7 @@ done
 
 for refined_contract in \
   'ControlSettings.qml:sequence: "Ctrl+K"' \
-  'ControlSettings.qml:text: "Search settings…"' \
+  'ControlSettings.qml:placeholder: "Search settings, options, or plugins…"' \
   'ControlSettings.qml:{ value: "quick", label: "QUICK" }' \
   'ControlSettings.qml:{ value: "configure", label: "CONFIGURE" }' \
   'ControlCenterPanel.qml:contentHeight: settings.currentPage === "quick"' \
@@ -285,11 +285,111 @@ for refined_contract in \
   'ActiveBarSettingsPage.qml:visible: root.v2Active' \
   'ActiveBarSettingsPage.qml:surfaceEffectOptionCount:' \
   'ActiveBarSettingsPage.qml:surfaceRadiusOptionCount:' \
-  'ControlSearchPage.qml:split gap slots divider separator full fit dock notch'; do
+  'ControlSettings.qml:split gap slots divider separator full fit dock notch'; do
   file=${refined_contract%%:*}
   label=${refined_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
     || fail "refined Control Center contract drifted: $label"
+done
+
+[[ -f $control_dir/SearchEngine.js ]] \
+  || fail "shared predictive-search engine is missing"
+[[ -f $control_dir/PredictiveSearchInput.qml ]] \
+  || fail "shared predictive-search input is missing"
+for search_contract in \
+  'SearchEngine.js:function fuzzyScore(queryValue, candidateValue)' \
+  'SearchEngine.js:return 100 + gaps' \
+  'SearchEngine.js:function filterAndRank(entries, queryValue)' \
+  'SearchEngine.js:function primaryEntryFields(entry)' \
+  'SearchEngine.js:function collectMatches(source, query, scorer, includeDescription)' \
+  'SearchEngine.js:source, query, directEntryScore, false' \
+  'SearchEngine.js:source, query, directEntryScore, true' \
+  'SearchEngine.js:function completions(entries, queryValue, limitValue)' \
+  'SearchEngine.js:if (primaryDirect.length > 0)' \
+  'PredictiveSearchInput.qml:Qt.Key_Down' \
+  'PredictiveSearchInput.qml:Qt.Key_Up' \
+  'PredictiveSearchInput.qml:Qt.Key_Tab' \
+  'PredictiveSearchInput.qml:Qt.Key_Right' \
+  'PredictiveSearchInput.qml:searchInput.cursorPosition === searchInput.length' \
+  'PredictiveSearchInput.qml:Qt.Key_Return' \
+  'PredictiveSearchInput.qml:Qt.Key_Enter' \
+  'PredictiveSearchInput.qml:function handleEscape()' \
+  'PredictiveSearchInput.qml:function blur()' \
+  'PredictiveSearchInput.qml:return "suggestions"' \
+  'PredictiveSearchInput.qml:searchInput.focus = false' \
+  'PredictiveSearchInput.qml:return "clear"' \
+  'PredictiveSearchInput.qml:id: suggestionPopup' \
+  'PredictiveSearchInput.qml:id: suggestionPointer' \
+  'PredictiveSearchInput.qml:property string popupStyle: "global"' \
+  'PredictiveSearchInput.qml:readonly property bool catalogPopup:' \
+  'PredictiveSearchInput.qml:readonly property real reservedPopupHeight:' \
+  'PredictiveSearchInput.qml:anchors.topMargin: Commons.Style.space(4)' \
+  'PredictiveSearchInput.qml:root.controller.marketPanel.r' \
+  'PredictiveSearchInput.qml:root.controller.marketPanel.b' \
+  'PredictiveSearchInput.qml:border.width: 1' \
+  'PredictiveSearchInput.qml:border.color: root.controller.controlBorderColor' \
+  'PredictiveSearchInput.qml:anchors.margins: 1' \
+  'PluginCatalogPage.qml:PredictiveSearchInput {' \
+  'PluginCatalogPage.qml:popupStyle: "catalog"' \
+  'PluginCatalogPage.qml:suggestionLimit: 4' \
+  'ControlSettings.qml:PredictiveSearchInput {' \
+  'ControlSettings.qml:popupStyle: "catalog"' \
+  'ControlSettings.qml:suggestionLimit: 4' \
+  'ControlSettings.qml:+ settingsSearch.reservedPopupHeight' \
+  'PluginCatalogPage.qml:+ pluginSearch.reservedPopupHeight' \
+  'ControlSearchPage.qml:SearchEngine.filterAndRank(searchEntries, query)' \
+  'ControlCenterPanel.qml:searchTags:'; do
+  file=${search_contract%%:*}
+  label=${search_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "shared predictive-search contract drifted: $label"
+done
+if rg -Fq 'width: Commons.Style.space(28)' \
+    "$control_dir/PredictiveSearchInput.qml"; then
+  fail "predictive search still draws the obsolete focus underline"
+fi
+for click_away_contract in \
+    'height: Commons.Style.space(42)' \
+    'function dismissSearchesAt(x, y)' \
+    'TapHandler {' \
+    'gesturePolicy: TapHandler.ReleaseWithinBounds' \
+    'onTapped: function(eventPoint, _button)' \
+    'eventPoint.position.x, eventPoint.position.y'; do
+  rg -Fq "$click_away_contract" "$control_dir/ControlSettings.qml" \
+    || fail "global search click-away contract drifted: $click_away_contract"
+done
+if rg -Fq 'propagateComposedEvents: true' \
+    "$control_dir/ControlSettings.qml"; then
+  fail "search click-away can still leak into the panel dismiss layer"
+fi
+for disabled_search_contract in \
+    'function applyPluginSearchQuery(value)' \
+    '&& selectedProvider === "Active"' \
+    'selectedProvider = "All"' \
+    'onEdited: function(value) { root.applyPluginSearchQuery(value) }'; do
+  rg -Fq "$disabled_search_contract" "$control_dir/PluginCatalogPage.qml" \
+    || fail "disabled plugin search drifted: $disabled_search_contract"
+done
+for favorite_contract in \
+    'ConfigureLandingPage.qml:signal favoritesRequested()' \
+    'ConfigureLandingPage.qml:text: root.pluginFavoritesVisible ? "Favorites"' \
+    'ControlSettings.qml:function showPluginFavorites()' \
+    'ControlSettings.qml:onFavoritesRequested: root.showPluginFavorites()' \
+    'PluginCatalogPage.qml:property bool favoritesOnly: false' \
+    'PluginCatalogPage.qml:function toggleFavoriteById(pluginId)' \
+    'WidgetModuleTile.qml:text: root.favorite ? "star" : "star_border"' \
+    'ControlCenterPanel.qml:function setPluginFavorite(pluginId, favorite)' \
+    'Service.qml:function setPluginFavorite(pluginId, favorite)' \
+    'ShibumiConfig.js:plugins: defaultPluginConfig()'; do
+  file=${favorite_contract%%:*}
+  label=${favorite_contract#*:}
+  if [[ $file == Service.qml || $file == ShibumiConfig.js ]]; then
+    rg -Fq "$label" "$repo_root/hancore.shibumi.state/$file" \
+      || fail "plugin favorite persistence drifted: $label"
+  else
+    rg -Fq "$label" "$control_dir/$file" \
+      || fail "plugin favorite UI drifted: $label"
+  fi
 done
 rg -Fq 'surfaceEffectOptionCount !== 2' \
   "$repo_root/tests/control-center-smoke.qml" \
@@ -451,12 +551,24 @@ if rg -q 'shellStyleRepeater|positionRepeater|BAR SHELL' \
   fail "Appearance still duplicates Bars shell controls"
 fi
 
-for page_file in ControlOverviewPage.qml PluginCatalogPage.qml \
+for page_file in ControlOverviewPage.qml \
     SplitSettingsPage.qml BarFunctionsPage.qml ControlMainPage.qml \
-    BarsPage.qml WidgetEditorPage.qml WorkspaceSettingsPage.qml \
-    PickerSettingsPage.qml LogoSettingsPage.qml ControlSearchPage.qml; do
+    BarsPage.qml WorkspaceSettingsPage.qml \
+    PickerSettingsPage.qml LogoSettingsPage.qml ControlSearchPage.qml \
+    PluginCatalogPage.qml; do
   rg -Fq 'PageHeaderHero {' "$control_dir/$page_file" \
     || fail "page motion is missing from $page_file"
+done
+for header_contract in \
+    'property real preferredHeight: Commons.Style.space(80)' \
+    'property real previewWidth: Commons.Style.space(150)' \
+    'anchors.topMargin: Commons.Style.space(5)' \
+    'wrapMode: Text.NoWrap' \
+    'maximumLineCount: 1' \
+    'property string actionLabel: ""' \
+    'signal actionRequested()'; do
+  rg -Fq "$header_contract" "$control_dir/PageHeaderHero.qml" \
+    || fail "shared Configure header geometry drifted: $header_contract"
 done
 
 rg -Fq 'visible: root.controller.v2LayoutActive !== true' \
@@ -740,8 +852,93 @@ for provider in All Shibumi 'Omarchy Quattro' Third-party; do
   rg -Fq "\"$provider\"" "$control_dir/ProviderFilter.qml" \
     || fail "missing widget provider filter: $provider"
 done
+for plugin_contract in \
+    'spacing: Commons.Style.space(10)' \
+    'title: "FILTER"' \
+    '"All", "Active", "Shibumi", "Omarchy Quattro", "Third-party"' \
+    'title: "PROVIDER SWITCHES"' \
+    'title: "ACTIVE"' \
+    'title: "AVAILABLE"' \
+    'text: "UNDO"' \
+    'id: undoButton' \
+    'undoPointer.containsMouse' \
+    'controller.accentColor("color01")' \
+    'id: feedbackCountdown' \
+    'duration: 7000' \
+    'paused: feedbackHover.hovered || undoButton.activeFocus' \
+    '(parent.width - 2) * root.feedbackProgress' \
+    'id: pluginSearch' \
+    'height: Commons.Style.space(34)' \
+    'border.color: root.controller.controlBorderColor' \
+    'Find plugins, tags, authors, or providers…' \
+    'property bool activeExpanded: false' \
+    'property bool availableExpanded: false' \
+    'function requestPluginRemoval(entry)' \
+    'function confirmPluginRemoval()' \
+    'text: "REMOVE"' \
+    'interval: 7000' \
+    'function undoLastChange()' \
+    'controller.restoreShibumiProvider(undoGroup)' \
+    'actionLabel: "Add plugin"'; do
+  rg -Fq "$plugin_contract" "$control_dir/PluginCatalogPage.qml" \
+    || fail "plugin provider-feedback contract drifted: $plugin_contract"
+done
+for provider_model in \
+    'const replacementGroup = group === "" && bar' \
+    'replacementLabel: group === "" && bar' \
+    'replacementTargetEnabled:' \
+    'replacementInEffect: false' \
+    'replacedByIds: []' \
+    'removable: manifest.__isFirstParty !== true && !suiteManaged' \
+    'function removePlugin(pluginId)' \
+    '["omarchy", "plugin", "remove", id, "--yes"]' \
+    'id: pluginRemoval' \
+    'Control Center rejected non-removable plugin:' \
+    'function restoreShibumiProvider(groupId)'; do
+  rg -Fq "$provider_model" "$control_dir/ControlCenterPanel.qml" \
+    || fail "plugin provider model drifted: $provider_model"
+done
+for tile_contract in \
+    'property bool replaced: false' \
+    'text: root.inserted ? "ACTIVE"' \
+    ': root.replaced ? "REPLACED" : "AVAILABLE"' \
+    '? "Replaced by " + root.replacedBy' \
+    'property bool removable: false' \
+    'controller.accentColor("color03")' \
+    'controller.accentColor("color01")' \
+    ': root.replaced ? root.replacedStatusColor : root.foreground' \
+    'text: root.removalBusy ? "hourglass_top" : "delete"' \
+    'onClicked: root.removeRequested()'; do
+  rg -Fq "$tile_contract" "$control_dir/WidgetModuleTile.qml" \
+    || fail "plugin replacement tile drifted: $tile_contract"
+done
+tile_pointer_line=$(rg -n -F 'id: pointer' \
+  "$control_dir/WidgetModuleTile.qml" | head -1 | cut -d: -f1)
+tile_row_line=$(rg -n -F 'id: actionRow' \
+  "$control_dir/WidgetModuleTile.qml" | head -1 | cut -d: -f1)
+tile_favorite_line=$(rg -n -F 'id: favoritePointer' \
+  "$control_dir/WidgetModuleTile.qml" | head -1 | cut -d: -f1)
+[[ -n $tile_pointer_line && -n $tile_row_line && -n $tile_favorite_line \
+    && $tile_pointer_line -lt $tile_row_line \
+    && $tile_row_line -lt $tile_favorite_line ]] \
+  || fail "plugin tile actions can leak into the card toggle"
+[[ -f $control_dir/PluginSectionHeader.qml ]] \
+  || fail "collapsible plugin section header is missing"
+for section_contract in \
+    'root.title + "  " + root.count' \
+    'root.expanded ? "expand_more" : "chevron_right"' \
+    'onClicked: root.toggled()'; do
+  rg -Fq "$section_contract" "$control_dir/PluginSectionHeader.qml" \
+    || fail "plugin section hierarchy drifted: $section_contract"
+done
+if rg -Fq 'height: visible ? Commons.Style.space(48) : 0' \
+    "$control_dir/PluginCatalogPage.qml"; then
+  fail "plugin feedback still shifts the catalog layout"
+fi
 for suite_boundary in \
     'userToggleable: barWidget && (!suiteManaged || group !== "")' \
+    'styleAvailable: group === ""' \
+    'Control Center rejected V2-only plugin in V1:' \
     'Control Center rejected suite-internal plugin toggle:' \
     '? String(manifest.barWidget.defaultSection) : "center"' \
     'bar.setBarWidgetInstalled(id, enabled === true, section)'; do
@@ -751,6 +948,8 @@ done
 for widget_surface in PluginCatalogPage.qml ControlSettings.qml; do
   rg -Fq 'entry.userToggleable === true' "$control_dir/$widget_surface" \
     || fail "$widget_surface exposes suite-internal helper plugins"
+  rg -Fq 'entry.styleAvailable !== false' "$control_dir/$widget_surface" \
+    || fail "$widget_surface exposes plugins unsupported by the active style"
 done
 if rg -q 'model: 5' "$control_dir/WidgetModuleTile.qml"; then
   fail "decorative connector contacts remain on widget tiles"
@@ -825,12 +1024,12 @@ for workbench_contract in \
     'signal widgetRequested(string groupId, string pluginId)' \
     'signal overviewRequested()' \
     'text: "ALL WIDGETS"' \
-    'visible: !root.editorOnly && !root.detailOpen' \
-    'visible: root.editorOnly || root.detailOpen' \
-    'interactive: root.editorOnly' \
+    'visible: !root.detailOpen' \
+    'visible: root.detailOpen' \
+    'interactive: false' \
     'columns: 4' \
-    'property bool editorOnly: false' \
-    'property string scopeMode: "shared"' \
+    'readonly property var activeGroupIds:' \
+    'activeGroupIds.indexOf(group) < 0' \
     'id: contentModeChoices' \
     'id: contentToneChoices' \
     'id: surfaceModeChoices' \
@@ -838,9 +1037,6 @@ for workbench_contract in \
     'id: fillColorPalette' \
     'id: outlineColorPalette' \
     'id: opacityChoices' \
-    'text: root.advancedOpen ? "Less settings" : "More settings"' \
-    'visible: root.editorOnly && root.selectedSupported' \
-    '&& (root.detailOpen || root.advancedOpen)' \
     'enabled: root.selectedHasBorder' \
     'component GroupDivider: Rectangle' \
     'component SurfaceChoiceList: Column' \
@@ -1019,20 +1215,12 @@ for palette_contract in \
   rg -Fq "$palette_contract" "$workbench" \
     || fail "Icons palette no longer matches Bars: $palette_contract"
 done
-for editor_contract in \
-    'WidgetEditorPage.qml:BOTH · V1 + V2' \
-    'WidgetEditorPage.qml:V1 ONLY' \
-    'WidgetEditorPage.qml:V2 ONLY' \
-    'WidgetAppearanceWorkbench.qml:Open Bars settings' \
-    'WidgetAppearanceWorkbench.qml:Divider after ' \
-    'WidgetAppearanceWorkbench.qml:Edit V2 dividers on bar' \
-    'WidgetModuleTile.qml:signal editRequested()' \
-    'PluginCatalogPage.qml:onEditRequested:'; do
-  file=${editor_contract%%:*}
-  label=${editor_contract#*:}
-  rg -Fq "$label" "$control_dir/$file" \
-    || fail "widget editor drill-down contract drifted: $label"
-done
+[[ ! -e $control_dir/WidgetEditorPage.qml ]] \
+  || fail "Plugins still owns a second widget Appearance editor"
+if rg -q 'widget-editor|editRequested|scopeMode|editorOnly' \
+    "$control_dir" --glob '*.qml'; then
+  fail "retired cross-style widget editor remains reachable"
+fi
 rg -Fq 'function resetGroupAppearance(groupId)' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "widget Appearance reset is not atomic in the state service"
@@ -1081,7 +1269,7 @@ for density_contract in \
     'WordmarkPreview.qml:implicitHeight: 24' \
     'WorkspaceMarkerPreviewCard.qml:height: Commons.Style.space(68)' \
     'BarStylePreviewCard.qml:height: Commons.Style.space(92)' \
-    'WidgetModuleTile.qml:implicitHeight: Commons.Style.space(66)' \
+    'WidgetModuleTile.qml:implicitHeight: Commons.Style.space(58)' \
     'AppearanceWidgetTile.qml:implicitHeight: Commons.Style.space(62)'; do
   file=${density_contract%%:*}
   label=${density_contract#*:}

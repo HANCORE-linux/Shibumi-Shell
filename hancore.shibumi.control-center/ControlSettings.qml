@@ -14,6 +14,7 @@ Item {
   property string currentPage: "quick"
   property string lastConfigurePage: "main"
   property string configureDetailPage: ""
+  property bool pluginFavoritesOnly: false
   property alias settingsQuery: settingsSearch.text
   property bool paletteOpen: false
   property bool installMode: false
@@ -22,8 +23,6 @@ Item {
   property string pickerProvider: "All"
   property string installUrl: ""
   property string installStatus: ""
-  property string selectedWidgetGroup: "G4"
-  property string selectedWidgetId: ""
   readonly property real routeActivationViewportRatio: 2 / 3
 
   readonly property var pageOptions: {
@@ -33,7 +32,7 @@ Item {
       { id: "logo", label: "Logo", glyph: "branding_watermark" },
       { id: "workspaces", label: "Workspaces", glyph: "grid_view" },
       { id: "pickers", label: "Pickers", glyph: "collections" },
-      { id: "plugins", label: "Widgets", glyph: "widgets" },
+      { id: "plugins", label: "Plugins", glyph: "extension" },
       { id: "preferences", label: "Advanced", glyph: "settings" }
     ]
     return controller.stockOmarchyHost
@@ -41,6 +40,57 @@ Item {
           return page.id !== "plugins" && page.id !== "splits"
         })
       : pages
+  }
+  readonly property var settingsSearchEntries: {
+    const pageKeywords = {
+      bars: "bars shell omarchy shibumi switch continuity layout v1 v2 "
+        + "split gap slots divider separator full fit dock notch position "
+        + "surface color accent border panel tooltip",
+      plugins: "widgets modules plugins add install enable disable remove "
+        + "delete provider active available",
+      workspaces: "workspace workspaces count active marker style navigation",
+      pickers: "picker pickers theme wallpaper screenshot video media browser",
+      logo: "logo launcher identity wordmark icon",
+      functions: "icons icon appearance widget color surface style content "
+        + "tone shape spacing opacity outline",
+      preferences: "advanced reload reset power lock suspend reboot shutdown"
+    }
+    const values = pageOptions.map(function(page) {
+      return {
+        kind: "page",
+        id: page.id === "main" ? "configure" : page.id,
+        name: page.label,
+        label: page.label,
+        description: "Control Center page",
+        detail: "Control Center page",
+        provider: "Settings",
+        author: "Shibumi",
+        category: "Settings",
+        searchTags: String(pageKeywords[page.id] || "").split(" "),
+        kinds: ["setting"],
+        glyph: page.glyph
+      }
+    })
+    const plugins = (controller.pluginEntries || []).filter(function(entry) {
+      return entry.userToggleable === true && entry.styleAvailable !== false
+    }).map(function(entry) {
+      return {
+        kind: "plugin",
+        id: entry.id,
+        group: controller.shibumiWidgetGroup(entry.id),
+        name: entry.name,
+        label: entry.name,
+        description: entry.description,
+        detail: entry.provider + " · " + entry.compatibility,
+        provider: entry.provider,
+        author: entry.author,
+        category: entry.category,
+        searchTags: entry.searchTags,
+        kinds: entry.kinds,
+        glyph: entry.glyph || "widgets"
+      }
+    })
+    return values.concat(plugins)
   }
   readonly property bool configureDetailOpen: configureDetailPage !== ""
   readonly property bool barsSurfaceAvailable:
@@ -66,6 +116,10 @@ Item {
   readonly property bool barsSurfaceRouteActive:
     barsSurfaceActivationY >= 0
     && pageFlick.contentY >= barsSurfaceActivationY - 0.5
+  readonly property bool pluginFavoritesRouteAvailable:
+    currentPage === "configure" && configureDetailPage === "plugins"
+  readonly property bool pluginFavoritesRouteActive:
+    pluginFavoritesRouteAvailable && pluginFavoritesOnly
   readonly property string restorePage: currentPage === "configure"
     && configureDetailOpen ? configureDetailPage : currentPage
   readonly property bool ready: quickPage.ready
@@ -81,11 +135,16 @@ Item {
       ? configureLanding : settingsQuery.trim() !== ""
         ? searchPage : pageLoader.item
   readonly property bool fitsWidth: implicitWidth <= width + 0.5
+  readonly property var settingsSearchSuggestions: settingsSearch.suggestions
+  readonly property int activeSettingsSearchSuggestion:
+    settingsSearch.activeSuggestionIndex
+  readonly property var settingsSearchResults: searchPage.results
   readonly property var filteredPlugins: {
     const needle = query.trim().toLowerCase()
     const entries = (controller.pluginEntries || []).filter(
       function(entry) {
         return entry.userToggleable === true
+          && entry.styleAvailable !== false
           && (root.pickerProvider === "All"
             || entry.provider === root.pickerProvider)
       })
@@ -101,7 +160,7 @@ Item {
   readonly property var validPageIds: pageOptions.map(function(page) {
     return page.id
   }).concat(["quick", "configure", "main"]).concat(
-    controller.stockOmarchyHost ? [] : ["widget-editor", "splits"])
+    controller.stockOmarchyHost ? [] : ["splits"])
 
   implicitWidth: Commons.Style.space(720)
   implicitHeight: Commons.Style.space(500)
@@ -114,7 +173,6 @@ Item {
     if (page === "logo") return logoPage
     if (page === "splits") return splitPage
     if (page === "functions") return functionsPage
-    if (page === "widget-editor") return widgetEditorPage
     if (page === "preferences") return preferencesPage
     return overviewPage
   }
@@ -124,6 +182,7 @@ Item {
     if (validPageIds.indexOf(next) < 0)
       return false
     if (next === "quick") {
+      pluginFavoritesOnly = false
       configureDetailPage = ""
       configureLanding.cancelTransition()
       currentPage = "quick"
@@ -133,11 +192,13 @@ Item {
     currentPage = "configure"
     settingsQuery = ""
     if (next === "configure") {
+      pluginFavoritesOnly = false
       configureDetailPage = ""
       configureLanding.cancelTransition()
       Qt.callLater(function() { configureLanding.forceActiveFocus() })
       return true
     }
+    pluginFavoritesOnly = false
     configureDetailPage = next
     lastConfigurePage = next
     Qt.callLater(function() {
@@ -158,6 +219,16 @@ Item {
     return true
   }
 
+  function showPluginFavorites() {
+    if (configureDetailPage !== "plugins" || currentPage !== "configure") {
+      if (!setPage("plugins")) return false
+    }
+    pluginFavoritesOnly = true
+    pageScrollAnimation.stop()
+    pageFlick.contentY = 0
+    return true
+  }
+
   function setMode(value) {
     const next = String(value || "")
     if (next === "quick") return setPage("quick")
@@ -165,12 +236,60 @@ Item {
     return setPage("configure")
   }
 
-  function editWidget(groupId, pluginId) {
-    const group = String(groupId || "")
-    if (group === "" || controller.stockOmarchyHost) return false
-    selectedWidgetGroup = group
-    selectedWidgetId = String(pluginId || "")
-    return setPage("widget-editor")
+  function focusPredictiveSettingsSearch() {
+    settingsSearch.forceInputFocus()
+    return true
+  }
+
+  function setPredictiveSettingsQuery(value) {
+    settingsSearch.suggestionsSuppressed = false
+    settingsSearch.activeSuggestionIndex = -1
+    settingsSearch.text = String(value || "")
+    return true
+  }
+
+  function acceptSettingsSearchSuggestion(index) {
+    return settingsSearch.acceptSuggestion(index)
+  }
+
+  function dismissSettingsSearch() {
+    return settingsSearch.handleEscape()
+  }
+
+  function blurPredictiveSettingsSearch() {
+    return settingsSearch.blur()
+  }
+
+  function settingsSearchContainsPoint(x, y) {
+    const local = settingsSearch.mapFromItem(root, x, y)
+    return local.x >= 0 && local.x <= settingsSearch.width
+      && local.y >= 0
+      && local.y <= settingsSearch.height
+        + settingsSearch.reservedPopupHeight
+  }
+
+  function pluginSearchPage() {
+    const page = pageLoader.item
+    return page && page.searchInputActiveFocus !== undefined
+      && typeof page.searchContainsPoint === "function"
+      && typeof page.blurPluginSearch === "function" ? page : null
+  }
+
+  function dismissSearchesAt(x, y) {
+    let dismissed = false
+    if (settingsSearch.inputActiveFocus
+        && !settingsSearchContainsPoint(x, y)) {
+      settingsSearch.blur()
+      dismissed = true
+    }
+    const pluginPage = pluginSearchPage()
+    if (pluginPage !== null
+        && pluginPage.searchInputActiveFocus === true
+        && !pluginPage.searchContainsPoint(root, x, y)) {
+      pluginPage.blurPluginSearch()
+      dismissed = true
+    }
+    return dismissed
   }
 
   function openWidgetPicker() {
@@ -224,7 +343,7 @@ Item {
 
   Shortcut {
     sequence: "Ctrl+K"
-    onActivated: settingsSearch.forceActiveFocus()
+    onActivated: settingsSearch.forceInputFocus()
   }
 
   NumberAnimation {
@@ -241,49 +360,39 @@ Item {
 
     Item {
       id: searchBand
+      z: settingsSearch.suggestionsVisible ? 50 : 5
       width: parent.width
-      height: Commons.Style.space(48)
+      height: Commons.Style.space(42)
+        + settingsSearch.reservedPopupHeight
 
       Rectangle {
+        id: settingsSearchFrame
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.top: parent.top
+        anchors.topMargin: Commons.Style.space(4)
         anchors.leftMargin: Commons.Style.space(20)
         anchors.rightMargin: Commons.Style.space(20)
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: "transparent"
         border.width: 1
-        border.color: settingsSearch.activeFocus
-          ? root.accent : root.controller.controlBorderColor
+        border.color: root.controller.controlBorderColor
 
-        IconText {
-          id: searchGlyph
-          anchors.left: parent.left
-          anchors.leftMargin: Commons.Style.space(10)
-          anchors.verticalCenter: parent.verticalCenter
-          text: "search"
-          color: root.foreground
-          opacity: 0.42
-          font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
-          fill: 0
-        }
-
-        TextInput {
+        PredictiveSearchInput {
           id: settingsSearch
-          anchors.left: searchGlyph.right
-          anchors.right: searchHint.left
-          anchors.verticalCenter: parent.verticalCenter
-          anchors.leftMargin: Commons.Style.space(8)
-          anchors.rightMargin: Commons.Style.space(8)
-          color: root.foreground
-          selectionColor: Commons.Util.alpha(root.accent, 0.34)
-          selectedTextColor: root.foreground
-          clip: true
-          font.family: root.controller.marketFont
-          font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
-          onTextEdited: {
-            if (text.trim() !== ""
+          anchors.fill: parent
+          controller: root.controller
+          entries: root.settingsSearchEntries
+          placeholder: "Search settings, options, or plugins…"
+          popupStyle: "catalog"
+          suggestionLimit: 4
+          hint: "CTRL K"
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onEdited: function(value) {
+            if (value.trim() !== ""
                 && (root.currentPage === "quick"
                   || !root.configureDetailOpen)) {
               root.currentPage = "configure"
@@ -293,38 +402,6 @@ Item {
               })
             }
           }
-        }
-
-        Text {
-          anchors.left: settingsSearch.left
-          anchors.verticalCenter: parent.verticalCenter
-          visible: settingsSearch.text === ""
-          text: "Search settings…"
-          color: root.foreground
-          opacity: 0.32
-          font.family: root.controller.marketFont
-          font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
-        }
-
-        Text {
-          id: searchHint
-          anchors.right: parent.right
-          anchors.rightMargin: Commons.Style.space(9)
-          anchors.verticalCenter: parent.verticalCenter
-          text: "CTRL K"
-          color: root.foreground
-          opacity: 0.28
-          font.family: root.controller.marketFont
-          font.pixelSize: Commons.Style.font.caption * root.uiScale
-          font.weight: Font.Medium
-          font.letterSpacing: 0.8
-        }
-
-        MouseArea {
-          anchors.fill: parent
-          acceptedButtons: Qt.LeftButton
-          cursorShape: Qt.IBeamCursor
-          onClicked: settingsSearch.forceActiveFocus()
         }
       }
     }
@@ -404,17 +481,15 @@ Item {
           radius: root.controller.controlRadius
           color: widgetsShortcutPointer.containsMouse
             || root.configureDetailPage === "plugins"
-            || root.configureDetailPage === "widget-editor"
             ? root.controller.marketPanelRaised : "transparent"
           opacity: root.controller.stockOmarchyHost ? 0.34 : 1
           border.width: 1
           border.color: root.configureDetailPage === "plugins"
-            || root.configureDetailPage === "widget-editor"
             ? root.accent : root.controller.controlBorderColor
 
           Text {
             anchors.centerIn: parent
-            text: "WIDGETS  " + root.controller.enabledWidgetCount
+            text: "PLUGINS  " + root.controller.enabledWidgetCount
               + " / " + root.controller.availableWidgetCount
             color: root.foreground
             font.family: root.controller.marketFont
@@ -448,7 +523,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: Commons.Style.space(10)
             anchors.rightMargin: Commons.Style.space(10)
-            text: "PLUGINS  "
+            text: "REGISTRY  "
               + root.controller.registryShibumiPluginCount + " SHIBUMI · "
               + root.controller.registryOmarchyPluginCount + " OMARCHY · "
               + root.controller.registryExternalPluginCount + " EXT"
@@ -523,11 +598,14 @@ Item {
           detailOpen: root.configureDetailOpen
           surfaceRouteAvailable: root.barsSurfaceAvailable
           surfaceRouteActive: root.barsSurfaceRouteActive
+          favoritesRouteAvailable: root.pluginFavoritesRouteAvailable
+          favoritesRouteActive: root.pluginFavoritesRouteActive
           motionActive: root.controller.open === true
             && root.currentPage === "configure"
             && !root.configureDetailOpen && !root.paletteOpen
           onPageRequested: function(pageId) { root.setPage(pageId) }
           onSurfaceRequested: root.scrollToBarSurface()
+          onFavoritesRequested: root.showPluginFavorites()
           onBackRequested: root.setPage("configure")
         }
       }
@@ -564,6 +642,7 @@ Item {
               visible: root.settingsQuery.trim() !== ""
               controller: root.controller
               pageOptions: root.pageOptions
+              searchEntries: root.settingsSearchEntries
               query: root.settingsQuery
               foreground: root.foreground
               accent: root.accent
@@ -571,9 +650,6 @@ Item {
               motionActive: root.controller.open === true
                 && root.settingsQuery.trim() !== "" && !root.paletteOpen
               onPageRequested: function(pageId) { root.setPage(pageId) }
-              onWidgetRequested: function(groupId, pluginId) {
-                root.editWidget(groupId, pluginId)
-              }
             }
 
             Loader {
@@ -634,6 +710,19 @@ Item {
     }
   }
 
+  TapHandler {
+    enabled: settingsSearch.inputActiveFocus
+      || (root.pluginSearchPage() !== null
+        && root.pluginSearchPage().searchInputActiveFocus === true)
+    acceptedButtons: Qt.LeftButton
+    gesturePolicy: TapHandler.ReleaseWithinBounds
+
+    onTapped: function(eventPoint, _button) {
+      root.dismissSearchesAt(
+        eventPoint.position.x, eventPoint.position.y)
+    }
+  }
+
   Rectangle {
     anchors.fill: parent
     visible: root.paletteOpen
@@ -673,7 +762,7 @@ Item {
             width: parent.width - closePalette.width
             anchors.verticalCenter: parent.verticalCenter
             text: root.installMode ? "Install plugin from Git"
-              : "Add widget"
+              : "Add plugin"
             color: root.foreground
             font.family: Commons.Style.font.menuFamily
             font.pixelSize: Commons.Style.font.heading * root.uiScale
@@ -725,7 +814,7 @@ Item {
               anchors.fill: parent
               verticalAlignment: Text.AlignVCenter
               visible: parent.text === ""
-              text: "Search widgets or plugins …"
+              text: "Search bar plugins …"
               color: root.foreground
               opacity: 0.38
               font: parent.font
@@ -787,7 +876,7 @@ Item {
 
               Text {
                 height: Commons.Style.space(24)
-                text: "AVAILABLE WIDGETS"
+                text: "AVAILABLE PLUGINS"
                 color: root.foreground
                 opacity: 0.42
                 font.family: Commons.Style.font.menuFamily
@@ -1063,29 +1152,12 @@ Item {
     id: pluginsPage
     PluginCatalogPage {
       controller: root.controller
+      favoritesOnly: root.pluginFavoritesOnly
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
       motionActive: root.controller.open === true
         && root.configureDetailPage === "plugins"
-        && root.settingsQuery.trim() === "" && !root.paletteOpen
-      onEditRequested: function(groupId, pluginId) {
-        root.editWidget(groupId, pluginId)
-      }
-    }
-  }
-
-  Component {
-    id: widgetEditorPage
-    WidgetEditorPage {
-      controller: root.controller
-      uiScale: root.uiScale
-      foreground: root.foreground
-      accent: root.accent
-      selectedWidgetGroup: root.selectedWidgetGroup
-      selectedWidgetId: root.selectedWidgetId
-      motionActive: root.controller.open === true
-        && root.configureDetailPage === "widget-editor"
         && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }

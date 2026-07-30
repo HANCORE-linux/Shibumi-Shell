@@ -312,8 +312,24 @@ ShellRoot {
       if (hostBar.visualTokens.seal !== stateService.selectedColor)
         return root.fail("style did not consume the shared state service")
 
+      const v1Config = JSON.parse(JSON.stringify(stateService.config))
+      if (!v1Config.presentation) v1Config.presentation = {}
+      v1Config.presentation.shellStyle = "shibumi"
+      stateService.config = v1Config
+      if (!hostBar.setBarWidgetInstalled(
+            "omarchy.clock", true, "right")
+          || !hostBar.removeWidgetFamilyAlternatives("G8")) {
+        return root.fail("Add plugin did not work with the active V1 layout")
+      }
+
+      const v2Config = JSON.parse(JSON.stringify(stateService.config))
+      v2Config.presentation.shellStyle = "full"
+      stateService.config = v2Config
       if (hostBar.widgetReplacementLabel("omarchy.clock")
             !== "Replaces Shibumi Center"
+          || hostBar.widgetReplacementGroup("omarchy.clock") !== "G8"
+          || hostBar.widgetReplacementTarget("omarchy.clock")
+            !== "Shibumi Center"
           || hostBar.widgetReplacementLabel("example.future-clock")
             !== "Replaces Shibumi Center"
           || hostBar.widgetReplacementLabel("omarchy.notifications") !== ""
@@ -321,7 +337,7 @@ ShellRoot {
             "omarchy.notifications", true, "left")
           || !hostBar.setBarWidgetInstalled(
             "omarchy.clock", true, "right")) {
-        return root.fail("clock replacement contract was rejected")
+        return root.fail("Add plugin did not work with the active V2 layout")
       }
       const replacedConfig = fakeShell.shellConfig.bar
       const centerEntries = replacedConfig.layout.center || []

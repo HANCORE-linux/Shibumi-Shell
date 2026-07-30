@@ -345,6 +345,18 @@ Item {
     return WidgetFamilies.replacementLabel(widgetId, pluginRegistry)
   }
 
+  function widgetReplacementGroup(widgetId) {
+    const family = WidgetFamilies.familyForPlugin(
+      String(widgetId || ""), pluginRegistry)
+    return family ? String(family.group || "") : ""
+  }
+
+  function widgetReplacementTarget(widgetId) {
+    const family = WidgetFamilies.familyForPlugin(
+      String(widgetId || ""), pluginRegistry)
+    return family ? String(family.shibumi || "") : ""
+  }
+
   function entryId(entry) {
     if (typeof entry === "string") return Util.canonicalWidgetId(entry)
     if (Util.isPlainObject(entry)) return Util.canonicalWidgetId(entry.id || "")

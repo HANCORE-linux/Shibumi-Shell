@@ -287,6 +287,20 @@ Item {
     return commit(function(next) { next.menu = normalized })
   }
 
+  function setPluginFavorite(pluginId, favorite) {
+    const id = String(pluginId || "").trim()
+    if (id === "" || id.length > 255 || /[\x00-\x1f\x7f/\\]/.test(id)
+        || typeof favorite !== "boolean") return false
+    return commit(function(next) {
+      const plugins = ShibumiConfig.normalizePlugins(next.plugins)
+      const favorites = plugins.favorites.slice()
+      const index = favorites.indexOf(id)
+      if (favorite && index < 0) favorites.push(id)
+      if (!favorite && index >= 0) favorites.splice(index, 1)
+      next.plugins = { favorites: favorites }
+    })
+  }
+
   function defaultMenuConfig() {
     return ShibumiConfig.defaultMenuConfig()
   }

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
@@ -46,6 +47,9 @@ ShibumiPanel {
   readonly property var barPresentation: stateConfig.presentation || ({})
   readonly property var workspaceConfig: stateConfig.workspace || ({})
   readonly property var menuConfig: stateConfig.menu || ({})
+  readonly property var pluginConfig: stateConfig.plugins || ({})
+  readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
+    ? pluginConfig.favorites : []
   readonly property var launcherConfig: menuConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
@@ -78,10 +82,13 @@ ShibumiPanel {
   readonly property int enabledPluginCount: pluginEntries.filter(
     function(entry) { return entry.enabled }).length
   readonly property int availableWidgetCount: pluginEntries.filter(
-    function(entry) { return entry.userToggleable }).length
+    function(entry) {
+      return entry.userToggleable && entry.styleAvailable
+    }).length
   readonly property int enabledWidgetCount: pluginEntries.filter(
     function(entry) {
-      return entry.userToggleable && entry.installedInBar
+      return entry.userToggleable && entry.styleAvailable
+        && entry.installedInBar
     }).length
   readonly property int nativePluginCount: pluginEntries.filter(
     function(entry) { return entry.firstParty }).length
@@ -99,6 +106,11 @@ ShibumiPanel {
     function(entry) {
       return entry.compatibility !== "Native" && entry.enabled
     }).length
+  readonly property bool pluginRemovalRunning: pluginRemoval.running
+  readonly property string pluginRemovalId: removalPluginId
+  property string removalPluginId: ""
+  signal pluginRemovalFinished(
+    string pluginId, bool success, string detail)
   readonly property string managerCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-manager"
@@ -323,6 +335,7 @@ ShibumiPanel {
 
   function buildPluginEntries() {
     void(pluginRevision)
+    void(v2LayoutActive)
     if (bar) void(bar.layoutConfig)
     void(stateConfig.widgets)
     const registry = pluginRegistry
@@ -342,7 +355,31 @@ ShibumiPanel {
       const suiteManaged = String(shibumi.suiteId || "")
         === "hancore.shibumi"
       const group = shibumiWidgetGroup(id)
+      const replacementGroup = group === "" && bar
+        && typeof bar.widgetReplacementGroup === "function"
+        ? bar.widgetReplacementGroup(id) : ""
+      const replacementTargetId = group === "" && bar
+        && typeof bar.widgetReplacementTarget === "function"
+        ? bar.widgetReplacementTarget(id) : ""
+      const replacementTargetManifest =
+        installed[String(replacementTargetId || "")] || ({})
+      const replacementTarget = replacementTargetId !== ""
+        ? String(replacementTargetManifest.name || replacementTargetId) : ""
       const barWidget = kinds.indexOf("bar-widget") >= 0
+      const barWidgetMeta = manifest.barWidget || ({})
+      const category = String(barWidgetMeta.category || "")
+      const searchTags = []
+      const declaredTags = (Array.isArray(manifest.tags)
+        ? manifest.tags : []).concat(
+          Array.isArray(shibumi.capabilities) ? shibumi.capabilities : [])
+        .concat(Array.isArray(barWidgetMeta.semanticCapabilities)
+          ? barWidgetMeta.semanticCapabilities : [])
+        .concat(kinds)
+        .concat(category !== "" ? [category] : [])
+      for (let tagIndex = 0; tagIndex < declaredTags.length; tagIndex++) {
+        const tag = String(declaredTags[tagIndex] || "").trim()
+        if (tag !== "" && searchTags.indexOf(tag) < 0) searchTags.push(tag)
+      }
       const placement = manifest.barWidget
         && ["left", "center", "right"].indexOf(
           String(manifest.barWidget.defaultSection || "")) >= 0
@@ -356,6 +393,13 @@ ShibumiPanel {
       result.push({
         id: id,
         name: String(manifest.name || id),
+        description: [
+          String(manifest.description || ""),
+          String(barWidgetMeta.description || "")
+        ].filter(function(value) { return value !== "" }).join(" "),
+        author: String(manifest.author || ""),
+        category: category,
+        searchTags: searchTags,
         version: String(manifest.version || ""),
         kinds: kinds,
         glyph: pluginGlyph(id, kinds),
@@ -363,18 +407,62 @@ ShibumiPanel {
         barWidget: barWidget,
         installedInBar: barWidget
           ? widgetInstalled(id) : enabled,
+        styleAvailable: group === ""
+          || v2LayoutActive
+          || ["G16", "G17", "G18"].indexOf(group) < 0,
         suiteManaged: suiteManaged,
         userToggleable: barWidget && (!suiteManaged || group !== ""),
         defaultSection: placement,
         compatibility: pluginCompatibility(manifest),
         firstParty: manifest.__isFirstParty === true,
+        removable: manifest.__isFirstParty !== true && !suiteManaged,
         provider: pluginCompatibility(manifest) === "Native"
           ? "Shibumi" : manifest.__isFirstParty === true
             ? "Omarchy Quattro" : "Third-party",
-        replacementLabel: bar
+        replacementLabel: group === "" && bar
           && typeof bar.widgetReplacementLabel === "function"
-          ? bar.widgetReplacementLabel(id) : ""
+          ? bar.widgetReplacementLabel(id) : "",
+        group: group,
+        replacementGroup: replacementGroup,
+        replacementTargetId: replacementTargetId,
+        replacementTarget: replacementTarget,
+        replacementTargetEnabled: replacementGroup !== ""
+          && groupSetting(replacementGroup, "enabled", true) !== false,
+        replacementInEffect: false,
+        replaced: false,
+        replacedBy: "",
+        replacedByIds: []
       })
+    }
+
+    const activeReplacements = {}
+    for (let index = 0; index < result.length; index++) {
+      const entry = result[index]
+      const replacementGroup = String(entry.replacementGroup || "")
+      if (replacementGroup === "" || entry.installedInBar !== true) continue
+      if (!activeReplacements[replacementGroup])
+        activeReplacements[replacementGroup] = []
+      activeReplacements[replacementGroup].push(entry)
+    }
+    for (let index = 0; index < result.length; index++) {
+      const entry = result[index]
+      const group = String(entry.group || "")
+      const replacementGroup = String(entry.replacementGroup || "")
+      if (replacementGroup !== "") {
+        entry.replacementInEffect = entry.installedInBar === true
+          && groupSetting(replacementGroup, "enabled", true) === false
+        continue
+      }
+      const replacements = activeReplacements[group] || []
+      if (group === "" || replacements.length === 0
+          || entry.installedInBar === true) continue
+      entry.replaced = true
+      entry.replacedByIds = replacements.map(function(item) {
+        return String(item.id || "")
+      })
+      entry.replacedBy = replacements.length === 1
+        ? String(replacements[0].name || replacements[0].id || "")
+        : replacements.length + " active alternatives"
     }
     return result
   }
@@ -398,6 +486,11 @@ ShibumiPanel {
     if (kinds.indexOf("bar-widget") >= 0) {
       const group = shibumiWidgetGroup(id)
       if (group !== "") {
+        if (!v2LayoutActive
+            && ["G16", "G17", "G18"].indexOf(group) >= 0) {
+          console.warn("Control Center rejected V2-only plugin in V1:", id)
+          return false
+        }
         if (enabled === true && bar
             && typeof bar.removeWidgetFamilyAlternatives === "function")
           bar.removeWidgetFamilyAlternatives(group)
@@ -423,6 +516,35 @@ ShibumiPanel {
     return pluginRegistry.setEnabled(id, enabled === true)
   }
 
+  function restoreShibumiProvider(groupId) {
+    const group = String(groupId || "")
+    if (group === "" || !bar
+        || typeof bar.removeWidgetFamilyAlternatives !== "function")
+      return false
+    bar.removeWidgetFamilyAlternatives(group)
+    return setGroupSetting(group, "enabled", true)
+  }
+
+  function removePlugin(pluginId) {
+    const id = String(pluginId || "")
+    if (id === "" || pluginRemoval.running) return false
+    let entry = null
+    for (let index = 0; index < pluginEntries.length; index++) {
+      if (String(pluginEntries[index].id || "") === id) {
+        entry = pluginEntries[index]
+        break
+      }
+    }
+    if (!entry || entry.removable !== true) {
+      console.warn("Control Center rejected non-removable plugin:", id)
+      return false
+    }
+    removalPluginId = id
+    pluginRemoval.command = ["omarchy", "plugin", "remove", id, "--yes"]
+    pluginRemoval.running = true
+    return true
+  }
+
   function rescanPlugins() {
     if (!pluginRegistry
         || typeof pluginRegistry.rescan !== "function") return false
@@ -438,6 +560,16 @@ ShibumiPanel {
   function setGroupSetting(groupId, key, value) {
     return stateService && typeof stateService.setGroupSetting === "function"
       ? stateService.setGroupSetting(groupId, key, value) : false
+  }
+
+  function pluginFavorite(pluginId) {
+    return pluginFavorites.indexOf(String(pluginId || "")) >= 0
+  }
+
+  function setPluginFavorite(pluginId, favorite) {
+    return stateService
+      && typeof stateService.setPluginFavorite === "function"
+      ? stateService.setPluginFavorite(pluginId, favorite) : false
   }
 
   function resetGroupAppearance(groupId) {
@@ -626,13 +758,38 @@ ShibumiPanel {
     return settings.setPage(value)
   }
 
-  function editWidget(groupId, pluginId) {
-    return settings.editWidget(groupId, pluginId)
-  }
-
   function openWidgetPicker() {
     settings.setPage("plugins")
     return settings.openWidgetPicker()
+  }
+
+  Item {
+    width: 0
+    height: 0
+    visible: false
+
+    Process {
+      id: pluginRemoval
+      running: false
+      stdout: StdioCollector {
+        id: removalStdout
+        waitForEnd: true
+      }
+      stderr: StdioCollector {
+        id: removalStderr
+        waitForEnd: true
+      }
+      onExited: function(exitCode) {
+        const id = panel.removalPluginId
+        const output = String(
+          removalStderr.text || removalStdout.text || "").trim()
+        const detail = output === "" ? ""
+          : output.split("\n").slice(-1)[0]
+        if (exitCode === 0) panel.rescanPlugins()
+        panel.pluginRemovalFinished(id, exitCode === 0, detail)
+        panel.removalPluginId = ""
+      }
+    }
   }
 
   onOpenChanged: {
@@ -669,8 +826,7 @@ ShibumiPanel {
             + (settings.restorePage === "quick" ? "QUICK"
               : settings.restorePage === "configure" ? "CONFIGURE"
               : settings.restorePage === "bars" ? "BARS"
-              : settings.restorePage === "plugins" ? "WIDGETS"
-              : settings.restorePage === "widget-editor" ? "WIDGET EDITOR"
+              : settings.restorePage === "plugins" ? "PLUGINS"
               : settings.restorePage === "workspaces" ? "WORKSPACES"
               : settings.restorePage === "pickers" ? "PICKERS"
               : settings.restorePage === "logo" ? "LOGO"

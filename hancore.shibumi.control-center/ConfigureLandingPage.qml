@@ -16,6 +16,8 @@ Column {
   property bool detailOpen: false
   property bool surfaceRouteAvailable: false
   property bool surfaceRouteActive: false
+  property bool favoritesRouteAvailable: false
+  property bool favoritesRouteActive: false
   property bool transitioning: false
   property string selectedPage: ""
   property int hoveredIndex: -1
@@ -48,12 +50,27 @@ Column {
     }
     return -1
   }
+  readonly property int pluginsRouteIndex: {
+    for (let index = 0; index < routeOptions.length; index++) {
+      if (routeOptions[index].id === "plugins") return index
+    }
+    return -1
+  }
   readonly property bool barsSurfaceVisible: detailOpen
     && selectedPage === "bars" && surfaceRouteAvailable
-  readonly property real surfaceRouteExtension: barsSurfaceVisible
+  readonly property bool pluginFavoritesVisible: detailOpen
+    && selectedPage === "plugins" && favoritesRouteAvailable
+  readonly property bool childRouteVisible:
+    barsSurfaceVisible || pluginFavoritesVisible
+  readonly property bool childRouteActive: barsSurfaceVisible
+    ? surfaceRouteActive : favoritesRouteActive
+  readonly property int childRouteIndex: barsSurfaceVisible
+    ? barsRouteIndex : pluginsRouteIndex
+  readonly property real surfaceRouteExtension: childRouteVisible
     ? Commons.Style.space(34) : 0
   signal pageRequested(string pageId)
   signal surfaceRequested()
+  signal favoritesRequested()
   signal backRequested()
 
   width: parent ? parent.width : 1
@@ -72,8 +89,8 @@ Column {
   function routeHomeY(index) {
     const base = index
       * (Commons.Style.space(43) + Commons.Style.space(7))
-    return base + (root.barsSurfaceVisible
-      && index > root.barsRouteIndex ? root.surfaceRouteExtension : 0)
+    return base + (root.childRouteVisible
+      && index > root.childRouteIndex ? root.surfaceRouteExtension : 0)
   }
 
   function openRoute(pageId) {
@@ -315,6 +332,9 @@ Column {
         function onBarsSurfaceVisibleChanged() {
           detailRouteCanvas.requestPaint()
         }
+        function onPluginFavoritesVisibleChanged() {
+          detailRouteCanvas.requestPaint()
+        }
       }
 
       onWidthChanged: requestPaint()
@@ -446,8 +466,8 @@ Column {
 
       Canvas {
         id: surfaceRouteCanvas
-        property real barsNodeY: root.barsRouteIndex >= 0
-          ? root.routeHomeY(root.barsRouteIndex)
+        property real barsNodeY: root.childRouteIndex >= 0
+          ? root.routeHomeY(root.childRouteIndex)
             + Commons.Style.space(43) / 2
           : 0
         property real childNodeY: surfaceRouteRow.y
@@ -459,21 +479,21 @@ Column {
         width: Commons.Style.space(44)
         height: Math.max(1, childNodeY - barsNodeY
           + Commons.Style.space(4))
-        visible: root.barsSurfaceVisible
+        visible: root.childRouteVisible
         antialiasing: true
 
         onPaint: {
           const context = getContext("2d")
           context.reset()
           context.clearRect(0, 0, width, height)
-          if (!root.barsSurfaceVisible) return
+          if (!root.childRouteVisible) return
           const railX = Commons.Style.space(4)
           const nodeX = Commons.Style.space(34)
           const nodeY = height - Commons.Style.space(4)
-          const routeColor = root.surfaceRouteActive
+          const routeColor = root.childRouteActive
             ? root.accent : Commons.Util.alpha(root.foreground, 0.24)
           context.beginPath()
-          if (root.surfaceRouteActive) {
+          if (root.childRouteActive) {
             context.moveTo(railX, 0)
             context.lineTo(railX, nodeY)
           } else {
@@ -481,7 +501,7 @@ Column {
           }
           context.lineTo(nodeX, nodeY)
           context.strokeStyle = routeColor
-          context.lineWidth = root.surfaceRouteActive ? 1.5 : 1
+          context.lineWidth = root.childRouteActive ? 1.5 : 1
           context.stroke()
           context.beginPath()
           context.arc(nodeX, nodeY, 3.2, 0, Math.PI * 2)
@@ -495,6 +515,12 @@ Column {
             surfaceRouteCanvas.requestPaint()
           }
           function onBarsSurfaceVisibleChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+          function onPluginFavoritesVisibleChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+          function onFavoritesRouteActiveChanged() {
             surfaceRouteCanvas.requestPaint()
           }
           function onForegroundChanged() {
@@ -513,21 +539,21 @@ Column {
       Rectangle {
         id: surfaceRouteRow
         x: Commons.Style.space(24)
-        y: root.barsRouteIndex >= 0
-          ? root.routeHomeY(root.barsRouteIndex)
+        y: root.childRouteIndex >= 0
+          ? root.routeHomeY(root.childRouteIndex)
             + Commons.Style.space(47)
           : 0
         z: 4
         width: Math.max(1, Commons.Style.space(130))
         height: Commons.Style.space(27)
-        visible: root.barsSurfaceVisible
+        visible: root.childRouteVisible
         activeFocusOnTab: visible
         radius: root.controller.controlRadius
-        color: root.surfaceRouteActive || activeFocus
+        color: root.childRouteActive || activeFocus
             || surfaceRoutePointer.containsMouse
           ? root.controller.controlHoverFillColor : "transparent"
-        border.width: root.surfaceRouteActive || activeFocus ? 1 : 0
-        border.color: root.surfaceRouteActive
+        border.width: root.childRouteActive || activeFocus ? 1 : 0
+        border.color: root.childRouteActive
           ? root.accent : root.controller.controlBorderColor
 
         Text {
@@ -536,9 +562,9 @@ Column {
           anchors.verticalCenter: parent.verticalCenter
           anchors.leftMargin: Commons.Style.space(9)
           anchors.rightMargin: Commons.Style.space(7)
-          text: "Surface & Color"
-          color: root.surfaceRouteActive ? root.accent : root.foreground
-          opacity: root.surfaceRouteActive || parent.activeFocus
+          text: root.pluginFavoritesVisible ? "Favorites" : "Surface & Color"
+          color: root.childRouteActive ? root.accent : root.foreground
+          opacity: root.childRouteActive || parent.activeFocus
             || surfaceRoutePointer.containsMouse ? 1 : 0.62
           elide: Text.ElideRight
           font.family: root.controller.marketFont
@@ -553,16 +579,19 @@ Column {
           cursorShape: Qt.PointingHandCursor
           onClicked: {
             surfaceRouteRow.forceActiveFocus()
-            root.surfaceRequested()
+            if (root.pluginFavoritesVisible) root.favoritesRequested()
+            else root.surfaceRequested()
           }
         }
 
         Keys.onReturnPressed: function(event) {
-          root.surfaceRequested()
+          if (root.pluginFavoritesVisible) root.favoritesRequested()
+          else root.surfaceRequested()
           event.accepted = true
         }
         Keys.onEnterPressed: function(event) {
-          root.surfaceRequested()
+          if (root.pluginFavoritesVisible) root.favoritesRequested()
+          else root.surfaceRequested()
           event.accepted = true
         }
       }

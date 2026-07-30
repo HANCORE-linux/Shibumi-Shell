@@ -9,11 +9,11 @@ language:
 
 - **Quick** keeps the active bar, five direct bar-widget visibility controls,
   widget installation, and shell reload immediately available. The compact
-  header beside Quick/Configure links to Widgets with its active/available
+  header beside Quick/Configure links to Plugins with its active/available
   count and shows the passive Shibumi/Omarchy/external plugin breakdown. The
   redundant bar-position statistic is omitted.
 - **Configure** opens a route landing page for Bars, Icons, Logo, Workspaces,
-  Pickers, Widgets, and Advanced. Focusing a route updates its
+  Pickers, Plugins, and Advanced. Focusing a route updates its
   semantic preview at the right. Selecting a route fades the
   landing graph and moves the complete route list into a compact left-hand
   master column while revealing the matching editor on the right. Every route
@@ -22,8 +22,27 @@ language:
   to the landing graph. Ambiguous chevrons are not used.
 - Quick and Configure use a stable panel height so their larger landing
   compositions never expose partially clipped controls.
-- Search remains available in both modes. `Ctrl+K` focuses it, Escape clears
-  it, and results open either the matching page or a native widget editor.
+- Search remains available in both modes. `Ctrl+K` focuses it, and results
+  open either the matching settings page or the Plugins registry. The global
+  field and the Plugins field use the same predictive-search engine: partial
+  multi-word fragments are matched directly across their metadata, with
+  ordered-subsequence matching as a fallback. A maximum of four ranked
+  suggestions appears with an inline ghost preview. Up and Down select a
+  suggestion; Tab, Enter, or Right Arrow at the end of the query accepts it.
+  Escape is staged: the first press closes visible suggestions, the next
+  clears and unfocuses the field, and a following panel-level Escape closes
+  the Control Center. A pointer click outside the global field and its
+  suggestion surface closes suggestions and removes focus without clearing the
+  current query or consuming the clicked control's action. A passive tap
+  observer performs this dismissal; pointer events are never propagated into
+  the panel's outer close layer.
+- Predictive search shares one visual and interaction treatment in both
+  contexts. The global settings search and Plugins search use the same
+  four-result catalog surface. Its opaque background, neutral border, radius,
+  dividers, and hover fill use the surrounding control tokens. Opening either
+  suggestion list reserves its vertical space and moves the following content
+  down instead of covering it. Both fields retain a neutral one-pixel outline;
+  no extra focus underline or full-border accent is drawn.
 - Groups use progressive disclosure. The active page remains visible when its
   group is collapsed.
 
@@ -53,18 +72,19 @@ wider invisible pointer target. Repeated preview and module cards use compact
 geometry to reduce unnecessary scrolling while retaining readable labels and
 usable pointer targets.
 
-The Widgets source filter uses one shared caption size, medium weight, and
-vertical text box for `SOURCE` and every provider option. Selection changes
-color and underline only; it never shifts the option baseline or changes its
-perceived type size.
+The Plugins filter uses one shared caption size, medium weight, and vertical
+text box for `FILTER` and every provider option. It can show all, active,
+Shibumi, Omarchy Quattro, or third-party entries. Selection changes color and
+underline only; it never shifts the option baseline or changes its perceived
+type size. Entering a query in the normal catalog visibly changes an `Active`
+filter to `All`, allowing inactive but style-compatible plugins to be found.
+The Favorites route remains intentionally scoped to saved plugins.
 
 Quick uses the same card anatomy throughout: themed fill, border and radius;
 caption/demi-bold labels; body-small/demi-bold values and actions; and
 caption/regular details. Bar choices, widget visibility tiles, header status,
 and footer actions therefore share one visual grammar while keeping their
-different interaction roles explicit. The Plugins header status remains
-non-interactive until the Control Center has a registry page that represents
-all plugins, rather than only bar-widget modules.
+different interaction roles explicit.
 
 Every page uses a contained semantic preview of the settings behind that route.
 The preview is static until its route or represented state changes; no
@@ -172,25 +192,66 @@ from the V2 interaction surface. V2 slot and divider controls are likewise
 absent from V1. The capability boundary is visible within Bars without a
 second navigation level.
 
-## Widget editor
+## Plugins and Icons
 
-The Widgets page separates activation from configuration. The switch at the
-end of a row enables or disables the widget; selecting a native Shibumi row
-opens its editor.
+The **Plugins** page is the only bar-plugin registry. It enables, disables, and
+installs compatible bar plugins; it does not expose visual editing. V1 hides
+V2-only Shibumi groups, and V2 exposes them when that style is active.
+Third-party and stock Omarchy plugins retain their original rendering
+contract.
 
-The editor labels the scope of every control:
+Active plugins appear before available plugins. A provider switch is grouped
+as one relationship: the selected Omarchy alternative is marked `ACTIVE` and
+the corresponding Shibumi widget is marked `REPLACED` with the replacing
+provider named in full. `ACTIVE` uses the current theme's `color03`;
+`REPLACED` uses the theme's red `color01`, so the relationship remains
+semantically readable across themes. The switch happens immediately without
+an additional confirmation dialog. A non-modal seven-second status banner
+explains which widget was hidden to prevent duplicates and offers `UNDO`;
+restoring the Shibumi tile removes its active alternatives through the same
+provider-family contract. `UNDO` and its two-pixel linear deadline indicator
+use theme `color01`. The indicator drains over seven seconds and pauses while
+the banner is hovered or the Undo action has keyboard focus. A new provider
+mutation replaces the previous banner, so only the latest change is reversible
+and statuses never stack. Remove confirmation remains exclusive and clears an
+existing Undo state. `Add plugin` remains in the compact page header rather
+than consuming a catalog tile.
 
-- **Both · V1 + V2** contains shared widget presentation such as display mode,
-  surface, color, content tone, shape, spacing, opacity, and outline width.
-- **V1 only** links to split-island and animated-gap controls. Those are bar
-  layout properties, not widget properties.
-- **V2 only** owns the persistent divider after the selected widget group and
-  the direct divider editor on the bar. These controls are disabled until a V2
-  shell style is active.
+The provider filter is followed by one fixed-height interaction slot. In its
+  idle state it searches plugin names, IDs, providers, authors, categories,
+  capabilities, and manifest tags. Free-form descriptions are searched only
+  when those primary fields produce no match, preventing relational wording
+  such as `Bluetooth audio owner` from polluting a direct Audio query. Its
+  matching, ranked suggestions, inline
+completion, keyboard navigation, acceptance keys, and staged Escape behavior
+are identical to the global settings search. The global field searches both
+Configure routes and the same plugin metadata. During a mutation the Plugins
+slot shows status and the hover-visible `UNDO` action in the same geometry.
+Provider updates therefore never insert a new row or push the catalog
+downward. Active and available sections expose counts and can be expanded
+independently. Both start collapsed so a large catalog does not instantiate or
+display every card on page open. A search temporarily reveals matching entries
+regardless of section state.
 
-The drill-down keeps Widgets highlighted in the navigation rail and returns to
-the same catalog. Third-party and stock Omarchy widgets retain their original
-rendering contract and do not expose Shibumi-only appearance controls.
+Every plugin card, including a card revealed by search, exposes a star action.
+Starred plugin IDs are persisted in `bar.shibumi.plugins.favorites`. The
+connected **Favorites** child route below Plugins scopes the same provider
+filter, predictive search, activation, and removal controls to that saved set;
+selecting Plugins again returns to the complete catalog.
+
+Only independently installed user plugins expose the trash action. Quattro
+built-ins and Shibumi suite-managed plugins cannot be removed individually.
+Deletion requires a second inline `REMOVE` action, then delegates to
+`omarchy plugin remove <id> --yes`; arguments are passed as a process array,
+the catalog is rescanned on success, and failures retain the installed plugin.
+Disabling remains a separate reversible toggle.
+
+The **Icons** page is the only per-widget visual editor. It derives its list
+from the active V1 or V2 layout and immediately closes a detail view when its
+widget is not part of the newly selected style. Shared presentation controls
+such as display mode, surface, color, content tone, shape, spacing, opacity,
+and outline width are edited here. Generation-specific layout controls remain
+under Bars and are never offered through a second cross-style editor.
 
 ## Workspaces and pickers
 
@@ -216,7 +277,7 @@ not secondary sections inside Icons:
   shape, spacing, and opacity. It follows the active bar's canonical
   left/center/right layout order and lists only enabled groups that implement
   the Shibumi appearance contract. Provider filters do not appear in this
-  editor; unsupported stock or third-party widgets remain in Widgets. The
+  editor; unsupported stock or third-party widgets remain in Plugins. The
   selected widget's live preview shares the inspector header, content and
   surface choices use visual samples, and the surface palette uses the same
   neutral-border, underline-selection, and hover-motion contract as Bars.

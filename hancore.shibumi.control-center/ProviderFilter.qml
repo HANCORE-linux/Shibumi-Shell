@@ -11,6 +11,7 @@ Item {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property string title: "SOURCE"
   property var options: ["All", "Shibumi", "Omarchy Quattro", "Third-party"]
   readonly property real filterFontSize:
     Commons.Style.font.caption * uiScale
@@ -36,7 +37,7 @@ Item {
       Text {
         height: parent.height
         verticalAlignment: Text.AlignVCenter
-        text: "SOURCE"
+        text: root.title
         color: root.foreground
         opacity: 0.48
         font.family: root.controller.marketFont

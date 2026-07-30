@@ -17,6 +17,9 @@ Item {
   readonly property var barPresentation: stateConfig.presentation || ({})
   readonly property var workspaceConfig: stateConfig.workspace || ({})
   readonly property var menuConfig: stateConfig.menu || ({})
+  readonly property var pluginConfig: stateConfig.plugins || ({})
+  readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
+    ? pluginConfig.favorites : []
   readonly property var launcherConfig: menuConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
@@ -70,11 +73,113 @@ Item {
   readonly property bool quickProfileAvailable: true
   readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
-  readonly property var pluginEntries: []
-  readonly property int availablePluginCount: 0
-  readonly property int enabledPluginCount: 0
-  readonly property int availableWidgetCount: 0
-  readonly property int enabledWidgetCount: 0
+  property bool pluginRemovalRunning: false
+  readonly property string pluginRemovalId: ""
+  signal pluginRemovalFinished(
+    string pluginId, bool success, string detail)
+  property var pluginEntries: [
+    {
+      id: "hancore.shibumi.audio",
+      name: "Shibumi Audio",
+      description: "Volume, microphone, and PipeWire controls",
+      author: "HANCORE",
+      category: "Audio",
+      searchTags: ["audio", "volume", "microphone", "pipewire"],
+      kinds: ["bar-widget", "service"],
+      glyph: "volume_up",
+      provider: "Shibumi",
+      removable: false,
+      userToggleable: true,
+      styleAvailable: true,
+      installedInBar: true,
+      group: "G6",
+      replacementGroup: "",
+      replacementTarget: "",
+      replacementTargetEnabled: false,
+      replacementInEffect: false,
+      replacementLabel: "",
+      replaced: false,
+      replacedBy: "",
+      replacedByIds: []
+    },
+    {
+      id: "omarchy.audio",
+      name: "Omarchy Audio",
+      description: "Built-in Quattro volume widget",
+      author: "Omarchy",
+      category: "Audio",
+      searchTags: ["audio", "volume", "pipewire"],
+      kinds: ["bar-widget"],
+      glyph: "volume_up",
+      provider: "Omarchy Quattro",
+      removable: false,
+      userToggleable: true,
+      styleAvailable: true,
+      installedInBar: false,
+      group: "",
+      replacementGroup: "G6",
+      replacementTarget: "Shibumi Audio",
+      replacementTargetEnabled: true,
+      replacementInEffect: false,
+      replacementLabel: "Replaces Shibumi Audio",
+      replaced: false,
+      replacedBy: "",
+      replacedByIds: []
+    },
+    {
+      id: "acme.weather",
+      name: "Acme Weather",
+      description: "Forecast and temperature widget",
+      author: "Acme Labs",
+      category: "Weather",
+      searchTags: ["weather", "forecast", "temperature"],
+      kinds: ["bar-widget"],
+      glyph: "cloud",
+      provider: "Third-party",
+      removable: true,
+      userToggleable: true,
+      styleAvailable: true,
+      installedInBar: false,
+      group: "",
+      replacementGroup: "",
+      replacementTarget: "",
+      replacementTargetEnabled: false,
+      replacementInEffect: false,
+      replacementLabel: "",
+      replaced: false,
+      replacedBy: "",
+      replacedByIds: []
+    },
+    {
+      id: "hancore.shibumi.bluetooth",
+      name: "Shibumi Bluetooth",
+      description: "Shibumi Bluetooth presentation over Omarchy's BlueZ and audio owner",
+      author: "HANCORE",
+      category: "Connectivity",
+      searchTags: ["bluetooth", "bluez", "devices"],
+      kinds: ["bar-widget", "service"],
+      glyph: "bluetooth",
+      provider: "Shibumi",
+      removable: false,
+      userToggleable: true,
+      styleAvailable: true,
+      installedInBar: true,
+      group: "G15",
+      replacementGroup: "",
+      replacementTarget: "",
+      replacementTargetEnabled: false,
+      replacementInEffect: false,
+      replacementLabel: "",
+      replaced: false,
+      replacedBy: "",
+      replacedByIds: []
+    }
+  ]
+  readonly property int availablePluginCount: pluginEntries.length
+  readonly property int enabledPluginCount: pluginEntries.filter(
+    function(entry) { return entry.installedInBar === true }).length
+  readonly property int availableWidgetCount: availablePluginCount
+  readonly property int enabledWidgetCount: enabledPluginCount
   readonly property int registryShibumiPluginCount: 0
   readonly property int registryOmarchyPluginCount: 0
   readonly property int registryExternalPluginCount: 0
@@ -89,6 +194,10 @@ Item {
     settings.barsSurfaceActivationY
   readonly property real barsDetailScrollMaximum:
     settings.detailScrollMaximum
+  readonly property var settingsSearchSuggestions:
+    settings.settingsSearchSuggestions
+  readonly property var settingsSearchResults:
+    settings.settingsSearchResults
   readonly property color marketBackground: "#08080a"
   readonly property color marketPanel: "#0b0b0d"
   readonly property color marketPanelRaised: "#101012"
@@ -125,6 +234,26 @@ Item {
     return settings.scrollToBarSurface()
   }
 
+  function focusPredictiveSettingsSearch() {
+    return settings.focusPredictiveSettingsSearch()
+  }
+
+  function setPredictiveSettingsQuery(value) {
+    return settings.setPredictiveSettingsQuery(value)
+  }
+
+  function acceptSettingsSearchSuggestion(index) {
+    return settings.acceptSettingsSearchSuggestion(index)
+  }
+
+  function dismissSettingsSearch() {
+    return settings.dismissSettingsSearch()
+  }
+
+  function blurPredictiveSettingsSearch() {
+    return settings.blurPredictiveSettingsSearch()
+  }
+
   function groupSetting(groupId, key, fallback) {
     return stateService && typeof stateService.groupSetting === "function"
       ? stateService.groupSetting(groupId, key, fallback) : fallback
@@ -133,6 +262,16 @@ Item {
   function setGroupSetting(groupId, key, value) {
     return stateService && typeof stateService.setGroupSetting === "function"
       ? stateService.setGroupSetting(groupId, key, value) : false
+  }
+
+  function pluginFavorite(pluginId) {
+    return pluginFavorites.indexOf(String(pluginId || "")) >= 0
+  }
+
+  function setPluginFavorite(pluginId, favorite) {
+    return stateService
+      && typeof stateService.setPluginFavorite === "function"
+      ? stateService.setPluginFavorite(pluginId, favorite) : false
   }
 
   function resetGroupAppearance(groupId) {
@@ -272,16 +411,59 @@ Item {
     return settings.setPage(value)
   }
 
-  function editWidget(groupId, pluginId) {
-    return settings.editWidget(groupId, pluginId)
-  }
-
   function openWidgetPicker() {
     settings.setPage("plugins")
     return settings.openWidgetPicker()
   }
 
-  function setPluginEnabled(_pluginId, _enabled) { return false }
+  function setPluginEnabled(pluginId, enabled) {
+    const id = String(pluginId || "")
+    const next = JSON.parse(JSON.stringify(pluginEntries))
+    const shibumi = next[0]
+    const omarchy = next[1]
+    if (id === "omarchy.audio") {
+      omarchy.installedInBar = enabled === true
+      omarchy.replacementInEffect = enabled === true
+      if (enabled === true) {
+        shibumi.installedInBar = false
+        shibumi.replaced = true
+        shibumi.replacedBy = "Omarchy Audio"
+        shibumi.replacedByIds = ["omarchy.audio"]
+      }
+    } else if (id === "hancore.shibumi.audio") {
+      shibumi.installedInBar = enabled === true
+      if (enabled === true) {
+        shibumi.replaced = false
+        shibumi.replacedBy = ""
+        shibumi.replacedByIds = []
+        omarchy.installedInBar = false
+        omarchy.replacementInEffect = false
+      }
+    } else {
+      return false
+    }
+    omarchy.replacementTargetEnabled = shibumi.installedInBar === true
+    pluginEntries = next
+    return true
+  }
+
+  function restoreShibumiProvider(groupId) {
+    return String(groupId || "") === "G6"
+      && setPluginEnabled("hancore.shibumi.audio", true)
+  }
+
+  function removePlugin(pluginId) {
+    const id = String(pluginId || "")
+    const remaining = pluginEntries.filter(function(entry) {
+      return String(entry.id || "") !== id || entry.removable !== true
+    })
+    if (remaining.length === pluginEntries.length) return false
+    pluginRemovalRunning = true
+    pluginEntries = remaining
+    pluginRemovalRunning = false
+    pluginRemovalFinished(id, true, "Removed by fixture.")
+    return true
+  }
   function rescanPlugins() { return true }
   function beginBarEditing() { return false }
   function quickWidgetAvailable(_pluginId) { return true }

@@ -13,10 +13,7 @@ Column {
   property color accent: Commons.Color.menu.selectedText
   property string selectedWidgetGroup: "G4"
   property string selectedWidgetId: ""
-  property bool advancedOpen: false
-  property bool editorOnly: false
   property bool detailOpen: false
-  property string scopeMode: "shared"
   signal widgetRequested(string groupId, string pluginId)
   signal overviewRequested()
 
@@ -37,6 +34,15 @@ Column {
     { value: "color08", label: "08" },
     { value: "foreground", label: "FG" }
   ]
+  readonly property var activeGroupIds: controller.v2LayoutActive === true
+    ? [
+        "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9",
+        "G10", "G11", "G12", "G13", "G14", "G15", "G16", "G17", "G18"
+      ]
+    : [
+        "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9",
+        "G10", "G11", "G12", "G13", "G14", "G15"
+      ]
   readonly property var activeOptions: buildActiveOptions()
   readonly property var selectedWidget: optionForSelection(
     selectedWidgetGroup, selectedWidgetId)
@@ -109,22 +115,6 @@ Column {
       if (group === "" && id !== "" && String(option.id || "") === id)
         return option
     }
-    for (let catalogIndex = 0;
-        catalogIndex < widgetOptions.length; catalogIndex++) {
-      const catalogOption = widgetOptions[catalogIndex]
-      if (group !== "" && String(catalogOption.group || "") === group) {
-        const plugin = pluginForGroup(group)
-        return {
-          group: group,
-          id: plugin ? String(plugin.id || "") : id,
-          label: catalogOption.label,
-          glyph: catalogOption.glyph,
-          modes: catalogOption.modes,
-          region: "",
-          supported: true
-        }
-      }
-    }
     return activeOptions.length > 0 ? activeOptions[0] : ({
       group: "", id: "", label: "Widget", glyph: "widgets",
       modes: ["full"], region: "", supported: false
@@ -176,6 +166,7 @@ Column {
   function buildActiveOptions() {
     void(controller.activeWidgetOrder)
     void(controller.v2LayoutActive)
+    void(activeGroupIds)
     const result = []
     const order = activeOrder()
     const regions = ["left", "center", "right"]
@@ -186,6 +177,7 @@ Column {
         const group = String(groups[groupIndex] || "")
         const source = catalogOptionForGroup(group)
         if (!source
+            || activeGroupIds.indexOf(group) < 0
             || controller.groupSetting(group, "enabled", true) === false)
           continue
         const plugin = pluginForGroup(group)
@@ -314,19 +306,17 @@ Column {
     readonly property real overviewHeight: Math.max(
       Commons.Style.space(180),
       widgetList.implicitHeight + Commons.Style.space(45))
-    readonly property real routeHeight: root.detailOpen && !root.editorOnly
+    readonly property real routeHeight: root.detailOpen
       ? Commons.Style.space(34) : 0
-    readonly property real inspectorHeight: root.editorOnly
-      ? Commons.Style.space(356)
-      : inspector.implicitHeight + Commons.Style.space(20)
-    height: root.editorOnly ? inspectorHeight
-      : root.detailOpen
-        ? routeHeight + Commons.Style.space(8) + inspectorHeight
-        : overviewHeight
+    readonly property real inspectorHeight:
+      inspector.implicitHeight + Commons.Style.space(20)
+    height: root.detailOpen
+      ? routeHeight + Commons.Style.space(8) + inspectorHeight
+      : overviewHeight
 
     Item {
       id: detailRoute
-      visible: root.detailOpen && !root.editorOnly
+      visible: root.detailOpen
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
@@ -398,7 +388,7 @@ Column {
     }
 
     Rectangle {
-      visible: !root.editorOnly && !root.detailOpen
+      visible: !root.detailOpen
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
@@ -561,7 +551,7 @@ Column {
       Text {
         anchors.centerIn: parent
         visible: root.activeOptions.length === 0
-        text: "No editable widgets are active. Enable one under Widgets."
+        text: "No editable widgets are active. Enable one under Plugins."
         color: root.foreground
         opacity: 0.46
         wrapMode: Text.WordWrap
@@ -593,12 +583,11 @@ Column {
 
     Rectangle {
       id: inspectorCard
-      visible: root.editorOnly || root.detailOpen
+      visible: root.detailOpen
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: detailRoute.bottom
-      anchors.topMargin: root.detailOpen && !root.editorOnly
-        ? Commons.Style.space(8) : 0
+      anchors.topMargin: root.detailOpen ? Commons.Style.space(8) : 0
       height: parent.inspectorHeight
       radius: root.controller.controlRadius
       color: root.controller.controlFillColor
@@ -614,7 +603,7 @@ Column {
         contentHeight: inspector.implicitHeight
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
-        interactive: root.editorOnly
+        interactive: false
         clip: true
 
         Column {
@@ -662,7 +651,7 @@ Column {
 
               Text {
                 anchors.verticalCenter: parent.verticalCenter
-                visible: root.detailOpen && !root.editorOnly
+                visible: root.detailOpen
                 text: root.controller.v2LayoutActive
                   ? "V2 ACTIVE" : "V1 ACTIVE"
                 color: root.accent
@@ -741,7 +730,6 @@ Column {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.selectedSupported
-                  && root.scopeMode === "shared"
                 text: "Reset ↺"
                 color: resetPointer.containsMouse
                   ? root.accent : root.foreground
@@ -775,7 +763,7 @@ Column {
           }
 
           Row {
-            visible: root.selectedSupported && root.scopeMode === "shared"
+            visible: root.selectedSupported
             width: parent.width
             spacing: Commons.Style.space(8)
 
@@ -835,7 +823,7 @@ Column {
           }
 
           Column {
-            visible: root.selectedSupported && root.scopeMode === "shared"
+            visible: root.selectedSupported
               && root.selectedHasFill
             width: parent.width
             spacing: Commons.Style.space(4)
@@ -851,7 +839,7 @@ Column {
           }
 
           Column {
-            visible: root.selectedSupported && root.scopeMode === "shared"
+            visible: root.selectedSupported
               && root.selectedHasBorder
             width: parent.width
             spacing: Commons.Style.space(4)
@@ -872,7 +860,7 @@ Column {
           }
 
           Row {
-            visible: root.selectedSupported && root.scopeMode === "shared"
+            visible: root.selectedSupported
             width: parent.width
             spacing: Commons.Style.space(8)
 
@@ -913,50 +901,9 @@ Column {
             }
           }
 
-          Rectangle {
-            visible: root.editorOnly && root.selectedSupported
-              && root.scopeMode === "shared"
-            width: parent.width
-            height: Commons.Style.space(31)
-            radius: root.controller.controlRadius
-            color: advancedPointer.containsMouse
-              ? root.controller.controlHoverFillColor : "transparent"
-            border.width: 1
-            border.color: root.controller.controlBorderColor
-
-            Text {
-              anchors.left: parent.left
-              anchors.leftMargin: Commons.Style.space(9)
-              anchors.verticalCenter: parent.verticalCenter
-              text: root.advancedOpen ? "Less settings" : "More settings"
-              color: root.foreground
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-              font.weight: Font.Medium
-            }
-
-            Text {
-              anchors.right: parent.right
-              anchors.rightMargin: Commons.Style.space(9)
-              anchors.verticalCenter: parent.verticalCenter
-              text: root.advancedOpen ? "⌃" : "⌄"
-              color: root.accent
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
-
-            MouseArea {
-              id: advancedPointer
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.advancedOpen = !root.advancedOpen
-            }
-          }
-
           Column {
             visible: root.selectedSupported
-              && (root.detailOpen || root.advancedOpen)
-              && root.scopeMode === "shared"
+              && root.detailOpen
             width: parent.width
             spacing: Commons.Style.space(7)
 
@@ -997,103 +944,6 @@ Column {
               }
             }
 
-          }
-
-          Column {
-            visible: root.selectedSupported && root.scopeMode === "v1"
-            width: parent.width
-            spacing: Commons.Style.space(10)
-
-            SectionLabel { text: "V1 LAYOUT" }
-
-            Text {
-              width: parent.width
-              text: "V1 uses split islands and animated gaps between groups. "
-                + "Those settings belong to the bar layout, not to "
-                + root.selectedWidget.label + "."
-              color: root.foreground
-              opacity: 0.54
-              wrapMode: Text.WordWrap
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
-
-            CompactSettingChoice {
-              width: parent.width
-              controller: root.controller
-              label: "Open Bars settings"
-              enabled: root.controller.v2LayoutActive !== true
-              foreground: root.foreground
-              accent: root.accent
-              uiScale: root.uiScale
-              onClicked: root.controller.showSettingsPage("bars")
-            }
-
-            Text {
-              visible: root.controller.v2LayoutActive === true
-              width: parent.width
-              text: "Switch the Shibumi shell to V1 to edit split islands."
-              color: root.foreground
-              opacity: 0.42
-              wrapMode: Text.WordWrap
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
-          }
-
-          Column {
-            visible: root.selectedSupported && root.scopeMode === "v2"
-            width: parent.width
-            spacing: Commons.Style.space(10)
-
-            SectionLabel { text: "V2 LAYOUT" }
-
-            Text {
-              width: parent.width
-              text: "V2 uses persistent dividers and slots. The divider is "
-                + "stored after this widget group."
-              color: root.foreground
-              opacity: 0.54
-              wrapMode: Text.WordWrap
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
-
-            CompactSettingChoice {
-              width: parent.width
-              controller: root.controller
-              label: "Divider after " + root.selectedWidget.label
-              selected: root.widgetSetting(
-                root.selectedWidget.group, "separator", false) === true
-              enabled: root.controller.v2LayoutActive === true
-              foreground: root.foreground
-              accent: root.accent
-              uiScale: root.uiScale
-              onClicked: root.controller.setGroupSetting(
-                root.selectedWidget.group, "separator", !selected)
-            }
-
-            CompactSettingChoice {
-              width: parent.width
-              controller: root.controller
-              label: "Edit V2 dividers on bar"
-              enabled: root.controller.v2LayoutActive === true
-              foreground: root.foreground
-              accent: root.accent
-              uiScale: root.uiScale
-              onClicked: root.controller.beginBarEditing()
-            }
-
-            Text {
-              visible: root.controller.v2LayoutActive !== true
-              width: parent.width
-              text: "Switch the Shibumi shell to V2 to edit dividers and slots."
-              color: root.foreground
-              opacity: 0.42
-              wrapMode: Text.WordWrap
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
           }
         }
       }
