@@ -20,7 +20,8 @@ Item {
     : value === "omacom" ? 550 / 112 : 656 / 192
 
   implicitWidth: 110
-  implicitHeight: 28
+  implicitHeight: 24
+  clip: true
 
   Text {
     visible: root.shibumiWordmark
@@ -29,7 +30,7 @@ Item {
     color: root.foreground
     renderType: Text.NativeRendering
     font.family: root.fontFamily
-    font.pixelSize: 11
+    font.pixelSize: 10
     font.weight: Font.Medium
     font.letterSpacing: 1.2
   }
@@ -38,11 +39,11 @@ Item {
     visible: root.archWordmark
     anchors.centerIn: parent
     width: Math.min(parent.width, 100)
-    height: 22
+    height: 19
 
     Row {
       anchors.centerIn: parent
-      height: 17
+      height: 15
       spacing: 3
 
       Text {
@@ -51,13 +52,13 @@ Item {
         color: root.foreground
         renderType: Text.QtRendering
         font.family: root.fontFamily
-        font.pixelSize: 15
+        font.pixelSize: 13
       }
 
       FlatTintedImage {
         anchors.verticalCenter: parent.verticalCenter
         width: Math.round(height * 605 / 231)
-        height: 13
+        height: 11
         source: Qt.resolvedUrl("assets/arch-header-arch.png")
         tint: root.foreground
       }
@@ -65,7 +66,7 @@ Item {
       FlatTintedImage {
         anchors.verticalCenter: parent.verticalCenter
         width: Math.round(height * 549 / 230)
-        height: 13
+        height: 11
         source: Qt.resolvedUrl("assets/arch-header-linux.png")
         tint: root.foreground
       }
@@ -75,8 +76,8 @@ Item {
   FlatTintedImage {
     visible: !root.shibumiWordmark && !root.archWordmark
     anchors.centerIn: parent
-    height: root.value === "hyprland" ? 15
-      : root.value === "omacom" ? 17 : 22
+    height: root.value === "hyprland" ? 12
+      : root.value === "omacom" ? 14 : 18
     width: Math.min(parent.width, Math.round(height * root.imageAspect))
     source: root.imageSource
     tint: root.foreground

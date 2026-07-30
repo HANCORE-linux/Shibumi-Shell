@@ -11,6 +11,8 @@ Column {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property bool v2Active: false
+  property bool showSurface: true
+  property bool showAccent: true
   readonly property var effectOptions: v2Active
     ? [
         {
@@ -20,7 +22,7 @@ Column {
         },
         {
           key: "panelBorder",
-          label: "Panel & tooltip border",
+          label: "Panel + tooltip",
           fallback: true
         }
       ]
@@ -47,22 +49,28 @@ Column {
     { value: "foreground", label: "FG" }
   ]
   readonly property bool ready:
-    effectRepeater.count === effectOptions.length
-    && radiusRepeater.count === radiusOptions.length
-    && colorRepeater.count === colorOptions.length
+    effectRepeater.count === (showSurface ? effectOptions.length : 0)
+    && radiusRepeater.count === (showSurface ? radiusOptions.length : 0)
+    && colorRepeater.count === (showAccent ? colorOptions.length : 0)
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(8)
 
-  SectionLabel { text: "BAR SURFACE" }
+  SectionLabel {
+    visible: root.showSurface
+    text: "BAR SURFACE"
+  }
 
   Row {
+    id: effectRow
     width: parent.width
-    spacing: Commons.Style.space(4)
+    height: Commons.Style.space(30)
+    spacing: Commons.Style.space(8)
+    visible: root.showSurface
 
     Repeater {
       id: effectRepeater
-      model: root.effectOptions
+      model: root.showSurface ? root.effectOptions : []
 
       delegate: CompactSettingChoice {
         required property var modelData
@@ -76,7 +84,8 @@ Column {
           : root.controller.barPresentation[modelData.key] === true
         foreground: root.foreground
         accent: root.accent
-        fontSize: Commons.Style.font.caption * root.uiScale * 0.92
+        uiScale: root.uiScale
+        controlHeight: effectRow.height
         onClicked: root.controller.setBarPresentation(
           modelData.key, !selected)
       }
@@ -86,10 +95,11 @@ Column {
   Row {
     width: parent.width
     spacing: Commons.Style.space(4)
+    visible: root.showSurface && root.radiusOptions.length > 0
 
     Repeater {
       id: radiusRepeater
-      model: root.radiusOptions
+      model: root.showSurface ? root.radiusOptions : []
 
       delegate: CompactSettingChoice {
         required property var modelData
@@ -107,16 +117,20 @@ Column {
     }
   }
 
-  SectionLabel { text: "BAR ACCENT" }
+  SectionLabel {
+    visible: root.showAccent
+    text: "BAR ACCENT"
+  }
 
   Grid {
     width: parent.width
     columns: 9
     columnSpacing: Commons.Style.space(6)
+    visible: root.showAccent
 
     Repeater {
       id: colorRepeater
-      model: root.colorOptions
+      model: root.showAccent ? root.colorOptions : []
 
       delegate: Rectangle {
         id: swatch
@@ -124,13 +138,19 @@ Column {
         readonly property bool selected:
           String(root.controller.barPresentation.accent || "color01")
           === modelData.value
+        readonly property bool hovered: swatchMouse.containsMouse
         width: (parent.width - parent.columnSpacing * 8) / 9
         height: Commons.Style.space(26)
         radius: root.controller.controlRadius
         color: root.controller.accentColor(modelData.value)
-        border.width: selected ? 2 : 1
-        border.color: selected ? root.foreground
-          : root.controller.controlBorderColor
+        border.width: 1
+        border.color: root.controller.controlBorderColor
+        scale: hovered ? 1.04 : 1
+        z: hovered ? 1 : 0
+
+        Behavior on scale {
+          NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+        }
 
         Text {
           anchors.centerIn: parent
@@ -141,8 +161,21 @@ Column {
           font.weight: Font.Medium
         }
 
+        Rectangle {
+          anchors.horizontalCenter: parent.horizontalCenter
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: Commons.Style.space(3)
+          width: Commons.Style.space(18)
+          height: 2
+          radius: 1
+          visible: swatch.selected
+          color: root.controller.contrastColor(swatch.modelData.value)
+        }
+
         MouseArea {
+          id: swatchMouse
           anchors.fill: parent
+          hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.controller.setBarPresentation(
             "accent", swatch.modelData.value)

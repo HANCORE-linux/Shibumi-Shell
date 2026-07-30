@@ -582,6 +582,14 @@ Item {
     return false
   }
 
+  function barWidgetPage(pluginId, fallbackPage) {
+    const widget = findPanelWidget(pluginId)
+    return widget && widget.panelLoaded === true && widget.panelItem
+      && widget.panelItem.settingsPage !== undefined
+      ? String(widget.panelItem.settingsPage || fallbackPage || "")
+      : String(fallbackPage || "")
+  }
+
   function openConfigPanel() {
     return summonBarWidget("hancore.shibumi.control-center")
   }
@@ -602,6 +610,17 @@ Item {
     return true
   }
 
+  function widgetRestoreSatisfied(pluginId, page) {
+    const id = String(pluginId || "")
+    const requestedPage = String(page || "")
+    const widget = findPanelWidget(id)
+    if (!widget || widget.opened !== true) return false
+    if (id !== "hancore.shibumi.control-center"
+        || requestedPage === "") return true
+    return widget.panelLoaded === true && widget.panelItem
+      && String(widget.panelItem.settingsPage || "") === requestedPage
+  }
+
   Timer {
     id: widgetRestoreTimer
     interval: 80
@@ -609,11 +628,15 @@ Item {
 
     onTriggered: {
       root.pendingWidgetRestoreAttempts++
-      if (root.pendingWidgetRestoreId === "hancore.shibumi.control-center"
-          && root.pendingWidgetRestorePage !== "") {
-        root.openConfigPage(root.pendingWidgetRestorePage)
-      } else {
-        root.summonBarWidget(root.pendingWidgetRestoreId)
+      if (!root.widgetRestoreSatisfied(root.pendingWidgetRestoreId,
+          root.pendingWidgetRestorePage)) {
+        if (root.pendingWidgetRestoreId
+            === "hancore.shibumi.control-center"
+            && root.pendingWidgetRestorePage !== "") {
+          root.openConfigPage(root.pendingWidgetRestorePage)
+        } else {
+          root.summonBarWidget(root.pendingWidgetRestoreId)
+        }
       }
       // A shell-style change can rebuild the layout delegates over more than
       // one event-loop turn. Reassert the idempotent open request long enough
@@ -818,6 +841,10 @@ Item {
       } catch (error) {
         // Plain strings remain convenient for CLI callers.
       }
+      if (root.isBarWidgetOpen("hancore.shibumi.control-center"))
+        root.scheduleWidgetRestore(
+          "hancore.shibumi.control-center",
+          root.barWidgetPage("hancore.shibumi.control-center", "bars"))
       return state.setPresentationSetting(name, value)
         ? "ok" : "rejected"
     }
@@ -834,7 +861,8 @@ Item {
       const state = root.pluginService("hancore.shibumi.state")
       if (root.isBarWidgetOpen("hancore.shibumi.control-center"))
         root.scheduleWidgetRestore(
-          "hancore.shibumi.control-center", "functions")
+          "hancore.shibumi.control-center",
+          root.barWidgetPage("hancore.shibumi.control-center", "bars"))
       return state && typeof state.setPresentationSetting === "function"
           && state.setPresentationSetting("shellStyle", value)
         ? "ok" : "rejected"

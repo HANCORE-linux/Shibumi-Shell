@@ -19,7 +19,7 @@ Rectangle {
   signal toggled()
   signal editRequested()
 
-  implicitHeight: Commons.Style.space(78)
+  implicitHeight: Commons.Style.space(66)
   radius: controller.controlRadius
   color: pointer.containsMouse
     ? controller.controlHoverFillColor : controller.controlFillColor
@@ -37,12 +37,12 @@ Rectangle {
 
   Row {
     anchors.fill: parent
-    anchors.margins: Commons.Style.space(10)
-    spacing: Commons.Style.space(10)
+    anchors.margins: Commons.Style.space(8)
+    spacing: Commons.Style.space(8)
 
     Rectangle {
       anchors.verticalCenter: parent.verticalCenter
-      width: Commons.Style.space(42)
+      width: Commons.Style.space(36)
       height: width
       radius: root.controller.controlRadius
       color: Commons.Util.alpha(root.accent, 0.09)
@@ -53,7 +53,7 @@ Rectangle {
         anchors.centerIn: parent
         text: root.glyph
         color: root.inserted ? root.accent : root.foreground
-        font.pixelSize: Commons.Style.space(22) * root.uiScale
+        font.pixelSize: Commons.Style.space(19) * root.uiScale
         font.weight: Font.Medium
         fill: 0
       }
@@ -62,7 +62,7 @@ Rectangle {
     Column {
       anchors.verticalCenter: parent.verticalCenter
       width: parent.width - x - enableSwitch.width - parent.spacing
-      spacing: Commons.Style.space(4)
+      spacing: Commons.Style.space(3)
 
       Text {
         width: parent.width

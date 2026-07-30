@@ -97,7 +97,7 @@ Column {
     Rectangle {
       id: addModule
       width: (moduleDeck.width - moduleDeck.spacing) / 2
-      height: Commons.Style.space(78)
+      height: Commons.Style.space(66)
       radius: root.controller.controlRadius
       color: addPointer.containsMouse
         ? root.controller.controlHoverFillColor : "transparent"
@@ -106,13 +106,13 @@ Column {
 
       Column {
         anchors.centerIn: parent
-        spacing: Commons.Style.space(5)
+        spacing: Commons.Style.space(3)
 
         IconText {
           anchors.horizontalCenter: parent.horizontalCenter
           text: "add"
           color: root.accent
-          font.pixelSize: Commons.Style.space(24) * root.uiScale
+          font.pixelSize: Commons.Style.space(20) * root.uiScale
           font.weight: Font.Medium
           fill: 0
         }

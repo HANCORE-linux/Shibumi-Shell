@@ -277,6 +277,7 @@ Column {
       clip: true
 
       Flickable {
+        id: widgetListFlick
         anchors.fill: parent
         anchors.margins: Commons.Style.space(5)
         contentWidth: width
@@ -383,6 +384,19 @@ Column {
           }
         }
       }
+
+      ThinScrollBar {
+        z: 2
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Commons.Style.space(6)
+        anchors.rightMargin: 1
+        anchors.bottomMargin: Commons.Style.space(6)
+        flickable: widgetListFlick
+        foreground: root.foreground
+        accent: root.accent
+      }
     }
 
     Rectangle {
@@ -395,6 +409,7 @@ Column {
       clip: true
 
       Flickable {
+        id: inspectorFlick
         anchors.fill: parent
         anchors.margins: Commons.Style.space(10)
         contentWidth: width
@@ -811,6 +826,19 @@ Column {
             }
           }
         }
+      }
+
+      ThinScrollBar {
+        z: 2
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Commons.Style.space(10)
+        anchors.rightMargin: 1
+        anchors.bottomMargin: Commons.Style.space(10)
+        flickable: inspectorFlick
+        foreground: root.foreground
+        accent: root.accent
       }
     }
   }

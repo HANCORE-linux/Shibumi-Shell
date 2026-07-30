@@ -128,6 +128,18 @@ rg -Fq 'name === "shellStyle"' \
 rg -Fq 'restoreBar.scheduleWidgetRestore(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style changes do not preserve the open Control Center page"
+rg -Fq '"accent", "border", "panelBorder", "frost", "shadow"' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "bar presentation changes do not preserve the Control Center page"
+rg -Fq 'barsSurfaceActivationY' \
+  "$control_dir/ControlSettings.qml" \
+  || fail "bar surface route cannot activate at the scroll boundary"
+rg -Fq 'anchors.bottomMargin: Commons.Style.space(3)' \
+  "$control_dir/BarSurfaceSettings.qml" \
+  || fail "selected accent does not use the QS-Dots underline treatment"
+rg -Fq 'scale: hovered ? 1.04 : 1' \
+  "$control_dir/BarSurfaceSettings.qml" \
+  || fail "accent hover feedback lost its QS-Dots motion treatment"
 if rg -q 'centerOnBar:[[:space:]]*true' \
     "$control_dir/ControlCenterPanel.qml"; then
   fail "Control Center is centered instead of anchored to its launcher widget"
@@ -156,9 +168,12 @@ for configure_contract in \
   'ControlSettings.qml:sourceComponent: root.pageComponent(' \
   'ControlSettings.qml:id: activeBarPage' \
   'ControlSettings.qml:ActiveBarSettingsPage {' \
+  'ControlSettings.qml:function scrollToBarSurface()' \
+  'ControlSettings.qml:onSurfaceRequested: root.scrollToBarSurface()' \
   'ConfigureLandingPage.qml:function openRoute(pageId)' \
   'ConfigureLandingPage.qml:function showRoute(pageId)' \
   'ConfigureLandingPage.qml:signal backRequested()' \
+  'ConfigureLandingPage.qml:signal surfaceRequested()' \
   'ConfigureLandingPage.qml:context.bezierCurveTo(' \
   'ConfigureLandingPage.qml:routeColumn.width + routeGraph.portOffset' \
   'ConfigureLandingPage.qml:context.arc(startX, startY, 3.6, 0, Math.PI * 2)' \
@@ -172,7 +187,11 @@ for configure_contract in \
   'ConfigureLandingPage.qml:return 0' \
   'ConfigureLandingPage.qml:context.lineTo(nodeX, lastY)' \
   'ConfigureLandingPage.qml:context.arc(nodeX, nodeY, 3.6, 0, Math.PI * 2)' \
-  'ConfigureLandingPage.qml:if (pageId !== selectedPage) pageRequested(pageId)' \
+  'ConfigureLandingPage.qml:text: "Surface & Color"' \
+  'ConfigureLandingPage.qml:activeFocusOnTab: visible' \
+  'ConfigureLandingPage.qml:if (root.surfaceRouteActive) {' \
+  'ConfigureLandingPage.qml:context.lineTo(railX, nodeY)' \
+  'ConfigureLandingPage.qml:root.pageRequested(routeCard.modelData.id)' \
   'ConfigureLandingPage.qml:? root.targetY(modelData.id) + homeY : homeY' \
   'ConfigureLandingPage.qml:? Commons.Style.space(154) : routeColumn.width' \
   'ConfigureLandingPage.qml:enabled: !root.transitioning || root.detailOpen' \
@@ -180,6 +199,8 @@ for configure_contract in \
   'ConfigureLandingPage.qml:opacity: 1' \
   'ConfigureLandingPage.qml:Behavior on x {' \
   'ConfigureLandingPage.qml:interval: 330' \
+  'ActiveBarSettingsPage.qml:surfaceSectionY: barAccentSettings.y' \
+  'ActiveBarSettingsPage.qml:V1 split/gap controls stay hidden.' \
   'ControlSearchPage.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
@@ -551,7 +572,7 @@ for command in omarchy-system-lock 'systemctl", "suspend' \
 done
 
 for label in Status Battery \
-    'Bar border' 'Panel & tooltip border' Border Frost Shadow \
+    'Bar border' 'Panel + tooltip' Border Frost Shadow \
     'Radius 12' 'Radius 6'; do
   rg -Fq "label: \"$label\"" "$control_dir" \
     --glob '*.qml' --glob '*.js' \
@@ -560,16 +581,59 @@ done
 
 for surface_contract in \
   'property bool v2Active: false' \
+  'property bool showSurface: true' \
+  'property bool showAccent: true' \
   'readonly property var effectOptions: v2Active' \
   'readonly property var radiusOptions: v2Active' \
-  'effectRepeater.count === effectOptions.length' \
-  'radiusRepeater.count === radiusOptions.length'; do
+  'height: Commons.Style.space(30)' \
+  'spacing: Commons.Style.space(8)' \
+  'controlHeight: effectRow.height' \
+  'uiScale: root.uiScale' \
+  'effectRepeater.count === (showSurface ? effectOptions.length : 0)' \
+  'radiusRepeater.count === (showSurface ? radiusOptions.length : 0)' \
+  'colorRepeater.count === (showAccent ? colorOptions.length : 0)'; do
   rg -Fq "$surface_contract" "$control_dir/BarSurfaceSettings.qml" \
     || fail "version-aware bar-surface contract drifted: $surface_contract"
 done
 rg -Fq 'v2Active: root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "active bar version is not forwarded to Bar Surface"
+for split_surface_contract in \
+    'id: primaryControlRow' \
+    'id: positionChoiceRow' \
+    'id: barAccentSettings' \
+    'showSurface: true' \
+    'showAccent: false' \
+    'showSurface: false' \
+    'showAccent: true'; do
+  rg -Fq "$split_surface_contract" \
+    "$control_dir/ActiveBarSettingsPage.qml" \
+    || fail "compact Position/Surface split drifted: $split_surface_contract"
+done
+if rg -Fq 'fontSize: Commons.Style.font.caption' \
+    "$control_dir/BarSurfaceSettings.qml"; then
+  fail "bar-surface buttons retain a smaller typography override"
+fi
+for active_bar_density in \
+    'height: Commons.Style.space(62)' \
+    'font.pixelSize: Commons.Style.space(20) * root.uiScale'; do
+  rg -Fq "$active_bar_density" \
+    "$control_dir/ActiveBarSettingsPage.qml" \
+    || fail "active-bar status card is not compact: $active_bar_density"
+done
+if rg -Fq 'text: "ACTIVE BAR"' \
+    "$control_dir/ActiveBarSettingsPage.qml"; then
+  fail "Bars repeats the already explicit V1/V2 active state"
+fi
+position_line=$(rg -n -m1 'SectionLabel \{ text: "POSITION" \}' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+surface_line=$(rg -n -m1 'id: barSurfaceSettings' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+form_line=$(rg -n -m1 'SectionLabel \{ text: "BAR FORM" \}' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+if (( surface_line <= position_line || surface_line >= form_line )); then
+  fail "Surface & Color is not directly ordered after Position"
+fi
 
 for color_contract in \
   '{ value: "color01", label: "01" }' \
@@ -736,14 +800,48 @@ if rg -q 'Regular|Minimal|heightGroup|barPresentation\.height|Ui\.Toggle|Ui\.Dro
   fail "retired oversized setting controls remain"
 fi
 
-rg -q 'color: panel\.dividerColor' "$control_dir/ControlCenterPanel.qml" \
-  || fail "scroll indicator is not a neutral divider"
+[[ -f $control_dir/ThinScrollBar.qml ]] \
+  || fail "shared thin scrollbar is missing"
+for scrollbar_contract in \
+    'width: root.engaged ? 3 : 2' \
+    'visible: active && !!flickable && flickable.visible && scrollable' \
+    'root.flickable.contentY = ratio * contentRange' \
+    'flickable.contentHeight > flickable.height + 0.5'; do
+  rg -Fq "$scrollbar_contract" "$control_dir/ThinScrollBar.qml" \
+    || fail "thin scrollbar contract drifted: $scrollbar_contract"
+done
+scrollbar_instances=$(rg -n '^[[:space:]]*ThinScrollBar \{' \
+  "$control_dir/ControlCenterPanel.qml" \
+  "$control_dir/ControlSettings.qml" \
+  "$control_dir/WidgetAppearanceWorkbench.qml" | wc -l)
+[[ $scrollbar_instances -eq 7 ]] \
+  || fail "expected 7 scroll surfaces, found $scrollbar_instances"
+for scroll_surface in settingsFlick quickFlick configureLandingFlick pageFlick \
+    resultsFlick widgetListFlick inspectorFlick; do
+  rg -Fq "flickable: $scroll_surface" "$control_dir" --glob '*.qml' \
+    || fail "scroll surface has no thin scrollbar: $scroll_surface"
+done
+if rg -q '(^|[[:space:]])ScrollBar[[:space:].{]' \
+    "$control_dir" --glob '*.qml'; then
+  fail "control center depends on a foreign styled scrollbar"
+fi
 rg -q 'id: settingsViewport' "$control_dir/ControlCenterPanel.qml" \
   || fail "settings viewport is missing"
 sed -n '/id: settingsViewport/,/Flickable {/p' \
   "$control_dir/ControlCenterPanel.qml" | rg -q 'clip: true' \
   || fail "settings viewport does not clip the scroll indicator"
-rg -Fq 'settingsViewport.height - height' "$control_dir/ControlCenterPanel.qml" \
-  || fail "scroll indicator is not clamped to the settings viewport"
+
+for density_contract in \
+    'LogoSettingsPage.qml:height: Commons.Style.space(56)' \
+    'WordmarkPreview.qml:implicitHeight: 24' \
+    'WorkspaceMarkerPreviewCard.qml:height: Commons.Style.space(68)' \
+    'BarStylePreviewCard.qml:height: Commons.Style.space(92)' \
+    'WidgetModuleTile.qml:implicitHeight: Commons.Style.space(66)' \
+    'AppearanceWidgetTile.qml:implicitHeight: Commons.Style.space(62)'; do
+  file=${density_contract%%:*}
+  label=${density_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "compact card geometry drifted: $file"
+done
 
 printf 'control center regression passed\n'

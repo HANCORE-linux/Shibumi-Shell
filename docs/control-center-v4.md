@@ -46,6 +46,13 @@ demi-bold values and navigation selection, and a single 24-pixel-equivalent
 demi-bold page-title tier. Micro-sized one-off labels and unrelated font
 families are avoided.
 
+Every vertically scrollable Control Center surface exposes the same slim,
+theme-driven side rail. It appears only when content exceeds the viewport,
+uses a two-pixel thumb that grows to three pixels on hover or drag, and keeps a
+wider invisible pointer target. Repeated preview and module cards use compact
+geometry to reduce unnecessary scrolling while retaining readable labels and
+usable pointer targets.
+
 The Widgets source filter uses one shared caption size, medium weight, and
 vertical text box for `SOURCE` and every provider option. Selection changes
 color and underline only; it never shifts the option baseline or changes its
@@ -91,6 +98,18 @@ accent; inactive nodes remain neutral. The landing introduction collapses
 structurally when the master column opens, so every visible route remains
 inside its actual pointer hit-test bounds.
 
+Bars adds one contextual child node, `Surface & Color`, only while the Bars
+editor and a Shibumi bar are active. It is an in-page anchor rather than a
+nested settings page: selecting it scrolls the existing editor to the
+version-gated accent/detail block after Bar Form, while selecting Bars returns
+to the top of the same editor. Position and the compact border controls share
+one two-column row above Bar Form. The child node disappears for the stock
+Omarchy bar and every other Configure route. When the child is active, the
+complete branch from the Bars node to `Surface & Color` uses the accent rather
+than highlighting only the final connector. The shared scrollspy activation
+line is the upper two thirds of the visible detail viewport, so a child route
+activates while its section enters focus rather than only at the scroll limit.
+
 The selector distinguishes three separate outcomes:
 
 - **Shibumi V1** selects the V1 presentation immediately; selecting its
@@ -118,6 +137,13 @@ restore, and left/center/right slot capacity with valid minimum and maximum
 limits. V2 never exposes V1 gap-animation or split-island controls. The former
 Layout route remains only as an internal compatibility target and is absent
 from Configure, search, Appearance, and Bars navigation.
+
+Accent swatches keep a neutral one-pixel border. Selection is communicated by
+the QS-Dots two-pixel underline beneath the palette number or `FG`, while a
+short scale transition supplies pointer hover feedback. Bar presentation
+mutations preserve the active Control Center route across owner rebuilds.
+During V2 layout editing, compact bar forms include empty drop-slot width in
+their temporary editor surface so targets remain inside the visible bar frame.
 
 The Bars page continues that visual grammar with labeled circular
 `Snapshot → Apply → Verify` nodes. During a handoff the current stage is
@@ -182,7 +208,7 @@ not secondary sections inside Appearance:
   Screenshots and videos retain Tanzaku, Hearthstone, and Carousel.
 - **Bars** owns the active bar's supported surface and accent settings. V1
   exposes border, frost, shadow, and Radius 12/6. V2 exposes Bar Border and
-  Panel & Tooltip Border; its fixed V2 radii and unsupported V1 effects are not
+  Panel + Tooltip; its fixed V2 radii and unsupported V1 effects are not
   presented as editable settings;
   the same tokens are consumed by both the V1 and V2 renderers.
 - **Logo** owns launcher wordmark/icon format and visual choices.

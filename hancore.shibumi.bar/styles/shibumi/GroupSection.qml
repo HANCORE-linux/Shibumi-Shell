@@ -41,6 +41,10 @@ Item {
     && contentItem.separatorGeometry ? contentItem.separatorGeometry : []
   readonly property var stageBudgetWidths: contentItem
     && contentItem.stageBudgetWidths ? contentItem.stageBudgetWidths : [0, 0, 0, 0]
+  readonly property real editingWidthOverhead: v2Editing && contentItem
+    ? Math.max(0, Number(contentItem.layoutWidth || 0)
+      - Number(stageBudgetWidths[0] || 0))
+    : 0
   readonly property real minimumResponsiveWidth: contentItem
     && contentItem.minimumResponsiveWidth !== undefined
       ? Number(contentItem.minimumResponsiveWidth) || 0 : implicitWidth

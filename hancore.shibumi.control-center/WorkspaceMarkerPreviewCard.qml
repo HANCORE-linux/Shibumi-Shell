@@ -21,7 +21,7 @@ Rectangle {
     return Qt.rgba(foreground.r, foreground.g, foreground.b, alpha)
   }
 
-  height: Commons.Style.space(78)
+  height: Commons.Style.space(68)
   radius: controller.controlRadius
   color: selected || pointer.containsMouse
     ? controller.controlHoverFillColor : controller.controlFillColor
@@ -32,7 +32,7 @@ Rectangle {
     id: markerRow
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.top: parent.top
-    anchors.topMargin: Commons.Style.space(10)
+    anchors.topMargin: Commons.Style.space(7)
     spacing: root.styleValue === "rings" || root.styleValue === "aurora"
       ? Commons.Style.space(3) : Commons.Style.space(2)
 
@@ -159,7 +159,7 @@ Rectangle {
     anchors.bottom: parent.bottom
     anchors.leftMargin: Commons.Style.space(7)
     anchors.rightMargin: Commons.Style.space(7)
-    anchors.bottomMargin: Commons.Style.space(7)
+    anchors.bottomMargin: Commons.Style.space(6)
     spacing: Commons.Style.space(4)
 
     Text {

@@ -448,7 +448,11 @@ ShibumiPanel {
     // A shell-style mutation may synchronously rebuild that owner, so enqueue
     // the restore before touching state instead of consulting a binding that
     // can disappear during the mutation.
-    const preservePanel = String(name || "") === "shellStyle"
+    const presentationName = String(name || "")
+    const preservePanel = [
+      "accent", "border", "panelBorder", "frost", "shadow",
+      "radius", "shellStyle"
+    ].indexOf(presentationName) >= 0
     const preservePage = settings.restorePage
     const restoreBar = bar
     if (preservePanel && restoreBar
@@ -740,16 +744,16 @@ ShibumiPanel {
           }
         }
 
-        Rectangle {
+        ThinScrollBar {
           anchors.right: parent.right
-          anchors.rightMargin: -Commons.Style.space(2)
-          width: 1
-          height: Math.max(Commons.Style.space(18),
-            settingsViewport.height * settingsFlick.visibleArea.heightRatio)
-          y: Math.max(0, Math.min(settingsViewport.height - height,
-            settingsFlick.visibleArea.yPosition * settingsViewport.height))
-          visible: settingsFlick.visibleArea.heightRatio < 0.999
-          color: panel.dividerColor
+          anchors.top: parent.top
+          anchors.bottom: parent.bottom
+          anchors.topMargin: Commons.Style.space(4)
+          anchors.bottomMargin: Commons.Style.space(4)
+          anchors.rightMargin: Commons.Style.space(2)
+          flickable: settingsFlick
+          foreground: panel.marketText
+          accent: panel.marketAccent
         }
       }
     }

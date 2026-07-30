@@ -11,6 +11,7 @@ ShellRoot {
   property int phase: 0
   property int ticks: 0
   property var clickTargets: []
+  property bool surfaceScrollRequested: false
   readonly property bool holdWidgetEditor:
     Quickshell.env("SHIBUMI_SMOKE_HOLD_EDITOR") === "1"
 
@@ -212,12 +213,12 @@ ShellRoot {
             + " owner=" + widget.opened
             + " type=" + typeof fakeBar.scheduleWidgetRestore)
         if (!panel.setBarPresentation("shellStyle", "full")
-            || fakeBar.restoreWrites !== 1
+            || fakeBar.restoreWrites !== 3
             || fakeBar.restoredWidgetId !== "hancore.shibumi.control-center"
             || fakeBar.restoredPage !== "functions"
             || stateService.config.presentation.shellStyle !== "full"
             || fakeShell.writes !== 10)
-          return root.fail("shell-style change did not preserve the open page"
+          return root.fail("bar presentation changes did not preserve the open page"
             + " restore=" + fakeBar.restoreWrites
             + " id=" + fakeBar.restoredWidgetId
             + " page=" + fakeBar.restoredPage
@@ -326,6 +327,22 @@ ShellRoot {
             + " page-v2=" + (panel && panel.settingsPageItem
               ? panel.settingsPageItem.v2Active : "missing")
             + " shell=" + (panel ? panel.activeShell : "missing"))
+        if (!root.surfaceScrollRequested) {
+          if (panel.barsSurfaceActivationY < 0
+              || panel.barsDetailScrollMaximum <= 0
+              || panel.barsSurfaceActivationY
+                >= panel.barsDetailScrollMaximum - 1
+              || !panel.scrollToBarSurface())
+            return root.fail("bar child route does not activate before scroll end"
+              + " activation=" + panel.barsSurfaceActivationY
+              + " maximum=" + panel.barsDetailScrollMaximum)
+          root.surfaceScrollRequested = true
+          root.ticks = 0
+          return
+        }
+        if (root.ticks < 24) return
+        if (!panel.barsSurfaceRouteActive)
+          return root.fail("bar child route did not follow detail scrolling")
         panel.v2LayoutActive = false
         if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
             || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)

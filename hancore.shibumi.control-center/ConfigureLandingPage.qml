@@ -14,6 +14,8 @@ Column {
   property bool motionActive: false
   property bool activePage: false
   property bool detailOpen: false
+  property bool surfaceRouteAvailable: false
+  property bool surfaceRouteActive: false
   property bool transitioning: false
   property string selectedPage: ""
   property int hoveredIndex: -1
@@ -40,7 +42,18 @@ Column {
     ? hoveredIndex : Math.max(0, Math.min(focusIndex, routeOptions.length - 1))
   readonly property var previewRoute: routeOptions.length > 0
     ? routeOptions[previewIndex] : ({ id: "", label: "", detail: "" })
+  readonly property int barsRouteIndex: {
+    for (let index = 0; index < routeOptions.length; index++) {
+      if (routeOptions[index].id === "bars") return index
+    }
+    return -1
+  }
+  readonly property bool barsSurfaceVisible: detailOpen
+    && selectedPage === "bars" && surfaceRouteAvailable
+  readonly property real surfaceRouteExtension: barsSurfaceVisible
+    ? Commons.Style.space(34) : 0
   signal pageRequested(string pageId)
+  signal surfaceRequested()
   signal backRequested()
 
   width: parent ? parent.width : 1
@@ -54,6 +67,13 @@ Column {
   function targetY(pageId) {
     void(pageId)
     return 0
+  }
+
+  function routeHomeY(index) {
+    const base = index
+      * (Commons.Style.space(43) + Commons.Style.space(7))
+    return base + (root.barsSurfaceVisible
+      && index > root.barsRouteIndex ? root.surfaceRouteExtension : 0)
   }
 
   function openRoute(pageId) {
@@ -90,7 +110,7 @@ Column {
     if (focusIndex < 0 || focusIndex >= routeOptions.length) return false
     const pageId = routeOptions[focusIndex].id
     if (detailOpen) {
-      if (pageId !== selectedPage) pageRequested(pageId)
+      pageRequested(pageId)
       return true
     }
     return openRoute(pageId)
@@ -247,9 +267,11 @@ Column {
         context.clearRect(0, 0, width, height)
         if (!root.detailOpen || root.routeOptions.length < 1) return
         const nodeX = Commons.Style.space(4)
-        const firstY = Commons.Style.space(43) / 2
-        const lastY = firstY + (root.routeOptions.length - 1)
-          * (Commons.Style.space(43) + Commons.Style.space(7))
+        const firstItem = routeRepeater.itemAt(0)
+        const lastItem = routeRepeater.itemAt(root.routeOptions.length - 1)
+        if (!firstItem || !lastItem) return
+        const firstY = firstItem.homeY + firstItem.homeHeight / 2
+        const lastY = lastItem.homeY + lastItem.homeHeight / 2
         context.strokeStyle = Commons.Util.alpha(root.foreground, 0.18)
         context.lineWidth = 1
         context.beginPath()
@@ -258,8 +280,9 @@ Column {
         context.stroke()
 
         for (let index = 0; index < root.routeOptions.length; index++) {
-          const nodeY = firstY + index
-            * (Commons.Style.space(43) + Commons.Style.space(7))
+          const routeItem = routeRepeater.itemAt(index)
+          if (!routeItem) continue
+          const nodeY = routeItem.homeY + routeItem.homeHeight / 2
           const active = root.routeOptions[index].id === root.selectedPage
           context.strokeStyle = active
             ? root.accent : Commons.Util.alpha(root.foreground, 0.18)
@@ -289,6 +312,9 @@ Column {
         function onDetailOpenChanged() {
           detailRouteCanvas.requestPaint()
         }
+        function onBarsSurfaceVisibleChanged() {
+          detailRouteCanvas.requestPaint()
+        }
       }
 
       onWidthChanged: requestPaint()
@@ -304,6 +330,7 @@ Column {
       implicitHeight: root.routeOptions.length * Commons.Style.space(43)
         + Math.max(0, root.routeOptions.length - 1)
           * Commons.Style.space(7)
+        + root.surfaceRouteExtension
 
       Repeater {
         id: routeRepeater
@@ -313,8 +340,7 @@ Column {
           id: routeCard
           required property var modelData
           required property int index
-          readonly property real homeY: index
-            * (Commons.Style.space(43) + Commons.Style.space(7))
+          readonly property real homeY: root.routeHomeY(index)
           readonly property real homeHeight: Commons.Style.space(43)
           readonly property bool selected:
             root.selectedPage === modelData.id
@@ -409,13 +435,135 @@ Column {
             onClicked: {
               if (root.detailOpen) {
                 root.focusIndex = routeCard.index
-                if (!routeCard.selected)
-                  root.pageRequested(routeCard.modelData.id)
+                root.pageRequested(routeCard.modelData.id)
               } else {
                 root.openRoute(routeCard.modelData.id)
               }
             }
           }
+        }
+      }
+
+      Canvas {
+        id: surfaceRouteCanvas
+        property real barsNodeY: root.barsRouteIndex >= 0
+          ? root.routeHomeY(root.barsRouteIndex)
+            + Commons.Style.space(43) / 2
+          : 0
+        property real childNodeY: surfaceRouteRow.y
+          + surfaceRouteRow.height / 2
+
+        x: -Commons.Style.space(14)
+        y: barsNodeY
+        z: 5
+        width: Commons.Style.space(44)
+        height: Math.max(1, childNodeY - barsNodeY
+          + Commons.Style.space(4))
+        visible: root.barsSurfaceVisible
+        antialiasing: true
+
+        onPaint: {
+          const context = getContext("2d")
+          context.reset()
+          context.clearRect(0, 0, width, height)
+          if (!root.barsSurfaceVisible) return
+          const railX = Commons.Style.space(4)
+          const nodeX = Commons.Style.space(34)
+          const nodeY = height - Commons.Style.space(4)
+          const routeColor = root.surfaceRouteActive
+            ? root.accent : Commons.Util.alpha(root.foreground, 0.24)
+          context.beginPath()
+          if (root.surfaceRouteActive) {
+            context.moveTo(railX, 0)
+            context.lineTo(railX, nodeY)
+          } else {
+            context.moveTo(railX, nodeY)
+          }
+          context.lineTo(nodeX, nodeY)
+          context.strokeStyle = routeColor
+          context.lineWidth = root.surfaceRouteActive ? 1.5 : 1
+          context.stroke()
+          context.beginPath()
+          context.arc(nodeX, nodeY, 3.2, 0, Math.PI * 2)
+          context.fillStyle = routeColor
+          context.fill()
+        }
+
+        Connections {
+          target: root
+          function onSurfaceRouteActiveChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+          function onBarsSurfaceVisibleChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+          function onForegroundChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+          function onAccentChanged() {
+            surfaceRouteCanvas.requestPaint()
+          }
+        }
+
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        Component.onCompleted: requestPaint()
+      }
+
+      Rectangle {
+        id: surfaceRouteRow
+        x: Commons.Style.space(24)
+        y: root.barsRouteIndex >= 0
+          ? root.routeHomeY(root.barsRouteIndex)
+            + Commons.Style.space(47)
+          : 0
+        z: 4
+        width: Math.max(1, Commons.Style.space(130))
+        height: Commons.Style.space(27)
+        visible: root.barsSurfaceVisible
+        activeFocusOnTab: visible
+        radius: root.controller.controlRadius
+        color: root.surfaceRouteActive || activeFocus
+            || surfaceRoutePointer.containsMouse
+          ? root.controller.controlHoverFillColor : "transparent"
+        border.width: root.surfaceRouteActive || activeFocus ? 1 : 0
+        border.color: root.surfaceRouteActive
+          ? root.accent : root.controller.controlBorderColor
+
+        Text {
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.leftMargin: Commons.Style.space(9)
+          anchors.rightMargin: Commons.Style.space(7)
+          text: "Surface & Color"
+          color: root.surfaceRouteActive ? root.accent : root.foreground
+          opacity: root.surfaceRouteActive || parent.activeFocus
+            || surfaceRoutePointer.containsMouse ? 1 : 0.62
+          elide: Text.ElideRight
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: Font.Medium
+        }
+
+        MouseArea {
+          id: surfaceRoutePointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            surfaceRouteRow.forceActiveFocus()
+            root.surfaceRequested()
+          }
+        }
+
+        Keys.onReturnPressed: function(event) {
+          root.surfaceRequested()
+          event.accepted = true
+        }
+        Keys.onEnterPressed: function(event) {
+          root.surfaceRequested()
+          event.accepted = true
         }
       }
     }

@@ -87,6 +87,9 @@ Item {
         leftGroups.budgetWidthForStage(0) + leftExtras.width
         + centerGroups.budgetWidthForStage(0) + centerExtras.width
         + rightExtras.width + rightGroups.budgetWidthForStage(0)
+        + leftGroups.editingWidthOverhead
+        + centerGroups.editingWidthOverhead
+        + rightGroups.editingWidthOverhead
         + 2 * centerGap + 2 * contentInset
         + (shellStyle === "notch"
           ? 2 * root.bar.visualTokens.shellWingWidth : 0)

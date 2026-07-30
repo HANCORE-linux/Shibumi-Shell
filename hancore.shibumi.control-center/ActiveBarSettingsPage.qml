@@ -54,6 +54,8 @@ Column {
     barSurfaceSettings.effectOptions.length
   readonly property int surfaceRadiusOptionCount:
     barSurfaceSettings.radiusOptions.length
+  readonly property bool surfaceSectionAvailable: shibumiActive
+  readonly property real surfaceSectionY: barAccentSettings.y
   readonly property var reactorOptions: [
     { value: 0, label: "Off" },
     { value: 1, label: "Stream" },
@@ -69,23 +71,14 @@ Column {
     shellStyleRepeater.count === visibleShellStyleOptions.length
     && v2SlotRepeater.count === 3
     && reactorRepeater.count === reactorOptions.length
-    && barSurfaceSettings.ready
+    && barSurfaceSettings.ready && barAccentSettings.ready
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
 
-  Text {
-    text: "ACTIVE BAR"
-    color: root.accent
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-    font.weight: Font.DemiBold
-    font.letterSpacing: 1.2
-  }
-
   Rectangle {
     width: parent.width
-    height: Commons.Style.space(72)
+    height: Commons.Style.space(62)
     radius: root.controller.controlRadius
     color: Commons.Util.alpha(root.accent, 0.09)
     border.width: root.controller.controlBorderWidth
@@ -103,7 +96,7 @@ Column {
         text: root.activeLabel + " ACTIVE"
         color: root.foreground
         font.family: root.controller.marketFont
-        font.pixelSize: Commons.Style.space(22) * root.uiScale
+        font.pixelSize: Commons.Style.space(20) * root.uiScale
         font.weight: Font.DemiBold
       }
 
@@ -132,35 +125,62 @@ Column {
     }
   }
 
-  SectionLabel { text: "POSITION" }
-
   Row {
+    id: primaryControlRow
     width: parent.width
-    height: Commons.Style.space(30)
     spacing: Commons.Style.space(8)
 
-    CompactSettingChoice {
-      width: (parent.width - parent.spacing) / 2
-      controller: root.controller
-      label: "Top"
-      selected: root.controller.barPosition !== "bottom"
-      controlHeight: parent.height
-      foreground: root.foreground
-      accent: root.accent
-      uiScale: root.uiScale
-      onClicked: root.controller.setBarPosition("top")
+    Column {
+      width: root.shibumiActive
+        ? (primaryControlRow.width - primaryControlRow.spacing) / 2
+        : primaryControlRow.width
+      spacing: Commons.Style.space(8)
+
+      SectionLabel { text: "POSITION" }
+
+      Row {
+        id: positionChoiceRow
+        width: parent.width
+        height: Commons.Style.space(30)
+        spacing: Commons.Style.space(8)
+
+        CompactSettingChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Top"
+          selected: root.controller.barPosition !== "bottom"
+          controlHeight: positionChoiceRow.height
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setBarPosition("top")
+        }
+
+        CompactSettingChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Bottom"
+          selected: root.controller.barPosition === "bottom"
+          controlHeight: positionChoiceRow.height
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setBarPosition("bottom")
+        }
+      }
     }
 
-    CompactSettingChoice {
-      width: (parent.width - parent.spacing) / 2
+    BarSurfaceSettings {
+      id: barSurfaceSettings
+      width: (primaryControlRow.width - primaryControlRow.spacing) / 2
+      visible: root.shibumiActive
       controller: root.controller
-      label: "Bottom"
-      selected: root.controller.barPosition === "bottom"
-      controlHeight: parent.height
+      v2Active: root.v2Active
+      showSurface: true
+      showAccent: false
       foreground: root.foreground
       accent: root.accent
       uiScale: root.uiScale
-      onClicked: root.controller.setBarPosition("bottom")
     }
   }
 
@@ -211,6 +231,19 @@ Column {
         }
       }
     }
+  }
+
+  BarSurfaceSettings {
+    id: barAccentSettings
+    width: parent.width
+    visible: root.shibumiActive
+    controller: root.controller
+    v2Active: root.v2Active
+    showSurface: false
+    showAccent: true
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
   }
 
   Column {
@@ -306,8 +339,8 @@ Column {
 
     Text {
       width: parent.width
-      text: "V2 uses three slot regions and persistent dividers. "
-        + "V1 split and gap controls are intentionally hidden."
+      text: "V2 uses three slots and dividers; "
+        + "V1 split/gap controls stay hidden."
       color: root.foreground
       opacity: 0.48
       wrapMode: Text.WordWrap
@@ -451,24 +484,12 @@ Column {
     }
   }
 
-  BarSurfaceSettings {
-    id: barSurfaceSettings
-    width: parent.width
-    visible: root.shibumiActive
-    controller: root.controller
-    v2Active: root.v2Active
-    foreground: root.foreground
-    accent: root.accent
-    uiScale: root.uiScale
-  }
-
-  SectionLabel { text: "HOST BAR" }
-
   ActionCard {
     width: parent.width
     controller: root.controller
     glyph: "swap_horiz"
-    label: "Switch to " + (root.shibumiActive ? "Omarchy" : "Shibumi")
+    label: "Switch to "
+      + (root.shibumiActive ? "Omarchy Bar" : "Shibumi Bar")
     detail: "Snapshot · apply · verify with rollback"
     foreground: root.foreground
     accent: root.accent

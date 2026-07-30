@@ -16,7 +16,7 @@ Rectangle {
   property color accent: Commons.Color.menu.selectedText
   signal chosen()
 
-  implicitHeight: Commons.Style.space(72)
+  implicitHeight: Commons.Style.space(62)
   radius: Math.max(controller.controlRadius, Commons.Style.space(7))
   color: selected
     ? Commons.Util.alpha(accent, 0.10)
@@ -27,15 +27,15 @@ Rectangle {
 
   Row {
     anchors.fill: parent
-    anchors.margins: Commons.Style.space(10)
-    spacing: Commons.Style.space(9)
+    anchors.margins: Commons.Style.space(8)
+    spacing: Commons.Style.space(8)
 
     IconText {
       anchors.verticalCenter: parent.verticalCenter
-      width: Commons.Style.space(25)
+      width: Commons.Style.space(22)
       text: root.glyph
       color: root.selected ? root.accent : root.foreground
-      font.pixelSize: Commons.Style.space(22) * root.uiScale
+      font.pixelSize: Commons.Style.space(19) * root.uiScale
       font.weight: Font.Medium
       fill: 0
     }

@@ -18,7 +18,7 @@ Rectangle {
 
   signal chosen(string styleValue)
 
-  height: Commons.Style.space(104)
+  height: Commons.Style.space(92)
   radius: controller.controlRadius
   color: selected || pointer.containsMouse
     ? controller.controlHoverFillColor : controller.controlFillColor
@@ -32,8 +32,8 @@ Rectangle {
     anchors.top: parent.top
     anchors.leftMargin: Commons.Style.space(9)
     anchors.rightMargin: Commons.Style.space(9)
-    anchors.topMargin: Commons.Style.space(8)
-    height: Commons.Style.space(54)
+    anchors.topMargin: Commons.Style.space(6)
+    height: Commons.Style.space(44)
     clip: true
 
     Canvas {
@@ -295,7 +295,7 @@ Rectangle {
     anchors.bottom: parent.bottom
     anchors.leftMargin: Commons.Style.space(9)
     anchors.rightMargin: Commons.Style.space(9)
-    anchors.bottomMargin: Commons.Style.space(7)
+    anchors.bottomMargin: Commons.Style.space(5)
     spacing: Commons.Style.space(6)
 
     Column {

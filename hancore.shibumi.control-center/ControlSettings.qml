@@ -24,6 +24,7 @@ Item {
   property string installStatus: ""
   property string selectedWidgetGroup: "G4"
   property string selectedWidgetId: ""
+  readonly property real routeActivationViewportRatio: 2 / 3
 
   readonly property var pageOptions: {
     const pages = [
@@ -42,6 +43,29 @@ Item {
       : pages
   }
   readonly property bool configureDetailOpen: configureDetailPage !== ""
+  readonly property bool barsSurfaceAvailable:
+    currentPage === "configure" && configureDetailPage === "bars"
+    && pageLoader.item !== null
+    && pageLoader.item.surfaceSectionAvailable === true
+  readonly property real barsSurfaceTargetY: {
+    if (!barsSurfaceAvailable
+        || pageLoader.item.surfaceSectionY === undefined)
+      return -1
+    return Number(pageLoader.item.surfaceSectionY)
+  }
+  readonly property real detailScrollMaximum: Math.max(
+    0, pageFlick.contentHeight - pageFlick.height)
+  readonly property real barsSurfaceActivationY: {
+    if (barsSurfaceTargetY < 0) return -1
+    // Shared scrollspy convention: activate a child route once its heading
+    // reaches the upper two thirds of the visible detail viewport.
+    const requested = Math.max(0, barsSurfaceTargetY
+      - pageFlick.height * routeActivationViewportRatio)
+    return Math.min(requested, detailScrollMaximum)
+  }
+  readonly property bool barsSurfaceRouteActive:
+    barsSurfaceActivationY >= 0
+    && pageFlick.contentY >= barsSurfaceActivationY - 0.5
   readonly property string restorePage: currentPage === "configure"
     && configureDetailOpen ? configureDetailPage : currentPage
   readonly property bool ready: quickPage.ready
@@ -116,7 +140,21 @@ Item {
     }
     configureDetailPage = next
     lastConfigurePage = next
-    Qt.callLater(function() { configureLanding.showRoute(next) })
+    Qt.callLater(function() {
+      configureLanding.showRoute(next)
+      pageScrollAnimation.stop()
+      pageFlick.contentY = 0
+    })
+    return true
+  }
+
+  function scrollToBarSurface() {
+    if (!barsSurfaceAvailable || barsSurfaceTargetY < 0) return false
+    pageScrollAnimation.stop()
+    pageScrollAnimation.from = pageFlick.contentY
+    pageScrollAnimation.to = Math.max(0, Math.min(
+      detailScrollMaximum, barsSurfaceTargetY - Commons.Style.space(8)))
+    pageScrollAnimation.start()
     return true
   }
 
@@ -187,6 +225,14 @@ Item {
   Shortcut {
     sequence: "Ctrl+K"
     onActivated: settingsSearch.forceActiveFocus()
+  }
+
+  NumberAnimation {
+    id: pageScrollAnimation
+    target: pageFlick
+    property: "contentY"
+    duration: 220
+    easing.type: Easing.OutCubic
   }
 
   Column {
@@ -475,10 +521,13 @@ Item {
           activePage: root.currentPage === "configure"
             && !root.configureDetailOpen
           detailOpen: root.configureDetailOpen
+          surfaceRouteAvailable: root.barsSurfaceAvailable
+          surfaceRouteActive: root.barsSurfaceRouteActive
           motionActive: root.controller.open === true
             && root.currentPage === "configure"
             && !root.configureDetailOpen && !root.paletteOpen
           onPageRequested: function(pageId) { root.setPage(pageId) }
+          onSurfaceRequested: root.scrollToBarSurface()
           onBackRequested: root.setPage("configure")
         }
       }
@@ -537,6 +586,50 @@ Item {
             }
           }
         }
+      }
+
+      ThinScrollBar {
+        z: 6
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Commons.Style.space(4)
+        anchors.rightMargin: Commons.Style.space(4)
+        anchors.bottomMargin: Commons.Style.space(4)
+        active: root.currentPage === "quick"
+        flickable: quickFlick
+        foreground: root.foreground
+        accent: root.accent
+      }
+
+      ThinScrollBar {
+        z: 6
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Commons.Style.space(4)
+        anchors.rightMargin: Commons.Style.space(4)
+        anchors.bottomMargin: Commons.Style.space(4)
+        active: root.currentPage === "configure"
+          && !root.configureDetailOpen
+        flickable: configureLandingFlick
+        foreground: root.foreground
+        accent: root.accent
+      }
+
+      ThinScrollBar {
+        z: 6
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Commons.Style.space(4)
+        anchors.rightMargin: Commons.Style.space(4)
+        anchors.bottomMargin: Commons.Style.space(4)
+        active: root.currentPage === "configure"
+          && root.configureDetailOpen
+        flickable: pageFlick
+        foreground: root.foreground
+        accent: root.accent
       }
     }
   }
@@ -673,11 +766,13 @@ Item {
         }
 
         Item {
+          id: pluginResultsViewport
           width: parent.width
           height: root.installMode
             ? parent.height - y : parent.height - y
 
           Flickable {
+            id: resultsFlick
             anchors.fill: parent
             visible: !root.installMode
             contentWidth: width
@@ -801,6 +896,20 @@ Item {
                 }
               }
             }
+          }
+
+          ThinScrollBar {
+            z: 2
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.topMargin: Commons.Style.space(3)
+            anchors.rightMargin: -Commons.Style.space(8)
+            anchors.bottomMargin: Commons.Style.space(3)
+            active: !root.installMode
+            flickable: resultsFlick
+            foreground: root.foreground
+            accent: root.accent
           }
 
           Column {

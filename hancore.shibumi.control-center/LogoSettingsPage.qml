@@ -68,7 +68,7 @@ Column {
         required property var modelData
         readonly property bool selected: root.activeMode === modelData.value
         width: (parent.width - parent.spacing) / 2
-        height: Commons.Style.space(68)
+        height: Commons.Style.space(58)
         radius: root.controller.controlRadius
         color: selected || modePointer.containsMouse
           ? root.controller.controlHoverFillColor
@@ -82,9 +82,9 @@ Column {
           visible: modeCard.modelData.value === "text"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(7)
+          anchors.topMargin: Commons.Style.space(5)
           width: parent.width - Commons.Style.space(20)
-          height: Commons.Style.space(30)
+          height: Commons.Style.space(24)
           value: root.controller.launcherConfig.text || "shibumi"
           foreground: root.foreground
           fontFamily: root.controller.marketFont
@@ -95,8 +95,8 @@ Column {
             && root.controller.launcherConfig.icon === "shibumi"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(8)
-          width: Commons.Style.space(26)
+          anchors.topMargin: Commons.Style.space(5)
+          width: Commons.Style.space(22)
           height: width
           source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")
           fillMode: Image.PreserveAspectFit
@@ -109,7 +109,7 @@ Column {
             && root.controller.launcherConfig.icon !== "shibumi"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(9)
+          anchors.topMargin: Commons.Style.space(6)
           text: root.glyph(root.controller.launcherConfig.icon || "omarchy")
           color: root.foreground
           font.family: root.controller.launcherConfig.icon === "omarchy"
@@ -120,7 +120,7 @@ Column {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.bottom: parent.bottom
-          anchors.bottomMargin: Commons.Style.space(8)
+          anchors.bottomMargin: Commons.Style.space(6)
           text: modeCard.modelData.label
           color: modeCard.selected ? root.accent : root.foreground
           font.family: root.controller.marketFont
@@ -163,7 +163,7 @@ Column {
             ? root.controller.launcherConfig.text
             : root.controller.launcherConfig.icon) === modelData
         width: (parent.width - parent.spacing * 3) / 4
-        height: Commons.Style.space(70)
+        height: Commons.Style.space(56)
         radius: root.controller.controlRadius
         color: selected || optionPointer.containsMouse
           ? root.controller.controlHoverFillColor
@@ -177,9 +177,9 @@ Column {
           visible: root.activeMode === "text"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(5)
+          anchors.topMargin: Commons.Style.space(3)
           width: parent.width - Commons.Style.space(12)
-          height: Commons.Style.space(36)
+          height: Commons.Style.space(25)
           value: optionCard.modelData
           foreground: root.foreground
           fontFamily: root.controller.marketFont
@@ -190,8 +190,8 @@ Column {
             && optionCard.modelData === "shibumi"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(7)
-          width: Commons.Style.space(30)
+          anchors.topMargin: Commons.Style.space(4)
+          width: Commons.Style.space(23)
           height: width
           source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")
           fillMode: Image.PreserveAspectFit
@@ -204,7 +204,7 @@ Column {
             && optionCard.modelData !== "shibumi"
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          anchors.topMargin: Commons.Style.space(10)
+          anchors.topMargin: Commons.Style.space(6)
           text: root.glyph(optionCard.modelData)
           color: root.foreground
           font.family: optionCard.modelData === "omarchy"
@@ -215,7 +215,7 @@ Column {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.bottom: parent.bottom
-          anchors.bottomMargin: Commons.Style.space(8)
+          anchors.bottomMargin: Commons.Style.space(5)
           text: root.controller.launcherLabel(optionCard.modelData)
           color: optionCard.selected ? root.accent : root.foreground
           font.family: root.controller.marketFont

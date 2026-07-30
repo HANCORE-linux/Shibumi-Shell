@@ -69,6 +69,12 @@ Item {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property bool barsSurfaceRouteActive:
+    settings.barsSurfaceRouteActive
+  readonly property real barsSurfaceActivationY:
+    settings.barsSurfaceActivationY
+  readonly property real barsDetailScrollMaximum:
+    settings.detailScrollMaximum
   readonly property color marketBackground: "#08080a"
   readonly property color marketPanel: "#0b0b0d"
   readonly property color marketPanelRaised: "#101012"
@@ -101,6 +107,10 @@ Item {
       bar.releasePopout(ownerWidget)
   }
 
+  function scrollToBarSurface() {
+    return settings.scrollToBarSurface()
+  }
+
   function groupSetting(groupId, key, fallback) {
     return stateService && typeof stateService.groupSetting === "function"
       ? stateService.groupSetting(groupId, key, fallback) : fallback
@@ -118,7 +128,11 @@ Item {
   }
 
   function setBarPresentation(name, value) {
-    const preservePanel = String(name || "") === "shellStyle"
+    const presentationName = String(name || "")
+    const preservePanel = [
+      "accent", "border", "panelBorder", "frost", "shadow",
+      "radius", "shellStyle"
+    ].indexOf(presentationName) >= 0
     const preservePage = settings.restorePage
     const restoreBar = bar
     if (preservePanel && restoreBar
