@@ -129,7 +129,7 @@ function defaultPickerConfig() {
   return {
     // `style` remains a compatibility alias for mixed-version deployments.
     style: "tanzaku",
-    imageStyle: "tanzaku",
+    imageStyle: "omarchy",
     mediaStyle: "tanzaku"
   }
 }
@@ -336,7 +336,7 @@ function normalizeMenu(value) {
     if (["shibumi", "omarchy", "hyprland", "arch", "omacom"]
         .indexOf(String(value.launcher.text || "")) !== -1)
       result.launcher.text = String(value.launcher.text)
-    if (["omarchy", "hyprland", "arch", "grid", "spark", "power",
+    if (["shibumi", "omarchy", "hyprland", "arch", "grid", "spark", "power",
          "dragon", "mark", "nix", "branch", "rebel"]
         .indexOf(String(value.launcher.icon || "")) !== -1)
       result.launcher.icon = String(value.launcher.icon)
@@ -360,10 +360,15 @@ function normalizeWorkspace(value) {
       || Number(value.version) !== WorkspaceSchemaVersion) return result
   if (["10", "5", "active"].indexOf(String(value.mode || "")) !== -1)
     result.mode = String(value.mode)
-  if (["default", "numbers", "magic", "kanji", "rings", "frame",
-       "aurora", "aurora-streak"]
-      .indexOf(String(value.style || "")) !== -1)
-    result.style = String(value.style)
+  var style = String(value.style || "")
+  // Pre-alpha Shibumi briefly exposed two names that never existed in the
+  // QS Rise contract. Preserve their visual intent while returning to the
+  // six canonical V2 tokens.
+  if (style === "frame") style = "rings"
+  if (style === "aurora-streak") style = "aurora"
+  if (["default", "numbers", "magic", "kanji", "rings", "aurora"]
+      .indexOf(style) !== -1)
+    result.style = style
   return result
 }
 
@@ -371,12 +376,17 @@ function normalizePicker(value) {
   var result = defaultPickerConfig()
   if (!isPlainObject(value)) return result
 
+  var legacyCandidate = String(value.style || "")
   var legacyStyle = ["tanzaku", "hearthstone", "carousel"].indexOf(
-    String(value.style || "")) >= 0 ? String(value.style) : "tanzaku"
-  var imageStyle = String(value.imageStyle || legacyStyle)
-  var mediaStyle = String(value.mediaStyle || legacyStyle)
+    legacyCandidate) >= 0 ? legacyCandidate : ""
+  var imageStyle = String(value.imageStyle || legacyStyle || result.imageStyle)
+  var mediaStyle = String(value.mediaStyle || legacyStyle || result.mediaStyle)
 
-  if (["omarchy", "tanzaku", "hearthstone", "carousel"].indexOf(imageStyle) >= 0)
+  // Carousel is the stock Omarchy experience for themes and wallpapers.
+  // Pre-release Shibumi configs used the same name for a separate image view;
+  // migrate those configs instead of retaining a hidden fourth UI state.
+  if (imageStyle === "carousel") imageStyle = "omarchy"
+  if (["omarchy", "tanzaku", "hearthstone"].indexOf(imageStyle) >= 0)
     result.imageStyle = imageStyle
   if (["tanzaku", "hearthstone", "carousel"].indexOf(mediaStyle) >= 0)
     result.mediaStyle = mediaStyle

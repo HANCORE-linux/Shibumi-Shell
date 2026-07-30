@@ -169,7 +169,7 @@ Item {
       fillColor: root.bar.background
       capStyle: ShapePath.FlatCap
       joinStyle: ShapePath.RoundJoin
-      startX: 0
+      startX: 0.5
       startY: root.atTop ? 0 : root.height
 
       PathLine {
@@ -220,7 +220,7 @@ Item {
       strokeWidth: root.bar.visualTokens.pillBorderWidth
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
-      startX: 0.5
+      startX: 0
       startY: root.atTop ? 0 : root.height
       PathLine {
         x: 0.5
@@ -260,7 +260,7 @@ Item {
       strokeWidth: root.bar.visualTokens.pillBorderWidth
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
-      startX: 0.5
+      startX: 0
       startY: root.atTop ? 0.5 : root.height - 0.5
       PathCubic {
         x: root.wing + root.notchBodyRadius
@@ -280,7 +280,7 @@ Item {
       strokeWidth: root.bar.visualTokens.pillBorderWidth
       fillColor: "transparent"
       capStyle: ShapePath.FlatCap
-      startX: root.width - 0.5
+      startX: root.width
       startY: root.atTop ? 0.5 : root.height - 0.5
       PathCubic {
         x: root.width - root.wing - root.notchBodyRadius

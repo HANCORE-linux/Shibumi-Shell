@@ -23,7 +23,7 @@ Item {
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
   ]
   readonly property var launcherIconOptions: [
-    "omarchy", "hyprland", "arch", "grid", "spark", "power",
+    "shibumi", "omarchy", "hyprland", "arch", "grid", "spark", "power",
     "dragon", "mark", "nix", "branch", "rebel"
   ]
   readonly property string barPosition: bar
@@ -36,16 +36,38 @@ Item {
       || "tanzaku") : "tanzaku"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
+  readonly property bool stockOmarchyHost: false
+  readonly property string activeShell: "shibumi"
+  property bool v2LayoutActive: false
+  readonly property bool quickNetworkAvailable: true
+  readonly property bool quickNetworkEnabled: true
+  readonly property string quickNetworkLabel: "Fixture Wi-Fi"
+  readonly property string quickNetworkDetail: "connected"
+  readonly property bool quickBluetoothAvailable: true
+  readonly property bool quickBluetoothEnabled: true
+  readonly property string quickBluetoothLabel: "Fixture Phone"
+  readonly property string quickBluetoothDetail: "1 connected"
+  readonly property bool quickAudioAvailable: true
+  readonly property bool quickAudioMuted: false
+  readonly property string quickAudioLabel: "On"
+  readonly property bool quickBrightnessAvailable: true
+  readonly property string quickBrightnessLabel: "75%"
+  readonly property string quickBrightnessDetail: "eDP-1"
+  readonly property bool quickProfileAvailable: true
+  readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
   readonly property var pluginEntries: []
   readonly property int availablePluginCount: 0
   readonly property int enabledPluginCount: 0
   readonly property int availableWidgetCount: 0
   readonly property int enabledWidgetCount: 0
+  readonly property int registryShibumiPluginCount: 0
+  readonly property int registryOmarchyPluginCount: 0
+  readonly property int registryExternalPluginCount: 0
   readonly property bool settingsReady: settings.ready
   readonly property bool settingsFitsWidth: settings.fitsWidth
   readonly property bool settingsPageReady: settings.pageReady
-  readonly property string settingsPage: settings.currentPage
+  readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
   readonly property color marketBackground: "#08080a"
   readonly property color marketPanel: "#0b0b0d"
@@ -97,7 +119,7 @@ Item {
 
   function setBarPresentation(name, value) {
     const preservePanel = String(name || "") === "shellStyle"
-    const preservePage = settings.currentPage
+    const preservePage = settings.restorePage
     const restoreBar = bar
     if (preservePanel && restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
@@ -222,6 +244,10 @@ Item {
     return settings.setPage(value)
   }
 
+  function editWidget(groupId, pluginId) {
+    return settings.editWidget(groupId, pluginId)
+  }
+
   function openWidgetPicker() {
     settings.setPage("plugins")
     return settings.openWidgetPicker()
@@ -229,6 +255,16 @@ Item {
 
   function setPluginEnabled(_pluginId, _enabled) { return false }
   function rescanPlugins() { return true }
+  function beginBarEditing() { return false }
+  function quickWidgetAvailable(_pluginId) { return true }
+  function quickWidgetVisible(_pluginId) { return true }
+  function toggleQuickWidget(_pluginId) { return true }
+  function shibumiWidgetGroup(pluginId) {
+    const groups = {
+      "hancore.shibumi.storage": "G18"
+    }
+    return String(groups[String(pluginId || "")] || "")
+  }
 
   onOpenChanged: syncPopout()
   Component.onCompleted: syncPopout()

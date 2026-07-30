@@ -134,7 +134,8 @@ Item {
     y: root.centerY - root.focusedHeight / 2 - Commons.Style.space(23) - height
     text: (root.controller.selectedIndex + 1) + " / "
       + root.controller.filteredEntries.length
-    color: root.bar.visualTokens ? root.bar.visualTokens.mutedInk
+    color: root.bar && "visualTokens" in root.bar && root.bar.visualTokens
+      ? root.bar.visualTokens.mutedInk
       : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
         root.bar.foreground.b, 0.45)
     font.family: root.bar.fontFamily

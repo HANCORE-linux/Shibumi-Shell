@@ -9,12 +9,14 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.audio"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("AudioPanel.qml")
   readonly property url backendPanelSource: registeredSource("omarchy.audio")
   property Component panelComponent: String(backendPanelSource) ? null
     : registeredComponent("omarchy.audio")
 
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -61,8 +63,14 @@ Ui.Panel {
   }
 
   function registeredSource(id) {
-    return bar && typeof bar.registeredWidgetSource === "function"
-      ? bar.registeredWidgetSource(id) : ""
+    if (bar && typeof bar.registeredWidgetSource === "function")
+      return bar.registeredWidgetSource(id)
+    const registry = bar && bar.shell
+      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
   }
 
   function officialSettings() {
@@ -178,6 +186,7 @@ Ui.Panel {
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
         PillSurface {
+          tokenSource: root.tokens
           settings: root.settings
           anchors.fill: parent
           bar: root.bar

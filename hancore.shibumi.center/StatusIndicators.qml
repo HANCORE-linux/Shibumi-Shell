@@ -23,10 +23,12 @@ Item {
     + (statusService && statusService.notificationsSilenced ? 1 : 0)
     + (statusService && statusService.recording ? 1 : 0)
     + (statusService && statusService.voxtypeActive ? 1 : 0)
+  readonly property real recordingWidth: recordingIcon.implicitWidth
+    + recordingText.implicitWidth + Commons.Style.space(5) + 6
   readonly property real activeWidth:
     (statusService && statusService.stayAwake ? 20 : 0)
     + (statusService && statusService.notificationsSilenced ? 20 : 0)
-    + (statusService && statusService.recording ? recordingIndicator.implicitWidth : 0)
+    + (statusService && statusService.recording ? recordingWidth : 0)
     + (statusService && statusService.voxtypeActive ? 20 : 0)
     + Math.max(0, activeCount - 1) * Commons.Style.space(8)
 
@@ -138,13 +140,21 @@ Item {
     Item {
       id: recordingIndicator
       visible: root.statusService && root.statusService.recording
-      implicitWidth: visible ? recordingRow.implicitWidth + 6 : 0
+      implicitWidth: visible ? root.recordingWidth : 0
       implicitHeight: root.implicitHeight
       width: implicitWidth
       height: implicitHeight
 
-      Component.onCompleted: if (root.bar) root.bar.registerClickTarget(recordingIndicator)
-      Component.onDestruction: if (root.bar) root.bar.unregisterClickTarget(recordingIndicator)
+      Component.onCompleted: {
+        if (root.bar
+            && typeof root.bar.registerClickTarget === "function")
+          root.bar.registerClickTarget(recordingIndicator)
+      }
+      Component.onDestruction: {
+        if (root.bar
+            && typeof root.bar.unregisterClickTarget === "function")
+          root.bar.unregisterClickTarget(recordingIndicator)
+      }
 
       Row {
         id: recordingRow
@@ -167,6 +177,7 @@ Item {
         }
 
         Text {
+          id: recordingText
           anchors.verticalCenter: parent.verticalCenter
           text: root.elapsedText()
           color: root.contentColor

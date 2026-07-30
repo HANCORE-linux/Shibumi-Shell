@@ -2,48 +2,78 @@
 
 Status: user reference
 
-You can use some Shibumi plugins without the default Shibumi bar. The App Menu follows Omarchy's shell-level menu contract, while visible bar widgets require the [Shibumi host facade V1](host-facade-v1.md).
+Shibumi can keep another Omarchy bar active while the complete Shibumi suite
+provides its widgets, panels, menu, and internal services. Shibumi must remain
+suite-installed; individual plugin-root installations are not supported.
 
 ## Compatibility by plugin type
 
-The plugin kind and runtime contract determine whether a component can work with another bar:
-
-| Plugin type | Stock Omarchy bar | Another Shibumi-compatible bar | Arbitrary third-party bar |
+| Plugin type | Stock Omarchy bar | Standard Quattro-compatible bar | Shibumi bar |
 | --- | --- | --- | --- |
-| Shibumi App Menu | Supported | Supported | Supported inside Omarchy Shell |
-| Shibumi bar widgets and panels | Not supported | Supported after host-facade validation | Not supported by default |
-| Shibumi service-only plugins | Internal dependencies | Internal dependencies | No supported standalone use |
-| Shibumi full-bar plugin | Replaces the active bar | Alternative host | Alternative host |
+| Shibumi App Menu | Supported | Supported inside Omarchy Shell | Supported |
+| Shibumi bar widgets and panels | Supported | Supported when the host implements the standard Quattro widget contract | Supported |
+| Shibumi service-only plugins | Managed suite dependencies | Managed suite dependencies | Managed suite dependencies |
+| Shibumi full-bar plugin | Installed but inactive | Installed but inactive | Active host |
 
-An installed `bar-widget` manifest only makes the widget discoverable. It doesn't prove that the active bar implements the properties and methods used by that widget.
+Shibumi's compatibility adapter supplies missing visual tokens from the active
+host's foreground, background, accent, font, and bar size. Tooltip, popout,
+screen ownership, and click routing still come from the active bar's standard
+Quattro widget interface.
 
-## Use the App Menu with another bar
+Advanced Shibumi-only shell surfaces, split editing, and layout mutation require
+the complete [Shibumi host facade V1](host-facade-v1.md). The Control Center
+hides unsupported layout controls while a standard external host is active.
 
-`hancore.shibumi.menu` is independent from `hancore.shibumi.bar`. It uses Omarchy's menu lifecycle and falls back to standard Omarchy colors when the active bar has no Shibumi visual tokens.
+## Install without replacing the current bar
 
-The App Menu still requires `hancore.shibumi.state`. Install and maintain it through the complete Shibumi suite so dependency validation, updates, repair, and removal remain transactional.
+Install all 25 managed plugin roots while preserving the current bar and its
+widget layout:
 
-## Use Shibumi widgets with another compatible bar
+```bash
+./scripts/shibumi-suite install --no-activate --keep-layout --yes
+```
 
-The 19 visible Shibumi feature plugins depend on host facade version 1. A compatible bar must implement the complete property and method contract for:
+Shibumi enables only the required suite services. Add or arrange Shibumi
+widgets through Omarchy Settings or the active bar's supported widget manager.
+Updates and repairs preserve the external bar and its layout.
 
-- visual tokens and bar geometry
-- tooltip and panel routing
-- output ownership
-- click-target registration
-- widget resolution and summon actions
-- layout and Control Center mutations
+## Switch an existing installation
 
-A custom bar isn't supported because its QML can render one widget. It must pass the [host-facade acceptance gates](host-facade-v1.md#acceptance) and the [additional bar validation](multi-bar-extension-plan.md#required-gates-for-every-bar) on Machine2.
+Switch from the Shibumi bar to the stock Omarchy bar without removing the
+current Shibumi widgets:
 
-## Avoid unsupported combinations
+```bash
+./scripts/shibumi-suite deactivate --keep-layout
+```
 
-Don't add Shibumi widgets directly to the stock Omarchy bar or an unvalidated third-party bar. Missing facade members can cause broken colors, panels on the wrong output, failed popouts, or QML runtime errors.
+Return to the Shibumi bar and its managed profile:
 
-Don't disable, remove, or update individual Shibumi roots through the generic plugin menu. Use the [suite lifecycle](install.md) to keep all 25 plugin roots and their dependencies consistent.
+```bash
+./scripts/shibumi-suite activate
+```
 
-## Build another compatible bar
+The Control Center's **Bars** page maintains separate Shibumi and Omarchy
+layout profiles. Widgets added to the Omarchy profile stay there when switching
+away and back.
 
-A third-party bar author can support Shibumi widgets by implementing host facade version 1 without copying Shibumi's feature services. Start with the [host facade contract](host-facade-v1.md), then follow the [additional bar contract](multi-bar-extension-plan.md).
+## Suite ownership
 
-Compatibility becomes release-supported only after the complete Machine2 gates pass. Until then, treat the new bar as an external integration.
+Do not disable, remove, install, or update individual Shibumi roots through the
+generic plugin menu. Service-only roots are implementation dependencies, not
+standalone products. Use the [suite lifecycle](install.md) so updates, repair,
+payload verification, and uninstall remain transactional.
+
+The App Menu is bar-independent, but it still requires the suite-managed
+`hancore.shibumi.state` service. Requiring the complete Shibumi installation
+keeps that dependency boundary predictable.
+
+## Third-party bar acceptance
+
+A third-party bar must implement Omarchy Quattro's standard bar-widget
+properties and panel-routing methods. Passing the
+[host-facade acceptance gates](host-facade-v1.md#acceptance) additionally
+enables Shibumi-only layout and shell-surface features.
+
+Validate a new host on Machine2 with the
+[additional bar validation](multi-bar-extension-plan.md#required-gates-for-every-bar)
+before calling it release-supported.

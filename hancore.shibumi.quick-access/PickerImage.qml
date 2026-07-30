@@ -51,7 +51,8 @@ Item {
 
       Rectangle {
         anchors.fill: parent
-        color: root.bar.visualTokens
+        color: root.bar && "visualTokens" in root.bar
+          && root.bar.visualTokens
           ? root.bar.visualTokens.paper : root.bar.background
         opacity: root.washOpacity
       }

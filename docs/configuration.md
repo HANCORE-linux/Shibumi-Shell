@@ -18,7 +18,9 @@ and normalizes this branch before using it. It includes:
 
 - V1 and V2 widget order and split boundaries;
 - per-widget enabled state and appearance;
-- bar style, semantic accent, borders, frost, shadow, and radius;
+- bar style and semantic accent;
+- V1 border, frost, shadow, and Radius 12/6 settings;
+- V2 bar-border and panel/tooltip-border settings;
 - workspace mode and presentation;
 - App Menu favorites, hidden entries, launcher identity, and presentation;
 - image and media picker styles;

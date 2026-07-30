@@ -70,15 +70,16 @@ def main() -> None:
             fail(f"broken README image: {raw_target}")
 
     bash_blocks = re.findall(r"```bash\n.*?\n```", readme, flags=re.DOTALL)
-    if len(bash_blocks) != 1:
-        fail("README landing page must contain exactly one Bash command block")
+    if len(bash_blocks) != 2:
+        fail("README landing page must contain install and uninstall Bash blocks")
     install_command = (
         "git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && "
         "cd Shibumi-Shell && ./scripts/shibumi-suite install --yes"
     )
-    if install_command not in bash_blocks[0]:
+    if sum(install_command in block for block in bash_blocks) != 1:
         fail("README landing page is missing the private-alpha install command")
-    if "`./scripts/shibumi-suite uninstall`" not in readme:
+    uninstall_command = "./scripts/shibumi-suite uninstall"
+    if sum(uninstall_command in block for block in bash_blocks) != 1:
         fail("README landing page is missing the uninstall command")
     if "docs/plugin-compatibility.md" not in readme:
         fail("README landing page is missing the plugin compatibility guide")

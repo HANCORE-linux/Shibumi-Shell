@@ -58,8 +58,10 @@ if rg -q 'Quickshell\.Networking|Networking\.' \
 fi
 rg -q 'property var bar: shell \? shell\.bar : null' "$service" \
   || fail "network service does not use the versioned active bar facade"
-rg -q 'registeredWidgetComponent\("omarchy\.network"\)' "$service" \
+rg -q 'registeredComponent\("omarchy\.network"\)' "$service" \
   || fail "network service does not retain the official Omarchy owner"
+rg -Fq '"barWidgetRegistry" in bar' "$service" \
+  || fail "network service cannot resolve the official owner on stock Quattro"
 rg -Fq 'function connectedWifiLabel()' \
   "$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml" \
   || fail "network bridge does not normalize Quattro's current SSID owner"

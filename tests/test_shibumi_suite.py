@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import io
 import shutil
@@ -91,7 +92,7 @@ class FakeOmarchyRuntime(OmarchyRuntime):
         return
 
     def payload_ready(self, payload_digest: str) -> bool:
-        target = self.paths.plugin_dir / "hancore.shibumi.bar"
+        target = self.paths.plugin_dir / "hancore.shibumi.state"
         try:
             marker = json.loads(
                 (target / ".shibumi-managed.json").read_text(encoding="utf-8")
@@ -232,6 +233,8 @@ class SuiteLifecycleTests(unittest.TestCase):
             "dry_run": False,
             "yes": True,
             "keep_settings": False,
+            "no_activate": False,
+            "keep_layout": False,
         }
         defaults.update(values)
         return SimpleNamespace(**defaults)
@@ -593,6 +596,115 @@ class SuiteLifecycleTests(unittest.TestCase):
         }
         self.assertIn("local.extra", final_ids)
         self.assertEqual(final_config["customAfterInstall"], "keep")
+
+    def test_external_install_update_repair_and_activate_preserve_host_layout(
+        self,
+    ) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["id"] = "third.party.bar"
+        base["bar"]["position"] = "bottom"
+        base["bar"]["layout"]["right"].append(
+            {
+                "id": "hancore.shibumi.bluetooth",
+                "settings": {"displayMode": "icon"},
+            }
+        )
+        atomic_write(self.paths.config_file, encode_config(base))
+        expected_bar = copy.deepcopy(base["bar"])
+
+        external_args = self.args(no_activate=True, keep_layout=True)
+        self.assertEqual(
+            command_install(
+                external_args, self.suite, self.paths, self.runtime
+            ),
+            0,
+        )
+
+        installed = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(installed["bar"], expected_bar)
+        profile = self.suite.profile("default")
+        self.assertTrue(
+            set(profile.enable_services)
+            <= {entry_id(entry) for entry in installed["plugins"]}
+        )
+        state = load_install_state(self.paths, self.suite)
+        self.assertEqual(state["activation"]["mode"], "external")
+        self.assertEqual(state["activation"]["layoutPolicy"], "preserved")
+        self.assertEqual(
+            state["activation"]["configuredBar"], "third.party.bar"
+        )
+        self.assertEqual(command_status(self.suite, self.paths), 0)
+
+        installed["bar"]["layout"]["left"].append(
+            {"id": "hancore.shibumi.audio", "custom": 9}
+        )
+        installed["bar"]["customHostSetting"] = {"preserve": True}
+        atomic_write(self.paths.config_file, encode_config(installed))
+        expected_bar = copy.deepcopy(installed["bar"])
+        self.assertEqual(
+            command_update(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            0,
+        )
+        updated = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(updated["bar"], expected_bar)
+
+        shutil.rmtree(
+            self.paths.plugin_dir / "hancore.shibumi.bluetooth"
+        )
+        self.assertEqual(
+            command_repair(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            0,
+        )
+        repaired = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(repaired["bar"], expected_bar)
+        self.assertTrue(
+            (
+                self.paths.plugin_dir / "hancore.shibumi.bluetooth"
+            ).is_dir()
+        )
+
+        self.assertEqual(
+            command_activate(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            0,
+        )
+        active = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
+        active_state = load_install_state(self.paths, self.suite)
+        self.assertEqual(active_state["activation"]["mode"], "managed")
+        self.assertEqual(
+            active_state["activation"]["layoutPolicy"], "managed"
+        )
+
+    def test_external_install_flags_must_be_used_together(self) -> None:
+        with self.assertRaisesRegex(CliError, "must be used together"):
+            command_install(
+                self.args(no_activate=True),
+                self.suite,
+                self.paths,
+                self.runtime,
+            )
+        with self.assertRaisesRegex(CliError, "must be used together"):
+            command_install(
+                self.args(keep_layout=True),
+                self.suite,
+                self.paths,
+                self.runtime,
+            )
+        self.assertFalse((self.paths.state_dir / "install.json").exists())
 
     def test_update_adopts_markerless_owned_alpha_install(self) -> None:
         self.install()

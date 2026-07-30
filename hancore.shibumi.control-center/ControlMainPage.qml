@@ -10,6 +10,7 @@ Column {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property bool motionActive: false
   property bool powerOpen: false
 
   readonly property bool ready: powerRepeater.count === 4
@@ -17,30 +18,16 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(8)
 
-  Text {
-    text: "SYSTEM OPERATIONS"
-    color: root.accent
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-    font.weight: Font.Bold
-    font.letterSpacing: 1.8
-  }
-
-  Text {
-    text: "advanced"
-    color: root.foreground
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.space(24) * root.uiScale
-    font.weight: Font.Bold
-  }
-
-  Text {
-    width: parent.width
-    text: "Maintenance, session actions and recovery."
-    color: root.foreground
-    opacity: 0.58
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
+  PageHeaderHero {
+    controller: root.controller
+    active: root.motionActive
+    pageKey: "advanced"
+    eyebrow: "SYSTEM OPERATIONS"
+    title: "Advanced"
+    description: "Maintenance, session actions and recovery."
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
   }
 
   Separator {}

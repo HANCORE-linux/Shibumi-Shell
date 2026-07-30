@@ -100,8 +100,12 @@ Item {
       readonly property real shellContentInset: contentInset
         + (shellStyle === "notch"
           ? root.bar.visualTokens.shellWingWidth : 0)
-      readonly property real centerAvailableWidth: Math.max(0,
+      readonly property real measuredCenterSpan: Math.max(0,
         rightRegion.x - (leftRegion.x + leftRegion.width) - 2 * centerGap)
+      readonly property real centerAvailableWidth:
+        ResponsiveLayout.centerAvailableWidth(compactShell, width,
+          frameInset, shellContentInset, leftRegion.width, rightRegion.width,
+          centerGap, measuredCenterSpan)
       property int narrowStage: 0
       readonly property real sideMargin: shellX + shellContentInset
       readonly property real responsiveSideInset: shellContentInset

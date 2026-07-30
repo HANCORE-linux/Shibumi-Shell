@@ -26,7 +26,9 @@ Item {
   property real trayAppMenuAnchorX: 0
   property bool notificationPanelOpen: false
 
-  readonly property var tokens: bar ? bar.visualTokens : null
+  HostTokens { id: hostTokens; bar: root.bar }
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property string displayMode: {
     const value = String(settings && settings.displayMode !== undefined
       ? settings.displayMode : "full")
@@ -96,8 +98,14 @@ Item {
   }
 
   function registeredSource(id) {
-    return bar && typeof bar.registeredWidgetSource === "function"
-      ? bar.registeredWidgetSource(id) : ""
+    if (bar && typeof bar.registeredWidgetSource === "function")
+      return bar.registeredWidgetSource(id)
+    const registry = bar && bar.shell
+      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
   }
 
   function childSettings(id) {
@@ -400,8 +408,7 @@ Item {
     readonly property color urgent: root.widgetInk
     readonly property color background: realBar
       ? realBar.background : "#111111"
-    readonly property var visualTokens: realBar
-      ? realBar.visualTokens : null
+    readonly property var visualTokens: root.tokens
     readonly property bool foregroundAnimationEnabled: realBar
       ? realBar.foregroundAnimationEnabled !== false : false
     readonly property var shell: realBar ? realBar.shell : null
@@ -446,6 +453,7 @@ Item {
   }
 
   PillSurface {
+    tokenSource: root.tokens
     settings: root.settings
     anchors.fill: parent
     anchors.topMargin: root.tokens

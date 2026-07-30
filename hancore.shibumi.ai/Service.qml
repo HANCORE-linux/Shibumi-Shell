@@ -26,9 +26,10 @@ Item {
   property bool openCodeAvailable: false
   property int providerRevision: 0
 
-  readonly property string modelUsageSource: bar
+  readonly property string modelUsageSource: (bar
     && typeof bar.registeredWidgetSource === "function"
-    ? String(bar.registeredWidgetSource("omarchy.model-usage") || "") : ""
+    ? String(bar.registeredWidgetSource("omarchy.model-usage") || "") : "")
+    || standardWidgetSource("omarchy.model-usage")
   readonly property url claudeSource: providerUrl("Claude.qml")
   readonly property url codexSource: providerUrl("Codex.qml")
   readonly property var settings: {
@@ -59,6 +60,16 @@ Item {
     const slash = source.lastIndexOf("/")
     if (slash < 0) return ""
     return source.slice(0, slash + 1) + "providers/" + fileName
+  }
+
+  function standardWidgetSource(id) {
+    const registry = shell && "pluginRegistry" in shell
+      ? shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? String(registry.entryPointUrl(
+          pluginManifest, "barWidget") || "") : ""
   }
 
   function providerFor(id) {

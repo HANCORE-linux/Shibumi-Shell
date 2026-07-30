@@ -11,6 +11,8 @@ ShellRoot {
   property int phase: 0
   property int ticks: 0
   property var clickTargets: []
+  readonly property bool holdWidgetEditor:
+    Quickshell.env("SHIBUMI_SMOKE_HOLD_EDITOR") === "1"
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -163,6 +165,8 @@ ShellRoot {
         if (!panel.open || panel.ownerWidget !== widget
             || panel.stateService !== stateService
             || !panel.settingsReady || !panel.settingsFitsWidth
+            || panel.settingsPage !== "quick"
+            || !panel.settingsPageItem || !panel.settingsPageItem.ready
             || panel.barPosition !== "top"
             || fakeBar.activePopout !== widget)
           return root.fail("panel injection, layout, or popout ownership")
@@ -171,7 +175,7 @@ ShellRoot {
             || !panel.setBarPresentation("accent", "color06")
             || !panel.setBarPresentation("radius", "small")
             || !panel.setWorkspacePreference("mode", "5")
-            || !panel.setImagePickerStyle("omarchy")
+            || !panel.setImagePickerStyle("tanzaku")
             || !panel.setMediaPickerStyle("hearthstone")
             || !panel.setReactorMode(8))
           return root.fail("state mutation facade rejected valid values")
@@ -181,7 +185,7 @@ ShellRoot {
             || stateService.config.presentation.radius !== "small"
             || panel.controlRadius !== 4
             || stateService.config.workspace.mode !== "5"
-            || stateService.config.picker.imageStyle !== "omarchy"
+            || stateService.config.picker.imageStyle !== "tanzaku"
             || stateService.config.picker.mediaStyle !== "hearthstone"
             || stateService.config.picker.style !== "hearthstone"
             || stateService.config.reactor.mode !== 8
@@ -234,10 +238,7 @@ ShellRoot {
             || !panel.settingsPageItem.ready
             || !panel.settingsPageItem.workbenchReady
             || panel.settingsPageItem.widgetOptionCount !== 18
-            || !panel.settingsPageItem.allWidgetModesReady
-            || panel.settingsPageItem.colorSwatchCount !== 9
-            || panel.settingsPageItem.colorColumnCount !== 9
-            || panel.settingsPageItem.firstColorRadius !== 4)
+            || !panel.settingsPageItem.allWidgetModesReady)
           return root.fail("appearance page did not instantiate")
 
         const appearance = panel.settingsPageItem
@@ -268,7 +269,8 @@ ShellRoot {
             || stateService.groupSetting("G18", "color", "inherit") !== "inherit"
             || stateService.groupSetting("G18", "widgetPadding", "auto") !== "auto"
             || stateService.groupSetting("G18", "separator", false) !== true
-            || !panel.showSettingsPage("splits"))
+            || !panel.editWidget(
+              "G18", "hancore.shibumi.storage"))
           return root.fail("appearance reset did not preserve nonvisual state")
         root.phase++
         root.ticks = 0
@@ -279,15 +281,63 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "splits"
-            || !panel.showSettingsPage("preferences"))
-          return root.fail("splits page did not instantiate")
+            || panel.settingsPage !== "widget-editor"
+            || !panel.settingsPageItem
+            || panel.settingsPageItem.selectedWidgetGroup !== "G18"
+            || panel.settingsPageItem.scopeMode !== "shared"
+            || !panel.settingsPageItem.ready)
+          return root.fail("widget editor drill-down did not instantiate")
+        if (root.holdWidgetEditor) return
+        if (!panel.showSettingsPage("splits"))
+          return root.fail("widget editor did not return to layout")
         root.phase++
         root.ticks = 0
         return
       }
 
       if (root.phase === 4) {
+        if (!widget || root.ticks < 2) return
+        const panel = widget.panelItem
+        if (!panel || !panel.settingsPageReady
+            || panel.settingsPage !== "splits")
+          return root.fail("splits page did not instantiate")
+        panel.v2LayoutActive = true
+        if (!panel.showSettingsPage("bars"))
+          return root.fail("V2 Bars page rejected")
+        root.phase++
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 5) {
+        if (!widget || root.ticks < 2) return
+        const panel = widget.panelItem
+        if (!panel || !panel.settingsPageReady
+            || panel.settingsPage !== "bars"
+            || !panel.settingsPageItem
+            || panel.settingsPageItem.surfaceEffectOptionCount !== 2
+            || panel.settingsPageItem.surfaceRadiusOptionCount !== 0)
+          return root.fail("V2 exposed V1 Bar Surface settings"
+            + " effects=" + (panel && panel.settingsPageItem
+              ? panel.settingsPageItem.surfaceEffectOptionCount : "missing")
+            + " radii=" + (panel && panel.settingsPageItem
+              ? panel.settingsPageItem.surfaceRadiusOptionCount : "missing")
+            + " active=" + (panel ? panel.v2LayoutActive : "missing")
+            + " page-v2=" + (panel && panel.settingsPageItem
+              ? panel.settingsPageItem.v2Active : "missing")
+            + " shell=" + (panel ? panel.activeShell : "missing"))
+        panel.v2LayoutActive = false
+        if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
+            || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)
+          return root.fail("V1 Bar Surface settings did not restore")
+        if (!panel.showSettingsPage("preferences"))
+          return root.fail("Bars page did not open Advanced")
+        root.phase++
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 6) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady
@@ -299,7 +349,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 5) {
+      if (root.phase === 7) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady || panel.settingsPage !== "main"
@@ -311,7 +361,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 6) {
+      if (root.phase === 8) {
         if (!widget || root.ticks < 3) return
         if (widget.opened || widget.panelLoaded || fakeBar.activePopout !== null)
           return root.fail("panel did not release on close")
@@ -321,7 +371,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 7) {
+      if (root.phase === 9) {
         if (!widget || root.ticks < 2) return
         if (!widget.stockOmarchyHost || !widget.iconMode)
           return root.fail("stock Omarchy host identity was not detected")

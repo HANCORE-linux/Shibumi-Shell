@@ -12,6 +12,12 @@ Every Shibumi bar variant implements this facade on the object injected as
 
 The machine-readable source is `contracts/host-facade-v1.json`.
 
+This is the complete contract for Shibumi-owned bar hosts. It is broader than
+Omarchy's standard Quattro bar-widget contract. A compatibility adapter lets
+feature widgets run on the stock bar without claiming that the stock bar
+implements Shibumi-only split, style, or layout-control methods. See
+[cross-bar plugin compatibility](plugin-compatibility.md).
+
 ## Host Injection
 
 Omarchy may assign `omarchyPath`, `shell`, `manifest`, `pluginRegistry`,
@@ -87,6 +93,10 @@ Adding an optional property or method does not change the version. Removing or
 renaming a required member, changing its meaning, or changing output/panel
 ownership requires a new host-facade version and an explicit compatibility
 adapter.
+
+`HostTokens.qml` and the standard registry-resolution fallback are that
+adapter for non-Shibumi Quattro hosts. They don't expand or weaken this
+contract.
 
 ## Acceptance
 

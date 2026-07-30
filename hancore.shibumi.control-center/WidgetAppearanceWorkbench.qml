@@ -15,6 +15,8 @@ Column {
   property string selectedWidgetId: ""
   property string providerFilter: "All"
   property bool advancedOpen: false
+  property bool editorOnly: false
+  property string scopeMode: "shared"
 
   readonly property var providerOptions: [
     { value: "All", label: "All" },
@@ -175,7 +177,7 @@ Column {
   Rectangle {
     width: parent.width
     height: Commons.Style.space(54)
-    radius: 0
+    radius: root.controller.controlRadius
     color: "transparent"
     border.width: 1
     border.color: root.controller.controlBorderColor
@@ -186,7 +188,7 @@ Column {
       anchors.verticalCenter: parent.verticalCenter
       anchors.margins: Commons.Style.space(10)
       height: Commons.Style.space(26)
-      radius: 0
+      radius: root.controller.controlRadius
       color: root.controller.marketPanel
       border.width: 1
       border.color: root.controller.controlBorderColor
@@ -236,6 +238,7 @@ Column {
   }
 
   Row {
+    visible: !root.editorOnly
     width: parent.width
     spacing: Commons.Style.space(4)
 
@@ -259,13 +262,15 @@ Column {
 
   Row {
     width: parent.width
-    height: Commons.Style.space(310)
+    height: root.editorOnly
+      ? Commons.Style.space(356) : Commons.Style.space(310)
     spacing: Commons.Style.space(10)
 
     Rectangle {
-      width: Math.round(parent.width * 0.34)
+      visible: !root.editorOnly
+      width: root.editorOnly ? 0 : Math.round(parent.width * 0.34)
       height: parent.height
-      radius: 0
+      radius: root.controller.controlRadius
       color: root.controller.controlFillColor
       border.width: 1
       border.color: root.controller.controlBorderColor
@@ -298,7 +303,7 @@ Column {
                     || root.selectedWidgetId === modelData.id)
               width: parent.width
               height: Commons.Style.space(38)
-              radius: 0
+              radius: root.controller.controlRadius
               color: selected
                 ? root.controller.buttonFillColor
                 : widgetPointer.containsMouse
@@ -383,7 +388,7 @@ Column {
     Rectangle {
       width: parent.width - x
       height: parent.height
-      radius: 0
+      radius: root.controller.controlRadius
       color: root.controller.controlFillColor
       border.width: 1
       border.color: root.controller.controlBorderColor
@@ -432,7 +437,7 @@ Column {
             Text {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              visible: root.selectedSupported
+              visible: root.selectedSupported && root.scopeMode === "shared"
               text: "Reset ↺"
               color: resetPointer.containsMouse ? root.accent : root.foreground
               opacity: resetPointer.containsMouse ? 1 : 0.58
@@ -464,12 +469,12 @@ Column {
           }
 
           SectionLabel {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && root.scopeMode === "shared"
             text: "DISPLAY"
           }
 
           Row {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && root.scopeMode === "shared"
             width: parent.width
             spacing: Commons.Style.space(4)
 
@@ -492,12 +497,12 @@ Column {
           }
 
           SectionLabel {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && root.scopeMode === "shared"
             text: "SURFACE"
           }
 
           Row {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && root.scopeMode === "shared"
             width: parent.width
             spacing: Commons.Style.space(4)
 
@@ -526,11 +531,13 @@ Column {
 
           SectionLabel {
             visible: root.selectedSupported && root.selectedHasFill
+              && root.scopeMode === "shared"
             text: "COLOR"
           }
 
           Grid {
             visible: root.selectedSupported && root.selectedHasFill
+              && root.scopeMode === "shared"
             width: parent.width
             columns: 10
             columnSpacing: Commons.Style.space(4)
@@ -547,7 +554,7 @@ Column {
                   root.selectedColor === modelData.value
                 width: (parent.width - parent.columnSpacing * 9) / 10
                 height: Commons.Style.space(25)
-                radius: 0
+                radius: root.controller.controlRadius
                 color: modelData.value === "inherit"
                   ? root.controller.controlHoverFillColor
                   : root.controller.accentColor(modelData.value)
@@ -594,10 +601,10 @@ Column {
           }
 
           Rectangle {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && root.scopeMode === "shared"
             width: parent.width
             height: Commons.Style.space(31)
-            radius: 0
+            radius: root.controller.controlRadius
             color: advancedPointer.containsMouse
               ? root.controller.controlHoverFillColor : "transparent"
             border.width: 1
@@ -634,6 +641,7 @@ Column {
 
           Column {
             visible: root.selectedSupported && root.advancedOpen
+              && root.scopeMode === "shared"
             width: parent.width
             spacing: Commons.Style.space(7)
 
@@ -703,6 +711,103 @@ Column {
               onClicked: root.controller.setGroupSetting(
                 root.selectedWidget.group, "widgetBorderWidth",
                 selected ? 1 : 2)
+            }
+          }
+
+          Column {
+            visible: root.selectedSupported && root.scopeMode === "v1"
+            width: parent.width
+            spacing: Commons.Style.space(10)
+
+            SectionLabel { text: "V1 LAYOUT" }
+
+            Text {
+              width: parent.width
+              text: "V1 uses split islands and animated gaps between groups. "
+                + "Those settings belong to the bar layout, not to "
+                + root.selectedWidget.label + "."
+              color: root.foreground
+              opacity: 0.54
+              wrapMode: Text.WordWrap
+              font.family: root.controller.marketFont
+              font.pixelSize: Commons.Style.font.caption * root.uiScale
+            }
+
+            CompactSettingChoice {
+              width: parent.width
+              controller: root.controller
+              label: "Open Bars settings"
+              enabled: root.controller.v2LayoutActive !== true
+              foreground: root.foreground
+              accent: root.accent
+              uiScale: root.uiScale
+              onClicked: root.controller.showSettingsPage("bars")
+            }
+
+            Text {
+              visible: root.controller.v2LayoutActive === true
+              width: parent.width
+              text: "Switch the Shibumi shell to V1 to edit split islands."
+              color: root.foreground
+              opacity: 0.42
+              wrapMode: Text.WordWrap
+              font.family: root.controller.marketFont
+              font.pixelSize: Commons.Style.font.caption * root.uiScale
+            }
+          }
+
+          Column {
+            visible: root.selectedSupported && root.scopeMode === "v2"
+            width: parent.width
+            spacing: Commons.Style.space(10)
+
+            SectionLabel { text: "V2 LAYOUT" }
+
+            Text {
+              width: parent.width
+              text: "V2 uses persistent dividers and slots. The divider is "
+                + "stored after this widget group."
+              color: root.foreground
+              opacity: 0.54
+              wrapMode: Text.WordWrap
+              font.family: root.controller.marketFont
+              font.pixelSize: Commons.Style.font.caption * root.uiScale
+            }
+
+            CompactSettingChoice {
+              width: parent.width
+              controller: root.controller
+              label: "Divider after " + root.selectedWidget.label
+              selected: root.widgetSetting(
+                root.selectedWidget.group, "separator", false) === true
+              enabled: root.controller.v2LayoutActive === true
+              foreground: root.foreground
+              accent: root.accent
+              uiScale: root.uiScale
+              onClicked: root.controller.setGroupSetting(
+                root.selectedWidget.group, "separator", !selected)
+            }
+
+            CompactSettingChoice {
+              width: parent.width
+              controller: root.controller
+              label: "Edit V2 dividers on bar"
+              enabled: root.controller.v2LayoutActive === true
+              foreground: root.foreground
+              accent: root.accent
+              uiScale: root.uiScale
+              onClicked: root.controller.beginBarEditing()
+            }
+
+            Text {
+              visible: root.controller.v2LayoutActive !== true
+              width: parent.width
+              text: "Switch the Shibumi shell to V2 to edit dividers and slots."
+              color: root.foreground
+              opacity: 0.42
+              wrapMode: Text.WordWrap
+              font.family: root.controller.marketFont
+              font.pixelSize: Commons.Style.font.caption * root.uiScale
             }
           }
         }

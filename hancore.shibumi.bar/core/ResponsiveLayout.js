@@ -32,3 +32,22 @@ function nextNarrowStage(currentStage, availableWidth, stageWidths) {
   if (stage === 1 && need(0) <= width) stage = 0
   return stage
 }
+
+function centerAvailableWidth(compactShell, surfaceWidth, frameInset,
+                              contentInset, leftWidth, rightWidth,
+                              centerGap, measuredSpan) {
+  if (!compactShell)
+    return Math.max(0, Number(measuredSpan) || 0)
+
+  // Fit, Dock and Notch are content-driven surfaces. Measuring their center
+  // budget from the current shell width makes the responsive center feed back
+  // into its own input: the compact stage shrinks the shell, which then keeps
+  // weather hidden. Use the monitor-local surface capacity, as V2 does.
+  return Math.max(0,
+    (Number(surfaceWidth) || 0)
+    - 2 * Math.max(0, Number(frameInset) || 0)
+    - 2 * Math.max(0, Number(contentInset) || 0)
+    - Math.max(0, Number(leftWidth) || 0)
+    - Math.max(0, Number(rightWidth) || 0)
+    - 2 * Math.max(0, Number(centerGap) || 0))
+}

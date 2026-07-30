@@ -191,7 +191,8 @@ PanelWindow {
             && root.controller.selectedThemeAuthor !== ""
           text: "by " + root.controller.selectedThemeAuthor + "  ↗"
           color: tanzakuAuthorMouse.containsMouse ? root.bar.urgent
-            : root.bar.visualTokens ? root.bar.visualTokens.mutedInk
+            : root.bar && "visualTokens" in root.bar
+                && root.bar.visualTokens ? root.bar.visualTokens.mutedInk
             : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
               root.bar.foreground.b, 0.45)
           font.family: root.bar.fontFamily
@@ -245,7 +246,8 @@ PanelWindow {
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
         text: "← →  navigate     Enter apply     Esc cancel     type to filter     Tab style"
-        color: root.bar.visualTokens ? root.bar.visualTokens.mutedInk
+        color: root.bar && "visualTokens" in root.bar
+          && root.bar.visualTokens ? root.bar.visualTokens.mutedInk
           : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
             root.bar.foreground.b, 0.45)
         font.family: root.bar.fontFamily
@@ -399,7 +401,8 @@ PanelWindow {
 
     implicitWidth: actionContent.implicitWidth + Commons.Style.space(18)
     implicitHeight: Commons.Style.space(28)
-    radius: root.bar.visualTokens ? root.bar.visualTokens.tileRadius
+    radius: root.bar && "visualTokens" in root.bar
+      && root.bar.visualTokens ? root.bar.visualTokens.tileRadius
       : Commons.Style.cornerRadius
     color: action.urgent
       ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.18)

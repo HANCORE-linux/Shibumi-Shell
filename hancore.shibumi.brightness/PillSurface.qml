@@ -7,7 +7,9 @@ Item {
 
   required property var bar
   property var settings: ({})
-  readonly property var tokens: bar.visualTokens
+  property var tokenSource: null
+  readonly property var tokens: tokenSource
+    || (bar && "visualTokens" in bar ? bar.visualTokens : null)
   readonly property string shellStyle: tokens
     && tokens.shellStyle !== undefined ? String(tokens.shellStyle) : "shibumi"
   readonly property bool customDecorated: !!(tokens

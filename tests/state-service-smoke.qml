@@ -92,13 +92,14 @@ ShellRoot {
             || state.config.presentation.shellStyle !== "notch"
             || state.config.presentation.accent !== "color06")
           return root.fail("presentation mutation validation")
-        if (!state.setImagePickerStyle("omarchy")
+        if (!state.setImagePickerStyle("tanzaku")
             || !state.setMediaPickerStyle("hearthstone")
+            || state.setImagePickerStyle("carousel")
             || state.setImagePickerStyle("unknown")
             || state.setMediaPickerStyle("omarchy")
             || !state.setPickerStyle("carousel")
             || state.setPickerStyle("unknown")
-            || state.config.picker.imageStyle !== "carousel"
+            || state.config.picker.imageStyle !== "omarchy"
             || state.config.picker.mediaStyle !== "carousel"
             || state.config.picker.style !== "carousel")
           return root.fail("picker mutation validation")

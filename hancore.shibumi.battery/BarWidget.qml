@@ -9,13 +9,15 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.battery"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url panelSource: Qt.resolvedUrl("BatteryPanel.qml")
   property var powerServiceOverride: null
 
   readonly property var powerService: powerServiceOverride
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.power-state") : null)
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -98,6 +100,7 @@ Ui.Panel {
     height: implicitHeight
 
     PillSurface {
+      tokenSource: root.tokens
       settings: root.settings
       anchors.fill: parent
       anchors.topMargin: root.tokens

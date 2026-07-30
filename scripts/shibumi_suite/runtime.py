@@ -178,19 +178,25 @@ class OmarchyRuntime:
         raise RuntimeFailure(f"reloadConfig did not settle: {detail}")
 
     def reload_payload(self, *, timeout: float = 8) -> None:
-        command = [self.command("omarchy-shell"), "shibumi-suite", "reloadPayload"]
         deadline = time.monotonic() + timeout
         detail = "reload endpoint is not ready"
+        targets = ("shibumi-suite-runtime", "shibumi-suite")
         while time.monotonic() < deadline:
-            result = self.run(command, check=False)
-            if result.returncode == 0 and result.stdout.strip() == "ok":
-                return
-            detail = (result.stderr or result.stdout).strip() or (
-                f"exit {result.returncode}"
-            )
+            for target in targets:
+                command = [
+                    self.command("omarchy-shell"),
+                    target,
+                    "reloadPayload",
+                ]
+                result = self.run(command, check=False)
+                if result.returncode == 0 and result.stdout.strip() == "ok":
+                    return
+                detail = (result.stderr or result.stdout).strip() or (
+                    f"{target} exited {result.returncode}"
+                )
             time.sleep(0.1)
         raise RuntimeFailure(
-            "the running Shibumi bar cannot reload updated QML; "
+            "the running Shibumi state service cannot reload updated QML; "
             f"restart the Omarchy Shell once and retry ({detail})"
         )
 
@@ -217,7 +223,7 @@ class OmarchyRuntime:
         result = self.run(
             [
                 self.command("omarchy-shell"),
-                "shibumi-suite",
+                "shibumi-suite-runtime",
                 "verifyPayload",
                 payload_digest,
             ],

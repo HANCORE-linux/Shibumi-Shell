@@ -20,7 +20,7 @@ Item {
     foreground, accent)
   readonly property bool ready: launcherModeGroup.options.length === 2
     && textLogo.options.length === 5
-    && iconLogo.options.length === 11
+    && iconLogo.options.length === 12
     && selectionGroup.options.length === 3
     && scaleGroup.options.length === 3
     && backgroundGroup.options.length === 3
@@ -89,6 +89,7 @@ Item {
       label: "Icon"
       value: root.controller.launcherConfig.icon
       options: [
+        { value: "shibumi", label: "Shibumi" },
         { value: "omarchy", label: "Omarchy" },
         { value: "hyprland", label: "Hyprland" },
         { value: "arch", label: "Arch" },

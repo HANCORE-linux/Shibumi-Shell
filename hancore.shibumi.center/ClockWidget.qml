@@ -60,7 +60,8 @@ Ui.BarWidget {
     horizontalAlignment: Text.AlignHCenter
     color: root.contentColor
     font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-    font.pixelSize: root.bar && root.bar.visualTokens
+    font.pixelSize: root.bar && "visualTokens" in root.bar
+      && root.bar.visualTokens
       ? root.bar.visualTokens.labelSize : 12
     font.letterSpacing: root.bar && root.bar.vertical ? 0 : 1
     renderType: Text.NativeRendering

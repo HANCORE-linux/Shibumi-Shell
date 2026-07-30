@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import shutil
@@ -152,8 +153,16 @@ def make_install_state(
     revision: str,
     payload_digest: str,
     plugin_digests: dict[str, str],
+    *,
+    activation_mode: str = "managed",
+    layout_policy: str = "managed",
+    configured_bar: str | None = None,
 ) -> dict[str, Any]:
     selected_profile = suite.profile(profile)
+    if activation_mode not in ("managed", "external"):
+        raise CliError(f"invalid activation mode: {activation_mode}")
+    if layout_policy not in ("managed", "preserved"):
+        raise CliError(f"invalid layout policy: {layout_policy}")
     return {
         "schemaVersion": STATE_SCHEMA_VERSION,
         "suiteId": SUITE_ID,
@@ -166,6 +175,9 @@ def make_install_state(
         "pluginDigests": plugin_digests,
         "activation": {
             "activeBar": selected_profile.active_bar,
+            "mode": activation_mode,
+            "layoutPolicy": layout_policy,
+            "configuredBar": configured_bar or selected_profile.active_bar,
             "layout": {
                 region: list(selected_profile.layout[region])
                 for region in ("left", "center", "right")
@@ -271,12 +283,83 @@ def runtime_enabled_plugin_ids(
     return enabled
 
 
+def configured_bar_id(config: dict[str, Any]) -> str:
+    bar = config.get("bar") if isinstance(config.get("bar"), dict) else {}
+    return str(bar.get("id") or "omarchy.bar")
+
+
+def external_activation(
+    state: dict[str, Any],
+    config: dict[str, Any],
+) -> bool:
+    """Return whether the suite explicitly delegates layout ownership."""
+    activation = state.get("activation")
+    return isinstance(activation, dict) \
+        and activation.get("mode") == "external"
+
+
+def external_runtime_enabled_plugin_ids(
+    suite: Suite,
+    config: dict[str, Any],
+) -> set[str]:
+    """Return suite roots enabled by an externally owned bar configuration."""
+    bar = config.get("bar") if isinstance(config.get("bar"), dict) else {}
+    layout = bar.get("layout") if isinstance(bar.get("layout"), dict) else {}
+    enabled = {
+        entry_id(entry)
+        for region in ("left", "center", "right")
+        for entry in (
+            layout.get(region) if isinstance(layout.get(region), list) else []
+        )
+    }
+    enabled.update(
+        plugin_id
+        for plugin_id in (
+            entry_id(entry) for entry in config.get("plugins", [])
+        )
+        if plugin_id in suite.plugins
+        and not suite.plugins[plugin_id].is_bar_widget
+    )
+    enabled &= set(suite.plugins)
+    enabled.discard("hancore.shibumi.bar")
+    return enabled
+
+
+def external_activation_drift(
+    config: dict[str, Any],
+    suite: Suite,
+    profile_id: str,
+) -> list[str]:
+    """Check dependencies without claiming ownership of host or widget layout."""
+    services = {entry_id(entry) for entry in config.get("plugins", [])}
+    missing = set(suite.profile(profile_id).enable_services) - services
+    return (
+        [f"missing services: {', '.join(sorted(missing))}"]
+        if missing else []
+    )
+
+
+def preserve_external_bar(
+    config: dict[str, Any],
+    profile: Any,
+) -> dict[str, Any]:
+    """Keep the host and layout byte-semantics while enabling suite services."""
+    return reconcile_profile_services(
+        apply_identity_contract(config),
+        profile,
+    )
+
+
 def command_install(
     args: argparse.Namespace,
     suite: Suite,
     paths: RuntimePaths,
     runtime: OmarchyRuntime,
 ) -> int:
+    if args.no_activate != args.keep_layout:
+        raise CliError(
+            "--no-activate and --keep-layout must be used together"
+        )
     if install_state_file(paths).exists():
         raise CliError("Shibumi is already suite-managed; use update")
     if legacy_install_state_file(paths).exists():
@@ -287,15 +370,28 @@ def command_install(
     specs = suite.selected(profile.install)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
-    desired = apply_identity_contract(
-        apply_profile(current, profile, suite.plugins)
+    external = args.no_activate and args.keep_layout
+    desired = (
+        preserve_external_bar(current, profile)
+        if external
+        else apply_identity_contract(
+            apply_profile(current, profile, suite.plugins)
+        )
     )
     preflight_replacements(paths.plugin_dir, specs)
-    print_plan(f"Install Shibumi profile {profile.id}", specs, paths)
+    label = (
+        f"Install Shibumi profile {profile.id} with the current bar and layout"
+        if external else f"Install Shibumi profile {profile.id}"
+    )
+    print_plan(label, specs, paths)
     if args.dry_run:
         print("Dry run complete; no files changed.")
         return 0
-    confirm("Install and activate Shibumi", args.yes)
+    confirm(
+        "Install Shibumi and keep the current bar and layout"
+        if external else "Install and activate Shibumi",
+        args.yes,
+    )
 
     revision = suite.revision()
     with PluginTransaction(paths, runtime) as transaction:
@@ -311,21 +407,39 @@ def command_install(
             revision,
             payload_digest,
             plugin_digests,
+            activation_mode="external" if external else "managed",
+            layout_policy="preserved" if external else "managed",
+            configured_bar=configured_bar_id(desired),
         )
         transaction.expose()
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
-        runtime.verify_install(
-            set(profile.install),
-            profile.active_bar,
-            payload_digest,
-            enabled_plugin_ids=runtime_enabled_plugin_ids(
-                suite, profile.id
-            ),
-        )
+        if external:
+            runtime.verify_update(
+                set(profile.install),
+                payload_digest,
+                enabled_plugin_ids=external_runtime_enabled_plugin_ids(
+                    suite, desired
+                ),
+            )
+        else:
+            runtime.verify_install(
+                set(profile.install),
+                profile.active_bar,
+                payload_digest,
+                enabled_plugin_ids=runtime_enabled_plugin_ids(
+                    suite, profile.id
+                ),
+            )
         transaction.finish(desired_state, archive_previous=True)
-    print(f"Installed and activated Shibumi ({len(specs)} plugins).")
+    if external:
+        print(
+            f"Installed Shibumi ({len(specs)} plugins); "
+            "kept the current bar and layout."
+        )
+    else:
+        print(f"Installed and activated Shibumi ({len(specs)} plugins).")
     return 0
 
 
@@ -427,26 +541,35 @@ def command_update(
     specs = suite.selected(profile.install)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
-    drift = activation_drift(
-        current,
-        suite,
-        profile_id,
-        str(state.get("activeBar") or "hancore.shibumi.bar"),
-        set(state["plugins"]),
+    external = external_activation(state, current)
+    drift = (
+        external_activation_drift(current, suite, profile_id)
+        if external
+        else activation_drift(
+            current,
+            suite,
+            profile_id,
+            str(state.get("activeBar") or "hancore.shibumi.bar"),
+            set(state["plugins"]),
+        )
     )
-    if drift:
+    if drift and not external:
         raise CliError(
             "Shibumi is installed but inactive; run 'shibumi-suite activate' "
             f"first ({'; '.join(drift)})"
         )
-    desired = reconcile_profile_services(
-        reconcile_profile_additions(
-            apply_identity_contract(current),
+    desired = (
+        preserve_external_bar(current, profile)
+        if external
+        else reconcile_profile_services(
+            reconcile_profile_additions(
+                apply_identity_contract(current),
+                profile,
+                set(state["plugins"]),
+                suite.plugins,
+            ),
             profile,
-            set(state["plugins"]),
-            suite.plugins,
-        ),
-        profile,
+        )
     )
     adoptable_plugin_ids = set(state["plugins"])
     preflight_replacements(
@@ -472,6 +595,9 @@ def command_update(
             revision,
             payload_digest,
             plugin_digests,
+            activation_mode="external" if external else "managed",
+            layout_policy="preserved" if external else "managed",
+            configured_bar=configured_bar_id(desired),
         )
         transaction.expose()
         runtime.rescan()
@@ -481,8 +607,10 @@ def command_update(
         runtime.verify_update(
             set(plugin_ids),
             payload_digest,
-            enabled_plugin_ids=runtime_enabled_plugin_ids(
-                suite, profile_id
+            enabled_plugin_ids=(
+                external_runtime_enabled_plugin_ids(suite, desired)
+                if external
+                else runtime_enabled_plugin_ids(suite, profile_id)
             ),
         )
         transaction.finish(desired_state, archive_previous=True)
@@ -504,8 +632,13 @@ def command_repair(
     specs = suite.selected(profile.install)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
-    desired = apply_identity_contract(
-        apply_profile(current, profile, suite.plugins)
+    external = external_activation(state, current)
+    desired = (
+        preserve_external_bar(current, profile)
+        if external
+        else apply_identity_contract(
+            apply_profile(current, profile, suite.plugins)
+        )
     )
     adoptable_plugin_ids = set(state["plugins"])
     preflight_replacements(
@@ -520,7 +653,11 @@ def command_repair(
         print("Dry run complete; no files changed.")
         return 0
     confirm(
-        "Repair the complete Shibumi payload and restore its managed layout",
+        "Repair the complete Shibumi payload"
+        + (
+            " while keeping the current bar and layout"
+            if external else " and restore its managed layout"
+        ),
         args.yes,
     )
 
@@ -538,23 +675,39 @@ def command_repair(
             revision,
             payload_digest,
             plugin_digests,
+            activation_mode="external" if external else "managed",
+            layout_policy="preserved" if external else "managed",
+            configured_bar=configured_bar_id(desired),
         )
         transaction.expose()
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
         runtime.reload_payload()
-        runtime.verify_install(
-            set(plugin_ids),
-            profile.active_bar,
-            payload_digest,
-            enabled_plugin_ids=runtime_enabled_plugin_ids(
-                suite, profile_id
-            ),
-        )
+        if external:
+            runtime.verify_update(
+                set(plugin_ids),
+                payload_digest,
+                enabled_plugin_ids=external_runtime_enabled_plugin_ids(
+                    suite, desired
+                ),
+            )
+        else:
+            runtime.verify_install(
+                set(plugin_ids),
+                profile.active_bar,
+                payload_digest,
+                enabled_plugin_ids=runtime_enabled_plugin_ids(
+                    suite, profile_id
+                ),
+            )
         transaction.finish(desired_state, archive_previous=True)
     print(
-        f"Repaired and activated Shibumi ({len(specs)} plugins)."
+        f"Repaired Shibumi ({len(specs)} plugins)"
+        + (
+            "; kept the current bar and layout."
+            if external else " and restored its managed layout."
+        )
     )
     return 0
 
@@ -591,7 +744,13 @@ def command_activate(
                 suite, profile_id
             ),
         )
-        transaction.finish(state, archive_previous=False)
+        activated_state = copy.deepcopy(state)
+        activation = activated_state.setdefault("activation", {})
+        activation["mode"] = "managed"
+        activation["layoutPolicy"] = "managed"
+        activation["configuredBar"] = profile.active_bar
+        activated_state["updatedEpoch"] = int(time.time())
+        transaction.finish(activated_state, archive_previous=False)
     print("Activated Shibumi and restored its configured layout.")
     return 0
 
@@ -606,16 +765,35 @@ def command_deactivate(
     current, _ = read_config(paths.config_file, paths.defaults_file)
     defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
     active_bar = str(state.get("activeBar") or "hancore.shibumi.bar")
-    desired = remove_suite(
-        current,
-        suite.plugins,
-        active_bar,
-        default_center_anchor(defaults),
-        True,
-        CONTINUITY_PLUGIN_IDS,
-    )
+    profile_id = str(state.get("profile") or "default")
+    profile = suite.profile(profile_id)
+    if args.keep_layout:
+        desired = preserve_external_bar(current, profile)
+        bar = desired.get("bar")
+        if isinstance(bar, dict) and str(bar.get("id") or "") == active_bar:
+            bar.pop("id", None)
+        desired_state = copy.deepcopy(state)
+        activation = desired_state.setdefault("activation", {})
+        activation["mode"] = "external"
+        activation["layoutPolicy"] = "preserved"
+        activation["configuredBar"] = configured_bar_id(desired)
+        desired_state["updatedEpoch"] = int(time.time())
+    else:
+        desired = remove_suite(
+            current,
+            suite.plugins,
+            active_bar,
+            default_center_anchor(defaults),
+            True,
+            CONTINUITY_PLUGIN_IDS,
+        )
+        desired_state = state
     print_plan(
-        "Deactivate Shibumi and restore the stock Omarchy bar",
+        (
+            "Use the stock Omarchy bar with the current Shibumi widget layout"
+            if args.keep_layout
+            else "Deactivate Shibumi and restore the stock Omarchy bar"
+        ),
         suite.selected(tuple(state["plugins"])),
         paths,
     )
@@ -623,22 +801,40 @@ def command_deactivate(
         print("Dry run complete; no files changed.")
         return 0
     confirm(
-        "Deactivate Shibumi while retaining its plugins and settings",
+        (
+            "Switch to the stock Omarchy bar and keep the current widget layout"
+            if args.keep_layout
+            else "Deactivate Shibumi while retaining its plugins and settings"
+        ),
         args.yes,
     )
 
     with PluginTransaction(paths, runtime) as transaction:
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
-        runtime.verify_deactivation(
-            set(state["plugins"]),
-            active_bar,
-            allowed_enabled=CONTINUITY_PLUGIN_IDS,
-        )
-        transaction.finish(state, archive_previous=False)
+        if args.keep_layout:
+            runtime.verify_update(
+                set(state["plugins"]),
+                str(state["payloadDigest"]),
+                enabled_plugin_ids=external_runtime_enabled_plugin_ids(
+                    suite, desired
+                ),
+            )
+        else:
+            runtime.verify_deactivation(
+                set(state["plugins"]),
+                active_bar,
+                allowed_enabled=CONTINUITY_PLUGIN_IDS,
+            )
+        transaction.finish(desired_state, archive_previous=False)
     print(
-        "Deactivated Shibumi and restored the stock Omarchy bar; "
-        "plugins and settings were retained."
+        (
+            "Switched to the stock Omarchy bar; kept Shibumi widgets, "
+            "plugins, and settings."
+            if args.keep_layout
+            else "Deactivated Shibumi and restored the stock Omarchy bar; "
+            "plugins and settings were retained."
+        )
     )
     return 0
 
@@ -733,11 +929,16 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         config, _ = read_config(paths.config_file, paths.defaults_file)
         bar = config.get("bar") if isinstance(config.get("bar"), dict) else {}
         print(f"Configured bar: {bar.get('id', 'omarchy.bar')}")
-        drift = activation_drift(
-            config,
-            suite,
-            str(state.get("profile") or "default"),
-            str(state.get("activeBar") or "hancore.shibumi.bar"),
+        profile_id = str(state.get("profile") or "default")
+        drift = (
+            external_activation_drift(config, suite, profile_id)
+            if external_activation(state, config)
+            else activation_drift(
+                config,
+                suite,
+                profile_id,
+                str(state.get("activeBar") or "hancore.shibumi.bar"),
+            )
         )
         if drift:
             print(f"Configuration drift: {'; '.join(drift)}")
@@ -760,6 +961,16 @@ def parser() -> argparse.ArgumentParser:
 
     install = subparsers.add_parser("install", help="install and activate Shibumi")
     install.add_argument("--profile", default="default")
+    install.add_argument(
+        "--no-activate",
+        action="store_true",
+        help="keep the currently configured bar",
+    )
+    install.add_argument(
+        "--keep-layout",
+        action="store_true",
+        help="preserve the current bar widget layout (requires --no-activate)",
+    )
     install.add_argument("--dry-run", action="store_true")
     install.add_argument("--yes", "-y", action="store_true")
 
@@ -792,6 +1003,11 @@ def parser() -> argparse.ArgumentParser:
     )
     deactivate.add_argument("--dry-run", action="store_true")
     deactivate.add_argument("--yes", "-y", action="store_true")
+    deactivate.add_argument(
+        "--keep-layout",
+        action="store_true",
+        help="keep Shibumi widgets in the stock bar layout",
+    )
 
     uninstall = subparsers.add_parser("uninstall", help="remove Shibumi")
     uninstall.add_argument("--keep-settings", action="store_true")

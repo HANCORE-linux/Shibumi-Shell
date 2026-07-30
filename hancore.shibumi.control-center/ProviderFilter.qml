@@ -12,13 +12,17 @@ Item {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property var options: ["All", "Shibumi", "Omarchy Quattro", "Third-party"]
+  readonly property real filterFontSize:
+    Commons.Style.font.caption * uiScale
+  readonly property int filterFontWeight: Font.Medium
   signal selected(string provider)
 
   implicitHeight: Commons.Style.space(34)
 
   Rectangle {
     anchors.fill: parent
-    radius: 0
+    radius: root.controller.controlRadius
+    clip: true
     color: "transparent"
     border.width: 1
     border.color: root.controller.controlBorderColor
@@ -30,13 +34,14 @@ Item {
       spacing: Commons.Style.space(17)
 
       Text {
-        anchors.verticalCenter: parent.verticalCenter
+        height: parent.height
+        verticalAlignment: Text.AlignVCenter
         text: "SOURCE"
         color: root.foreground
         opacity: 0.48
         font.family: root.controller.marketFont
-        font.pixelSize: Commons.Style.font.caption * root.uiScale
-        font.weight: Font.DemiBold
+        font.pixelSize: root.filterFontSize
+        font.weight: root.filterFontWeight
         font.letterSpacing: 1
       }
 
@@ -53,15 +58,15 @@ Item {
 
           Text {
             id: label
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.verticalCenterOffset: -Commons.Style.space(2)
+            height: parent.height
+            verticalAlignment: Text.AlignVCenter
             text: option.modelData
             color: option.active ? root.accent : root.foreground
             opacity: option.active ? 1
               : optionPointer.containsMouse ? 0.82 : 0.48
             font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-            font.weight: option.active ? Font.DemiBold : Font.Normal
+            font.pixelSize: root.filterFontSize
+            font.weight: root.filterFontWeight
           }
 
           Rectangle {

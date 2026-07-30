@@ -11,7 +11,10 @@ Item {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
-  property string currentPage: "bars"
+  property string currentPage: "quick"
+  property string lastConfigurePage: "main"
+  property string configureDetailPage: ""
+  property alias settingsQuery: settingsSearch.text
   property bool paletteOpen: false
   property bool installMode: false
   property bool installConfirmed: false
@@ -19,20 +22,40 @@ Item {
   property string pickerProvider: "All"
   property string installUrl: ""
   property string installStatus: ""
+  property string selectedWidgetGroup: "G4"
+  property string selectedWidgetId: ""
 
-  readonly property var pageOptions: [
-    { id: "main", label: "Overview", glyph: "radio_button_checked" },
-    { id: "bars", label: "Bars", glyph: "align_vertical_center" },
-    { id: "plugins", label: "Widgets", glyph: "widgets" },
-    { id: "functions", label: "Appearance", glyph: "brush" },
-    { id: "splits", label: "Layout", glyph: "view_week" },
-    { id: "preferences", label: "Advanced", glyph: "settings" }
-  ]
-  readonly property bool ready: navRepeater.count === pageOptions.length
-    && pageReady
-  readonly property bool pageReady: pageLoader.item !== null
-    && pageLoader.item.ready === true
-  readonly property var pageItem: pageLoader.item
+  readonly property var pageOptions: {
+    const pages = [
+      { id: "bars", label: "Bars", glyph: "align_vertical_center" },
+      { id: "plugins", label: "Widgets", glyph: "widgets" },
+      { id: "workspaces", label: "Workspaces", glyph: "grid_view" },
+      { id: "pickers", label: "Pickers", glyph: "collections" },
+      { id: "logo", label: "Logo", glyph: "branding_watermark" },
+      { id: "functions", label: "Appearance", glyph: "brush" },
+      { id: "preferences", label: "Advanced", glyph: "settings" }
+    ]
+    return controller.stockOmarchyHost
+      ? pages.filter(function(page) {
+          return page.id !== "plugins" && page.id !== "splits"
+        })
+      : pages
+  }
+  readonly property bool configureDetailOpen: configureDetailPage !== ""
+  readonly property string restorePage: currentPage === "configure"
+    && configureDetailOpen ? configureDetailPage : currentPage
+  readonly property bool ready: quickPage.ready
+    && configureLanding.ready && pageReady
+  readonly property bool pageReady: currentPage === "quick"
+    ? quickPage.ready
+    : !configureDetailOpen && settingsQuery.trim() === ""
+      ? configureLanding.ready
+      : settingsQuery.trim() !== "" ? searchPage.ready
+        : pageLoader.item !== null && pageLoader.item.ready === true
+  readonly property var pageItem: currentPage === "quick"
+    ? quickPage : !configureDetailOpen && settingsQuery.trim() === ""
+      ? configureLanding : settingsQuery.trim() !== ""
+        ? searchPage : pageLoader.item
   readonly property bool fitsWidth: implicitWidth <= width + 0.5
   readonly property var filteredPlugins: {
     const needle = query.trim().toLowerCase()
@@ -51,25 +74,65 @@ Item {
   }
   readonly property bool validInstallUrl: /^(https:\/\/|ssh:\/\/|git@)[^\s]+$/i
     .test(installUrl.trim())
+  readonly property var validPageIds: pageOptions.map(function(page) {
+    return page.id
+  }).concat(["quick", "configure", "main"]).concat(
+    controller.stockOmarchyHost ? [] : ["widget-editor", "splits"])
 
   implicitWidth: Commons.Style.space(720)
   implicitHeight: Commons.Style.space(500)
 
   function pageComponent(page) {
-    if (page === "bars") return barsPage
+    if (page === "bars") return activeBarPage
     if (page === "plugins") return pluginsPage
+    if (page === "workspaces") return workspacesPage
+    if (page === "pickers") return pickersPage
+    if (page === "logo") return logoPage
     if (page === "splits") return splitPage
     if (page === "functions") return functionsPage
+    if (page === "widget-editor") return widgetEditorPage
     if (page === "preferences") return preferencesPage
     return overviewPage
   }
 
   function setPage(value) {
     const next = String(value || "")
-    if (!pageOptions.some(function(page) { return page.id === next }))
+    if (validPageIds.indexOf(next) < 0)
       return false
-    currentPage = next
+    if (next === "quick") {
+      configureDetailPage = ""
+      configureLanding.cancelTransition()
+      currentPage = "quick"
+      settingsQuery = ""
+      return true
+    }
+    currentPage = "configure"
+    settingsQuery = ""
+    if (next === "configure") {
+      configureDetailPage = ""
+      configureLanding.cancelTransition()
+      Qt.callLater(function() { configureLanding.forceActiveFocus() })
+      return true
+    }
+    configureDetailPage = next
+    lastConfigurePage = next
+    Qt.callLater(function() { configureLanding.showRoute(next) })
     return true
+  }
+
+  function setMode(value) {
+    const next = String(value || "")
+    if (next === "quick") return setPage("quick")
+    if (next !== "configure") return false
+    return setPage("configure")
+  }
+
+  function editWidget(groupId, pluginId) {
+    const group = String(groupId || "")
+    if (group === "" || controller.stockOmarchyHost) return false
+    selectedWidgetGroup = group
+    selectedWidgetId = String(pluginId || "")
+    return setPage("widget-editor")
   }
 
   function openWidgetPicker() {
@@ -110,160 +173,369 @@ Item {
   }
 
   Keys.onEscapePressed: function(event) {
-    if (!paletteOpen) return
-    closeWidgetPicker()
-    event.accepted = true
+    if (paletteOpen) {
+      closeWidgetPicker()
+      event.accepted = true
+      return
+    }
+    if (settingsQuery !== "") {
+      settingsQuery = ""
+      event.accepted = true
+    }
   }
 
-  Row {
+  Shortcut {
+    sequence: "Ctrl+K"
+    onActivated: settingsSearch.forceActiveFocus()
+  }
+
+  Column {
     anchors.fill: parent
     spacing: 0
 
-    Rectangle {
-      id: sidebar
-      width: Commons.Style.space(154)
-      height: parent.height
-      color: root.controller.marketPanel
+    Item {
+      id: searchBand
+      width: parent.width
+      height: Commons.Style.space(48)
 
-      Column {
-        anchors.fill: parent
-        anchors.rightMargin: Commons.Style.space(16)
-        spacing: Commons.Style.space(4)
+      Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Commons.Style.space(20)
+        anchors.rightMargin: Commons.Style.space(20)
+        height: Commons.Style.space(34)
+        radius: root.controller.controlRadius
+        color: "transparent"
+        border.width: 1
+        border.color: settingsSearch.activeFocus
+          ? root.accent : root.controller.controlBorderColor
 
-        Text {
-          height: Commons.Style.space(34)
-          verticalAlignment: Text.AlignVCenter
-          text: "SHIBUMI"
-          color: root.accent
-          font.family: root.controller.marketFont
-          font.pixelSize: Commons.Style.font.caption * root.uiScale
-          font.weight: Font.DemiBold
-          font.letterSpacing: 1.8
-        }
-
-        Text {
-          width: parent.width
-          height: Commons.Style.space(22)
-          verticalAlignment: Text.AlignVCenter
-          text: "CONTROL"
+        IconText {
+          id: searchGlyph
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(10)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "search"
           color: root.foreground
           opacity: 0.42
-          font.family: root.controller.marketFont
-          font.pixelSize: Commons.Style.font.caption * root.uiScale
-          font.letterSpacing: 1.4
+          font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
+          fill: 0
         }
 
-        Repeater {
-          id: navRepeater
-          model: root.pageOptions
-
-          delegate: Rectangle {
-            id: navItem
-            required property var modelData
-            width: parent.width
-            height: Commons.Style.space(36)
-            radius: 0
-            color: root.currentPage === navItem.modelData.id
-              ? root.controller.buttonFillColor : navPointer.containsMouse
-                ? root.controller.controlHoverFillColor : "transparent"
-
-            Rectangle {
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              width: Commons.Style.space(2)
-              height: parent.height
-              visible: root.currentPage === navItem.modelData.id
-              color: root.accent
-            }
-
-            Row {
-              anchors.fill: parent
-              anchors.leftMargin: Commons.Style.space(9)
-              spacing: Commons.Style.space(9)
-
-              IconText {
-                anchors.verticalCenter: parent.verticalCenter
-                width: Commons.Style.space(18)
-                text: navItem.modelData.glyph
-                color: root.foreground
-                opacity: root.currentPage === navItem.modelData.id ? 1 : 0.82
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
-                font.weight: Font.Medium
-                fill: 0
-              }
-
-              Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: navItem.modelData.label
-                color: root.currentPage === navItem.modelData.id
-                  ? root.foreground : root.foreground
-                opacity: root.currentPage === navItem.modelData.id ? 1 : 0.66
-                font.family: root.controller.marketFont
-                font.pixelSize: Commons.Style.font.subtitle * root.uiScale
-                font.weight: root.currentPage === navItem.modelData.id
-                  ? Font.Medium : Font.Normal
-              }
-            }
-
-            MouseArea {
-              id: navPointer
-              anchors.fill: parent
-              hoverEnabled: true
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.setPage(navItem.modelData.id)
+        TextInput {
+          id: settingsSearch
+          anchors.left: searchGlyph.right
+          anchors.right: searchHint.left
+          anchors.verticalCenter: parent.verticalCenter
+          anchors.leftMargin: Commons.Style.space(8)
+          anchors.rightMargin: Commons.Style.space(8)
+          color: root.foreground
+          selectionColor: Commons.Util.alpha(root.accent, 0.34)
+          selectedTextColor: root.foreground
+          clip: true
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+          onTextEdited: {
+            if (text.trim() !== ""
+                && (root.currentPage === "quick"
+                  || !root.configureDetailOpen)) {
+              root.currentPage = "configure"
+              root.configureDetailPage = root.lastConfigurePage
+              Qt.callLater(function() {
+                configureLanding.showRoute(root.lastConfigurePage)
+              })
             }
           }
         }
 
-        Item { width: 1; height: Commons.Style.space(10) }
-
-        Rectangle {
-          width: parent.width
-          height: 1
-          color: root.controller.dividerColor
+        Text {
+          anchors.left: settingsSearch.left
+          anchors.verticalCenter: parent.verticalCenter
+          visible: settingsSearch.text === ""
+          text: "Search settings…"
+          color: root.foreground
+          opacity: 0.32
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
         }
 
         Text {
-          width: parent.width
-          text: root.controller.pluginsScanning
-            ? "Refreshing plugin index …"
-            : root.controller.availablePluginCount + " Plugins · Quattro"
+          id: searchHint
+          anchors.right: parent.right
+          anchors.rightMargin: Commons.Style.space(9)
+          anchors.verticalCenter: parent.verticalCenter
+          text: "CTRL K"
           color: root.foreground
-          opacity: 0.42
-          wrapMode: Text.WordWrap
+          opacity: 0.28
           font.family: root.controller.marketFont
           font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: Font.Medium
+          font.letterSpacing: 0.8
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          acceptedButtons: Qt.LeftButton
+          cursorShape: Qt.IBeamCursor
+          onClicked: settingsSearch.forceActiveFocus()
         }
       }
     }
 
-    Rectangle {
-      width: 1
-      height: parent.height
-      color: root.controller.dividerColor
+    Item {
+      id: modeBand
+      width: parent.width
+      height: Commons.Style.space(42)
+
+      Row {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Commons.Style.space(20)
+        anchors.rightMargin: Commons.Style.space(20)
+        height: Commons.Style.space(31)
+        spacing: Commons.Style.space(6)
+
+        Rectangle {
+          id: modeSelector
+          width: Commons.Style.space(206)
+          height: parent.height
+          radius: root.controller.controlRadius
+          color: "transparent"
+          border.width: 1
+          border.color: root.controller.controlBorderColor
+          clip: true
+
+          Row {
+            anchors.fill: parent
+            anchors.margins: 2
+            spacing: 0
+
+            Repeater {
+              model: [
+                { value: "quick", label: "QUICK" },
+                { value: "configure", label: "CONFIGURE" }
+              ]
+
+              delegate: Rectangle {
+                id: modeOption
+                required property var modelData
+                readonly property bool active: modelData.value === "quick"
+                  ? root.currentPage === "quick"
+                  : root.currentPage !== "quick"
+                width: parent.width / 2
+                height: parent.height
+                radius: Math.max(0, root.controller.controlRadius - 2)
+                color: active
+                  ? root.controller.marketPanelRaised : "transparent"
+
+                Text {
+                  anchors.centerIn: parent
+                  text: modeOption.modelData.label
+                  color: root.foreground
+                  opacity: modeOption.active ? 1 : 0.42
+                  font.family: root.controller.marketFont
+                  font.pixelSize: Commons.Style.font.caption * root.uiScale
+                  font.weight: Font.DemiBold
+                  font.letterSpacing: 0.8
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.setMode(modeOption.modelData.value)
+                }
+              }
+            }
+          }
+        }
+
+        Rectangle {
+          id: widgetsShortcut
+          width: Commons.Style.space(178)
+          height: parent.height
+          radius: root.controller.controlRadius
+          color: widgetsShortcutPointer.containsMouse
+            || root.configureDetailPage === "plugins"
+            || root.configureDetailPage === "widget-editor"
+            ? root.controller.marketPanelRaised : "transparent"
+          opacity: root.controller.stockOmarchyHost ? 0.34 : 1
+          border.width: 1
+          border.color: root.configureDetailPage === "plugins"
+            || root.configureDetailPage === "widget-editor"
+            ? root.accent : root.controller.controlBorderColor
+
+          Text {
+            anchors.centerIn: parent
+            text: "WIDGETS  " + root.controller.enabledWidgetCount
+              + " / " + root.controller.availableWidgetCount
+            color: root.foreground
+            font.family: root.controller.marketFont
+            font.pixelSize: Commons.Style.font.caption * root.uiScale
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.8
+          }
+
+          MouseArea {
+            id: widgetsShortcutPointer
+            anchors.fill: parent
+            enabled: !root.controller.stockOmarchyHost
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: root.setPage("plugins")
+          }
+        }
+
+        Rectangle {
+          id: pluginRegistryStatus
+          width: parent.width - x
+          height: parent.height
+          radius: root.controller.controlRadius
+          color: "transparent"
+          border.width: 1
+          border.color: root.controller.controlBorderColor
+
+          Text {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Commons.Style.space(10)
+            anchors.rightMargin: Commons.Style.space(10)
+            text: "PLUGINS  "
+              + root.controller.registryShibumiPluginCount + " SHIBUMI · "
+              + root.controller.registryOmarchyPluginCount + " OMARCHY · "
+              + root.controller.registryExternalPluginCount + " EXT"
+            color: root.foreground
+            opacity: 0.62
+            elide: Text.ElideRight
+            horizontalAlignment: Text.AlignHCenter
+            font.family: root.controller.marketFont
+            font.pixelSize: Commons.Style.font.caption * root.uiScale
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.8
+          }
+        }
+      }
     }
 
     Item {
-      width: parent.width - sidebar.width - 1
-      height: parent.height
+      id: workspace
+      width: parent.width
+      height: parent.height - searchBand.height - modeBand.height
+      clip: true
 
       Flickable {
-        id: pageFlick
+        id: quickFlick
+        z: 1
         anchors.fill: parent
-        anchors.leftMargin: Commons.Style.space(22)
+        anchors.leftMargin: Commons.Style.space(20)
+        anchors.rightMargin: Commons.Style.space(20)
+        visible: root.currentPage === "quick"
         contentWidth: width
-        contentHeight: pageLoader.item
-          ? pageLoader.item.implicitHeight + Commons.Style.space(12) : height
+        contentHeight: quickPage.implicitHeight + Commons.Style.space(12)
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
         clip: true
 
-        Loader {
-          id: pageLoader
-          width: parent.width - Commons.Style.space(8)
-          height: item ? item.implicitHeight : 1
-          sourceComponent: root.pageComponent(root.currentPage)
+        QuickControlPage {
+          id: quickPage
+          width: parent.width
+          controller: root.controller
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          motionActive: root.controller.open === true
+            && root.currentPage === "quick" && !root.paletteOpen
+        }
+      }
+
+      Flickable {
+        id: configureLandingFlick
+        z: 1
+        anchors.fill: parent
+        visible: root.currentPage === "configure"
+        contentWidth: width
+        contentHeight: configureLanding.implicitHeight
+          + Commons.Style.space(12)
+        interactive: !root.configureDetailOpen
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        clip: true
+
+        ConfigureLandingPage {
+          id: configureLanding
+          x: Commons.Style.space(20)
+          width: parent.width - Commons.Style.space(40)
+          controller: root.controller
+          pageOptions: root.pageOptions
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          activePage: root.currentPage === "configure"
+            && !root.configureDetailOpen
+          detailOpen: root.configureDetailOpen
+          motionActive: root.controller.open === true
+            && root.currentPage === "configure"
+            && !root.configureDetailOpen && !root.paletteOpen
+          onPageRequested: function(pageId) { root.setPage(pageId) }
+          onBackRequested: root.setPage("configure")
+        }
+      }
+
+      Item {
+        id: configureDetailPane
+        z: 3
+        x: Commons.Style.space(194)
+        width: parent.width - x - Commons.Style.space(20)
+        height: parent.height
+        visible: root.currentPage === "configure"
+          && root.configureDetailOpen
+
+        Flickable {
+          id: pageFlick
+          anchors.fill: parent
+          contentWidth: width
+          contentHeight: activePage.implicitHeight
+            + Commons.Style.space(12)
+          boundsBehavior: Flickable.StopAtBounds
+          flickableDirection: Flickable.VerticalFlick
+          clip: true
+
+          Item {
+            id: activePage
+            width: parent.width
+            implicitHeight: root.settingsQuery.trim() !== ""
+              ? searchPage.implicitHeight
+              : pageLoader.item ? pageLoader.item.implicitHeight : 1
+
+            ControlSearchPage {
+              id: searchPage
+              width: parent.width
+              visible: root.settingsQuery.trim() !== ""
+              controller: root.controller
+              pageOptions: root.pageOptions
+              query: root.settingsQuery
+              foreground: root.foreground
+              accent: root.accent
+              uiScale: root.uiScale
+              motionActive: root.controller.open === true
+                && root.settingsQuery.trim() !== "" && !root.paletteOpen
+              onPageRequested: function(pageId) { root.setPage(pageId) }
+              onWidgetRequested: function(groupId, pluginId) {
+                root.editWidget(groupId, pluginId)
+              }
+            }
+
+            Loader {
+              id: pageLoader
+              width: parent.width
+              height: item ? item.implicitHeight : 1
+              visible: root.settingsQuery.trim() === ""
+              sourceComponent: root.pageComponent(
+                root.configureDetailPage)
+            }
+          }
         }
       }
     }
@@ -288,7 +560,7 @@ Item {
         Commons.Style.space(560))
       height: installMode
         ? Commons.Style.space(292) : Commons.Style.space(410)
-      radius: 0
+      radius: root.controller.controlRadius
       color: root.controller.marketPanel
       border.width: root.controller.controlBorderWidth
       border.color: root.controller.controlBorderColor
@@ -329,7 +601,7 @@ Item {
         Rectangle {
           width: parent.width
           height: Commons.Style.space(36)
-          radius: 0
+          radius: root.controller.controlRadius
           color: root.controller.controlFillColor
           border.width: 1
           border.color: root.installMode && installInput.activeFocus
@@ -480,7 +752,7 @@ Item {
               Rectangle {
                 width: parent.width
                 height: Commons.Style.space(42)
-                radius: 0
+                radius: root.controller.controlRadius
                 color: installPointer.containsMouse
                   ? root.controller.controlHoverFillColor : "transparent"
 
@@ -549,7 +821,7 @@ Item {
             Rectangle {
               width: parent.width
               height: Commons.Style.space(32)
-              radius: 0
+              radius: root.controller.controlRadius
               color: root.installConfirmed
                 ? Commons.Util.alpha(root.accent, 0.15)
                 : root.controller.controlFillColor
@@ -653,12 +925,15 @@ Item {
   }
 
   Component {
-    id: barsPage
-    BarsPage {
+    id: activeBarPage
+    ActiveBarSettingsPage {
       controller: root.controller
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "bars"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 
@@ -669,6 +944,9 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "main"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 
@@ -679,6 +957,66 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "plugins"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
+      onEditRequested: function(groupId, pluginId) {
+        root.editWidget(groupId, pluginId)
+      }
+    }
+  }
+
+  Component {
+    id: widgetEditorPage
+    WidgetEditorPage {
+      controller: root.controller
+      uiScale: root.uiScale
+      foreground: root.foreground
+      accent: root.accent
+      selectedWidgetGroup: root.selectedWidgetGroup
+      selectedWidgetId: root.selectedWidgetId
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "widget-editor"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
+    }
+  }
+
+  Component {
+    id: workspacesPage
+    WorkspaceSettingsPage {
+      controller: root.controller
+      uiScale: root.uiScale
+      foreground: root.foreground
+      accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "workspaces"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
+    }
+  }
+
+  Component {
+    id: pickersPage
+    PickerSettingsPage {
+      controller: root.controller
+      uiScale: root.uiScale
+      foreground: root.foreground
+      accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "pickers"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
+    }
+  }
+
+  Component {
+    id: logoPage
+    LogoSettingsPage {
+      controller: root.controller
+      uiScale: root.uiScale
+      foreground: root.foreground
+      accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "logo"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 
@@ -689,6 +1027,9 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "splits"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 
@@ -699,6 +1040,9 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "functions"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 
@@ -709,6 +1053,9 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionActive: root.controller.open === true
+        && root.configureDetailPage === "preferences"
+        && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
 }

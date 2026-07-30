@@ -172,6 +172,7 @@ rg -Fq 'radius: root.bar.visualTokens.pillRadius' \
   || fail "drop targets do not follow the selected V1 radius"
 for pill_contract in \
   'property var settings: ({})' \
+  'property var tokenSource: null' \
   'readonly property bool customDecorated:' \
   'readonly property bool surfaceDisabled:' \
   'readonly property bool shellPillVisible: shellStyle === "shibumi"' \
@@ -180,12 +181,22 @@ for pill_contract in \
   rg -Fq "$pill_contract" shared/presentation/PillSurface.qml \
     || fail "V1/V2 widget surface separation drifted: $pill_contract"
 done
+for widget in ai audio battery bluetooth brightness center control-center cpu gpu \
+    media memory network power-profile quick-access status storage temperature \
+    workspaces; do
+  rg -Fq 'HostTokens { id: hostTokens; bar: root.bar }' \
+    "hancore.shibumi.$widget/BarWidget.qml" \
+    || fail "$widget does not provide standard-host visual tokens"
+done
 for widget in ai audio battery bluetooth brightness center cpu gpu media \
     memory network power-profile quick-access status storage temperature \
     workspaces; do
   rg -Fq 'settings: root.settings' \
     "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not pass appearance state to its native pill"
+  rg -Fq 'tokenSource: root.tokens' \
+    "hancore.shibumi.$widget/BarWidget.qml" \
+    || fail "$widget does not pass its resolved host tokens to its pill"
 done
 for launcher_contract in \
   'readonly property bool customDecorated:' \

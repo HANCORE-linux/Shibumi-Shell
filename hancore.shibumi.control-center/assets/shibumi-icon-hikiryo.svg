@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>Shibumi — Hikiryō Circle</title>
+  <circle cx="12" cy="12" r="9.3" fill="none" stroke="#d9d9db" stroke-width="1.4"/>
+  <line x1="5" y1="8.4" x2="19" y2="8.4" stroke="#d9d9db" stroke-width="1.6" stroke-linecap="butt"/>
+  <line x1="5" y1="12.8" x2="19" y2="12.8" stroke="#d9d9db" stroke-width="1.6" stroke-linecap="butt"/>
+  <line x1="6.5" y1="16.6" x2="17.5" y2="16.6" stroke="#e3a988" stroke-width="1.6" stroke-linecap="butt"/>
+</svg>

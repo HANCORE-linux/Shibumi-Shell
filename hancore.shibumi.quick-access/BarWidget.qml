@@ -13,7 +13,9 @@ Item {
   property var settings: ({})
   property var quickAccessServiceOverride: null
   property var targetScreenOverride: null
-  readonly property var tokens: bar ? bar.visualTokens : null
+  HostTokens { id: hostTokens; bar: root.bar }
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -93,6 +95,7 @@ Item {
   }
 
   PillSurface {
+    tokenSource: root.tokens
     settings: root.settings
     anchors.fill: parent
     anchors.topMargin: root.bar && !root.bar.vertical

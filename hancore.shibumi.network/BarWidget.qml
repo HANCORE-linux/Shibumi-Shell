@@ -9,11 +9,13 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.network"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("NetworkPanel.qml")
   property var networkServiceOverride: null
   property var sessionService: null
 
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -123,6 +125,7 @@ Ui.Panel {
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
         PillSurface {
+          tokenSource: root.tokens
           anchors.fill: parent
           bar: root.bar
           settings: root.settings

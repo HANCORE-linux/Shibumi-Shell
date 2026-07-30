@@ -11,6 +11,7 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.center"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url calendarSource: Qt.resolvedUrl("CalendarPanel.qml")
   property real availableWidth: 0
   // Start conservatively when the widget is recreated after a provider
@@ -19,7 +20,8 @@ Ui.Panel {
   // hysteresis trap. A genuinely roomy center expands to stage 0 on the first
   // measured update.
   property int stage: 1
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -94,8 +96,14 @@ Ui.Panel {
   }
 
   function registeredSource(id) {
-    return bar && typeof bar.registeredWidgetSource === "function"
-      ? bar.registeredWidgetSource(id) : ""
+    if (bar && typeof bar.registeredWidgetSource === "function")
+      return bar.registeredWidgetSource(id)
+    const registry = bar && bar.shell
+      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
   }
 
   function syncOfficialLoader(loader, component, source, id, childSettingsValue) {
@@ -184,6 +192,7 @@ Ui.Panel {
   }
 
   PillSurface {
+    tokenSource: root.tokens
     bar: root.bar
     settings: root.settings
     anchors.fill: parent

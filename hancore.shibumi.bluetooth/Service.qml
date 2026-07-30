@@ -12,10 +12,9 @@ Item {
   property var shell: null
   property var manifest: null
   property var bar: shell ? shell.bar : null
-  readonly property url panelSource: bar
-    ? bar.registeredWidgetSource("omarchy.bluetooth") : ""
+  readonly property url panelSource: registeredSource("omarchy.bluetooth")
   property Component panelComponent: String(panelSource) ? null
-    : bar ? bar.registeredWidgetComponent("omarchy.bluetooth") : null
+    : registeredComponent("omarchy.bluetooth")
   property var sessionOwners: []
 
   readonly property var backend: bridge.panel
@@ -29,6 +28,28 @@ Item {
   readonly property var pendingActions: bridge.pendingActions
   readonly property int connectedCount: connectedDevices.length
   readonly property int sessionCount: sessionOwners.length
+
+  function registeredSource(id) {
+    if (bar && typeof bar.registeredWidgetSource === "function")
+      return bar.registeredWidgetSource(id)
+    const registry = shell && "pluginRegistry" in shell
+      ? shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
+  }
+
+  function registeredComponent(id) {
+    if (bar && typeof bar.registeredWidgetComponent === "function")
+      return bar.registeredWidgetComponent(id)
+    const registry = bar && "barWidgetRegistry" in bar
+      ? bar.barWidgetRegistry : null
+    if (registry) void(registry.revision)
+    const widgets = registry && registry.widgets ? registry.widgets : ({})
+    const entry = widgets[String(id || "")]
+    return entry && entry.component ? entry.component : null
+  }
 
   visible: false
   width: 0

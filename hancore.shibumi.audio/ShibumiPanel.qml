@@ -46,7 +46,8 @@ PanelWindow {
   readonly property var anchorWindow: anchorItem
     ? anchorItem.QsWindow.window : null
   readonly property string barPos: bar ? bar.position : "top"
-  readonly property var shibumiTokens: bar ? bar.visualTokens : null
+  readonly property var shibumiTokens: bar && "visualTokens" in bar
+    ? bar.visualTokens : null
   readonly property string shellStyle: shibumiTokens
     ? String(shibumiTokens.shellStyle || "shibumi") : "shibumi"
   readonly property bool connectedSurfaceEnabled:

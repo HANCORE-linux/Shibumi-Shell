@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import "ShibumiConfig.js" as ShibumiConfig
 
 Item {
@@ -9,6 +11,10 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
+  readonly property string pluginSourceDir: manifest
+    ? String(manifest.__sourceDir || "") : ""
+  property string suitePayloadDigest: ""
+  property bool suitePayloadLoaded: false
 
   readonly property int contractVersion: 1
   readonly property bool ready: shell !== null
@@ -32,6 +38,20 @@ Item {
 
   function same(left, right) {
     return JSON.stringify(left) === JSON.stringify(right)
+  }
+
+  function captureSuiteMarker(raw) {
+    suitePayloadDigest = ""
+    suitePayloadLoaded = false
+    try {
+      const marker = JSON.parse(String(raw || ""))
+      const digest = String(marker.suitePayloadDigest || "")
+      if (marker.suiteId === "hancore.shibumi"
+          && /^[0-9a-f]{64}$/.test(digest)) {
+        suitePayloadDigest = digest
+        suitePayloadLoaded = true
+      }
+    } catch (error) {}
   }
 
   function applySourceConfig(value) {
@@ -205,13 +225,17 @@ Item {
     const style = String(value || "")
     if (["tanzaku", "hearthstone", "carousel"].indexOf(style) < 0) return false
     return commit(function(next) {
-      next.picker = { style: style, imageStyle: style, mediaStyle: style }
+      next.picker = {
+        style: style,
+        imageStyle: style === "carousel" ? "omarchy" : style,
+        mediaStyle: style
+      }
     })
   }
 
   function setImagePickerStyle(value) {
     const style = String(value || "")
-    if (["omarchy", "tanzaku", "hearthstone", "carousel"].indexOf(style) < 0)
+    if (["omarchy", "tanzaku", "hearthstone"].indexOf(style) < 0)
       return false
     return commit(function(next) {
       const picker = ShibumiConfig.normalize(next).picker
@@ -323,6 +347,36 @@ Item {
 
   onSourceConfigChanged: applySourceConfig(sourceConfig)
   Component.onCompleted: applySourceConfig(sourceConfig)
+
+  IpcHandler {
+    target: "shibumi-suite-runtime"
+
+    function verifyPayload(expectedDigest: string): string {
+      const expected = String(expectedDigest || "")
+      return root.ready
+          && root.suitePayloadLoaded
+          && expected.length === 64
+          && expected === root.suitePayloadDigest
+        ? "ok" : "not-ready"
+    }
+
+    function reloadPayload(): string {
+      Qt.callLater(function() { Quickshell.reload(false) })
+      return "ok"
+    }
+  }
+
+  FileView {
+    path: root.pluginSourceDir !== ""
+      ? root.pluginSourceDir + "/.shibumi-managed.json" : ""
+    watchChanges: false
+    printErrors: false
+    onLoaded: root.captureSuiteMarker(text())
+    onLoadFailed: {
+      root.suitePayloadDigest = ""
+      root.suitePayloadLoaded = false
+    }
+  }
 
   ThemePalette {
     id: palette

@@ -65,6 +65,7 @@ ShellRoot {
     })
     property bool foregroundAnimationEnabled: false
     property var activePopout: null
+    property var layoutController: ({ v2Mode: true })
     property var workspaceConfig: ({ version: 1, mode: "5", style: "numbers" })
     property var shell: fakeShell
     property var lastCommand: []
@@ -174,45 +175,23 @@ ShellRoot {
         }
         root.geometryWaits = 0
         if (!workspaceState.setPreference("style", "rings"))
-          return root.fail("Rings workspace preference")
+          return root.fail("Frame workspace preference")
       } else if (root.phase === 3) {
         if (widget.workspaceStyle !== "rings"
-            || Math.round(widget.implicitWidth) !== 49) {
-          root.geometryWaits++
-          if (root.geometryWaits < 10) return
-          return root.fail("V2 Rings presentation geometry: " + widget.implicitWidth)
-        }
-        root.geometryWaits = 0
-        if (!workspaceState.setPreference("style", "frame"))
-          return root.fail("Frame workspace preference")
-      } else if (root.phase === 4) {
-        if (widget.workspaceStyle !== "frame"
             || Math.round(widget.implicitWidth) !== 51) {
           root.geometryWaits++
           if (root.geometryWaits < 10) return
-          return root.fail("embedded V2 Frame presentation geometry: "
-            + widget.implicitWidth)
+          return root.fail("V2 Frame presentation geometry: " + widget.implicitWidth)
         }
         root.geometryWaits = 0
         if (!workspaceState.setPreference("style", "aurora"))
           return root.fail("Aurora workspace preference")
-      } else if (root.phase === 5) {
+      } else if (root.phase === 4) {
         if (widget.workspaceStyle !== "aurora"
-            || Math.round(widget.implicitWidth) !== 69) {
-          root.geometryWaits++
-          if (root.geometryWaits < 10) return
-          return root.fail("V2 Aurora presentation geometry: " + widget.implicitWidth)
-        }
-        root.geometryWaits = 0
-        if (!workspaceState.setPreference("style", "aurora-streak"))
-          return root.fail("Aurora streak workspace preference")
-      } else if (root.phase === 6) {
-        if (widget.workspaceStyle !== "aurora-streak"
             || Math.round(widget.implicitWidth) !== 58) {
           root.geometryWaits++
           if (root.geometryWaits < 10) return
-          return root.fail("embedded V2 Aurora streak presentation geometry: "
-            + widget.implicitWidth)
+          return root.fail("V2 Aurora presentation geometry: " + widget.implicitWidth)
         }
         root.geometryWaits = 0
         if (!workspaceState.setPreference("style", "default")

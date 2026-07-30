@@ -9,6 +9,7 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.temperature"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
 
   readonly property var hostShell: bar && bar.shell ? bar.shell : null
   readonly property var telemetryService: hostShell
@@ -19,7 +20,8 @@ Ui.Panel {
   readonly property var stateService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.state") : null
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -90,6 +92,7 @@ Ui.Panel {
     height: implicitHeight
 
     PillSurface {
+      tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
       anchors.fill: parent

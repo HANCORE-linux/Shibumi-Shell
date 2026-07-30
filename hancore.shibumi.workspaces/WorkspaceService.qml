@@ -23,8 +23,7 @@ Item {
   readonly property string mode: config && ["10", "5", "active"].indexOf(
     String(config.mode || "")) !== -1 ? String(config.mode) : "10"
   readonly property string style: config
-    && ["default", "numbers", "magic", "kanji", "rings", "frame",
-        "aurora", "aurora-streak"].indexOf(
+    && ["default", "numbers", "magic", "kanji", "rings", "aurora"].indexOf(
       String(config.style || "")) !== -1 ? String(config.style) : "default"
   readonly property var visibleWorkspaceIds: WorkspaceModel.visibleIds(
     mode, entries, focusedId)
@@ -49,8 +48,8 @@ Item {
     if (key === "mode" && ["10", "5", "active"].indexOf(next) < 0)
       return false
     if (key === "style"
-        && ["default", "numbers", "magic", "kanji", "rings", "frame",
-            "aurora", "aurora-streak"].indexOf(next) < 0) return false
+        && ["default", "numbers", "magic", "kanji", "rings", "aurora"]
+          .indexOf(next) < 0) return false
     if (key !== "mode" && key !== "style") return false
     return stateService
       && typeof stateService.setWorkspacePreference === "function"

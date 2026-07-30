@@ -10,9 +10,11 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.control-center"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
 
   readonly property var hostShell: bar && bar.shell ? bar.shell : null
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings, bar ? bar.urgent : "white")
@@ -37,7 +39,7 @@ Ui.Panel {
   readonly property int barSize: bar ? Number(bar.barSize || 0) : 0
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
-  readonly property bool animationActive: pointer.containsMouse || opened
+  readonly property bool animationActive: pointer.containsMouse
   readonly property var launcherConfig: stateService && stateService.config
     && stateService.config.menu && stateService.config.menu.launcher
     ? stateService.config.menu.launcher
@@ -333,11 +335,12 @@ Ui.Panel {
   Item {
     visible: root.iconMode
     anchors.centerIn: parent
-    width: 16
+    width: root.stockOmarchyHost ? 18 : 16
     height: root.tokens ? root.tokens.pillHeight : 24
 
     Text {
       visible: !root.stockOmarchyHost
+        && root.launcherConfig.icon !== "shibumi"
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.iconXOffset(root.launcherConfig.icon)
       anchors.verticalCenterOffset: root.iconYOffset(root.launcherConfig.icon)
@@ -348,13 +351,18 @@ Ui.Panel {
       font.pixelSize: root.iconSize(root.launcherConfig.icon)
     }
 
-    FlatTintedImage {
+    Image {
       visible: root.stockOmarchyHost
+        || root.launcherConfig.icon === "shibumi"
       anchors.centerIn: parent
-      width: 17
-      height: 17
-      source: Qt.resolvedUrl("assets/shibumi-mark.svg")
-      tint: root.widgetInk
+      width: 18
+      height: 18
+      source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")
+      fillMode: Image.PreserveAspectFit
+      sourceSize.width: 24
+      sourceSize.height: 24
+      smooth: true
+      mipmap: true
     }
   }
 

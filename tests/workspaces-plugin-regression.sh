@@ -65,10 +65,14 @@ rg -q 'height: 30' \
   "$repo_root/hancore.shibumi.workspaces/WorkspacePanelContent.qml" \
   || fail "workspace rows do not retain the compact V1 height"
 
-for v2_style in kanji rings frame aurora aurora-streak; do
+for v2_style in kanji rings aurora; do
   rg -Fq "root.renderStyle === \"$v2_style\"" \
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
     || fail "V2 workspace style is missing: $v2_style"
 done
+if rg -q 'root\.renderStyle === "(frame|aurora-streak)"' \
+    "$repo_root/hancore.shibumi.workspaces/BarWidget.qml"; then
+  fail "non-reference workspace style remains in the Shibumi renderer"
+fi
 
 printf 'workspaces plugin regression passed\n'

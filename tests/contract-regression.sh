@@ -210,6 +210,9 @@ rg -q 'onAvailableWidthChanged: injectProperties\(\)' core/WidgetSlot.qml \
   || fail "center width changes are not forwarded reactively"
 rg -q 'availableWidth: horizontalSurface.centerAvailableWidth' styles/shibumi/BarSurface.qml \
   || fail "center width budget is not monitor-local"
+rg -Fq 'ResponsiveLayout.centerAvailableWidth(compactShell, width,' \
+  styles/shibumi/BarSurface.qml \
+  || fail "compact V2 shells measure the center against their own fitted width"
 for shell_contract in shellStyle shellWidth shellX shellContentInset; do
   rg -Fq "$shell_contract" styles/shibumi/BarSurface.qml \
     || fail "Shibumi surface lost V2 shell geometry: $shell_contract"

@@ -10,6 +10,7 @@ Column {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property bool motionActive: false
 
   readonly property var reactorOptions: [
     { value: 0, label: "Off" },
@@ -28,21 +29,18 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(8)
 
-  Text {
-    text: "LAYOUT ENGINE"
-    color: root.accent
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-    font.weight: Font.Bold
-    font.letterSpacing: 1.8
-  }
-
-  Text {
-    text: "layout"
-    color: root.foreground
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.space(24) * root.uiScale
-    font.weight: Font.Bold
+  PageHeaderHero {
+    controller: root.controller
+    active: root.motionActive
+    pageKey: "layout"
+    eyebrow: "LAYOUT ENGINE"
+    title: "Layout"
+    description: root.controller.v2LayoutActive === true
+      ? "V2 regions and dividers."
+      : "V1 splits, gaps and island motion."
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
   }
 
   Column {
@@ -113,7 +111,7 @@ Column {
 
     Text {
       width: parent.width
-      text: "Full, Fit, Dock and Notch use slots and manual separators. "
+      text: "Full, Fit, Dock and Notch use slots and manual dividers. "
         + "V1 split islands, merge and gap animations do not apply."
       color: root.foreground
       opacity: 0.54
@@ -125,7 +123,7 @@ Column {
     CompactSettingChoice {
       width: parent.width
       controller: root.controller
-      label: "Edit separators on bar"
+      label: "Edit dividers on bar"
       foreground: root.foreground
       accent: root.accent
       uiScale: root.uiScale

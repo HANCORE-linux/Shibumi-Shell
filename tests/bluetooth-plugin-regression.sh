@@ -52,8 +52,10 @@ if rg -q 'bar\.bluetoothService' "$repo_root/hancore.shibumi.bluetooth"; then
 fi
 rg -q 'property var bar: shell \? shell\.bar : null' "$service" \
   || fail "Bluetooth service does not use the versioned active bar facade"
-rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' "$service" \
+rg -q 'registeredComponent\("omarchy\.bluetooth"\)' "$service" \
   || fail "Bluetooth service does not retain the official Omarchy owner"
+rg -Fq '"barWidgetRegistry" in bar' "$service" \
+  || fail "Bluetooth service cannot resolve the official owner on stock Quattro"
 [[ $(rg -c '^  BluetoothPanelBridge \{' "$service") -eq 1 ]] \
   || fail "Bluetooth service does not own exactly one official bridge"
 if rg -Fq 'panel.bar = null' "$bridge"; then

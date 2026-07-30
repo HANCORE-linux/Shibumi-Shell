@@ -9,7 +9,8 @@ Ui.BorderSurface {
 
   required property var controller
   readonly property var barController: controller.barController || null
-  readonly property var tokens: barController ? barController.visualTokens : null
+  readonly property var tokens: barController
+    && "visualTokens" in barController ? barController.visualTokens : null
   property int availableWidth: Commons.Style.space(800)
   property int availableHeight: Commons.Style.space(600)
   readonly property real uiScale: Math.max(0.6, Math.min(1.0,

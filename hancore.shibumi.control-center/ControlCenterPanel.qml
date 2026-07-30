@@ -11,22 +11,35 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var stateService
-  readonly property color marketBackground: "#08080a"
-  readonly property color marketPanel: "#0b0b0d"
-  readonly property color marketPanelRaised: "#101012"
-  readonly property color marketLine: "#28282c"
-  readonly property color marketLineStrong: "#3a3a3f"
-  readonly property color marketText: "#d7d7d9"
-  readonly property color marketMuted: "#aaaab0"
-  readonly property color marketFaint: "#7d7d84"
-  readonly property color marketAccent: stateService
-    ? stateService.selectedColor : "#ff5a36"
-  readonly property color marketButtonFill: stateService
-    ? stateService.paletteColor("color08") : marketPanel
-  readonly property color buttonFillColor: marketButtonFill
-  readonly property color buttonHoverFillColor: marketButtonFill
-  readonly property color buttonHoverBorderColor: marketMuted
-  readonly property string marketFont: "JetBrainsMono Nerd Font"
+  // Compatibility aliases for the Control Center views. Their provenance is
+  // the active host's VisualTokens, which ultimately follow colors.toml.
+  readonly property color marketBackground: shibumiTokens
+    ? shibumiTokens.panelBackground : Commons.Color.popups.background
+  readonly property color marketPanel: marketBackground
+  readonly property color marketPanelRaised: shibumiTokens
+    && shibumiTokens.fillHover !== undefined
+    ? shibumiTokens.fillHover : Commons.Util.alpha(marketAccent, 0.10)
+  readonly property color marketLine: shibumiTokens
+    && shibumiTokens.separator !== undefined
+    ? shibumiTokens.separator : Commons.Color.popups.border
+  readonly property color marketLineStrong: shibumiTokens
+    ? shibumiTokens.panelBorder : Commons.Color.popups.border
+  readonly property color marketText: shibumiTokens
+    ? shibumiTokens.ink : Commons.Color.popups.text
+  readonly property color marketMuted: shibumiTokens
+    && shibumiTokens.sumiHi !== undefined
+    ? shibumiTokens.sumiHi : Commons.Color.muted
+  readonly property color marketFaint: shibumiTokens
+    && shibumiTokens.sumi !== undefined
+    ? shibumiTokens.sumi : Commons.Color.muted
+  readonly property color marketAccent: shibumiTokens
+    ? shibumiTokens.seal : stateService
+      ? stateService.selectedColor : Commons.Color.accent
+  readonly property color buttonFillColor: controlFillColor
+  readonly property color buttonHoverFillColor: controlHoverFillColor
+  readonly property color buttonHoverBorderColor: controlHoverBorderColor
+  readonly property string marketFont: shibumiTokens
+    ? shibumiTokens.fontFamily : Commons.Style.font.family
 
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
@@ -39,7 +52,7 @@ ShibumiPanel {
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
   ]
   readonly property var launcherIconOptions: [
-    "omarchy", "hyprland", "arch", "grid", "spark", "power",
+    "shibumi", "omarchy", "hyprland", "arch", "grid", "spark", "power",
     "dragon", "mark", "nix", "branch", "rebel"
   ]
   readonly property string barPosition: bar
@@ -52,8 +65,10 @@ ShibumiPanel {
       || "tanzaku") : "tanzaku"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
-  readonly property var pluginRegistry: bar && bar.pluginRegistry
-    ? bar.pluginRegistry : null
+  readonly property var pluginRegistry: bar && "pluginRegistry" in bar
+    && bar.pluginRegistry ? bar.pluginRegistry
+    : bar && bar.shell && "pluginRegistry" in bar.shell
+      ? bar.shell.pluginRegistry : null
   readonly property int pluginRevision: pluginRegistry
     ? Number(pluginRegistry.registryRevision || 0) : 0
   readonly property bool pluginsScanning: pluginRegistry
@@ -72,6 +87,14 @@ ShibumiPanel {
     function(entry) { return entry.firstParty }).length
   readonly property int shibumiPluginCount: pluginEntries.filter(
     function(entry) { return entry.compatibility === "Native" }).length + 1
+  readonly property int registryShibumiPluginCount: pluginEntries.filter(
+    function(entry) { return entry.suiteManaged }).length
+  readonly property int registryOmarchyPluginCount: pluginEntries.filter(
+    function(entry) { return entry.firstParty }).length
+  readonly property int registryExternalPluginCount: pluginEntries.filter(
+    function(entry) {
+      return !entry.suiteManaged && !entry.firstParty
+    }).length
   readonly property int preservedExtraCount: pluginEntries.filter(
     function(entry) {
       return entry.compatibility !== "Native" && entry.enabled
@@ -85,34 +108,78 @@ ShibumiPanel {
   readonly property var v2LayoutSlots: bar && bar.layoutController
     ? bar.layoutController.v2Slots
     : ({ left: [], center: [], right: [] })
+  readonly property var networkService: shellService(
+    "hancore.shibumi.network")
+  readonly property var bluetoothService: shellService(
+    "hancore.shibumi.bluetooth")
+  readonly property var audioService: shellService(
+    "hancore.shibumi.audio")
+  readonly property var brightnessService: shellService(
+    "hancore.shibumi.brightness")
+  readonly property var powerService: shellService(
+    "hancore.shibumi.power-state")
+  readonly property bool quickNetworkAvailable: networkService
+    && networkService.wifiAvailable === true
+  readonly property bool quickNetworkEnabled: networkService
+    && networkService.wifiEnabled === true
+  readonly property string quickNetworkLabel: networkService
+    ? String(networkService.label || (quickNetworkEnabled ? "Wi-Fi" : "Off"))
+    : "Unavailable"
+  readonly property string quickNetworkDetail: !quickNetworkAvailable
+    ? "no adapter" : quickNetworkEnabled
+      ? String(networkService.kind || "") === "disconnected"
+        ? "not connected" : "connected"
+      : "off"
+  readonly property bool quickBluetoothAvailable: bluetoothService
+    && bluetoothService.adapterAvailable === true
+  readonly property bool quickBluetoothEnabled: bluetoothService
+    && bluetoothService.radioEnabled === true
+  readonly property string quickBluetoothLabel: !quickBluetoothAvailable
+    ? "Unavailable" : quickBluetoothEnabled
+      ? (Number(bluetoothService.connectedCount || 0) > 0
+        ? bluetoothService.deviceLabel(
+          bluetoothService.connectedDevices[0]) : "On")
+      : "Off"
+  readonly property string quickBluetoothDetail: quickBluetoothAvailable
+    ? Number(bluetoothService.connectedCount || 0) + " connected"
+    : "no adapter"
+  readonly property bool quickAudioAvailable: audioService
+    && audioService.ready === true
+  readonly property bool quickAudioMuted: audioService
+    && audioService.outputMuted === true
+  readonly property string quickAudioLabel: !quickAudioAvailable
+    ? "Unavailable" : quickAudioMuted ? "Muted" : "On"
+  readonly property bool quickBrightnessAvailable: brightnessService
+    && brightnessService.brightnessAvailable === true
+  readonly property string quickBrightnessLabel: quickBrightnessAvailable
+    ? Math.round(Number(brightnessService.brightnessPercent || 0)) + "%"
+    : "Unavailable"
+  readonly property string quickBrightnessDetail: quickBrightnessAvailable
+    ? String(brightnessService.internalMonitor || "display") : "no backlight"
+  readonly property bool quickProfileAvailable: powerService
+    && powerService.profileAvailable === true
+  readonly property string quickProfileLabel: quickProfileAvailable
+    ? String(powerService.activeProfileLabel || "Ready") : "Unavailable"
   property string switchPhase: ""
   property string switchDetail: ""
   readonly property bool settingsReady: settings.ready
   readonly property bool settingsFitsWidth: settings.fitsWidth
   readonly property bool settingsPageReady: settings.pageReady
-  readonly property string settingsPage: settings.currentPage
+  readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
 
   owner: ownerWidget
   open: ownerWidget.opened && stateService && stateService.ready
   focusTarget: keyCatcher
   centerOnBar: false
-  surfaceOverrideEnabled: true
-  surfaceColorOverride: marketBackground
-  surfaceBorderColorOverride: marketLineStrong
-  surfaceBorderWidthOverride: 1
-  surfaceRadiusOverride: 0
-  controlRadiusOverride: 0
-  controlForegroundOverride: marketText
-  controlAccentOverride: marketAccent
-  controlFillOverride: marketPanel
-  controlHoverFillOverride: marketPanelRaised
-  controlBorderOverride: marketLine
-  controlHoverBorderOverride: marketMuted
+  surfaceOverrideEnabled: false
   contentWidth: fittedContentWidth(Commons.Style.space(820),
     Commons.Style.space(900))
-  contentHeight: fittedContentHeight(
-    Commons.Style.space(520), Commons.Style.space(620))
+  contentHeight: settings.currentPage === "quick"
+    ? fittedContentHeight(Commons.Style.space(495),
+        Commons.Style.space(550))
+    : fittedContentHeight(Commons.Style.space(610),
+        Commons.Style.space(680))
 
   function switchShell(target) {
     const requested = String(target || "")
@@ -124,6 +191,37 @@ ShibumiPanel {
     Quickshell.execDetached([managerCommand, "request", requested])
     ownerWidget.close()
     return true
+  }
+
+  function shellService(pluginId) {
+    return bar && bar.shell
+      && typeof bar.shell.serviceFor === "function"
+      ? bar.shell.serviceFor(String(pluginId || "")) : null
+  }
+
+  function quickWidgetAvailable(pluginId) {
+    const id = String(pluginId || "")
+    return pluginEntries.some(function(entry) {
+      return entry.id === id && entry.userToggleable
+    })
+  }
+
+  function quickWidgetVisible(pluginId) {
+    const id = String(pluginId || "")
+    return quickWidgetAvailable(id) && widgetInstalled(id)
+  }
+
+  function toggleQuickWidget(pluginId) {
+    const id = String(pluginId || "")
+    const allowed = [
+      "hancore.shibumi.network",
+      "hancore.shibumi.bluetooth",
+      "hancore.shibumi.audio",
+      "hancore.shibumi.brightness",
+      "hancore.shibumi.power-profile"
+    ]
+    if (allowed.indexOf(id) < 0 || !quickWidgetAvailable(id)) return false
+    return setPluginEnabled(id, !quickWidgetVisible(id))
   }
 
   function beginBarEditing() {
@@ -351,7 +449,7 @@ ShibumiPanel {
     // the restore before touching state instead of consulting a binding that
     // can disappear during the mutation.
     const preservePanel = String(name || "") === "shellStyle"
-    const preservePage = settings.currentPage
+    const preservePage = settings.restorePage
     const restoreBar = bar
     if (preservePanel && restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
@@ -468,6 +566,24 @@ ShibumiPanel {
     return stateService.setMenuConfig(next)
   }
 
+  function setLauncherSelection(mode, value) {
+    if (!stateService || typeof stateService.setMenuConfig !== "function")
+      return false
+    const nextMode = String(mode || "")
+    const nextValue = String(value || "")
+    const options = nextMode === "text"
+      ? launcherTextOptions : nextMode === "icon"
+        ? launcherIconOptions : []
+    if (options.indexOf(nextValue) < 0) return false
+    const next = JSON.parse(JSON.stringify(menuConfig))
+    if (!next.launcher) next.launcher = {
+      mode: "text", text: "shibumi", icon: "omarchy"
+    }
+    next.launcher.mode = nextMode
+    next.launcher[nextMode] = nextValue
+    return stateService.setMenuConfig(next)
+  }
+
   function reloadShell() {
     ownerWidget.close()
     Quickshell.reload(false)
@@ -503,6 +619,10 @@ ShibumiPanel {
     return settings.setPage(value)
   }
 
+  function editWidget(groupId, pluginId) {
+    return settings.editWidget(groupId, pluginId)
+  }
+
   function openWidgetPicker() {
     settings.setPage("plugins")
     return settings.openWidgetPicker()
@@ -511,7 +631,7 @@ ShibumiPanel {
   onOpenChanged: {
     if (!open) {
       settings.closeWidgetPicker()
-      settings.setPage("bars")
+      settings.setPage("quick")
     }
   }
 
@@ -526,7 +646,11 @@ ShibumiPanel {
       spacing: Commons.Style.spacing.sm
 
       Row {
-        width: parent.width
+        id: headerBand
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: Commons.Style.space(20)
+        anchors.rightMargin: Commons.Style.space(20)
         height: Commons.Style.space(28)
         spacing: Commons.Style.space(4)
 
@@ -535,11 +659,17 @@ ShibumiPanel {
             - parent.spacing * 2
           anchors.verticalCenter: parent.verticalCenter
           text: "SHIBUMI  /  CONTROL CENTER  /  "
-            + (settings.currentPage === "bars" ? "BARS"
-              : settings.currentPage === "plugins" ? "WIDGETS"
-              : settings.currentPage === "functions" ? "APPEARANCE"
-              : settings.currentPage === "splits" ? "LAYOUT"
-              : settings.currentPage === "preferences" ? "ADVANCED"
+            + (settings.restorePage === "quick" ? "QUICK"
+              : settings.restorePage === "configure" ? "CONFIGURE"
+              : settings.restorePage === "bars" ? "BARS"
+              : settings.restorePage === "plugins" ? "WIDGETS"
+              : settings.restorePage === "widget-editor" ? "WIDGET EDITOR"
+              : settings.restorePage === "workspaces" ? "WORKSPACES"
+              : settings.restorePage === "pickers" ? "PICKERS"
+              : settings.restorePage === "logo" ? "LOGO"
+              : settings.restorePage === "functions" ? "APPEARANCE"
+              : settings.restorePage === "splits" ? "LAYOUT"
+              : settings.restorePage === "preferences" ? "ADVANCED"
               : "OVERVIEW")
           color: panel.marketText
           font.family: panel.marketFont
@@ -574,7 +704,11 @@ ShibumiPanel {
       }
 
       Rectangle {
-        width: parent.width
+        id: headerDivider
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: Commons.Style.space(20)
+        anchors.rightMargin: Commons.Style.space(20)
         height: 1
         color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
           panel.bar.foreground.g, panel.bar.foreground.b, 0.18)
@@ -628,7 +762,7 @@ ShibumiPanel {
     signal clicked()
     implicitWidth: Commons.Style.space(28)
     implicitHeight: Commons.Style.space(28)
-    radius: 0
+    radius: panel.controlRadius
     foreground: panel.marketText
     accent: panel.marketAccent
 

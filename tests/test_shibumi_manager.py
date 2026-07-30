@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import runpy
 import tempfile
@@ -152,6 +153,45 @@ class ContinuityManagerTests(unittest.TestCase):
             },
         )
 
+    def test_hybrid_service_does_not_need_direct_bar_placement(self) -> None:
+        state = copy.deepcopy(self.state)
+        state["plugins"].append("hancore.shibumi.update-center")
+        state["activation"]["enableServices"].append(
+            "hancore.shibumi.update-center"
+        )
+        config = self.module["activate_config"](self.active, state)
+        plugins = {
+            plugin_id: {
+                "enabled": plugin_id != "hancore.shibumi.update-center",
+                "active": plugin_id == "hancore.shibumi.bar",
+            }
+            for plugin_id in state["plugins"]
+        }
+
+        ready, detail = self.module["activation_verification"](
+            config, plugins, state
+        )
+
+        self.assertTrue(ready, detail)
+
+    def test_activation_requires_every_configured_service(self) -> None:
+        config = self.module["activate_config"](self.active, self.state)
+        config["plugins"] = []
+        plugins = {
+            plugin_id: {
+                "enabled": True,
+                "active": plugin_id == "hancore.shibumi.bar",
+            }
+            for plugin_id in self.state["plugins"]
+        }
+
+        ready, detail = self.module["activation_verification"](
+            config, plugins, self.state
+        )
+
+        self.assertFalse(ready)
+        self.assertIn("hancore.shibumi.state", detail)
+
     def test_legacy_shibumi_snapshot_removes_merged_stock_layout(self) -> None:
         snapshot = self.module["snapshot_layout"](
             self.active, "shibumi", self.state, legacy=True
@@ -181,6 +221,7 @@ class ContinuityManagerTests(unittest.TestCase):
             json.dumps(self.state) + "\n", encoding="utf-8"
         )
         original = config.read_bytes()
+        original_state = (state_dir / "install.json").read_bytes()
 
         environment = {
             "SHIBUMI_CONFIG_FILE": str(config),
@@ -208,6 +249,9 @@ class ContinuityManagerTests(unittest.TestCase):
             globals_map["verify"] = original_verify
 
         self.assertEqual(config.read_bytes(), original)
+        self.assertEqual(
+            (state_dir / "install.json").read_bytes(), original_state
+        )
         self.assertFalse((state_dir / "switch-transaction").exists())
 
     def test_reload_uses_full_shell_restart_when_available(self) -> None:

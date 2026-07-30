@@ -10,6 +10,7 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.media"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url panelSource: Qt.resolvedUrl("MediaPanel.qml")
   readonly property var mediaService: bar && bar.shell
     && typeof bar.shell.firstPartyServiceFor === "function"
@@ -27,7 +28,8 @@ Ui.Panel {
     ? title + "  ·  " + artist : title || artist
   readonly property string tooltipText: active
     ? (artist ? artist + " — " + title : title) : "No active media player"
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -139,6 +141,7 @@ Ui.Panel {
     height: implicitHeight
 
     PillSurface {
+      tokenSource: root.tokens
       settings: root.settings
       anchors.fill: parent
       anchors.topMargin: root.tokens

@@ -20,7 +20,8 @@ Item {
   property real liveValue: value
   property int trackHeight: Commons.Style.space(8)
   property int handleSize: Commons.Style.space(14)
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    ? bar.visualTokens : null
   readonly property real range: Math.max(0.0001, maximum - minimum)
   readonly property real progress: Math.max(0, Math.min(1,
     (liveValue - minimum) / range))

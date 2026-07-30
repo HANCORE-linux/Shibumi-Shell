@@ -10,37 +10,23 @@ Column {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property bool motionActive: false
 
   readonly property bool ready: statusRepeater.count === 3
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(12)
 
-  Text {
-    text: "SYSTEM REGISTRY"
-    color: root.accent
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-    font.weight: Font.Bold
-    font.letterSpacing: 1.8
-  }
-
-  Text {
-    text: "control center"
-    color: root.foreground
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.space(26) * root.uiScale
-    font.weight: Font.Bold
-  }
-
-  Text {
-    width: parent.width
-    text: "Your Shibumi bar, widgets, and Omarchy plugins in one place."
-    color: root.foreground
-    opacity: 0.62
-    wrapMode: Text.WordWrap
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+  PageHeaderHero {
+    controller: root.controller
+    active: root.motionActive
+    pageKey: "overview"
+    eyebrow: "SYSTEM REGISTRY"
+    title: "Control Center"
+    description: "Your Shibumi bar, widgets, and Omarchy plugins in one place."
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
   }
 
   Rectangle {
@@ -75,18 +61,26 @@ Column {
         }
       ]
 
-      delegate: Rectangle {
+      delegate: Item {
         required property var modelData
+        required property int index
         width: (parent.width - parent.columnSpacing * 2) / 3
         height: Commons.Style.space(82)
-        radius: 0
-        color: root.controller.controlFillColor
-        border.width: root.controller.controlBorderWidth
-        border.color: root.controller.controlBorderColor
+
+        Rectangle {
+          anchors.left: parent.left
+          anchors.top: parent.top
+          anchors.bottom: parent.bottom
+          width: 1
+          visible: index > 0
+          color: root.controller.dividerColor
+        }
 
         Column {
           anchors.fill: parent
-          anchors.margins: Commons.Style.space(10)
+          anchors.leftMargin: index > 0
+            ? Commons.Style.space(18) : Commons.Style.space(4)
+          anchors.topMargin: Commons.Style.space(10)
           spacing: Commons.Style.space(3)
 
           Text {
@@ -162,10 +156,9 @@ Column {
   Rectangle {
     width: parent.width
     height: contractContent.implicitHeight + Commons.Style.space(24)
-    radius: 0
-    color: "transparent"
-    border.width: root.controller.controlBorderWidth
-    border.color: root.controller.controlBorderColor
+    radius: root.controller.controlRadius
+    color: root.controller.controlFillColor
+    border.width: 0
 
     Column {
       id: contractContent

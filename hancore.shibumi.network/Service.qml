@@ -14,10 +14,9 @@ Item {
   property var shell: null
   property var manifest: null
   property var bar: shell ? shell.bar : null
-  readonly property url panelSource: bar
-    ? bar.registeredWidgetSource("omarchy.network") : ""
+  readonly property url panelSource: registeredSource("omarchy.network")
   property Component panelComponent: String(panelSource) ? null
-    : bar ? bar.registeredWidgetComponent("omarchy.network") : null
+    : registeredComponent("omarchy.network")
   readonly property var backend: bridge.panel
   readonly property bool ready: backend !== null
   readonly property bool backendAvailable: ready && bridge.backendAvailable
@@ -65,6 +64,28 @@ Item {
   property var sessionOwners: []
   readonly property int sessionCount: sessionOwners.length
   readonly property var networks: mergedNetworks(visibleNetworks, savedProfiles)
+
+  function registeredSource(id) {
+    if (bar && typeof bar.registeredWidgetSource === "function")
+      return bar.registeredWidgetSource(id)
+    const registry = shell && "pluginRegistry" in shell
+      ? shell.pluginRegistry : null
+    const pluginManifest = registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
+  }
+
+  function registeredComponent(id) {
+    if (bar && typeof bar.registeredWidgetComponent === "function")
+      return bar.registeredWidgetComponent(id)
+    const registry = bar && "barWidgetRegistry" in bar
+      ? bar.barWidgetRegistry : null
+    if (registry) void(registry.revision)
+    const widgets = registry && registry.widgets ? registry.widgets : ({})
+    const entry = widgets[String(id || "")]
+    return entry && entry.component ? entry.component : null
+  }
 
   function connectedVisibleLabel(rows) {
     const values = Array.isArray(rows) ? rows : []

@@ -10,6 +10,7 @@ Item {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property bool motionActive: false
   readonly property bool ready: true
   readonly property string activeShell: String(
     controller.activeShell || "shibumi")
@@ -20,7 +21,7 @@ Item {
     || controller.switchPhase === "apply"
     || controller.switchPhase === "verify"
 
-  implicitHeight: Commons.Style.space(520)
+  implicitHeight: Commons.Style.space(644)
 
   function shellTitle(id) {
     return id === "shibumi" ? "SHIBUMI" : "OMARCHY"
@@ -28,6 +29,13 @@ Item {
 
   function requestSelected() {
     if (!switching) controller.switchShell(selectedShell)
+  }
+
+  function switchPhaseRank() {
+    if (controller.switchPhase === "snapshot") return 1
+    if (controller.switchPhase === "apply") return 2
+    if (controller.switchPhase === "verify") return 3
+    return 0
   }
 
   Keys.onLeftPressed: function(event) {
@@ -47,7 +55,19 @@ Item {
 
   Column {
     anchors.fill: parent
-    spacing: 0
+    spacing: Commons.Style.space(8)
+
+    PageHeaderHero {
+      controller: root.controller
+      active: root.motionActive
+      pageKey: "bars"
+      eyebrow: "SHELL CONTINUITY"
+      title: "Bars"
+      description: "Switch through a guarded snapshot, apply and verify route."
+      foreground: root.foreground
+      accent: root.accent
+      uiScale: root.uiScale
+    }
 
     Row {
       width: parent.width
@@ -55,7 +75,7 @@ Item {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: "SHELL CONTINUITY"
+        text: "SAFE HANDOFF"
         color: root.foreground
         opacity: 0.52
         font.family: root.controller.bar
@@ -114,6 +134,21 @@ Item {
         height: 1
         color: root.controller.dividerColor
 
+        Repeater {
+          model: [0, 1]
+
+          Rectangle {
+            required property int index
+            x: index === 0 ? -width / 2 : continuityLine.width - width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            width: Commons.Style.space(7)
+            height: width
+            radius: width / 2
+            color: root.accent
+            opacity: 0.82
+          }
+        }
+
         Rectangle {
           width: root.activeShell === "shibumi"
             ? parent.width * 0.08 : parent.width
@@ -138,21 +173,44 @@ Item {
 
         delegate: Item {
           required property var modelData
+          required property int index
+          readonly property bool current:
+            root.switching && root.switchPhaseRank() === index + 1
+          readonly property bool reached: root.switching
+            ? root.switchPhaseRank() > index + 1
+            : root.activeShell === "omarchy"
           x: continuityLine.x + continuityLine.width * modelData.ratio
             - width / 2
           y: continuityLine.y - Commons.Style.space(5)
           width: Commons.Style.space(18)
-          height: Commons.Style.space(18)
+          height: Commons.Style.space(34)
 
           Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
             width: Commons.Style.space(9)
             height: width
-            color: root.controller.controlFillColor
+            radius: width / 2
+            color: parent.current
+              ? root.accent
+              : parent.reached
+                ? Commons.Util.alpha(root.accent, 0.24)
+                : root.controller.controlFillColor
             border.width: 1
-            border.color: root.controller.dividerColor
+            border.color: parent.current || parent.reached
+              ? root.accent : root.controller.dividerColor
           }
 
+          Text {
+            anchors.top: parent.top
+            anchors.topMargin: Commons.Style.space(13)
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: parent.modelData.label
+            color: parent.current ? root.accent : root.foreground
+            opacity: parent.current ? 1 : parent.reached ? 0.7 : 0.38
+            font.family: root.controller.marketFont
+            font.pixelSize: Commons.Style.font.caption * root.uiScale
+            font.letterSpacing: 0.7
+          }
         }
       }
 

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Shapes
 import qs.Commons as Commons
 import qs.Ui as Ui
 
@@ -9,11 +10,13 @@ Ui.Panel {
 
   moduleName: "hancore.shibumi.workspaces"
   manageIpc: false
+  HostTokens { id: hostTokens; bar: root.bar }
   property url panelSource: Qt.resolvedUrl("WorkspacePanel.qml")
   property var workspaceService: bar && bar.shell
     && typeof bar.shell.serviceFor === "function"
     ? bar.shell.serviceFor("hancore.shibumi.workspaces") : null
-  readonly property var tokens: bar ? bar.visualTokens : null
+  readonly property var tokens: bar && "visualTokens" in bar
+    && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -26,8 +29,13 @@ Ui.Panel {
   readonly property bool compact: displayMode === "icon"
   readonly property string workspaceStyle: workspaceService
     ? workspaceService.style : "default"
+  readonly property bool v2Mode: bar && bar.layoutController
+    ? bar.layoutController.v2Mode === true : false
+  readonly property string versionStyle: !v2Mode
+    && ["kanji", "rings", "aurora"].indexOf(workspaceStyle) >= 0
+      ? "default" : workspaceStyle
   readonly property string renderStyle: displayMode === "icon" ? "rings"
-    : displayMode === "text" ? "numbers" : workspaceStyle
+    : displayMode === "text" ? "numbers" : versionStyle
   readonly property var displayedWorkspaceIds: {
     if (displayMode === "full") return workspaceIds
     for (var index = 0; index < workspaceIds.length; index++) {
@@ -43,9 +51,8 @@ Ui.Panel {
   readonly property int workspacePadding: tokens
     ? tokens.workspacePillPadding(renderStyle) : 4
   readonly property int workspaceGap: renderStyle === "rings"
-    || renderStyle === "frame" ? Commons.Style.space(3)
-    : renderStyle === "aurora-streak" ? Commons.Style.space(4)
-    : renderStyle === "aurora" ? Commons.Style.space(3)
+    ? Commons.Style.space(3)
+    : renderStyle === "aurora" ? Commons.Style.space(4)
     : tokens ? tokens.contentGap : Commons.Style.space(5)
   readonly property int focusedDisplayIndex: {
     for (var index = 0; index < displayedWorkspaceIds.length; index++) {
@@ -118,6 +125,7 @@ Ui.Panel {
     height: implicitHeight
 
     PillSurface {
+      tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
       anchors.fill: parent
@@ -132,23 +140,73 @@ Ui.Panel {
       onClicked: root.toggle()
     }
 
-    Rectangle {
+    Item {
       id: frameMotion
       z: 0
-      visible: root.renderStyle === "frame" && root.frameTarget !== null
+      visible: root.renderStyle === "rings" && root.frameTarget !== null
       x: workspaceRow.x + (root.frameTarget ? root.frameTarget.x : 0)
         + (root.frameTarget ? (root.frameTarget.width - width) / 2 : 0)
       anchors.verticalCenter: parent.verticalCenter
       width: Commons.Style.space(18)
       height: width
-      radius: Commons.Style.space(5)
-      color: "transparent"
-      border.width: 1
-      border.color: root.widgetInk
-      antialiasing: true
 
       Behavior on x {
         NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
+      }
+
+      Shape {
+        id: frameShape
+        anchors.fill: parent
+        antialiasing: true
+        preferredRendererType: Shape.CurveRenderer
+        layer.enabled: true
+        layer.samples: 8
+        layer.smooth: true
+        layer.mipmap: true
+        layer.textureSize: Qt.size(
+          Math.ceil(width * 4), Math.ceil(height * 4))
+        readonly property real r: Commons.Style.space(5)
+
+        ShapePath {
+          strokeColor: root.widgetInk
+          strokeWidth: 1
+          fillColor: "transparent"
+          capStyle: ShapePath.FlatCap
+          joinStyle: ShapePath.RoundJoin
+          startX: frameShape.r
+          startY: 0.5
+          PathLine { x: frameShape.width - frameShape.r; y: 0.5 }
+          PathQuad {
+            x: frameShape.width - 0.5
+            y: frameShape.r
+            controlX: frameShape.width - 0.5
+            controlY: 0.5
+          }
+          PathLine {
+            x: frameShape.width - 0.5
+            y: frameShape.height - frameShape.r
+          }
+          PathQuad {
+            x: frameShape.width - frameShape.r
+            y: frameShape.height - 0.5
+            controlX: frameShape.width - 0.5
+            controlY: frameShape.height - 0.5
+          }
+          PathLine { x: frameShape.r; y: frameShape.height - 0.5 }
+          PathQuad {
+            x: 0.5
+            y: frameShape.height - frameShape.r
+            controlX: 0.5
+            controlY: frameShape.height - 0.5
+          }
+          PathLine { x: 0.5; y: frameShape.r }
+          PathQuad {
+            x: frameShape.r
+            y: 0.5
+            controlX: 0.5
+            controlY: 0.5
+          }
+        }
       }
     }
 
@@ -176,11 +234,8 @@ Ui.Panel {
             : root.renderStyle === "kanji" ? Commons.Style.space(22)
             : root.renderStyle === "magic"
               ? Commons.Style.space(focused ? 20 : 18)
-            : root.renderStyle === "rings" ? Commons.Style.space(19)
-            : root.renderStyle === "frame" ? Commons.Style.space(20)
+            : root.renderStyle === "rings" ? Commons.Style.space(20)
             : root.renderStyle === "aurora"
-              ? Commons.Style.space(focused ? 38 : 20)
-            : root.renderStyle === "aurora-streak"
               ? Commons.Style.space(focused ? 34 : 12)
             : Commons.Style.space(focused ? 32 : 16)
           implicitHeight: workspaceSurface.height
@@ -231,7 +286,7 @@ Ui.Panel {
               color: cell.focused
                 ? root.widgetInk
                 : Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-                  root.widgetInk.b, cell.occupied ? 0.58 : 0.32)
+                  root.widgetInk.b, cell.occupied ? 0.5 : 0.28)
               font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: cell.focused
                 ? Commons.Style.font.subtitle : root.tokens.labelSize
@@ -271,30 +326,8 @@ Ui.Panel {
             Behavior on color { ColorAnimation { duration: 200 } }
           }
 
-          Rectangle {
-            id: ringsMark
-            visible: root.renderStyle === "rings"
-            anchors.centerIn: parent
-            width: Commons.Style.space(cell.focused ? 13 : 12)
-            height: width
-            radius: width / 2
-            color: cell.focused ? root.widgetInk : "transparent"
-            border.width: cell.focused ? 0 : 1
-            border.color: root.widgetInk
-            opacity: cellPointer.containsMouse ? 0.4
-              : cell.focused ? 1 : cell.occupied ? 0.45 : 0.10
-            antialiasing: true
-
-            Behavior on width {
-              NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-            }
-            Behavior on opacity {
-              NumberAnimation { duration: 300; easing.type: Easing.InOutCubic }
-            }
-          }
-
           Text {
-            visible: root.renderStyle === "frame"
+            visible: root.renderStyle === "rings"
             anchors.centerIn: parent
             text: cell.modelData
             color: root.widgetInk
@@ -311,26 +344,8 @@ Ui.Panel {
             }
           }
 
-          Rectangle {
-            visible: root.renderStyle === "aurora"
-            anchors.centerIn: parent
-            width: Commons.Style.space(cell.focused ? 36 : 18)
-            height: Commons.Style.space(16)
-            radius: height / 2
-            antialiasing: true
-            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-              root.widgetInk.b,
-              cell.empty ? (cellPointer.containsMouse ? 0.25 : 0.10)
-                : (cellPointer.containsMouse ? 0.55 : 1))
-
-            Behavior on width {
-              NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-            }
-            Behavior on color { ColorAnimation { duration: 250 } }
-          }
-
           Item {
-            visible: root.renderStyle === "aurora-streak"
+            visible: root.renderStyle === "aurora"
             anchors.centerIn: parent
             width: Commons.Style.space(cell.focused ? 32 : 10)
             height: Commons.Style.space(16)
@@ -370,10 +385,8 @@ Ui.Panel {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onEntered: {
-              cell.scale = root.renderStyle === "frame" ? 1
-                : root.renderStyle === "rings" ? 1.06
-                : root.renderStyle === "aurora" ? 1.03
-                : root.renderStyle === "aurora-streak" ? 1.04 : 1.15
+              cell.scale = root.renderStyle === "rings" ? 1
+                : root.renderStyle === "aurora" ? 1.04 : 1.15
               if (root.bar) root.bar.showTooltip(
                 workspaceSurface, root.workspaceTooltip(cell.modelData))
             }

@@ -30,7 +30,7 @@ Item {
   readonly property var pickerConfig: stateService && stateService.config
     && stateService.config.picker ? stateService.config.picker : ({})
   readonly property string imagePickerStyle: normalizeImageStyle(
-    pickerConfig.imageStyle || pickerConfig.style || "tanzaku")
+    pickerConfig.imageStyle || pickerConfig.style || "omarchy")
   readonly property string mediaPickerStyle: normalizeMediaStyle(
     pickerConfig.mediaStyle || pickerConfig.style || "tanzaku")
   readonly property string pickerStyle: imageMode
@@ -73,8 +73,9 @@ Item {
 
   function normalizeImageStyle(value) {
     const candidate = String(value || "")
-    return ["omarchy", "tanzaku", "hearthstone", "carousel"].indexOf(candidate) >= 0
-      ? candidate : "tanzaku"
+    if (candidate === "carousel") return "omarchy"
+    return ["omarchy", "tanzaku", "hearthstone"].indexOf(candidate) >= 0
+      ? candidate : "omarchy"
   }
 
   function normalizeMediaStyle(value) {
@@ -92,9 +93,12 @@ Item {
   }
 
   function cycleStyle(direction) {
-    const styles = ["tanzaku", "hearthstone", "carousel"]
+    const styles = imageMode
+      ? ["omarchy", "tanzaku", "hearthstone"]
+      : ["tanzaku", "hearthstone", "carousel"]
     const current = Math.max(0, styles.indexOf(
-      normalizeMediaStyle(pickerStyle)))
+      imageMode ? normalizeImageStyle(pickerStyle)
+        : normalizeMediaStyle(pickerStyle)))
     const step = Number(direction) < 0 ? -1 : 1
     const next = styles[(current + step + styles.length) % styles.length]
     if (!stateService) return false

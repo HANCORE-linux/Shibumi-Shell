@@ -10,7 +10,9 @@ Column {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property bool motionActive: false
   property string selectedProvider: "All"
+  signal editRequested(string groupId, string pluginId)
   readonly property var widgetEntries: (controller.pluginEntries || [])
     .filter(function(entry) {
       return entry.userToggleable === true
@@ -22,30 +24,16 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(12)
 
-  Text {
-    text: "WIDGET REGISTRY"
-    color: root.accent
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-    font.weight: Font.Bold
-    font.letterSpacing: 1.8
-  }
-
-  Text {
-    text: "browse widgets"
-    color: root.foreground
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.space(24) * root.uiScale
-    font.weight: Font.Bold
-  }
-
-  Text {
-    width: parent.width
-    text: "Your module bay · Shibumi and Omarchy Quattro"
-    color: root.foreground
-    opacity: 0.58
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
+  PageHeaderHero {
+    controller: root.controller
+    active: root.motionActive
+    pageKey: "widgets"
+    eyebrow: "WIDGET REGISTRY"
+    title: "Widgets"
+    description: "Your module bay · Shibumi and Omarchy Quattro"
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
   }
 
   Rectangle {
@@ -94,11 +82,15 @@ Column {
         provider: modelData.provider
         relationship: modelData.replacementLabel || ""
         inserted: modelData.installedInBar === true
+        editable: modelData.compatibility === "Native"
+          && root.controller.shibumiWidgetGroup(modelData.id) !== ""
         foreground: root.foreground
         accent: root.accent
         uiScale: root.uiScale
         onToggled: root.controller.setPluginEnabled(
           modelData.id, !inserted)
+        onEditRequested: root.editRequested(
+          root.controller.shibumiWidgetGroup(modelData.id), modelData.id)
       }
     }
 
@@ -106,7 +98,7 @@ Column {
       id: addModule
       width: (moduleDeck.width - moduleDeck.spacing) / 2
       height: Commons.Style.space(78)
-      radius: 0
+      radius: root.controller.controlRadius
       color: addPointer.containsMouse
         ? root.controller.controlHoverFillColor : "transparent"
       border.width: 1

@@ -52,8 +52,10 @@ if rg -q 'bar\.monitorService' "$repo_root/hancore.shibumi.brightness"; then
 fi
 rg -q 'property var bar: shell \? shell\.bar : null' "$service" \
   || fail "monitor service does not use the versioned active bar facade"
-rg -q 'registeredWidgetComponent\("omarchy\.monitor"\)' "$service" \
+rg -q 'registeredComponent\("omarchy\.monitor"\)' "$service" \
   || fail "monitor service does not retain the official Omarchy owner"
+rg -Fq '"barWidgetRegistry" in bar' "$service" \
+  || fail "monitor service cannot resolve the official owner on stock Quattro"
 [[ $(rg -c '^  MonitorPanelBridge \{' "$service") -eq 1 ]] \
   || fail "monitor service does not own exactly one official bridge"
 if rg -Fq 'panel.bar = null' "$bridge"; then

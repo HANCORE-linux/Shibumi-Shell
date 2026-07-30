@@ -48,6 +48,23 @@ Pass `--yes` only when you intentionally want to skip the confirmation prompt.
 Do not run `omarchy plugin add` against the repository root. Quattro installs
 one root manifest at a time, while Shibumi is a managed suite.
 
+### Keep the current bar
+
+Install the complete suite without replacing the active bar or its widget
+layout:
+
+```bash
+./scripts/shibumi-suite install --no-activate --keep-layout --yes
+```
+
+The two flags form one safety policy and must be used together. The adapter
+stages all 25 roots, enables required Shibumi services, records external layout
+ownership, and verifies the running payload through the bar-independent state
+service. It does not install individual plugin roots.
+
+Add Shibumi widgets with Omarchy Settings or the active bar's supported widget
+manager. See [cross-bar plugin compatibility](plugin-compatibility.md).
+
 ## Migrate a managed QS Rise installation
 
 Use migration only when the predecessor was installed by its suite adapter:
@@ -71,9 +88,10 @@ git pull --ff-only
 ./scripts/shibumi-suite update
 ```
 
-An update requires an active, suite-managed Shibumi installation. It stages all
-25 current plugin roots as one transaction and verifies that the shell executes
-the accepted payload rather than a stale QML cache.
+An update requires a suite-managed Shibumi installation. It stages all 25
+current plugin roots as one transaction and verifies that the shell executes
+the accepted payload rather than a stale QML cache. For an external-bar
+installation, update preserves the active bar and layout.
 
 ## Status
 
@@ -98,9 +116,10 @@ managed profile with:
 ./scripts/shibumi-suite status
 ```
 
-Repair validates and stages all current plugin roots, restores the selected
-Shibumi profile, verifies the running payload, and rolls back to the exact
-pre-repair state if a gate fails. It refuses to overwrite a foreign directory.
+Repair validates and stages all current plugin roots, verifies the running
+payload, and rolls back to the exact pre-repair state if a gate fails. It
+restores the selected Shibumi profile in managed mode and preserves the active
+bar and layout in external mode. It refuses to overwrite a foreign directory.
 
 ## Switch bar hosts
 
@@ -109,6 +128,12 @@ Keep Shibumi installed but return to the stock Omarchy bar:
 ```bash
 ./scripts/shibumi-suite deactivate --dry-run
 ./scripts/shibumi-suite deactivate
+```
+
+Keep the current Shibumi widgets in the stock bar instead:
+
+```bash
+./scripts/shibumi-suite deactivate --keep-layout
 ```
 
 Restore the Shibumi bar and managed layout:

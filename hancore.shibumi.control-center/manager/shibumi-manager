@@ -271,7 +271,6 @@ def deactivate_config(
     result = normalize(config)
     managed_ids = set(state["plugins"])
     activation = state["activation"]
-    preserved = set(activation.get("continuityPlugins") or [])
     result["bar"]["layout"] = copy_layout(
         target_layout
         if target_layout is not None
@@ -287,12 +286,24 @@ def deactivate_config(
             for entry in result["bar"]["layout"][region]
             if entry_id(entry) != continuity_widget
         ]
-    if continuity_widget in preserved:
+    if not any(
+        entry_id(entry) == continuity_widget
+        for region in REGIONS
+        for entry in result["bar"]["layout"][region]
+    ):
         result["bar"]["layout"]["right"].append({"id": continuity_widget})
+    existing_services = {
+        entry_id(entry): copy.deepcopy(entry)
+        for entry in result["plugins"]
+        if entry_id(entry) in activation["enableServices"]
+    }
     result["plugins"] = [
         copy.deepcopy(entry)
         for entry in result["plugins"]
-        if entry_id(entry) not in managed_ids or entry_id(entry) in preserved
+        if entry_id(entry) not in managed_ids
+    ] + [
+        existing_services.get(plugin_id, {"id": plugin_id})
+        for plugin_id in activation["enableServices"]
     ]
     if result["bar"].get("id") == activation["activeBar"]:
         result["bar"].pop("id", None)
@@ -400,6 +411,40 @@ def plugin_snapshot(runtime_paths: dict[str, Path]) -> dict[str, dict[str, Any]]
     }
 
 
+def activation_verification(
+    config: dict[str, Any],
+    plugins: dict[str, dict[str, Any]],
+    state: dict[str, Any],
+) -> tuple[bool, str]:
+    managed = set(state["plugins"])
+    activation = state["activation"]
+    layout_ids = {
+        entry_id(entry)
+        for region in REGIONS
+        for entry in config["bar"]["layout"][region]
+    }
+    active_bar = str(activation["activeBar"])
+    registry_enabled = layout_ids | {active_bar}
+    service_ids = set(activation["enableServices"])
+    configured_services = {
+        entry_id(entry) for entry in config["plugins"]
+    }
+    missing = managed - plugins.keys()
+    disabled = {
+        plugin_id
+        for plugin_id in registry_enabled
+        if plugins.get(plugin_id, {}).get("enabled") is not True
+    }
+    missing_services = service_ids - configured_services
+    active = plugins.get(active_bar, {}).get("active") is True
+    ready = not missing and not disabled and not missing_services and active
+    detail = (
+        f"missing={sorted(missing)}, disabled={sorted(disabled)}, "
+        f"services={sorted(missing_services)}, active={active}"
+    )
+    return ready, detail
+
+
 def verify(
     runtime_paths: dict[str, Path],
     state: dict[str, Any],
@@ -415,22 +460,18 @@ def verify(
         try:
             plugins = plugin_snapshot(runtime_paths)
             if target == "shibumi":
-                missing = managed - plugins.keys()
-                disabled = {
-                    plugin_id
-                    for plugin_id in managed
-                    if plugins.get(plugin_id, {}).get("enabled") is not True
-                }
-                active = (
-                    plugins.get(str(activation["activeBar"]), {}).get("active")
-                    is True
-                )
-                ready = not missing and not disabled and active
-                detail = (
-                    f"missing={sorted(missing)}, disabled={sorted(disabled)}, "
-                    f"active={active}"
+                ready, detail = activation_verification(
+                    current_config(runtime_paths),
+                    plugins,
+                    state,
                 )
             else:
+                layout_ids = {
+                    entry_id(entry)
+                    for region in REGIONS
+                    for entry in current_config(runtime_paths)["bar"]["layout"][region]
+                }
+                allowed = set(activation["enableServices"]) | layout_ids
                 enabled = {
                     plugin_id
                     for plugin_id in managed
@@ -511,6 +552,18 @@ def perform(target: str) -> int:
             if target == "shibumi"
             else deactivate_config(current, defaults, state, target_layout)
         )
+        desired_state = copy.deepcopy(state)
+        desired_activation = desired_state["activation"]
+        desired_activation["mode"] = (
+            "managed" if target == "shibumi" else "external"
+        )
+        desired_activation["layoutPolicy"] = (
+            "managed" if target == "shibumi" else "preserved"
+        )
+        desired_activation["configuredBar"] = str(
+            desired["bar"].get("id") or "omarchy.bar"
+        )
+        desired_state["updatedEpoch"] = int(time.time())
         transaction = runtime_paths["state"] / "switch-transaction"
         if transaction.exists():
             raise ManagerError(
@@ -518,10 +571,13 @@ def perform(target: str) -> int:
             )
         transaction.mkdir(parents=True)
         snapshot = transaction / "shell.json.before"
+        state_snapshot = transaction / "install.json.before"
+        state_path = runtime_paths["state"] / "install.json"
         config_path = runtime_paths["config"]
         existed = config_path.is_file()
         if existed:
             snapshot.write_bytes(config_path.read_bytes())
+        state_snapshot.write_bytes(state_path.read_bytes())
         atomic_write(
             transaction / "journal.json",
             encode({"schemaVersion": 1, "target": target, "configExisted": existed}),
@@ -529,6 +585,7 @@ def perform(target: str) -> int:
         try:
             write_status(runtime_paths, target, "snapshot")
             atomic_write(config_path, encode(desired))
+            atomic_write(state_path, encode(desired_state))
             write_status(runtime_paths, target, "apply")
             reload_shell(runtime_paths)
             write_status(runtime_paths, target, "verify")
@@ -539,6 +596,7 @@ def perform(target: str) -> int:
                 atomic_write(config_path, snapshot.read_bytes())
             else:
                 config_path.unlink(missing_ok=True)
+            atomic_write(state_path, state_snapshot.read_bytes())
             try:
                 reload_shell(runtime_paths)
             except ManagerError:
@@ -559,12 +617,18 @@ def recover() -> int:
         return 0
     journal = read_json(transaction / "journal.json", "switch journal")
     snapshot = transaction / "shell.json.before"
+    state_snapshot = transaction / "install.json.before"
     if journal.get("configExisted") is True:
         if not snapshot.is_file():
             raise ManagerError("switch snapshot is missing")
         atomic_write(runtime_paths["config"], snapshot.read_bytes())
     else:
         runtime_paths["config"].unlink(missing_ok=True)
+    if state_snapshot.is_file():
+        atomic_write(
+            runtime_paths["state"] / "install.json",
+            state_snapshot.read_bytes(),
+        )
     reload_shell(runtime_paths)
     for child in transaction.iterdir():
         child.unlink(missing_ok=True)

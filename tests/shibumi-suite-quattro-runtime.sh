@@ -91,9 +91,18 @@ state_file="$home/.local/state/shibumi/install.json"
 [[ -f $state_file ]] || fail 'install state is missing'
 first_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $first_digest =~ ^[0-9a-f]{64}$ ]] || fail 'install payload digest is invalid'
-[[ $(shell_ipc shibumi-suite verifyPayload "$first_digest") == ok ]] \
-  || fail 'installed bar did not confirm the first payload digest'
+[[ $(shell_ipc shibumi-suite-runtime verifyPayload "$first_digest") == ok ]] \
+  || fail 'installed state service did not confirm the first payload digest'
 suite_cli status >/dev/null || fail 'installed suite status is not clean'
+
+suite_cli deactivate --keep-layout --yes \
+  || fail 'suite external-bar transition failed'
+config="$home/.config/omarchy/shell.json"
+jq -e '(.bar.id // "omarchy.bar") == "omarchy.bar"' "$config" >/dev/null \
+  || fail 'external-bar transition did not activate the stock bar'
+external_bar_snapshot=$(jq -Sc '.bar' "$config")
+[[ $(shell_ipc shibumi-suite-runtime verifyPayload "$first_digest") == ok ]] \
+  || fail 'state service endpoint was lost under the stock bar'
 
 printf '\n// isolated runtime update generation\n' \
   >>"$source_root/hancore.shibumi.center/BarWidget.qml"
@@ -101,15 +110,21 @@ suite_cli update --yes || fail 'suite update command failed'
 second_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $second_digest =~ ^[0-9a-f]{64}$ && $second_digest != "$first_digest" ]] \
   || fail 'updated payload digest did not change'
-[[ $(shell_ipc shibumi-suite verifyPayload "$second_digest") == ok ]] \
-  || fail 'updated bar did not confirm the new payload digest'
+[[ $(shell_ipc shibumi-suite-runtime verifyPayload "$second_digest") == ok ]] \
+  || fail 'updated state service did not confirm the new payload digest'
+[[ $(jq -Sc '.bar' "$config") == "$external_bar_snapshot" ]] \
+  || fail 'external update rewrote the stock bar or widget layout'
+suite_cli status >/dev/null || fail 'external suite status is not clean'
+
+suite_cli activate --yes || fail 'suite reactivation failed'
+jq -e '.bar.id == "hancore.shibumi.bar"' "$config" >/dev/null \
+  || fail 'reactivation did not restore the Shibumi bar'
 
 suite_cli uninstall --yes || fail 'suite uninstall command failed'
 [[ ! -e $home/.local/state/shibumi ]] || fail 'suite state remains after uninstall'
 [[ ! -e $home/.cache/shibumi ]] || fail 'suite cache remains after uninstall'
 [[ ! -e $home/.config/omarchy/plugins/hancore.shibumi.bar ]] \
   || fail 'Shibumi bar remains after uninstall'
-config="$home/.config/omarchy/shell.json"
 jq -e '
   (.bar.id // "omarchy.bar") == "omarchy.bar" and
   all(.plugins[]?; (.id // "") | startswith("hancore.shibumi.") | not) and

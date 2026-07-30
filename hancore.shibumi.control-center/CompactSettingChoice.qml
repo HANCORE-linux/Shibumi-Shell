@@ -13,6 +13,8 @@ Rectangle {
   property color accent: Commons.Color.menu.selectedText
   property real uiScale: 1
   property real fontSize: Commons.Style.font.bodySmall * uiScale
+  property int textWeight: selected || primary
+    ? Font.DemiBold : Font.Normal
   property int horizontalPadding: Commons.Style.space(6)
   property int controlHeight: Commons.Style.space(25)
   property bool primary: false
@@ -40,7 +42,7 @@ Rectangle {
     color: root.selected || root.primary ? root.accent : root.foreground
     font.family: root.controller.marketFont
     font.pixelSize: root.fontSize
-    font.weight: root.selected || root.primary ? Font.DemiBold : Font.Normal
+    font.weight: root.textWeight
     font.letterSpacing: 0.35
     horizontalAlignment: Text.AlignHCenter
     elide: Text.ElideRight

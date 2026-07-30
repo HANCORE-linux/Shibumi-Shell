@@ -47,7 +47,7 @@ QtObject {
         || defaults.workspace.style !== "default")
       fail("invalid default workspace state")
     if (defaults.picker.style !== "tanzaku"
-        || defaults.picker.imageStyle !== "tanzaku"
+        || defaults.picker.imageStyle !== "omarchy"
         || defaults.picker.mediaStyle !== "tanzaku")
       fail("invalid default picker state")
     if (defaults.reactor.mode !== 0)
@@ -188,9 +188,7 @@ QtObject {
       fail("presentation settings were not normalized")
     if (valid.workspace.mode !== "active" || valid.workspace.style !== "magic")
       fail("workspace settings were not normalized")
-    const v2WorkspaceStyles = [
-      "kanji", "rings", "frame", "aurora", "aurora-streak"
-    ]
+    const v2WorkspaceStyles = ["kanji", "rings", "aurora"]
     for (let workspaceStyle of v2WorkspaceStyles) {
       const workspaceState = Config.normalize({
         version: 1,
@@ -199,12 +197,44 @@ QtObject {
       if (workspaceState.workspace.style !== workspaceStyle)
         fail("V2 workspace style was not retained: " + workspaceStyle)
     }
+    const legacyFrame = Config.normalize({
+      version: 1,
+      workspace: { version: 1, mode: "active", style: "frame" }
+    })
+    const legacyAurora = Config.normalize({
+      version: 1,
+      workspace: { version: 1, mode: "active", style: "aurora-streak" }
+    })
+    if (legacyFrame.workspace.style !== "rings"
+        || legacyAurora.workspace.style !== "aurora")
+      fail("pre-alpha workspace style aliases were not migrated")
     if (valid.menu.favorites.join(",") !== "org.example.Editor"
         || valid.menu.hidden.join(",") !== "org.example.Hidden")
       fail("menu ids were not normalized")
     if (valid.menu.launcher.mode !== "icon" || valid.menu.launcher.text !== "arch"
         || valid.menu.launcher.icon !== "rebel")
       fail("launcher presentation was not normalized")
+    const shibumiIcon = Config.normalize({
+      version: 1,
+      menu: {
+        version: 1,
+        favorites: [],
+        hidden: [],
+        launcher: {
+          mode: "icon",
+          text: "shibumi",
+          icon: "shibumi"
+        },
+        presentation: {
+          icons: true,
+          scale: 100,
+          selectionStyle: "default",
+          background: "off"
+        }
+      }
+    })
+    if (shibumiIcon.menu.launcher.icon !== "shibumi")
+      fail("Shibumi launcher icon was not normalized")
     if (valid.menu.presentation.icons !== false || valid.menu.presentation.scale !== 80
         || valid.menu.presentation.selectionStyle !== "glide"
         || valid.menu.presentation.background !== "full")
@@ -221,9 +251,9 @@ QtObject {
       picker: { style: "carousel" }
     })
     if (carousel.picker.style !== "carousel"
-        || carousel.picker.imageStyle !== "carousel"
+        || carousel.picker.imageStyle !== "omarchy"
         || carousel.picker.mediaStyle !== "carousel")
-      fail("V2 carousel picker state was not preserved")
+      fail("legacy carousel state was not split by media type")
 
     const legacyPicker = Config.normalize({
       version: 1,

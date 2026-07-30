@@ -51,6 +51,19 @@ Item {
     stage = ResponsiveLayout.nextNarrowStage(stage, 1000, widths)
     if (stage !== 0) { fail("exact full-width recovery"); return }
 
+    const compactCenter = ResponsiveLayout.centerAvailableWidth(
+      true, 1920, 5, 4, 300, 400, 12, 100)
+    if (compactCenter !== 1178) {
+      fail("compact center budget follows the content-driven shell")
+      return
+    }
+    const fullCenter = ResponsiveLayout.centerAvailableWidth(
+      false, 1920, 5, 4, 300, 400, 12, 812)
+    if (fullCenter !== 812) {
+      fail("full center budget ignores measured geometry")
+      return
+    }
+
     console.log("responsive layout regression passed")
     Qt.exit(0)
   }
