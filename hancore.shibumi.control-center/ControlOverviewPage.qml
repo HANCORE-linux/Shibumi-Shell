@@ -120,7 +120,7 @@ Column {
     spacing: Commons.Style.space(8)
 
     CompactSettingChoice {
-      width: (parent.width - parent.spacing * 2) / 3
+      width: (parent.width - parent.spacing) / 2
       controller: root.controller
       label: "Add widget"
       primary: true
@@ -131,17 +131,7 @@ Column {
     }
 
     CompactSettingChoice {
-      width: (parent.width - parent.spacing * 2) / 3
-      controller: root.controller
-      label: "Reload Shibumi"
-      foreground: root.foreground
-      accent: root.accent
-      uiScale: root.uiScale
-      onClicked: root.controller.reloadShell()
-    }
-
-    CompactSettingChoice {
-      width: (parent.width - parent.spacing * 2) / 3
+      width: (parent.width - parent.spacing) / 2
       controller: root.controller
       label: "Icons"
       foreground: root.foreground

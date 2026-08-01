@@ -15,7 +15,7 @@ Item {
     if (route === "quick" || route === "layout") return "bars"
     if (route === "plugins") return "widgets"
     if (route === "functions") return "appearance"
-    if (route === "overview") return "advanced"
+    if (route === "preferences") return "health"
     return route
   }
 

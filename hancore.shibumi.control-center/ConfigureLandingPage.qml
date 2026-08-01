@@ -30,7 +30,7 @@ Column {
       logo: "Wordmark and icon previews",
       functions: "Widget icons and presentation",
       bars: "Shibumi and Omarchy handoff",
-      preferences: "Maintenance and session"
+      health: "Runtime and error diagnostics"
     }
     return {
       id: page.id,

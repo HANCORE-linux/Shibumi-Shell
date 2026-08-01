@@ -89,7 +89,7 @@ Column {
   GroupLabel {
     label: "SYSTEM"
     expanded: root.systemGroupOpen
-    visible: root.hasPage("bars") || root.hasPage("preferences")
+    visible: root.hasPage("bars") || root.hasPage("health")
     onToggled: root.systemGroupOpen = !root.systemGroupOpen
   }
 
@@ -97,7 +97,7 @@ Column {
     width: parent.width
     spacing: Commons.Style.space(2)
     visible: root.systemGroupOpen
-      || root.activeIn(["bars", "preferences"])
+      || root.activeIn(["bars", "health"])
 
     NavRow {
       visible: root.hasPage("bars")
@@ -108,10 +108,10 @@ Column {
     }
 
     NavRow {
-      visible: root.hasPage("preferences")
-      pageId: "preferences"
-      label: "Advanced"
-      glyph: "settings"
+      visible: root.hasPage("health")
+      pageId: "health"
+      label: "Health"
+      glyph: "health_and_safety"
       indented: true
     }
   }

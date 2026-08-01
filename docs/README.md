@@ -87,6 +87,7 @@ current source define exact schema fields, plugin IDs, and executable defaults.
 | [Host facade v1](host-facade-v1.md) | Reusable widget-to-bar API |
 | [Widget provider contract](widget-provider-contract.md) | Widget registration and provider behavior |
 | [Control Center v4](control-center-v4.md) | Control Center design and runtime contract |
+| [Health diagnostics](health-diagnostics.md) | Read-only runtime, error, and source-drift contract |
 | [Multi-bar extension plan](multi-bar-extension-plan.md) | Registration and validation rules for additional bar hosts |
 | [App Menu integration](app-menu-integration-plan.md) | App Menu ownership and separation from G1 |
 | [V1 output lifecycle audit](v1-output-lifecycle-audit.md) | Multi-output, scale, hotplug, DPMS, suspend, and resume behavior |

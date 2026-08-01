@@ -178,6 +178,10 @@ def make_install_state(
         "profile": profile,
         "activeBar": active_bar,
         "plugins": plugin_ids,
+        # Development installs retain the checkout that produced the staged
+        # payload. Health uses it for read-only branch/upstream diagnostics;
+        # package metadata will replace this authority in the AUR lifecycle.
+        "sourceRoot": str(suite.root),
         "sourceRevision": revision,
         "payloadDigest": payload_digest,
         "pluginDigests": plugin_digests,

@@ -12,6 +12,7 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var stateService
+  required property var healthService
   // Compatibility aliases for the Control Center views. Their provenance is
   // the active host's VisualTokens, which ultimately follow colors.toml.
   readonly property color marketBackground: shibumiTokens
@@ -182,6 +183,10 @@ ShibumiPanel {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property var healthReport: healthService.report
+  readonly property bool healthRunning: healthService.running
+  readonly property bool healthFetching: healthService.fetching
+  readonly property string healthFailure: healthService.failure
 
   owner: ownerWidget
   open: ownerWidget.opened && stateService && stateService.ready
@@ -729,18 +734,8 @@ ShibumiPanel {
     return true
   }
 
-  function runSystemAction(action) {
-    const commands = {
-      lock: ["omarchy-system-lock"],
-      suspend: ["systemctl", "suspend"],
-      reboot: ["omarchy-system-reboot"],
-      shutdown: ["omarchy-system-shutdown"]
-    }
-    const command = commands[String(action || "")]
-    if (!command) return false
-    ownerWidget.close()
-    Quickshell.execDetached(command)
-    return true
+  function runHealthChecks(fetchUpdates) {
+    return healthService.runChecks(fetchUpdates === true)
   }
 
   function accentColor(value) {
@@ -837,7 +832,7 @@ ShibumiPanel {
               : settings.restorePage === "logo" ? "LOGO"
               : settings.restorePage === "functions" ? "ICONS"
               : settings.restorePage === "splits" ? "LAYOUT"
-              : settings.restorePage === "preferences" ? "ADVANCED"
+              : settings.restorePage === "health" ? "HEALTH"
               : "OVERVIEW")
           color: panel.marketText
           font.family: panel.marketFont

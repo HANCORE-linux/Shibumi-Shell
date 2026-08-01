@@ -13,7 +13,7 @@ language:
   count and shows the passive Shibumi/Omarchy/external plugin breakdown. The
   redundant bar-position statistic is omitted.
 - **Configure** opens a route landing page for Bars, Icons, Logo, Workspaces,
-  Pickers, Plugins, and Advanced. Focusing a route updates its
+  Pickers, Plugins, and Health. Focusing a route updates its
   semantic preview at the right. Selecting a route fades the
   landing graph and moves the complete route list into a compact left-hand
   master column while revealing the matching editor on the right. Every route

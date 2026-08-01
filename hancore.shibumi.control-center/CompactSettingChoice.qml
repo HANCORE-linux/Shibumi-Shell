@@ -22,11 +22,14 @@ Rectangle {
 
   implicitHeight: controlHeight
   opacity: enabled ? 1 : 0.34
+  activeFocusOnTab: true
+  Accessible.role: Accessible.Button
+  Accessible.name: label
   radius: controller.controlRadius
   color: pointer.containsMouse
     ? controller.buttonHoverFillColor : controller.buttonFillColor
   border.width: controller.controlBorderWidth
-  border.color: selected || primary ? accent
+  border.color: selected || primary || activeFocus ? accent
     : pointer.containsMouse ? controller.buttonHoverBorderColor
     : controller.controlBorderColor
 
@@ -58,4 +61,8 @@ Rectangle {
     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
     onClicked: root.clicked()
   }
+
+  Keys.onReturnPressed: if (enabled) root.clicked()
+  Keys.onEnterPressed: if (enabled) root.clicked()
+  Keys.onSpacePressed: if (enabled) root.clicked()
 }

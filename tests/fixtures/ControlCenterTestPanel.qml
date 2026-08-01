@@ -10,8 +10,13 @@ Item {
   required property var bar
   required property var ownerWidget
   required property var stateService
+  required property var healthService
 
   readonly property bool open: ownerWidget.opened
+  readonly property var healthReport: healthService.report
+  readonly property bool healthRunning: healthService.running
+  readonly property bool healthFetching: healthService.fetching
+  readonly property string healthFailure: healthService.failure
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
   readonly property var barPresentation: stateConfig.presentation || ({})
@@ -391,9 +396,8 @@ Item {
   }
 
   function reloadShell() { return true }
-  function runSystemAction(action) {
-    return ["lock", "suspend", "reboot", "shutdown"]
-      .indexOf(String(action || "")) >= 0
+  function runHealthChecks(fetchUpdates) {
+    return healthService.runChecks(fetchUpdates === true)
   }
 
   function accentColor(value) {

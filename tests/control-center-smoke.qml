@@ -496,8 +496,24 @@ ShellRoot {
         if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
             || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)
           return root.fail("V1 Bar Surface settings did not restore")
+        panel.healthService.report = {
+          schemaVersion: 1,
+          generatedEpoch: 1785570000,
+          overall: "error",
+          summary: "Runtime error detected",
+          checks: [{
+            id: "runtime-errors",
+            group: "runtime",
+            label: "Recent runtime errors",
+            status: "error",
+            value: "1 loader error",
+            detail: "Unable to assign Example.qml:42",
+            component: "hancore.shibumi.example",
+            action: "Review the affected component."
+          }]
+        }
         if (!panel.showSettingsPage("preferences"))
-          return root.fail("Bars page did not open Advanced")
+          return root.fail("legacy Advanced route did not open Health")
         root.phase++
         root.ticks = 0
         return
@@ -507,9 +523,27 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "preferences"
-            || !panel.showSettingsPage("main"))
-          return root.fail("advanced page did not instantiate")
+            || panel.settingsPage !== "health"
+            || !panel.settingsPageItem
+            || panel.settingsPageItem.attentionChecks.length !== 1)
+          return root.fail("Health page did not instantiate")
+        const health = panel.settingsPageItem
+        const error = health.attentionChecks[0]
+        const issueUrl = health.diagnosticIssueUrl(error)
+        if (health.diagnosticCode(error)
+              !== "SHIBUMI-HEALTH/RUNTIME-ERRORS"
+            || health.diagnosticReport(error).indexOf(
+              "Component: hancore.shibumi.example") < 0
+            || issueUrl.indexOf(
+              "github.com/HANCORE-linux/Shibumi-Shell/issues/new?title=") < 0
+            || decodeURIComponent(issueUrl).indexOf(
+              "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
+          return root.fail("Health error report or issue URL is incomplete")
+        health.copyDiagnostic(error)
+        if (health.copiedCheckId !== "runtime-errors")
+          return root.fail("Health error report was not copied")
+        if (!panel.showSettingsPage("main"))
+          return root.fail("Health page did not return to overview")
         root.phase++
         root.ticks = 0
         return

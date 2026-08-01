@@ -84,9 +84,8 @@ if rg -q 'hancore\.shibumi\.menu|hostShell\.toggle|shell\.mutateShellConfig' \
 fi
 
 for contract in \
-  'ControlMainPage.qml:MAINTENANCE' \
-  'ControlMainPage.qml:SESSION' \
-  'ControlMainPage.qml:SHORTCUTS' \
+  'ControlMainPage.qml:ATTENTION  ·  ' \
+  'ControlMainPage.qml:RUNTIME' \
   'SplitSettingsPage.qml:SPLIT & MERGE' \
   'SplitSettingsPage.qml:GAP ANIMATION' \
   'ActiveBarSettingsPage.qml:BAR FORM' \
@@ -165,7 +164,7 @@ for installer_contract in \
 done
 
 for page in quick configure main bars plugins workspaces pickers logo splits \
-    functions preferences; do
+    functions health preferences; do
   rg -Fq "\"$page\"" "$control_dir/ControlSettings.qml" \
     || fail "missing control-center page: $page"
 done
@@ -177,7 +176,7 @@ configure_page_order=$(
     | paste -sd, -
 )
 [[ $configure_page_order == \
-  "bars,functions,logo,workspaces,pickers,plugins,preferences" ]] \
+  "bars,functions,logo,workspaces,pickers,plugins,health" ]] \
   || fail "Configure page order drifted: $configure_page_order"
 rg -Fq '{ id: "functions", label: "Icons"' \
   "$control_dir/ControlSettings.qml" \
@@ -646,7 +645,7 @@ rg -Fq 'Control Center rejected full-bar toggle:' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "controller does not reject full-bar mutations defensively"
 for icon in radio_button_checked align_vertical_center widgets brush \
-    view_week settings download; do
+    view_week health_and_safety download; do
   rg -Fq "\"$icon\"" "$control_dir" --glob '*.qml' \
     || fail "missing Material Symbol in V4 navigation: $icon"
 done
@@ -706,12 +705,71 @@ rg -q 'property int controlHeight: Commons\.Style\.space\(25\)' \
 rg -q 'property real fontSize: Commons\.Style\.font\.bodySmall' \
   "$control_dir/CompactSettingChoice.qml" \
   || fail "compact choices do not use the readable label token"
-
-for command in omarchy-system-lock 'systemctl", "suspend' \
-    omarchy-system-reboot omarchy-system-shutdown; do
-  rg -Fq "$command" "$control_dir/ControlCenterPanel.qml" \
-    || fail "missing session-aware power action: $command"
+for keyboard_contract in \
+    'activeFocusOnTab: true' \
+    'Accessible.role: Accessible.Button' \
+    'Keys.onReturnPressed: if (enabled) root.clicked()' \
+    'Keys.onSpacePressed: if (enabled) root.clicked()'; do
+  rg -Fq "$keyboard_contract" "$control_dir/CompactSettingChoice.qml" \
+    || fail "compact choice keyboard contract drifted: $keyboard_contract"
 done
+
+for health_contract in \
+    'title: "Health"' \
+    'eyebrow: "RUNTIME DIAGNOSTICS"' \
+    'label: root.busy && !root.controller.healthFetching' \
+    'onClicked: root.controller.runHealthChecks(false)' \
+    'onClicked: root.controller.runHealthChecks(true)' \
+    'return controller.accentColor("color01")' \
+    'return controller.accentColor("color03")' \
+    '["runtime-errors", "bar-runtime", "managed-plugins"]' \
+    'return parts.length > 0 ? parts.join("  ·  ") : "Not checked yet"' \
+    'verticalAlignment: Text.AlignVCenter' \
+    'checkRow.interactive && checkRow.extra !== ""' \
+    'readonly property int statusColumnWidth: 62' \
+    'width: root.statusColumnWidth' \
+    'width: Math.max(1, checkRow.width - root.rowHorizontalPadding * 2)' \
+    'horizontalAlignment: Text.AlignLeft' \
+    'anchors.leftMargin: 0' \
+    'text: "Shibumi " + root.installedShibumiVersion' \
+    'text: "LOCAL SUITE"' \
+    'return "SHIBUMI-HEALTH/" + String(check.id || "UNKNOWN")' \
+    'function diagnosticIssueUrl(check)' \
+    'Qt.openUrlExternally(diagnosticIssueUrl(check))' \
+    'label: root.copiedCheckId === String(checkRow.check.id || "")' \
+    'label: "Open issue ↗"' \
+    'interactive: false' \
+    'const next = requested === "preferences" ? "health" : requested'; do
+  rg -Fq "$health_contract" "$control_dir/ControlMainPage.qml" \
+    "$control_dir/ControlSettings.qml" \
+    || fail "Health route contract drifted: $health_contract"
+done
+
+for health_error_contract in \
+    'id: "runtime-errors"' \
+    'status: "error"' \
+    'health.diagnosticCode(error)' \
+    'health.diagnosticIssueUrl(error)' \
+    'health.copyDiagnostic(error)'; do
+  rg -Fq "$health_error_contract" "$repo_root/tests/control-center-smoke.qml" \
+    || fail "Health error-action smoke contract drifted: $health_error_contract"
+done
+
+if rg -q 'additional checks|detailChecks|detailsOpen' \
+    "$control_dir/ControlMainPage.qml"; then
+  fail "Health still exposes successful implementation-detail checks"
+fi
+if rg -Fq 'warning(s)' "$control_dir/ControlMainPage.qml"; then
+  fail "Health still exposes machine-oriented status grammar"
+fi
+
+if rg -q 'runSystemAction|omarchy-system-lock|omarchy-system-reboot|omarchy-system-shutdown|systemctl.*suspend' \
+    "$control_dir" --glob '*.qml'; then
+  fail "Health still duplicates authoritative App Menu session actions"
+fi
+[[ $(rg -l -F 'onClicked: root.controller.reloadShell()' "$control_dir" \
+  --glob '*.qml' | wc -l) -eq 1 ]] \
+  || fail "Reload Shibumi is not owned exclusively by Quick"
 
 for label in Status Battery \
     'Bar border' 'Panel + tooltip' Border Frost Shadow \

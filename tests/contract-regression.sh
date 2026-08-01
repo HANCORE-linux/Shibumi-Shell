@@ -934,6 +934,8 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/host-widget-resolver-regression.qml"
 
+"$repo_root/tests/health-diagnostics-regression.sh"
+
 if [[ -x /usr/bin/quickshell ]]; then
   quote_smoke_root=$(mktemp -d)
   mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \

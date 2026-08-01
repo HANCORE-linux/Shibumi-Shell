@@ -92,6 +92,8 @@ Ui.Panel {
   property var registeredBar: null
   property string pendingPage: ""
 
+  HealthService { id: healthState }
+
   implicitWidth: vertical ? barSize : logoWidth + logoPadding
   implicitHeight: vertical ? logoWidth + logoPadding : barSize
 
@@ -111,11 +113,15 @@ Ui.Panel {
       anchorItem: pill,
       bar: root.bar,
       ownerWidget: root,
-      stateService: root.stateService
+      stateService: root.stateService,
+      healthService: healthState
     })
   }
 
-  onOpenedChanged: syncPanelLoader()
+  onOpenedChanged: {
+    if (opened) healthState.ensureFresh(300)
+    syncPanelLoader()
+  }
   onStateServiceChanged: syncPanelLoader()
   onPanelLoadedChanged: {
     if (!panelLoaded || pendingPage === "") return

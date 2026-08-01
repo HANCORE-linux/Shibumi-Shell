@@ -34,7 +34,7 @@ Item {
       { id: "workspaces", label: "Workspaces", glyph: "grid_view" },
       { id: "pickers", label: "Pickers", glyph: "collections" },
       { id: "plugins", label: "Plugins", glyph: "extension" },
-      { id: "preferences", label: "Advanced", glyph: "settings" }
+      { id: "health", label: "Health", glyph: "health_and_safety" }
     ]
     return controller.stockOmarchyHost
       ? pages.filter(function(page) {
@@ -54,7 +54,8 @@ Item {
       logo: "logo launcher identity wordmark icon",
       functions: "icons icon appearance widget color surface style content "
         + "tone shape spacing opacity outline",
-      preferences: "advanced reload reset power lock suspend reboot shutdown"
+      health: "health runtime diagnostics errors warnings lifecycle plugins "
+        + "source git drift versions updates"
     }
     const values = pageOptions.map(function(page) {
       return {
@@ -174,12 +175,14 @@ Item {
     if (page === "logo") return logoPage
     if (page === "splits") return splitPage
     if (page === "functions") return functionsPage
-    if (page === "preferences") return preferencesPage
+    if (page === "health") return healthPage
     return overviewPage
   }
 
   function setPage(value) {
-    const next = String(value || "")
+    const requested = String(value || "")
+    // Keep external/restore callers from the former Advanced route working.
+    const next = requested === "preferences" ? "health" : requested
     if (validPageIds.indexOf(next) < 0)
       return false
     if (next === "quick") {
@@ -1297,14 +1300,14 @@ Item {
   }
 
   Component {
-    id: preferencesPage
+    id: healthPage
     ControlMainPage {
       controller: root.controller
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
       motionActive: root.controller.open === true
-        && root.configureDetailPage === "preferences"
+        && root.configureDetailPage === "health"
         && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
