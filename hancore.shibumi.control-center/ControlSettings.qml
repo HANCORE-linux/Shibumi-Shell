@@ -92,6 +92,17 @@ Item {
     return values.concat(plugins)
   }
   readonly property bool configureDetailOpen: configureDetailPage !== ""
+  readonly property bool compactIconsOverview:
+    currentPage === "configure"
+    && configureDetailPage === "functions"
+    && settingsQuery.trim() === ""
+    && pageLoader.item !== null
+    && pageLoader.item.widgetDetailOpen === false
+  readonly property real compactIconsPanelHeight:
+    Commons.Style.space(470)
+    + Math.max(0, Number(pageLoader.item
+      ? pageLoader.item.widgetOverviewRowCount : 5) - 5)
+      * Commons.Style.space(41)
   readonly property bool barsSurfaceAvailable:
     currentPage === "configure" && configureDetailPage === "bars"
     && pageLoader.item !== null

@@ -39,6 +39,16 @@ ShellRoot {
       return true
     }
 
+    function groupEnabled(groupId) {
+      const settings = config.widgets && config.widgets[groupId]
+        ? config.widgets[groupId] : ({})
+      const variant = String(config.presentation.shellStyle || "shibumi")
+        === "shibumi" ? "v1" : "v2"
+      const key = variant === "v2" ? "enabledV2" : "enabledV1"
+      return Object.prototype.hasOwnProperty.call(settings, key)
+        ? settings[key] !== false : settings.enabled !== false
+    }
+
     function resetLayout() { return false }
   }
 
@@ -350,7 +360,7 @@ ShellRoot {
       if (!replacedConfig.shibumi
           || !replacedConfig.shibumi.widgets
           || !replacedConfig.shibumi.widgets.G8
-          || replacedConfig.shibumi.widgets.G8.enabled !== false
+          || replacedConfig.shibumi.widgets.G8.enabledV2 !== false
           || centerEntries.length !== 1
           || String(centerEntries[0].id || centerEntries[0])
             !== "omarchy.clock") {

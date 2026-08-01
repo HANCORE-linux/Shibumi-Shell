@@ -238,6 +238,7 @@ ShellRoot {
             || !panel.settingsPageItem.workbenchReady
             || panel.settingsPageItem.widgetOptionCount !== 18
             || panel.settingsPageItem.activeWidgetCount !== 12
+            || panel.settingsPageItem.inactiveWidgetCount !== 6
             || !panel.settingsPageItem.allWidgetModesReady)
           return root.fail("appearance page did not instantiate")
 
@@ -301,6 +302,8 @@ ShellRoot {
             || stateService.groupSetting(
               "G4", "widgetBorderColor", "") !== "color03")
           return root.fail("per-widget appearance contract did not persist")
+        if (!appearance.widgetUsesCustomAppearance("G4"))
+          return root.fail("Icons missed a real custom appearance")
         if (!appearance.controller.resetGroupAppearance("G4")
             || stateService.groupSetting("G4", "displayMode", "full") !== "full"
             || stateService.groupSetting("G4", "color", "inherit") !== "inherit"
@@ -308,19 +311,87 @@ ShellRoot {
             || stateService.groupSetting(
               "G4", "widgetBorderColor", "inherit") !== "inherit")
           return root.fail("appearance reset did not preserve nonvisual state")
+        if (appearance.widgetUsesCustomAppearance("G4"))
+          return root.fail("Icons marked a reset widget as customized")
+        appearance.controller.setGroupSetting("G4", "displayMode", "full")
+        appearance.controller.setGroupSetting("G4", "compact", false)
+        appearance.controller.setGroupSetting("G4", "colorMode", "fill")
+        appearance.controller.setGroupSetting("G4", "widgetBorder", false)
+        appearance.controller.setGroupSetting("G4", "color", "inherit")
+        appearance.controller.setGroupSetting("G4", "tone", "auto")
+        appearance.controller.setGroupSetting("G4", "widgetRadius", "auto")
+        appearance.controller.setGroupSetting("G4", "widgetPadding", "auto")
+        appearance.controller.setGroupSetting("G4", "surfaceOpacity", 1)
+        appearance.controller.setGroupSetting("G4", "widgetBorderWidth", 1)
+        appearance.controller.setGroupSetting(
+          "G4", "widgetBorderColor", "inherit")
+        appearance.controller.setGroupSetting(
+          "G4", "widgetBorderUsesSurfaceColor", false)
+        if (appearance.widgetUsesCustomAppearance("G4"))
+          return root.fail("Icons treated explicit defaults as customization")
+        appearance.controller.resetGroupAppearance("G4")
         appearance.showWidgetOverview()
-        if (appearance.openWidgetDetails(
-              "G18", "hancore.shibumi.storage"))
-          return root.fail("V1 Icons exposed a V2-only widget")
+        appearance.controller.setGroupSetting("G4", "color", "color05")
+        if (appearance.setWidgetEnabled("G1", false)
+            || !stateService.groupEnabledForVariant("G1", "v1"))
+          return root.fail("Icons allowed Control Center self-disable")
+        if (!appearance.setWidgetEnabled("G4", false)
+            || appearance.activeWidgetCount !== 11
+            || appearance.inactiveWidgetCount !== 7
+            || stateService.groupEnabledForVariant("G4", "v1")
+            || !stateService.groupEnabledForVariant("G4", "v2")
+            || stateService.groupSetting("G4", "color", "") !== "color05"
+            || !appearance.openWidgetDetails("G4", "")
+            || appearance.selectedWidgetActive)
+          return root.fail("Icons did not deactivate Memory without style loss")
+        if (!appearance.setWidgetEnabled("G4", true)
+            || appearance.activeWidgetCount !== 12
+            || appearance.inactiveWidgetCount !== 6
+            || !stateService.groupEnabledForVariant("G4", "v1")
+            || !stateService.groupEnabledForVariant("G4", "v2")
+            || stateService.groupSetting("G4", "color", "") !== "color05"
+            || !appearance.widgetDetailOpen
+            || !appearance.selectedWidgetActive)
+          return root.fail("Icons did not reactivate Memory with its style")
+        appearance.controller.resetGroupAppearance("G4")
+        appearance.showWidgetOverview()
+        if (!appearance.openWidgetDetails(
+              "G18", "hancore.shibumi.storage")
+            || appearance.selectedWidgetActive)
+          return root.fail("V1 Icons did not expose inactive Storage")
+        const inactiveModeBeforeCycle = appearance.selectedWidgetMode
+        const expectedInactiveModeAfterCycle = inactiveModeBeforeCycle === "full"
+          ? "icon" : inactiveModeBeforeCycle === "icon" ? "text" : "full"
+        if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== expectedInactiveModeAfterCycle
+            || stateService.groupSetting(
+              "G:hancore.shibumi.storage", "displayMode", "")
+                !== expectedInactiveModeAfterCycle)
+          return root.fail("V1 inactive widget appearance used the wrong group")
         panel.v2LayoutActive = true
         if (appearance.activeWidgetCount !== 15
+            || appearance.inactiveWidgetCount !== 3
+            || !appearance.widgetDetailOpen
+            || !appearance.selectedWidgetActive
             || !appearance.openWidgetDetails(
               "G18", "hancore.shibumi.storage"))
           return root.fail("V2 Icons did not expose its active widget set")
+        if (!appearance.setWidgetEnabled("G18", false)
+            || appearance.activeWidgetCount !== 14
+            || appearance.inactiveWidgetCount !== 4
+            || appearance.selectedWidgetActive)
+          return root.fail("V2 Icons did not move Storage to inactive")
+        if (!appearance.setWidgetEnabled("G18", true)
+            || appearance.activeWidgetCount !== 15
+            || appearance.inactiveWidgetCount !== 3
+            || !appearance.selectedWidgetActive)
+          return root.fail("V2 Icons did not restore Storage to active")
         panel.v2LayoutActive = false
         if (appearance.activeWidgetCount !== 12
-            || appearance.widgetDetailOpen)
-          return root.fail("Icons retained V2-only state after switching to V1")
+            || appearance.inactiveWidgetCount !== 6
+            || !appearance.widgetDetailOpen
+            || appearance.selectedWidgetActive)
+          return root.fail("Icons did not preserve inactive detail across V1/V2")
         if (!panel.showSettingsPage("plugins"))
           return root.fail("Plugins page rejected")
         root.phase++

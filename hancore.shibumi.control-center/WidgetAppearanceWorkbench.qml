@@ -14,6 +14,8 @@ Column {
   property string selectedWidgetGroup: "G4"
   property string selectedWidgetId: ""
   property bool detailOpen: false
+  property string toggleErrorGroup: ""
+  property string toggleErrorMessage: ""
   signal widgetRequested(string groupId, string pluginId)
   signal overviewRequested()
 
@@ -43,9 +45,14 @@ Column {
         "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9",
         "G10", "G11", "G12", "G13", "G14", "G15"
       ]
-  readonly property var activeOptions: buildActiveOptions()
+  readonly property var overviewOptions: buildOverviewOptions()
+  readonly property var activeOptions: overviewOptions.active
+  readonly property var inactiveOptions: overviewOptions.inactive
+  readonly property var editableOptions: activeOptions.concat(inactiveOptions)
   readonly property var selectedWidget: optionForSelection(
     selectedWidgetGroup, selectedWidgetId)
+  readonly property bool selectedActive:
+    selectedWidget && selectedWidget.active === true
   readonly property bool selectedSupported: selectedWidget
     && String(selectedWidget.group || "") !== ""
   readonly property string selectedDisplayMode: selectedSupported
@@ -84,7 +91,13 @@ Column {
   readonly property real choiceFontSize:
     Commons.Style.font.caption * uiScale
   readonly property int visibleOptionCount: activeOptions.length
+  readonly property int inactiveOptionCount: inactiveOptions.length
+  readonly property int overviewRowCount: Math.max(
+    Math.ceil(activeOptions.length / 3),
+    Math.ceil(inactiveOptions.length
+      / (inactiveOptions.length <= 5 ? 1 : 2)))
   readonly property bool ready: widgetRepeater.count === activeOptions.length
+    && inactiveWidgetRepeater.count === inactiveOptions.length
     && contentModeChoices.ready
     && contentToneChoices.ready
     && surfaceModeChoices.ready
@@ -96,29 +109,168 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(8)
 
-  onActiveOptionsChanged: {
-    if (!detailOpen) return
-    const selectedGroup = String(selectedWidgetGroup || "")
-    const stillActive = activeOptions.some(function(option) {
-      return String(option.group || "") === selectedGroup
-    })
-    if (!stillActive) overviewRequested()
+  Timer {
+    id: toggleErrorTimer
+    interval: 4200
+    onTriggered: {
+      root.toggleErrorGroup = ""
+      root.toggleErrorMessage = ""
+    }
+  }
+
+  function editableOption(groupValue, idValue) {
+    const group = String(groupValue || "")
+    const id = String(idValue || "")
+    for (let index = 0; index < editableOptions.length; index++) {
+      const option = editableOptions[index]
+      if (group !== "" && (String(option.group || "") === group
+          || String(option.catalogGroup || "") === group))
+        return option
+      if (id !== "" && String(option.id || "") === id)
+        return option
+    }
+    return null
   }
 
   function optionForSelection(groupValue, idValue) {
-    const group = String(groupValue || "")
-    const id = String(idValue || "")
-    for (let index = 0; index < activeOptions.length; index++) {
-      const option = activeOptions[index]
-      if (group !== "" && String(option.group || "") === group)
-        return option
-      if (group === "" && id !== "" && String(option.id || "") === id)
-        return option
-    }
-    return activeOptions.length > 0 ? activeOptions[0] : ({
-      group: "", id: "", label: "Widget", glyph: "widgets",
-      modes: ["full"], region: "", supported: false
+    const option = editableOption(groupValue, idValue)
+    if (option) return option
+    return editableOptions.length > 0 ? editableOptions[0] : ({
+      group: "", catalogGroup: "", id: "", label: "Widget",
+      glyph: "widgets", modes: ["full"], region: "",
+      supported: false, active: false
     })
+  }
+
+  function isEditableWidget(groupValue, idValue) {
+    return editableOption(groupValue, idValue) !== null
+  }
+
+  function pluginIdForGroup(groupValue) {
+    const plugin = pluginForGroup(groupValue)
+    if (plugin) return String(plugin.id || "")
+    const ids = {
+      G1: "hancore.shibumi.control-center",
+      G2: "hancore.shibumi.workspaces",
+      G3: "hancore.shibumi.status",
+      G4: "hancore.shibumi.memory",
+      G5: "hancore.shibumi.cpu",
+      G6: "hancore.shibumi.audio",
+      G7: "hancore.shibumi.ai",
+      G8: "hancore.shibumi.center",
+      G9: "hancore.shibumi.media",
+      G10: "hancore.shibumi.quick-access",
+      G11: "hancore.shibumi.network",
+      G12: "hancore.shibumi.battery",
+      G13: "hancore.shibumi.brightness",
+      G14: "hancore.shibumi.power-profile",
+      G15: "hancore.shibumi.bluetooth",
+      G16: "hancore.shibumi.temperature",
+      G17: "hancore.shibumi.gpu",
+      G18: "hancore.shibumi.storage"
+    }
+    return String(ids[String(groupValue || "")] || "")
+  }
+
+  function catalogGroupForActiveGroup(groupValue) {
+    const group = String(groupValue || "")
+    if (catalogOptionForGroup(group)) return group
+    if (group.indexOf("G:") !== 0) return ""
+    return String(controller.shibumiWidgetGroup(group.slice(2)) || "")
+  }
+
+  function settingsGroupForCatalogGroup(groupValue) {
+    const group = String(groupValue || "")
+    if (controller.v2LayoutActive === true
+        || activeGroupIds.indexOf(group) >= 0)
+      return group
+    const pluginId = pluginIdForGroup(group)
+    return pluginId !== "" ? "G:" + pluginId : group
+  }
+
+  function optionModel(source, settingsGroup, catalogGroup, region, active) {
+    return {
+      group: settingsGroup,
+      catalogGroup: catalogGroup,
+      id: pluginIdForGroup(catalogGroup),
+      label: source.label,
+      glyph: source.glyph,
+      modes: source.modes,
+      region: region,
+      supported: true,
+      active: active === true
+    }
+  }
+
+  function displayRank(groupValue) {
+    const order = [
+      "G1", "G2", "G3",
+      "G5", "G6", "G7",
+      "G9", "G10", "G11",
+      "G12", "G13", "G15",
+      "G4", "G8", "G14",
+      "G16", "G17", "G18"
+    ]
+    const rank = order.indexOf(String(groupValue || ""))
+    return rank >= 0 ? rank : order.length
+  }
+
+  function sortForOverview(options) {
+    return options.slice().sort(function(left, right) {
+      return displayRank(left.catalogGroup) - displayRank(right.catalogGroup)
+    })
+  }
+
+  function isCatalogGroupActive(groupValue, activeValues) {
+    const group = String(groupValue || "")
+    return activeValues.some(function(option) {
+      return String(option.catalogGroup || "") === group
+    })
+  }
+
+  function buildInactiveOptions(activeValues) {
+    const result = []
+    for (let index = 0; index < widgetOptions.length; index++) {
+      const source = widgetOptions[index]
+      const catalogGroup = String(source.group || "")
+      if (catalogGroup === ""
+          || isCatalogGroupActive(catalogGroup, activeValues)) continue
+      result.push(optionModel(source,
+        settingsGroupForCatalogGroup(catalogGroup), catalogGroup, "", false))
+    }
+    return sortForOverview(result)
+  }
+
+  function buildOverviewOptions() {
+    void(controller.activeWidgetOrder)
+    void(controller.v2LayoutActive)
+    void(activeGroupIds)
+    const active = buildActiveOptions()
+    return { active: active, inactive: buildInactiveOptions(active) }
+  }
+
+  function setWidgetActive(option, enabled) {
+    if (!option) return false
+    const catalogGroup = String(option.catalogGroup || "")
+    const pluginId = String(option.id || "")
+    if (catalogGroup === "G1") {
+      toggleErrorGroup = catalogGroup
+      toggleErrorMessage = "Control Center access stays active"
+      toggleErrorTimer.restart()
+      return false
+    }
+    if (pluginId !== ""
+        && typeof controller.setPluginEnabled === "function"
+        && controller.setPluginEnabled(pluginId, enabled === true)) {
+      toggleErrorGroup = ""
+      toggleErrorMessage = ""
+      return true
+    }
+    toggleErrorGroup = catalogGroup
+    toggleErrorMessage = String(controller.pluginActionError
+      || "Widget state could not be changed")
+    toggleErrorTimer.restart()
+    return false
   }
 
   function pluginForGroup(groupValue) {
@@ -168,74 +320,63 @@ Column {
     void(controller.v2LayoutActive)
     void(activeGroupIds)
     const result = []
+    const seen = ({})
     const order = activeOrder()
     const regions = ["left", "center", "right"]
     for (let regionIndex = 0; regionIndex < regions.length; regionIndex++) {
       const region = regions[regionIndex]
       const groups = order[region] || []
       for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-        const group = String(groups[groupIndex] || "")
-        const source = catalogOptionForGroup(group)
-        if (!source
-            || activeGroupIds.indexOf(group) < 0
-            || controller.groupSetting(group, "enabled", true) === false)
+        const settingsGroup = String(groups[groupIndex] || "")
+        const catalogGroup = catalogGroupForActiveGroup(settingsGroup)
+        const source = catalogOptionForGroup(catalogGroup)
+        const supportedGroup = activeGroupIds.indexOf(catalogGroup) >= 0
+          || settingsGroup.indexOf("G:") === 0
+        if (!source || !supportedGroup || seen[catalogGroup] === true
+            || (typeof controller.groupEnabled === "function"
+              ? !controller.groupEnabled(settingsGroup)
+              : controller.groupSetting(
+                  settingsGroup, "enabled", true) === false))
           continue
-        const plugin = pluginForGroup(group)
-        result.push({
-          group: group,
-          id: plugin ? String(plugin.id || "") : "",
-          label: source.label,
-          glyph: source.glyph,
-          modes: source.modes,
-          region: region,
-          supported: true
-        })
+        seen[catalogGroup] = true
+        result.push(optionModel(source, settingsGroup,
+          catalogGroup, region, true))
       }
     }
-    return result
+    return sortForOverview(result)
   }
 
   function widgetSetting(group, key, fallback) {
     return controller.groupSetting(group, key, fallback)
   }
 
-  function widgetAppearanceSettings(groupValue) {
-    const widgets = controller.stateConfig
-      && controller.stateConfig.widgets
-      ? controller.stateConfig.widgets : ({})
-    const settings = widgets[String(groupValue || "")]
-    return settings && typeof settings === "object" ? settings : ({})
-  }
-
   function widgetAppearanceChanged(groupValue) {
-    const settings = widgetAppearanceSettings(groupValue)
-    const keys = [
-      "displayMode", "compact", "color", "colorMode", "tone",
-      "widgetBorder", "widgetBorderWidth",
-      "widgetBorderUsesSurfaceColor", "widgetPadding",
-      "widgetRadius", "surfaceOpacity"
-    ]
-    return keys.some(function(key) {
-      return Object.prototype.hasOwnProperty.call(settings, key)
-    })
+    const group = String(groupValue || "")
+    const color = String(widgetSetting(group, "color", "inherit"))
+    const usesSurfaceColor = widgetSetting(
+      group, "widgetBorderUsesSurfaceColor", false) === true
+    const borderColor = String(widgetSetting(group, "widgetBorderColor",
+      usesSurfaceColor ? color : "inherit"))
+    return widgetMode(group) !== "full"
+      || color !== "inherit"
+      || String(widgetSetting(group, "colorMode", "fill")) !== "fill"
+      || String(widgetSetting(group, "tone", "auto")) !== "auto"
+      || widgetSetting(group, "widgetBorder", false) === true
+      || Number(widgetSetting(group, "widgetBorderWidth", 1)) !== 1
+      || borderColor !== "inherit"
+      || usesSurfaceColor
+      || String(widgetSetting(group, "widgetPadding", "auto")) !== "auto"
+      || String(widgetSetting(group, "widgetRadius", "auto")) !== "auto"
+      || Number(widgetSetting(group, "surfaceOpacity", 1)) !== 1
   }
 
   function widgetAppearanceIndicatorColor(groupValue) {
-    const settings = widgetAppearanceSettings(groupValue)
-    const fillColor = settings.color !== undefined
-      ? String(settings.color) : "inherit"
-    const outlineColor = settings.widgetBorderColor !== undefined
-      ? String(settings.widgetBorderColor) : "inherit"
-    const colorId = fillColor !== "inherit" ? fillColor : outlineColor
-    return colorId !== "inherit"
-      ? controller.accentColor(colorId) : accent
+    return controller.accentColor("color03")
   }
 
   function isActiveWidget(groupValue) {
-    const group = String(groupValue || "")
-    return activeOptions.some(function(option) {
-      return String(option.group || "") === group
-    })
+    const option = editableOption(groupValue, "")
+    return option !== null && option.active === true
   }
 
   function widgetMode(group) {
@@ -304,8 +445,9 @@ Column {
   Item {
     width: parent.width
     readonly property real overviewHeight: Math.max(
-      Commons.Style.space(180),
-      widgetList.implicitHeight + Commons.Style.space(45))
+      Commons.Style.space(105),
+      Math.max(activeWidgetGrid.implicitHeight,
+        inactiveWidgetGrid.implicitHeight) + Commons.Style.space(39))
     readonly property real routeHeight: root.detailOpen
       ? Commons.Style.space(34) : 0
     readonly property real inspectorHeight:
@@ -399,185 +541,78 @@ Column {
       border.color: root.controller.controlBorderColor
       clip: true
 
-      Text {
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.topMargin: Commons.Style.space(9)
-        anchors.leftMargin: Commons.Style.space(10)
-        text: "ACTIVE WIDGETS"
-        color: root.foreground
-        opacity: 0.54
-        font.family: root.controller.marketFont
-        font.pixelSize: Commons.Style.font.caption * root.uiScale
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
-      }
+      Row {
+        id: widgetSections
+        anchors.fill: parent
+        anchors.margins: Commons.Style.space(5)
+        spacing: Commons.Style.space(8)
 
-      Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.topMargin: Commons.Style.space(29)
-        height: 1
-        color: root.controller.dividerColor
-      }
+        Column {
+          width: Math.floor((parent.width - widgetSectionDivider.width
+            - widgetSections.spacing * 2) * 0.66)
+          spacing: Commons.Style.space(4)
 
-      Flickable {
-        id: widgetListFlick
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: Commons.Style.space(5)
-        anchors.rightMargin: Commons.Style.space(5)
-        anchors.topMargin: Commons.Style.space(35)
-        anchors.bottomMargin: Commons.Style.space(5)
-        contentWidth: width
-        contentHeight: widgetList.implicitHeight
-        boundsBehavior: Flickable.StopAtBounds
-        flickableDirection: Flickable.VerticalFlick
-        clip: true
+          WidgetSectionHeader {
+            title: "ACTIVE WIDGETS"
+            count: root.activeOptions.length
+          }
 
-        Grid {
-          id: widgetList
-          width: parent.width
-          columns: 4
-          columnSpacing: Commons.Style.space(4)
-          rowSpacing: Commons.Style.space(3)
+          Grid {
+            id: activeWidgetGrid
+            width: parent.width
+            columns: 3
+            columnSpacing: Commons.Style.space(4)
+            rowSpacing: Commons.Style.space(3)
 
-          Repeater {
-            id: widgetRepeater
-            model: root.activeOptions
+            Repeater {
+              id: widgetRepeater
+              model: root.activeOptions
 
-            delegate: Rectangle {
-              id: widgetRow
-              required property var modelData
-              readonly property bool selected:
-                root.detailOpen
-                  && String(root.selectedWidget.group || "")
-                  === String(modelData.group || "")
-              readonly property bool appearanceChanged:
-                root.widgetAppearanceChanged(modelData.group)
-              width: (parent.width - parent.columnSpacing * 3) / 4
-              height: Commons.Style.space(38)
-              radius: root.controller.controlRadius
-              color: selected
-                ? root.controller.buttonFillColor
-                : widgetPointer.containsMouse
-                  ? root.controller.controlHoverFillColor : "transparent"
-              border.width: selected ? 1 : 0
-              border.color: root.accent
-
-              Row {
-                anchors.fill: parent
-                anchors.leftMargin: Commons.Style.space(8)
-                anchors.rightMargin: widgetRow.appearanceChanged
-                  ? Commons.Style.space(16) : Commons.Style.space(7)
-                spacing: Commons.Style.space(7)
-
-                IconText {
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: Commons.Style.space(20)
-                  text: widgetRow.modelData.glyph
-                  color: widgetRow.selected ? root.accent : root.foreground
-                  horizontalAlignment: Text.AlignHCenter
-                  font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
-                }
-
-                Column {
-                  anchors.verticalCenter: parent.verticalCenter
-                  width: parent.width - x
-                  spacing: 0
-
-                  Text {
-                    width: parent.width
-                    text: widgetRow.modelData.label
-                    color: root.foreground
-                    elide: Text.ElideRight
-                    font.family: root.controller.marketFont
-                    font.pixelSize: Commons.Style.font.caption * root.uiScale
-                    font.weight: widgetRow.selected ? Font.DemiBold : Font.Normal
-                  }
-
-                  Text {
-                    width: parent.width
-                    text: widgetRow.modelData.supported
-                      ? root.displayModeLabel(
-                          root.widgetMode(widgetRow.modelData.group))
-                      : ""
-                    color: widgetRow.selected ? root.accent : root.foreground
-                    opacity: widgetRow.selected ? 0.9 : 0.42
-                    elide: Text.ElideRight
-                    font.family: root.controller.marketFont
-                    font.pixelSize: Commons.Style.font.caption
-                      * root.uiScale * 0.86
-                  }
-                }
-              }
-
-              Rectangle {
-                id: appearanceStateDot
-                visible: widgetRow.appearanceChanged
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: Commons.Style.space(6)
-                anchors.rightMargin: Commons.Style.space(6)
-                width: Commons.Style.space(6)
-                height: width
-                radius: width / 2
-                color: root.widgetAppearanceIndicatorColor(
-                  widgetRow.modelData.group)
-              }
-
-              MouseArea {
-                id: widgetPointer
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                  root.selectedWidgetGroup =
-                    String(widgetRow.modelData.group || "")
-                  root.selectedWidgetId = String(widgetRow.modelData.id || "")
-                  root.widgetRequested(
-                    root.selectedWidgetGroup, root.selectedWidgetId)
-                }
+              delegate: WidgetOptionTile {
+                required property var modelData
+                option: modelData
+                width: (parent.width - parent.columnSpacing * 2) / 3
               }
             }
           }
-
         }
-      }
 
-      Text {
-        anchors.centerIn: parent
-        visible: root.activeOptions.length === 0
-        text: "No editable widgets are active. Enable one under Plugins."
-        color: root.foreground
-        opacity: 0.46
-        wrapMode: Text.WordWrap
-        horizontalAlignment: Text.AlignHCenter
-        font.family: root.controller.marketFont
-        font.pixelSize: Commons.Style.font.caption * root.uiScale
-
-        MouseArea {
-          anchors.fill: parent
-          anchors.margins: -Commons.Style.space(6)
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.controller.showSettingsPage("plugins")
+        Rectangle {
+          id: widgetSectionDivider
+          width: 1
+          height: parent.height
+          color: root.controller.dividerColor
         }
-      }
 
-      ThinScrollBar {
-        z: 2
-        anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.topMargin: Commons.Style.space(36)
-        anchors.rightMargin: 1
-        anchors.bottomMargin: Commons.Style.space(6)
-        flickable: widgetListFlick
-        foreground: root.foreground
-        accent: root.accent
+        Column {
+          width: parent.width - x
+          spacing: Commons.Style.space(4)
+
+          WidgetSectionHeader {
+            title: "INACTIVE WIDGETS"
+            count: root.inactiveOptions.length
+          }
+
+          Grid {
+            id: inactiveWidgetGrid
+            width: parent.width
+            columns: root.inactiveOptions.length <= 5 ? 1 : 2
+            columnSpacing: Commons.Style.space(4)
+            rowSpacing: Commons.Style.space(3)
+
+            Repeater {
+              id: inactiveWidgetRepeater
+              model: root.inactiveOptions
+
+              delegate: WidgetOptionTile {
+                required property var modelData
+                option: modelData
+                width: (parent.width - parent.columnSpacing
+                  * (parent.columns - 1)) / parent.columns
+              }
+            }
+          }
+        }
       }
     }
 
@@ -652,8 +687,8 @@ Column {
               Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.detailOpen
-                text: root.controller.v2LayoutActive
-                  ? "V2 ACTIVE" : "V1 ACTIVE"
+                text: (root.controller.v2LayoutActive ? "V2 " : "V1 ")
+                  + (root.selectedActive ? "ACTIVE" : "INACTIVE")
                 color: root.accent
                 font.family: root.controller.marketFont
                 font.pixelSize:
@@ -960,6 +995,244 @@ Column {
         foreground: root.foreground
         accent: root.accent
       }
+    }
+  }
+
+  component WidgetSectionHeader: Item {
+    required property string title
+    required property int count
+
+    width: parent ? parent.width : 0
+    height: Commons.Style.space(25)
+
+    Text {
+      anchors.left: parent.left
+      anchors.leftMargin: Commons.Style.space(5)
+      anchors.verticalCenter: parent.verticalCenter
+      text: parent.title
+      color: root.foreground
+      opacity: 0.54
+      font.family: root.controller.marketFont
+      font.pixelSize: Commons.Style.font.caption * root.uiScale
+      font.weight: Font.DemiBold
+      font.letterSpacing: 1
+    }
+
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: Commons.Style.space(5)
+      anchors.verticalCenter: parent.verticalCenter
+      text: String(parent.count)
+      color: root.accent
+      opacity: 0.82
+      font.family: root.controller.marketFont
+      font.pixelSize: Commons.Style.font.caption * root.uiScale * 0.9
+      font.weight: Font.DemiBold
+    }
+
+    Rectangle {
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      height: 1
+      color: root.controller.dividerColor
+    }
+  }
+
+  component WidgetOptionTile: Rectangle {
+    id: widgetRow
+
+    required property var option
+    readonly property bool selected: root.detailOpen
+      && String(root.selectedWidget.catalogGroup || "")
+        === String(option.catalogGroup || "")
+    readonly property bool active: option.active === true
+    readonly property bool hasToggleError:
+      root.toggleErrorGroup === String(option.catalogGroup || "")
+    readonly property bool appearanceChanged:
+      root.widgetAppearanceChanged(option.group)
+    readonly property bool stateLocked:
+      String(option.catalogGroup || "") === "G1"
+
+    height: Commons.Style.space(38)
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: option.label + (active
+      ? ". Active. Move right to deactivate."
+      : ". Inactive. Move left to activate.")
+    radius: root.controller.controlRadius
+    color: selected
+      ? root.controller.buttonFillColor
+      : editorPointer.containsMouse || moveAction.hovered || activeFocus
+        ? root.controller.controlHoverFillColor : "transparent"
+    border.width: selected || activeFocus ? 1 : 0
+    border.color: root.accent
+
+    Keys.onReturnPressed: openEditor()
+    Keys.onEnterPressed: openEditor()
+    Keys.onRightPressed: {
+      if (active && !stateLocked) root.setWidgetActive(option, false)
+    }
+    Keys.onLeftPressed: {
+      if (!active) root.setWidgetActive(option, true)
+    }
+
+    function openEditor() {
+      root.selectedWidgetGroup = String(option.group || "")
+      root.selectedWidgetId = String(option.id || "")
+      root.widgetRequested(root.selectedWidgetGroup, root.selectedWidgetId)
+    }
+
+    Row {
+      anchors.fill: parent
+      anchors.leftMargin: Commons.Style.space(7)
+      anchors.rightMargin: Commons.Style.space(22)
+      spacing: Commons.Style.space(6)
+
+      IconText {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Commons.Style.space(19)
+        text: widgetRow.option.glyph
+        color: widgetRow.selected || editorPointer.containsMouse
+          ? root.accent : root.foreground
+        opacity: widgetRow.active || widgetRow.selected
+          || editorPointer.containsMouse ? 1 : 0.56
+        horizontalAlignment: Text.AlignHCenter
+        font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
+      }
+
+      Column {
+        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width - x
+        spacing: 0
+
+        Text {
+          width: parent.width
+          text: widgetRow.option.label
+          color: widgetRow.selected || editorPointer.containsMouse
+            ? root.accent : root.foreground
+          opacity: widgetRow.active || widgetRow.selected
+            || editorPointer.containsMouse ? 1 : 0.68
+          elide: Text.ElideRight
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: widgetRow.selected ? Font.DemiBold : Font.Normal
+        }
+
+        Text {
+          width: parent.width
+          visible: widgetRow.active || widgetRow.hasToggleError
+          text: widgetRow.hasToggleError
+            ? root.toggleErrorMessage
+            : root.displayModeLabel(root.widgetMode(widgetRow.option.group))
+          color: widgetRow.hasToggleError
+            ? root.controller.accentColor("color01")
+            : widgetRow.selected || editorPointer.containsMouse
+              ? root.accent : root.foreground
+          opacity: widgetRow.selected || editorPointer.containsMouse
+            ? 0.9 : 0.42
+          elide: Text.ElideRight
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale * 0.86
+        }
+      }
+    }
+
+    Rectangle {
+      id: appearanceStateDot
+      visible: widgetRow.active && widgetRow.appearanceChanged
+      anchors.top: parent.top
+      anchors.right: moveAction.left
+      anchors.topMargin: Commons.Style.space(6)
+      anchors.rightMargin: Commons.Style.space(3)
+      width: Commons.Style.space(6)
+      height: width
+      radius: width / 2
+      color: root.widgetAppearanceIndicatorColor(widgetRow.option.group)
+    }
+
+    MouseArea {
+      id: editorPointer
+      anchors.left: parent.left
+      anchors.right: moveAction.left
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: widgetRow.openEditor()
+    }
+
+    WidgetMoveAction {
+      id: moveAction
+      anchors.right: parent.right
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      active: widgetRow.active
+      locked: widgetRow.stateLocked
+      label: widgetRow.option.label
+      onRequested: root.setWidgetActive(
+        widgetRow.option, !widgetRow.active)
+    }
+  }
+
+  component WidgetMoveAction: FocusScope {
+    id: moveActionControl
+
+    required property bool active
+    required property bool locked
+    required property string label
+    readonly property bool hovered: movePointer.containsMouse
+    signal requested()
+
+    width: Commons.Style.space(17)
+    activeFocusOnTab: !locked
+    Accessible.role: Accessible.Button
+    Accessible.name: locked ? label + " stays active"
+      : (active ? "Deactivate " : "Activate ") + label
+
+    Keys.onSpacePressed: if (!locked) requested()
+    Keys.onReturnPressed: if (!locked) requested()
+
+    Rectangle {
+      anchors.fill: parent
+      anchors.leftMargin: Commons.Style.space(2)
+      anchors.rightMargin: 1
+      anchors.topMargin: Commons.Style.space(5)
+      anchors.bottomMargin: Commons.Style.space(5)
+      radius: root.controller.controlRadius
+      color: moveActionControl.hovered || moveActionControl.activeFocus
+        ? Commons.Util.alpha(root.accent, 0.13) : "transparent"
+    }
+
+    Rectangle {
+      anchors.left: parent.left
+      anchors.top: parent.top
+      anchors.bottom: parent.bottom
+      anchors.topMargin: Commons.Style.space(5)
+      anchors.bottomMargin: Commons.Style.space(5)
+      width: 1
+      color: root.controller.dividerColor
+      opacity: moveActionControl.hovered ? 1 : 0.72
+    }
+
+    IconText {
+      anchors.centerIn: parent
+      text: moveActionControl.locked ? "lock"
+        : moveActionControl.active ? "arrow_forward" : "arrow_back"
+      color: moveActionControl.hovered || moveActionControl.activeFocus
+        ? root.accent : root.foreground
+      opacity: moveActionControl.hovered
+        || moveActionControl.activeFocus ? 1 : 0.72
+      font.pixelSize: Commons.Style.font.iconSmall * root.uiScale
+    }
+
+    MouseArea {
+      id: movePointer
+      anchors.fill: parent
+      enabled: !moveActionControl.locked
+      hoverEnabled: true
+      cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+      onClicked: moveActionControl.requested()
     }
   }
 

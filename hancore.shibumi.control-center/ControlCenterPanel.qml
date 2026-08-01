@@ -224,6 +224,9 @@ ShibumiPanel {
           switchPhase === "error" ? 250 : 205), Commons.Style.space(260))
       : fittedContentHeight(Commons.Style.space(
           switchPhase === "error" ? 488 : 436), Commons.Style.space(495))
+    : settings.compactIconsOverview
+      ? fittedContentHeight(settings.compactIconsPanelHeight,
+          Commons.Style.space(680))
     : fittedContentHeight(Commons.Style.space(610),
         Commons.Style.space(680))
 
@@ -334,10 +337,10 @@ ShibumiPanel {
     const group = shibumiWidgetGroup(id)
     if (["G16", "G17", "G18"].indexOf(group) >= 0)
       return v2LayoutActive
-        ? groupSetting(group, "enabled", true) !== false
+        ? groupEnabled(group)
         : bar && typeof bar.layoutContains === "function"
           ? bar.layoutContains(id) : false
-    if (group !== "") return groupSetting(group, "enabled", true) !== false
+    if (group !== "") return groupEnabled(group)
     return bar && typeof bar.layoutContains === "function"
       ? bar.layoutContains(id) : false
   }
@@ -434,7 +437,7 @@ ShibumiPanel {
         replacementTargetId: replacementTargetId,
         replacementTarget: replacementTarget,
         replacementTargetEnabled: replacementGroup !== ""
-          && groupSetting(replacementGroup, "enabled", true) !== false,
+          && groupEnabled(replacementGroup),
         replacementInEffect: false,
         replaced: false,
         replacedBy: "",
@@ -457,7 +460,7 @@ ShibumiPanel {
       const replacementGroup = String(entry.replacementGroup || "")
       if (replacementGroup !== "") {
         entry.replacementInEffect = entry.installedInBar === true
-          && groupSetting(replacementGroup, "enabled", true) === false
+          && !groupEnabled(replacementGroup)
         continue
       }
       const replacements = activeReplacements[group] || []
@@ -516,7 +519,7 @@ ShibumiPanel {
         if (enabled === true && bar
             && typeof bar.removeWidgetFamilyAlternatives === "function")
           bar.removeWidgetFamilyAlternatives(group)
-        return setGroupSetting(group, "enabled", enabled === true)
+        return setGroupEnabled(group, enabled === true)
       }
       if (suiteManaged) {
         console.warn(
@@ -551,7 +554,7 @@ ShibumiPanel {
         || typeof bar.removeWidgetFamilyAlternatives !== "function")
       return false
     bar.removeWidgetFamilyAlternatives(group)
-    return setGroupSetting(group, "enabled", true)
+    return setGroupEnabled(group, true)
   }
 
   function removePlugin(pluginId) {
@@ -584,6 +587,22 @@ ShibumiPanel {
   function groupSetting(groupId, key, fallback) {
     return stateService && typeof stateService.groupSetting === "function"
       ? stateService.groupSetting(groupId, key, fallback) : fallback
+  }
+
+  function groupEnabled(groupId) {
+    return stateService && typeof stateService.groupEnabledForVariant
+      === "function"
+      ? stateService.groupEnabledForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1")
+      : groupSetting(groupId, "enabled", true) !== false
+  }
+
+  function setGroupEnabled(groupId, enabled) {
+    return stateService && typeof stateService.setGroupEnabledForVariant
+      === "function"
+      ? stateService.setGroupEnabledForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1", enabled === true)
+      : setGroupSetting(groupId, "enabled", enabled === true)
   }
 
   function setGroupSetting(groupId, key, value) {

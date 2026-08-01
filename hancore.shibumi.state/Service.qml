@@ -94,8 +94,41 @@ Item {
       ? settings[name] : fallback
   }
 
+  function activeShellVariant() {
+    const presentation = config && config.presentation
+      ? config.presentation : ({})
+    return String(presentation.shellStyle || "shibumi") === "shibumi"
+      ? "v1" : "v2"
+  }
+
+  function groupEnabledForVariant(groupId, variantValue) {
+    const settings = groupSettings(groupId)
+    const variant = String(variantValue || "").toLowerCase()
+    const key = variant === "v2" ? "enabledV2" : "enabledV1"
+    if (Object.prototype.hasOwnProperty.call(settings, key))
+      return settings[key] !== false
+    return Object.prototype.hasOwnProperty.call(settings, "enabled")
+      ? settings.enabled !== false : true
+  }
+
   function groupEnabled(groupId) {
-    return groupSetting(groupId, "enabled", true) !== false
+    return groupEnabledForVariant(groupId, activeShellVariant())
+  }
+
+  function setGroupEnabledForVariant(groupId, variantValue, enabled) {
+    const group = String(groupId || "")
+    const variant = String(variantValue || "").toLowerCase()
+    if (!ShibumiConfig.isGroupId(group)
+        || ["v1", "v2"].indexOf(variant) < 0
+        || typeof enabled !== "boolean") return false
+    const key = variant === "v2" ? "enabledV2" : "enabledV1"
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+      const settings = ShibumiConfig.isPlainObject(next.widgets[group])
+        ? next.widgets[group] : {}
+      settings[key] = enabled
+      next.widgets[group] = settings
+    })
   }
 
   function setGroupSetting(groupId, key, value) {

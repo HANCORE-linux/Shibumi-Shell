@@ -1141,7 +1141,7 @@ for visual_contract in \
     'text: "FILL COLOR"' \
     'text: "OUTLINE COLOR"' \
     'root.displayModeLabel(' \
-    'root.widgetMode(widgetRow.modelData.group))' \
+    'root.widgetMode(widgetRow.option.group))' \
     '{ value: "none", label: "None" }' \
     '{ value: "fill", label: "Fill" }' \
     '{ value: "border", label: "Outline" }' \
@@ -1200,11 +1200,18 @@ workbench="$control_dir/WidgetAppearanceWorkbench.qml"
 [[ -f $workbench ]] \
   || fail "direct widget Appearance workbench is missing"
 for workbench_contract in \
-    'readonly property var activeOptions: buildActiveOptions()' \
+    'readonly property var overviewOptions: buildOverviewOptions()' \
+    'readonly property var activeOptions: overviewOptions.active' \
+    'readonly property var inactiveOptions: overviewOptions.inactive' \
+    'readonly property var editableOptions: activeOptions.concat(inactiveOptions)' \
     'function buildActiveOptions()' \
+    'function buildInactiveOptions(activeValues)' \
+    'function buildOverviewOptions()' \
     'void(controller.activeWidgetOrder)' \
-    'text: "ACTIVE WIDGETS"' \
+    'title: "ACTIVE WIDGETS"' \
+    'title: "INACTIVE WIDGETS"' \
     'model: root.activeOptions' \
+    'model: root.inactiveOptions' \
     'id: inspectorCard' \
     'property bool detailOpen: false' \
     'signal widgetRequested(string groupId, string pluginId)' \
@@ -1213,9 +1220,23 @@ for workbench_contract in \
     'visible: !root.detailOpen' \
     'visible: root.detailOpen' \
     'interactive: false' \
-    'columns: 4' \
+    'columns: 3' \
+    'columns: root.inactiveOptions.length <= 5 ? 1 : 2' \
     'readonly property var activeGroupIds:' \
-    'activeGroupIds.indexOf(group) < 0' \
+    'function settingsGroupForCatalogGroup(groupValue)' \
+    'pluginId !== "" ? "G:" + pluginId : group' \
+    'component WidgetOptionTile: Rectangle' \
+    'component WidgetSectionHeader: Item' \
+    'component WidgetMoveAction: FocusScope' \
+    'function setWidgetActive(option, enabled)' \
+    'controller.setPluginEnabled(pluginId, enabled === true)' \
+    'id: editorPointer' \
+    'id: moveAction' \
+    'onRequested: root.setWidgetActive(' \
+    'text: moveActionControl.locked ? "lock"' \
+    ': moveActionControl.active ? "arrow_forward" : "arrow_back"' \
+    'Keys.onRightPressed:' \
+    'Keys.onLeftPressed:' \
     'id: contentModeChoices' \
     'id: contentToneChoices' \
     'id: surfaceModeChoices' \
@@ -1239,12 +1260,22 @@ for workbench_contract in \
     'readonly property real choiceFontSize:' \
     'function widgetAppearanceChanged(groupValue)' \
     'function widgetAppearanceIndicatorColor(groupValue)' \
+    'return controller.accentColor("color03")' \
     'id: appearanceStateDot' \
-    'visible: widgetRow.appearanceChanged' \
+    'visible: widgetRow.active && widgetRow.appearanceChanged' \
     'root.controller.resetGroupAppearance('; do
   rg -Fq "$workbench_contract" "$workbench" \
     || fail "widget Appearance workbench contract drifted: $workbench_contract"
 done
+if rg -Fq 'Inactive ·' "$workbench"; then
+  fail "inactive Icons tiles redundantly repeat their section state"
+fi
+if rg -Fq 'component WidgetStateToggle' "$workbench"; then
+  fail "Icons still uses redundant state switches instead of direct movement"
+fi
+if rg -Fq 'drag.target: widgetRow' "$workbench"; then
+  fail "Icons still uses ambiguous drag movement instead of split actions"
+fi
 if rg -Fq 'text: "FINISH"' "$workbench"; then
   fail "Icons still exposes the redundant Finish section"
 fi
@@ -1357,15 +1388,32 @@ if rg -Fq 'visible: modeChoice.selected' "$workbench" \
 fi
 for icons_drilldown_contract in \
     'BarFunctionsPage.qml:property bool widgetDetailOpen: false' \
+    'BarFunctionsPage.qml:readonly property int inactiveWidgetCount:' \
+    'BarFunctionsPage.qml:readonly property bool selectedWidgetActive:' \
     'BarFunctionsPage.qml:function openWidgetDetails(groupId, pluginId)' \
+    'BarFunctionsPage.qml:function setWidgetEnabled(groupId, enabled)' \
+    'BarFunctionsPage.qml:function widgetUsesCustomAppearance(groupId)' \
     'BarFunctionsPage.qml:function showWidgetOverview()' \
     'BarFunctionsPage.qml:visible: !root.widgetDetailOpen' \
     'BarFunctionsPage.qml:detailOpen: root.widgetDetailOpen' \
-    'WidgetAppearanceWorkbench.qml:? "V2 ACTIVE" : "V1 ACTIVE"'; do
+    'WidgetAppearanceWorkbench.qml:+ (root.selectedActive ? "ACTIVE" : "INACTIVE")'; do
   file=${icons_drilldown_contract%%:*}
   label=${icons_drilldown_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
     || fail "Icons drill-down contract drifted: $label"
+done
+for icons_height_contract in \
+    'WidgetAppearanceWorkbench.qml:readonly property int overviewRowCount:' \
+    'BarFunctionsPage.qml:readonly property int widgetOverviewRowCount:' \
+    'ControlSettings.qml:readonly property bool compactIconsOverview:' \
+    'ControlSettings.qml:readonly property real compactIconsPanelHeight:' \
+    'ControlSettings.qml:pageLoader.item.widgetDetailOpen === false' \
+    'ControlCenterPanel.qml:: settings.compactIconsOverview' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactIconsPanelHeight,'; do
+  file=${icons_height_contract%%:*}
+  label=${icons_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Icons compact panel-height contract drifted: $label"
 done
 for icons_hero_contract in \
     'PageHeaderHero.qml:property real preferredHeight:' \
@@ -1384,7 +1432,7 @@ fi
 for active_order_contract in \
     'ControlCenterPanel.qml:readonly property var activeWidgetOrder:' \
     'ControlCenterPanel.qml:bar.layoutController.order' \
-    'WidgetAppearanceWorkbench.qml:controller.groupSetting(group, "enabled", true)' \
+    'WidgetAppearanceWorkbench.qml:settingsGroup, "enabled", true' \
     'WidgetAppearanceWorkbench.qml:region: region'; do
   file=${active_order_contract%%:*}
   label=${active_order_contract#*:}
@@ -1433,10 +1481,10 @@ scrollbar_instances=$(rg -n '^[[:space:]]*ThinScrollBar \{' \
   "$control_dir/ControlCenterPanel.qml" \
   "$control_dir/ControlSettings.qml" \
   "$control_dir/WidgetAppearanceWorkbench.qml" | wc -l)
-[[ $scrollbar_instances -eq 7 ]] \
-  || fail "expected 7 scroll surfaces, found $scrollbar_instances"
+[[ $scrollbar_instances -eq 6 ]] \
+  || fail "expected 6 scroll surfaces, found $scrollbar_instances"
 for scroll_surface in settingsFlick quickFlick configureLandingFlick pageFlick \
-    resultsFlick widgetListFlick inspectorFlick; do
+    resultsFlick inspectorFlick; do
   rg -Fq "flickable: $scroll_surface" "$control_dir" --glob '*.qml' \
     || fail "scroll surface has no thin scrollbar: $scroll_surface"
 done

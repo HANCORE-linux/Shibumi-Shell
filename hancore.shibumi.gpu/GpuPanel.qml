@@ -30,7 +30,9 @@ ShibumiPanel {
       spacing: Commons.Style.space(10)
 
       Text {
-        text: "GPU · " + (panel.gpu ? panel.gpu.backend.toUpperCase() : "")
+        text: panel.gpu && panel.gpu.available
+          ? "GPU · " + panel.gpu.backend.toUpperCase()
+          : "GPU · UNAVAILABLE"
         color: panel.bar.foreground
         font.family: panel.bar.fontFamily
         font.pixelSize: Commons.Style.font.heading
@@ -45,11 +47,13 @@ ShibumiPanel {
 
       Metric {
         label: "Load"
-        value: (panel.gpu ? panel.gpu.utilization : 0) + "%"
+        value: panel.gpu && panel.gpu.available
+          ? panel.gpu.utilization + "%" : "--"
       }
       Metric {
         label: "Temperature"
-        value: (panel.gpu ? panel.gpu.temperatureC : 0) + "°C"
+        value: panel.gpu && panel.gpu.available
+          ? panel.gpu.temperatureC + "°C" : "--"
       }
       Metric {
         visible: panel.gpu && panel.gpu.memoryTotalMiB > 0

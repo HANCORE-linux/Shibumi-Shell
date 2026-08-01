@@ -71,6 +71,73 @@ Item {
   width: implicitWidth
   height: implicitHeight
 
+  // QML Repeaters rebuild every delegate when a JavaScript array model is
+  // replaced. V1 extension changes must retain existing widget owners (most
+  // importantly G1 and its open Control Center), so mirror the order into a
+  // row-stable model and only insert, move, or remove changed groups.
+  ListModel { id: stableGroupModel }
+
+  function stableGroupValues() {
+    const result = []
+    for (let index = 0; index < stableGroupModel.count; index++)
+      result.push(String(stableGroupModel.get(index).groupId || ""))
+    return result
+  }
+
+  function isGroupSubsequence(shorter, longer) {
+    let cursor = 0
+    for (let index = 0; index < longer.length
+        && cursor < shorter.length; index++) {
+      if (String(longer[index] || "") === String(shorter[cursor] || ""))
+        cursor++
+    }
+    return cursor === shorter.length
+  }
+
+  function syncStableGroups() {
+    const desired = Array.isArray(groups) ? groups : []
+    const current = stableGroupValues()
+    if (JSON.stringify(current) === JSON.stringify(desired)) return
+
+    // Pure additions/removals retain every unchanged delegate. Reorders need
+    // a rebuild because Repeater row moves do not change the visual child
+    // order; edit mode already closes panels before such a drag operation.
+    if (isGroupSubsequence(current, desired)) {
+      let currentIndex = 0
+      for (let target = 0; target < desired.length; target++) {
+        const groupId = String(desired[target] || "")
+        if (currentIndex < stableGroupModel.count
+            && String(stableGroupModel.get(currentIndex).groupId || "")
+              === groupId) {
+          currentIndex++
+          continue
+        }
+        stableGroupModel.insert(target, { groupId: groupId })
+        currentIndex++
+      }
+      return
+    }
+    if (isGroupSubsequence(desired, current)) {
+      let desiredIndex = desired.length - 1
+      for (let index = stableGroupModel.count - 1; index >= 0; index--) {
+        const groupId = String(stableGroupModel.get(index).groupId || "")
+        if (desiredIndex >= 0
+            && groupId === String(desired[desiredIndex] || "")) {
+          desiredIndex--
+          continue
+        }
+        stableGroupModel.remove(index)
+      }
+      return
+    }
+    stableGroupModel.clear()
+    for (let index = 0; index < desired.length; index++)
+      stableGroupModel.append({ groupId: String(desired[index] || "") })
+  }
+
+  onGroupsChanged: syncStableGroups()
+  Component.onCompleted: syncStableGroups()
+
   function splitAfter(index) {
     const groupId = index >= 0 && index < groups.length
       ? String(groups[index]) : ""
@@ -242,12 +309,13 @@ Item {
 
       Repeater {
         id: horizontalRepeater
-        model: root.groups
+        model: stableGroupModel
 
         delegate: Item {
           id: horizontalCell
-          required property string modelData
+          required property string groupId
           required property int index
+          readonly property string modelData: groupId
           readonly property bool emptySlot: root.slotEditing && modelData === ""
           readonly property bool groupHasContent: groupSlot.hasContent
           readonly property bool stageShown: modelData !== ""
@@ -674,12 +742,13 @@ Item {
 
       Repeater {
         id: verticalRepeater
-        model: root.groups
+        model: stableGroupModel
 
         delegate: Item {
           id: verticalCell
-          required property string modelData
+          required property string groupId
           required property int index
+          readonly property string modelData: groupId
           readonly property bool groupHasContent: groupSlot.hasContent
           readonly property int leadingGap: groupHasContent
             && verticalColumn.hasContentBefore(index) ? root.groupSpacing : 0

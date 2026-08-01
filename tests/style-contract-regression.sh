@@ -90,6 +90,18 @@ done
 rg -Fq 'enabled: root.persistentSeparators || !root.v2Mode' \
   styles/shibumi/GroupSection.qml \
   || fail "within-region separators are not live in V1 and persistent in V2"
+for stable_group_contract in \
+  'ListModel { id: stableGroupModel }' \
+  'function syncStableGroups()' \
+  'stableGroupModel.insert(target, { groupId: groupId })' \
+  'stableGroupModel.remove(index)' \
+  'model: stableGroupModel'; do
+  rg -Fq "$stable_group_contract" styles/shibumi/GroupSection.qml \
+    || fail "dynamic groups can rebuild existing widget owners: $stable_group_contract"
+done
+if rg -Fq 'model: root.groups' styles/shibumi/GroupSection.qml; then
+  fail "group repeater still destroys every widget owner on layout changes"
+fi
 rg -Fq 'onClicked: root.bar.toggleGroupSeparator(' \
   styles/shibumi/GroupSection.qml && \
   fail "separator click bypasses the V2 interaction guard"

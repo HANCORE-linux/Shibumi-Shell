@@ -67,6 +67,18 @@ rg -q 'text: "CPU · GPU"' \
 rg -q 'visible: panel\.gpuTelemetry && panel\.gpuTelemetry\.available' \
   "$repo_root/hancore.shibumi.cpu/CpuPanel.qml" \
   || fail "CPU panel does not gate GPU data on a real telemetry backend"
+gpu_widget="$repo_root/hancore.shibumi.gpu/BarWidget.qml"
+for gpu_fallback_contract in \
+  'readonly property bool telemetryAvailable:' \
+  'visible: true' \
+  '"GPU telemetry unavailable"' \
+  ': "--"'; do
+  rg -Fq "$gpu_fallback_contract" "$gpu_widget" \
+    || fail "GPU widget has no visible unsupported-hardware fallback: $gpu_fallback_contract"
+done
+if rg -Fq 'visible: root.gpu && root.gpu.available' "$gpu_widget"; then
+  fail "active GPU widget still collapses to 0x0 without a telemetry backend"
+fi
 for source_contract in cpu core gpu nvme memory; do
   rg -Fq "\"$source_contract\"" \
     "$repo_root/hancore.shibumi.telemetry/ThermalTelemetry.qml" \

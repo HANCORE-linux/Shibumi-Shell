@@ -54,6 +54,15 @@ ShellRoot {
         if (state.groupEnabled("G7") || state.groupEnabled("G14")
             || state.groupEnabled("G15"))
           return root.fail("V1 optional group defaults")
+        if (!state.setGroupEnabledForVariant("G4", "v1", false)
+            || state.groupEnabledForVariant("G4", "v1")
+            || !state.groupEnabledForVariant("G4", "v2")
+            || state.groupSetting("G4", "enabled", true) === false
+            || !state.setGroupEnabledForVariant("G4", "v1", true)
+            || !state.groupEnabledForVariant("G4", "v1")
+            || state.setGroupEnabledForVariant("G4", "v3", false))
+          return root.fail("V1/V2 group activation isolation")
+        fakeShell.writes = 0
         if (!state.config.v2Layout
             || state.config.v2Layout.left.length !== 10
             || state.config.v2Layout.center.length !== 1

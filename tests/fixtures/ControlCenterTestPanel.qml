@@ -289,6 +289,22 @@ Item {
       ? stateService.groupSetting(groupId, key, fallback) : fallback
   }
 
+  function groupEnabled(groupId) {
+    return stateService && typeof stateService.groupEnabledForVariant
+      === "function"
+      ? stateService.groupEnabledForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1")
+      : groupSetting(groupId, "enabled", true) !== false
+  }
+
+  function setGroupEnabled(groupId, enabled) {
+    return stateService && typeof stateService.setGroupEnabledForVariant
+      === "function"
+      ? stateService.setGroupEnabledForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1", enabled === true)
+      : setGroupSetting(groupId, "enabled", enabled === true)
+  }
+
   function setGroupSetting(groupId, key, value) {
     return stateService && typeof stateService.setGroupSetting === "function"
       ? stateService.setGroupSetting(groupId, key, value) : false
@@ -513,6 +529,10 @@ Item {
         omarchy.installedInBar = false
         omarchy.replacementInEffect = false
       }
+    } else if (id === "hancore.shibumi.memory") {
+      return setGroupEnabled("G4", enabled === true)
+    } else if (id === "hancore.shibumi.storage") {
+      return setGroupEnabled("G18", enabled === true)
     } else {
       return false
     }

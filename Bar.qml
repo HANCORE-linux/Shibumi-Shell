@@ -338,6 +338,7 @@ Item {
       ? shell.serviceFor("hancore.shibumi.state") : null
     const canSetFamilyState = stateService
       && typeof stateService.setGroupSetting === "function"
+    const activeVariant = layoutStateController.v2Mode ? "v2" : "v1"
     if (!id || !shell || typeof shell.mutateShellConfig !== "function")
       return false
     if (installed === true && !hasBarWidgetEntryPoint(id))
@@ -367,7 +368,8 @@ Item {
         const currentGroup = Util.isPlainObject(
           config.bar.shibumi.widgets[family.group])
           ? config.bar.shibumi.widgets[family.group] : {}
-        currentGroup.enabled = false
+        currentGroup[activeVariant === "v2" ? "enabledV2" : "enabledV1"]
+          = false
         config.bar.shibumi.widgets[family.group] = currentGroup
       }
       for (const section of ["left", "center", "right"]) {
@@ -389,8 +391,12 @@ Item {
     // Persist the provider choice last. mutateShellConfig may publish its
     // snapshot asynchronously, so writing this state before the layout would
     // let that older snapshot re-enable the Shibumi provider.
-    if (installed === true && family && canSetFamilyState)
-      stateService.setGroupSetting(family.group, "enabled", false)
+    if (installed === true && family && canSetFamilyState) {
+      if (typeof stateService.setGroupEnabledForVariant === "function")
+        stateService.setGroupEnabledForVariant(
+          family.group, activeVariant, false)
+      else stateService.setGroupSetting(family.group, "enabled", false)
+    }
     return true
   }
 

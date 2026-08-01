@@ -17,7 +17,9 @@ Item {
     ? stateService.config : ({})
   readonly property var groupSettings: stateConfig.widgets
     ? stateConfig.widgets[groupId] || ({}) : ({})
-  readonly property bool groupEnabled: groupSettings.enabled !== false
+  readonly property bool groupEnabled: stateService
+    && typeof stateService.groupEnabled === "function"
+      ? stateService.groupEnabled(groupId) : groupSettings.enabled !== false
   readonly property bool v2Shell: !!(bar.visualTokens
     && bar.visualTokens.v2Shell === true)
   readonly property bool dynamicV1Group: !v2Shell

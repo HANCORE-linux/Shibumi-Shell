@@ -19,6 +19,12 @@ Column {
   readonly property int widgetOptionCount: widgetOptions.length
   readonly property int activeWidgetCount:
     appearanceWorkbench.visibleOptionCount
+  readonly property int inactiveWidgetCount:
+    appearanceWorkbench.inactiveOptionCount
+  readonly property int widgetOverviewRowCount:
+    appearanceWorkbench.overviewRowCount
+  readonly property bool selectedWidgetActive:
+    appearanceWorkbench.selectedActive
   readonly property string selectedWidgetMode:
     appearanceWorkbench.selectedDisplayMode
   readonly property string selectedWidgetSurface:
@@ -51,12 +57,23 @@ Column {
   }
 
   function openWidgetDetails(groupId, pluginId) {
-    const group = String(groupId || "")
-    if (!appearanceWorkbench.isActiveWidget(group)) return false
-    selectedWidgetGroup = group
-    appearanceWorkbench.selectedWidgetId = String(pluginId || "")
+    const option = appearanceWorkbench.editableOption(groupId, pluginId)
+    if (!option) return false
+    selectedWidgetGroup = String(option.group || "")
+    appearanceWorkbench.selectedWidgetId = String(option.id || "")
     widgetDetailOpen = true
     return true
+  }
+
+  function setWidgetEnabled(groupId, enabled) {
+    const option = appearanceWorkbench.editableOption(groupId, "")
+    return appearanceWorkbench.setWidgetActive(option, enabled === true)
+  }
+
+  function widgetUsesCustomAppearance(groupId) {
+    const option = appearanceWorkbench.editableOption(groupId, "")
+    return option
+      ? appearanceWorkbench.widgetAppearanceChanged(option.group) : false
   }
 
   function showWidgetOverview() {

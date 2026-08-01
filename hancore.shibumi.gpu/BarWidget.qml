@@ -26,12 +26,17 @@ Ui.Panel {
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property bool telemetryAvailable:
+    root.gpu && root.gpu.available === true
   property var acquiredGpu: null
 
   implicitWidth: bar && bar.vertical ? bar.barSize : surface.implicitWidth
   implicitHeight: bar && bar.vertical ? surface.implicitHeight
     : bar ? bar.barSize : 28
-  visible: root.gpu && root.gpu.available
+  // Activation is a layout choice, not a hardware-capability probe. Keep the
+  // widget visible on unsupported/iGPU-only hosts and communicate that the
+  // metric is unavailable instead of silently rendering a 0x0 active slot.
+  visible: true
 
   function syncGpuOwner() {
     if (acquiredGpu === gpu) return
@@ -110,8 +115,9 @@ Ui.Panel {
       Text {
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
-        text: String(Math.min(100,
-          root.gpu ? root.gpu.utilization : 0)).padStart(2, "0") + "%"
+        text: root.telemetryAvailable
+          ? String(Math.min(100, root.gpu.utilization)).padStart(2, "0") + "%"
+          : "--"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
@@ -125,7 +131,9 @@ Ui.Panel {
       cursorShape: Qt.PointingHandCursor
       onEntered: if (root.bar && root.gpu)
         root.bar.showTooltip(surface,
-          root.gpu.utilization + "% · " + root.gpu.temperatureC + "°C")
+          root.telemetryAvailable
+            ? root.gpu.utilization + "% · " + root.gpu.temperatureC + "°C"
+            : "GPU telemetry unavailable")
       onExited: if (root.bar) root.bar.hideTooltip(surface)
       onClicked: root.toggle()
     }
