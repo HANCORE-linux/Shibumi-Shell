@@ -11,16 +11,14 @@ Column {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property bool motionActive: false
-  readonly property bool v2Active: controller.v2LayoutActive === true
   readonly property var workspaceStyleOptions: [
     { value: "default", label: "Default" },
     { value: "numbers", label: "Numbers" },
-    { value: "magic", label: "Magic" }
-  ].concat(v2Active ? [
+    { value: "magic", label: "Magic" },
     { value: "kanji", label: "Kanji" },
     { value: "rings", label: "Frame" },
     { value: "aurora", label: "Aurora" }
-  ] : [])
+  ]
   readonly property bool ready: workspaceModeRepeater.count === 3
     && workspaceStyleRepeater.count === workspaceStyleOptions.length
 

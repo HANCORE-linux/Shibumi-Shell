@@ -464,6 +464,12 @@ for logo_contract in \
   rg -Fq "$label" "$control_dir/$file" \
     || fail "logo preview contract drifted: $label"
 done
+for shared_page in LogoSettingsPage.qml PickerSettingsPage.qml \
+    ControlMainPage.qml; do
+  if rg -q 'v2LayoutActive|v2Active' "$control_dir/$shared_page"; then
+    fail "$shared_page contains an unintended V1/V2 capability gate"
+  fi
+done
 for motion_contract in \
   'PageMotionStage.qml:clip: true' \
   'PageMotionStage.qml:radius: controller.controlRadius' \
@@ -1096,14 +1102,24 @@ if rg -Fq 'height: visible ? Commons.Style.space(48) : 0' \
 fi
 for suite_boundary in \
     'userToggleable: barWidget && (!suiteManaged || group !== "")' \
-    'styleAvailable: group === ""' \
-    'Control Center rejected V2-only plugin in V1:' \
+    'styleAvailable: true' \
+    'V1 has no free extension slot.' \
     'Control Center rejected suite-internal plugin toggle:' \
     '? String(manifest.barWidget.defaultSection) : "center"' \
     'bar.setBarWidgetInstalled(id, enabled === true, section)'; do
   rg -Fq "$suite_boundary" "$control_dir/ControlCenterPanel.qml" \
     || fail "plugin-manager suite boundary drifted: $suite_boundary"
 done
+for parity_contract in \
+    'bar.layoutContains(id)' \
+    'bar.setBarWidgetInstalled(id, enabled === true, section)' \
+    'property string pluginActionError: ""'; do
+  rg -Fq "$parity_contract" "$control_dir/ControlCenterPanel.qml" \
+    || fail "V1/V2 plugin management parity drifted: $parity_contract"
+done
+rg -Fq 'controller.pluginActionError' \
+  "$control_dir/PluginCatalogPage.qml" \
+  || fail "plugin capacity failure is not actionable in the catalog"
 for widget_surface in PluginCatalogPage.qml ControlSettings.qml; do
   rg -Fq 'entry.userToggleable === true' "$control_dir/$widget_surface" \
     || fail "$widget_surface exposes suite-internal helper plugins"
@@ -1144,10 +1160,21 @@ for visual_contract in \
   rg -Fq "$visual_contract" "$control_dir/WidgetAppearanceWorkbench.qml" \
     || fail "Appearance is missing widget visual control: $visual_contract"
 done
-for workspace_contract in 'label: "Magic"' 'label: "Frame"' \
+for workspace_contract in 'label: "Magic"' 'label: "Kanji"' \
+    'label: "Frame"' 'label: "Aurora"' \
     'Each marker is a workspace.'; do
   rg -Fq "$workspace_contract" "$control_dir/WorkspaceSettingsPage.qml" \
     || fail "Workspaces is missing visual control: $workspace_contract"
+done
+if rg -Fq 'concat(v2Active ?' "$control_dir/WorkspaceSettingsPage.qml"; then
+  fail "Workspace marker choices still differ between V1 and V2"
+fi
+for radius_contract in \
+    'readonly property real numberMarkerRadius:' \
+    'readonly property real frameMarkerRadius:'; do
+  rg -Fq "$radius_contract" \
+    "$control_dir/WorkspaceMarkerPreviewCard.qml" \
+    || fail "Workspace preview is missing radius contract: $radius_contract"
 done
 rg -Fq 'label: "Edit dividers on bar"' \
   "$control_dir/SplitSettingsPage.qml" \

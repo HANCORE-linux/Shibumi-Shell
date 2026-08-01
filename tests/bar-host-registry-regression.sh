@@ -16,6 +16,19 @@ for endpoint in 'function openControlCenter(): string' \
   rg -Fq "$endpoint" "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "missing Shibumi Control Center IPC endpoint: $endpoint"
 done
+for v2_native_widget in \
+    'hancore.shibumi.temperature' \
+    'hancore.shibumi.gpu' \
+    'hancore.shibumi.storage'; do
+  rg -Fq "\"$v2_native_widget\"" "$repo_root/hancore.shibumi.bar/Bar.qml" \
+    || fail "V2 does not suppress the V1 provider entry for $v2_native_widget"
+done
+rg -Fq '!GroupRegistry.isAssignedModule(id)' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "assigned suite widgets do not require explicit V1 installation"
+rg -Fq 'else if (isV1AdditionalSuiteWidget(id))' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1 suite removal does not preserve the neutral host entry"
 
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'

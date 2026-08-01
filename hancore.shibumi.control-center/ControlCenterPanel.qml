@@ -121,6 +121,7 @@ ShibumiPanel {
   readonly property bool pluginRemovalRunning: pluginRemoval.running
   readonly property string pluginRemovalId: removalPluginId
   property string removalPluginId: ""
+  property string pluginActionError: ""
   signal pluginRemovalFinished(
     string pluginId, bool success, string detail)
   readonly property string managerCommand: Quickshell.env("HOME")
@@ -333,7 +334,9 @@ ShibumiPanel {
     const group = shibumiWidgetGroup(id)
     if (["G16", "G17", "G18"].indexOf(group) >= 0)
       return v2LayoutActive
-        && groupSetting(group, "enabled", true) !== false
+        ? groupSetting(group, "enabled", true) !== false
+        : bar && typeof bar.layoutContains === "function"
+          ? bar.layoutContains(id) : false
     if (group !== "") return groupSetting(group, "enabled", true) !== false
     return bar && typeof bar.layoutContains === "function"
       ? bar.layoutContains(id) : false
@@ -413,9 +416,7 @@ ShibumiPanel {
         barWidget: barWidget,
         installedInBar: barWidget
           ? widgetInstalled(id) : enabled,
-        styleAvailable: group === ""
-          || v2LayoutActive
-          || ["G16", "G17", "G18"].indexOf(group) < 0,
+        styleAvailable: true,
         suiteManaged: suiteManaged,
         userToggleable: barWidget && (!suiteManaged || group !== ""),
         defaultSection: placement,
@@ -474,8 +475,12 @@ ShibumiPanel {
   }
 
   function setPluginEnabled(pluginId, enabled) {
+    pluginActionError = ""
     if (!pluginRegistry
-        || typeof pluginRegistry.setEnabled !== "function") return false
+        || typeof pluginRegistry.setEnabled !== "function") {
+      pluginActionError = "The plugin registry is not ready."
+      return false
+    }
     const id = String(pluginId || "")
     const manifest = pluginRegistry.installedPlugins
       ? pluginRegistry.installedPlugins[id] : null
@@ -483,6 +488,7 @@ ShibumiPanel {
       ? manifest.kinds : []
     if (kinds.indexOf("bar") >= 0) {
       console.warn("Control Center rejected full-bar toggle:", id)
+      pluginActionError = "Full bars can only be changed from Bars."
       return false
     }
     const shibumi = manifest && manifest["x-shibumi"]
@@ -494,8 +500,18 @@ ShibumiPanel {
       if (group !== "") {
         if (!v2LayoutActive
             && ["G16", "G17", "G18"].indexOf(group) >= 0) {
-          console.warn("Control Center rejected V2-only plugin in V1:", id)
-          return false
+          const section = manifest.barWidget
+            && ["left", "center", "right"].indexOf(
+              String(manifest.barWidget.defaultSection || "")) >= 0
+            ? String(manifest.barWidget.defaultSection) : "right"
+          const changed = bar
+            && typeof bar.setBarWidgetInstalled === "function"
+            ? bar.setBarWidgetInstalled(id, enabled === true, section) : false
+          if (!changed)
+            pluginActionError = enabled === true
+              ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
+              : "The plugin could not be removed from the V1 layout."
+          return changed
         }
         if (enabled === true && bar
             && typeof bar.removeWidgetFamilyAlternatives === "function")
@@ -505,18 +521,25 @@ ShibumiPanel {
       if (suiteManaged) {
         console.warn(
           "Control Center rejected suite-internal plugin toggle:", id)
+        pluginActionError = "This suite service cannot be placed in the bar."
         return false
       }
       const section = manifest.barWidget
         && ["left", "center", "right"].indexOf(
           String(manifest.barWidget.defaultSection || "")) >= 0
         ? String(manifest.barWidget.defaultSection) : "center"
-      return bar && typeof bar.setBarWidgetInstalled === "function"
+      const changed = bar && typeof bar.setBarWidgetInstalled === "function"
         ? bar.setBarWidgetInstalled(id, enabled === true, section) : false
+      if (!changed)
+        pluginActionError = enabled === true
+          ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
+          : "The plugin could not be removed from the active bar."
+      return changed
     }
     if (suiteManaged) {
       console.warn(
         "Control Center rejected suite-internal plugin toggle:", id)
+      pluginActionError = "This suite service is managed by Shibumi."
       return false
     }
     return pluginRegistry.setEnabled(id, enabled === true)

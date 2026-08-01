@@ -14,6 +14,16 @@ Rectangle {
   property color accent: Commons.Color.menu.selectedText
   readonly property bool selected:
     String(controller.workspaceConfig.style || "default") === styleValue
+  readonly property bool v2Active: controller.v2LayoutActive === true
+  readonly property bool v1RadiusSmall: !v2Active
+    && controller.barPresentation
+    && controller.barPresentation.radius === "small"
+  readonly property real numberMarkerRadius: v2Active
+    ? Commons.Style.space(10)
+    : v1RadiusSmall ? Commons.Style.space(5) : Commons.Style.space(10)
+  readonly property real frameMarkerRadius: v2Active
+    ? Commons.Style.space(5)
+    : v1RadiusSmall ? Commons.Style.space(6) : Commons.Style.space(9)
 
   signal chosen(string styleValue)
 
@@ -79,8 +89,7 @@ Rectangle {
           anchors.centerIn: parent
           width: Commons.Style.space(20)
           height: width
-          radius: root.controller.controlRadius <= Commons.Style.space(5)
-            ? Commons.Style.space(5) : height / 2
+          radius: root.numberMarkerRadius
           color: root.ink(marker.focused ? 0.30
             : marker.occupied ? 0.12 : 0.04)
 
@@ -120,7 +129,7 @@ Rectangle {
           anchors.centerIn: parent
           width: Commons.Style.space(18)
           height: width
-          radius: Commons.Style.space(5)
+          radius: root.frameMarkerRadius
           color: "transparent"
           border.width: 1
           border.color: root.foreground

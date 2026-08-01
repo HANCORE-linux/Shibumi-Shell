@@ -123,6 +123,9 @@ ShellRoot {
           return root.fail("initial service/widget contract")
         if (widget.workspacePadding !== 2 || Math.round(widget.implicitWidth) !== 161)
           return root.fail("V1 numbers presentation geometry")
+        if (widget.numberMarkerRadius !== 10
+            || widget.frameMarkerRadius !== 5)
+          return root.fail("V2 fixed marker radius contract")
         if (!widget.activateWorkspace(8)
             || fakeBar.lastCommand.join("|")
               !== "hyprctl|dispatch|hl.dsp.focus({ workspace = \"8\" })")
@@ -194,6 +197,25 @@ ShellRoot {
           return root.fail("V2 Aurora presentation geometry: " + widget.implicitWidth)
         }
         root.geometryWaits = 0
+        fakeBar.layoutController = ({ v2Mode: false })
+        const smallTokens = Object.assign({}, fakeBar.visualTokens)
+        smallTokens.presentation = ({ radius: "small" })
+        fakeBar.visualTokens = smallTokens
+        if (!workspaceState.setPreference("style", "rings"))
+          return root.fail("V1 Frame workspace preference")
+      } else if (root.phase === 5) {
+        if (widget.renderStyle !== "rings"
+            || widget.numberMarkerRadius !== 5
+            || widget.frameMarkerRadius !== 6)
+          return root.fail("V1 Radius 6 marker contract")
+        const largeTokens = Object.assign({}, fakeBar.visualTokens)
+        largeTokens.presentation = ({ radius: "large" })
+        fakeBar.visualTokens = largeTokens
+      } else if (root.phase === 6) {
+        if (widget.renderStyle !== "rings"
+            || widget.numberMarkerRadius !== 10
+            || widget.frameMarkerRadius !== 9)
+          return root.fail("V1 Radius 12 marker contract")
         if (!workspaceState.setPreference("style", "default")
             || !workspaceState.setPreference("mode", "10"))
           return root.fail("workspace presentation reset")

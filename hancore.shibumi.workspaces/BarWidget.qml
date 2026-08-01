@@ -31,11 +31,20 @@ Ui.Panel {
     ? workspaceService.style : "default"
   readonly property bool v2Mode: bar && bar.layoutController
     ? bar.layoutController.v2Mode === true : false
-  readonly property string versionStyle: !v2Mode
-    && ["kanji", "rings", "aurora"].indexOf(workspaceStyle) >= 0
-      ? "default" : workspaceStyle
   readonly property string renderStyle: displayMode === "icon" ? "rings"
-    : displayMode === "text" ? "numbers" : versionStyle
+    : displayMode === "text" ? "numbers" : workspaceStyle
+  // V1 keeps the original QS Rise radius contract. The later V2 renderer has
+  // fixed marker geometry and must not inherit the V1 Radius 12/6 setting.
+  readonly property real numberMarkerRadius: v2Mode
+    ? Commons.Style.space(10)
+    : tokens && tokens.presentation
+      && tokens.presentation.radius === "small"
+        ? Commons.Style.space(5) : Commons.Style.space(10)
+  readonly property real frameMarkerRadius: v2Mode
+    ? Commons.Style.space(5)
+    : tokens && tokens.presentation
+      && tokens.presentation.radius === "small"
+        ? Commons.Style.space(6) : Commons.Style.space(9)
   readonly property var displayedWorkspaceIds: {
     if (displayMode === "full") return workspaceIds
     for (var index = 0; index < workspaceIds.length; index++) {
@@ -165,7 +174,7 @@ Ui.Panel {
         layer.mipmap: true
         layer.textureSize: Qt.size(
           Math.ceil(width * 4), Math.ceil(height * 4))
-        readonly property real r: Commons.Style.space(5)
+        readonly property real r: root.frameMarkerRadius
 
         ShapePath {
           strokeColor: root.widgetInk
@@ -274,8 +283,7 @@ Ui.Panel {
             anchors.centerIn: parent
             width: cell.numberWidth
             height: Commons.Style.space(20)
-            radius: root.tokens.presentation.radius === "small"
-              ? Commons.Style.space(5) : height / 2
+            radius: root.numberMarkerRadius
             color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
               root.widgetInk.b,
               cell.focused ? 0.30 : cell.occupied ? 0.12 : 0.04)

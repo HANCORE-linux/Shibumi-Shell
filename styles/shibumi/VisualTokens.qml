@@ -95,9 +95,10 @@ Item {
 
   function workspacePillPadding(style) {
     if (style !== "numbers") return Commons.Style.space(4)
-    const badgeRadius = Commons.Style.space(
-      presentation.radius === "small" ? 5 : 10)
-    return Math.max(1, pillRadius - badgeRadius)
+    const outerRadius = v2Shell ? Commons.Style.space(12) : pillRadius
+    const badgeRadius = v2Shell ? Commons.Style.space(10)
+      : Commons.Style.space(presentation.radius === "small" ? 5 : 10)
+    return Math.max(1, outerRadius - badgeRadius)
   }
 
   function widgetColorId(settings) {

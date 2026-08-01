@@ -285,7 +285,14 @@ Column {
       const alternatives = Array.isArray(entry.replacedByIds)
         ? entry.replacedByIds.slice() : []
       const replacementName = String(entry.replacedBy || "alternative")
-      if (!controller.setPluginEnabled(id, true)) return false
+      if (!controller.setPluginEnabled(id, true)) {
+        showFeedback(
+          name + " could not be restored",
+          String(controller.pluginActionError
+            || "The provider rejected the request."),
+          "", "", false, "", [])
+        return false
+      }
       showFeedback(
         name + " restored",
         replacementName + " was removed to avoid duplicates.",
@@ -298,7 +305,15 @@ Column {
     const group = String(entry.replacementGroup || "")
     const target = String(entry.replacementTarget || "Shibumi widget")
     const targetWasEnabled = entry.replacementTargetEnabled === true
-    if (!controller.setPluginEnabled(id, enable)) return false
+    if (!controller.setPluginEnabled(id, enable)) {
+      showFeedback(
+        name + (enable ? " could not be activated"
+          : " could not be deactivated"),
+        String(controller.pluginActionError
+          || "The provider rejected the request."),
+        "", "", false, "", [])
+      return false
+    }
 
     if (enable && group !== "" && targetWasEnabled) {
       showFeedback(

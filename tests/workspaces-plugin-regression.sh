@@ -70,6 +70,16 @@ for v2_style in kanji rings aurora; do
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
     || fail "V2 workspace style is missing: $v2_style"
 done
+rg -Fq 'readonly property real numberMarkerRadius:' \
+  "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
+  || fail "workspace widget does not expose the V1/V2 number radius contract"
+rg -Fq 'readonly property real frameMarkerRadius:' \
+  "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
+  || fail "workspace widget does not expose the V1/V2 frame radius contract"
+if rg -Fq 'readonly property string versionStyle:' \
+    "$repo_root/hancore.shibumi.workspaces/BarWidget.qml"; then
+  fail "workspace widget still downgrades shared styles in V1"
+fi
 if rg -q 'root\.renderStyle === "(frame|aurora-streak)"' \
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml"; then
   fail "non-reference workspace style remains in the Shibumi renderer"

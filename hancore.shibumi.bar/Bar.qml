@@ -240,9 +240,24 @@ Item {
     return Array.isArray(entries) ? entries : []
   }
 
+  function isV1AdditionalSuiteWidget(widgetId) {
+    return [
+      "hancore.shibumi.temperature",
+      "hancore.shibumi.gpu",
+      "hancore.shibumi.storage"
+    ].indexOf(String(widgetId || "")) >= 0
+  }
+
   function unassignedLayoutEntries(region) {
     const entries = GroupRegistry.unassignedEntries(layoutConfig, region)
-    if (layoutStateController.v2Mode) return entries
+    if (layoutStateController.v2Mode) {
+      // G16-G18 use V1 extension slots but remain native fixed groups in V2.
+      // Keep their persisted V1 provider entries out of V2's unassigned deck,
+      // otherwise the same widget would be rendered twice after a switch.
+      return entries.filter(function(entry) {
+        return !isV1AdditionalSuiteWidget(entryId(entry))
+      })
+    }
     return entries.filter(function(entry) {
       const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
       return groupId === "" || !layoutStateController.groupLocation(groupId)
@@ -290,7 +305,7 @@ Item {
       for (let index = 0; index < entries.length; index++) {
         if (entryId(entries[index]) !== id) continue
         const entry = entries[index]
-        if (GroupRegistry.ConsumedAliases.indexOf(id) < 0
+        if (!GroupRegistry.isAssignedModule(id)
             || (Util.isPlainObject(entry) && entry.shibumiModule === true))
           return true
       }
@@ -368,6 +383,8 @@ Item {
           id: id,
           shibumiModule: true
         })
+      else if (isV1AdditionalSuiteWidget(id))
+        config.bar.layout[targetRegion].push({ id: id })
     })
     // Persist the provider choice last. mutateShellConfig may publish its
     // snapshot asynchronously, so writing this state before the layout would

@@ -299,6 +299,13 @@ Deletion requires a second inline `REMOVE` action, then delegates to
 the catalog is rescanned on success, and failures retain the installed plugin.
 Disabling remains a separate reversible toggle.
 
+The plugin catalog is generation-independent. Temperature, GPU, and Storage
+use the fixed G16-G18 groups in V2 and the same persistent extension-slot
+mechanism as other added bar plugins in V1. Their V1 placement therefore does
+not duplicate or overwrite their V2 layout. When all four V1 extension slots
+are occupied, activation stays discoverable and reports the concrete capacity
+constraint instead of hiding the plugin or failing silently.
+
 The **Icons** page is the only per-widget visual editor. It derives its list
 from the active V1 or V2 layout and immediately closes a detail view when its
 widget is not part of the newly selected style. Shared presentation controls
@@ -313,19 +320,23 @@ not secondary sections inside Icons:
 
 - **Workspaces** exclusively owns the visible-workspace count and marker style.
   Every marker choice is shown as a themed three-workspace preview with an
-  active, occupied, and empty state before it is applied. V1 exposes the QS
-  Rise styles Default, Numbers, and Magic. V2 additionally exposes Kanji,
-  Frame (persisted as `rings`), and Aurora.
+  active, occupied, and empty state before it is applied. V1 and V2 expose the
+  same Default, Numbers, Magic, Kanji, Frame (persisted as `rings`), and Aurora
+  choices. V1's Radius 12/6 setting affects the Numbers and Frame marker
+  geometry only; V2 keeps its fixed marker radii.
 - **Pickers** exclusively owns the theme/wallpaper browser and the
   screenshot/video browser. Themes and wallpapers default to Omarchy's
   carousel, with Tanzaku and Hearthstone as the two Shibumi alternatives.
-  Screenshots and videos retain Tanzaku, Hearthstone, and Carousel.
+  Screenshots and videos retain Tanzaku, Hearthstone, and Carousel. The same
+  picker routes, choices, and persisted selections are used by V1 and V2.
 - **Bars** owns the active bar's supported surface and accent settings. V1
   exposes border, frost, shadow, and Radius 12/6. V2 exposes Bar Border and
   Panel + Tooltip; its fixed V2 radii and unsupported V1 effects are not
   presented as editable settings;
   the same tokens are consumed by both the V1 and V2 renderers.
-- **Logo** owns launcher wordmark/icon format and visual choices.
+- **Logo** owns launcher wordmark/icon format and visual choices. V1 and V2
+  consume the same launcher selection and expose the same built-in wordmarks
+  and icons.
 - **Icons** owns per-widget icon/content modes plus their surfaces, colors,
   shape, spacing, and opacity. It follows the active bar's canonical
   left/center/right layout order and lists only enabled groups that implement
