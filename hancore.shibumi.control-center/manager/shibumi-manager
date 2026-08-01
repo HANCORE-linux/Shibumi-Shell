@@ -271,16 +271,6 @@ def deactivate_config(
     result = normalize(config)
     managed_ids = set(state["plugins"])
     activation = state["activation"]
-    shibumi = result["bar"].get("shibumi")
-    if isinstance(shibumi, dict):
-        picker = shibumi.get("picker")
-        if not isinstance(picker, dict):
-            picker = {}
-            shibumi["picker"] = picker
-        # The stock Omarchy bar owns the stock theme/wallpaper picker. Media
-        # browser selection remains independent because Quattro has no native
-        # screenshots/videos replacement for it.
-        picker["imageStyle"] = "omarchy"
     result["bar"]["layout"] = copy_layout(
         target_layout
         if target_layout is not None
@@ -330,6 +320,40 @@ def deactivate_config(
             result["bar"].pop("centerAnchor", None)
     if result["bar"].get("style") == "shibumi":
         result["bar"].pop("style", None)
+    return result
+
+
+def apply_shibumi_variant(
+    config: dict[str, Any], target: str
+) -> dict[str, Any]:
+    """Persist the remembered Shibumi return target transactionally."""
+    if target not in {"v1", "v2"}:
+        return config
+    result = normalize(config)
+    shibumi = result["bar"].get("shibumi")
+    if not isinstance(shibumi, dict):
+        shibumi = {}
+        result["bar"]["shibumi"] = shibumi
+    presentation = shibumi.get("presentation")
+    if not isinstance(presentation, dict):
+        presentation = {}
+        shibumi["presentation"] = presentation
+    v2_styles = {"full", "fit", "dock", "notch"}
+    current_style = str(presentation.get("shellStyle") or "")
+    if target == "v1":
+        if current_style in v2_styles:
+            presentation["v2ShellStyle"] = current_style
+        presentation["shellStyle"] = "shibumi"
+    else:
+        remembered = (
+            current_style
+            if current_style in v2_styles
+            else str(presentation.get("v2ShellStyle") or "")
+        )
+        if remembered not in v2_styles:
+            remembered = "full"
+        presentation["v2ShellStyle"] = remembered
+        presentation["shellStyle"] = remembered
     return result
 
 
@@ -528,6 +552,7 @@ def write_status(
 
 
 def perform(target: str) -> int:
+    runtime_target = "shibumi" if target in {"shibumi", "v1", "v2"} else target
     runtime_paths = paths()
     runtime_paths["lock"].parent.mkdir(parents=True, exist_ok=True)
     with runtime_paths["lock"].open("a+") as lock:
@@ -553,22 +578,23 @@ def perform(target: str) -> int:
             state,
             legacy=current_shell not in profiles["layouts"],
         )
-        target_layout = layouts.get(target)
+        target_layout = layouts.get(runtime_target)
         if target_layout is None:
-            target_layout = initial_layout(target, defaults, state)
-            layouts[target] = copy_layout(target_layout)
+            target_layout = initial_layout(runtime_target, defaults, state)
+            layouts[runtime_target] = copy_layout(target_layout)
         desired = (
             activate_config(current, state, target_layout)
-            if target == "shibumi"
+            if runtime_target == "shibumi"
             else deactivate_config(current, defaults, state, target_layout)
         )
+        desired = apply_shibumi_variant(desired, target)
         desired_state = copy.deepcopy(state)
         desired_activation = desired_state["activation"]
         desired_activation["mode"] = (
-            "managed" if target == "shibumi" else "external"
+            "managed" if runtime_target == "shibumi" else "external"
         )
         desired_activation["layoutPolicy"] = (
-            "managed" if target == "shibumi" else "preserved"
+            "managed" if runtime_target == "shibumi" else "preserved"
         )
         desired_activation["configuredBar"] = str(
             desired["bar"].get("id") or "omarchy.bar"
@@ -599,7 +625,7 @@ def perform(target: str) -> int:
             write_status(runtime_paths, target, "apply")
             reload_shell(runtime_paths)
             write_status(runtime_paths, target, "verify")
-            verify(runtime_paths, state, target)
+            verify(runtime_paths, state, runtime_target)
             atomic_write(profile_path(runtime_paths), encode(profiles))
         except Exception:
             if existed:
@@ -650,18 +676,34 @@ def recover() -> int:
 def request(target: str) -> int:
     runtime_paths = paths()
     load_state(runtime_paths)
-    write_status(runtime_paths, target, "queued")
-    try:
-        subprocess.Popen(
-            [sys.executable, str(Path(__file__).resolve()), "_worker", target],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
+    request_lock_path = runtime_paths["state"] / "switch-request.lock"
+    request_lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with request_lock_path.open("a+") as request_lock:
+        fcntl.flock(request_lock.fileno(), fcntl.LOCK_EX)
+        current_status: dict[str, Any] = {}
+        if status_path(runtime_paths).is_file():
+            current_status = read_json(status_path(runtime_paths), "switch status")
+        current_phase = str(current_status.get("phase") or "")
+        current_age = max(
+            0,
+            int(time.time()) - int(current_status.get("updatedEpoch") or 0),
         )
-    except OSError as error:
-        raise ManagerError(f"cannot launch switch worker: {error}") from error
+        if current_phase in {"queued", "snapshot", "apply", "verify"} \
+                and current_age <= 120:
+            raise ManagerError("another Shibumi lifecycle operation is running")
+        write_status(runtime_paths, target, "queued")
+        try:
+            subprocess.Popen(
+                [sys.executable, str(Path(__file__).resolve()), "_worker", target],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                close_fds=True,
+            )
+        except OSError as error:
+            write_status(runtime_paths, target, "error", str(error))
+            raise ManagerError(f"cannot launch switch worker: {error}") from error
     print(json.dumps({"accepted": True, "target": target}))
     return 0
 
@@ -674,6 +716,11 @@ def show_status() -> int:
     switch_status: dict[str, Any] = {}
     if status_path(runtime_paths).is_file():
         switch_status = read_json(status_path(runtime_paths), "switch status")
+    shibumi = config["bar"].get("shibumi")
+    presentation = shibumi.get("presentation") \
+        if isinstance(shibumi, dict) else {}
+    shell_style = str(presentation.get("shellStyle") or "shibumi") \
+        if isinstance(presentation, dict) else "shibumi"
     print(
         json.dumps(
             {
@@ -681,6 +728,7 @@ def show_status() -> int:
                 if active == state["activation"]["activeBar"]
                 else "omarchy",
                 "barId": active,
+                "variant": "v1" if shell_style == "shibumi" else "v2",
                 "switch": switch_status,
             }
         )
@@ -694,9 +742,13 @@ def parser() -> argparse.ArgumentParser:
     for name in ("activate", "deactivate", "request"):
         command = commands.add_parser(name)
         if name == "request":
-            command.add_argument("target", choices=("shibumi", "omarchy"))
+            command.add_argument(
+                "target", choices=("shibumi", "v1", "v2", "omarchy")
+            )
     worker = commands.add_parser("_worker")
-    worker.add_argument("target", choices=("shibumi", "omarchy"))
+    worker.add_argument(
+        "target", choices=("shibumi", "v1", "v2", "omarchy")
+    )
     commands.add_parser("status")
     commands.add_parser("recover")
     return result

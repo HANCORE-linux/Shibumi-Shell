@@ -12,12 +12,12 @@ Item {
     || (bar && "visualTokens" in bar ? bar.visualTokens : null)
   readonly property string shellStyle: tokens
     && tokens.shellStyle !== undefined ? String(tokens.shellStyle) : "shibumi"
-  readonly property bool customDecorated: !!(tokens
+  readonly property bool customDecorated: shellStyle !== "shibumi" && !!(tokens
     && ((typeof tokens.widgetHasFill === "function"
           && tokens.widgetHasFill(settings))
       || (typeof tokens.widgetHasBorder === "function"
           && tokens.widgetHasBorder(settings))))
-  readonly property bool surfaceDisabled: !!(tokens
+  readonly property bool surfaceDisabled: shellStyle !== "shibumi" && !!(tokens
     && typeof tokens.widgetColorMode === "function"
     && tokens.widgetColorMode(settings) === "none")
   // V1 owns the individual rounded widget pills. V2 Full/Fit/Dock/Notch

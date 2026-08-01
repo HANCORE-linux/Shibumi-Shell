@@ -7,10 +7,11 @@ Shibumi and its Omarchy Quattro plugins. Its layout follows the approved
 `g-refined-combo` reference while preserving the active Shibumi visual
 language:
 
-- **Quick** keeps the active bar, five direct bar-widget visibility controls,
-  widget installation, and shell reload immediately available. The compact
-  header beside Quick/Configure links to Plugins with its active/available
-  count and shows the passive Shibumi/Omarchy/external plugin breakdown. The
+- **Quick** keeps the active bar, plugin installation, shell reload, Bars,
+  Pickers, and the four Omarchy session actions immediately available. The
+  compact surface beside Quick/Configure divides the Active Bar width between
+  direct Health and Plugins routes; Registry shows the abbreviated
+  Shibumi/Omarchy/external plugin breakdown. The
   redundant bar-position statistic is omitted.
 - **Configure** opens a route landing page for Bars, Icons, Logo, Workspaces,
   Pickers, Plugins, and Health. Focusing a route updates its
@@ -82,18 +83,20 @@ The Favorites route remains intentionally scoped to saved plugins.
 
 Quick uses the same card anatomy throughout: themed fill, border and radius;
 caption/demi-bold labels; body-small/demi-bold values and actions; and
-caption/regular details. Bar choices, widget visibility tiles, header status,
-and footer actions therefore share one visual grammar while keeping their
-different interaction roles explicit.
+caption/regular details. Bar choices, header status, and the compact action
+deck therefore share one visual grammar while keeping their different
+interaction roles explicit.
 
 Every page uses a contained semantic preview of the settings behind that route.
 The preview is static until its route or represented state changes; no
 decorative timer, frame loop, random preset rotation, or background animation
 remains. A route change uses one short opacity-and-scale transition so the image
-changes smoothly without continuously consuming rendering time. The Quick
-Active Bar preview remains the only interactive preview and opens Bars settings.
+changes smoothly without continuously consuming rendering time. Hovering a
+selector previews its appearance without changing the active bar. In Shibumi,
+the settled Active Bar preview retains its hover state and opens Bars; in the
+Omarchy return-only surface it remains passive.
 
-## Bar and widget-shortcut logic
+## Bar switch and Quick-action logic
 
 The Quick landing area stacks three independent, fully rounded bar choices next
 to the active-bar preview. Node connections link each choice to the active-bar
@@ -102,9 +105,8 @@ possible destination, and inactive routes stay muted. Connections communicate
 real selection and workflow state; they are not used as decoration.
 Circular ports are used at both ends of a connection; the three source ports
 sit just outside the card borders instead of obscuring them. Chevrons are
-reserved for real navigation. The five widget-visibility status dots derive
-from the active theme's `color04` role and retain their position/shape when the
-theme changes.
+reserved for real navigation. The active route derives from the active theme's
+`color04` role and retains its position and shape when the theme changes.
 
 The Configure landing graph uses the same connection geometry as Quick:
 source ports sit six spacing units outside each card border, every source has
@@ -132,13 +134,34 @@ activates while its section enters focus rather than only at the scroll limit.
 
 The selector distinguishes three separate outcomes:
 
-- **Shibumi V1** selects the V1 presentation immediately; selecting its
-  already-active card opens Bars.
-- **Shibumi V2** selects the V2 presentation immediately; selecting its
-  already-active card or the Active Bar stage opens Bars.
-- **Omarchy** opens the guarded Bars workflow. Switching the host bar is not
-  presented as an instant cosmetic toggle because it requires snapshot,
-  apply, and verification steps.
+- **V1** selects the Shibumi split-bar presentation immediately.
+- **V2** selects the Shibumi full-bar presentation immediately.
+- **Omarchy Bar** starts the guarded host handoff. Switching the host bar is
+  not a cosmetic toggle because it requires apply, verification, and exact
+  rollback on failure.
+
+While Omarchy Bar is active, the Shibumi launcher becomes a return-only
+surface. It renders only V1, V2, and Omarchy Bar with their preview. Search,
+Quick actions, Configure routes, Plugins, and stored deep links cannot be
+opened, because Shibumi does not configure the stock bar. V1 and V2 remain
+valid return targets.
+
+Shibumi's mutable configuration and the independent Shibumi/Omarchy layouts
+remain outside the deployed QML payload. Every successful transition retains
+the inactive bar exactly as it was left. The manager uses one temporary
+transaction snapshot only for rollback and removes it after success or
+recovery; it does not create a growing snapshot history.
+
+V2's selected shell form is stored independently as `v2ShellStyle`. Switching
+to V1 changes only the active generation marker; returning to V2 restores the
+remembered Full, Fit, Dock, or Notch form. The Quick preview renders that
+effective form rather than a generic V2 bar.
+
+V2-only per-group fill, border, radius, and padding settings do not suppress
+or reposition V1's original widget-owned pills. V1 run borders retain the
+integer-aligned geometry of the approved standalone V1 implementation. V1 and
+V2 also persist independent bar-border choices; changing either generation no
+longer changes the other generation when the user returns to it.
 
 The Bars Configure route owns the complete bar-layout workflow without another
 visible submenu. Its right-hand editor begins with the effective state
@@ -165,15 +188,24 @@ mutations preserve the active Control Center route across owner rebuilds.
 During V2 layout editing, compact bar forms include empty drop-slot width in
 their temporary editor surface so targets remain inside the visible bar frame.
 
-The Bars page continues that visual grammar with labeled circular
-`Snapshot → Apply → Verify` nodes. During a handoff the current stage is
-accented, completed stages remain visible, and both shell cards expose the
-route endpoints.
-
-The five tiles show or hide their matching Shibumi bar widgets through the
-state-service group contract. They never disable Wi-Fi or Bluetooth, mute
-audio, change brightness, or cycle the power profile. Device and service values
-remain read-only context beneath the explicit `Shown` or `Hidden` state.
+The eight-tile Quick deck contains `+ Add plugin`, `Reload Shibumi`, `Bars`,
+`Pickers`, `Screensaver`, `Lock`, `Reboot`, and `Shutdown`. Four vertically
+stacked Shibumi actions sit on the left and four authoritative Omarchy session
+actions on the right. A compact node-and-line spine uses the same connection
+language as Configure instead of a generic divider. Only its vertical spine
+and route nodes remain visible at rest; hovering an action reveals only that
+action's branch to the spine. The left and right action columns align exactly
+with the bar selector and Active Bar preview above. Add plugin opens the same
+direct Git installer as Plugins; Bars and Pickers open their existing Configure
+editors; Health is available from the compact header; reload remains owned by
+the Shibumi shell.
+All action tiles remain visually neutral at rest; emphasis is reserved for
+pointer hover and destructive-action confirmation.
+Session actions delegate to the
+authoritative Omarchy commands instead of duplicating their behavior. Reboot
+and Shutdown require an in-panel second activation within five seconds.
+Escape first dismisses an open installer or active search state and closes the
+Control Center on the next unconsumed press.
 
 ## Layout capability matrix
 

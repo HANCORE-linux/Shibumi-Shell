@@ -56,11 +56,13 @@ QtObject {
         || !defaults.widgets.G14 || defaults.widgets.G14.enabled !== false
         || !defaults.widgets.G15 || defaults.widgets.G15.enabled !== false)
       fail("V1 optional widget defaults")
-    if (!defaults.presentation.border || defaults.presentation.shadow
+    if (!defaults.presentation.border || !defaults.presentation.v1Border
+        || !defaults.presentation.v2Border || defaults.presentation.shadow
         || defaults.presentation.frost || defaults.presentation.radius !== "large"
         || defaults.presentation.height !== undefined
         || defaults.presentation.accent !== "color01"
-        || defaults.presentation.shellStyle !== "shibumi")
+        || defaults.presentation.shellStyle !== "shibumi"
+        || defaults.presentation.v2ShellStyle !== "full")
       fail("invalid default presentation state")
 
     const absent = Config.normalize(null)
@@ -181,11 +183,20 @@ QtObject {
     if (temperatureState.widgets.G16.source !== "gpu"
         || unsafeTemperatureState.widgets.G16.source !== "cpu")
       fail("temperature source setting was not normalized")
-    if (valid.presentation.border || !valid.presentation.shadow
+    if (valid.presentation.border || valid.presentation.v1Border
+        || valid.presentation.v2Border || !valid.presentation.shadow
         || !valid.presentation.frost || valid.presentation.radius !== "small"
         || valid.presentation.shellStyle !== "notch"
+        || valid.presentation.v2ShellStyle !== "notch"
         || valid.presentation.height !== undefined)
       fail("presentation settings were not normalized")
+    const separatedBorders = Config.normalize({
+      version: 1,
+      presentation: { border: true, v1Border: false, v2Border: true }
+    })
+    if (separatedBorders.presentation.v1Border !== false
+        || separatedBorders.presentation.v2Border !== true)
+      fail("V1/V2 border profiles were not retained independently")
     if (valid.workspace.mode !== "active" || valid.workspace.style !== "magic")
       fail("workspace settings were not normalized")
     const v2WorkspaceStyles = ["kanji", "rings", "aurora"]

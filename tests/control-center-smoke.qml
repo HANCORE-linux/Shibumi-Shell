@@ -580,13 +580,76 @@ ShellRoot {
             || panel.dismissSettingsSearch() !== "clear"
             || panel.settingsSearchResults.length !== 0)
           return root.fail("settings search Escape staging failed")
-        widget.close()
+        if (!panel.showSettingsPage("quick"))
+          return root.fail("Quick page rejected before return-only test")
         root.phase++
         root.ticks = 0
         return
       }
 
       if (root.phase === 8) {
+        if (!widget || root.ticks < 2) return
+        const panel = widget.panelItem
+        const quick = panel ? panel.settingsPageItem : null
+        if (!panel || panel.settingsPage !== "quick" || !quick || !quick.ready
+            || quick.barOptionCount !== 3 || quick.actionCount !== 8
+            || quick.barOptions[2].label !== "Omarchy Bar")
+          return root.fail("compact Quick switch/action deck did not instantiate")
+        const activeBeforePreview = quick.activeBarId
+        quick.hoveredBarIndex = 1
+        if (quick.previewBar.id !== "v2"
+            || quick.activeBarId !== activeBeforePreview)
+          return root.fail("bar hover preview changed the active bar")
+        quick.hoveredBarIndex = -1
+        if (!quick.activateAction("reload") || panel.reloadCalls !== 1
+            || !quick.activateAction("screensaver")
+            || panel.lastQuickSystemAction !== "screensaver")
+          return root.fail("Quick action deck did not delegate to its owners")
+        if (!quick.activateAction("add-plugin")
+            || !panel.pluginInstallerOpen || !panel.handleEscape()
+            || panel.pluginInstallerOpen || !panel.open || !widget.opened)
+          return root.fail("direct plugin installer or staged Escape failed")
+        if (!quick.activateAction("bars") || panel.settingsPage !== "bars"
+            || !panel.showSettingsPage("quick"))
+          return root.fail("Quick Bars tile did not open its existing editor")
+        if (!quick.activateAction("pickers") || panel.settingsPage !== "pickers"
+            || !panel.showSettingsPage("quick"))
+          return root.fail("Quick Pickers tile did not open its existing page")
+        if (!quick.activateAction("reboot") || quick.pendingAction !== "reboot"
+            || panel.lastQuickSystemAction === "reboot")
+          return root.fail("destructive Quick action skipped confirmation")
+        quick.pendingAction = ""
+        panel.activeShell = "omarchy"
+        root.phase++
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 9) {
+        if (!widget || root.ticks < 2) return
+        const panel = widget.panelItem
+        const quick = panel ? panel.settingsPageItem : null
+        if (!panel || !panel.stockOmarchyHost || !quick || !quick.returnOnly
+            || quick.actionCount !== 0 || panel.settingsPageOptions.length !== 0
+            || panel.showSettingsPage("plugins")
+            || panel.focusPredictiveSettingsSearch()
+            || quick.activateAction("lock")
+            || panel.lastQuickSystemAction !== "screensaver")
+          return root.fail("Omarchy host exposed Shibumi controls")
+        if (!quick.activateBar("v1") || panel.lastSwitchTarget !== "v1")
+          return root.fail("Omarchy host did not retain the return switch")
+        panel.switchService.status = {
+          schemaVersion: 1, target: "v1", phase: "complete", detail: "",
+          updatedEpoch: Math.floor(Date.now() / 1000)
+        }
+        panel.activeShell = "shibumi"
+        widget.close()
+        root.phase++
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 10) {
         if (!widget || root.ticks < 3) return
         if (widget.opened || widget.panelLoaded || fakeBar.activePopout !== null)
           return root.fail("panel did not release on close")
@@ -596,7 +659,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 9) {
+      if (root.phase === 11) {
         if (!widget || root.ticks < 2) return
         if (!widget.stockOmarchyHost || !widget.iconMode)
           return root.fail("stock Omarchy host identity was not detected")

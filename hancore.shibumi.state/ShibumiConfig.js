@@ -86,12 +86,15 @@ function defaultWidgetConfig() {
 function defaultPresentationConfig() {
   return {
     border: true,
+    v1Border: true,
+    v2Border: true,
     panelBorder: true,
     shadow: false,
     frost: false,
     radius: "large",
     accent: "color01",
-    shellStyle: "shibumi"
+    shellStyle: "shibumi",
+    v2ShellStyle: "full"
   }
 }
 
@@ -298,8 +301,13 @@ function normalizedPaletteId(value) {
 
 function normalizePresentation(value) {
   var result = defaultPresentationConfig()
+  var v2Styles = ["full", "fit", "dock", "notch"]
   if (!isPlainObject(value)) return result
   if (typeof value.border === "boolean") result.border = value.border
+  result.v1Border = typeof value.v1Border === "boolean"
+    ? value.v1Border : result.border
+  result.v2Border = typeof value.v2Border === "boolean"
+    ? value.v2Border : result.border
   if (typeof value.panelBorder === "boolean")
     result.panelBorder = value.panelBorder
   if (typeof value.shadow === "boolean") result.shadow = value.shadow
@@ -311,6 +319,10 @@ function normalizePresentation(value) {
   if (["shibumi", "full", "fit", "dock", "notch"]
       .indexOf(String(value.shellStyle || "")) !== -1)
     result.shellStyle = String(value.shellStyle)
+  if (v2Styles.indexOf(String(value.v2ShellStyle || "")) !== -1)
+    result.v2ShellStyle = String(value.v2ShellStyle)
+  else if (v2Styles.indexOf(result.shellStyle) !== -1)
+    result.v2ShellStyle = result.shellStyle
   return result
 }
 

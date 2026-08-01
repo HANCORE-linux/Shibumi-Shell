@@ -71,12 +71,9 @@ Item {
     delegate: Rectangle {
       required property var modelData
       x: Number(modelData.x || 0)
-        + (root.bar.visualTokens.pillBorderWidth > 0 ? 0.5 : 0)
-      y: root.bar.visualTokens.pillBorderWidth > 0 ? 0.5 : 0
-      width: Math.max(0, Number(modelData.width || 0)
-        - (root.bar.visualTokens.pillBorderWidth > 0 ? 1 : 0))
-      height: Math.max(0, root.height
-        - (root.bar.visualTokens.pillBorderWidth > 0 ? 1 : 0))
+      y: 0
+      width: Math.max(0, Number(modelData.width || 0))
+      height: root.height
       radius: Math.min(height / 2, root.bar.visualTokens.islandRadius)
       color: root.bar.background
       border.width: root.bar.visualTokens.pillBorderWidth

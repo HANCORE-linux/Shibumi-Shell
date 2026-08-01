@@ -24,6 +24,7 @@ Item {
   property string pickerProvider: "All"
   property string installUrl: ""
   property string installStatus: ""
+  readonly property bool returnOnly: controller.stockOmarchyHost === true
   readonly property real routeActivationViewportRatio: 2 / 3
 
   readonly property var pageOptions: {
@@ -36,11 +37,7 @@ Item {
       { id: "plugins", label: "Plugins", glyph: "extension" },
       { id: "health", label: "Health", glyph: "health_and_safety" }
     ]
-    return controller.stockOmarchyHost
-      ? pages.filter(function(page) {
-          return page.id !== "plugins" && page.id !== "splits"
-        })
-      : pages
+    return root.returnOnly ? [] : pages
   }
   readonly property var settingsSearchEntries: {
     const pageKeywords = {
@@ -125,7 +122,7 @@ Item {
   readonly property string restorePage: currentPage === "configure"
     && configureDetailOpen ? configureDetailPage : currentPage
   readonly property bool ready: quickPage.ready
-    && configureLanding.ready && pageReady
+    && (returnOnly || configureLanding.ready && pageReady)
   readonly property bool pageReady: currentPage === "quick"
     ? quickPage.ready
     : !configureDetailOpen && settingsQuery.trim() === ""
@@ -161,8 +158,7 @@ Item {
     .test(installUrl.trim())
   readonly property var validPageIds: pageOptions.map(function(page) {
     return page.id
-  }).concat(["quick", "configure", "main"]).concat(
-    controller.stockOmarchyHost ? [] : ["splits"])
+  }).concat(returnOnly ? ["quick"] : ["quick", "configure", "main", "splits"])
 
   implicitWidth: Commons.Style.space(720)
   implicitHeight: Commons.Style.space(500)
@@ -183,6 +179,7 @@ Item {
     const requested = String(value || "")
     // Keep external/restore callers from the former Advanced route working.
     const next = requested === "preferences" ? "health" : requested
+    if (returnOnly && next !== "quick") return false
     if (validPageIds.indexOf(next) < 0)
       return false
     if (next === "quick") {
@@ -236,11 +233,12 @@ Item {
   function setMode(value) {
     const next = String(value || "")
     if (next === "quick") return setPage("quick")
-    if (next !== "configure") return false
+    if (next !== "configure" || returnOnly) return false
     return setPage("configure")
   }
 
   function focusPredictiveSettingsSearch() {
+    if (returnOnly) return false
     settingsSearch.forceInputFocus()
     return true
   }
@@ -297,6 +295,7 @@ Item {
   }
 
   function openWidgetPicker() {
+    if (returnOnly) return false
     query = ""
     pickerProvider = "All"
     installMode = false
@@ -309,6 +308,7 @@ Item {
   }
 
   function openPluginInstaller() {
+    if (returnOnly) return false
     query = ""
     pickerProvider = "All"
     installMode = true
@@ -330,6 +330,7 @@ Item {
   }
 
   function showInstaller() {
+    if (returnOnly) return
     installMode = true
     installerDirect = false
     installConfirmed = false
@@ -348,21 +349,40 @@ Item {
     return true
   }
 
-  Keys.onEscapePressed: function(event) {
+  function dismissEscapeState() {
     if (paletteOpen) {
       closeWidgetPicker()
-      event.accepted = true
-      return
+      return true
     }
-    if (settingsQuery !== "") {
-      settingsQuery = ""
-      event.accepted = true
+    const pluginPage = pluginSearchPage()
+    if (pluginPage !== null
+        && (pluginPage.searchInputActiveFocus === true
+          || String(pluginPage.pluginQuery || "") !== "")) {
+      pluginPage.dismissPluginSearch()
+      return true
     }
+    if (settingsSearch.inputActiveFocus
+        || settingsSearch.suggestionsVisible || settingsQuery !== "") {
+      settingsSearch.handleEscape()
+      return true
+    }
+    return false
+  }
+
+  Keys.onEscapePressed: function(event) {
+    event.accepted = root.dismissEscapeState()
   }
 
   Shortcut {
     sequence: "Ctrl+K"
+    enabled: !root.returnOnly
     onActivated: settingsSearch.forceInputFocus()
+  }
+
+  onReturnOnlyChanged: {
+    if (!returnOnly) return
+    closeWidgetPicker()
+    setPage("quick")
   }
 
   NumberAnimation {
@@ -381,8 +401,9 @@ Item {
       id: searchBand
       z: settingsSearch.suggestionsVisible ? 50 : 5
       width: parent.width
-      height: Commons.Style.space(42)
-        + settingsSearch.reservedPopupHeight
+      visible: !root.returnOnly
+      height: visible ? Commons.Style.space(42)
+        + settingsSearch.reservedPopupHeight : 0
 
       Rectangle {
         id: settingsSearchFrame
@@ -428,7 +449,8 @@ Item {
     Item {
       id: modeBand
       width: parent.width
-      height: Commons.Style.space(42)
+      visible: !root.returnOnly
+      height: visible ? Commons.Style.space(42) : 0
 
       Row {
         anchors.left: parent.left
@@ -437,11 +459,11 @@ Item {
         anchors.leftMargin: Commons.Style.space(20)
         anchors.rightMargin: Commons.Style.space(20)
         height: Commons.Style.space(31)
-        spacing: Commons.Style.space(6)
+        spacing: Commons.Style.space(34)
 
         Rectangle {
           id: modeSelector
-          width: Commons.Style.space(206)
+          width: Math.min(Commons.Style.space(270), parent.width * 0.42)
           height: parent.height
           radius: root.controller.controlRadius
           color: "transparent"
@@ -469,14 +491,15 @@ Item {
                 width: parent.width / 2
                 height: parent.height
                 radius: Math.max(0, root.controller.controlRadius - 2)
-                color: active
+                color: active || modeOptionPointer.containsMouse
                   ? root.controller.marketPanelRaised : "transparent"
 
                 Text {
                   anchors.centerIn: parent
                   text: modeOption.modelData.label
                   color: root.foreground
-                  opacity: modeOption.active ? 1 : 0.42
+                  opacity: modeOption.active || modeOptionPointer.containsMouse
+                    ? 1 : 0.42
                   font.family: root.controller.marketFont
                   font.pixelSize: Commons.Style.font.caption * root.uiScale
                   font.weight: Font.DemiBold
@@ -484,7 +507,9 @@ Item {
                 }
 
                 MouseArea {
+                  id: modeOptionPointer
                   anchors.fill: parent
+                  hoverEnabled: true
                   cursorShape: Qt.PointingHandCursor
                   onClicked: root.setMode(modeOption.modelData.value)
                 }
@@ -494,66 +519,88 @@ Item {
         }
 
         Rectangle {
-          id: widgetsShortcut
-          width: Commons.Style.space(178)
-          height: parent.height
-          radius: root.controller.controlRadius
-          color: widgetsShortcutPointer.containsMouse
-            || root.configureDetailPage === "plugins"
-            ? root.controller.marketPanelRaised : "transparent"
-          opacity: root.controller.stockOmarchyHost ? 0.34 : 1
-          border.width: 1
-          border.color: root.configureDetailPage === "plugins"
-            ? root.accent : root.controller.controlBorderColor
-
-          Text {
-            anchors.centerIn: parent
-            text: "PLUGINS  " + root.controller.enabledWidgetCount
-              + " / " + root.controller.availableWidgetCount
-            color: root.foreground
-            font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-            font.weight: Font.DemiBold
-            font.letterSpacing: 0.8
-          }
-
-          MouseArea {
-            id: widgetsShortcutPointer
-            anchors.fill: parent
-            enabled: !root.controller.stockOmarchyHost
-            hoverEnabled: true
-            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.setPage("plugins")
-          }
-        }
-
-        Rectangle {
-          id: pluginRegistryStatus
+          id: statusSelector
           width: parent.width - x
           height: parent.height
           radius: root.controller.controlRadius
           color: "transparent"
           border.width: 1
           border.color: root.controller.controlBorderColor
+          clip: true
 
-          Text {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: Commons.Style.space(10)
-            anchors.rightMargin: Commons.Style.space(10)
-            text: "REGISTRY  "
-              + root.controller.registryShibumiPluginCount + " SHIBUMI · "
-              + root.controller.registryOmarchyPluginCount + " OMARCHY · "
-              + root.controller.registryExternalPluginCount + " EXT"
-            color: root.foreground
-            opacity: 0.62
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-            font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-            font.weight: Font.DemiBold
-            font.letterSpacing: 0.8
+          Row {
+            anchors.fill: parent
+            anchors.margins: 2
+            spacing: 0
+
+            Rectangle {
+              id: healthStatusShortcut
+              width: parent.width / 2
+              height: parent.height
+              radius: Math.max(0, root.controller.controlRadius - 2)
+              color: healthStatusPointer.containsMouse
+                || root.configureDetailPage === "health"
+                ? root.controller.marketPanelRaised : "transparent"
+
+              Text {
+                anchors.centerIn: parent
+                text: "HEALTH"
+                color: root.foreground
+                opacity: root.configureDetailPage === "health"
+                  || healthStatusPointer.containsMouse ? 1 : 0.62
+                font.family: root.controller.marketFont
+                font.pixelSize: Commons.Style.font.caption * root.uiScale
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.8
+              }
+
+              MouseArea {
+                id: healthStatusPointer
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.setPage("health")
+              }
+            }
+
+            Rectangle {
+              id: pluginRegistryStatus
+              width: parent.width / 2
+              height: parent.height
+              radius: Math.max(0, root.controller.controlRadius - 2)
+              color: pluginRegistryPointer.containsMouse
+                || root.configureDetailPage === "plugins"
+                ? root.controller.marketPanelRaised : "transparent"
+
+              Text {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Commons.Style.space(7)
+                anchors.rightMargin: Commons.Style.space(7)
+                text: "REGISTRY  "
+                  + root.controller.registryShibumiPluginCount + " S · "
+                  + root.controller.registryOmarchyPluginCount + " O · "
+                  + root.controller.registryExternalPluginCount + " EXT"
+                color: root.foreground
+                opacity: root.configureDetailPage === "plugins"
+                  || pluginRegistryPointer.containsMouse ? 1 : 0.62
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+                font.family: root.controller.marketFont
+                font.pixelSize: Commons.Style.font.caption * root.uiScale
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.8
+              }
+
+              MouseArea {
+                id: pluginRegistryPointer
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.setPage("plugins")
+              }
+            }
           }
         }
       }
@@ -594,7 +641,7 @@ Item {
         id: configureLandingFlick
         z: 1
         anchors.fill: parent
-        visible: root.currentPage === "configure"
+        visible: !root.returnOnly && root.currentPage === "configure"
         contentWidth: width
         contentHeight: configureLanding.implicitHeight
           + Commons.Style.space(12)
@@ -635,7 +682,7 @@ Item {
         x: Commons.Style.space(194)
         width: parent.width - x - Commons.Style.space(20)
         height: parent.height
-        visible: root.currentPage === "configure"
+        visible: !root.returnOnly && root.currentPage === "configure"
           && root.configureDetailOpen
 
         Flickable {

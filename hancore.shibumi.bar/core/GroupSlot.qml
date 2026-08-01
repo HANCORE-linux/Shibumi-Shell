@@ -18,15 +18,17 @@ Item {
   readonly property var groupSettings: stateConfig.widgets
     ? stateConfig.widgets[groupId] || ({}) : ({})
   readonly property bool groupEnabled: groupSettings.enabled !== false
-  readonly property bool appearanceFill: !!(bar.visualTokens
+  readonly property bool v2Shell: !!(bar.visualTokens
+    && bar.visualTokens.v2Shell === true)
+  // Per-group fill, border, radius, and padding belong to V2. V1 preserves
+  // the original widget-owned pill recipe independently of these settings.
+  readonly property bool appearanceFill: v2Shell && !!(bar.visualTokens
     && typeof bar.visualTokens.widgetHasFill === "function"
     && bar.visualTokens.widgetHasFill(groupSettings))
-  readonly property bool appearanceBorder: !!(bar.visualTokens
+  readonly property bool appearanceBorder: v2Shell && !!(bar.visualTokens
     && typeof bar.visualTokens.widgetHasBorder === "function"
     && bar.visualTokens.widgetHasBorder(groupSettings))
   readonly property bool decorated: appearanceFill || appearanceBorder
-  readonly property bool v2Shell: !!(bar.visualTokens
-    && bar.visualTokens.v2Shell === true)
   readonly property real appearancePadding: bar.visualTokens
     && typeof bar.visualTokens.widgetPadding === "function"
     ? bar.visualTokens.widgetPadding(groupSettings, decorated)

@@ -200,8 +200,11 @@ Item {
     } else if (name === "accent") {
       if (!ShibumiConfig.paletteIdValid(value)) return false
       normalizedValue = ShibumiConfig.normalizedPaletteId(value)
-    } else if (name === "shellStyle") {
-      if (["shibumi", "full", "fit", "dock", "notch"]
+    } else if (name === "shellStyle" || name === "v2ShellStyle") {
+      const allowed = name === "shellStyle"
+        ? ["shibumi", "full", "fit", "dock", "notch"]
+        : ["full", "fit", "dock", "notch"]
+      if (allowed
           .indexOf(String(value || "")) < 0) return false
       normalizedValue = String(value)
     } else {
@@ -210,7 +213,36 @@ Item {
 
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.presentation)) next.presentation = {}
-      next.presentation[name] = normalizedValue
+      if (name === "border") {
+        const shellStyle = String(next.presentation.shellStyle || "shibumi")
+        next.presentation[shellStyle === "shibumi"
+          ? "v1Border" : "v2Border"] = normalizedValue
+      } else next.presentation[name] = normalizedValue
+      if (name === "shellStyle" && normalizedValue !== "shibumi")
+        next.presentation.v2ShellStyle = normalizedValue
+    })
+  }
+
+  function setShellVariant(target) {
+    const requested = String(target || "")
+    if (requested !== "v1" && requested !== "v2") return false
+    const v2Styles = ["full", "fit", "dock", "notch"]
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.presentation))
+        next.presentation = {}
+      const current = String(next.presentation.shellStyle || "shibumi")
+      if (requested === "v1") {
+        if (v2Styles.indexOf(current) >= 0)
+          next.presentation.v2ShellStyle = current
+        next.presentation.shellStyle = "shibumi"
+        return
+      }
+      const remembered = v2Styles.indexOf(current) >= 0
+        ? current : v2Styles.indexOf(
+          String(next.presentation.v2ShellStyle || "")) >= 0
+          ? String(next.presentation.v2ShellStyle) : "full"
+      next.presentation.v2ShellStyle = remembered
+      next.presentation.shellStyle = remembered
     })
   }
 

@@ -93,6 +93,7 @@ Ui.Panel {
   property string pendingPage: ""
 
   HealthService { id: healthState }
+  SwitchService { id: switchState }
 
   implicitWidth: vertical ? barSize : logoWidth + logoPadding
   implicitHeight: vertical ? logoWidth + logoPadding : barSize
@@ -114,7 +115,8 @@ Ui.Panel {
       bar: root.bar,
       ownerWidget: root,
       stateService: root.stateService,
-      healthService: healthState
+      healthService: healthState,
+      switchService: switchState
     })
   }
 

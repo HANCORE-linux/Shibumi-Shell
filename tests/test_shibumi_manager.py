@@ -6,6 +6,7 @@ import copy
 import json
 import runpy
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -108,7 +109,7 @@ class ContinuityManagerTests(unittest.TestCase):
             inactive["bar"]["shibumi"]["picker"],
             {
                 "style": "hearthstone",
-                "imageStyle": "omarchy",
+                "imageStyle": "hearthstone",
                 "mediaStyle": "hearthstone",
             },
         )
@@ -142,7 +143,7 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
         self.assertEqual(active["bar"]["shibumi"]["scale"], 1.25)
         self.assertEqual(
-            active["bar"]["shibumi"]["picker"]["imageStyle"], "omarchy"
+            active["bar"]["shibumi"]["picker"]["imageStyle"], "hearthstone"
         )
         user_widget = next(
             entry
@@ -170,6 +171,78 @@ class ContinuityManagerTests(unittest.TestCase):
                 for entry in active["bar"]["layout"][region]
             },
         )
+
+    def test_variant_round_trip_changes_only_shell_style(self) -> None:
+        original = copy.deepcopy(self.active)
+        original["bar"]["shibumi"]["presentation"] = {
+            "shellStyle": "shibumi",
+            "accent": "color06",
+            "radius": "small",
+        }
+        original["bar"]["shibumi"]["groups"] = {
+            "G4": {
+                "displayMode": "text",
+                "color": "color05",
+                "widgetPadding": "roomy",
+            }
+        }
+
+        v2 = self.module["apply_shibumi_variant"](original, "v2")
+        inactive = self.module["deactivate_config"](
+            v2,
+            self.defaults,
+            self.state,
+            self.defaults["bar"]["layout"],
+        )
+        restored = self.module["activate_config"](
+            inactive,
+            self.state,
+            self.module["copy_layout"](original["bar"]["layout"]),
+        )
+        v1 = self.module["apply_shibumi_variant"](restored, "v1")
+
+        expected_shibumi = copy.deepcopy(original["bar"]["shibumi"])
+        expected_shibumi["presentation"]["v2ShellStyle"] = "full"
+        self.assertEqual(
+            v2["bar"]["shibumi"]["presentation"]["shellStyle"], "full"
+        )
+        self.assertEqual(
+            v1["bar"]["shibumi"]["presentation"]["shellStyle"], "shibumi"
+        )
+        self.assertEqual(v1["bar"]["shibumi"], expected_shibumi)
+        self.assertEqual(
+            v1["bar"]["layout"], original["bar"]["layout"]
+        )
+
+    def test_v2_return_keeps_the_saved_shell_form(self) -> None:
+        for shell_style in ("full", "fit", "dock", "notch"):
+            with self.subTest(shell_style=shell_style):
+                configured = copy.deepcopy(self.active)
+                configured["bar"]["shibumi"]["presentation"] = {
+                    "shellStyle": shell_style,
+                    "v2ShellStyle": shell_style,
+                    "accent": "color06",
+                }
+                inactive = self.module["deactivate_config"](
+                    configured,
+                    self.defaults,
+                    self.state,
+                    self.defaults["bar"]["layout"],
+                )
+                restored = self.module["activate_config"](
+                    inactive,
+                    self.state,
+                    self.module["copy_layout"](
+                        configured["bar"]["layout"]
+                    ),
+                )
+                returned = self.module["apply_shibumi_variant"](
+                    restored, "v2"
+                )
+                self.assertEqual(
+                    returned["bar"]["shibumi"]["presentation"],
+                    configured["bar"]["shibumi"]["presentation"],
+                )
 
     def test_hybrid_service_does_not_need_direct_bar_placement(self) -> None:
         state = copy.deepcopy(self.state)
@@ -271,6 +344,35 @@ class ContinuityManagerTests(unittest.TestCase):
             (state_dir / "install.json").read_bytes(), original_state
         )
         self.assertFalse((state_dir / "switch-transaction").exists())
+
+    def test_request_rejects_overlapping_switch_without_spawning(self) -> None:
+        state_dir = self.root / "state/shibumi"
+        state_dir.mkdir(parents=True)
+        (state_dir / "install.json").write_text(
+            json.dumps(self.state) + "\n", encoding="utf-8"
+        )
+        (state_dir / "switch-status.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "target": "omarchy",
+                    "phase": "verify",
+                    "detail": "",
+                    "updatedEpoch": int(time.time()),
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        environment = {"SHIBUMI_STATE_DIR": str(state_dir)}
+        globals_map = self.module["request"].__globals__
+        with patch.dict("os.environ", environment, clear=False):
+            with patch.object(globals_map["subprocess"], "Popen") as popen:
+                with self.assertRaisesRegex(
+                    self.module["ManagerError"], "another Shibumi lifecycle"
+                ):
+                    self.module["request"]("v1")
+        popen.assert_not_called()
 
     def test_reload_uses_full_shell_restart_when_available(self) -> None:
         restart = self.root / "omarchy/bin/omarchy-restart-shell"

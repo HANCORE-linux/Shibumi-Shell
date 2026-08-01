@@ -11,6 +11,7 @@ Item {
   required property var ownerWidget
   required property var stateService
   required property var healthService
+  required property var switchService
 
   readonly property bool open: ownerWidget.opened
   readonly property var healthReport: healthService.report
@@ -19,7 +20,17 @@ Item {
   readonly property string healthFailure: healthService.failure
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
-  readonly property var barPresentation: stateConfig.presentation || ({})
+  readonly property var rawBarPresentation: stateConfig.presentation || ({})
+  readonly property var barPresentation: {
+    const source = rawBarPresentation
+    const effective = {}
+    for (const key in source) effective[key] = source[key]
+    const profileBorder = v2LayoutActive ? source.v2Border : source.v1Border
+    effective.border = profileBorder === undefined
+      ? source.border !== false : profileBorder !== false
+    if (!v2LayoutActive) effective.panelBorder = effective.border
+    return effective
+  }
   readonly property var workspaceConfig: stateConfig.workspace || ({})
   readonly property var menuConfig: stateConfig.menu || ({})
   readonly property var pluginConfig: stateConfig.plugins || ({})
@@ -44,9 +55,20 @@ Item {
       || "tanzaku") : "tanzaku"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
-  readonly property bool stockOmarchyHost: false
-  readonly property string activeShell: "shibumi"
+  property string activeShell: "shibumi"
+  readonly property bool stockOmarchyHost: activeShell === "omarchy"
+  readonly property string switchPhase: switchService
+    ? String(switchService.phase || "idle") : "idle"
+  readonly property string switchTarget: switchService
+    ? String(switchService.target || "") : ""
+  readonly property string switchDetail: switchService
+    ? String(switchService.detail || "") : ""
+  readonly property bool switchBusy: switchService
+    ? switchService.busy === true : false
   property bool v2LayoutActive: false
+  property string lastSwitchTarget: ""
+  property string lastQuickSystemAction: ""
+  property int reloadCalls: 0
   readonly property var activeWidgetOrder: v2LayoutActive
     ? {
         left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
@@ -193,6 +215,9 @@ Item {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property var settingsPageOptions: settings.pageOptions
+  readonly property bool pluginInstallerOpen: settings.paletteOpen
+    && settings.installMode && settings.installerDirect
   readonly property bool barsSurfaceRouteActive:
     settings.barsSurfaceRouteActive
   readonly property real barsSurfaceActivationY:
@@ -302,6 +327,20 @@ Item {
       ? stateService.setPresentationSetting(name, value) : false
   }
 
+  function setBarVariant(target) {
+    const requested = String(target || "")
+    if (requested !== "v1" && requested !== "v2"
+        || !stateService
+        || typeof stateService.setShellVariant !== "function") return false
+    const preservePage = settings.restorePage
+    const restoreBar = bar
+    if (restoreBar
+        && typeof restoreBar.scheduleWidgetRestore === "function")
+      restoreBar.scheduleWidgetRestore(
+        "hancore.shibumi.control-center", preservePage)
+    return stateService.setShellVariant(requested)
+  }
+
   function setWorkspacePreference(name, value) {
     return stateService
       && typeof stateService.setWorkspacePreference === "function"
@@ -395,7 +434,33 @@ Item {
     return stateService.setMenuConfig(next)
   }
 
-  function reloadShell() { return true }
+  function switchShell(target) {
+    const requested = String(target || "")
+    if (["v1", "v2", "omarchy"].indexOf(requested) < 0
+        || switchBusy || !switchService.begin(requested)) return false
+    lastSwitchTarget = requested
+    return true
+  }
+
+  function runQuickSystemAction(action) {
+    const requested = String(action || "")
+    if (stockOmarchyHost
+        || ["screensaver", "lock", "reboot", "shutdown"]
+          .indexOf(requested) < 0) return false
+    lastQuickSystemAction = requested
+    return true
+  }
+
+  function handleEscape() {
+    if (settings.dismissEscapeState()) return true
+    ownerWidget.close()
+    return true
+  }
+
+  function reloadShell() {
+    reloadCalls++
+    return true
+  }
   function runHealthChecks(fetchUpdates) {
     return healthService.runChecks(fetchUpdates === true)
   }
@@ -475,9 +540,6 @@ Item {
   }
   function rescanPlugins() { return true }
   function beginBarEditing() { return false }
-  function quickWidgetAvailable(_pluginId) { return true }
-  function quickWidgetVisible(_pluginId) { return true }
-  function toggleQuickWidget(_pluginId) { return true }
   function shibumiWidgetGroup(pluginId) {
     const groups = {
       "hancore.shibumi.storage": "G18"

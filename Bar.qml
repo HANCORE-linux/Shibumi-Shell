@@ -892,6 +892,12 @@ Item {
         ? "ok" : "unchanged"
     }
 
+    function setAllSplits(enabled: string): string {
+      const value = String(enabled || "").toLowerCase()
+      if (value !== "true" && value !== "false") return "invalid-enabled"
+      return root.setAllSplits(value === "true") ? "ok" : "rejected"
+    }
+
     function setShellStyle(style: string): string {
       const value = String(style || "")
       const state = root.pluginService("hancore.shibumi.state")

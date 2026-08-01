@@ -58,9 +58,9 @@ Item {
   readonly property int shellFitRadius: Commons.Style.space(6)
   readonly property int shellDockRadius: Commons.Style.space(8)
 
-  readonly property bool borderEnabled: presentation.border !== false
-  readonly property bool panelBorderEnabled:
-    presentation.panelBorder !== false
+  readonly property bool borderEnabled: presentation.v1Border === undefined
+    ? presentation.border !== false : presentation.v1Border !== false
+  readonly property bool panelBorderEnabled: borderEnabled
   readonly property bool shadowEnabled: presentation.shadow === true
   readonly property bool frostEnabled: presentation.frost === true
   readonly property color paper: bar && "background" in bar

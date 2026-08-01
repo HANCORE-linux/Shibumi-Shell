@@ -13,6 +13,7 @@ ShibumiPanel {
   required property var ownerWidget
   required property var stateService
   required property var healthService
+  required property var switchService
   // Compatibility aliases for the Control Center views. Their provenance is
   // the active host's VisualTokens, which ultimately follow colors.toml.
   readonly property color marketBackground: shibumiTokens
@@ -45,7 +46,17 @@ ShibumiPanel {
 
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
-  readonly property var barPresentation: stateConfig.presentation || ({})
+  readonly property var rawBarPresentation: stateConfig.presentation || ({})
+  readonly property var barPresentation: {
+    const source = rawBarPresentation
+    const effective = {}
+    for (const key in source) effective[key] = source[key]
+    const profileBorder = v2LayoutActive ? source.v2Border : source.v1Border
+    effective.border = profileBorder === undefined
+      ? source.border !== false : profileBorder !== false
+    if (!v2LayoutActive) effective.panelBorder = effective.border
+    return effective
+  }
   readonly property var workspaceConfig: stateConfig.workspace || ({})
   readonly property var menuConfig: stateConfig.menu || ({})
   readonly property var pluginConfig: stateConfig.plugins || ({})
@@ -116,6 +127,7 @@ ShibumiPanel {
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-manager"
   readonly property string activeShell: HostIdentity.shellName(bar)
+  readonly property bool stockOmarchyHost: activeShell === "omarchy"
   readonly property bool v2LayoutActive: bar && bar.layoutController
     ? bar.layoutController.v2Mode === true : false
   readonly property var activeWidgetOrder: bar && bar.layoutController
@@ -176,13 +188,20 @@ ShibumiPanel {
     && powerService.profileAvailable === true
   readonly property string quickProfileLabel: quickProfileAvailable
     ? String(powerService.activeProfileLabel || "Ready") : "Unavailable"
-  property string switchPhase: ""
-  property string switchDetail: ""
+  readonly property string switchPhase: switchService
+    ? String(switchService.phase || "idle") : "idle"
+  readonly property string switchTarget: switchService
+    ? String(switchService.target || "") : ""
+  readonly property string switchDetail: switchService
+    ? String(switchService.detail || "") : ""
+  readonly property bool switchBusy: switchService
+    ? switchService.busy === true : false
   readonly property bool settingsReady: settings.ready
   readonly property bool settingsFitsWidth: settings.fitsWidth
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property var settingsPageOptions: settings.pageOptions
   readonly property var healthReport: healthService.report
   readonly property bool healthRunning: healthService.running
   readonly property bool healthFetching: healthService.fetching
@@ -196,17 +215,21 @@ ShibumiPanel {
   contentWidth: fittedContentWidth(Commons.Style.space(820),
     Commons.Style.space(900))
   contentHeight: settings.currentPage === "quick"
-    ? fittedContentHeight(Commons.Style.space(495),
-        Commons.Style.space(550))
+    ? settings.returnOnly
+      ? fittedContentHeight(Commons.Style.space(
+          switchPhase === "error" ? 250 : 205), Commons.Style.space(260))
+      : fittedContentHeight(Commons.Style.space(
+          switchPhase === "error" ? 488 : 436), Commons.Style.space(495))
     : fittedContentHeight(Commons.Style.space(610),
         Commons.Style.space(680))
 
   function switchShell(target) {
-    const requested = String(target || "")
-    if ((requested !== "shibumi" && requested !== "omarchy")
-        || managerCommand === "" || switchPhase === "queued") return false
-    switchPhase = "queued"
-    switchDetail = ""
+    let requested = String(target || "")
+    if (requested === "shibumi")
+      requested = v2LayoutActive ? "v2" : "v1"
+    if (["v1", "v2", "omarchy"].indexOf(requested) < 0
+        || managerCommand === "" || switchBusy
+        || !switchService.begin(requested)) return false
     console.info("Shibumi continuity request:", requested)
     Quickshell.execDetached([managerCommand, "request", requested])
     ownerWidget.close()
@@ -217,31 +240,6 @@ ShibumiPanel {
     return bar && bar.shell
       && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor(String(pluginId || "")) : null
-  }
-
-  function quickWidgetAvailable(pluginId) {
-    const id = String(pluginId || "")
-    return pluginEntries.some(function(entry) {
-      return entry.id === id && entry.userToggleable
-    })
-  }
-
-  function quickWidgetVisible(pluginId) {
-    const id = String(pluginId || "")
-    return quickWidgetAvailable(id) && widgetInstalled(id)
-  }
-
-  function toggleQuickWidget(pluginId) {
-    const id = String(pluginId || "")
-    const allowed = [
-      "hancore.shibumi.network",
-      "hancore.shibumi.bluetooth",
-      "hancore.shibumi.audio",
-      "hancore.shibumi.brightness",
-      "hancore.shibumi.power-profile"
-    ]
-    if (allowed.indexOf(id) < 0 || !quickWidgetAvailable(id)) return false
-    return setPluginEnabled(id, !quickWidgetVisible(id))
   }
 
   function beginBarEditing() {
@@ -605,6 +603,20 @@ ShibumiPanel {
     return changed
   }
 
+  function setBarVariant(target) {
+    const requested = String(target || "")
+    if (requested !== "v1" && requested !== "v2"
+        || !stateService
+        || typeof stateService.setShellVariant !== "function") return false
+    const preservePage = settings.restorePage
+    const restoreBar = bar
+    if (restoreBar
+        && typeof restoreBar.scheduleWidgetRestore === "function")
+      restoreBar.scheduleWidgetRestore(
+        "hancore.shibumi.control-center", preservePage)
+    return stateService.setShellVariant(requested)
+  }
+
   function setWorkspacePreference(name, value) {
     return stateService
       && typeof stateService.setWorkspacePreference === "function"
@@ -734,6 +746,28 @@ ShibumiPanel {
     return true
   }
 
+  function runQuickSystemAction(action) {
+    if (stockOmarchyHost) return false
+    const commands = {
+      screensaver: ["omarchy-launch-screensaver", "force"],
+      lock: ["omarchy-system-lock"],
+      reboot: ["omarchy-system-reboot"],
+      shutdown: ["omarchy-system-shutdown"]
+    }
+    const requested = String(action || "")
+    if (!Object.prototype.hasOwnProperty.call(commands, requested))
+      return false
+    Quickshell.execDetached(commands[requested])
+    ownerWidget.close()
+    return true
+  }
+
+  function handleEscape() {
+    if (settings.dismissEscapeState()) return true
+    ownerWidget.close()
+    return true
+  }
+
   function runHealthChecks(fetchUpdates) {
     return healthService.runChecks(fetchUpdates === true)
   }
@@ -802,7 +836,7 @@ ShibumiPanel {
   Ui.PanelKeyCatcher {
     id: keyCatcher
     anchors.fill: parent
-    onCloseRequested: panel.ownerWidget.close()
+    onCloseRequested: panel.handleEscape()
     onTabRequested: function(direction) { panel.ownerWidget.switchPanel(direction) }
 
     Column {
@@ -822,7 +856,9 @@ ShibumiPanel {
           width: parent.width - stateSync.width - closeAction.width
             - parent.spacing * 2
           anchors.verticalCenter: parent.verticalCenter
-          text: "SHIBUMI  /  CONTROL CENTER  /  "
+          text: panel.stockOmarchyHost
+            ? "SHIBUMI  /  RETURN TO SHIBUMI"
+            : "SHIBUMI  /  CONTROL CENTER  /  "
             + (settings.restorePage === "quick" ? "QUICK"
               : settings.restorePage === "configure" ? "CONFIGURE"
               : settings.restorePage === "bars" ? "BARS"
@@ -849,7 +885,8 @@ ShibumiPanel {
         Text {
           id: stateSync
           anchors.verticalCenter: parent.verticalCenter
-          text: "●  STATE SYNCED"
+          text: panel.stockOmarchyHost
+            ? "●  OMARCHY BAR ACTIVE" : "●  STATE SYNCED"
           color: panel.marketAccent
           font.family: panel.bar
             ? panel.bar.fontFamily : Commons.Style.font.family

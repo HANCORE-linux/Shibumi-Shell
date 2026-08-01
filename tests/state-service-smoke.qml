@@ -84,14 +84,33 @@ ShellRoot {
             || state.setPresentationSetting("radius", "unsafe")
             || !state.setPresentationSetting("shellStyle", "notch")
             || state.setPresentationSetting("shellStyle", "unsafe")
+            || !state.setPresentationSetting("border", false)
+            || state.config.presentation.v2Border !== false
+            || state.config.presentation.v1Border !== true
             || !state.setPresentationSetting("accent", "color06")
             || state.setPresentationSetting("accent", "unsafe")
             || state.setPresentationSetting("height", "minimal")
             || state.config.presentation.height !== undefined
             || state.config.presentation.radius !== "small"
             || state.config.presentation.shellStyle !== "notch"
+            || state.config.presentation.v2ShellStyle !== "notch"
             || state.config.presentation.accent !== "color06")
           return root.fail("presentation mutation validation")
+        if (!state.setShellVariant("v1")
+            || state.config.presentation.shellStyle !== "shibumi"
+            || state.config.presentation.v2ShellStyle !== "notch"
+            || !state.setPresentationSetting("border", false)
+            || state.config.presentation.v1Border !== false
+            || state.config.presentation.v2Border !== false
+            || !state.setPresentationSetting("border", true)
+            || state.config.presentation.v1Border !== true
+            || state.config.presentation.v2Border !== false
+            || !state.setShellVariant("v2")
+            || state.config.presentation.shellStyle !== "notch"
+            || state.config.presentation.v2ShellStyle !== "notch"
+            || state.config.presentation.v2Border !== false
+            || state.config.presentation.v1Border !== true)
+          return root.fail("V1/V2 variant memory")
         if (!state.setImagePickerStyle("tanzaku")
             || !state.setMediaPickerStyle("hearthstone")
             || state.setImagePickerStyle("carousel")

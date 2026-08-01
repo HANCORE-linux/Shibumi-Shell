@@ -252,6 +252,19 @@ rg -Fq 'connectedPanelHostCaret' Bar.qml \
   || fail "bar facade does not distinguish host-drawn panel carets"
 rg -q 'active: root\.groupEnabled' core/GroupSlot.qml \
   || fail "disabled multi-module groups remain instantiated"
+rg -Fq 'readonly property bool appearanceFill: v2Shell &&' \
+  core/GroupSlot.qml \
+  || fail "V2 group appearance settings leak into the V1 pill surface"
+rg -Fq 'customDecorated: shellStyle !== "shibumi"' \
+  widgets/PillSurface.qml \
+  || fail "V2 widget appearance settings suppress the V1 native pill"
+rg -Fq 'presentation.v2Border === undefined' \
+  styles/shibumi/VisualTokens.qml \
+  || fail "V1 and V2 still share one mutable bar-border state"
+if rg -Fq 'pillBorderWidth > 0 ? 0.5 : 0' \
+    styles/shibumi/RunChrome.qml; then
+  fail "V1 run borders are shifted off their original integer geometry"
+fi
 if rg -q 'visible: activeItem' core/WidgetSlot.qml; then
   fail "widget slot visibility must not depend on child effective visibility"
 fi

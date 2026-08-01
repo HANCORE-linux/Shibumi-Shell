@@ -124,6 +124,20 @@ done
 rg -Fq 'name === "shellStyle"' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "bar shell style is not persisted by the state service"
+for variant_memory_contract in \
+    'ShibumiConfig.js:v2ShellStyle: "full"' \
+    'Service.qml:function setShellVariant(target)' \
+    'Service.qml:next.presentation.v2ShellStyle = current' \
+    'ControlCenterPanel.qml:function setBarVariant(target)' \
+    'QuickControlPage.qml:return controller.setBarVariant(requested)' \
+    'QuickControlPage.qml:"bar-v2-" + v2ShellStyle'; do
+  file=${variant_memory_contract%%:*}
+  label=${variant_memory_contract#*:}
+  target_file="$control_dir/$file"
+  [[ -f $target_file ]] || target_file="$repo_root/hancore.shibumi.state/$file"
+  rg -Fq "$label" "$target_file" \
+    || fail "V1/V2 style-memory contract drifted: $label"
+done
 rg -Fq 'restoreBar.scheduleWidgetRestore(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style changes do not preserve the open Control Center page"
@@ -288,11 +302,16 @@ for refined_contract in \
   'ControlCenterPanel.qml:contentHeight: settings.currentPage === "quick"' \
   'QuickControlPage.qml:label: "V1"' \
   'QuickControlPage.qml:label: "V2"' \
-  'QuickControlPage.qml:label: "Omarchy"' \
-  'QuickControlPage.qml:SectionLabel { text: "BAR WIDGETS" }' \
-  'QuickControlPage.qml:root.controller.toggleQuickWidget(' \
-  'ControlCenterPanel.qml:function quickWidgetVisible(pluginId)' \
-  'ControlCenterPanel.qml:function toggleQuickWidget(pluginId)' \
+  'QuickControlPage.qml:label: "Omarchy Bar"' \
+  'QuickControlPage.qml:id: "add-plugin", label: "+ Add plugin"' \
+  'QuickControlPage.qml:id: "reload", label: "Reload Shibumi"' \
+  'QuickControlPage.qml:id: "bars", label: "Bars"' \
+  'QuickControlPage.qml:id: "pickers", label: "Pickers"' \
+  'QuickControlPage.qml:glyph: "align_vertical_center"' \
+  'QuickControlPage.qml:id: "screensaver", label: "Screensaver"' \
+  'QuickControlPage.qml:id: "lock", label: "Lock"' \
+  'QuickControlPage.qml:id: "reboot", label: "Reboot"' \
+  'QuickControlPage.qml:id: "shutdown", label: "Shutdown"' \
   'ActiveBarSettingsPage.qml:root.activeLabel + " ACTIVE"' \
   'ActiveBarSettingsPage.qml:visible: root.shibumiActive && !root.v2Active' \
   'ActiveBarSettingsPage.qml:visible: root.v2Active' \
@@ -475,17 +494,23 @@ for landing_contract in \
   'barButtonColumn.width + barLanding.portOffset' \
   'context.arc(startX, startY, 3.6, 0, Math.PI * 2)' \
   'function onHoveredBarIndexChanged()' \
-  'label: "ACTIVE BAR"' \
-  'interactive: true' \
+  'root.previewing ? "BAR PREVIEW" : "ACTIVE BAR"' \
+  'pageKey: root.previewRoute' \
+  'interactive: !root.returnOnly && !root.previewing' \
   'onClicked: root.controller.showSettingsPage("bars")' \
-  'if (modelData.active)' \
+  'onEntered: root.hoveredBarIndex = barOption.index' \
+  'onClicked: barOption.activate()' \
   'PageMotionStage {'; do
   rg -Fq "$landing_contract" "$control_dir/QuickControlPage.qml" \
     || fail "BAR landing-page contract drifted: $landing_contract"
 done
-if rg -q 'triggerQuickAction|toggleWifi|toggleBluetooth|wpctl.*set-mute|cycleProfile' \
+if rg -q 'triggerQuickAction|toggleQuickWidget|toggleWifi|toggleBluetooth|wpctl.*set-mute|cycleProfile' \
     "$control_dir/ControlCenterPanel.qml" "$control_dir/QuickControlPage.qml"; then
-  fail "BAR WIDGETS still mutate hardware state"
+  fail "retired Quick widget toggles remain reachable"
+fi
+if rg -q 'BAR WIDGETS|\+ Add widget|V1 / V2 applies|SectionLabel \{ text: "BAR"' \
+    "$control_dir/QuickControlPage.qml"; then
+  fail "retired Quick copy or widget section remains"
 fi
 if rg -Fq 'anchors.bottom: parent.bottom' \
     "$control_dir/PageMotionStage.qml"; then
@@ -500,26 +525,35 @@ if rg -Fq 'id: routeIndicator' "$control_dir/QuickControlPage.qml"; then
 fi
 for quick_contract in \
   'QuickControlPage.qml:controller.paletteColor("color04")' \
-  'QuickControlPage.qml:? root.activeStateColor : root.controller.dividerColor' \
-  'ControlSettings.qml:id: widgetsShortcut' \
   'ControlSettings.qml:onClicked: root.setPage("plugins")' \
+  'ControlSettings.qml:onClicked: root.setPage("health")' \
+  'ControlSettings.qml:id: statusSelector' \
+  'ControlSettings.qml:id: healthStatusShortcut' \
+  'ControlSettings.qml:id: healthStatusPointer' \
   'ControlSettings.qml:id: pluginRegistryStatus' \
-  'ControlSettings.qml:+ " / " + root.controller.availableWidgetCount' \
-  'ControlSettings.qml:+ " SHIBUMI · "' \
-  'ControlSettings.qml:+ " OMARCHY · "' \
+  'ControlSettings.qml:id: pluginRegistryPointer' \
+  'ControlSettings.qml:|| modeOptionPointer.containsMouse' \
+  'ControlSettings.qml:|| healthStatusPointer.containsMouse ? 1 : 0.62' \
+  'ControlSettings.qml:|| pluginRegistryPointer.containsMouse ? 1 : 0.62' \
+  'ControlSettings.qml:hoverEnabled: true' \
+  'ControlSettings.qml:width: Math.min(Commons.Style.space(270), parent.width * 0.42)' \
+  'ControlSettings.qml:spacing: Commons.Style.space(34)' \
+  'ControlSettings.qml:+ " S · "' \
+  'ControlSettings.qml:+ " O · "' \
   'ControlSettings.qml:+ " EXT"' \
   'QuickControlPage.qml:function surfaceFill(active, hovered)' \
   'QuickControlPage.qml:function surfaceBorder(active, hovered)' \
-  'QuickControlPage.qml:textWeight: root.valueFontWeight' \
   'CompactSettingChoice.qml:property int textWeight:' \
   'ControlCenterPanel.qml:registryShibumiPluginCount:' \
   'ControlCenterPanel.qml:registryOmarchyPluginCount:' \
   'ControlCenterPanel.qml:registryExternalPluginCount:' \
+  'ControlCenterPanel.qml:source.v2Border : source.v1Border' \
   'ControlSettings.qml:radius: Math.max(0, root.controller.controlRadius - 2)' \
   'ControlSettings.qml:id: activePage' \
   'ControlSettings.qml:width: parent.width' \
-  'ControlCenterPanel.qml:? fittedContentHeight(Commons.Style.space(495),' \
-  'ControlCenterPanel.qml:Commons.Style.space(550))'; do
+  'ControlCenterPanel.qml:switchPhase === "error" ? 250 : 205' \
+  'ControlCenterPanel.qml:switchPhase === "error" ? 488 : 436' \
+  'ControlCenterPanel.qml:Commons.Style.space(495))'; do
   file=${quick_contract%%:*}
   label=${quick_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
@@ -763,13 +797,50 @@ if rg -Fq 'warning(s)' "$control_dir/ControlMainPage.qml"; then
   fail "Health still exposes machine-oriented status grammar"
 fi
 
-if rg -q 'runSystemAction|omarchy-system-lock|omarchy-system-reboot|omarchy-system-shutdown|systemctl.*suspend' \
-    "$control_dir" --glob '*.qml'; then
+if rg -q 'runQuickSystemAction|omarchy-system-lock|omarchy-system-reboot|omarchy-system-shutdown|systemctl.*suspend' \
+    "$control_dir/ControlMainPage.qml"; then
   fail "Health still duplicates authoritative App Menu session actions"
 fi
-[[ $(rg -l -F 'onClicked: root.controller.reloadShell()' "$control_dir" \
+for action_contract in \
+    'function runQuickSystemAction(action)' \
+    'screensaver: ["omarchy-launch-screensaver", "force"]' \
+    'lock: ["omarchy-system-lock"]' \
+    'reboot: ["omarchy-system-reboot"]' \
+    'shutdown: ["omarchy-system-shutdown"]' \
+    'if (stockOmarchyHost) return false'; do
+  rg -Fq "$action_contract" "$control_dir/ControlCenterPanel.qml" \
+    || fail "Quick system-action delegation drifted: $action_contract"
+done
+rg -Fq 'function setAllSplits(enabled: string): string' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "runtime split mutation is unavailable for switch continuity checks"
+[[ $(rg -l -F 'function reloadShell()' "$control_dir" \
   --glob '*.qml' | wc -l) -eq 1 ]] \
   || fail "Reload Shibumi is not owned exclusively by Quick"
+
+for return_contract in \
+    'ControlSettings.qml:readonly property bool returnOnly: controller.stockOmarchyHost === true' \
+    'ControlSettings.qml:return root.returnOnly ? [] : pages' \
+    'ControlSettings.qml:if (returnOnly && next !== "quick") return false' \
+    'ControlSettings.qml:enabled: !root.returnOnly' \
+    'QuickControlPage.qml:model: root.returnOnly ? [] :' \
+    'QuickControlPage.qml:if (returnOnly) return false' \
+    'QuickControlPage.qml:id: actionConnector' \
+    'QuickControlPage.qml:x: shibumiActionColumn.width' \
+    'QuickControlPage.qml:width: actionDeck.width - shibumiActionColumn.width' \
+    'QuickControlPage.qml:context.bezierCurveTo(' \
+    'QuickControlPage.qml:function onHoveredShibumiActionIndexChanged()' \
+    'QuickControlPage.qml:function onHoveredSystemActionIndexChanged()' \
+    'QuickControlPage.qml:leftHovered || rightHovered ? 3.2 : 2.7' \
+    'ControlCenterPanel.qml:onCloseRequested: panel.handleEscape()' \
+    'ControlCenterPanel.qml:if (settings.dismissEscapeState()) return true' \
+    'SwitchService.qml:watchChanges: true' \
+    'SwitchService.qml:running: root.busy'; do
+  file=${return_contract%%:*}
+  label=${return_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "return-only or Escape contract drifted: $label"
+done
 
 for label in Status Battery \
     'Bar border' 'Panel + tooltip' Border Frost Shadow \
