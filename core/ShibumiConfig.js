@@ -21,6 +21,7 @@ var GroupIds = [
   "G16", "G17", "G18"
 ]
 var V1GroupIds = GroupIds.slice(0, 15)
+var V1DynamicGroupPrefix = "G:"
 var TemperatureSourceIds = ["cpu", "core", "gpu", "nvme", "memory"]
 
 function defaultOrder() {
@@ -31,11 +32,23 @@ function defaultOrder() {
   }
 }
 
-function defaultSplits() {
+function slotRolesForOrder(value) {
+  var order = normalizedOrder(value) || defaultOrder()
+  var result = { left: [], center: [], right: [] }
+  var baseCounts = { left: 7, center: 1, right: 7 }
+  for (var region in result) {
+    for (var index = 0; index < order[region].length; index++)
+      result[region].push(index < baseCounts[region] ? "base" : "extra")
+  }
+  return result
+}
+
+function defaultSplits(orderValue) {
+  var order = normalizedOrder(orderValue) || defaultOrder()
   return {
-    left: [false, false, false, false, false, false],
+    left: Array(Math.max(0, order.left.length - 1)).fill(false),
     boundaries: [false, false],
-    right: [false, false, false, false, false, false]
+    right: Array(Math.max(0, order.right.length - 1)).fill(false)
   }
 }
 
@@ -59,6 +72,7 @@ function defaultConfig() {
     version: SchemaVersion,
     identityVersion: IdentityVersion,
     order: defaultOrder(),
+    v1SlotRoles: slotRolesForOrder(defaultOrder()),
     splits: defaultSplits(),
     v2Layout: defaultV2Layout(),
     v2Boundaries: defaultV2Boundaries(),
@@ -150,6 +164,19 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
 
+function isV1DynamicGroupId(value) {
+  var groupId = String(value || "")
+  if (groupId.indexOf(V1DynamicGroupPrefix) !== 0) return false
+  var pluginId = groupId.slice(V1DynamicGroupPrefix.length)
+  return pluginId.length > 0 && pluginId.length <= 160
+    && /^[a-z0-9][a-z0-9._-]*$/.test(pluginId)
+}
+
+function isGroupId(value) {
+  var groupId = String(value || "")
+  return GroupIds.indexOf(groupId) >= 0 || isV1DynamicGroupId(groupId)
+}
+
 function boolArray(value, length) {
   if (!Array.isArray(value) || value.length !== length) return null
   var result = []
@@ -162,24 +189,49 @@ function boolArray(value, length) {
 
 function normalizedOrder(value) {
   if (!isPlainObject(value)) return null
-  if (!Array.isArray(value.left) || value.left.length !== 7) return null
+  if (!Array.isArray(value.left)
+      || value.left.length < 7 || value.left.length > 9) return null
   if (!Array.isArray(value.center) || value.center.length !== 1) return null
-  if (!Array.isArray(value.right) || value.right.length !== 7) return null
+  if (!Array.isArray(value.right)
+      || value.right.length < 7 || value.right.length > 9) return null
 
   var combined = value.left.concat(value.center, value.right)
   var seen = {}
+  var fixedCount = 0
   for (var i = 0; i < combined.length; i++) {
     var id = String(combined[i] || "")
-    if (V1GroupIds.indexOf(id) === -1 || seen[id]) return null
+    if (id === "") continue
+    if ((V1GroupIds.indexOf(id) === -1 && !isV1DynamicGroupId(id))
+        || seen[id]) return null
     seen[id] = true
+    if (V1GroupIds.indexOf(id) >= 0) fixedCount++
   }
-  if (Object.keys(seen).length !== V1GroupIds.length) return null
+  if (fixedCount !== V1GroupIds.length) return null
 
   return {
     left: value.left.slice(),
     center: value.center.slice(),
     right: value.right.slice()
   }
+}
+
+function normalizedV1SlotRoles(value, orderValue) {
+  var order = normalizedOrder(orderValue)
+  if (!order) return null
+  var expected = slotRolesForOrder(order)
+  // Missing roles identify the legacy fixed-order format. The normalized
+  // config writes the explicit role map on the first subsequent mutation.
+  if (value === undefined || value === null) return expected
+  if (!isPlainObject(value)) return null
+  for (var region in expected) {
+    if (!Array.isArray(value[region])
+        || value[region].length !== expected[region].length) return null
+    for (var index = 0; index < expected[region].length; index++) {
+      if (String(value[region][index] || "") !== expected[region][index])
+        return null
+    }
+  }
+  return expected
 }
 
 function normalizedV2Layout(value) {
@@ -211,11 +263,12 @@ function normalizedV2Boundaries(value) {
   return boolArray(value, 2)
 }
 
-function normalizedSplits(value) {
-  if (!isPlainObject(value)) return null
-  var left = boolArray(value.left, 6)
+function normalizedSplits(value, orderValue) {
+  var order = normalizedOrder(orderValue)
+  if (!isPlainObject(value) || !order) return null
+  var left = boolArray(value.left, Math.max(0, order.left.length - 1))
   var boundaries = boolArray(value.boundaries, 2)
-  var right = boolArray(value.right, 6)
+  var right = boolArray(value.right, Math.max(0, order.right.length - 1))
   if (!left || !boundaries || !right) return null
   return { left: left, boundaries: boundaries, right: right }
 }
@@ -258,7 +311,7 @@ function normalizedWidgets(value) {
   if (!isPlainObject(value)) return {}
   var result = {}
   for (var key in value) {
-    if (GroupIds.indexOf(key) === -1 || !isPlainObject(value[key])) continue
+    if (!isGroupId(key) || !isPlainObject(value[key])) continue
     var settings = safeValue(value[key], 0)
     if (settings !== undefined) result[key] = settings
   }
@@ -447,11 +500,17 @@ function normalize(value) {
   if (!isPlainObject(value) || Number(value.version) !== SchemaVersion) return result
 
   var order = normalizedOrder(value.order)
-  var splits = normalizedSplits(value.splits)
+  var roles = order ? normalizedV1SlotRoles(value.v1SlotRoles, order) : null
+  var splits = order ? normalizedSplits(value.splits, order) : null
   var v2Layout = normalizedV2Layout(value.v2Layout)
   var v2Boundaries = normalizedV2Boundaries(value.v2Boundaries)
-  if (order) result.order = order
-  if (splits) result.splits = splits
+  // V1 layout state is one transaction: invalid/partial order, roles, or
+  // split lengths fall back together instead of publishing mixed geometry.
+  if (order && roles && splits) {
+    result.order = order
+    result.v1SlotRoles = roles
+    result.splits = splits
+  }
   if (v2Layout) result.v2Layout = v2Layout
   if (v2Boundaries) result.v2Boundaries = v2Boundaries
   result.widgets = mergeWidgetConfig(value.widgets)

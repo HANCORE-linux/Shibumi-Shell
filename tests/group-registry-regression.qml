@@ -123,6 +123,18 @@ QtObject {
     if (extras.length !== 1 || extras[0].id !== "custom.left"
         || extras[0].value !== 7)
       fail("custom host widget preservation")
+    const dynamicId = GroupRegistry.dynamicGroupIdForModule("custom.left")
+    const dynamicEntries = GroupRegistry.entriesFor(
+      dynamicId, { compact: true }, layout)
+    if (dynamicId !== "G:custom.left"
+        || GroupRegistry.dynamicModuleIdForGroup(dynamicId) !== "custom.left"
+        || dynamicEntries.length !== 1
+        || dynamicEntries[0].id !== "custom.left"
+        || dynamicEntries[0].value !== 7
+        || dynamicEntries[0].compact !== true
+        || GroupRegistry.dynamicGroupIdForModule("Invalid Plugin") !== ""
+        || GroupRegistry.entriesFor("G:missing.plugin", {}, layout).length !== 0)
+      fail("dynamic plugin group ownership/settings")
 
     console.log("group registry regression passed")
     Qt.exit(0)

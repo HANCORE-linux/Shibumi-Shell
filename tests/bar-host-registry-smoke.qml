@@ -321,6 +321,12 @@ ShellRoot {
           || !hostBar.removeWidgetFamilyAlternatives("G8")) {
         return root.fail("Add plugin did not work with the active V1 layout")
       }
+      const clockGroup = hostBar.layoutController.groupLocation(
+        "G:omarchy.clock")
+      if (!clockGroup || clockGroup.region === "center"
+          || stateService.config.order[clockGroup.region][clockGroup.index]
+            !== "G:omarchy.clock")
+        return root.fail("V1 plugin did not receive an automatic G-group")
 
       const v2Config = JSON.parse(JSON.stringify(stateService.config))
       v2Config.presentation.shellStyle = "full"

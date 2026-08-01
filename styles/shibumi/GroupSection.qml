@@ -14,22 +14,37 @@ Item {
   property var layoutSession: null
   property real availableWidth: 0
   property int visibilityStage: 0
-  readonly property bool v2Editing: layoutSession
-    && layoutSession.editing
-    && bar.layoutController && bar.layoutController.v2Mode === true
-  readonly property var groups: v2Editing
-    && bar.layoutController.v2Slots
-    ? bar.layoutController.v2Slots[region] || []
-    : bar.layoutController && bar.layoutController.order
-      ? bar.layoutController.order[region] || [] : []
-  readonly property int baseV2SlotCount: bar.layoutController
-    && typeof bar.layoutController.baseV2SlotCount === "function"
-    ? bar.layoutController.baseV2SlotCount(region) : 0
-  readonly property int maxV2SlotCount: bar.layoutController
-    && typeof bar.layoutController.maxV2SlotCount === "function"
-    ? bar.layoutController.maxV2SlotCount(region) : 0
-  readonly property bool canAddV2Slot: v2Editing
-    && maxV2SlotCount > 0 && groups.length < maxV2SlotCount
+  readonly property bool editing: layoutSession && layoutSession.editing
+  readonly property bool v2Mode: bar.layoutController
+    && bar.layoutController.v2Mode === true
+  readonly property bool v2Editing: editing && v2Mode
+  readonly property bool v1Editing: editing && !v2Mode
+  readonly property bool slotEditing: v1Editing || v2Editing
+  readonly property var groups: v2Mode
+    ? v2Editing && bar.layoutController.v2Slots
+      ? bar.layoutController.v2Slots[region] || []
+      : bar.layoutController && bar.layoutController.order
+        ? bar.layoutController.order[region] || [] : []
+    : bar.layoutController && bar.layoutController.v1Slots
+      ? bar.layoutController.v1Slots[region] || [] : []
+  readonly property int baseSlotCount: bar.layoutController
+    ? v2Mode && typeof bar.layoutController.baseV2SlotCount === "function"
+      ? bar.layoutController.baseV2SlotCount(region)
+      : !v2Mode && typeof bar.layoutController.baseV1SlotCount === "function"
+        ? bar.layoutController.baseV1SlotCount(region) : 0
+    : 0
+  readonly property int maxSlotCount: bar.layoutController
+    ? v2Mode && typeof bar.layoutController.maxV2SlotCount === "function"
+      ? bar.layoutController.maxV2SlotCount(region)
+      : !v2Mode && typeof bar.layoutController.maxV1SlotCount === "function"
+        ? bar.layoutController.maxV1SlotCount(region) : 0
+    : 0
+  readonly property bool canAddSlot: slotEditing
+    && maxSlotCount > baseSlotCount && groups.length < maxSlotCount
+  readonly property real slotVisualSize: v2Mode
+    ? tokenNumber("slotHeight", 28) : tokenNumber("pillHeight", 24)
+  readonly property real slotVisualRadius: v2Mode
+    ? tokenNumber("tileRadius", 8) : tokenNumber("pillRadius", 12)
   readonly property int groupSpacing: bar.visualTokens.groupGap
   readonly property int splitGrow: bar.visualTokens.splitGap
   readonly property bool persistentSeparators:
@@ -41,7 +56,7 @@ Item {
     && contentItem.separatorGeometry ? contentItem.separatorGeometry : []
   readonly property var stageBudgetWidths: contentItem
     && contentItem.stageBudgetWidths ? contentItem.stageBudgetWidths : [0, 0, 0, 0]
-  readonly property real editingWidthOverhead: v2Editing && contentItem
+  readonly property real editingWidthOverhead: slotEditing && contentItem
     ? Math.max(0, Number(contentItem.layoutWidth || 0)
       - Number(stageBudgetWidths[0] || 0))
     : 0
@@ -82,10 +97,13 @@ Item {
       : groupSpacing / 2
   }
 
-  function toggleSeparator(groupId) {
-    return persistentSeparators && bar
-      && typeof bar.toggleGroupSeparator === "function"
-      ? bar.toggleGroupSeparator(String(groupId || "")) : false
+  function toggleSeparator(groupId, index) {
+    if (persistentSeparators && bar
+        && typeof bar.toggleGroupSeparator === "function")
+      return bar.toggleGroupSeparator(String(groupId || ""))
+    return !v2Mode && bar.layoutController
+      && typeof bar.layoutController.toggleSplit === "function"
+      ? bar.layoutController.toggleSplit(region, Number(index)) : false
   }
 
   function groupVisibleAtStage(groupId, stage) {
@@ -127,7 +145,7 @@ Item {
           var item = horizontalRepeater.itemAt(i)
           if (item) total += item.width
         }
-        return total + (root.canAddV2Slot
+        return total + (root.canAddSlot
           ? root.groupSpacing + addSlotTarget.width : 0)
       }
       readonly property real layoutHeight: {
@@ -136,7 +154,7 @@ Item {
           var item = horizontalRepeater.itemAt(i)
           if (item && item.visible) height = Math.max(height, item.height)
         }
-        return Math.max(height, root.canAddV2Slot ? addSlotTarget.height : 0)
+        return Math.max(height, root.canAddSlot ? addSlotTarget.height : 0)
       }
       readonly property real minimumResponsiveWidth: {
         void(root.groups)
@@ -173,7 +191,8 @@ Item {
         var result = []
         for (var i = 0; i < horizontalRepeater.count; i++) {
           var item = horizontalRepeater.itemAt(i)
-          if (!item || !item.effectiveHasContent) continue
+          if (!item || !(root.v2Editing
+              ? item.effectiveHasContent : item.contentShown)) continue
           result.push({
             groupId: item.modelData,
             index: item.index,
@@ -213,6 +232,14 @@ Item {
         return false
       }
 
+      function nextSlotHasContent(index) {
+        // Re-evaluate once the Repeater has instantiated the following
+        // delegate; the first cell can otherwise cache a false pre-load read.
+        void(horizontalRepeater.count)
+        var item = horizontalRepeater.itemAt(index + 1)
+        return item && item.contentShown
+      }
+
       Repeater {
         id: horizontalRepeater
         model: root.groups
@@ -221,24 +248,36 @@ Item {
           id: horizontalCell
           required property string modelData
           required property int index
-          readonly property bool emptySlot: root.v2Editing && modelData === ""
+          readonly property bool emptySlot: root.slotEditing && modelData === ""
           readonly property bool groupHasContent: groupSlot.hasContent
-          readonly property bool autoShown: emptySlot
-            || root.groupVisibleAtStage(modelData, root.visibilityStage)
-          readonly property Item targetVisual: emptySlot
+          readonly property bool stageShown: modelData !== ""
+            && root.groupVisibleAtStage(modelData, root.visibilityStage)
+          readonly property bool contentShown: modelData !== ""
+            && groupSlot.groupEnabled && groupHasContent && stageShown
+          readonly property bool proxySlot: root.v1Editing && modelData !== ""
+            && !contentShown
+          readonly property bool placeholderSlot: emptySlot || proxySlot
+          readonly property bool removableEmptySlot: emptySlot
+            && (root.v2Mode ? index >= root.baseSlotCount
+              : root.bar.layoutController
+                && typeof root.bar.layoutController.isExtraV1Slot === "function"
+                && root.bar.layoutController.isExtraV1Slot(root.region, index))
+          readonly property bool autoShown: placeholderSlot || stageShown
+          readonly property Item targetVisual: placeholderSlot
             ? emptySlotTarget : groupSlot
           property bool measuredHasContent: false
           property real measuredNaturalGroupWidth: 0
           property real measuredMinimumGroupWidth: 0
-          readonly property bool effectiveHasContent: autoShown
-            && (groupHasContent || emptySlot)
-          readonly property bool budgetHasContent: groupHasContent
+          readonly property bool effectiveHasContent: placeholderSlot
+            || contentShown
+          readonly property bool budgetHasContent: groupSlot.groupEnabled
+            && (groupHasContent
             || (measuredHasContent && groupSlot.groupEnabled
-              && !autoShown)
-          readonly property real naturalGroupWidth: emptySlot
+              && !autoShown))
+          readonly property real naturalGroupWidth: placeholderSlot
             ? emptySlotTarget.width : groupHasContent
               ? groupSlot.implicitWidth : measuredNaturalGroupWidth
-          readonly property real minimumGroupWidth: emptySlot
+          readonly property real minimumGroupWidth: placeholderSlot
             ? emptySlotTarget.width : groupHasContent
               ? groupSlot.minimumResponsiveWidth : measuredMinimumGroupWidth
           readonly property real contentLeft: targetVisual.x
@@ -250,20 +289,26 @@ Item {
             splitMarker.x + splitMarker.width / 2
           property var targetSession: root.layoutSession
           property var registeredSession: null
+          property var registeredItem: null
+          property string registeredGroupId: ""
+          property string registeredRegion: ""
+          property int registeredIndex: -1
+          property bool registeredAsSlot: false
           readonly property int leadingGap: effectiveHasContent
             && horizontalRow.hasContentBefore(index) ? root.groupSpacing : 0
-          readonly property bool separated: effectiveHasContent
-            && horizontalRow.hasContentAfter(index) && root.splitAfter(index)
+          readonly property bool separated: contentShown
+            && horizontalRow.nextSlotHasContent(index) && root.splitAfter(index)
           implicitWidth: effectiveHasContent
             ? leadingGap + targetVisual.width + (separated ? root.splitGrow : 0)
             : 0
-          implicitHeight: effectiveHasContent ? targetVisual.height : 0
+          implicitHeight: effectiveHasContent
+            ? root.v2Mode ? targetVisual.height : 32 : 0
           width: implicitWidth
           height: implicitHeight
           // Keep the cell visible while its widget determines its initial
           // size. Basing ancestor visibility on groupHasContent would make
           // the child's effective visible state false and deadlock discovery.
-          visible: autoShown && groupSlot.groupEnabled
+          visible: autoShown && (placeholderSlot || groupSlot.groupEnabled)
           opacity: autoShown ? 1 : 0
           // The V1 split handle is 14px wide while an unsplit gap is only 6px.
           // Let the handle overlap the adjacent cells instead of clipping its
@@ -274,19 +319,46 @@ Item {
             NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
           }
 
-          function syncTargetRegistration() {
-            if (registeredSession
-                && (registeredSession !== targetSession || !effectiveHasContent)
+          function syncTargetRegistration(force) {
+            const nextSession = targetSession
+            const nextItem = targetVisual
+            const nextGroupId = String(modelData || "")
+            const nextAsSlot = root.slotEditing
+            const unchanged = registeredSession === nextSession
+              && registeredItem === nextItem
+              && registeredGroupId === nextGroupId
+              && registeredRegion === root.region
+              && registeredIndex === index
+              && registeredAsSlot === nextAsSlot
+              && effectiveHasContent
+            if (unchanged && force !== true) return
+
+            if (registeredSession && registeredItem
                 && typeof registeredSession.unregisterTarget === "function")
-              registeredSession.unregisterTarget(targetVisual)
-            registeredSession = targetSession
-            if (!registeredSession || !effectiveHasContent) return
-            if (root.v2Editing
-                && typeof registeredSession.registerSlotTarget === "function")
-              registeredSession.registerSlotTarget(
-                root.region, index, modelData, targetVisual)
-            else if (typeof registeredSession.registerTarget === "function")
-              registeredSession.registerTarget(modelData, targetVisual)
+              registeredSession.unregisterTarget(registeredItem)
+
+            registeredSession = null
+            registeredItem = null
+            registeredGroupId = ""
+            registeredRegion = ""
+            registeredIndex = -1
+            registeredAsSlot = false
+            if (!nextSession || !effectiveHasContent || !nextItem) return
+
+            if (nextAsSlot
+                && typeof nextSession.registerSlotTarget === "function")
+              nextSession.registerSlotTarget(
+                root.region, index, nextGroupId, nextItem)
+            else if (typeof nextSession.registerTarget === "function")
+              nextSession.registerTarget(nextGroupId, nextItem)
+            else return
+
+            registeredSession = nextSession
+            registeredItem = nextItem
+            registeredGroupId = nextGroupId
+            registeredRegion = root.region
+            registeredIndex = index
+            registeredAsSlot = nextAsSlot
           }
 
           function retainResponsiveMetrics() {
@@ -297,13 +369,40 @@ Item {
               groupSlot.minimumResponsiveWidth)
           }
 
-          onTargetSessionChanged: registrationTimer.restart()
+          onTargetSessionChanged: {
+            syncTargetRegistration()
+            registrationTimer.restart()
+          }
           onGroupHasContentChanged: {
             retainResponsiveMetrics()
             registrationTimer.restart()
           }
           onAutoShownChanged: registrationTimer.restart()
-          onModelDataChanged: registrationTimer.restart()
+          onPlaceholderSlotChanged: {
+            syncTargetRegistration()
+            registrationTimer.restart()
+          }
+          onContentShownChanged: registrationTimer.restart()
+          Connections {
+            target: root
+            function onSlotEditingChanged() {
+              horizontalCell.syncTargetRegistration()
+              registrationTimer.restart()
+            }
+          }
+          onModelDataChanged: {
+            syncTargetRegistration()
+            registrationTimer.restart()
+          }
+          onIndexChanged: {
+            syncTargetRegistration()
+            registrationTimer.restart()
+          }
+          Component.onDestruction: {
+            if (registeredSession && registeredItem
+                && typeof registeredSession.unregisterTarget === "function")
+              registeredSession.unregisterTarget(registeredItem)
+          }
           Component.onCompleted: {
             retainResponsiveMetrics()
             registrationTimer.restart()
@@ -311,7 +410,7 @@ Item {
           Timer {
             id: registrationTimer
             interval: 0
-            onTriggered: horizontalCell.syncTargetRegistration()
+            onTriggered: horizontalCell.syncTargetRegistration(true)
           }
 
           Core.GroupSlot {
@@ -320,7 +419,9 @@ Item {
             groupId: horizontalCell.modelData
             screenName: root.screenName
             availableWidth: root.availableWidth
+            enabled: !root.slotEditing
             x: horizontalCell.leadingGap
+            anchors.verticalCenter: parent.verticalCenter
             opacity: root.layoutSession && root.layoutSession.active
               && root.layoutSession.sourceGroupId === horizontalCell.modelData
               ? 0.28 : 1
@@ -338,11 +439,14 @@ Item {
             id: emptySlotTarget
             x: horizontalCell.leadingGap
             anchors.verticalCenter: parent.verticalCenter
-            width: horizontalCell.emptySlot ? 28 : 0
-            height: horizontalCell.emptySlot
-              ? root.tokenNumber("slotHeight", 28) : 0
-            visible: horizontalCell.emptySlot
-            radius: root.tokenNumber("tileRadius", 8)
+            width: horizontalCell.placeholderSlot ? root.slotVisualSize : 0
+            height: horizontalCell.placeholderSlot
+              ? root.slotVisualSize : 0
+            visible: horizontalCell.placeholderSlot
+            opacity: root.layoutSession && root.layoutSession.active
+              && root.layoutSession.sourceGroupId === horizontalCell.modelData
+              ? 0.28 : 1
+            radius: root.slotVisualRadius
             color: removeEmptyMouse.containsMouse
               ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
                   root.bar.urgent.b, 0.14)
@@ -355,7 +459,7 @@ Item {
 
             Text {
               anchors.centerIn: parent
-              text: horizontalCell.index >= root.baseV2SlotCount ? "×" : "·"
+              text: horizontalCell.removableEmptySlot ? "×" : "·"
               color: removeEmptyMouse.containsMouse
                 ? root.bar.urgent
                 : root.tokenColor("sumi", root.bar.foreground)
@@ -368,10 +472,15 @@ Item {
               anchors.fill: parent
               hoverEnabled: true
               acceptedButtons: Qt.LeftButton
-              enabled: horizontalCell.index >= root.baseV2SlotCount
+              enabled: horizontalCell.removableEmptySlot
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: root.bar.layoutController.removeV2SlotAt(
-                root.region, horizontalCell.index)
+              onClicked: {
+                if (root.v2Mode)
+                  root.bar.layoutController.removeV2SlotAt(
+                    root.region, horizontalCell.index)
+                else root.bar.layoutController.removeV1SlotAt(
+                  root.region, horizontalCell.index)
+              }
             }
           }
 
@@ -394,13 +503,15 @@ Item {
           MouseArea {
             id: dragMouse
 
-            x: groupSlot.x
-            y: groupSlot.y
-            width: groupSlot.width
-            height: groupSlot.height
+            x: horizontalCell.targetVisual.x
+            y: horizontalCell.targetVisual.y
+            width: horizontalCell.targetVisual.width
+            height: horizontalCell.targetVisual.height
             enabled: root.layoutSession && root.layoutSession.editing
-              && horizontalCell.groupHasContent
+              && horizontalCell.modelData !== ""
+              && horizontalCell.effectiveHasContent
             acceptedButtons: Qt.LeftButton
+            hoverEnabled: true
             preventStealing: true
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
             z: 30
@@ -411,7 +522,8 @@ Item {
 
             onPressed: mouse => {
               const point = windowPoint(mouse)
-              root.layoutSession.begin(horizontalCell.modelData, groupSlot,
+              root.layoutSession.begin(horizontalCell.modelData,
+                horizontalCell.targetVisual,
                 point.x, point.y)
             }
             onPositionChanged: mouse => {
@@ -428,7 +540,7 @@ Item {
           Item {
             id: splitMarker
 
-            readonly property bool hasFollowingGroup: horizontalCell.effectiveHasContent
+            readonly property bool hasFollowingGroup: horizontalCell.contentShown
               && horizontalRow.hasContentAfter(horizontalCell.index)
             x: groupSlot.x + groupSlot.width
               + root.separatorCenterOffset(horizontalCell.separated)
@@ -456,13 +568,14 @@ Item {
             Text {
               anchors.centerIn: parent
               visible: root.persistentSeparators
-                && !horizontalCell.separated
-              text: "•"
-              color: splitMouse.containsMouse
+                ? !horizontalCell.separated : !root.v2Mode
+              text: root.persistentSeparators || !horizontalCell.separated
+                ? "•" : "│"
+              color: splitMouse.containsMouse || horizontalCell.separated
                 ? root.bar.urgent : root.bar.visualTokens.sumi
               font.pixelSize: 10
               font.family: root.bar.fontFamily
-              opacity: root.v2Editing
+              opacity: root.persistentSeparators && root.v2Editing
                 ? splitMouse.containsMouse ? 0.95 : 0.34
                 : splitMouse.containsMouse ? 0.9 : 0
 
@@ -472,11 +585,12 @@ Item {
             MouseArea {
               id: splitMouse
               anchors.fill: parent
-              enabled: root.persistentSeparators
+              enabled: root.persistentSeparators || !root.v2Mode
               hoverEnabled: true
               acceptedButtons: Qt.LeftButton
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: root.toggleSeparator(horizontalCell.modelData)
+              onClicked: root.toggleSeparator(
+                horizontalCell.modelData, horizontalCell.index)
             }
           }
         }
@@ -485,16 +599,17 @@ Item {
       Item {
         id: addSlotTarget
 
-        width: root.canAddV2Slot ? 28 : 0
-        height: root.canAddV2Slot ? root.tokenNumber("slotHeight", 28) : 0
-        visible: root.canAddV2Slot
+        width: root.canAddSlot ? root.slotVisualSize : 0
+        height: root.canAddSlot
+          ? root.v1Editing ? 32 : root.tokenNumber("slotHeight", 28) : 0
+        visible: root.canAddSlot
 
         Rectangle {
           x: root.groupSpacing
           anchors.verticalCenter: parent.verticalCenter
-          width: 28
-          height: 28
-          radius: root.tokenNumber("tileRadius", 8)
+          width: root.slotVisualSize
+          height: root.slotVisualSize
+          radius: root.slotVisualRadius
           color: addSlotMouse.containsMouse
             ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
                 root.bar.urgent.b, 0.14)
@@ -521,7 +636,11 @@ Item {
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.bar.layoutController.addV2Slot(root.region)
+            onClicked: {
+              if (root.v2Mode)
+                root.bar.layoutController.addV2Slot(root.region)
+              else root.bar.layoutController.addV1Slot(root.region)
+            }
           }
         }
       }

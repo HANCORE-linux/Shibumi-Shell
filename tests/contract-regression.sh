@@ -145,10 +145,16 @@ if ! {
 fi
 rg -q '^PanelWindow \{' core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
-rg -Fq 'implicitHeight: bar.vertical ? 0 : bar.barSize' core/BarPanel.qml \
-  || fail "horizontal host window must expose the real bar height to Omarchy panels"
-rg -q '^PanelWindow \{' core/EditBackdropPanel.qml \
-  || fail "edit backdrop must be isolated from the edge-local bar window"
+rg -Fq 'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
+  core/BarPanel.qml \
+  || fail "horizontal host must stay screen-sized to avoid edit resize flashes"
+rg -Fq 'WlrLayershell.keyboardFocus: dragSession.editing' \
+  core/BarPanel.qml \
+  || fail "stable bar surface must own temporary edit focus"
+rg -q '^  mask: Region \{' core/BarPanel.qml \
+  || fail "screen-sized bar surface must constrain its locked input region"
+rg -Fq 'onClicked: dragSession.setEditing(false)' core/BarPanel.qml \
+  || fail "stable edit surface does not dismiss from outside clicks"
 rg -q '^PanelWindow \{' core/DragGhostPanel.qml \
   || fail "drag ghost must be isolated from the edge-local bar window"
 rg -q 'mask: Region \{\}' core/DragGhostPanel.qml \
@@ -206,6 +212,8 @@ for compatibility_contract in \
     'findCompatibilityCard' \
     'hostedModule' \
     'hostPanelChromeEnabled' \
+    'hostPanelPlacementEnabled' \
+    'hostedCardOrigin' \
     'publishCompatibilityConnection'; do
   rg -Fq "$compatibility_contract" core/WidgetSlot.qml \
     || fail "third-party host compatibility lost $compatibility_contract"
@@ -218,6 +226,11 @@ rg -Fq 'if (root.bar.pendingTooltipTarget || root.bar.tooltipTarget) return' \
   || fail "manifest tooltip fallback can override a plugin tooltip"
 rg -Fq 'Binding.RestoreBindingOrValue' core/WidgetSlot.qml \
   || fail "third-party panel chrome cannot restore native bindings"
+[[ $(rg -c 'value: root\.hostedCardOrigin\(root\.compatibilityPanel\)' \
+  core/WidgetSlot.qml) -eq 2 ]] \
+  || fail "hosted panels do not translate both card axes to the visible bar"
+rg -Fq 'y = barThickness + gap' core/WidgetSlot.qml \
+  || fail "top hosted panels still derive their offset from the host window"
 rg -q '^PanelWindow \{' core/HostedPanelConnector.qml \
   || fail "hosted V2 caret overlay is missing"
 rg -q 'mask: Region \{\}' core/HostedPanelConnector.qml \
@@ -1078,7 +1091,9 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
   cp -a "${OMARCHY_PATH}/shell/Ui" "$smoke_root/"
   cp widgets/ShibumiPanel.qml "$smoke_root/widgets/"
   cp core/BarSection.qml core/GroupRegistry.js core/GroupSlot.qml \
-    core/PanelRouting.js core/ResponsiveLayout.js core/RunGeometry.js \
+    core/LayoutController.qml core/LayoutModel.js core/V2LayoutModel.js \
+    core/PanelRouting.js \
+    core/ResponsiveLayout.js core/RunGeometry.js \
     core/WidgetSlot.qml "$smoke_root/core/"
   cp core/DragSession.qml "$smoke_root/core/"
   cp styles/shibumi/BarSurface.qml styles/shibumi/DragGhost.qml \
@@ -1114,6 +1129,22 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
     || fail "group interaction smoke exited $group_interaction_rc"
   grep -q 'group interaction regression passed' <<<"$group_interaction_output" \
     || fail "group interaction smoke did not reach its marker"
+
+  cp tests/v1-slot-interaction-regression.qml "$smoke_root/shell.qml"
+
+  set +e
+  v1_slot_interaction_output=$(timeout 7 env \
+    QT_QPA_PLATFORM=offscreen \
+    XDG_RUNTIME_DIR="$smoke_root/runtime" \
+    /usr/bin/quickshell -p "$smoke_root" 2>&1)
+  v1_slot_interaction_rc=$?
+  set -e
+  printf '%s\n' "$v1_slot_interaction_output"
+  [[ $v1_slot_interaction_rc -eq 0 ]] \
+    || fail "V1 slot interaction smoke exited $v1_slot_interaction_rc"
+  grep -q 'V1 slot interaction regression passed' \
+    <<<"$v1_slot_interaction_output" \
+    || fail "V1 slot interaction smoke did not reach its marker"
 
   cp services/SystemTelemetry.qml "$smoke_root/services/"
   cp services/ClockService.qml "$smoke_root/services/"

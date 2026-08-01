@@ -20,6 +20,8 @@ Item {
   readonly property bool groupEnabled: groupSettings.enabled !== false
   readonly property bool v2Shell: !!(bar.visualTokens
     && bar.visualTokens.v2Shell === true)
+  readonly property bool dynamicV1Group: !v2Shell
+    && GroupRegistry.dynamicModuleIdForGroup(groupId) !== ""
   // Per-group fill, border, radius, and padding belong to V2. V1 preserves
   // the original widget-owned pill recipe independently of these settings.
   readonly property bool appearanceFill: v2Shell && !!(bar.visualTokens
@@ -29,7 +31,7 @@ Item {
     && typeof bar.visualTokens.widgetHasBorder === "function"
     && bar.visualTokens.widgetHasBorder(groupSettings))
   readonly property bool decorated: appearanceFill || appearanceBorder
-  readonly property real appearancePadding: bar.visualTokens
+  readonly property real appearancePadding: v2Shell && bar.visualTokens
     && typeof bar.visualTokens.widgetPadding === "function"
     ? bar.visualTokens.widgetPadding(groupSettings, decorated)
     : decorated ? 3 : 0
@@ -46,6 +48,9 @@ Item {
   readonly property real v2SurfaceHeight: bar.visualTokens
     && bar.visualTokens.pillHeight !== undefined
     ? Number(bar.visualTokens.pillHeight) || 24 : 24
+  readonly property real v1SlotHeight: bar.visualTokens
+    && bar.visualTokens.slotHeight !== undefined
+    ? Number(bar.visualTokens.slotHeight) || 28 : 28
   readonly property Item visualSurfaceItem: widgetSurface
   readonly property bool hasContent: implicitWidth > 0.5 && implicitHeight > 0.5
   readonly property real minimumResponsiveWidth: contentItem
@@ -74,27 +79,36 @@ Item {
 
     anchors.verticalCenter: parent.verticalCenter
     width: parent.width
-    height: root.v2Shell
+    height: root.v2Shell || root.dynamicV1Group
       ? Math.min(parent.height, root.v2SurfaceHeight) : parent.height
-    visible: root.decorated
-    radius: root.bar.visualTokens
+    visible: root.decorated || root.dynamicV1Group
+    radius: root.dynamicV1Group && root.bar.visualTokens
+      && root.bar.visualTokens.pillRadius !== undefined
+      ? root.bar.visualTokens.pillRadius : root.bar.visualTokens
       && typeof root.bar.visualTokens.widgetRadius === "function"
       ? root.bar.visualTokens.widgetRadius(root.groupSettings)
       : root.bar.visualTokens
         && root.bar.visualTokens.tileRadius !== undefined
         ? root.bar.visualTokens.tileRadius : 0
-    opacity: root.bar.visualTokens
+    opacity: root.dynamicV1Group ? 1 : root.bar.visualTokens
       && typeof root.bar.visualTokens.widgetSurfaceOpacity === "function"
       ? root.bar.visualTokens.widgetSurfaceOpacity(root.groupSettings) : 1
-    color: root.appearanceFill
+    color: root.dynamicV1Group && root.bar.visualTokens
+      && root.bar.visualTokens.pill !== undefined
+      ? root.bar.visualTokens.pill : root.appearanceFill
       && typeof root.bar.visualTokens.widgetFillColor === "function"
       ? root.bar.visualTokens.widgetFillColor(root.groupSettings)
       : "transparent"
-    border.width: root.appearanceBorder && root.bar.visualTokens
+    border.width: root.dynamicV1Group && root.bar.visualTokens
+      && root.bar.visualTokens.pillBorderWidth !== undefined
+      ? root.bar.visualTokens.pillBorderWidth
+      : root.appearanceBorder && root.bar.visualTokens
       && typeof root.bar.visualTokens.widgetBorderWidth === "function"
       ? root.bar.visualTokens.widgetBorderWidth(root.groupSettings)
       : root.appearanceBorder ? 1 : 0
-    border.color: root.appearanceBorder
+    border.color: root.dynamicV1Group && root.bar.visualTokens
+      && root.bar.visualTokens.pillBorder !== undefined
+      ? root.bar.visualTokens.pillBorder : root.appearanceBorder
       && typeof root.bar.visualTokens.widgetBorderColor === "function"
       ? root.bar.visualTokens.widgetBorderColor(root.groupSettings)
       : "transparent"
@@ -158,6 +172,7 @@ Item {
             screenName: root.screenName
             availableWidth: root.availableWidth > 0
               ? Math.max(0, root.availableWidth - horizontalRoot.siblingWidth(index)) : 0
+            horizontalHostHeight: root.v2Shell ? 0 : root.v1SlotHeight
           }
         }
       }

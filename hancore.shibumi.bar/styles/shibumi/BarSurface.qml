@@ -436,10 +436,13 @@ Item {
 
         Text {
           anchors.centerIn: parent
-          visible: root.bar.layoutController.v2Mode === true
-            && !boundaryMarker.splitOn
-          text: "•"
+          visible: root.bar.layoutController.v2Mode !== true
+            || !boundaryMarker.splitOn
+          text: root.bar.layoutController.v2Mode !== true
+              && boundaryMarker.splitOn ? "│" : "•"
           color: boundaryMouse.containsMouse
+              || (root.bar.layoutController.v2Mode !== true
+                && boundaryMarker.splitOn)
             ? root.bar.urgent : root.bar.visualTokens.sumi
           font.pixelSize: 10
           font.family: root.bar.fontFamily
@@ -453,7 +456,7 @@ Item {
         MouseArea {
           id: boundaryMouse
           anchors.fill: parent
-          enabled: root.bar.layoutController.v2Mode === true
+          enabled: true
           hoverEnabled: true
           acceptedButtons: Qt.LeftButton
           cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor

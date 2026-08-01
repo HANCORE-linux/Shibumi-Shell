@@ -575,6 +575,7 @@ for route_contract in \
   '? shellStyleOptions.slice(1) : [shellStyleOptions[0]]' \
   'label: "Split all"' \
   'label: "Merge all"' \
+  'label: "Edit slots"' \
   'label: "Edit dividers"' \
   'label: "Restore layout"' \
   'id: v2SlotRepeater' \
@@ -584,6 +585,16 @@ for route_contract in \
   'root.controller.switchShell('; do
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
     || fail "active Bars drill-down drifted: $route_contract"
+done
+for v1_slot_contract in \
+  'ControlCenterPanel.qml:v1LayoutSlots' \
+  'ControlCenterPanel.qml:function addV1Slot(region)' \
+  'ControlCenterPanel.qml:function removeV1Slot(region)' \
+  'ActiveBarSettingsPage.qml:onClicked: root.controller.beginBarEditing()'; do
+  file=${v1_slot_contract%%:*}
+  contract=${v1_slot_contract#*:}
+  rg -Fq "$contract" "$control_dir/$file" \
+    || fail "V1 slot editor contract drifted: $v1_slot_contract"
 done
 if rg -Fq 'showSettingsPage("splits")' \
     "$control_dir/ActiveBarSettingsPage.qml"; then

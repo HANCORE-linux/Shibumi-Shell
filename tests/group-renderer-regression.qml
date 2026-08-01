@@ -69,7 +69,9 @@ ShellRoot {
 
     QtObject {
       id: fakeStateService
-      property var config: ({ widgets: ({}) })
+      property var config: ({
+        widgets: ({ G1: { widgetPadding: "compact" } })
+      })
       readonly property color selectedColor: "#88aaff"
     }
 
@@ -98,11 +100,17 @@ ShellRoot {
     QtObject {
       id: noSplitController
 
+      property int toggleCount: 0
+      property string lastToggleRegion: ""
+      property int lastToggleIndex: -1
+
+      readonly property bool v2Mode: false
       readonly property var order: ({
         left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
         center: ["G8"],
         right: ["G9", "G10", "G11", "G14", "G12", "G13", "G15"]
       })
+      readonly property var v1Slots: order
       readonly property var splits: ({
         left: [false, false, false, false, false, false],
         boundaries: [false, false],
@@ -112,11 +120,38 @@ ShellRoot {
       function splitEnabled(region, index) {
         return false
       }
+
+      function toggleSplit(region, index) {
+        toggleCount++
+        lastToggleRegion = String(region || "")
+        lastToggleIndex = Number(index)
+        return true
+      }
+    }
+
+    QtObject {
+      id: editingSession
+      property bool editing: false
+      property bool active: false
+      property string sourceGroupId: ""
     }
 
     QtObject {
       id: splitController
 
+      readonly property bool v2Mode: false
+      readonly property var order: noSplitController.order
+      readonly property var v1Slots: order
+
+      function splitEnabled(region, index) {
+        return region === "left" && index === 0
+      }
+    }
+
+    QtObject {
+      id: v2SplitController
+
+      readonly property bool v2Mode: true
       readonly property var order: noSplitController.order
 
       function splitEnabled(region, index) {
@@ -145,6 +180,10 @@ ShellRoot {
         invalidDropDuration: 230,
         returnCleanupDuration: 240,
         pillRadius: 12,
+        slotHeight: 28,
+        pillHeight: 24,
+        pill: "#242424",
+        pillBorder: "#606060",
         sumi: "#aaaaaa",
         pillBorderWidth: 1,
         islandBorder: "#505050"
@@ -233,7 +272,7 @@ ShellRoot {
         widgetRadius: function(settings) { return 10 }
       })
       readonly property var layoutConfig: noSplitBar.layoutConfig
-      readonly property var layoutController: splitController
+      readonly property var layoutController: v2SplitController
       property var activePopout: null
       property int separatorToggles: 0
       property string lastSeparatorGroup: ""
@@ -261,6 +300,7 @@ ShellRoot {
       readonly property bool vertical: false
       readonly property int barSize: 26
       readonly property var shell: fakeShell
+      readonly property var visualTokens: noSplitBar.visualTokens
       readonly property var layoutConfig: ({
         left: [], center: [],
         right: [{ id: "omarchy.active-window" }]
@@ -325,6 +365,7 @@ ShellRoot {
       id: leftWithoutSplit
       bar: noSplitBar
       region: "left"
+      layoutSession: editingSession
     }
 
     ShibumiStyle.GroupSection {
@@ -390,6 +431,12 @@ ShellRoot {
       id: directGroup
       bar: noSplitBar
       groupId: "G1"
+    }
+
+    Core.GroupSlot {
+      id: dynamicV1Group
+      bar: budgetBar
+      groupId: "G:omarchy.active-window"
     }
 
     Core.GroupSlot {
@@ -556,11 +603,15 @@ ShellRoot {
             + v2FillGroup.implicitHeight)
           return
         }
-        if (leftWithSplit.toggleSeparator("G1")
-            || !v2LeftWithSplit.toggleSeparator("G1")
+        if (!leftWithoutSplit.toggleSeparator("G1", 0)
+            || noSplitController.toggleCount !== 1
+            || noSplitController.lastToggleRegion !== "left"
+            || noSplitController.lastToggleIndex !== 0
+            || leftWithSplit.toggleSeparator("G1", 0)
+            || !v2LeftWithSplit.toggleSeparator("G1", 0)
             || v2SplitBar.separatorToggles !== 1
             || v2SplitBar.lastSeparatorGroup !== "G1") {
-          test.fail("locked separator interaction is not exclusive to V2")
+          test.fail("live V1 splits and persistent V2 separators diverged")
           return
         }
 
@@ -606,8 +657,31 @@ ShellRoot {
           test.fail("explicit output identity did not reach widget slot")
           return
         }
+        const directSlots = test.widgetSlots(directGroup.contentItem, [])
+        if (!test.closeEnough(directGroup.implicitHeight, 28)
+            || directSlots.length !== 1
+            || !test.closeEnough(directSlots[0].height, 28)
+            || !test.closeEnough(directSlots[0].activeItem.height, 28)) {
+          test.fail("V1 widgets did not inherit the original 28px host: group="
+            + directGroup.implicitHeight + ", slot="
+            + (directSlots[0] ? directSlots[0].height : -1) + ", item="
+            + (directSlots[0] && directSlots[0].activeItem
+              ? directSlots[0].activeItem.height : -1))
+          return
+        }
+        if (!dynamicV1Group.dynamicV1Group
+            || !dynamicV1Group.visualSurfaceItem.visible
+            || !test.closeEnough(dynamicV1Group.visualSurfaceItem.height, 24)
+            || !test.closeEnough(dynamicV1Group.visualSurfaceItem.radius, 12)
+            || dynamicV1Group.visualSurfaceItem.border.width !== 1) {
+          test.fail("dynamic V1 plugin lost the standard pill surface: height="
+            + dynamicV1Group.visualSurfaceItem.height + ", radius="
+            + dynamicV1Group.visualSurfaceItem.radius + ", border="
+            + dynamicV1Group.visualSurfaceItem.border.width)
+          return
+        }
         if (!test.closeEnough(delayedGroup.implicitWidth, 42)
-            || !test.closeEnough(delayedGroup.implicitHeight, 12)) {
+            || !test.closeEnough(delayedGroup.implicitHeight, 28)) {
           test.fail("asynchronous widget size did not propagate through group: "
             + delayedGroup.implicitWidth + "x" + delayedGroup.implicitHeight)
           return

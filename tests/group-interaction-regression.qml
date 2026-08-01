@@ -52,7 +52,9 @@ ShellRoot {
     QtObject {
       id: fakeController
 
+      readonly property bool v2Mode: false
       property var order: test.order
+      readonly property var v1Slots: order
 
       function groupLocation(groupId) {
         for (const region of ["left", "center", "right"]) {
@@ -63,6 +65,15 @@ ShellRoot {
       }
 
       function splitEnabled(region, index) { return false }
+      function baseV1SlotCount(region) {
+        return region === "center" ? 1 : 7
+      }
+      function maxV1SlotCount(region) {
+        return region === "center" ? 1 : 9
+      }
+      function isExtraV1Slot(region, index) {
+        return region !== "center" && index >= 7
+      }
 
       function swapGroups(source, target) {
         const sourceLocation = groupLocation(source)

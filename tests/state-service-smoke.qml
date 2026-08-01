@@ -145,8 +145,27 @@ ShellRoot {
         splits.left[0] = true
         if (!state.setLayout(moved, splits)
             || state.config.order.left[0] !== "G2"
-            || state.config.splits.left[0] !== true)
+            || state.config.splits.left[0] !== true
+            || state.config.v1SlotRoles.left[0] !== "base")
           return root.fail("layout mutation")
+        const extended = JSON.parse(JSON.stringify(state.config.order))
+        extended.left.push("")
+        const extendedSplits = JSON.parse(JSON.stringify(state.config.splits))
+        extendedSplits.left.push(false)
+        if (!state.setLayout(extended, extendedSplits)
+            || state.config.order.left.length !== 8
+            || state.config.v1SlotRoles.left[7] !== "extra"
+            || state.config.splits.left.length !== 7
+            || state.setLayout(extended, splits))
+          return root.fail("atomic extended V1 layout mutation")
+        if (!state.setGroupSetting("G:custom.widget", "compact", true)
+            || !state.setWidgetSetting(
+              "G:custom.widget", "custom.widget", "density", "small")
+            || state.groupSetting(
+              "G:custom.widget", "compact", false) !== true
+            || state.groupSettings("G:custom.widget")["custom.widget"].density
+              !== "small")
+          return root.fail("dynamic V1 group settings")
         if (!state.resetLayout()
             || state.config.order.left[0] !== "G1"
             || state.config.splits.left[0] !== false)

@@ -16,7 +16,8 @@ The active bar, plugin activation, bar layout, and Shibumi settings live in:
 Shibumi settings are stored under `bar.shibumi`. The state service validates
 and normalizes this branch before using it. It includes:
 
-- V1 and V2 widget order and split boundaries;
+- V1 and V2 widget order, explicit V1 base/extra slot roles, and split
+  boundaries;
 - per-widget enabled state and appearance;
 - bar style and semantic accent;
 - V1 border, frost, shadow, and Radius 12/6 settings;
@@ -28,6 +29,40 @@ and normalizes this branch before using it. It includes:
 
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema.
+
+### V1 layout slots
+
+V1 keeps seven base slots on the left, one in the center, and seven on the
+right. **Bars → Edit slots** exposes those positions as drop targets and allows
+up to two additional slots on each outer side. The center cannot be extended.
+
+- `+` adds an empty outer slot until that side reaches nine positions.
+- Dragging a group onto an occupied slot swaps the two groups; dragging it onto
+  an empty slot moves it there and leaves its former base position available.
+- Base positions remain locked drop targets. Only an empty extra position can
+  be removed.
+- A disabled, hardware-unavailable, or responsively hidden V1 group remains a
+  compact proxy while editing, so its position can still be changed.
+- Splits remain positional. Adding or removing a slot changes the matching
+  split array in the same validated state transaction.
+- **Restore layout** returns V1 to its fixed `7 / 1 / 7` default and removes
+  every extra position.
+
+Existing fixed-layout configurations migrate without changing group order or
+split values. Order, slot roles, and split arrays are accepted as one unit; an
+invalid partial layout falls back as a unit instead of combining mismatched
+pieces.
+
+Installing an additional compatible bar widget creates one stable V1 group
+named from the plugin ID (for example `G:example.weather`). The group is added
+to an outer extra slot and then participates in the same split and drag/drop
+transactions as G1–G15. Its identity never depends on installation order, so
+restarts, V1/V2 switching, and multi-monitor rendering cannot renumber it.
+Removing the plugin removes its group atomically; if the group had been dragged
+into a base slot, the displaced base group is moved back before the extra slot
+is removed. At most two extra positions per outer side are accepted. When all
+four are occupied, installation is rejected instead of rendering a widget
+outside V1's managed layout.
 
 ## Picker routing
 

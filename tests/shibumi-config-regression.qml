@@ -18,6 +18,11 @@ QtObject {
       fail("unexpected schema or identity version")
     if (defaults.order.left.length !== 7 || defaults.order.center.length !== 1
         || defaults.order.right.length !== 7) fail("invalid default region sizes")
+    if (!same(defaults.v1SlotRoles,
+          Config.slotRolesForOrder(defaults.order))
+        || defaults.v1SlotRoles.left.some(
+          function(value) { return value !== "base" }))
+      fail("invalid default V1 slot roles")
     if (defaults.v2Layout.left.length !== 10
         || defaults.v2Layout.center.length !== 1
         || defaults.v2Layout.right.length !== 13
@@ -165,6 +170,65 @@ QtObject {
       fail("valid order was not retained")
     if (!valid.splits.left[0] || !valid.splits.boundaries[1] || !valid.splits.right[5])
       fail("valid split state was not retained")
+    if (!same(valid.v1SlotRoles, Config.slotRolesForOrder(valid.order)))
+      fail("legacy fixed V1 order did not gain explicit slot roles")
+
+    const extendedOrder = Config.defaultOrder()
+    extendedOrder.left.push("")
+    extendedOrder.right.push("")
+    const extendedSplits = Config.defaultSplits(extendedOrder)
+    extendedSplits.left[6] = true
+    const extendedState = Config.normalize({
+      version: 1,
+      order: extendedOrder,
+      v1SlotRoles: Config.slotRolesForOrder(extendedOrder),
+      splits: extendedSplits
+    })
+    if (extendedState.order.left.length !== 8
+        || extendedState.order.right.length !== 8
+        || extendedState.v1SlotRoles.left[7] !== "extra"
+        || extendedState.v1SlotRoles.right[7] !== "extra"
+        || extendedState.splits.left.length !== 7
+        || extendedState.splits.left[6] !== true)
+      fail("extended V1 slot state was not retained")
+
+    const dynamicOrder = Config.defaultOrder()
+    dynamicOrder.left.push("G:custom.widget")
+    const dynamicState = Config.normalize({
+      version: 1,
+      order: dynamicOrder,
+      v1SlotRoles: Config.slotRolesForOrder(dynamicOrder),
+      splits: Config.defaultSplits(dynamicOrder),
+      widgets: { "G:custom.widget": { compact: true } }
+    })
+    if (!Config.isGroupId("G:custom.widget")
+        || Config.isGroupId("G:Custom Widget")
+        || dynamicState.order.left[7] !== "G:custom.widget"
+        || dynamicState.widgets["G:custom.widget"].compact !== true)
+      fail("dynamic V1 group state was not retained")
+
+    const partialExtendedState = Config.normalize({
+      version: 1,
+      order: extendedOrder,
+      v1SlotRoles: Config.slotRolesForOrder(extendedOrder),
+      splits: Config.defaultSplits()
+    })
+    if (!same(partialExtendedState.order, defaults.order)
+        || !same(partialExtendedState.v1SlotRoles, defaults.v1SlotRoles)
+        || !same(partialExtendedState.splits, defaults.splits))
+      fail("partial V1 slot transaction must fail closed")
+
+    const invalidRoles = Config.slotRolesForOrder(extendedOrder)
+    invalidRoles.left[7] = "base"
+    const invalidRoleState = Config.normalize({
+      version: 1,
+      order: extendedOrder,
+      v1SlotRoles: invalidRoles,
+      splits: extendedSplits
+    })
+    if (!same(invalidRoleState.order, defaults.order)
+        || !same(invalidRoleState.v1SlotRoles, defaults.v1SlotRoles))
+      fail("invalid V1 slot roles must reject the complete layout")
     if (!valid.widgets.G4 || valid.widgets.G4.compact !== true || valid.widgets.BAD
         || valid.widgets.G7.enabled !== false
         || valid.widgets.G7["hancore.shibumi.ai"].aiTool !== "opencode"

@@ -255,7 +255,7 @@ Column {
 
     Text {
       width: parent.width
-      text: "V1 alone supports split islands and animated gaps."
+      text: "V1 supports positional slots, split islands and animated gaps."
       color: root.foreground
       opacity: 0.48
       wrapMode: Text.WordWrap
@@ -265,11 +265,39 @@ Column {
 
     Row {
       width: parent.width
+      height: Commons.Style.space(50)
+      spacing: Commons.Style.space(7)
+
+      ActionCard {
+        width: (parent.width - parent.spacing) / 2
+        controller: root.controller
+        glyph: "view_column"
+        label: "Edit slots"
+        detail: "Add, move or remove on the bar"
+        foreground: root.foreground
+        accent: root.accent
+        onClicked: root.controller.beginBarEditing()
+      }
+
+      ActionCard {
+        width: (parent.width - parent.spacing) / 2
+        controller: root.controller
+        glyph: "restart_alt"
+        label: "Restore layout"
+        detail: "Reset slots and split positions"
+        foreground: root.foreground
+        accent: root.accent
+        onClicked: root.controller.resetBarLayout()
+      }
+    }
+
+    Row {
+      width: parent.width
       height: Commons.Style.space(30)
       spacing: Commons.Style.space(7)
 
       CompactSettingChoice {
-        width: (parent.width - parent.spacing * 2) / 3
+        width: (parent.width - parent.spacing) / 2
         controller: root.controller
         label: "Split all"
         controlHeight: parent.height
@@ -280,7 +308,7 @@ Column {
       }
 
       CompactSettingChoice {
-        width: (parent.width - parent.spacing * 2) / 3
+        width: (parent.width - parent.spacing) / 2
         controller: root.controller
         label: "Merge all"
         controlHeight: parent.height
@@ -290,16 +318,6 @@ Column {
         onClicked: root.controller.setAllSplits(false)
       }
 
-      CompactSettingChoice {
-        width: (parent.width - parent.spacing * 2) / 3
-        controller: root.controller
-        label: "Restore"
-        controlHeight: parent.height
-        foreground: root.foreground
-        accent: root.accent
-        uiScale: root.uiScale
-        onClicked: root.controller.resetBarLayout()
-      }
     }
 
     SectionLabel { text: "GAP ANIMATION" }

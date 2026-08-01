@@ -12,6 +12,9 @@ Item {
   property string region: ""
   property string screenName: ""
   property real availableWidth: 0
+  // The original V1 composes 28px widget roots inside a 32px slot row.
+  // Keep this opt-in so direct/V2/vertical hosts retain provider geometry.
+  property real horizontalHostHeight: 0
   readonly property string moduleName: bar.entryId(entry)
   readonly property var moduleSettings: bar.entrySettings(entry)
   readonly property bool moduleEnabled: moduleSettings.enabled !== false
@@ -58,6 +61,15 @@ Item {
     && compatibilityPanel !== null
     && compatibilityCard !== null
     && bar && bar.visualTokens !== null
+  // Omarchy KeyboardPanel normally derives its perpendicular offset from
+  // the anchor window's dimensions. Shibumi deliberately keeps BarPanel
+  // screen-sized so V1 edit mode can own one stable input surface, therefore
+  // the host must translate that offset back to the visible bar edge.
+  readonly property bool hostPanelPlacementEnabled: hostPanelChromeEnabled
+    && "screenW" in compatibilityPanel
+    && "screenH" in compatibilityPanel
+    && Number(compatibilityPanel.screenW) > 0
+    && Number(compatibilityPanel.screenH) > 0
   readonly property bool v2PanelConnectionEnabled: hostPanelChromeEnabled
     && String(bar.visualTokens.shellStyle || "shibumi") !== "shibumi"
     && (bar.position === "top" || bar.position === "bottom")
@@ -81,7 +93,10 @@ Item {
   implicitWidth: activeItemVisible
     ? (bar.vertical ? bar.barSize : activeItemImplicitWidth)
     : 0
-  implicitHeight: activeItemVisible ? activeItemImplicitHeight : 0
+  implicitHeight: activeItemVisible
+    ? !bar.vertical && horizontalHostHeight > 0
+      ? horizontalHostHeight : activeItemImplicitHeight
+    : 0
   width: implicitWidth
   height: implicitHeight
 
@@ -183,6 +198,55 @@ Item {
       return candidate
     }
     return null
+  }
+
+  function hostedCardOrigin(panel) {
+    if (!panel || !bar) return Qt.point(0, 0)
+    const screenWidth = Math.max(0, Number(panel.screenW) || 0)
+    const screenHeight = Math.max(0, Number(panel.screenH) || 0)
+    const contentWidth = Math.max(1, Number(panel.contentWidth) || 1)
+    const contentHeight = Math.max(1, Number(panel.contentHeight) || 1)
+    const margin = Math.max(0, Number(panel.margin) || 0)
+    const gap = Math.max(0, Number(panel.gap) || 0)
+    const barThickness = Math.max(0, Number(bar.barSize) || 0)
+    const barPosition = "barPos" in panel
+      ? String(panel.barPos || "top") : String(bar.position || "top")
+    const anchorPosition = "anchorScreenPos" in panel
+      ? panel.anchorScreenPos : slotWindowPosition
+    const anchorWidth = "anchorW" in panel
+      ? Math.max(0, Number(panel.anchorW) || 0) : width
+    const anchorHeight = "anchorH" in panel
+      ? Math.max(0, Number(panel.anchorH) || 0) : height
+    const centered = "centerOnBar" in panel && !!panel.centerOnBar
+    let x = 0
+    let y = 0
+
+    if (centered && (barPosition === "top" || barPosition === "bottom")) {
+      x = screenWidth / 2 - contentWidth / 2
+      y = barPosition === "bottom"
+        ? screenHeight - barThickness - contentHeight - gap
+        : barThickness + gap
+    } else if (centered) {
+      x = barPosition === "left" ? barThickness + gap
+        : screenWidth - barThickness - contentWidth - gap
+      y = screenHeight / 2 - contentHeight / 2
+    } else if (barPosition === "bottom") {
+      x = anchorPosition.x + anchorWidth / 2 - contentWidth / 2
+      y = screenHeight - barThickness - contentHeight - gap
+    } else if (barPosition === "left") {
+      x = barThickness + gap
+      y = anchorPosition.y + anchorHeight / 2 - contentHeight / 2
+    } else if (barPosition === "right") {
+      x = screenWidth - barThickness - contentWidth - gap
+      y = anchorPosition.y + anchorHeight / 2 - contentHeight / 2
+    } else {
+      x = anchorPosition.x + anchorWidth / 2 - contentWidth / 2
+      y = barThickness + gap
+    }
+
+    x = Math.max(margin, Math.min(x, screenWidth - contentWidth - margin))
+    y = Math.max(margin, Math.min(y, screenHeight - contentHeight - margin))
+    return Qt.point(Math.round(x), Math.round(y))
   }
 
   function resolveCompatibilitySurface() {
@@ -306,6 +370,22 @@ Item {
     value: root.bar && root.bar.visualTokens
       ? root.bar.visualTokens.panelRadius : 0
     when: root.hostPanelChromeEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
+  Binding {
+    target: root.compatibilityCard
+    property: "x"
+    value: root.hostedCardOrigin(root.compatibilityPanel).x
+    when: root.hostPanelPlacementEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
+  Binding {
+    target: root.compatibilityCard
+    property: "y"
+    value: root.hostedCardOrigin(root.compatibilityPanel).y
+    when: root.hostPanelPlacementEnabled
     restoreMode: Binding.RestoreBindingOrValue
   }
 

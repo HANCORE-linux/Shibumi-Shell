@@ -82,7 +82,7 @@ Item {
 
   function groupSettings(groupId) {
     const group = String(groupId || "")
-    if (ShibumiConfig.GroupIds.indexOf(group) < 0) return ({})
+    if (!ShibumiConfig.isGroupId(group)) return ({})
     return config && config.widgets && ShibumiConfig.isPlainObject(config.widgets[group])
       ? config.widgets[group] : ({})
   }
@@ -101,7 +101,7 @@ Item {
   function setGroupSetting(groupId, key, value) {
     const group = String(groupId || "")
     const name = String(key || "")
-    if (ShibumiConfig.GroupIds.indexOf(group) < 0
+    if (!ShibumiConfig.isGroupId(group)
         || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) return false
 
     return commit(function(next) {
@@ -115,7 +115,7 @@ Item {
 
   function resetGroupAppearance(groupId) {
     const group = String(groupId || "")
-    if (ShibumiConfig.GroupIds.indexOf(group) < 0) return false
+    if (!ShibumiConfig.isGroupId(group)) return false
     const appearanceKeys = [
       "displayMode", "compact", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth",
@@ -134,7 +134,7 @@ Item {
 
   function toggleGroupSeparator(groupId) {
     const group = String(groupId || "")
-    if (ShibumiConfig.GroupIds.indexOf(group) < 0) return false
+    if (!ShibumiConfig.isGroupId(group)) return false
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
       const settings = ShibumiConfig.isPlainObject(next.widgets[group])
@@ -174,7 +174,7 @@ Item {
     const group = String(groupId || "")
     const module = String(moduleId || "")
     const name = String(key || "")
-    if (ShibumiConfig.GroupIds.indexOf(group) < 0
+    if (!ShibumiConfig.isGroupId(group)
         || !/^[a-z0-9.-]+$/.test(module)
         || !/^[A-Za-z][A-Za-z0-9_-]*$/.test(name)) return false
 
@@ -349,22 +349,32 @@ Item {
 
   function setOrder(value) {
     const normalized = ShibumiConfig.normalizedOrder(value)
-    if (!normalized) return false
-    return commit(function(next) { next.order = normalized })
+    const splits = normalized
+      ? ShibumiConfig.normalizedSplits(config.splits, normalized) : null
+    if (!normalized || !splits) return false
+    return commit(function(next) {
+      next.order = normalized
+      next.v1SlotRoles = ShibumiConfig.slotRolesForOrder(normalized)
+      next.splits = splits
+    })
   }
 
   function setSplits(value) {
-    const normalized = ShibumiConfig.normalizedSplits(value)
+    const order = ShibumiConfig.normalizedOrder(config.order)
+    const normalized = order
+      ? ShibumiConfig.normalizedSplits(value, order) : null
     if (!normalized) return false
     return commit(function(next) { next.splits = normalized })
   }
 
   function setLayout(order, splits) {
     const normalizedOrder = ShibumiConfig.normalizedOrder(order)
-    const normalizedSplits = ShibumiConfig.normalizedSplits(splits)
+    const normalizedSplits = normalizedOrder
+      ? ShibumiConfig.normalizedSplits(splits, normalizedOrder) : null
     if (!normalizedOrder || !normalizedSplits) return false
     return commit(function(next) {
       next.order = normalizedOrder
+      next.v1SlotRoles = ShibumiConfig.slotRolesForOrder(normalizedOrder)
       next.splits = normalizedSplits
     })
   }

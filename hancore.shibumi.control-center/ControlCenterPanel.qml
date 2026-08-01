@@ -133,6 +133,9 @@ ShibumiPanel {
   readonly property var activeWidgetOrder: bar && bar.layoutController
     && bar.layoutController.order
     ? bar.layoutController.order : ({ left: [], center: [], right: [] })
+  readonly property var v1LayoutSlots: bar && bar.layoutController
+    ? bar.layoutController.v1Slots
+    : ({ left: [], center: [], right: [] })
   readonly property var v2LayoutSlots: bar && bar.layoutController
     ? bar.layoutController.v2Slots
     : ({ left: [], center: [], right: [] })
@@ -244,7 +247,7 @@ ShibumiPanel {
 
   function beginBarEditing() {
     if (!bar || typeof bar.setLayoutEditing !== "function"
-        || v2LayoutActive !== true) return false
+        || stockOmarchyHost) return false
     const changed = bar.setLayoutEditing(true, "")
     if (changed) ownerWidget.close()
     return changed
@@ -668,6 +671,16 @@ ShibumiPanel {
   function removeV2Slot(region) {
     return bar && typeof bar.removeV2Slot === "function"
       ? bar.removeV2Slot(region) : false
+  }
+
+  function addV1Slot(region) {
+    return bar && typeof bar.addV1Slot === "function"
+      ? bar.addV1Slot(region) : false
+  }
+
+  function removeV1Slot(region) {
+    return bar && typeof bar.removeV1Slot === "function"
+      ? bar.removeV1Slot(region) : false
   }
 
   function launcherLabel(value) {

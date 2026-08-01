@@ -173,7 +173,10 @@ Item {
   }
 
   function resetBarLayout() {
-    return layoutStateController.resetLayout()
+    const reset = layoutStateController.resetLayout()
+    if (reset && !layoutStateController.v2Mode)
+      v1PluginReconcileTimer.restart()
+    return reset
   }
 
   function addV2Slot(region) {
@@ -182,6 +185,14 @@ Item {
 
   function removeV2Slot(region) {
     return layoutStateController.removeV2Slot(region)
+  }
+
+  function addV1Slot(region) {
+    return layoutStateController.addV1Slot(region)
+  }
+
+  function removeV1Slot(region) {
+    return layoutStateController.removeV1Slot(region)
   }
 
   function widgetSettings(groupId, moduleId) {
@@ -230,7 +241,45 @@ Item {
   }
 
   function unassignedLayoutEntries(region) {
-    return GroupRegistry.unassignedEntries(layoutConfig, region)
+    const entries = GroupRegistry.unassignedEntries(layoutConfig, region)
+    if (layoutStateController.v2Mode) return entries
+    return entries.filter(function(entry) {
+      const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+      return groupId === "" || !layoutStateController.groupLocation(groupId)
+    })
+  }
+
+  function v1PluginSpecs(excludeId, includeSpec) {
+    const excluded = String(excludeId || "")
+    const specs = []
+    const seen = ({})
+    for (const region of ["left", "center", "right"]) {
+      const entries = layoutEntries(region)
+      for (let index = 0; index < entries.length; index++) {
+        const entry = entries[index]
+        const id = entryId(entry)
+        if (id === "" || id === excluded || seen[id]
+            || !Util.isPlainObject(entry)
+            || entry.shibumiModule !== true) continue
+        seen[id] = true
+        specs.push({ pluginId: id, region: region })
+      }
+    }
+    if (includeSpec && Util.isPlainObject(includeSpec)) {
+      const id = entryId(includeSpec)
+      if (id !== "" && !seen[id])
+        specs.push({
+          pluginId: id,
+          region: ["left", "center", "right"].indexOf(
+            String(includeSpec.region || "")) >= 0
+              ? String(includeSpec.region) : "right"
+        })
+    }
+    return specs
+  }
+
+  function reconcileV1PluginGroups() {
+    return layoutStateController.reconcileV1PluginGroups(v1PluginSpecs())
   }
 
   function layoutContains(widgetId) {
@@ -277,6 +326,11 @@ Item {
     if (!id || !shell || typeof shell.mutateShellConfig !== "function")
       return false
     if (installed === true && !hasBarWidgetEntryPoint(id))
+      return false
+
+    const desiredSpecs = v1PluginSpecs(id, installed === true
+      ? { id: id, region: targetRegion } : null)
+    if (!layoutStateController.reconcileV1PluginGroups(desiredSpecs))
       return false
 
     if (installed === true && pluginRegistry
@@ -724,6 +778,7 @@ Item {
   onBarConfigChanged: {
     applyBarConfig()
   }
+  onLayoutConfigChanged: v1PluginReconcileTimer.restart()
   onInjectionCompleteChanged: {
     if (injectionComplete) hostReadyDelay.restart()
     else {
@@ -731,7 +786,17 @@ Item {
       hostReady = false
     }
   }
-  Component.onCompleted: applyBarConfig()
+  Component.onCompleted: {
+    applyBarConfig()
+    v1PluginReconcileTimer.restart()
+  }
+
+  Timer {
+    id: v1PluginReconcileTimer
+    interval: 1
+    repeat: false
+    onTriggered: root.reconcileV1PluginGroups()
+  }
 
   Behavior on barForeground {
     enabled: root.foregroundAnimationEnabled
@@ -890,6 +955,26 @@ Item {
       if (value !== "true" && value !== "false") return "invalid-enabled"
       return root.setLayoutEditing(value === "true", screenName)
         ? "ok" : "unchanged"
+    }
+
+    function addV1Slot(region: string): string {
+      if (layoutStateController.v2Mode) return "wrong-style"
+      return root.addV1Slot(String(region || "")) ? "ok" : "rejected"
+    }
+
+    function removeV1Slot(region: string): string {
+      if (layoutStateController.v2Mode) return "wrong-style"
+      return root.removeV1Slot(String(region || "")) ? "ok" : "rejected"
+    }
+
+    function moveV1GroupToSlot(groupId: string, region: string,
+        index: string): string {
+      if (layoutStateController.v2Mode) return "wrong-style"
+      const targetIndex = Number(index)
+      if (!Number.isInteger(targetIndex)) return "invalid-index"
+      return layoutStateController.moveGroupToSlot(
+          String(groupId || ""), String(region || ""), targetIndex)
+        ? "ok" : "rejected"
     }
 
     function setAllSplits(enabled: string): string {

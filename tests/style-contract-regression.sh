@@ -66,6 +66,13 @@ rg -q 'requestedStyleId = String\(config\.style \|\| "shibumi"\)' Bar.qml \
   || fail "bar.style is not read from host configuration"
 rg -q '^  function setStyle\(value\)' Bar.qml \
   || fail "style selection cannot be persisted through the host facade"
+for v1_ipc_contract in \
+  'function addV1Slot(region: string): string' \
+  'function removeV1Slot(region: string): string' \
+  'function moveV1GroupToSlot(groupId: string, region: string,'; do
+  rg -Fq "$v1_ipc_contract" Bar.qml \
+    || fail "V1 slot runtime IPC drifted: $v1_ipc_contract"
+done
 rg -q 'activeStyle\.barSurfaceComponent' core/BarPanel.qml \
   || fail "bar surface is not delegated to the active style"
 rg -q 'activeStyle\.tooltipSurfaceComponent' core/BarPanel.qml \
@@ -80,20 +87,29 @@ for edit_contract in \
   rg -Fq "$edit_contract" styles/shibumi/BarSurface.qml \
     || fail "edit-mode frame drifted from V1: $edit_contract"
 done
-rg -Fq 'enabled: root.persistentSeparators' styles/shibumi/GroupSection.qml \
-  || fail "within-region separators are not clickable in locked V2 mode"
+rg -Fq 'enabled: root.persistentSeparators || !root.v2Mode' \
+  styles/shibumi/GroupSection.qml \
+  || fail "within-region separators are not live in V1 and persistent in V2"
 rg -Fq 'onClicked: root.bar.toggleGroupSeparator(' \
   styles/shibumi/GroupSection.qml && \
   fail "separator click bypasses the V2 interaction guard"
-rg -Fq 'onClicked: root.toggleSeparator(horizontalCell.modelData)' \
+rg -Fq 'onClicked: root.toggleSeparator(' \
   styles/shibumi/GroupSection.qml \
-  || fail "within-region markers do not use the locked V2 interaction route"
+  || fail "within-region markers do not use the guarded interaction route"
+for v1_edit_interaction_contract in \
+  'return !v2Mode && bar.layoutController' \
+  'bar.layoutController.toggleSplit(region, Number(index))' \
+  'function onSlotEditingChanged()' \
+  'enabled: !root.slotEditing'; do
+  rg -Fq "$v1_edit_interaction_contract" styles/shibumi/GroupSection.qml \
+    || fail "V1 edit interaction drifted: $v1_edit_interaction_contract"
+done
 rg -Fq 'return separated ? Math.max(0, splitGrow - groupSpacing)' \
   styles/shibumi/GroupSection.qml \
   || fail "active separators no longer follow the original V2 edge offset"
-rg -Fq 'width: horizontalCell.emptySlot ? 28 : 0' \
+rg -Fq 'width: horizontalCell.placeholderSlot ? root.slotVisualSize : 0' \
   styles/shibumi/GroupSection.qml \
-  || fail "V2 empty slot is not the original 28px square"
+  || fail "edit placeholder does not use the presentation-specific slot size"
 rg -Fq 'height: root.v2Shell' core/GroupSlot.qml \
   || fail "V2 widget fill is no longer constrained to the pill height"
 rg -Fq 'decorated ? v2SurfaceHeight : 0' core/GroupSlot.qml \
@@ -102,15 +118,32 @@ rg -Fq 'markerCenter: item.x + item.separatorCenter' \
   styles/shibumi/GroupSection.qml \
   || fail "separator geometry is not derived from the live widget edge"
 for slot_add_contract in \
-  'readonly property bool canAddV2Slot: v2Editing' \
+  'readonly property bool canAddSlot: slotEditing' \
   'text: "+"' \
-  'onClicked: root.bar.layoutController.addV2Slot(root.region)'; do
+  'root.bar.layoutController.addV2Slot(root.region)' \
+  'root.bar.layoutController.addV1Slot(root.region)'; do
   rg -Fq "$slot_add_contract" styles/shibumi/GroupSection.qml \
-    || fail "V2 inline add-slot affordance drifted: $slot_add_contract"
+    || fail "inline add-slot affordance drifted: $slot_add_contract"
 done
-rg -Fq 'enabled: root.bar.layoutController.v2Mode' \
+for v1_slot_contract in \
+  'readonly property bool proxySlot: root.v1Editing' \
+  'readonly property bool removableEmptySlot: emptySlot' \
+  '? root.v2Mode ? targetVisual.height : 32 : 0' \
+  'anchors.verticalCenter: parent.verticalCenter' \
+  'root.bar.layoutController.removeV1SlotAt(' \
+  'root.bar.layoutController.isExtraV1Slot(root.region, index)'; do
+  rg -Fq "$v1_slot_contract" styles/shibumi/GroupSection.qml \
+    || fail "V1 editable slot proxy drifted: $v1_slot_contract"
+done
+rg -Fq 'enabled: true' \
   styles/shibumi/BarSurface.qml \
-  || fail "boundary separators are not clickable in locked V2 mode"
+  || fail "boundary separators are not live in V1 and locked V2 modes"
+for v1_boundary_contract in \
+  'visible: root.bar.layoutController.v2Mode !== true' \
+  '&& boundaryMarker.splitOn ? "│" : "•"'; do
+  rg -Fq "$v1_boundary_contract" styles/shibumi/BarSurface.qml \
+    || fail "V1 boundary marker drifted: $v1_boundary_contract"
+done
 rg -Fq 'root.tokenColor("separator", root.bar.visualTokens.sumi)' \
   styles/shibumi/GroupSection.qml \
   || fail "widget separator color does not use the quiet V2 token"
@@ -172,6 +205,35 @@ awk '/id: splitMouse/{seen=1} seen && /hoverEnabled: true/{found=1; exit} END{ex
 rg -Fq 'radius: root.bar.visualTokens.pillRadius' \
   styles/shibumi/GroupSection.qml \
   || fail "drop targets do not follow the selected V1 radius"
+rg -Fq '? tokenNumber("tileRadius", 8) : tokenNumber("pillRadius", 12)' \
+  styles/shibumi/GroupSection.qml \
+  || fail "V1 expandable slots do not follow Radius 12/Radius 6"
+for v1_host_contract in \
+  'property real horizontalHostHeight: 0' \
+  'horizontalHostHeight: root.v2Shell ? 0 : root.v1SlotHeight'; do
+  rg -Fq "$v1_host_contract" core/WidgetSlot.qml core/GroupSlot.qml \
+    || fail "V1 widgets lost the original 28px host contract: $v1_host_contract"
+done
+for dynamic_v1_contract in \
+  'readonly property bool dynamicV1Group:' \
+  'visible: root.decorated || root.dynamicV1Group' \
+  'root.bar.visualTokens.pillBorderWidth'; do
+  rg -Fq "$dynamic_v1_contract" core/GroupSlot.qml \
+    || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
+done
+for edit_surface_contract in \
+  'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
+  'mask: Region {' \
+  'onClicked: dragSession.setEditing(false)'; do
+  rg -Fq "$edit_surface_contract" core/BarPanel.qml \
+    || fail "stable V1 edit surface drifted: $edit_surface_contract"
+done
+rg -Fq 'readonly property real appearancePadding: v2Shell && bar.visualTokens' \
+  core/GroupSlot.qml \
+  || fail "V2 widget padding leaked into the original V1 group geometry"
+rg -Fq '? tokenNumber("slotHeight", 28) : tokenNumber("pillHeight", 24)' \
+  styles/shibumi/GroupSection.qml \
+  || fail "V1 expandable slots do not use the 24px pill size"
 for pill_contract in \
   'property var settings: ({})' \
   'property var tokenSource: null' \

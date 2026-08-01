@@ -23,12 +23,13 @@ PanelWindow {
       ? barSurfaceLoader.item.responsiveProbe : ({})
 
   visible: bar.hostReady && bar.styleReady && validScreen && !bar.barHidden
-  implicitWidth: bar.vertical ? bar.barSize : 0
-  // Keep the host window edge-local so Omarchy KeyboardPanel consumers see
-  // the real perpendicular bar size through anchorItem.QsWindow.window.
-  // Edit and drag feedback live in separate fixed-geometry overlay windows.
-  implicitHeight: bar.vertical ? 0 : bar.barSize
-  color: bar.vertical && !bar.transparent ? bar.background : "transparent"
+  // Match the original V1 input model: keep one stable screen-sized surface
+  // and change only its input region. This avoids compositor resize flashes
+  // while allowing bar drag, Escape, and outside-click dismissal to share one
+  // focus owner during editing.
+  implicitWidth: bar.vertical && validScreen ? screen.width : 0
+  implicitHeight: !bar.vertical && validScreen ? screen.height : 0
+  color: "transparent"
   surfaceFormat.opaque: false
 
   anchors {
@@ -45,10 +46,16 @@ PanelWindow {
     ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
   mask: Region {
-    x: 0
-    y: 0
-    width: barWindow.width
-    height: barWindow.height
+    x: dragSession.editing ? 0
+      : barWindow.bar.vertical && barWindow.bar.position === "right"
+        ? Math.max(0, barWindow.width - barWindow.bar.barSize) : 0
+    y: dragSession.editing ? 0
+      : !barWindow.bar.vertical && barWindow.bar.position === "bottom"
+        ? Math.max(0, barWindow.height - barWindow.bar.barSize) : 0
+    width: dragSession.editing || !barWindow.bar.vertical
+      ? barWindow.width : barWindow.bar.barSize
+    height: dragSession.editing || barWindow.bar.vertical
+      ? barWindow.height : barWindow.bar.barSize
   }
 
   WindowRecovery {
@@ -68,12 +75,6 @@ PanelWindow {
   Component.onCompleted: bar.registerLayoutSession(dragSession)
   Component.onDestruction: bar.unregisterLayoutSession(dragSession)
 
-  EditBackdropPanel {
-    bar: barWindow.bar
-    layoutSession: dragSession
-    targetScreen: barWindow.screen
-  }
-
   DragGhostPanel {
     bar: barWindow.bar
     layoutSession: dragSession
@@ -85,12 +86,27 @@ PanelWindow {
     targetScreen: barWindow.screen
   }
 
+  Rectangle {
+    anchors.fill: parent
+    visible: dragSession.editing
+    color: "#000000"
+    opacity: 0.34
+    z: 1
+
+    MouseArea {
+      anchors.fill: parent
+      acceptedButtons: Qt.LeftButton
+      onClicked: dragSession.setEditing(false)
+    }
+  }
+
   Loader {
     id: barSurfaceLoader
 
     width: barWindow.bar.vertical ? barWindow.bar.barSize : parent.width
     height: barWindow.bar.vertical ? parent.height : barWindow.bar.barSize
-    anchors.left: parent.left
+    x: barWindow.bar.vertical && barWindow.bar.position === "right"
+      ? Math.max(0, parent.width - width) : 0
     y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"
       ? Math.max(0, parent.height - height) : 0
     active: barWindow.bar.hostReady && barWindow.bar.styleReady

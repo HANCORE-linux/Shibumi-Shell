@@ -174,10 +174,19 @@ The selector never mixes bar generations. With V2 live it shows only Full,
 Fit, Dock, and Notch; with V1 live it shows only Islands. Switching between
 V1 and V2 remains a Quick-level action, while Bars configures the active type.
 
-The remaining controls are capability-gated in place. V1 exposes split, merge,
-restore, and all nine gap-animation modes. V2 exposes divider editing, layout
-restore, and left/center/right slot capacity with valid minimum and maximum
-limits. V2 never exposes V1 gap-animation or split-island controls. The former
+The remaining controls are capability-gated in place. V1 exposes **Edit slots**,
+split, merge, restore, and all nine gap-animation modes. Slot editing retains
+the locked `7 / 1 / 7` base, adds at most two positions per outer side, and
+renders empty or temporarily unavailable positions as compact drop targets.
+Only an empty extra position exposes removal; restoring V1 removes every extra.
+Compatible plugins installed from the Plugins page automatically receive a
+stable plugin-derived V1 G-group in an outer extra position. That group uses
+the same per-output rendering and shared split/drag state as the built-in V1
+groups. Uninstall removes the group without renumbering any remaining plugin.
+If all four optional V1 positions are occupied, the add action fails closed.
+V2 exposes divider editing, layout restore, and left/center/right slot capacity
+with valid minimum and maximum limits. V2 never exposes V1 gap-animation or
+split-island controls. The former
 Layout route remains only as an internal compatibility target and is absent
 from Configure, search, Icons, and Bars navigation.
 
@@ -215,7 +224,8 @@ The Bars page selects its layout section from the active Shibumi presentation:
 | --- | --- | --- |
 | Split and merge islands | Yes | No |
 | Animated gaps / reactor modes | Yes | No |
-| Fixed left, center, and right slots | No | Yes |
+| Locked base slots | `7 / 1 / 7` | Yes |
+| Optional outer slots | Up to two per side | Style-defined capacity |
 | Persistent manual dividers | No | Yes |
 | Restore active layout | Yes | Yes |
 

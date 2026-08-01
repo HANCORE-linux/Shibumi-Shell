@@ -55,6 +55,7 @@ var ConsumedAliases = [
   "omarchy.indicators"
 ]
 var Regions = ["left", "center", "right"]
+var DynamicGroupPrefix = "G:"
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -63,6 +64,24 @@ function isObject(value) {
 function entryId(entry) {
   if (typeof entry === "string") return entry
   return isObject(entry) ? String(entry.id || "") : ""
+}
+
+function validPluginId(value) {
+  var id = String(value || "")
+  return id.length > 0 && id.length <= 160
+    && /^[a-z0-9][a-z0-9._-]*$/.test(id)
+}
+
+function dynamicGroupIdForModule(moduleValue) {
+  var moduleId = String(moduleValue || "")
+  return validPluginId(moduleId) ? DynamicGroupPrefix + moduleId : ""
+}
+
+function dynamicModuleIdForGroup(groupValue) {
+  var groupId = String(groupValue || "")
+  if (groupId.indexOf(DynamicGroupPrefix) !== 0) return ""
+  var moduleId = groupId.slice(DynamicGroupPrefix.length)
+  return validPluginId(moduleId) ? moduleId : ""
 }
 
 function copySettings(value) {
@@ -125,6 +144,10 @@ function mergeEntry(moduleId, hostEntry, overrides) {
 
 function moduleIdsFor(groupValue, layout) {
   var groupId = String(groupValue || "")
+  var dynamicModule = dynamicModuleIdForGroup(groupId)
+  if (dynamicModule !== "")
+    return configuredEntry(layout, dynamicModule) !== null
+      ? [dynamicModule] : []
   if (GroupIds.indexOf(groupId) < 0) return []
   var result = (BaseEntries[groupId] || []).slice()
   var configured = configuredEntries(layout)

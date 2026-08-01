@@ -26,7 +26,10 @@ Item {
     function setLayout(order, splits) {
       const next = ShibumiConfig.normalize(config)
       next.order = ShibumiConfig.normalizedOrder(order)
-      next.splits = ShibumiConfig.normalizedSplits(splits)
+      next.v1SlotRoles = next.order
+        ? ShibumiConfig.slotRolesForOrder(next.order) : null
+      next.splits = next.order
+        ? ShibumiConfig.normalizedSplits(splits, next.order) : null
       if (!next.order || !next.splits || root.same(config, next)) return false
       config = ShibumiConfig.normalize(next)
       root.writes++
@@ -156,8 +159,55 @@ Item {
         || !same(controller.splits, ShibumiConfig.defaultSplits())
         || controller.resetLayout())
       fail("layout reset contract")
-    if (root.writes !== 5)
+
+    if (!controller.addV1Slot("left")
+        || !controller.addV1Slot("left")
+        || controller.addV1Slot("left")
+        || controller.addV1Slot("center")
+        || controller.v1Slots.left.length !== 9
+        || controller.splits.left.length !== 8
+        || controller.baseV1SlotCount("left") !== 7
+        || controller.maxV1SlotCount("left") !== 9
+        || !controller.isExtraV1Slot("left", 8)
+        || controller.isExtraV1Slot("left", 6))
+      fail("V1 slot capacity controller contract")
+    if (!controller.moveGroupToSlot("G1", "left", 8)
+        || controller.v1Slots.left[0] !== ""
+        || controller.v1Slots.left[8] !== "G1"
+        || controller.removeV1SlotAt("left", 8)
+        || !controller.removeV1SlotAt("left", 7)
+        || controller.v1Slots.left.length !== 8
+        || controller.v1Slots.left[7] !== "G1"
+        || !controller.moveGroupToSlot("G1", "left", 0)
+        || !controller.removeV1Slot("left")
+        || !same(controller.order, ShibumiConfig.defaultOrder())
+        || !same(controller.splits, ShibumiConfig.defaultSplits()))
+      fail("V1 empty-slot swap/remove transaction")
+    if (root.writes !== 11)
       fail("unexpected persistence count " + root.writes)
+
+    if (!controller.reconcileV1PluginGroups([
+          { pluginId: "custom.right", region: "right" },
+          { pluginId: "custom.left", region: "left" }
+        ])
+        || controller.groupLocation("G:custom.left").region !== "left"
+        || controller.groupLocation("G:custom.right").region !== "right"
+        || !controller.reconcileV1PluginGroups([
+          { pluginId: "custom.left", region: "left" },
+          { pluginId: "custom.right", region: "right" }
+        ])
+        || !controller.moveGroupToSlot("G:custom.left", "left", 0)
+        || !controller.reconcileV1PluginGroups([
+          { pluginId: "custom.right", region: "right" }
+        ])
+        || controller.groupLocation("G:custom.left") !== null
+        || controller.groupLocation("G1").region !== "left"
+        || controller.groupLocation("G1").index !== 0
+        || !controller.reconcileV1PluginGroups([])
+        || !same(controller.order, ShibumiConfig.defaultOrder())
+        || !same(controller.splits, ShibumiConfig.defaultSplits())
+        || root.writes !== 15)
+      fail("V1 plugin-group lifecycle transaction")
 
     console.log("layout controller regression passed")
     Qt.exit(0)

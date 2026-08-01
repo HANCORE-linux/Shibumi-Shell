@@ -43,6 +43,11 @@ QtObject {
       { x: 62, width: 238 }
     ])) fail("within-section cut geometry")
 
+    const dormant = JSON.parse(JSON.stringify(base))
+    dormant.sections[0].splits[1] = true
+    if (!same(RunGeometry.compute(dormant), continuous))
+      fail("split next to an absent slot must remain dormant")
+
     const boundaries = JSON.parse(JSON.stringify(base))
     boundaries.boundaries = [true, true]
     const boundaryRuns = RunGeometry.compute(boundaries)

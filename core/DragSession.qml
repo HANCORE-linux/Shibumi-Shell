@@ -64,14 +64,18 @@ Item {
   function registerSlotTarget(region, index, groupId, item) {
     const targetRegionValue = String(region || "")
     const targetIndexValue = Math.floor(Number(index))
-    if (!layoutController || layoutController.v2Mode !== true
+    if (!layoutController
         || ["left", "center", "right"].indexOf(targetRegionValue) < 0
         || !Number.isFinite(targetIndexValue) || targetIndexValue < 0
         || !item) return false
     const next = []
     for (let i = 0; i < targets.length; i++) {
       const current = targets[i]
-      if (current && current.item !== item) next.push(current)
+      if (!current || current.item === item) continue
+      if (current.region === targetRegionValue
+          && current.index === targetIndexValue) continue
+      if (groupId !== "" && current.groupId === String(groupId)) continue
+      next.push(current)
     }
     next.push({
       groupId: String(groupId || ""),
