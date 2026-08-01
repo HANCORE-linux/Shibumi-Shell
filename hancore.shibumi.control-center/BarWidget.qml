@@ -145,6 +145,12 @@ Ui.Panel {
     return true
   }
 
+  function close() {
+    if (bar && typeof bar.cancelWidgetRestore === "function")
+      bar.cancelWidgetRestore(moduleName)
+    controller.hide()
+  }
+
   function syncClickRegistration() {
     if (registeredBar && typeof registeredBar.unregisterClickTarget === "function")
       registeredBar.unregisterClickTarget(root)

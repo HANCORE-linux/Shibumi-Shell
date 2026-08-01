@@ -13,6 +13,7 @@ Column {
   property color accent: Commons.Color.menu.selectedText
   property bool motionActive: false
   property string selectedWidgetGroup: "G4"
+  property string selectedWidgetId: ""
   property bool widgetDetailOpen: false
   readonly property var widgetOptions: WidgetCatalog.AppearanceOptions
   readonly property bool workbenchReady: appearanceWorkbench.ready
@@ -60,7 +61,9 @@ Column {
     const option = appearanceWorkbench.editableOption(groupId, pluginId)
     if (!option) return false
     selectedWidgetGroup = String(option.group || "")
-    appearanceWorkbench.selectedWidgetId = String(option.id || "")
+    selectedWidgetId = String(option.id || "")
+    if (typeof controller.trackWidgetDetails === "function")
+      controller.trackWidgetDetails(selectedWidgetGroup, selectedWidgetId)
     widgetDetailOpen = true
     return true
   }
@@ -77,6 +80,8 @@ Column {
   }
 
   function showWidgetOverview() {
+    if (typeof controller.clearWidgetDetails === "function")
+      controller.clearWidgetDetails()
     widgetDetailOpen = false
     return true
   }
@@ -88,7 +93,7 @@ Column {
     pageKey: "appearance"
     eyebrow: "WIDGET VISUALS"
     title: "Icons"
-    description: "Tune each widget's icon, label, surface, and color."
+    description: "Choose each widget's supported icon and label presentation."
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
@@ -105,9 +110,12 @@ Column {
     foreground: root.foreground
     accent: root.accent
     selectedWidgetGroup: root.selectedWidgetGroup
+    selectedWidgetId: root.selectedWidgetId
     detailOpen: root.widgetDetailOpen
     onSelectedWidgetGroupChanged:
       root.selectedWidgetGroup = selectedWidgetGroup
+    onSelectedWidgetIdChanged:
+      root.selectedWidgetId = selectedWidgetId
     onWidgetRequested: function(groupId, pluginId) {
       root.openWidgetDetails(groupId, pluginId)
     }

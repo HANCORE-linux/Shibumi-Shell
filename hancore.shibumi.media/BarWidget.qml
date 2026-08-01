@@ -35,16 +35,19 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property string displayMode: {
-    const value = String(setting("displayMode", "full"))
-    return ["full", "icon", "text"].indexOf(value) >= 0 ? value : "full"
-  }
-  readonly property bool fullMode: displayMode === "full"
-  readonly property bool iconMode: displayMode === "icon"
-  readonly property bool textMode: displayMode === "text"
+  // Now Playing follows the two-presentation contract shared by the original
+  // V1 and V2 shells. It is deliberately not part of the generic
+  // icon/text/full content-mode family used by the other V2 widgets.
+  readonly property string mediaStyle:
+    String(setting("mediaStyle", "default")) === "full"
+      ? "full" : "default"
+  readonly property bool defaultMode: mediaStyle === "default"
+  readonly property bool fullMode: mediaStyle === "full"
+  readonly property bool iconMode: false
+  readonly property bool textMode: false
   readonly property bool v1Presentation: !tokens
     || String(tokens.shellStyle || "shibumi") === "shibumi"
-  readonly property bool museMode: fullMode && !v1Presentation
+  readonly property bool museMode: fullMode
   readonly property bool spectrumEnabled: setting("spectrum", true) !== false
   readonly property bool spectrumRequested: visible && active && museMode
     && (!bar || !bar.vertical)
@@ -130,9 +133,7 @@ Ui.Panel {
       ? root.bar.barSize
       : (root.active
           ? (root.museMode ? muse.implicitWidth
-            : root.iconMode ? activeIcon.implicitWidth
-              : root.textMode ? activeText.implicitWidth
-              : activeRow.implicitWidth)
+            : activeRow.implicitWidth)
           : idleIcon.implicitWidth)
         + 2 * root.tokens.pillPaddingX
     implicitHeight: root.bar && root.bar.vertical
@@ -187,7 +188,7 @@ Ui.Panel {
 
     Row {
       id: activeRow
-      visible: root.active && root.fullMode && root.v1Presentation
+      visible: root.active && root.defaultMode
         && (!root.bar || !root.bar.vertical)
       anchors.centerIn: parent
       spacing: root.tokens ? root.tokens.compactGap : Commons.Style.space(4)

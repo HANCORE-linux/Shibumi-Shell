@@ -20,9 +20,16 @@ Column {
   signal overviewRequested()
 
   readonly property var displayModeOptions: [
+    { value: "icon", label: "Icon" },
     { value: "full", label: "Icon + text" },
-    { value: "icon", label: "Icon only" },
-    { value: "text", label: "Text only" }
+    { value: "text", label: "Text" }
+  ]
+  readonly property var mediaStyleOptions: [
+    { value: "default", label: "Default" },
+    { value: "full", label: "Full" }
+  ]
+  readonly property var v1CompactGroupIds: [
+    "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15"
   ]
   readonly property var colorOptions: [
     { value: "inherit", label: "Auto" },
@@ -51,12 +58,18 @@ Column {
   readonly property var editableOptions: activeOptions.concat(inactiveOptions)
   readonly property var selectedWidget: optionForSelection(
     selectedWidgetGroup, selectedWidgetId)
+  readonly property string selectedCatalogGroup:
+    String(selectedWidget ? selectedWidget.catalogGroup || "" : "")
+  readonly property bool selectedMedia: selectedCatalogGroup === "G9"
+  readonly property bool v1LayoutActive: controller.v2LayoutActive !== true
+  readonly property var selectedModeOptions: modeOptionsForGroup(
+    selectedWidget ? selectedWidget.group : "", selectedCatalogGroup)
   readonly property bool selectedActive:
     selectedWidget && selectedWidget.active === true
   readonly property bool selectedSupported: selectedWidget
     && String(selectedWidget.group || "") !== ""
   readonly property string selectedDisplayMode: selectedSupported
-    ? widgetMode(selectedWidget.group) : "full"
+    ? widgetMode(selectedWidget.group, selectedCatalogGroup) : "full"
   readonly property string selectedSurfaceMode: selectedSupported
     ? String(widgetSetting(selectedWidget.group, "colorMode", "fill")) : "none"
   readonly property string selectedColor: selectedSupported
@@ -74,9 +87,11 @@ Column {
             ? selectedColor : "inherit"))
     : "inherit"
   readonly property bool selectedHasFill:
-    selectedSurfaceMode === "fill" || selectedSurfaceMode === "both"
+    !v1LayoutActive
+      && (selectedSurfaceMode === "fill" || selectedSurfaceMode === "both")
   readonly property bool selectedHasBorder:
-    selectedSurfaceMode === "border" || selectedSurfaceMode === "both"
+    !v1LayoutActive
+      && (selectedSurfaceMode === "border" || selectedSurfaceMode === "both")
   readonly property color selectedFillColor: selectedColor === "inherit"
     ? controller.controlHoverFillColor
     : controller.accentColor(selectedColor)
@@ -99,6 +114,7 @@ Column {
   readonly property bool ready: widgetRepeater.count === activeOptions.length
     && inactiveWidgetRepeater.count === inactiveOptions.length
     && contentModeChoices.ready
+    && profileModeChoices.ready
     && contentToneChoices.ready
     && surfaceModeChoices.ready
     && outlineChoices.ready
@@ -234,6 +250,7 @@ Column {
       const source = widgetOptions[index]
       const catalogGroup = String(source.group || "")
       if (catalogGroup === ""
+          || !isShibumiWidgetOption(source)
           || isCatalogGroupActive(catalogGroup, activeValues)) continue
       result.push(optionModel(source,
         settingsGroupForCatalogGroup(catalogGroup), catalogGroup, "", false))
@@ -290,6 +307,12 @@ Column {
         return widgetOptions[index]
     }
     return null
+  }
+
+  function isShibumiWidgetOption(source) {
+    if (!source) return false
+    return pluginIdForGroup(String(source.group || ""))
+      .indexOf("hancore.shibumi.") === 0
   }
 
   function activeOrder() {
@@ -352,12 +375,19 @@ Column {
 
   function widgetAppearanceChanged(groupValue) {
     const group = String(groupValue || "")
+    const catalogGroup = catalogGroupForSettingsGroup(group)
+    if (controller.v2LayoutActive !== true) {
+      if (catalogGroup === "G9")
+        return widgetMode(group, catalogGroup) !== "default"
+      return v1CompactGroupIds.indexOf(catalogGroup) >= 0
+        && widgetMode(group, catalogGroup) !== "full"
+    }
     const color = String(widgetSetting(group, "color", "inherit"))
     const usesSurfaceColor = widgetSetting(
       group, "widgetBorderUsesSurfaceColor", false) === true
     const borderColor = String(widgetSetting(group, "widgetBorderColor",
       usesSurfaceColor ? color : "inherit"))
-    return widgetMode(group) !== "full"
+    return widgetMode(group, catalogGroup) !== "full"
       || color !== "inherit"
       || String(widgetSetting(group, "colorMode", "fill")) !== "fill"
       || String(widgetSetting(group, "tone", "auto")) !== "auto"
@@ -379,41 +409,86 @@ Column {
     return option !== null && option.active === true
   }
 
-  function widgetMode(group) {
-    const stored = String(widgetSetting(group, "displayMode", ""))
-    if (stored !== "") return stored
-    return widgetSetting(group, "compact", false) === true ? "icon" : "full"
+  function catalogGroupForSettingsGroup(groupValue) {
+    const group = String(groupValue || "")
+    if (group.indexOf("G:") !== 0) return group
+    return String(controller.shibumiWidgetGroup(group.slice(2)) || group)
   }
 
-  function displayModeLabel(mode) {
-    const value = String(mode || "")
-    for (let index = 0; index < displayModeOptions.length; index++) {
-      if (displayModeOptions[index].value === value)
-        return displayModeOptions[index].label
+  function modeOptionsForGroup(groupValue, catalogGroupValue) {
+    const catalogGroup = String(catalogGroupValue
+      || catalogGroupForSettingsGroup(groupValue) || "")
+    if (catalogGroup === "G9") return mediaStyleOptions
+    if (controller.v2LayoutActive === true) return displayModeOptions
+    const compactAvailable = v1CompactGroupIds.indexOf(catalogGroup) >= 0
+    return [
+      { value: "icon", label: "Icon", enabled: compactAvailable },
+      { value: "full", label: "Icon + text", enabled: true },
+      { value: "text", label: "Text", enabled: false }
+    ]
+  }
+
+  function widgetMode(group, catalogGroupValue) {
+    const catalogGroup = String(catalogGroupValue
+      || catalogGroupForSettingsGroup(group) || "")
+    if (catalogGroup === "G9")
+      return String(widgetSetting(group, "mediaStyle", "default")) === "full"
+        ? "full" : "default"
+    const stored = String(widgetSetting(group, "displayMode", ""))
+    const mode = stored !== "" ? stored
+      : widgetSetting(group, "compact", false) === true ? "icon" : "full"
+    const options = modeOptionsForGroup(group, catalogGroup)
+    for (let index = 0; index < options.length; index++) {
+      if (String(options[index].value) === mode
+          && options[index].enabled !== false) return mode
     }
-    return "Icon + text"
+    for (let index = 0; index < options.length; index++) {
+      if (options[index].enabled !== false)
+        return String(options[index].value)
+    }
+    return "full"
+  }
+
+  function displayModeLabel(group, mode) {
+    const value = String(mode || "")
+    const options = modeOptionsForGroup(group,
+      catalogGroupForSettingsGroup(group))
+    for (let index = 0; index < options.length; index++) {
+      if (options[index].value === value)
+        return options[index].label
+    }
+    return options.length > 0 ? String(options[0].label) : "Default"
   }
 
   function setWidgetMode(mode) {
     if (!selectedSupported) return false
     const value = String(mode)
-    controller.setGroupSetting(selectedWidget.group, "displayMode", value)
-    controller.setGroupSetting(selectedWidget.group, "compact",
-      selectedWidget.group === "G9" ? value === "full" : value === "icon")
-    return true
+    const available = selectedModeOptions.some(function(option) {
+      return String(option.value) === value && option.enabled !== false
+    })
+    if (!available) return false
+    if (selectedMedia)
+      return controller.setGroupSetting(
+        selectedWidget.group, "mediaStyle", value)
+    return controller.setGroupSetting(
+      selectedWidget.group, "displayMode", value)
   }
 
   function cycleWidgetMode() {
     if (!selectedSupported) return false
+    const available = selectedModeOptions.filter(function(option) {
+      return option.enabled !== false
+    })
+    if (available.length < 1) return false
     let currentIndex = 0
-    for (let index = 0; index < displayModeOptions.length; index++) {
-      if (displayModeOptions[index].value === selectedDisplayMode) {
+    for (let index = 0; index < available.length; index++) {
+      if (available[index].value === selectedDisplayMode) {
         currentIndex = index
         break
       }
     }
-    const nextIndex = (currentIndex + 1) % displayModeOptions.length
-    return setWidgetMode(displayModeOptions[nextIndex].value)
+    const nextIndex = (currentIndex + 1) % available.length
+    return setWidgetMode(available[nextIndex].value)
   }
 
   function cycleWidgetOpacity() {
@@ -798,7 +873,7 @@ Column {
           }
 
           Row {
-            visible: root.selectedSupported
+            visible: root.selectedSupported && !root.v1LayoutActive
             width: parent.width
             spacing: Commons.Style.space(8)
 
@@ -859,6 +934,7 @@ Column {
 
           Column {
             visible: root.selectedSupported
+              && !root.v1LayoutActive
               && root.selectedHasFill
             width: parent.width
             spacing: Commons.Style.space(4)
@@ -875,6 +951,7 @@ Column {
 
           Column {
             visible: root.selectedSupported
+              && !root.v1LayoutActive
               && root.selectedHasBorder
             width: parent.width
             spacing: Commons.Style.space(4)
@@ -894,28 +971,51 @@ Column {
             }
           }
 
+          Column {
+            visible: root.selectedSupported
+              && root.selectedMedia
+            width: parent.width
+            spacing: Commons.Style.space(4)
+
+            FieldLabel {
+              text: root.selectedMedia
+                ? "NOW PLAYING STYLE" : "PRESENTATION"
+            }
+
+            RadioChoiceList {
+              id: profileModeChoices
+              height: root.choiceListHeight
+              options: root.selectedModeOptions
+              currentValue: root.selectedDisplayMode
+              onChosen: value => root.setWidgetMode(value)
+            }
+          }
+
           Row {
             visible: root.selectedSupported
+              && !root.selectedMedia
             width: parent.width
             spacing: Commons.Style.space(8)
 
             Column {
-              width: (parent.width - parent.spacing * 2) / 3 * 2
-                + parent.spacing
+              width: root.v1LayoutActive ? parent.width
+                : (parent.width - parent.spacing * 2) / 3 * 2
+                  + parent.spacing
               spacing: Commons.Style.space(4)
 
-              FieldLabel { text: "CONTENT" }
+              FieldLabel { text: "PRESENTATION" }
 
               RadioChoiceList {
                 id: contentModeChoices
                 height: root.choiceListHeight
-                options: root.displayModeOptions
+                options: root.selectedModeOptions
                 currentValue: root.selectedDisplayMode
                 onChosen: value => root.setWidgetMode(value)
               }
             }
 
             Column {
+              visible: !root.v1LayoutActive
               width: (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
@@ -938,6 +1038,7 @@ Column {
 
           Column {
             visible: root.selectedSupported
+              && !root.v1LayoutActive
               && root.detailOpen
             width: parent.width
             spacing: Commons.Style.space(7)
@@ -1124,7 +1225,9 @@ Column {
           visible: widgetRow.active || widgetRow.hasToggleError
           text: widgetRow.hasToggleError
             ? root.toggleErrorMessage
-            : root.displayModeLabel(root.widgetMode(widgetRow.option.group))
+            : root.displayModeLabel(widgetRow.option.group,
+                root.widgetMode(widgetRow.option.group,
+                  widgetRow.option.catalogGroup))
           color: widgetRow.hasToggleError
             ? root.controller.accentColor("color01")
             : widgetRow.selected || editorPointer.containsMouse
@@ -1504,6 +1607,7 @@ Column {
         required property var modelData
         readonly property bool selected:
           radioList.currentValue === modelData.value
+        readonly property bool available: modelData.enabled !== false
         width: parent.width
         height: (radioList.height - radioList.spacing
           * (radioList.options.length - 1)) / radioList.options.length
@@ -1512,7 +1616,7 @@ Column {
           anchors.fill: parent
           radius: Math.min(root.controller.controlRadius,
             Commons.Style.space(4))
-          color: radioPointer.containsMouse
+          color: radioRow.available && radioPointer.containsMouse
             ? root.controller.buttonHoverFillColor : "transparent"
         }
 
@@ -1526,8 +1630,10 @@ Column {
           radius: width / 2
           color: "transparent"
           border.width: 1
-          border.color: radioRow.selected || radioPointer.containsMouse
+          border.color: radioRow.selected
+              || (radioRow.available && radioPointer.containsMouse)
             ? root.accent : root.controller.controlBorderColor
+          opacity: radioRow.available ? 1 : 0.36
 
           Rectangle {
             anchors.centerIn: parent
@@ -1545,8 +1651,10 @@ Column {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           text: radioRow.modelData.label
-          color: radioRow.selected || radioPointer.containsMouse
+          color: radioRow.selected
+              || (radioRow.available && radioPointer.containsMouse)
             ? root.accent : root.foreground
+          opacity: radioRow.available ? 1 : 0.34
           font.family: root.controller.marketFont
           font.pixelSize: root.choiceFontSize
           font.weight: radioRow.selected ? Font.DemiBold : Font.Normal
@@ -1557,7 +1665,7 @@ Column {
         MouseArea {
           id: radioPointer
           anchors.fill: parent
-          enabled: radioList.enabled
+          enabled: radioList.enabled && radioRow.available
           hoverEnabled: true
           cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
           onClicked: radioList.chosen(radioRow.modelData.value)

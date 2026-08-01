@@ -94,6 +94,82 @@ Item {
       ? settings[name] : fallback
   }
 
+  readonly property var appearanceKeys: [
+    "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
+    "widgetBorder", "widgetBorderWidth",
+    "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
+    "widgetRadius", "surfaceOpacity"
+  ]
+
+  function normalizedVariant(value) {
+    return String(value || "").toLowerCase() === "v2" ? "v2" : "v1"
+  }
+
+  function appearanceProfile(settings, variantValue) {
+    const appearance = settings && ShibumiConfig.isPlainObject(
+      settings.appearance) ? settings.appearance : ({})
+    const variant = normalizedVariant(variantValue)
+    return ShibumiConfig.isPlainObject(appearance[variant])
+      ? appearance[variant] : ({})
+  }
+
+  function normalizedDisplayMode(groupId, variantValue, value) {
+    const group = String(groupId || "")
+    const variant = normalizedVariant(variantValue)
+    const mode = String(value || "full")
+    if (variant === "v2")
+      return ["full", "icon", "text"].indexOf(mode) >= 0 ? mode : "full"
+    const compactGroups = [
+      "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15"
+    ]
+    return compactGroups.indexOf(group) >= 0 && mode === "icon"
+      ? "icon" : "full"
+  }
+
+  function groupAppearanceSettingForVariant(groupId, variantValue, key, fallback) {
+    const settings = groupSettings(groupId)
+    const name = String(key || "")
+    const variant = normalizedVariant(variantValue)
+    const profile = appearanceProfile(settings, variant)
+    let value = Object.prototype.hasOwnProperty.call(profile, name)
+      ? profile[name]
+      : Object.prototype.hasOwnProperty.call(settings, name)
+        ? settings[name] : fallback
+    if (name === "displayMode") {
+      if (!Object.prototype.hasOwnProperty.call(profile, name)
+          && !Object.prototype.hasOwnProperty.call(settings, name)
+          && settings.compact === true)
+        value = "icon"
+      value = normalizedDisplayMode(groupId, variant, value)
+    }
+    if (name === "compact")
+      value = normalizedDisplayMode(groupId, variant,
+        groupAppearanceSettingForVariant(
+          groupId, variant, "displayMode", "full")) === "icon"
+    if (name === "mediaStyle") {
+      if (!Object.prototype.hasOwnProperty.call(profile, name)
+          && !Object.prototype.hasOwnProperty.call(settings, name)
+          && settings.compact === true)
+        value = "full"
+      value = String(value || "default") === "full" ? "full" : "default"
+    }
+    return value
+  }
+
+  function groupSettingsForVariant(groupId, variantValue) {
+    const settings = groupSettings(groupId)
+    const effective = ({})
+    for (const key in settings) {
+      if (key !== "appearance") effective[key] = settings[key]
+    }
+    for (let index = 0; index < appearanceKeys.length; index++) {
+      const key = appearanceKeys[index]
+      effective[key] = groupAppearanceSettingForVariant(
+        groupId, variantValue, key, effective[key])
+    }
+    return effective
+  }
+
   function activeShellVariant() {
     const presentation = config && config.presentation
       ? config.presentation : ({})
@@ -146,11 +222,46 @@ Item {
     })
   }
 
+  function setGroupAppearanceSettingForVariant(groupId, variantValue, key, value) {
+    const group = String(groupId || "")
+    const variant = normalizedVariant(variantValue)
+    const name = String(key || "")
+    if (!ShibumiConfig.isGroupId(group)
+        || appearanceKeys.indexOf(name) < 0) return false
+
+    let normalizedValue = value
+    if (name === "displayMode")
+      normalizedValue = normalizedDisplayMode(group, variant, value)
+    else if (name === "compact")
+      normalizedValue = value === true
+    else if (name === "mediaStyle")
+      normalizedValue = String(value || "") === "full" ? "full" : "default"
+
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+      const settings = ShibumiConfig.isPlainObject(next.widgets[group])
+        ? next.widgets[group] : {}
+      const appearance = ShibumiConfig.isPlainObject(settings.appearance)
+        ? settings.appearance : {}
+      const profile = ShibumiConfig.isPlainObject(appearance[variant])
+        ? appearance[variant] : {}
+      profile[name] = normalizedValue
+      if (name === "compact")
+        profile.displayMode = normalizedDisplayMode(group, variant,
+          normalizedValue ? "icon" : "full")
+      else if (name === "displayMode")
+        profile.compact = normalizedValue === "icon"
+      appearance[variant] = profile
+      settings.appearance = appearance
+      next.widgets[group] = settings
+    })
+  }
+
   function resetGroupAppearance(groupId) {
     const group = String(groupId || "")
     if (!ShibumiConfig.isGroupId(group)) return false
     const appearanceKeys = [
-      "displayMode", "compact", "color", "colorMode", "tone",
+      "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth",
       "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
       "widgetRadius", "surfaceOpacity"
@@ -161,6 +272,29 @@ Item {
         ? next.widgets[group] : {}
       for (let index = 0; index < appearanceKeys.length; index++)
         delete settings[appearanceKeys[index]]
+      next.widgets[group] = settings
+    })
+  }
+
+  function resetGroupAppearanceForVariant(groupId, variantValue) {
+    const group = String(groupId || "")
+    const variant = normalizedVariant(variantValue)
+    if (!ShibumiConfig.isGroupId(group)) return false
+    const defaults = {
+      displayMode: "full", compact: false, mediaStyle: "default",
+      color: "inherit", colorMode: "fill", tone: "auto",
+      widgetBorder: false, widgetBorderWidth: 1,
+      widgetBorderColor: "inherit", widgetBorderUsesSurfaceColor: false,
+      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1
+    }
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+      const settings = ShibumiConfig.isPlainObject(next.widgets[group])
+        ? next.widgets[group] : {}
+      const appearance = ShibumiConfig.isPlainObject(settings.appearance)
+        ? settings.appearance : {}
+      appearance[variant] = JSON.parse(JSON.stringify(defaults))
+      settings.appearance = appearance
       next.widgets[group] = settings
     })
   }

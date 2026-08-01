@@ -141,6 +141,45 @@ done
 rg -Fq 'restoreBar.scheduleWidgetRestore(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style changes do not preserve the open Control Center page"
+rg -Fq 'presentationName === "shellStyle"' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "shell-style restore does not wait for the replacement panel owner"
+rg -Fq 'preservePage, true)' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "V1/V2 restore does not wait for the replacement panel owner"
+rg -Fq 'pendingWidgetRestoreAttempts < 20' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1/V2 restore window no longer covers late owner replacement"
+rg -Fq 'even after the first successful open' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1/V2 restore no longer protects a second panel-owner rebuild"
+rg -Fq 'property var pendingWidgetRestoreActiveOwner: null' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1/V2 restore does not track the established replacement owner"
+rg -Fq 'pendingWidgetRestorePage = currentPage' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1/V2 restore overwrites navigation performed during handoff"
+rg -Fq 'function trackWidgetRestorePage(pluginId, page)' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "V1/V2 restore does not preserve navigation during owner handoff"
+rg -Fq 'controller.trackSettingsPage(next)' \
+  "$control_dir/ControlSettings.qml" \
+  || fail "Control Center navigation is not handed to the restore lifecycle"
+rg -Fq 'bar.cancelWidgetRestore(moduleName)' \
+  "$control_dir/BarWidget.qml" \
+  || fail "closing the Control Center does not cancel a pending restore"
+rg -Fq 'function runWithControlCenterRestore(callback)' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "widget Appearance changes do not preserve the Control Center"
+rg -Fq 'restoreBar.scheduleWidgetRestore(' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "state mutations are not enrolled in panel-owner handoff"
+rg -Fq 'function trackControlCenterWidgetDetail(groupId, pluginId)' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "widget detail selection does not survive panel-owner replacement"
+rg -Fq 'root.controller.restoreWidgetDetails(item)' \
+  "$control_dir/ControlSettings.qml" \
+  || fail "the rebuilt Icons page does not restore its selected widget"
 rg -Fq '"accent", "border", "panelBorder", "frost", "shadow"' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "bar presentation changes do not preserve the Control Center page"
@@ -1133,15 +1172,15 @@ if rg -q 'model: 5' "$control_dir/BarsPage.qml"; then
   fail "ambiguous five-box decoration remains in the shell preview"
 fi
 for visual_contract in \
+    'value: "icon", label: "Icon"' \
     'value: "full", label: "Icon + text"' \
-    'value: "icon", label: "Icon only"' \
-    'value: "text", label: "Text only"' \
-    'text: "CONTENT"' \
+    'value: "text", label: "Text"' \
+    'text: "PRESENTATION"' \
     'id: integratedPreviewContent' \
     'text: "FILL COLOR"' \
     'text: "OUTLINE COLOR"' \
     'root.displayModeLabel(' \
-    'root.widgetMode(widgetRow.option.group))' \
+    'root.widgetMode(widgetRow.option.group,' \
     '{ value: "none", label: "None" }' \
     '{ value: "fill", label: "Fill" }' \
     '{ value: "border", label: "Outline" }' \
@@ -1238,6 +1277,7 @@ for workbench_contract in \
     'Keys.onRightPressed:' \
     'Keys.onLeftPressed:' \
     'id: contentModeChoices' \
+    'id: profileModeChoices' \
     'id: contentToneChoices' \
     'id: surfaceModeChoices' \
     'id: outlineChoices' \
@@ -1281,7 +1321,7 @@ if rg -Fq 'text: "FINISH"' "$workbench"; then
 fi
 for compact_surface_row_contract in \
     'width: (parent.width - parent.spacing * 2) / 3' \
-    'width: (parent.width - parent.spacing * 2) / 3 * 2' \
+    ': (parent.width - parent.spacing * 2) / 3 * 2' \
     '+ parent.spacing' \
     'height: root.choiceRowHeight * 4' \
     'readonly property real surfaceChoiceHeight: choiceRowHeight * 4'; do
@@ -1300,7 +1340,7 @@ for content_cycle_contract in \
     'BarFunctionsPage.qml:function cycleSelectedWidgetMode()' \
     'WidgetAppearanceWorkbench.qml:id: contentModeChoices' \
     'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetMode(value)' \
-    'control-center-smoke.qml:single Content button did not cycle the widget mode'; do
+    'control-center-smoke.qml:V1 Default/Compact choice did not cycle'; do
   file=${content_cycle_contract%%:*}
   label=${content_cycle_contract#*:}
   if [[ $file == control-center-smoke.qml ]]; then
@@ -1310,6 +1350,28 @@ for content_cycle_contract in \
   fi
   rg -Fq "$label" "$target" \
     || fail "single Content cycle contract drifted: $label"
+done
+for profile_icon_contract in \
+    'WidgetAppearanceWorkbench.qml:{ value: "icon", label: "Icon" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Icon + text" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: "text", label: "Text" }' \
+    'WidgetAppearanceWorkbench.qml:readonly property var mediaStyleOptions:' \
+    'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Full" }' \
+    'WidgetAppearanceWorkbench.qml:readonly property var v1CompactGroupIds:' \
+    'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G9") return mediaStyleOptions' \
+    'WidgetAppearanceWorkbench.qml:if (controller.v2LayoutActive === true) return displayModeOptions' \
+    'WidgetAppearanceWorkbench.qml:{ value: "text", label: "Text", enabled: false }' \
+    'WidgetAppearanceWorkbench.qml:enabled: radioList.enabled && radioRow.available' \
+    'WidgetAppearanceWorkbench.qml:function isShibumiWidgetOption(source)' \
+    'WidgetAppearanceWorkbench.qml:|| !isShibumiWidgetOption(source)' \
+    'WidgetAppearanceWorkbench.qml:&& !root.v1LayoutActive' \
+    'ControlCenterPanel.qml:stateService.groupAppearanceSettingForVariant' \
+    'ControlCenterPanel.qml:stateService.setGroupAppearanceSettingForVariant' \
+    'ControlCenterPanel.qml:stateService.resetGroupAppearanceForVariant'; do
+  file=${profile_icon_contract%%:*}
+  label=${profile_icon_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "V1/V2 icon capability boundary drifted: $label"
 done
 for compact_cycle_contract in \
     'BarFunctionsPage.qml:function cycleSelectedWidgetSurface()' \
@@ -1378,7 +1440,7 @@ for opacity_cycle_contract in \
 done
 color_palette_line=$(rg -n -m1 'text: "FILL COLOR"' "$workbench" \
   | cut -d: -f1)
-content_line=$(rg -n -m1 'text: "CONTENT"' "$workbench" | cut -d: -f1)
+content_line=$(rg -n -m1 'text: "PRESENTATION"' "$workbench" | cut -d: -f1)
 [[ -n $color_palette_line && -n $content_line \
     && $color_palette_line -lt $content_line ]] \
   || fail "Fill/Outline Color must sit directly before Content"
@@ -1458,6 +1520,9 @@ fi
 rg -Fq 'function resetGroupAppearance(groupId)' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "widget Appearance reset is not atomic in the state service"
+rg -Fq 'function resetGroupAppearanceForVariant(groupId, variantValue)' \
+  "$repo_root/hancore.shibumi.state/Service.qml" \
+  || fail "profile-specific widget Appearance reset is missing"
 rg -Fq '"widgetBorderColor"' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "widget outline-color choice is not covered by appearance reset"

@@ -9,7 +9,7 @@ ShellRoot {
   property int waits: 0
   property real activeWidth: 0
   property string mediaShellStyle: "shibumi"
-  property var mediaSettings: ({ spectrum: false, displayMode: "full" })
+  property var mediaSettings: ({ spectrum: false, mediaStyle: "default" })
 
   function fail(message) {
     console.error("media-plugin-smoke:", message)
@@ -221,7 +221,7 @@ ShellRoot {
       if (root.phase === 0) {
         if (!media || !media.mediaService || !media.active || !media.playing
             || media.trackLabel.indexOf("Artist A") < 0 || media.panelLoaded
-            || !media.fullMode || !media.v1Presentation
+            || media.fullMode || !media.defaultMode || !media.v1Presentation
             || !media.v1FullVisible || media.museVisible
             || media.museBandCount !== 24
             || fakeSpectrum.clientCount !== 0
@@ -234,11 +234,11 @@ ShellRoot {
         media.interactionTarget.wheelMoved(120)
         if (mediaState.lastAction !== "previous")
           return root.fail("wheel previous action forwarding")
-        root.mediaShellStyle = "full"
+        root.mediaSettings = ({ spectrum: false, mediaStyle: "full" })
       } else if (root.phase === 1) {
         if (!media.fullMode || !media.museMode || !media.museVisible
-            || fakeSpectrum.clientCount !== 1)
-          return root.fail("FULL muse presentation/lease")
+            || !media.v1Presentation || fakeSpectrum.clientCount !== 1)
+          return root.fail("V1 FULL muse presentation/lease")
         media.runMusePrimaryAction()
         if (mediaState.lastAction !== "playPause" || !playerA.isPlaying)
           return root.fail("FULL muse play/pause forwarding")
@@ -248,18 +248,16 @@ ShellRoot {
         media.runMuseWheel(-120)
         if (mediaState.lastAction !== "previous")
           return root.fail("FULL muse wheel-previous forwarding")
-        root.mediaShellStyle = "shibumi"
-        root.mediaSettings = ({ spectrum: false, displayMode: "text" })
+        root.mediaShellStyle = "full"
       } else if (root.phase === 2) {
-        if (!media.textMode || !media.textVisible || media.iconVisible
-            || media.museVisible
-            || fakeSpectrum.clientCount !== 0)
-          return root.fail("text presentation or FULL muse lease release")
-        root.mediaSettings = ({ spectrum: false, displayMode: "icon" })
+        if (!media.fullMode || !media.museMode || !media.museVisible
+            || media.v1Presentation || fakeSpectrum.clientCount !== 1)
+          return root.fail("V2 FULL muse presentation/lease")
+        root.mediaSettings = ({ spectrum: false, mediaStyle: "default" })
       } else if (root.phase === 3) {
-        if (!media.iconMode || !media.iconVisible || media.textVisible
-            || media.museVisible)
-          return root.fail("icon presentation")
+        if (media.fullMode || !media.defaultMode || !media.v1FullVisible
+            || media.museVisible || fakeSpectrum.clientCount !== 0)
+          return root.fail("shared default presentation")
         media.interactionTarget.triggerPress(Qt.RightButton)
       } else if (root.phase === 4) {
         if (!media.opened || !media.panelLoaded || !media.panelItem) return

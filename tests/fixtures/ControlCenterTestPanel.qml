@@ -285,8 +285,12 @@ Item {
   }
 
   function groupSetting(groupId, key, fallback) {
-    return stateService && typeof stateService.groupSetting === "function"
-      ? stateService.groupSetting(groupId, key, fallback) : fallback
+    return stateService
+      && typeof stateService.groupAppearanceSettingForVariant === "function"
+      ? stateService.groupAppearanceSettingForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1", key, fallback)
+      : stateService && typeof stateService.groupSetting === "function"
+        ? stateService.groupSetting(groupId, key, fallback) : fallback
   }
 
   function groupEnabled(groupId) {
@@ -306,8 +310,12 @@ Item {
   }
 
   function setGroupSetting(groupId, key, value) {
-    return stateService && typeof stateService.setGroupSetting === "function"
-      ? stateService.setGroupSetting(groupId, key, value) : false
+    return stateService
+      && typeof stateService.setGroupAppearanceSettingForVariant === "function"
+      ? stateService.setGroupAppearanceSettingForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1", key, value)
+      : stateService && typeof stateService.setGroupSetting === "function"
+        ? stateService.setGroupSetting(groupId, key, value) : false
   }
 
   function pluginFavorite(pluginId) {
@@ -322,8 +330,11 @@ Item {
 
   function resetGroupAppearance(groupId) {
     return stateService
-      && typeof stateService.resetGroupAppearance === "function"
-      ? stateService.resetGroupAppearance(groupId) : false
+      && typeof stateService.resetGroupAppearanceForVariant === "function"
+      ? stateService.resetGroupAppearanceForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1")
+      : stateService && typeof stateService.resetGroupAppearance === "function"
+        ? stateService.resetGroupAppearance(groupId) : false
   }
 
   function setBarPresentation(name, value) {
@@ -337,10 +348,15 @@ Item {
     if (preservePanel && restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
       restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage)
-    return stateService
+        "hancore.shibumi.control-center", preservePage,
+        presentationName === "shellStyle")
+    const changed = stateService
       && typeof stateService.setPresentationSetting === "function"
       ? stateService.setPresentationSetting(name, value) : false
+    if (!changed && preservePanel && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    return changed
   }
 
   function setBarVariant(target) {
@@ -353,8 +369,12 @@ Item {
     if (restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
       restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage)
-    return stateService.setShellVariant(requested)
+        "hancore.shibumi.control-center", preservePage, true)
+    const changed = stateService.setShellVariant(requested)
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    return changed
   }
 
   function setWorkspacePreference(name, value) {

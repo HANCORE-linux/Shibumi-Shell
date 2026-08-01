@@ -585,8 +585,12 @@ ShibumiPanel {
   }
 
   function groupSetting(groupId, key, fallback) {
-    return stateService && typeof stateService.groupSetting === "function"
-      ? stateService.groupSetting(groupId, key, fallback) : fallback
+    return stateService
+      && typeof stateService.groupAppearanceSettingForVariant === "function"
+      ? stateService.groupAppearanceSettingForVariant(groupId,
+          v2LayoutActive ? "v2" : "v1", key, fallback)
+      : stateService && typeof stateService.groupSetting === "function"
+        ? stateService.groupSetting(groupId, key, fallback) : fallback
   }
 
   function groupEnabled(groupId) {
@@ -598,16 +602,27 @@ ShibumiPanel {
   }
 
   function setGroupEnabled(groupId, enabled) {
-    return stateService && typeof stateService.setGroupEnabledForVariant
-      === "function"
-      ? stateService.setGroupEnabledForVariant(groupId,
-          v2LayoutActive ? "v2" : "v1", enabled === true)
-      : setGroupSetting(groupId, "enabled", enabled === true)
+    return runWithControlCenterRestore(function() {
+      return stateService && typeof stateService.setGroupEnabledForVariant
+        === "function"
+        ? stateService.setGroupEnabledForVariant(groupId,
+            v2LayoutActive ? "v2" : "v1", enabled === true)
+        : stateService && typeof stateService.setGroupSetting === "function"
+          ? stateService.setGroupSetting(groupId, "enabled", enabled === true)
+          : false
+    })
   }
 
   function setGroupSetting(groupId, key, value) {
-    return stateService && typeof stateService.setGroupSetting === "function"
-      ? stateService.setGroupSetting(groupId, key, value) : false
+    return runWithControlCenterRestore(function() {
+      return stateService
+        && typeof stateService.setGroupAppearanceSettingForVariant
+          === "function"
+        ? stateService.setGroupAppearanceSettingForVariant(groupId,
+            v2LayoutActive ? "v2" : "v1", key, value)
+        : stateService && typeof stateService.setGroupSetting === "function"
+          ? stateService.setGroupSetting(groupId, key, value) : false
+    })
   }
 
   function pluginFavorite(pluginId) {
@@ -621,9 +636,30 @@ ShibumiPanel {
   }
 
   function resetGroupAppearance(groupId) {
-    return stateService
-      && typeof stateService.resetGroupAppearance === "function"
-      ? stateService.resetGroupAppearance(groupId) : false
+    return runWithControlCenterRestore(function() {
+      return stateService
+        && typeof stateService.resetGroupAppearanceForVariant === "function"
+        ? stateService.resetGroupAppearanceForVariant(groupId,
+            v2LayoutActive ? "v2" : "v1")
+        : stateService
+            && typeof stateService.resetGroupAppearance === "function"
+          ? stateService.resetGroupAppearance(groupId) : false
+    })
+  }
+
+  function runWithControlCenterRestore(callback) {
+    if (typeof callback !== "function") return false
+    const restoreBar = bar
+    const preservePage = settings.restorePage
+    if (restoreBar
+        && typeof restoreBar.scheduleWidgetRestore === "function")
+      restoreBar.scheduleWidgetRestore(
+        "hancore.shibumi.control-center", preservePage, true)
+    const changed = callback()
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    return changed
   }
 
   function setBarPresentation(name, value) {
@@ -641,10 +677,14 @@ ShibumiPanel {
     if (preservePanel && restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
       restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage)
+        "hancore.shibumi.control-center", preservePage,
+        presentationName === "shellStyle")
     const changed = stateService
       && typeof stateService.setPresentationSetting === "function"
       ? stateService.setPresentationSetting(name, value) : false
+    if (!changed && preservePanel && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
     return changed
   }
 
@@ -658,8 +698,12 @@ ShibumiPanel {
     if (restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
       restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage)
-    return stateService.setShellVariant(requested)
+        "hancore.shibumi.control-center", preservePage, true)
+    const changed = stateService.setShellVariant(requested)
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    return changed
   }
 
   function setWorkspacePreference(name, value) {
@@ -840,6 +884,38 @@ ShibumiPanel {
 
   function showSettingsPage(value) {
     return settings.setPage(value)
+  }
+
+  function trackSettingsPage(value) {
+    const page = String(value || "")
+    if (page !== "functions" && bar
+        && typeof bar.clearControlCenterWidgetDetail === "function")
+      bar.clearControlCenterWidgetDetail()
+    return bar && typeof bar.trackWidgetRestorePage === "function"
+      ? bar.trackWidgetRestorePage(
+          "hancore.shibumi.control-center", page) : false
+  }
+
+  function trackWidgetDetails(groupId, pluginId) {
+    return bar
+        && typeof bar.trackControlCenterWidgetDetail === "function"
+      ? bar.trackControlCenterWidgetDetail(groupId, pluginId) : false
+  }
+
+  function clearWidgetDetails() {
+    return bar
+        && typeof bar.clearControlCenterWidgetDetail === "function"
+      ? bar.clearControlCenterWidgetDetail() : false
+  }
+
+  function restoreWidgetDetails(pageItem) {
+    const group = bar
+      ? String(bar.controlCenterWidgetDetailGroup || "") : ""
+    const plugin = bar
+      ? String(bar.controlCenterWidgetDetailPlugin || "") : ""
+    return group !== "" && pageItem
+        && typeof pageItem.openWidgetDetails === "function"
+      ? pageItem.openWidgetDetails(group, plugin) : false
   }
 
   function openWidgetPicker() {

@@ -81,6 +81,22 @@ ShellRoot {
         if (state.setGroupSetting("G4", "compact", true)
             || fakeShell.writes !== 1)
           return root.fail("no-op mutation persisted")
+        if (!state.setGroupAppearanceSettingForVariant(
+              "G4", "v1", "displayMode", "icon")
+            || !state.setGroupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "text")
+            || state.groupAppearanceSettingForVariant(
+              "G4", "v1", "displayMode", "") !== "icon"
+            || state.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "text"
+            || state.groupSettingsForVariant("G4", "v1").compact !== true
+            || state.groupSettingsForVariant("G4", "v2").compact !== false
+            || !state.resetGroupAppearanceForVariant("G4", "v1")
+            || state.groupAppearanceSettingForVariant(
+              "G4", "v1", "displayMode", "") !== "full"
+            || state.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "text")
+          return root.fail("V1/V2 appearance isolation")
         root.stage = 1
         return
       }

@@ -156,15 +156,15 @@ rg -q 'maximumRetries: 3' "$repo_root/hancore.shibumi.media/Service.qml" \
 rg -q 'target: "shibumi-media-spectrum"' \
   "$repo_root/hancore.shibumi.media/Service.qml" \
   || fail "media spectrum service lacks read-only runtime diagnostics"
-rg -Fq 'readonly property string displayMode: {' \
+rg -Fq 'readonly property string mediaStyle:' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
-  || fail "G9 does not normalize its appearance mode"
-rg -Fq '["full", "icon", "text"]' \
+  || fail "G9 does not normalize its two-presentation style"
+rg -Fq 'String(setting("mediaStyle", "default")) === "full"' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
-  || fail "G9 does not expose full, icon, and text modes"
-rg -q 'readonly property bool museMode: fullMode && !v1Presentation' \
+  || fail "G9 does not expose Default and Full presentations"
+rg -q 'readonly property bool museMode: fullMode' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
-  || fail "G9 does not keep V1 full and V2 FULL/muse separated"
+  || fail "G9 does not share FULL/muse across V1 and V2"
 rg -q 'readonly property int bandCount: 24' \
   "$repo_root/hancore.shibumi.media/MediaMuse.qml" \
   || fail "G9 FULL presentation does not render 24 bands"

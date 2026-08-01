@@ -56,6 +56,7 @@ ShellRoot {
     property int restoreWrites: 0
     property string restoredWidgetId: ""
     property string restoredPage: ""
+    property bool restoreNeedsReplacement: false
     property bool lastSplitValue: false
     property var clickTargets: root.clickTargets
     property var visualTokens: ({
@@ -90,9 +91,10 @@ ShellRoot {
     function switchPanelFrom(_owner, _direction) { return false }
     function targetBelongsToWindow(_target, _window) { return true }
 
-    function scheduleWidgetRestore(pluginId, page) {
+    function scheduleWidgetRestore(pluginId, page, needsReplacement) {
       restoredWidgetId = String(pluginId || "")
       restoredPage = String(page || "")
+      restoreNeedsReplacement = needsReplacement === true
       restoreWrites++
       return true
     }
@@ -179,7 +181,10 @@ ShellRoot {
             || !panel.setReactorMode(8))
           return root.fail("state mutation facade rejected valid values")
 
-        if (stateService.groupSetting("G4", "compact", false) !== true
+        if (stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "compact", false) !== true
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "compact", false) !== false
             || stateService.config.presentation.accent !== "color06"
             || stateService.config.presentation.radius !== "small"
             || panel.controlRadius !== 4
@@ -214,6 +219,7 @@ ShellRoot {
             || fakeBar.restoreWrites !== 3
             || fakeBar.restoredWidgetId !== "hancore.shibumi.control-center"
             || fakeBar.restoredPage !== "functions"
+            || !fakeBar.restoreNeedsReplacement
             || stateService.config.presentation.shellStyle !== "full"
             || fakeShell.writes !== 10)
           return root.fail("bar presentation changes did not preserve the open page"
@@ -248,11 +254,36 @@ ShellRoot {
             || !appearance.widgetDetailOpen)
           return root.fail("Icons overview did not drill into one widget")
         const modeBeforeCycle = appearance.selectedWidgetMode
-        const expectedModeAfterCycle = modeBeforeCycle === "full" ? "icon"
-          : modeBeforeCycle === "icon" ? "text" : "full"
+        const expectedModeAfterCycle = modeBeforeCycle === "full"
+          ? "icon" : "full"
         if (!appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== expectedModeAfterCycle)
-          return root.fail("single Content button did not cycle the widget mode")
+          return root.fail("V1 Default/Compact choice did not cycle")
+        if (stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "full")
+          return root.fail("V1 mode change leaked into V2")
+        appearance.showWidgetOverview()
+        if (!appearance.openWidgetDetails("G9", "")
+            || appearance.selectedWidgetMode !== "default"
+            || !appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "full"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v2", "mediaStyle", "") !== "default")
+          return root.fail("V1 Now Playing style contract drifted")
+        if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "default")
+          return root.fail("V1 Now Playing style did not restore")
+        panel.v2LayoutActive = true
+        if (!appearance.openWidgetDetails("G9", "")
+            || appearance.selectedWidgetMode !== "default"
+            || !appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "full"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "mediaStyle", "") !== "default")
+          return root.fail("V2 Now Playing style contract drifted")
+        if (!appearance.openWidgetDetails("G4", "")
+            || appearance.selectedWidgetMode !== "full")
+          return root.fail("V2 appearance did not remain independent")
         const opacityBeforeCycle = appearance.selectedWidgetOpacity
         const expectedOpacityAfterCycle = opacityBeforeCycle > 0.9 ? 0.8
           : opacityBeforeCycle > 0.7 ? 0.6
@@ -277,7 +308,6 @@ ShellRoot {
             && appearance.selectedWidgetSurface !== "both")
           return root.fail("Surface cycle could not enable an outline")
         appearance.controller.setGroupSetting("G4", "displayMode", "text")
-        appearance.controller.setGroupSetting("G4", "compact", false)
         appearance.controller.setGroupSetting("G4", "colorMode", "both")
         appearance.controller.setGroupSetting("G4", "widgetBorder", true)
         appearance.controller.setGroupSetting("G4", "color", "color05")
@@ -289,32 +319,44 @@ ShellRoot {
         appearance.controller.setGroupSetting(
           "G4", "widgetBorderColor", "color03")
 
-        if (stateService.groupSetting("G4", "displayMode", "") !== "text"
-            || stateService.groupSetting("G4", "compact", true) !== false
-            || stateService.groupSetting("G4", "colorMode", "") !== "both"
-            || stateService.groupSetting("G4", "widgetBorder", false) !== true
-            || stateService.groupSetting("G4", "color", "") !== "color05"
-            || stateService.groupSetting("G4", "tone", "") !== "background"
-            || stateService.groupSetting("G4", "widgetRadius", "") !== "round"
-            || stateService.groupSetting("G4", "widgetPadding", "") !== "roomy"
-            || stateService.groupSetting("G4", "surfaceOpacity", 0) !== 0.8
-            || stateService.groupSetting("G4", "widgetBorderWidth", 0) !== 1.5
-            || stateService.groupSetting(
-              "G4", "widgetBorderColor", "") !== "color03")
+        if (stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "text"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "compact", true) !== false
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "colorMode", "") !== "both"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetBorder", false) !== true
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "color", "") !== "color05"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "tone", "") !== "background"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetRadius", "") !== "round"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetPadding", "") !== "roomy"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "surfaceOpacity", 0) !== 0.8
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetBorderWidth", 0) !== 1.5
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetBorderColor", "") !== "color03")
           return root.fail("per-widget appearance contract did not persist")
         if (!appearance.widgetUsesCustomAppearance("G4"))
           return root.fail("Icons missed a real custom appearance")
         if (!appearance.controller.resetGroupAppearance("G4")
-            || stateService.groupSetting("G4", "displayMode", "full") !== "full"
-            || stateService.groupSetting("G4", "color", "inherit") !== "inherit"
-            || stateService.groupSetting("G4", "widgetPadding", "auto") !== "auto"
-            || stateService.groupSetting(
-              "G4", "widgetBorderColor", "inherit") !== "inherit")
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "full"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "color", "") !== "inherit"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetPadding", "") !== "auto"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "widgetBorderColor", "") !== "inherit")
           return root.fail("appearance reset did not preserve nonvisual state")
         if (appearance.widgetUsesCustomAppearance("G4"))
           return root.fail("Icons marked a reset widget as customized")
         appearance.controller.setGroupSetting("G4", "displayMode", "full")
-        appearance.controller.setGroupSetting("G4", "compact", false)
         appearance.controller.setGroupSetting("G4", "colorMode", "fill")
         appearance.controller.setGroupSetting("G4", "widgetBorder", false)
         appearance.controller.setGroupSetting("G4", "color", "inherit")
@@ -330,6 +372,7 @@ ShellRoot {
         if (appearance.widgetUsesCustomAppearance("G4"))
           return root.fail("Icons treated explicit defaults as customization")
         appearance.controller.resetGroupAppearance("G4")
+        panel.v2LayoutActive = false
         appearance.showWidgetOverview()
         appearance.controller.setGroupSetting("G4", "color", "color05")
         if (appearance.setWidgetEnabled("G1", false)
@@ -340,7 +383,8 @@ ShellRoot {
             || appearance.inactiveWidgetCount !== 7
             || stateService.groupEnabledForVariant("G4", "v1")
             || !stateService.groupEnabledForVariant("G4", "v2")
-            || stateService.groupSetting("G4", "color", "") !== "color05"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "color", "") !== "color05"
             || !appearance.openWidgetDetails("G4", "")
             || appearance.selectedWidgetActive)
           return root.fail("Icons did not deactivate Memory without style loss")
@@ -349,7 +393,8 @@ ShellRoot {
             || appearance.inactiveWidgetCount !== 6
             || !stateService.groupEnabledForVariant("G4", "v1")
             || !stateService.groupEnabledForVariant("G4", "v2")
-            || stateService.groupSetting("G4", "color", "") !== "color05"
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "color", "") !== "color05"
             || !appearance.widgetDetailOpen
             || !appearance.selectedWidgetActive)
           return root.fail("Icons did not reactivate Memory with its style")
@@ -360,14 +405,13 @@ ShellRoot {
             || appearance.selectedWidgetActive)
           return root.fail("V1 Icons did not expose inactive Storage")
         const inactiveModeBeforeCycle = appearance.selectedWidgetMode
-        const expectedInactiveModeAfterCycle = inactiveModeBeforeCycle === "full"
-          ? "icon" : inactiveModeBeforeCycle === "icon" ? "text" : "full"
+        const expectedInactiveModeAfterCycle = "full"
         if (!appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== expectedInactiveModeAfterCycle
-            || stateService.groupSetting(
-              "G:hancore.shibumi.storage", "displayMode", "")
+            || stateService.groupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", "")
                 !== expectedInactiveModeAfterCycle)
-          return root.fail("V1 inactive widget appearance used the wrong group")
+          return root.fail("V1 exposed Compact for an unsupported widget")
         panel.v2LayoutActive = true
         if (appearance.activeWidgetCount !== 15
             || appearance.inactiveWidgetCount !== 3

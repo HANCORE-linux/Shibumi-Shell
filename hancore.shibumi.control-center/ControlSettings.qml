@@ -193,6 +193,8 @@ Item {
     if (returnOnly && next !== "quick") return false
     if (validPageIds.indexOf(next) < 0)
       return false
+    if (controller && typeof controller.trackSettingsPage === "function")
+      controller.trackSettingsPage(next)
     if (next === "quick") {
       pluginFavoritesOnly = false
       configureDetailPage = ""
@@ -736,6 +738,13 @@ Item {
               visible: root.settingsQuery.trim() === ""
               sourceComponent: root.pageComponent(
                 root.configureDetailPage)
+              onLoaded: {
+                if (root.configureDetailPage === "functions"
+                    && root.controller
+                    && typeof root.controller.restoreWidgetDetails
+                      === "function")
+                  root.controller.restoreWidgetDetails(item)
+              }
             }
           }
         }

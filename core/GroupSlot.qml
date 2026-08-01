@@ -15,8 +15,11 @@ Item {
     ? bar.shell.serviceFor("hancore.shibumi.state") : null
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
-  readonly property var groupSettings: stateConfig.widgets
-    ? stateConfig.widgets[groupId] || ({}) : ({})
+  readonly property var groupSettings: stateService
+    && typeof stateService.groupSettingsForVariant === "function"
+    ? stateService.groupSettingsForVariant(groupId,
+        v2Shell ? "v2" : "v1")
+    : stateConfig.widgets ? stateConfig.widgets[groupId] || ({}) : ({})
   readonly property bool groupEnabled: stateService
     && typeof stateService.groupEnabled === "function"
       ? stateService.groupEnabled(groupId) : groupSettings.enabled !== false
