@@ -311,6 +311,16 @@ The page summary uses three equal provider rows for Shibumi, Omarchy, and
 third-party plugins. All three rows share the same type, spacing, and optical
 icon size. Their counts come from the same catalog model as the cards.
 Activation is deliberately not described as installation.
+
+The compact provider chip and the three summary rows intentionally count
+different surfaces. The chip is a host-registry inventory: it counts every
+discoverable Shibumi-managed, Omarchy first-party, and external plugin, while
+excluding the currently selected bar from the hostable Omarchy total. The
+summary rows are the installable widget catalog: they count only entries that
+can be presented as catalog cards, omit Shibumi's fixed G1 launcher, and omit
+disabled external plugins that are unavailable to the current host. A larger
+chip total therefore does not indicate a catalog mismatch.
+
 The theme-aware gloss runs once when the page opens and again only after a
 provider count changes; reduced motion keeps a static highlight.
 

@@ -12,6 +12,8 @@ ShellRoot {
   property int ticks: 0
   property var clickTargets: []
   property int barsRouteStep: 0
+  property bool panelIdempotenceStarted: false
+  property var stablePanelItem: null
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -163,6 +165,18 @@ ShellRoot {
         if (!widget || !widget.panelLoaded || !widget.panelItem
             || root.ticks < 3) return
         const panel = widget.panelItem
+
+        if (!root.panelIdempotenceStarted) {
+          root.panelIdempotenceStarted = true
+          root.stablePanelItem = panel
+          widget.syncPanelLoader()
+          widget.syncPanelLoader()
+          root.ticks = 0
+          return
+        }
+        if (panel !== root.stablePanelItem)
+          return root.fail("unchanged panel sync rebuilt the loader item")
+
         if (!panel.open || panel.ownerWidget !== widget
             || panel.stateService !== stateService
             || !panel.settingsReady || !panel.settingsFitsWidth

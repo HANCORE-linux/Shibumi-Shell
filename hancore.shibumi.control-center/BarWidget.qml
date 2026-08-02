@@ -86,6 +86,7 @@ Ui.Panel {
   property real phase: 0
   property var registeredBar: null
   property string pendingPage: ""
+  property url loadedPanelSource: ""
 
   HealthService { id: healthState }
   SwitchService { id: switchState }
@@ -102,9 +103,29 @@ Ui.Panel {
     font.letterSpacing: 1.2
   }
 
+  function injectPanel(item) {
+    if (!item) return
+    if ("anchorItem" in item) item.anchorItem = pill
+    if ("bar" in item) item.bar = root.bar
+    if ("ownerWidget" in item) item.ownerWidget = root
+    if ("stateService" in item) item.stateService = root.stateService
+    if ("healthService" in item) item.healthService = healthState
+    if ("switchService" in item) item.switchService = switchState
+  }
+
   function syncPanelLoader() {
-    panelLoader.source = ""
-    if (!opened || !stateService || !stateService.ready) return
+    const source = String(panelSource || "")
+    if (!opened || !stateService || !stateService.ready || source === "") {
+      loadedPanelSource = ""
+      panelLoader.source = ""
+      return
+    }
+    if (String(loadedPanelSource) === source
+        && (panelLoader.item || panelLoader.status === Loader.Loading)) {
+      injectPanel(panelLoader.item)
+      return
+    }
+    loadedPanelSource = panelSource
     panelLoader.setSource(panelSource, {
       anchorItem: pill,
       bar: root.bar,
@@ -120,6 +141,7 @@ Ui.Panel {
     syncPanelLoader()
   }
   onStateServiceChanged: syncPanelLoader()
+  onPanelSourceChanged: syncPanelLoader()
   onPanelLoadedChanged: {
     if (!panelLoaded || pendingPage === "") return
     const requested = pendingPage
@@ -186,7 +208,10 @@ Ui.Panel {
     return id === "mark" ? 0.5 : 0
   }
 
-  onBarChanged: syncClickRegistration()
+  onBarChanged: {
+    syncClickRegistration()
+    syncPanelLoader()
+  }
   Component.onCompleted: syncClickRegistration()
   Component.onDestruction: {
     if (registeredBar && typeof registeredBar.unregisterClickTarget === "function")
@@ -377,6 +402,8 @@ Ui.Panel {
 
   Loader {
     id: panelLoader
+
+    onLoaded: root.injectPanel(item)
   }
 
   MouseArea {
