@@ -302,9 +302,25 @@ independently. Both start collapsed so a large catalog does not instantiate or
 display every card on page open. A search temporarily reveals matching entries
 regardless of section state.
 
-The page summary reports installed and available plugin counts by actual
-provider family. It never labels an active third-party or Omarchy plugin as a
-Shibumi plugin merely because it appears in the same catalog.
+The Plugins route uses a compact panel height sized to keep the complete
+Configure navigation visible. Expanding either catalog section keeps that
+height and makes the catalog scroll, avoiding unused space in the collapsed
+state.
+
+The page summary uses three equal provider rows for Shibumi, Omarchy, and
+third-party plugins. All three rows share the same type, spacing, and optical
+icon size. Their counts come from the same catalog model as the cards.
+Activation is deliberately not described as installation.
+The theme-aware gloss runs once when the page opens and again only after a
+provider count changes; reduced motion keeps a static highlight.
+
+**Check plugin** below **Add plugin** first performs a read-only fetch of every
+independently installed Git-managed plugin. The terminal reports the number of
+available updates and offers a multi-selection. Only the selected plugins are
+then passed individually to Omarchy's validating `omarchy-plugin-update`
+command. Non-Git plugin directories are reported as not automatically
+checkable rather than treated as current. Shibumi does not silently update
+third-party code.
 
 Every plugin card, including a card revealed by search, exposes a star action.
 Starred plugin IDs are persisted in `bar.shibumi.plugins.favorites`. The

@@ -50,11 +50,15 @@ implementation checks stay hidden: they provide no user action and surface
 automatically if their state becomes abnormal.
 
 An expanded error exposes a stable `SHIBUMI-HEALTH/<CHECK-ID>` code and two
-explicit actions. **Copy report** places the bounded code, result, version,
+explicit actions. **Copy** places the bounded code, result, version,
 component, evidence, and suggested action on the clipboard. **Open issue**
 opens this repository's GitHub issue form with the same report prefilled; it
-does not submit anything. Warnings remain review-only and do not encourage a
+does not submit anything. The Copy action briefly changes to **Copied** as
+feedback. Warnings remain review-only and do not encourage a
 bug report without evidence of an actual failure.
+
+The collapsed report fits without a scrollbar. Expanding an Attention detail
+uses the existing page scroll when the additional evidence needs more room.
 
 A compact information band shows the installed Shibumi version and its current
 local-suite origin. The origin slot is intentionally stable so a later package

@@ -14,6 +14,7 @@ Rectangle {
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
+  property color countColor: foreground
   signal toggled()
 
   implicitHeight: Commons.Style.space(28)
@@ -39,10 +40,21 @@ Rectangle {
 
     Text {
       anchors.verticalCenter: parent.verticalCenter
-      text: root.title + "  " + root.count
+      text: root.title
       color: root.title === "PROVIDER SWITCHES"
         ? root.accent : root.foreground
       opacity: root.title === "PROVIDER SWITCHES" ? 1 : 0.54
+      font.family: root.controller.marketFont
+      font.pixelSize: Commons.Style.font.caption * root.uiScale
+      font.weight: Font.DemiBold
+      font.letterSpacing: 0.9
+    }
+
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.count
+      color: root.countColor
+      opacity: 1
       font.family: root.controller.marketFont
       font.pixelSize: Commons.Style.font.caption * root.uiScale
       font.weight: Font.DemiBold

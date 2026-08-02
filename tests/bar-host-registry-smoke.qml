@@ -72,6 +72,9 @@ ShellRoot {
     }
   }
 
+  QtObject { id: firstConnectedPanelOwner }
+  QtObject { id: secondConnectedPanelOwner }
+
   QtObject {
     id: fakeShell
 
@@ -370,6 +373,23 @@ ShellRoot {
       if (!hostBar.removeWidgetFamilyAlternatives("G8")
           || (fakeShell.shellConfig.bar.layout.center || []).length !== 0) {
         return root.fail("Shibumi Center did not remove its alternatives")
+      }
+
+      hostBar.activePopout = firstConnectedPanelOwner
+      if (!hostBar.publishConnectedPanel(
+            firstConnectedPanelOwner, "DP-1", 240, 1)) {
+        return root.fail("first connected panel owner was not published")
+      }
+      hostBar.activePopout = secondConnectedPanelOwner
+      if (!hostBar.publishConnectedPanel(
+            secondConnectedPanelOwner, "DP-1", 620, 1)
+          || hostBar.publishConnectedPanel(
+            firstConnectedPanelOwner, "DP-1", 250, 1)
+          || hostBar.clearConnectedPanel(firstConnectedPanelOwner)
+          || hostBar.connectedPanelOwner !== secondConnectedPanelOwner
+          || hostBar.connectedPanelX !== 620
+          || !hostBar.clearConnectedPanel(secondConnectedPanelOwner)) {
+        return root.fail("closing panel owner overwrote the active border seam")
       }
 
       stop()

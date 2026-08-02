@@ -361,6 +361,46 @@ ShellRoot {
       function releasePopout(_owner) {}
     }
 
+    QtObject {
+      id: notchBar
+
+      readonly property string position: "top"
+      readonly property color background: "#181818"
+      readonly property var visualTokens: ({
+        shellStyle: "notch",
+        shellWingWidth: 14,
+        shellFitRadius: 6,
+        shellDockRadius: 8,
+        islandRadius: 12,
+        shellBorder: "#aa88ff",
+        islandBorder: "#aa88ff",
+        pillBorderWidth: 1
+      })
+      readonly property string connectedPanelScreenName: ""
+      readonly property real connectedPanelReveal: 0
+      readonly property real connectedPanelX: 0
+    }
+
+    Repeater {
+      id: notchBorderModes
+
+      model: [
+        { mode: "auto", width: 720 },
+        { mode: "none", width: 712 },
+        { mode: "compact", width: 724 },
+        { mode: "roomy", width: 736 }
+      ]
+
+      delegate: ShibumiStyle.RunChrome {
+        required property var modelData
+
+        bar: notchBar
+        width: modelData.width
+        height: 33
+        visible: false
+      }
+    }
+
     ShibumiStyle.GroupSection {
       id: leftWithoutSplit
       bar: noSplitBar
@@ -699,6 +739,26 @@ ShellRoot {
             || disabledMultiGroup.implicitHeight !== 0) {
           test.fail("disabled multi-module group was instantiated")
           return
+        }
+        const expectedNotchModes = ["auto", "none", "compact", "roomy"]
+        if (notchBorderModes.count !== expectedNotchModes.length) {
+          test.fail("Notch border matrix did not instantiate every spacing mode")
+          return
+        }
+        for (let index = 0; index < expectedNotchModes.length; index++) {
+          const chrome = notchBorderModes.itemAt(index)
+          if (!chrome
+              || chrome.modelData.mode !== expectedNotchModes[index]
+              || !test.closeEnough(chrome.notchShoulderInset,
+                chrome.desktopEdgeInset)
+              || !test.closeEnough(chrome.wing, 14)
+              || !test.closeEnough(chrome.notchBodyRadius, 9)
+              || !test.closeEnough(chrome.desktopEdgeInset,
+                chrome.wing + chrome.notchBodyRadius)) {
+            test.fail("Notch border shoulder seam drifted for "
+              + expectedNotchModes[index])
+            return
+          }
         }
         const budgetSlots = test.widgetSlots(budgetGroup.contentItem, [])
         const centerSlot = budgetSlots.find(slot =>

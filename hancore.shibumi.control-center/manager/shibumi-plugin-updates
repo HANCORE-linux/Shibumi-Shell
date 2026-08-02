@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# Scan independently installed Git plugins before offering a multi-selection.
+# Updates themselves remain delegated to Omarchy's validating updater.
+
+set -euo pipefail
+
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
+
+plugins_dir="${SHIBUMI_PLUGIN_DIR:-$HOME/.config/omarchy/plugins}"
+mode="select"
+
+if [[ ${1:-} == "--list" ]]; then
+  mode="list"
+  shift
+fi
+if (( $# > 0 )); then
+  echo "Usage: shibumi-plugin-updates [--list]" >&2
+  exit 2
+fi
+
+[[ -d $plugins_dir ]] || {
+  echo "No plugin directory found at $plugins_dir." >&2
+  exit 1
+}
+
+valid_plugin_id() {
+  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && $1 != *..* ]]
+}
+
+is_shibumi_suite_plugin() {
+  local manifest="$1/manifest.json"
+  [[ -f $manifest ]] || return 1
+  [[ $(jq -r '.["x-shibumi"].suiteId // ""' "$manifest" 2>/dev/null) == "hancore.shibumi" ]]
+}
+
+updates=()
+unmanaged=()
+fetch_failed=()
+
+for plugin_dir in "$plugins_dir"/*/; do
+  [[ -d $plugin_dir ]] || continue
+  plugin_id=${plugin_dir%/}
+  plugin_id=${plugin_id##*/}
+  valid_plugin_id "$plugin_id" || continue
+  is_shibumi_suite_plugin "$plugin_dir" && continue
+
+  if [[ ! -d $plugin_dir/.git ]]; then
+    unmanaged+=("$plugin_id")
+    continue
+  fi
+
+  if ! git -C "$plugin_dir" fetch --quiet origin HEAD; then
+    fetch_failed+=("$plugin_id")
+    continue
+  fi
+  local_head=$(git -C "$plugin_dir" rev-parse HEAD)
+  remote_head=$(git -C "$plugin_dir" rev-parse FETCH_HEAD)
+  if [[ $local_head == "$remote_head" ]]; then
+    continue
+  fi
+  if git -C "$plugin_dir" merge-base --is-ancestor HEAD FETCH_HEAD; then
+    updates+=("$plugin_id")
+  elif ! git -C "$plugin_dir" merge-base --is-ancestor FETCH_HEAD HEAD; then
+    fetch_failed+=("$plugin_id (diverged)")
+  fi
+done
+
+if [[ $mode == "list" ]]; then
+  printf 'PLUGIN_UPDATE_COUNT=%d\n' "${#updates[@]}"
+  for plugin_id in "${updates[@]}"; do
+    printf 'PLUGIN_UPDATE_ID=%s\n' "$plugin_id"
+  done
+  for plugin_id in "${unmanaged[@]}"; do
+    printf 'PLUGIN_UNMANAGED_ID=%s\n' "$plugin_id"
+  done
+  for plugin_id in "${fetch_failed[@]}"; do
+    printf 'PLUGIN_FETCH_FAILED_ID=%s\n' "$plugin_id"
+  done
+  exit 0
+fi
+
+echo
+suffix="s"
+(( ${#updates[@]} == 1 )) && suffix=""
+if (( ${#updates[@]} == 0 )); then
+  echo "0 plugin updates available."
+else
+  printf '%d plugin update%s available.\n' "${#updates[@]}" "$suffix"
+fi
+
+if (( ${#unmanaged[@]} > 0 )); then
+  echo
+  echo "Not automatically checkable (not a Git checkout):"
+  printf '  %s\n' "${unmanaged[@]}"
+fi
+if (( ${#fetch_failed[@]} > 0 )); then
+  echo
+  echo "Check failed:"
+  printf '  %s\n' "${fetch_failed[@]}"
+fi
+if (( ${#updates[@]} == 0 )); then
+  exit $(( ${#fetch_failed[@]} > 0 ? 1 : 0 ))
+fi
+
+echo
+selected=$(printf '%s\n' "${updates[@]}" | gum choose --no-limit \
+  --ordered --header="Select plugins to update (${#updates[@]} available)") || exit $?
+[[ -n $selected ]] || {
+  echo "No plugins selected."
+  exit 0
+}
+
+selected_ids=()
+while IFS= read -r plugin_id; do
+  [[ -n $plugin_id ]] || continue
+  valid_plugin_id "$plugin_id" || continue
+  for candidate in "${updates[@]}"; do
+    if [[ $plugin_id == "$candidate" ]]; then
+      selected_ids+=("$plugin_id")
+      break
+    fi
+  done
+done <<< "$selected"
+
+(( ${#selected_ids[@]} > 0 )) || {
+  echo "No valid plugins selected."
+  exit 1
+}
+
+echo
+update_failed=0
+for plugin_id in "${selected_ids[@]}"; do
+  if ! omarchy-plugin-update "$plugin_id" --yes; then
+    update_failed=1
+  fi
+done
+exit "$update_failed"

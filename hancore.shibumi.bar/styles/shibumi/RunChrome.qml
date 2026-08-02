@@ -21,13 +21,16 @@ Item {
       ? Math.min(height / 2, bar.visualTokens.shellDockRadius)
       : Math.min(height / 2, bar.visualTokens.islandRadius)
   readonly property real wing: shellStyle === "notch"
-    ? Math.min(bar.visualTokens.shellWingWidth, width / 5) : 0
-  readonly property real notchBodyRadius: Math.min(9,
-    Math.max(0, width / 2 - wing))
+    ? bar.visualTokens.shellWingWidth : 0
+  readonly property real notchBodyRadius: shellStyle === "notch" ? 9 : 0
   readonly property real notchCurveKappa: 0.55228475
+  // The flowing shoulder and the straight desktop edge must meet at the
+  // exact same x-coordinate. Keeping that seam as one geometry token makes
+  // it independent from widget content width and per-group padding.
+  readonly property real notchShoulderInset: wing + notchBodyRadius
   readonly property bool atTop: bar.position !== "bottom"
   readonly property real desktopEdgeInset: shellStyle === "notch"
-    ? wing + notchBodyRadius
+    ? notchShoulderInset
     : shellStyle === "fit" || shellStyle === "dock" ? cornerRadius : 0
   readonly property color shellBorder:
     bar.visualTokens.shellBorder !== undefined
@@ -45,9 +48,17 @@ Item {
   readonly property real connectedTangentControl: 4.25 * connectedReveal
   readonly property real connectedTipControl: 2 * connectedReveal
   readonly property real connectedDepth: 5 * connectedReveal
+  readonly property real notchConnectedCenterX: connectedPanelActive
+    ? Math.max(desktopEdgeInset + connectedCurveHalfWidth,
+        Math.min(width - desktopEdgeInset - connectedCurveHalfWidth,
+          connectedCenterX))
+    : width / 2
   readonly property real connectedEdgeY: atTop ? height : 0
   readonly property real connectedInnerY: atTop
     ? height - connectedDepth : connectedDepth
+  readonly property real borderEdgeY: atTop ? height - 0.5 : 0.5
+  readonly property real borderInnerY: atTop
+    ? borderEdgeY - connectedDepth : borderEdgeY + connectedDepth
 
   // V2 owns one shadow for the complete shell. Individual widget shadows are
   // a V1/Shibumi presentation option and must not fragment Full/Fit/Dock.
@@ -349,7 +360,7 @@ Item {
         y: root.atTop ? 0 : root.height
       }
       PathCubic {
-        x: root.width - root.wing - root.notchBodyRadius
+        x: root.width - root.desktopEdgeInset
         y: root.atTop ? root.height : 0
         control1X: root.width - root.wing
           + (1 - root.notchCurveKappa) * root.wing
@@ -359,27 +370,29 @@ Item {
         control2Y: root.atTop ? root.height : 0
       }
       PathLine {
-        x: root.connectedCenterX + root.connectedCurveHalfWidth
+        x: root.notchConnectedCenterX + root.connectedCurveHalfWidth
         y: root.connectedEdgeY
       }
       PathCubic {
-        x: root.connectedCenterX
+        x: root.notchConnectedCenterX
         y: root.connectedInnerY
-        control1X: root.connectedCenterX + root.connectedTangentControl
+        control1X: root.notchConnectedCenterX
+          + root.connectedTangentControl
         control1Y: root.connectedEdgeY
-        control2X: root.connectedCenterX + root.connectedTipControl
+        control2X: root.notchConnectedCenterX + root.connectedTipControl
         control2Y: root.connectedInnerY
       }
       PathCubic {
-        x: root.connectedCenterX - root.connectedCurveHalfWidth
+        x: root.notchConnectedCenterX - root.connectedCurveHalfWidth
         y: root.connectedEdgeY
-        control1X: root.connectedCenterX - root.connectedTipControl
+        control1X: root.notchConnectedCenterX - root.connectedTipControl
         control1Y: root.connectedInnerY
-        control2X: root.connectedCenterX - root.connectedTangentControl
+        control2X: root.notchConnectedCenterX
+          - root.connectedTangentControl
         control2Y: root.connectedEdgeY
       }
       PathLine {
-        x: root.wing + root.notchBodyRadius
+        x: root.desktopEdgeInset
         y: root.atTop ? root.height : 0
       }
       PathCubic {
@@ -396,8 +409,8 @@ Item {
   }
 
   // Only Fit owns a closed perimeter. Dock keeps the screen-facing edge open
-  // and draws two side/corner runs; Notch draws only its flowing shoulders.
-  // The shared desktop-facing edge is rendered separately below.
+  // and draws two side/corner runs. Notch owns one fused path from its left
+  // shoulder through the connected inset to its right shoulder.
   Shape {
     anchors.fill: parent
     visible: root.bar.visualTokens.pillBorderWidth > 0
@@ -447,6 +460,7 @@ Item {
     }
 
     ShapePath {
+      id: notchBorderPath
       strokeColor: root.shellStyle === "notch"
         ? root.shellBorder : "transparent"
       strokeWidth: root.bar.visualTokens.pillBorderWidth
@@ -455,7 +469,7 @@ Item {
       startX: 0
       startY: root.atTop ? 0.5 : root.height - 0.5
       PathCubic {
-        x: root.wing + root.notchBodyRadius
+        x: root.desktopEdgeInset
         y: root.atTop ? root.height - 0.5 : 0.5
         control1X: root.wing
           - (1 - root.notchCurveKappa) * root.wing
@@ -464,31 +478,48 @@ Item {
           - (1 - root.notchCurveKappa) * root.notchBodyRadius
         control2Y: root.atTop ? root.height - 0.5 : 0.5
       }
-    }
-
-    ShapePath {
-      strokeColor: root.shellStyle === "notch"
-        ? root.shellBorder : "transparent"
-      strokeWidth: root.bar.visualTokens.pillBorderWidth
-      fillColor: "transparent"
-      capStyle: ShapePath.FlatCap
-      startX: root.width
-      startY: root.atTop ? 0.5 : root.height - 0.5
+      PathLine {
+        x: root.notchConnectedCenterX - root.connectedCurveHalfWidth
+        y: root.borderEdgeY
+      }
       PathCubic {
-        x: root.width - root.wing - root.notchBodyRadius
-        y: root.atTop ? root.height - 0.5 : 0.5
+        x: root.notchConnectedCenterX
+        y: root.borderInnerY
+        control1X: root.notchConnectedCenterX
+          - root.connectedTangentControl
+        control1Y: root.borderEdgeY
+        control2X: root.notchConnectedCenterX - root.connectedTipControl
+        control2Y: root.borderInnerY
+      }
+      PathCubic {
+        x: root.notchConnectedCenterX + root.connectedCurveHalfWidth
+        y: root.borderEdgeY
+        control1X: root.notchConnectedCenterX + root.connectedTipControl
+        control1Y: root.borderInnerY
+        control2X: root.notchConnectedCenterX
+          + root.connectedTangentControl
+        control2Y: root.borderEdgeY
+      }
+      PathLine {
+        x: root.width - root.desktopEdgeInset
+        y: root.borderEdgeY
+      }
+      PathCubic {
+        x: root.width
+        y: root.atTop ? 0.5 : root.height - 0.5
         control1X: root.width - root.wing
-          + (1 - root.notchCurveKappa) * root.wing
-        control1Y: root.atTop ? 0.5 : root.height - 0.5
-        control2X: root.width - root.wing
           + (1 - root.notchCurveKappa) * root.notchBodyRadius
-        control2Y: root.atTop ? root.height - 0.5 : 0.5
+        control1Y: root.atTop ? root.height - 0.5 : 0.5
+        control2X: root.width - root.wing
+          + (1 - root.notchCurveKappa) * root.wing
+        control2Y: root.atTop ? 0.5 : root.height - 0.5
       }
     }
   }
 
   Rectangle {
     visible: root.shellStyle !== "shibumi"
+      && root.shellStyle !== "notch"
       && root.bar.visualTokens.pillBorderWidth > 0
     x: root.desktopEdgeInset
     y: root.atTop ? root.height - 1 : 0
@@ -502,6 +533,7 @@ Item {
 
   Rectangle {
     visible: root.connectedPanelActive
+      && root.shellStyle !== "notch"
       && root.bar.visualTokens.pillBorderWidth > 0
     x: Math.max(root.desktopEdgeInset,
       root.connectedCenterX + 12)
@@ -517,7 +549,7 @@ Item {
   // instead of painting it with the bar color, which looked like a shadow.
   Shape {
     id: connectedInset
-    visible: root.connectedPanelActive
+    visible: root.connectedPanelActive && root.shellStyle !== "notch"
     x: Math.round(root.connectedCenterX - 13)
     y: root.atTop ? root.height - 6 : 0
     width: 26

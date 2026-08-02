@@ -160,6 +160,12 @@ Item {
     + Math.max(0, Number(pageLoader.item
       ? pageLoader.item.optionRowCount : 2) - 2)
       * Commons.Style.space(63)
+  readonly property bool compactPluginsPage:
+    currentPage === "configure"
+    && configureDetailPage === "plugins"
+    && settingsQuery.trim() === ""
+  readonly property real compactPluginsPanelHeight:
+    Commons.Style.space(500)
   readonly property bool barsChildRouteAvailable:
     currentPage === "configure"
     && (configureDetailPage === "bars"

@@ -45,7 +45,7 @@ Column {
   }
 
   width: parent ? parent.width : 1
-  spacing: Commons.Style.space(8)
+  spacing: Commons.Style.space(6)
 
   function overallLabel() {
     if (busy) return controller.healthFetching ? "Checking updates …" : "Checking …"
@@ -532,10 +532,10 @@ Column {
 
         CompactSettingChoice {
           id: copyReport
-          width: Commons.Style.space(88)
+          width: Commons.Style.space(62)
           controller: root.controller
           label: root.copiedCheckId === String(checkRow.check.id || "")
-            ? "Copied" : "Copy report"
+            ? "Copied" : "Copy"
           foreground: root.foreground
           accent: root.statusColor("error")
           uiScale: root.uiScale
@@ -544,9 +544,9 @@ Column {
 
         CompactSettingChoice {
           id: openIssue
-          width: Commons.Style.space(88)
+          width: Commons.Style.space(90)
           controller: root.controller
-          label: "Open issue ↗"
+          label: "Open issue"
           primary: true
           foreground: root.foreground
           accent: root.statusColor("error")

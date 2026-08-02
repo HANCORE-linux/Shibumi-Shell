@@ -86,18 +86,24 @@ Column {
     return entry.installedInBar === true
   }).length
   readonly property int availableCount: allEntries.length - activeCount
-  readonly property var installedEntries: allEntries.filter(function(entry) {
-    return entry.installedInBar === true
-  })
-  readonly property var inactiveEntries: allEntries.filter(function(entry) {
-    return entry.installedInBar !== true
-  })
+  readonly property int shibumiProviderCount:
+    providerCatalogCount("Shibumi")
+  readonly property int omarchyProviderCount:
+    providerCatalogCount("Omarchy Quattro")
+  readonly property int thirdPartyProviderCount:
+    providerCatalogCount("Third-party")
   readonly property int favoriteCount: allEntries.filter(function(entry) {
     return controller.pluginFavorite(entry.id)
   }).length
   readonly property color undoColor:
     typeof controller.accentColor === "function"
       ? controller.accentColor("color01") : accent
+  readonly property color activeCountColor:
+    typeof controller.accentColor === "function"
+      ? controller.accentColor("color03") : accent
+  readonly property color availableCountColor:
+    typeof controller.accentColor === "function"
+      ? controller.accentColor("color02") : accent
   readonly property bool feedbackCountdownRunning:
     feedbackCountdown.running
   readonly property bool feedbackCountdownPaused:
@@ -119,38 +125,11 @@ Column {
     return null
   }
 
-  function providerCountSummary(entries) {
-    const source = Array.isArray(entries) ? entries : []
-    const providers = [
-      { id: "Shibumi", label: "Shibumi" },
-      { id: "Omarchy Quattro", label: "Omarchy" },
-      { id: "Third-party", label: "third-party" }
-    ]
-    const parts = []
-    for (let index = 0; index < providers.length; index++) {
-      const provider = providers[index]
-      const count = source.filter(function(entry) {
-        return String(entry.provider || "") === provider.id
-      }).length
-      if (count > 0) parts.push(count + " " + provider.label)
-    }
-    return parts.join(" + ")
-  }
-
-  function catalogSummary() {
-    const installed = providerCountSummary(installedEntries)
-    const available = providerCountSummary(inactiveEntries)
-    const shibumiOnly = installedEntries.length > 0
-      && installedEntries.every(function(entry) {
-        return String(entry.provider || "") === "Shibumi"
-      })
-    const installedText = shibumiOnly
-      ? installedEntries.length + " Shibumi plugins installed"
-      : installedEntries.length + " plugins installed"
-        + (installed !== "" ? " — " + installed : "")
-    const availableText = inactiveEntries.length + " available"
-      + (available !== "" ? " — " + available : "")
-    return installedText + "\n" + availableText
+  function providerCatalogCount(provider) {
+    const requested = String(provider || "")
+    return allEntries.filter(function(entry) {
+      return String(entry.provider || "") === requested
+    }).length
   }
 
   function acceptSearchSuggestion(index) {
@@ -394,17 +373,35 @@ Column {
     eyebrow: "BAR PLUGINS"
     title: root.favoritesOnly ? "Favorites" : "Plugins"
     description: root.favoritesOnly
-      ? root.favoriteCount + " saved plugins"
-      : root.catalogSummary()
-    descriptionWrap: !root.favoritesOnly
+      ? root.favoriteCount + " saved plugins" : ""
+    descriptionComponent: root.favoritesOnly ? null : providerSummary
     preferredHeight: root.favoritesOnly
-      ? Commons.Style.space(80) : Commons.Style.space(92)
+      ? Commons.Style.space(80) : Commons.Style.space(110)
+    actionWidth: Commons.Style.space(132)
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
     actionLabel: "Add plugin"
     actionGlyph: "add"
+    secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"
+    secondaryActionGlyph: "refresh"
     onActionRequested: root.controller.openPluginInstaller()
+    onSecondaryActionRequested: root.controller.openPluginUpdater()
+  }
+
+  Component {
+    id: providerSummary
+
+    PluginProviderSummary {
+      controller: root.controller
+      shibumiCount: root.shibumiProviderCount
+      omarchyCount: root.omarchyProviderCount
+      thirdPartyCount: root.thirdPartyProviderCount
+      active: root.motionActive
+      foreground: root.foreground
+      accent: root.accent
+      uiScale: root.uiScale
+    }
   }
 
   Rectangle {
@@ -705,6 +702,7 @@ Column {
     controller: root.controller
     title: "PROVIDER SWITCHES"
     count: root.providerSwitchEntries.length
+    countColor: root.accent
     collapsible: false
     foreground: root.foreground
     accent: root.accent
@@ -751,6 +749,7 @@ Column {
     controller: root.controller
     title: "ACTIVE"
     count: root.activeEntries.length
+    countColor: root.activeCountColor
     expanded: root.activeExpanded || root.pluginQuery.trim() !== ""
     foreground: root.foreground
     accent: root.accent
@@ -796,6 +795,7 @@ Column {
     controller: root.controller
     title: "AVAILABLE"
     count: root.availableEntries.length
+    countColor: root.availableCountColor
     expanded: root.availableExpanded || root.pluginQuery.trim() !== ""
     foreground: root.foreground
     accent: root.accent

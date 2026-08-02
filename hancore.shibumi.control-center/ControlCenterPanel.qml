@@ -127,6 +127,9 @@ ShibumiPanel {
   readonly property string managerCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-manager"
+  readonly property string pluginUpdateCommand: Quickshell.env("HOME")
+    + "/.config/omarchy/plugins/hancore.shibumi.control-center"
+    + "/manager/shibumi-plugin-updates"
   readonly property string activeShell: HostIdentity.shellName(bar)
   readonly property bool stockOmarchyHost: activeShell === "omarchy"
   readonly property bool v2LayoutActive: bar && bar.layoutController
@@ -236,6 +239,9 @@ ShibumiPanel {
           Commons.Style.space(680))
     : settings.compactLogoPage
       ? fittedContentHeight(settings.compactLogoPanelHeight,
+          Commons.Style.space(680))
+    : settings.compactPluginsPage
+      ? fittedContentHeight(settings.compactPluginsPanelHeight,
           Commons.Style.space(680))
     : fittedContentHeight(Commons.Style.space(610),
         Commons.Style.space(680))
@@ -926,6 +932,16 @@ ShibumiPanel {
   function openPluginInstaller() {
     settings.setPage("plugins")
     return settings.openPluginInstaller()
+  }
+
+  function openPluginUpdater() {
+    if (stockOmarchyHost) return false
+    Quickshell.execDetached([
+      "omarchy-launch-floating-terminal-with-presentation",
+      pluginUpdateCommand
+    ])
+    ownerWidget.close()
+    return true
   }
 
   Item {

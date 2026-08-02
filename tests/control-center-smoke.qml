@@ -477,11 +477,13 @@ ShellRoot {
             || !panel.settingsPageItem.ready)
           return root.fail("Plugins page did not instantiate")
         const plugins = panel.settingsPageItem
-        if (plugins.catalogSummary()
-            !== "2 Shibumi plugins installed\n"
-              + "2 available — 1 Omarchy + 1 third-party")
-          return root.fail("plugin provider summary is ambiguous: "
-            + plugins.catalogSummary())
+        if (plugins.activeCountColor !== panel.accentColor("color03")
+            || plugins.availableCountColor !== panel.accentColor("color02"))
+          return root.fail("plugin counts do not follow theme colors")
+        if (plugins.shibumiProviderCount !== 2
+            || plugins.omarchyProviderCount !== 1
+            || plugins.thirdPartyProviderCount !== 1)
+          return root.fail("plugin provider summary is ambiguous")
         if (!plugins.togglePluginById("omarchy.audio")
             || !plugins.feedbackVisible
             || !plugins.feedbackCountdownRunning

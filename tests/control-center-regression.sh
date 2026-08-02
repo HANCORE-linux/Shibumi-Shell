@@ -763,6 +763,7 @@ done
 for header_contract in \
     'property real preferredHeight: Commons.Style.space(80)' \
     'property real previewWidth: Commons.Style.space(150)' \
+    'property real actionWidth: Commons.Style.space(116)' \
     'anchors.topMargin: Commons.Style.space(5)' \
     'property bool descriptionWrap: false' \
     'wrapMode: root.descriptionWrap ? Text.WordWrap : Text.NoWrap' \
@@ -925,7 +926,8 @@ for health_contract in \
     'function diagnosticIssueUrl(check)' \
     'Qt.openUrlExternally(diagnosticIssueUrl(check))' \
     'label: root.copiedCheckId === String(checkRow.check.id || "")' \
-    'label: "Open issue ↗"' \
+    '? "Copied" : "Copy"' \
+    'label: "Open issue"' \
     'interactive: false' \
     'const next = requested === "preferences" ? "health"'; do
   rg -Fq "$health_contract" "$control_dir/ControlMainPage.qml" \
@@ -1165,6 +1167,10 @@ for plugin_contract in \
     'title: "PROVIDER SWITCHES"' \
     'title: "ACTIVE"' \
     'title: "AVAILABLE"' \
+    'controller.accentColor("color03")' \
+    'controller.accentColor("color02")' \
+    'countColor: root.activeCountColor' \
+    'countColor: root.availableCountColor' \
     'text: "UNDO"' \
     'id: undoButton' \
     'undoPointer.containsMouse' \
@@ -1187,12 +1193,70 @@ for plugin_contract in \
     'controller.restoreShibumiProvider(undoGroup)' \
     'actionLabel: "Add plugin"' \
     'onActionRequested: root.controller.openPluginInstaller()' \
-    'function providerCountSummary(entries)' \
-    'return parts.join(" + ")' \
-    'root.catalogSummary()'; do
+    'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"' \
+    'secondaryActionGlyph: "refresh"' \
+    'actionWidth: Commons.Style.space(132)' \
+    'onSecondaryActionRequested: root.controller.openPluginUpdater()' \
+    'function providerCatalogCount(provider)' \
+    'shibumiCount: root.shibumiProviderCount' \
+    'omarchyCount: root.omarchyProviderCount' \
+    'thirdPartyCount: root.thirdPartyProviderCount'; do
   rg -Fq "$plugin_contract" "$control_dir/PluginCatalogPage.qml" \
     || fail "plugin provider-feedback contract drifted: $plugin_contract"
 done
+for provider_summary_contract in \
+    'assets/shibumi-icon-hikiryo.svg' \
+    'file:///usr/share/omarchy/icon.png' \
+    'INSTALLED SHIBUMI PLUGINS' \
+    'COMPATIBLE OMARCHY WIDGETS' \
+    'THIRD-PARTY' \
+    'onCountKeyChanged: if (active) Qt.callLater(runGloss)' \
+    'visible: root.reducedMotion' \
+    'Commons.Util.alpha(root.accent, 0.15)' \
+    'loops:'; do
+  if [[ $provider_summary_contract == loops: ]]; then
+    rg -Fq 'loops:' "$control_dir/PluginProviderSummary.qml" \
+      && fail "plugin provider gloss must not loop"
+    continue
+  fi
+  rg -Fq "$provider_summary_contract" \
+    "$control_dir/PluginProviderSummary.qml" \
+    || fail "plugin provider summary drifted: $provider_summary_contract"
+done
+[[ $(rg -c '^    ProviderRow \{' \
+  "$control_dir/PluginProviderSummary.qml") -eq 3 ]] \
+  || fail "plugin provider summary must render three equal rows"
+for plugin_height_contract in \
+    'ControlSettings.qml:readonly property bool compactPluginsPage:' \
+    'ControlSettings.qml:configureDetailPage === "plugins"' \
+    'ControlSettings.qml:readonly property real compactPluginsPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactPluginsPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactPluginsPanelHeight,'; do
+  file=${plugin_height_contract%%:*}
+  label=${plugin_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Plugins compact panel-height contract drifted: $label"
+done
+for plugin_update_contract in \
+    'function openPluginUpdater()' \
+    '"omarchy-launch-floating-terminal-with-presentation"' \
+    'pluginUpdateCommand'; do
+  rg -Fq "$plugin_update_contract" "$control_dir/ControlCenterPanel.qml" \
+    || fail "manual plugin update action drifted: $plugin_update_contract"
+done
+for stacked_action_contract in \
+    'anchors.left: root.secondaryActionLabel !== ""' \
+    'anchors.left: parent.left' \
+    'anchors.leftMargin: Commons.Style.space(10)'; do
+  rg -Fq "$stacked_action_contract" "$control_dir/PageHeaderHero.qml" \
+    || fail "stacked header actions lost their shared left edge"
+done
+[[ $(rg -c 'horizontalAlignment: Text.AlignLeft' \
+  "$control_dir/PageHeaderHero.qml") -eq 2 ]] \
+  || fail "stacked header action labels must share one text edge"
+[[ $(rg -c 'width: Commons.Style.space\(17\) \* root.uiScale' \
+  "$control_dir/PageHeaderHero.qml") -eq 2 ]] \
+  || fail "stacked header action icons must share one fixed column"
 for provider_model in \
     'const replacementGroup = group === "" && bar' \
     'replacementLabel: group === "" && bar' \
@@ -1235,7 +1299,10 @@ tile_favorite_line=$(rg -n -F 'id: favoritePointer' \
 [[ -f $control_dir/PluginSectionHeader.qml ]] \
   || fail "collapsible plugin section header is missing"
 for section_contract in \
-    'root.title + "  " + root.count' \
+    'property color countColor: foreground' \
+    'text: root.title' \
+    'text: root.count' \
+    'color: root.countColor' \
     'root.expanded ? "expand_more" : "chevron_right"' \
     'onClicked: root.toggled()'; do
   rg -Fq "$section_contract" "$control_dir/PluginSectionHeader.qml" \

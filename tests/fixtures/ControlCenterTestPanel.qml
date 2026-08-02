@@ -535,6 +535,13 @@ Item {
     return settings.openPluginInstaller()
   }
 
+  property int pluginUpdaterOpenCount: 0
+
+  function openPluginUpdater() {
+    pluginUpdaterOpenCount++
+    return true
+  }
+
   function setPluginEnabled(pluginId, enabled) {
     const id = String(pluginId || "")
     const next = JSON.parse(JSON.stringify(pluginEntries))

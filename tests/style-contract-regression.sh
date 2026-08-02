@@ -192,12 +192,31 @@ for v2_edge_contract in \
   'visible: (root.shellStyle === "full" || root.shellStyle === "fit")' \
   'strokeWidth: root.shellStyle === "fit"' \
   '&& (root.shellStyle === "dock" || root.shellStyle === "notch")' \
+  '? bar.visualTokens.shellWingWidth : 0' \
+  'readonly property real notchBodyRadius: shellStyle === "notch" ? 9 : 0' \
+  'readonly property real notchShoulderInset: wing + notchBodyRadius' \
+  'readonly property real notchConnectedCenterX: connectedPanelActive' \
+  'readonly property real borderEdgeY: atTop ? height - 0.5 : 0.5' \
   'readonly property real desktopEdgeInset:' \
+  '? notchShoulderInset' \
+  'x: root.desktopEdgeInset' \
+  'x: root.width - root.desktopEdgeInset' \
   'y: root.atTop ? root.height - 1 : 0' \
   ': Math.max(0, root.width - 2 * root.desktopEdgeInset)'; do
   rg -Fq "$v2_edge_contract" styles/shibumi/RunChrome.qml \
     || fail "V2 open-edge contour contract drifted: $v2_edge_contract"
 done
+for notch_single_path_contract in \
+  'id: notchBorderPath' \
+  'x: root.notchConnectedCenterX - root.connectedCurveHalfWidth' \
+  'x: root.notchConnectedCenterX + root.connectedCurveHalfWidth' \
+  'visible: root.connectedPanelActive && root.shellStyle !== "notch"'; do
+  rg -Fq "$notch_single_path_contract" styles/shibumi/RunChrome.qml \
+    || fail "Notch border is no longer one fused contour: $notch_single_path_contract"
+done
+if rg -q 'widgetPadding|appearancePadding' styles/shibumi/RunChrome.qml; then
+  fail "Notch border geometry depends on per-widget spacing"
+fi
 if awk '
   /^  Rectangle \{/ { in_rectangle=1 }
   in_rectangle && /visible: root.shellStyle === "full"/ { found=1 }

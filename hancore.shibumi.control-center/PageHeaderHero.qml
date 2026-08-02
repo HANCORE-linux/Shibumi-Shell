@@ -12,15 +12,20 @@ Item {
   property string eyebrow: ""
   property string title: ""
   property string description: ""
+  property Component descriptionComponent: null
   property bool descriptionWrap: false
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property real uiScale: 1
   property real preferredHeight: Commons.Style.space(80)
   property real previewWidth: Commons.Style.space(150)
+  property real actionWidth: Commons.Style.space(116)
   property string actionLabel: ""
   property string actionGlyph: ""
+  property string secondaryActionLabel: ""
+  property string secondaryActionGlyph: ""
   signal actionRequested()
+  signal secondaryActionRequested()
 
   width: parent ? parent.width : implicitWidth
   implicitHeight: preferredHeight
@@ -58,7 +63,8 @@ Item {
 
       Text {
         width: parent.width
-        visible: root.description !== ""
+        visible: root.descriptionComponent === null
+          && root.description !== ""
         text: root.description
         color: root.foreground
         opacity: 0.58
@@ -67,6 +73,12 @@ Item {
         elide: Text.ElideRight
         font.family: root.controller.marketFont
         font.pixelSize: Commons.Style.font.caption * root.uiScale
+      }
+
+      Loader {
+        width: parent.width
+        visible: root.descriptionComponent !== null
+        sourceComponent: root.descriptionComponent
       }
     }
 
@@ -78,6 +90,7 @@ Item {
       PageMotionStage {
         anchors.fill: parent
         visible: root.actionLabel === ""
+          && root.secondaryActionLabel === ""
         controller: root.controller
         active: root.active
         pageKey: root.pageKey
@@ -86,10 +99,13 @@ Item {
       }
 
       Rectangle {
+        id: primaryAction
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: root.secondaryActionLabel !== ""
+          ? -Commons.Style.space(20) : 0
         visible: root.actionLabel !== ""
-        width: Commons.Style.space(116)
+        width: root.actionWidth
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: actionPointer.containsMouse
@@ -99,16 +115,25 @@ Item {
         border.color: root.controller.controlBorderColor
 
         Row {
-          anchors.centerIn: parent
+          anchors.left: root.secondaryActionLabel !== ""
+            ? parent.left : undefined
+          anchors.leftMargin: root.secondaryActionLabel !== ""
+            ? Commons.Style.space(10) : 0
+          anchors.horizontalCenter: root.secondaryActionLabel === ""
+            ? parent.horizontalCenter : undefined
+          anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(6)
 
           IconText {
+            id: primaryActionIcon
             visible: root.actionGlyph !== ""
             anchors.verticalCenter: parent.verticalCenter
+            width: Commons.Style.space(17) * root.uiScale
             text: root.actionGlyph
             color: root.accent
             font.pixelSize: Commons.Style.space(17) * root.uiScale
             font.weight: Font.Medium
+            horizontalAlignment: Text.AlignHCenter
             fill: 0
           }
 
@@ -120,6 +145,7 @@ Item {
             font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
             font.weight: Font.Medium
             renderType: Text.NativeRendering
+            horizontalAlignment: Text.AlignLeft
           }
         }
 
@@ -129,6 +155,60 @@ Item {
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
           onClicked: root.actionRequested()
+        }
+      }
+
+      Rectangle {
+        anchors.right: parent.right
+        anchors.top: primaryAction.bottom
+        anchors.topMargin: Commons.Style.space(6)
+        visible: root.secondaryActionLabel !== ""
+        width: root.actionWidth
+        height: Commons.Style.space(34)
+        radius: root.controller.controlRadius
+        color: secondaryPointer.containsMouse
+          ? root.controller.controlHoverFillColor
+          : root.controller.controlFillColor
+        border.width: root.controller.controlBorderWidth
+        border.color: root.controller.controlBorderColor
+
+        Row {
+          anchors.left: parent.left
+          anchors.leftMargin: Commons.Style.space(10)
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Commons.Style.space(6)
+
+          IconText {
+            id: secondaryActionIcon
+            visible: root.secondaryActionGlyph !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            width: Commons.Style.space(17) * root.uiScale
+            text: root.secondaryActionGlyph
+            color: root.accent
+            font.pixelSize: Commons.Style.space(17) * root.uiScale
+            font.weight: Font.Medium
+            horizontalAlignment: Text.AlignHCenter
+            fill: 0
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.secondaryActionLabel
+            color: root.foreground
+            font.family: root.controller.marketFont
+            font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+            font.weight: Font.Medium
+            renderType: Text.NativeRendering
+            horizontalAlignment: Text.AlignLeft
+          }
+        }
+
+        MouseArea {
+          id: secondaryPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.secondaryActionRequested()
         }
       }
     }
