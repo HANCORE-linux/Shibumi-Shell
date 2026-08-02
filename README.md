@@ -75,7 +75,7 @@ the 24 user plugins without a root package hook touching the user's config.
 For the current private candidate:
 
 ```bash
-git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
+git clone https://github.com/HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
 ```
 
 [Installation, updates, recovery, and removal](docs/install.md)
