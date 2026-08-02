@@ -168,7 +168,10 @@ ShellRoot {
       const firstOrigin = first.item.mapToItem(null, 0, 0)
       const secondOrigin = second.item.mapToItem(null, 0, 0)
       if (firstOrigin.x >= secondOrigin.x) {
-        fail("target ids no longer match the rendered order")
+        fail("target ids no longer match the rendered order: ids="
+          + ids.join(",") + " G2=" + firstOrigin.x
+          + " G1=" + secondOrigin.x
+          + " geometry=" + JSON.stringify(section.groupGeometry))
         return
       }
 

@@ -627,6 +627,8 @@ ShellRoot {
         const separatorAfterFill = v2LeftWithSplit.separatorGeometry.find(
           function(entry) { return entry.groupId === "G1" })
         if (!separatorBeforeFill || !separatorAfterFill
+            || leftWithoutSplit.separatorHitTargetCount !== 6
+            || v2LeftWithSplit.separatorHitTargetCount !== 6
             || !v2FillGroup.decorated
             || !test.closeEnough(v2FillGroup.visualSurfaceItem.height, 24)
             || !test.closeEnough(v2FillGroup.implicitHeight, 24)
@@ -638,7 +640,9 @@ ShellRoot {
                 - separatorBeforeFill.markerCenter, 6)) {
           test.fail("V2 fill height or separator edge tracking drifted: before="
             + JSON.stringify(separatorBeforeFill) + ", after="
-            + JSON.stringify(separatorAfterFill) + ", surface="
+            + JSON.stringify(separatorAfterFill) + ", hitTargets="
+            + leftWithoutSplit.separatorHitTargetCount + "/"
+            + v2LeftWithSplit.separatorHitTargetCount + ", surface="
             + v2FillGroup.visualSurfaceItem.height + ", group="
             + v2FillGroup.implicitHeight)
           return

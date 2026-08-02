@@ -230,7 +230,7 @@ rg -Fq 'return groupSpacing + (separated ? splitGrow : 0)' \
   || fail "split marker is not centered across the full V1 22px gap"
 rg -Fq 'clip: false' styles/shibumi/GroupSection.qml \
   || fail "unsplit V1 markers are clipped outside their 6px cells"
-awk '/id: splitMouse/{seen=1} seen && /hoverEnabled: true/{found=1; exit} END{exit !found}' \
+awk '/id: separatorHitRepeater/{seen=1} seen && /hoverEnabled: true/{found=1; exit} END{exit !found}' \
   styles/shibumi/GroupSection.qml \
   || fail "within-region split handles cannot reveal their V1 hover marker"
 rg -Fq 'radius: root.bar.visualTokens.pillRadius' \

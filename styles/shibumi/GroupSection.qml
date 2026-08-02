@@ -54,6 +54,8 @@ Item {
     ? contentItem.groupGeometry : []
   readonly property var separatorGeometry: contentItem
     && contentItem.separatorGeometry ? contentItem.separatorGeometry : []
+  readonly property int separatorHitTargetCount: separatorHitRepeater.count
+  property string hoveredSeparatorGroupId: ""
   readonly property var stageBudgetWidths: contentItem
     && contentItem.stageBudgetWidths ? contentItem.stageBudgetWidths : [0, 0, 0, 0]
   readonly property real editingWidthOverhead: slotEditing && contentItem
@@ -198,6 +200,44 @@ Item {
     sourceComponent: root.bar.vertical ? verticalGroups : horizontalGroups
   }
 
+  // Separator markers may be painted into the gap owned by the following
+  // cell. Keep their input layer at section scope so parent delegate bounds
+  // cannot make an otherwise visible V2 marker unclickable.
+  Item {
+    anchors.fill: parent
+    z: 50
+
+    Repeater {
+      id: separatorHitRepeater
+      model: root.bar.vertical ? [] : root.separatorGeometry
+
+      delegate: MouseArea {
+        required property var modelData
+
+        x: Number(modelData.markerCenter || 0) - width / 2
+        y: 0
+        width: 14
+        height: root.height
+        enabled: root.persistentSeparators || !root.v2Mode
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
+        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+        onEntered: root.hoveredSeparatorGroupId = String(modelData.groupId || "")
+        onExited: {
+          if (root.hoveredSeparatorGroupId === String(modelData.groupId || ""))
+            root.hoveredSeparatorGroupId = ""
+        }
+        onClicked: root.toggleSeparator(
+          String(modelData.groupId || ""), Number(modelData.index))
+        Component.onDestruction: {
+          if (root.hoveredSeparatorGroupId === String(modelData.groupId || ""))
+            root.hoveredSeparatorGroupId = ""
+        }
+      }
+    }
+  }
+
   Component {
     id: horizontalGroups
 
@@ -277,6 +317,7 @@ Item {
           if (!item || !item.separatorAvailable) continue
           result.push({
             groupId: item.modelData,
+            index: item.index,
             visualRight: item.x + item.visualRightEdge,
             markerCenter: item.x + item.separatorCenter
           })
@@ -625,7 +666,7 @@ Item {
               height: Math.min(parent.height - 8, 14)
               visible: horizontalCell.separated
                 && root.persistentSeparators
-              color: splitMouse.containsMouse
+              color: root.hoveredSeparatorGroupId === horizontalCell.modelData
                 ? root.bar.urgent
                 : root.tokenColor("separator", root.bar.visualTokens.sumi)
               opacity: 0.62
@@ -639,27 +680,20 @@ Item {
                 ? !horizontalCell.separated : !root.v2Mode
               text: root.persistentSeparators || !horizontalCell.separated
                 ? "•" : "│"
-              color: splitMouse.containsMouse || horizontalCell.separated
+              color: root.hoveredSeparatorGroupId === horizontalCell.modelData
+                  || horizontalCell.separated
                 ? root.bar.urgent : root.bar.visualTokens.sumi
               font.pixelSize: 10
               font.family: root.bar.fontFamily
               opacity: root.persistentSeparators && root.v2Editing
-                ? splitMouse.containsMouse ? 0.95 : 0.34
-                : splitMouse.containsMouse ? 0.9 : 0
+                ? root.hoveredSeparatorGroupId === horizontalCell.modelData
+                  ? 0.95 : 0.34
+                : root.hoveredSeparatorGroupId === horizontalCell.modelData
+                  ? 0.9 : 0
 
               Behavior on opacity { NumberAnimation { duration: 120 } }
             }
 
-            MouseArea {
-              id: splitMouse
-              anchors.fill: parent
-              enabled: root.persistentSeparators || !root.v2Mode
-              hoverEnabled: true
-              acceptedButtons: Qt.LeftButton
-              cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-              onClicked: root.toggleSeparator(
-                horizontalCell.modelData, horizontalCell.index)
-            }
           }
         }
       }

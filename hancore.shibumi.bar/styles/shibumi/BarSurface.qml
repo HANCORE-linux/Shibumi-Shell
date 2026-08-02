@@ -93,6 +93,12 @@ Item {
         : compactShell ? Math.min(width - 2 * frameInset,
             Math.max(Commons.Style.space(80), naturalShellWidth))
         : width
+      // Fit/Dock/Notch are content-sized. Feeding their current shell width
+      // back into responsive staging lets a transient provider width compact
+      // the shell and hide G9/G10 even though the monitor still has room.
+      // Stage against the output capacity; shellWidth remains presentation.
+      readonly property real responsiveCapacity: compactShell
+        ? Math.max(0, width - 2 * frameInset) : shellWidth
       readonly property real shellX: shibumiShell ? frameInset
         : Math.round((width - shellWidth) / 2)
       readonly property real shellContentInset: contentInset
@@ -118,6 +124,7 @@ Item {
       })
       readonly property var responsiveProbe: ({
         shellWidth: Math.round(shellWidth),
+        capacity: Math.round(responsiveCapacity),
         stage: narrowStage,
         candidates: narrowCandidateWidths.map(function(value) {
           return Math.round(Number(value) || 0)
@@ -184,8 +191,8 @@ Item {
       }
 
       function updateNarrowStage() {
-        narrowStage = ResponsiveLayout.nextNarrowStage(narrowStage, shellWidth,
-          narrowCandidateWidths)
+        narrowStage = ResponsiveLayout.nextNarrowStage(narrowStage,
+          responsiveCapacity, narrowCandidateWidths)
       }
 
       function scheduleNarrowUpdate() { narrowTimer.restart() }

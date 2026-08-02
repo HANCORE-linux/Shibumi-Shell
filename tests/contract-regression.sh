@@ -306,6 +306,12 @@ rg -q 'availableWidth: horizontalSurface.centerAvailableWidth' styles/shibumi/Ba
 rg -Fq 'ResponsiveLayout.centerAvailableWidth(compactShell, width,' \
   styles/shibumi/BarSurface.qml \
   || fail "compact V2 shells measure the center against their own fitted width"
+rg -Fq 'readonly property real responsiveCapacity: compactShell' \
+  styles/shibumi/BarSurface.qml \
+  || fail "compact V2 shells do not retain the monitor responsive capacity"
+rg -Fq 'responsiveCapacity, narrowCandidateWidths' \
+  styles/shibumi/BarSurface.qml \
+  || fail "responsive staging still feeds back the content-sized V2 shell width"
 for shell_contract in shellStyle shellWidth shellX shellContentInset; do
   rg -Fq "$shell_contract" styles/shibumi/BarSurface.qml \
     || fail "Shibumi surface lost V2 shell geometry: $shell_contract"
