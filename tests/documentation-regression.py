@@ -62,8 +62,8 @@ def main() -> None:
             readme,
         )
     ]
-    if not 2 <= len(readme_images) <= 4:
-        fail("README landing page must contain between two and four images")
+    if not 2 <= len(readme_images) <= 5:
+        fail("README landing page must contain between two and five images")
     for raw_target in readme_images:
         target = local_target(REPO_ROOT / "README.md", raw_target)
         if target is not None and not target.is_file():

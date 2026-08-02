@@ -7,22 +7,46 @@
 Shibumi brings the approved QS Rise V1 and V2 layouts, controls, widgets,
 panels, and interaction model into Omarchy's existing shell process.
 
+<img src="docs/screenshots/shibumi-hikiryo-landing.png"
+     alt="Shibumi Shell project artwork"
+     width="100%">
+
 [Get started](docs/getting-started.md) ·
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
 </div>
 
-![Shibumi Quick page with V2 active](docs/mockups/control-center-quick-machine2.png)
-
-<p align="center">
-  <img src="docs/mockups/control-center-configure-machine2.png"
-       alt="Shibumi Configure landing page"
-       width="49%">
-  <img src="docs/mockups/control-center-bars-v2-machine2.png"
-       alt="Shibumi V2 bar form controls"
-       width="49%">
-</p>
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Quick</strong><br>
+      <img src="docs/screenshots/shibumi-quick-machine2.png"
+           alt="Shibumi Quick controls with V2 active"
+           width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>Configure</strong><br>
+      <img src="docs/screenshots/shibumi-configure-machine2.png"
+           alt="Shibumi Configure landing page"
+           width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Bars</strong><br>
+      <img src="docs/screenshots/shibumi-bars-machine2.png"
+           alt="Shibumi V2 bar form controls"
+           width="100%">
+    </td>
+    <td align="center" width="50%">
+      <strong>Plugins</strong><br>
+      <img src="docs/screenshots/shibumi-plugins-machine2.png"
+           alt="Shibumi plugin catalog"
+           width="100%">
+    </td>
+  </tr>
+</table>
 
 ## Install
 
