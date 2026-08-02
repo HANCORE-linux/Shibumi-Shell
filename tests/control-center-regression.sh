@@ -23,10 +23,13 @@ cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -Dm0644 "$repo_root/tests/control-center-smoke.qml" "$tmpdir/shell.qml"
 install -Dm0644 "$repo_root/tests/fixtures/ControlCenterTestPanel.qml" \
   "$tmpdir/fixtures/ControlCenterTestPanel.qml"
+install -Dm0755 "$repo_root/tests/fixtures/slow-health-report" \
+  "$tmpdir/home/.config/omarchy/plugins/hancore.shibumi.control-center/manager/shibumi-health"
 mkdir -m 700 "$tmpdir/runtime"
 
 set +e
 output=$(timeout 8 env \
+  HOME="$tmpdir/home" \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
@@ -40,8 +43,27 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "Quickshell exited $rc"
 grep -F 'control center smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -Eq 'attempted to evaluate a function in an invalid context|TypeError:.*showRoute' \
+    <<<"$output"; then
+  fail "destroyed Control Center context received a deferred route update"
+fi
 
 control_dir=$repo_root/hancore.shibumi.control-center
+
+for lifecycle_contract in \
+    'ControlSettings.qml:property string pendingConfigureRoute: ""' \
+    'ControlSettings.qml:function scheduleConfigureRoute(value)' \
+    'ControlSettings.qml:id: configureRouteSync' \
+    'control-center-smoke.qml:malformed Health result replaced the last report' \
+    'control-center-smoke.qml:closing the panel stopped or destroyed Health' \
+    'control-center-smoke.qml:reopened Health did not expose the completed report'; do
+  file=${lifecycle_contract%%:*}
+  label=${lifecycle_contract#*:}
+  target="$control_dir/$file"
+  [[ -f $target ]] || target="$repo_root/tests/$file"
+  rg -Fq "$label" "$target" \
+    || fail "Health lifecycle contract drifted: $label"
+done
 
 rg -q 'contentWidth: fittedContentWidth\(Commons\.Style\.space\(820\)' \
   "$control_dir/ControlCenterPanel.qml" \

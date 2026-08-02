@@ -26,6 +26,7 @@ for contract in \
   '"--quiet"' \
   '"status", "--porcelain=v1"' \
   '"rev-list", "--left-right", "--count"' \
+  '"SHIBUMI_HEALTH_FETCH_TIMEOUT", 12' \
   '["qs", "list", "--all", "--json"]' \
   '[str(command), "shell", "ping"]' \
   '"--tail",' \

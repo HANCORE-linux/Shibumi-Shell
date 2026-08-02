@@ -78,3 +78,20 @@ output, and reject lines containing credential, password, token, cookie, SSID,
 or authorization terms. Complete logs and environment dumps are never exposed.
 The long-lived owner rejects overlapping requests and delegates the hard
 deadline to `timeout`, which terminates and then kills an unresponsive child.
+
+## Verification baseline
+
+The automated acceptance matrix covers healthy and dirty checkouts plus local
+fixtures for ahead, behind, diverged, missing-upstream, offline, and hard-fetch-
+timeout states. Remote refresh is asserted to leave `HEAD` unchanged. Malformed
+reports must preserve the last valid result.
+
+The Control Center smoke test starts a deliberately slow report, navigates away,
+closes and reopens the panel while it is running, and confirms that the same
+long-lived owner delivers the completed report. A second request is rejected
+while the first is active. Deferred Configure navigation is owned by a QML
+`Timer`, so destroying the panel cancels the pending callback instead of
+evaluating it in an invalid context.
+
+Physical mixed-scale multi-monitor behavior remains a hardware acceptance gate;
+the offscreen lifecycle test does not claim to replace it.

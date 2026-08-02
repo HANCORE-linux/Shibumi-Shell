@@ -15,6 +15,7 @@ Item {
   property string lastConfigurePage: "main"
   property string configureDetailPage: ""
   property bool pluginFavoritesOnly: false
+  property string pendingConfigureRoute: ""
   property alias settingsQuery: settingsSearch.text
   property bool paletteOpen: false
   property bool installMode: false
@@ -269,12 +270,26 @@ Item {
     pluginFavoritesOnly = false
     configureDetailPage = next
     lastConfigurePage = next === "bars-motion" ? "bars" : next
-    Qt.callLater(function() {
-      configureLanding.showRoute(next === "bars-motion" ? "bars" : next)
+    scheduleConfigureRoute(next === "bars-motion" ? "bars" : next)
+    return true
+  }
+
+  function scheduleConfigureRoute(value) {
+    pendingConfigureRoute = String(value || "")
+    configureRouteSync.restart()
+  }
+
+  Timer {
+    id: configureRouteSync
+    interval: 0
+    onTriggered: {
+      const route = root.pendingConfigureRoute
+      root.pendingConfigureRoute = ""
+      if (route === "") return
+      configureLanding.showRoute(route)
       pageScrollAnimation.stop()
       pageFlick.contentY = 0
-    })
-    return true
+    }
   }
 
   function showBarsChildRoute() {
@@ -503,9 +518,7 @@ Item {
                   || !root.configureDetailOpen)) {
               root.currentPage = "configure"
               root.configureDetailPage = root.lastConfigurePage
-              Qt.callLater(function() {
-                configureLanding.showRoute(root.lastConfigurePage)
-              })
+              root.scheduleConfigureRoute(root.lastConfigurePage)
             }
           }
         }

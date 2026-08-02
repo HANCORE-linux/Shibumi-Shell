@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import runpy
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -166,16 +167,31 @@ class HealthDiagnosticsTests(unittest.TestCase):
         )
 
     def make_git_source(self) -> None:
-        remote = self.root / "remote.git"
-        self.git("init", "--bare", str(remote))
+        self.remote = self.root / "remote.git"
+        self.git("init", "--bare", str(self.remote))
         self.git("init", "-b", "main", str(self.source))
         self.git("config", "user.name", "Health Test", cwd=self.source)
         self.git("config", "user.email", "health@example.invalid", cwd=self.source)
         (self.source / "README.md").write_text("fixture\n", encoding="utf-8")
         self.git("add", "README.md", cwd=self.source)
         self.git("commit", "-m", "fixture", cwd=self.source)
-        self.git("remote", "add", "origin", str(remote), cwd=self.source)
+        self.git("remote", "add", "origin", str(self.remote), cwd=self.source)
         self.git("push", "-u", "origin", "main", cwd=self.source)
+
+    def commit_source(self, content: str, message: str = "fixture change") -> None:
+        (self.source / "README.md").write_text(content, encoding="utf-8")
+        self.git("add", "README.md", cwd=self.source)
+        self.git("commit", "-m", message, cwd=self.source)
+
+    def push_remote_commit(self, content: str) -> None:
+        writer = self.root / "writer"
+        self.git("clone", "--branch", "main", str(self.remote), str(writer))
+        self.git("config", "user.name", "Health Remote Test", cwd=writer)
+        self.git("config", "user.email", "health-remote@example.invalid", cwd=writer)
+        (writer / "README.md").write_text(content, encoding="utf-8")
+        self.git("add", "README.md", cwd=writer)
+        self.git("commit", "-m", "remote fixture change", cwd=writer)
+        self.git("push", "origin", "main", cwd=writer)
 
     def write_json(self, path: Path, value: object) -> None:
         path.write_text(json.dumps(value) + "\n", encoding="utf-8")
@@ -196,6 +212,14 @@ class HealthDiagnosticsTests(unittest.TestCase):
             timeout=15,
         )
         return json.loads(result.stdout)
+
+    def git_output(self, *arguments: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(self.source), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
 
     def by_id(self, payload: dict[str, object]) -> dict[str, dict[str, object]]:
         return {item["id"]: item for item in payload["checks"]}
@@ -220,6 +244,84 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["overall"], "warning")
         self.assertEqual(check["status"], "warning")
         self.assertEqual(check["value"], "Current · dirty")
+
+    def test_ahead_checkout_is_a_warning(self) -> None:
+        self.commit_source("ahead\n")
+        payload = self.run_health()
+        check = self.by_id(payload)["source-status"]
+        self.assertEqual(check["status"], "warning")
+        self.assertEqual(check["value"], "Ahead 1 · clean")
+        self.assertIn("ahead 1, behind 0", check["detail"])
+
+    def test_fetch_detects_behind_checkout_without_changing_head(self) -> None:
+        self.push_remote_commit("behind\n")
+        before = self.git_output("rev-parse", "HEAD")
+        payload = self.run_health("--fetch")
+        after = self.git_output("rev-parse", "HEAD")
+        checks = self.by_id(payload)
+        self.assertEqual(before, after)
+        self.assertEqual(checks["source-update"]["status"], "ok")
+        self.assertEqual(
+            checks["source-status"]["value"], "Update available · clean"
+        )
+        self.assertIn("ahead 0, behind 1", checks["source-status"]["detail"])
+
+    def test_fetch_detects_diverged_checkout(self) -> None:
+        self.commit_source("ahead\n")
+        self.push_remote_commit("behind\n")
+        payload = self.run_health("--fetch")
+        check = self.by_id(payload)["source-status"]
+        self.assertEqual(check["status"], "error")
+        self.assertEqual(check["value"], "Diverged · clean")
+        self.assertIn("ahead 1, behind 1", check["detail"])
+
+    def test_missing_upstream_fails_closed(self) -> None:
+        self.git("branch", "--unset-upstream", cwd=self.source)
+        payload = self.run_health()
+        check = self.by_id(payload)["source-status"]
+        self.assertEqual(check["status"], "warning")
+        self.assertEqual(check["value"], "Check failed")
+        self.assertIn("upstream", check["action"].lower())
+
+    def test_offline_fetch_preserves_cached_source_status(self) -> None:
+        self.git(
+            "remote",
+            "set-url",
+            "origin",
+            str(self.root / "offline.git"),
+            cwd=self.source,
+        )
+        payload = self.run_health("--fetch")
+        checks = self.by_id(payload)
+        self.assertEqual(checks["source-update"]["status"], "warning")
+        self.assertEqual(checks["source-update"]["value"], "Check failed")
+        self.assertEqual(checks["source-status"]["value"], "Current · clean")
+
+    def test_hard_fetch_timeout_is_bounded_and_reported(self) -> None:
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        fake_bin = self.root / "fake-bin"
+        fake_bin.mkdir()
+        fake_git = fake_bin / "git"
+        fake_git.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, sys, time\n"
+            "if 'fetch' in sys.argv:\n"
+            "    time.sleep(10)\n"
+            f"os.execv({real_git!r}, [{real_git!r}, *sys.argv[1:]])\n",
+            encoding="utf-8",
+        )
+        fake_git.chmod(0o755)
+        self.environment["PATH"] = (
+            str(fake_bin) + os.pathsep + self.environment["PATH"]
+        )
+        self.environment["SHIBUMI_HEALTH_FETCH_TIMEOUT"] = "0.05"
+
+        payload = self.run_health("--fetch")
+        check = self.by_id(payload)["source-update"]
+        self.assertEqual(check["status"], "warning")
+        self.assertEqual(check["value"], "Check failed")
+        self.assertIn("timed out", check["detail"])
 
     def test_inactive_managed_widget_is_not_a_runtime_failure(self) -> None:
         self.state["activation"]["enableServices"] = []

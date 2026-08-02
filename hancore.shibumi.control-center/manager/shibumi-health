@@ -78,6 +78,14 @@ def run(
     )
 
 
+def configured_timeout(name: str, default: float) -> float:
+    try:
+        value = float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return min(default, max(0.05, value))
+
+
 def payload_digest(directory: Path) -> str:
     digest = hashlib.sha256()
     digest.update(b"shibumi-plugin-payload-v1\0")
@@ -750,7 +758,9 @@ class Probe:
                             remote,
                             f"refs/heads/{remote_branch}:refs/remotes/{upstream_name}",
                         ],
-                        timeout=12,
+                        timeout=configured_timeout(
+                            "SHIBUMI_HEALTH_FETCH_TIMEOUT", 12
+                        ),
                     )
                     fetch_detail = "Remote refs refreshed."
                     self.add(

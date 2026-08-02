@@ -14,6 +14,9 @@ ShellRoot {
   property int barsRouteStep: 0
   property bool panelIdempotenceStarted: false
   property var stablePanelItem: null
+  property int healthLifecycleStep: 0
+  property var lifecycleHealthService: null
+  property int lifecycleReportEpoch: 0
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -689,27 +692,102 @@ ShellRoot {
       if (root.phase === 6) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
-        if (!panel || !panel.settingsPageReady
+        if (root.healthLifecycleStep === 0) {
+          if (!panel || !panel.settingsPageReady
+              || panel.settingsPage !== "health"
+              || !panel.settingsPageItem
+              || panel.headerHealthErrorCount !== 1
+              || panel.settingsPageItem.attentionChecks.length !== 1)
+            return root.fail("Health page did not instantiate")
+          const health = panel.settingsPageItem
+          const error = health.attentionChecks[0]
+          const issueUrl = health.diagnosticIssueUrl(error)
+          if (health.diagnosticCode(error)
+                !== "SHIBUMI-HEALTH/RUNTIME-ERRORS"
+              || health.diagnosticReport(error).indexOf(
+                "Component: hancore.shibumi.example") < 0
+              || issueUrl.indexOf(
+                "github.com/HANCORE-linux/Shibumi-Shell/issues/new?title=") < 0
+              || decodeURIComponent(issueUrl).indexOf(
+                "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
+            return root.fail("Health error report or issue URL is incomplete")
+          health.copyDiagnostic(error)
+          if (health.copiedCheckId !== "runtime-errors")
+            return root.fail("Health error report was not copied")
+
+          const stableReport = panel.healthService.report
+          if (panel.healthService.acceptReport("{broken")
+              || panel.healthService.report !== stableReport
+              || panel.healthService.failure === "")
+            return root.fail("malformed Health result replaced the last report")
+          panel.healthService.failure = ""
+          root.lifecycleHealthService = panel.healthService
+          root.lifecycleReportEpoch = Number(stableReport.generatedEpoch || 0)
+          if (!panel.healthService.runChecks(false))
+            return root.fail("Health check did not start")
+          root.healthLifecycleStep = 1
+          root.ticks = 0
+          return
+        }
+
+        if (root.healthLifecycleStep === 1) {
+          if (!panel || panel.settingsPage !== "health"
+              || !root.lifecycleHealthService
+              || !root.lifecycleHealthService.running
+              || root.lifecycleHealthService.runChecks(false))
+            return root.fail("Health did not serialize overlapping checks")
+          if (!panel.showSettingsPage("main"))
+            return root.fail("Health page did not navigate away during a check")
+          widget.close()
+          root.healthLifecycleStep = 2
+          root.ticks = 0
+          return
+        }
+
+        if (root.healthLifecycleStep === 2) {
+          if (widget.panelLoaded || widget.opened
+              || !root.lifecycleHealthService.running)
+            return root.fail("closing the panel stopped or destroyed Health")
+          if (!widget.openPage("health"))
+            return root.fail("Health panel did not reopen during a check")
+          root.healthLifecycleStep = 3
+          root.ticks = 0
+          return
+        }
+
+        if (root.healthLifecycleStep === 3) {
+          if (!panel || panel.healthService !== root.lifecycleHealthService
+              || panel.settingsPage !== "health"
+              || !root.lifecycleHealthService.running
+              || Number(root.lifecycleHealthService.report.generatedEpoch || 0)
+                !== root.lifecycleReportEpoch)
+            return root.fail("reopened Health lost the in-flight owner or report")
+          if (!panel.showSettingsPage("main"))
+            return root.fail("Health did not navigate away after reopen")
+          widget.close()
+          root.healthLifecycleStep = 4
+          root.ticks = 0
+          return
+        }
+
+        if (root.healthLifecycleStep === 4) {
+          if (root.lifecycleHealthService.running) return
+          if (root.lifecycleHealthService.failure !== ""
+              || Number(root.lifecycleHealthService.report.generatedEpoch || 0)
+                <= root.lifecycleReportEpoch)
+            return root.fail("background Health result was not retained")
+          if (!widget.openPage("health"))
+            return root.fail("completed Health report did not reopen")
+          root.healthLifecycleStep = 5
+          root.ticks = 0
+          return
+        }
+
+        if (!panel || panel.healthService !== root.lifecycleHealthService
             || panel.settingsPage !== "health"
-            || !panel.settingsPageItem
-            || panel.headerHealthErrorCount !== 1
-            || panel.settingsPageItem.attentionChecks.length !== 1)
-          return root.fail("Health page did not instantiate")
-        const health = panel.settingsPageItem
-        const error = health.attentionChecks[0]
-        const issueUrl = health.diagnosticIssueUrl(error)
-        if (health.diagnosticCode(error)
-              !== "SHIBUMI-HEALTH/RUNTIME-ERRORS"
-            || health.diagnosticReport(error).indexOf(
-              "Component: hancore.shibumi.example") < 0
-            || issueUrl.indexOf(
-              "github.com/HANCORE-linux/Shibumi-Shell/issues/new?title=") < 0
-            || decodeURIComponent(issueUrl).indexOf(
-              "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
-          return root.fail("Health error report or issue URL is incomplete")
-        health.copyDiagnostic(error)
-        if (health.copiedCheckId !== "runtime-errors")
-          return root.fail("Health error report was not copied")
+            || Number(panel.healthReport.generatedEpoch || 0)
+              <= root.lifecycleReportEpoch)
+          return root.fail("reopened Health did not expose the completed report")
         if (!panel.showSettingsPage("main"))
           return root.fail("Health page did not return to overview")
         root.phase++

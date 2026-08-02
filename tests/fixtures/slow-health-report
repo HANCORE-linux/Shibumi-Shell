@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+fixture_marker="${XDG_RUNTIME_DIR:?}/shibumi-health-fixture-started"
+if [[ -e $fixture_marker ]]; then
+  sleep 0.7
+else
+  touch "$fixture_marker"
+  sleep 0.05
+fi
+
+generated_epoch=$(date +%s)
+printf '{"schemaVersion":1,"generatedEpoch":%s,"overall":"healthy","summary":"Lifecycle fixture completed","fetchRequested":false,"checks":[{"id":"runtime-errors","group":"Runtime","label":"Recent runtime errors","status":"ok","value":"None detected","detail":"","component":"current Quickshell configuration","action":""}]}\n' "$generated_epoch"
