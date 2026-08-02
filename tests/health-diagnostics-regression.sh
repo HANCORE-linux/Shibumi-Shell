@@ -26,6 +26,8 @@ for contract in \
   '"--quiet"' \
   '"status", "--porcelain=v1"' \
   '"rev-list", "--left-right", "--count"' \
+  '["qs", "list", "--all", "--json"]' \
+  '[str(command), "shell", "ping"]' \
   '"--tail",' \
   'SENSITIVE_PATTERNS'; do
   rg -Fq "$contract" "$health_runner" || {

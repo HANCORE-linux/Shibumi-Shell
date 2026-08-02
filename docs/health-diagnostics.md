@@ -33,7 +33,8 @@ The local run covers:
 
 - configured and actually running bar;
 - bar form, position, and detected outputs;
-- the single production Quickshell process invariant;
+- the single production Quickshell instance invariant, matched by the exact
+  config path from Quickshell's instance registry and verified through IPC;
 - managed plugin roots, ownership markers, payload digests, registry discovery,
   and enabled state;
 - incomplete or failed continuity transactions;

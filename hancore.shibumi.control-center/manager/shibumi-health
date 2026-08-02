@@ -144,6 +144,8 @@ class Probe:
         self.registry: list[dict[str, Any]] = []
         self.processes: list[dict[str, Any]] = []
         self.production_pids: list[int] = []
+        self.production_responsive = False
+        self.process_probe_failed = False
 
     def add(
         self,
@@ -284,24 +286,55 @@ class Probe:
         try:
             if fixture:
                 values = read_json_list(Path(fixture))
-                self.processes = [item for item in values if isinstance(item, dict)]
             else:
-                result = run(["pgrep", "-x", "quickshell"], timeout=3)
-                pids = [int(line) for line in result.stdout.splitlines() if line.isdigit()]
-                for pid in pids:
-                    try:
-                        raw = Path(f"/proc/{pid}/cmdline").read_bytes()
-                    except OSError:
-                        continue
-                    command = raw.replace(b"\0", b" ").decode("utf-8", "replace").strip()
-                    self.processes.append({"pid": pid, "command": command})
-            self.production_pids = [
-                int(item.get("pid", 0))
-                for item in self.processes
-                if "/usr/share/omarchy/shell" in str(item.get("command", ""))
-                and int(item.get("pid", 0)) > 0
-            ]
-        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+                result = run(["qs", "list", "--all", "--json"], timeout=3)
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        result.stderr or result.stdout or "instance query failed"
+                    )
+                values = json.loads(result.stdout)
+                if not isinstance(values, list):
+                    raise ValueError("instance result is not an array")
+
+            self.processes = [item for item in values if isinstance(item, dict)]
+            production_config = os.path.normpath(
+                str(self.omarchy_root / "shell/shell.qml")
+            )
+            self.production_pids = sorted(
+                {
+                    int(item.get("pid", 0))
+                    for item in self.processes
+                    if os.path.normpath(str(item.get("config_path") or ""))
+                    == production_config
+                    and int(item.get("pid", 0)) > 0
+                }
+            )
+
+            fixture_live = os.environ.get("SHIBUMI_HEALTH_PROCESS_LIVE")
+            if fixture and fixture_live is not None:
+                self.production_responsive = fixture_live.lower() == "true"
+            elif fixture:
+                self.production_responsive = True
+            elif len(self.production_pids) == 1:
+                command = self.omarchy_root / "bin/omarchy-shell"
+                environment = os.environ.copy()
+                environment["OMARCHY_PATH"] = str(self.omarchy_root)
+                result = run(
+                    [str(command), "shell", "ping"],
+                    timeout=3,
+                    environment=environment,
+                )
+                self.production_responsive = (
+                    result.returncode == 0 and result.stdout.strip() == "ok"
+                )
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as error:
+            self.process_probe_failed = True
             self.add(
                 "quickshell-process",
                 "Runtime",
@@ -309,7 +342,7 @@ class Probe:
                 "error",
                 "Check failed",
                 str(error),
-                "/proc",
+                "qs list --all --json",
             )
 
     def load_outputs(self) -> list[dict[str, Any]]:
@@ -398,14 +431,29 @@ class Probe:
             )
 
     def check_processes(self) -> None:
+        if self.process_probe_failed:
+            return
         count = len(self.production_pids)
-        status = "ok" if count == 1 else "error"
-        value = "1 production process" if count == 1 else f"{count} production processes"
-        detail = (
-            f"PID {self.production_pids[0]} owns /usr/share/omarchy/shell."
-            if count == 1
-            else "Expected exactly one Quickshell process for the Omarchy shell."
-        )
+        responsive = count == 1 and self.production_responsive
+        status = "ok" if responsive else "error"
+        if responsive:
+            value = "1 production process"
+            detail = (
+                f"PID {self.production_pids[0]} owns "
+                f"{self.omarchy_root}/shell and answers IPC."
+            )
+        elif count == 1:
+            value = "Production process unresponsive"
+            detail = (
+                f"PID {self.production_pids[0]} is registered for "
+                f"{self.omarchy_root}/shell but does not answer IPC."
+            )
+        else:
+            value = f"{count} production processes"
+            detail = (
+                "Expected exactly one live Quickshell instance registered for "
+                f"{self.omarchy_root}/shell/shell.qml."
+            )
         self.add(
             "quickshell-process",
             "Runtime",
@@ -413,8 +461,8 @@ class Probe:
             status,
             value,
             detail,
-            "/proc",
-            "Restart the shell only after inspecting duplicate processes."
+            "qs list --all --json",
+            "Inspect the registered instances before restarting the shell."
             if status == "error" else "",
         )
 

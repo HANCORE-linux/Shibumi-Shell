@@ -122,6 +122,7 @@ class HealthDiagnosticsTests(unittest.TestCase):
                 {
                     "pid": 4242,
                     "command": "quickshell -n -p /usr/share/omarchy/shell",
+                    "config_path": str(self.omarchy / "shell/shell.qml"),
                 }
             ],
         )
@@ -146,6 +147,7 @@ class HealthDiagnosticsTests(unittest.TestCase):
                 "SHIBUMI_HEALTH_SOURCE_ROOT": str(self.source),
                 "SHIBUMI_HEALTH_REGISTRY_FILE": str(self.registry_file),
                 "SHIBUMI_HEALTH_PROCESS_FILE": str(self.process_file),
+                "SHIBUMI_HEALTH_PROCESS_LIVE": "true",
                 "SHIBUMI_HEALTH_OUTPUT_FILE": str(self.output_file),
                 "SHIBUMI_HEALTH_LOG_FILE": str(self.log_file),
             }
@@ -233,11 +235,20 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(check["value"], "1/1 required enabled")
 
     def test_duplicate_process_and_stale_payload_are_errors(self) -> None:
+        production_config = str(self.omarchy / "shell/shell.qml")
         self.write_json(
             self.process_file,
             [
-                {"pid": 1, "command": "quickshell -p /usr/share/omarchy/shell"},
-                {"pid": 2, "command": "quickshell -p /usr/share/omarchy/shell"},
+                {
+                    "pid": 1,
+                    "command": "quickshell -p /usr/share/omarchy/shell",
+                    "config_path": production_config,
+                },
+                {
+                    "pid": 2,
+                    "command": "quickshell -p /usr/share/omarchy/shell",
+                    "config_path": production_config,
+                },
             ],
         )
         target = self.plugin_dir / "hancore.shibumi.state/Service.qml"
@@ -248,6 +259,59 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(checks["quickshell-process"]["status"], "error")
         self.assertEqual(checks["managed-plugins"]["status"], "error")
         self.assertIn("modified/stale", checks["managed-plugins"]["detail"])
+
+    def test_argumentless_crash_relaunch_uses_registered_config(self) -> None:
+        self.write_json(
+            self.process_file,
+            [
+                {
+                    "pid": 4242,
+                    "command": "/usr/bin/quickshell",
+                    "config_path": str(self.omarchy / "shell/shell.qml"),
+                    "shell_id": "crash-relaunch-fixture",
+                }
+            ],
+        )
+        payload = self.run_health()
+        check = self.by_id(payload)["quickshell-process"]
+        self.assertEqual(payload["overall"], "healthy")
+        self.assertEqual(check["status"], "ok")
+        self.assertEqual(check["value"], "1 production process")
+
+    def test_foreign_instance_does_not_count_as_production(self) -> None:
+        self.write_json(
+            self.process_file,
+            [
+                {
+                    "pid": 4242,
+                    "command": "/usr/bin/quickshell",
+                    "config_path": "/tmp/another-shell/shell.qml",
+                }
+            ],
+        )
+        payload = self.run_health()
+        check = self.by_id(payload)["quickshell-process"]
+        self.assertEqual(payload["overall"], "error")
+        self.assertEqual(check["status"], "error")
+        self.assertEqual(check["value"], "0 production processes")
+
+    def test_registered_but_unresponsive_instance_is_an_error(self) -> None:
+        self.environment["SHIBUMI_HEALTH_PROCESS_LIVE"] = "false"
+        payload = self.run_health()
+        check = self.by_id(payload)["quickshell-process"]
+        self.assertEqual(payload["overall"], "error")
+        self.assertEqual(check["status"], "error")
+        self.assertEqual(check["value"], "Production process unresponsive")
+
+    def test_malformed_instance_registry_reports_one_process_error(self) -> None:
+        self.write_json(self.process_file, {"pid": 4242})
+        payload = self.run_health()
+        process_checks = [
+            item for item in payload["checks"]
+            if item["id"] == "quickshell-process"
+        ]
+        self.assertEqual(len(process_checks), 1)
+        self.assertEqual(process_checks[0]["value"], "Check failed")
 
     def test_bar_mismatch_and_failed_lifecycle_are_errors(self) -> None:
         self.registry[0]["active"] = False
