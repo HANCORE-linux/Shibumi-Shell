@@ -49,6 +49,14 @@ Item {
   readonly property int splitGrow: bar.visualTokens.splitGap
   readonly property bool persistentSeparators:
     bar.visualTokens && bar.visualTokens.v2Shell === true
+  readonly property var stateService: bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.state") : null
+  readonly property int stateRevision: stateService
+    && stateService.revision !== undefined
+    ? Number(stateService.revision) || 0 : 0
+  readonly property var stateConfig: stateService && stateService.config
+    ? stateService.config : ({})
   readonly property var contentItem: content.item
   readonly property var groupGeometry: contentItem && contentItem.groupGeometry
     ? contentItem.groupGeometry : []
@@ -141,18 +149,25 @@ Item {
   Component.onCompleted: syncStableGroups()
 
   function splitAfter(index) {
+    // Keep the replaced config object itself in the dependency graph. Method
+    // calls across the plugin-service boundary do not reliably preserve the
+    // nested config read, and revision is not forwarded by every host proxy.
+    void(root.stateRevision)
+    void(root.stateConfig)
     const groupId = index >= 0 && index < groups.length
       ? String(groups[index]) : ""
-    const stateService = bar && bar.shell
-      && typeof bar.shell.serviceFor === "function"
-      ? bar.shell.serviceFor("hancore.shibumi.state") : null
-    const appearanceSeparator = persistentSeparators && stateService
-      && typeof stateService.groupSetting === "function"
-      ? stateService.groupSetting(groupId, "separator", false) === true
-      : false
-    return appearanceSeparator || (bar.layoutController
+    const widgetSettings = root.stateConfig && root.stateConfig.widgets
+      && root.stateConfig.widgets[groupId]
+      ? root.stateConfig.widgets[groupId] : ({})
+    const appearanceSeparator = persistentSeparators
+      && widgetSettings.separator === true
+    // V2 separators are group-owned appearance state. Never OR them with
+    // V1's positional split array, otherwise an active V1 split makes the V2
+    // line impossible to turn off even though the V2 state changed correctly.
+    if (persistentSeparators) return appearanceSeparator
+    return bar.layoutController
       && typeof bar.layoutController.splitEnabled === "function"
-      ? bar.layoutController.splitEnabled(region, index) : false)
+      ? bar.layoutController.splitEnabled(region, index) : false
   }
 
   function markerGapWidth(separated) {

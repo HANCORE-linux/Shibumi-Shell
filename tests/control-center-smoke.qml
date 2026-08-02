@@ -770,9 +770,19 @@ ShellRoot {
             || !panel.showSettingsPage("quick"))
           return root.fail("Quick Pickers tile did not open its existing page")
         if (!quick.activateAction("reboot") || quick.pendingAction !== "reboot"
+            || quick.confirmationButtonCount !== 2
+            || quick.confirmationActionLabel !== "Reboot now"
             || panel.lastQuickSystemAction === "reboot")
           return root.fail("destructive Quick action skipped confirmation")
-        quick.pendingAction = ""
+        if (!quick.cancelPendingAction() || quick.pendingAction !== ""
+            || quick.confirmationButtonCount !== 0)
+          return root.fail("destructive Quick action could not be cancelled")
+        if (!quick.activateAction("shutdown")
+            || quick.confirmationActionLabel !== "Shutdown now"
+            || !quick.confirmPendingAction()
+            || panel.lastQuickSystemAction !== "shutdown"
+            || quick.pendingAction !== "")
+          return root.fail("destructive Quick action confirmation did not execute")
         panel.activeShell = "omarchy"
         root.phase++
         root.ticks = 0
@@ -788,7 +798,7 @@ ShellRoot {
             || panel.showSettingsPage("plugins")
             || panel.focusPredictiveSettingsSearch()
             || quick.activateAction("lock")
-            || panel.lastQuickSystemAction !== "screensaver")
+            || panel.lastQuickSystemAction !== "shutdown")
           return root.fail("Omarchy host exposed Shibumi controls")
         if (!quick.activateBar("v1") || panel.lastSwitchTarget !== "v1")
           return root.fail("Omarchy host did not retain the return switch")

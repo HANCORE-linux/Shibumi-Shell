@@ -15,6 +15,11 @@ Column {
   property int hoveredShibumiActionIndex: -1
   property int hoveredSystemActionIndex: -1
   property string pendingAction: ""
+  readonly property int confirmationButtonCount:
+    pendingAction === "reboot" || pendingAction === "shutdown" ? 2 : 0
+  readonly property string confirmationActionLabel:
+    pendingAction === "reboot" ? "Reboot now"
+      : pendingAction === "shutdown" ? "Shutdown now" : ""
   readonly property bool ready: barRepeater.count === 3
     && actionCount === (returnOnly ? 0 : 8)
   readonly property int barOptionCount: barRepeater.count
@@ -149,18 +154,31 @@ Column {
     const requested = String(actionId || "")
     if (returnOnly) return false
     if (requested === "reboot" || requested === "shutdown") {
-      if (pendingAction !== requested) {
-        pendingAction = requested
-        confirmationReset.restart()
-        return true
-      }
+      if (pendingAction === requested) return confirmPendingAction()
+      pendingAction = requested
+      confirmationReset.restart()
+      return true
     }
-    pendingAction = ""
-    confirmationReset.stop()
+    cancelPendingAction()
     if (requested === "bars") return controller.showSettingsPage("bars")
     if (requested === "pickers") return controller.showSettingsPage("pickers")
     if (requested === "add-plugin") return controller.openPluginInstaller()
     if (requested === "reload") return controller.reloadShell()
+    return controller.runQuickSystemAction(requested)
+  }
+
+  function cancelPendingAction() {
+    if (pendingAction === "") return false
+    pendingAction = ""
+    confirmationReset.stop()
+    return true
+  }
+
+  function confirmPendingAction() {
+    const requested = pendingAction
+    if (requested !== "reboot" && requested !== "shutdown") return false
+    pendingAction = ""
+    confirmationReset.stop()
     return controller.runQuickSystemAction(requested)
   }
 
@@ -193,10 +211,12 @@ Column {
       ? "Confirm " + modelData.label : modelData.label
 
     Row {
+      id: actionContent
       anchors.fill: parent
       anchors.leftMargin: Commons.Style.space(9)
       anchors.rightMargin: Commons.Style.space(8)
       spacing: Commons.Style.space(8)
+      visible: !actionTile.confirmation
 
       IconText {
         anchors.verticalCenter: parent.verticalCenter
@@ -244,9 +264,77 @@ Column {
       }
     }
 
+    Row {
+      anchors.fill: parent
+      anchors.margins: Commons.Style.space(5)
+      spacing: Commons.Style.space(5)
+      visible: actionTile.confirmation
+
+      Rectangle {
+        id: cancelConfirmation
+        width: Math.round((parent.width - parent.spacing) * 0.38)
+        height: parent.height
+        radius: Math.max(2, root.controller.controlRadius - 2)
+        color: cancelConfirmationPointer.containsMouse
+          ? root.controller.controlHoverFillColor
+          : root.controller.controlFillColor
+        border.width: root.controller.controlBorderWidth
+        border.color: cancelConfirmationPointer.containsMouse
+          ? root.controller.controlHoverBorderColor
+          : root.controller.controlBorderColor
+
+        Text {
+          anchors.centerIn: parent
+          text: "Cancel"
+          color: root.foreground
+          font.family: root.controller.marketFont
+          font.pixelSize: root.detailFontSize
+          font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+          id: cancelConfirmationPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.cancelPendingAction()
+        }
+      }
+
+      Rectangle {
+        id: executeConfirmation
+        width: parent.width - cancelConfirmation.width - parent.spacing
+        height: parent.height
+        radius: Math.max(2, root.controller.controlRadius - 2)
+        color: executeConfirmationPointer.containsMouse
+          ? Commons.Util.alpha(root.controller.accentColor("color01"), 0.2)
+          : Commons.Util.alpha(root.controller.accentColor("color01"), 0.11)
+        border.width: root.controller.controlBorderWidth
+        border.color: root.controller.accentColor("color01")
+
+        Text {
+          anchors.centerIn: parent
+          text: root.confirmationActionLabel
+          color: root.controller.accentColor("color01")
+          font.family: root.controller.marketFont
+          font.pixelSize: root.detailFontSize
+          font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+          id: executeConfirmationPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.confirmPendingAction()
+        }
+      }
+    }
+
     MouseArea {
       id: actionPointer
       anchors.fill: parent
+      enabled: !actionTile.confirmation
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onEntered: {
@@ -635,6 +723,6 @@ Column {
   Timer {
     id: confirmationReset
     interval: 5000
-    onTriggered: root.pendingAction = ""
+    onTriggered: root.cancelPendingAction()
   }
 }

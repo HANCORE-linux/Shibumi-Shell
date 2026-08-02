@@ -435,6 +435,9 @@ for refined_contract in \
   'QuickControlPage.qml:id: "lock", label: "Lock"' \
   'QuickControlPage.qml:id: "reboot", label: "Reboot"' \
   'QuickControlPage.qml:id: "shutdown", label: "Shutdown"' \
+  'QuickControlPage.qml:text: "Cancel"' \
+  'QuickControlPage.qml:? "Reboot now"' \
+  'QuickControlPage.qml:? "Shutdown now"' \
   'ActiveBarSettingsPage.qml:root.activeLabel + " ACTIVE"' \
   'ActiveBarSettingsPage.qml:visible: root.shibumiActive && !root.v2Active' \
   'ActiveBarSettingsPage.qml:visible: root.v2Active' \

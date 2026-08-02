@@ -412,6 +412,10 @@ Item {
   }
 
   function dismissEscapeState() {
+    if (quickPage.pendingAction !== "") {
+      quickPage.cancelPendingAction()
+      return true
+    }
     if (paletteOpen) {
       closeWidgetPicker()
       return true

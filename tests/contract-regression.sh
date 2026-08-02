@@ -312,6 +312,13 @@ rg -Fq 'readonly property real responsiveCapacity: compactShell' \
 rg -Fq 'responsiveCapacity, narrowCandidateWidths' \
   styles/shibumi/BarSurface.qml \
   || fail "responsive staging still feeds back the content-sized V2 shell width"
+rg -Fq 'void(root.stateRevision)' styles/shibumi/GroupSection.qml \
+  || fail "V2 separator geometry does not react to state-service commits"
+rg -Fq 'void(root.stateConfig)' styles/shibumi/GroupSection.qml \
+  || fail "V2 separator geometry does not bind to the replaced state config"
+rg -Fq 'if (persistentSeparators) return appearanceSeparator' \
+  styles/shibumi/GroupSection.qml \
+  || fail "V2 separators still inherit V1 positional split state"
 for shell_contract in shellStyle shellWidth shellX shellContentInset; do
   rg -Fq "$shell_contract" styles/shibumi/BarSurface.qml \
     || fail "Shibumi surface lost V2 shell geometry: $shell_contract"

@@ -69,10 +69,27 @@ ShellRoot {
 
     QtObject {
       id: fakeStateService
+      property int revision: 0
       property var config: ({
         widgets: ({ G1: { widgetPadding: "compact" } })
       })
       readonly property color selectedColor: "#88aaff"
+
+      function groupSetting(groupId, key, fallback) {
+        const settings = config && config.widgets
+          ? config.widgets[String(groupId || "")] || ({}) : ({})
+        return Object.prototype.hasOwnProperty.call(settings, String(key || ""))
+          ? settings[String(key || "")] : fallback
+      }
+
+      function setSeparator(enabled) {
+        const next = JSON.parse(JSON.stringify(config))
+        if (!next.widgets) next.widgets = ({})
+        if (!next.widgets.G1) next.widgets.G1 = ({})
+        next.widgets.G1.separator = enabled === true
+        config = next
+        revision++
+      }
     }
 
     QtObject {
@@ -155,6 +172,7 @@ ShellRoot {
       readonly property var order: noSplitController.order
 
       function splitEnabled(region, index) {
+        // Deliberately active: V1 positional splits must not leak into V2.
         return region === "left" && index === 0
       }
     }
@@ -543,6 +561,8 @@ ShellRoot {
     Timer {
       property int attempts: 0
       property bool narrowed: false
+      property int separatorPhase: 0
+      property real separatorBaseWidth: 0
 
       interval: 10
       running: true
@@ -597,6 +617,39 @@ ShellRoot {
             + JSON.stringify(test.sectionState(narrowLeftSection))
             + ", rightState="
             + JSON.stringify(test.sectionState(narrowRightSection)))
+          return
+        }
+
+        if (separatorPhase === 0) {
+          separatorBaseWidth = v2LeftWithSplit.implicitWidth
+          fakeStateService.setSeparator(true)
+          separatorPhase = 1
+          attempts = 0
+          return
+        }
+        if (separatorPhase === 1) {
+          if (!test.closeEnough(v2LeftWithSplit.implicitWidth,
+                separatorBaseWidth + v2LeftWithSplit.splitGrow)) {
+            if (attempts < 50) return
+            stop()
+            test.fail("V2 separator did not react to state revision: before="
+              + separatorBaseWidth + ", after="
+              + v2LeftWithSplit.implicitWidth + ", revision="
+              + fakeStateService.revision)
+            return
+          }
+          fakeStateService.setSeparator(false)
+          separatorPhase = 2
+          attempts = 0
+          return
+        }
+        if (separatorPhase === 2
+            && !test.closeEnough(v2LeftWithSplit.implicitWidth,
+              separatorBaseWidth)) {
+          if (attempts < 50) return
+          stop()
+          test.fail("V2 separator did not clear after state revision: before="
+            + separatorBaseWidth + ", after=" + v2LeftWithSplit.implicitWidth)
           return
         }
 
