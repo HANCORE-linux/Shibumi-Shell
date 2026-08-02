@@ -2,15 +2,17 @@
 
 Status: maintainer reference
 
-All Shibumi tests run on Machine2. Local source inspection and editing are
-allowed, but a local pass is not release evidence.
+Automated Shibumi tests can run from any supported development checkout.
+Maintainers repeat the complete contract and live Wayland acceptance on an
+isolated validation system before release; users and external contributors do
+not need access to that system.
 
 ## Test order
 
 Run the smallest affected regression first. For a bar-host change:
 
 ```bash
-cd /home/drdeltree/Projects/shibumi
+cd /path/to/shibumi
 OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
 ```
 
@@ -34,7 +36,7 @@ The full contract covers:
 - self-contained plugin payloads and vendored parity;
 - host-facade and suite lifecycle behavior;
 - QML component and service smokes;
-- Control Center, App Menu, bar, panel, and widget behavior;
+- Control Center, Omarchy menu continuity, bar, panel, and widget behavior;
 - transactional installer and updater regressions.
 
 ## Live validation
@@ -47,8 +49,8 @@ After the complete contract passes:
 ./scripts/shibumi-suite status
 ```
 
-Then verify the affected user flow in Machine2's real Wayland session. For UI
-changes, inspect Top and Bottom placement, open and closed state, Escape and
+Maintainers then verify the affected user flow in a real Wayland session. For
+UI changes, inspect Top and Bottom placement, open and closed state, Escape and
 outside dismissal, focus transfer, theme changes, bar switching, shell reload,
 and idle/screensaver behavior when relevant.
 

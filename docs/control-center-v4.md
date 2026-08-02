@@ -490,23 +490,23 @@ The compatibility label is deliberately conservative:
 ## Runtime evidence
 
 The focused offscreen regression, complete repository contract regression,
-25-plugin self-containment checks, suite manifest contract, and Quattro
-contract regression passed on 2026-07-30 on Machine2 against Omarchy
+24-plugin self-containment checks, suite manifest contract, and Quattro
+contract regression passed on 2026-07-30 on the validation system against Omarchy
 `4.0.0.r1458.gfa6b5fc-1`. Runtime screenshots separately verify Quick,
 Configure, search, V1 layout, and V2 layout states.
 
-The real Wayland lifecycle test on Machine2 also completed install, switch to
+The real Wayland lifecycle test on the validation system also completed install, switch to
 the stock Omarchy bar, update while preserving that host, Shibumi reactivation,
 and uninstall. It used an isolated temporary home and did not mutate the live
 user configuration.
 
 Evidence:
 
-- [Quick mode](mockups/control-center-refined-quick-machine2.png)
-- [Configure mode](mockups/control-center-refined-configure-machine2.png)
-- [Settings search](mockups/control-center-refined-search-machine2.png)
-- [V1 layout capabilities](mockups/control-center-refined-v1-layout-machine2.png)
-- [V2 layout capabilities](mockups/control-center-refined-v2-layout-machine2.png)
+- [Quick mode](mockups/control-center-refined-quick.png)
+- [Configure mode](mockups/control-center-refined-configure.png)
+- [Settings search](mockups/control-center-refined-search.png)
+- [V1 layout capabilities](mockups/control-center-refined-v1-layout.png)
+- [V2 layout capabilities](mockups/control-center-refined-v2-layout.png)
 
 ## Remaining acceptance
 

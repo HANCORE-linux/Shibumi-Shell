@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-if [[ ${1:-} == get ]]; then
-  printf '%s\n' 'performance'
-  exit 0
-fi
-exit 64

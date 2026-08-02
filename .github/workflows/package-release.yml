@@ -1,0 +1,72 @@
+name: Package release gates
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Validate package contracts
+        run: |
+          set -euo pipefail
+          bash -n packaging/aur/PKGBUILD
+          bash -n packaging/shibumi-shell
+          python3 tests/test_package_release.py
+          python3 tests/test_shibumi_suite.py
+          python3 tests/test_shibumi_health.py
+
+      - name: Build the reproducible release asset
+        run: |
+          set -euo pipefail
+          scripts/build-release-archive --check-reproducible
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package-contract
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tagged revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag, version, and pinned archive checksum
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          test "$GITHUB_REF_NAME" = "v$version"
+          scripts/build-release-archive --check-reproducible
+          archive="dist/shibumi-shell-$version.tar.gz"
+          expected=$(sed -n 's/^_source_sha256=//p' packaging/aur/PKGBUILD)
+          actual=$(sha256sum "$archive" | awk '{print $1}')
+          test "$expected" != SKIP
+          test "$actual" = "$expected"
+
+      - name: Publish immutable GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          gh release create "v$version" \
+            "dist/shibumi-shell-$version.tar.gz" \
+            "dist/shibumi-shell-$version.tar.gz.sha256" \
+            "dist/shibumi-shell-$version.tar.gz.inventory.json" \
+            --verify-tag \
+            --prerelease \
+            --generate-notes \
+            --title "Shibumi Shell $version"

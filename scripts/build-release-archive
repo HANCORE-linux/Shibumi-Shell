@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Build a deterministic, single-root Shibumi release archive."""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import hashlib
+import io
+import json
+import os
+import stat
+import subprocess
+import sys
+import tarfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+ROOT_FILES = {
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "VERSION",
+}
+ROOT_PREFIXES = ("contracts/", "docs/", "packaging/", "scripts/")
+EXCLUDED_PREFIXES = (
+    "docs/audits/",
+    "docs/mockups/",
+    "docs/screenshots/",
+    "docs/project-state-",
+    "packaging/aur/",
+)
+
+
+def git(*arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    return result.stdout
+
+
+def included(path: str) -> bool:
+    if path in ROOT_FILES:
+        return True
+    if path.startswith("hancore.shibumi.") and "/" in path:
+        return True
+    return path.startswith(ROOT_PREFIXES)
+
+
+def excluded(path: str) -> bool:
+    parts = Path(path).parts
+    return (
+        "__pycache__" in parts
+        or path.endswith(".pyc")
+        or path.startswith(EXCLUDED_PREFIXES)
+    )
+
+
+def working_entries() -> list[tuple[str, int, bytes, str | None]]:
+    entries: list[tuple[str, int, bytes, str | None]] = []
+    for path in sorted(ROOT.rglob("*")):
+        if path.is_dir():
+            continue
+        relative = str(path.relative_to(ROOT))
+        if not included(relative) or excluded(relative):
+            continue
+        if path.is_symlink():
+            entries.append((relative, 0o777, b"", os.readlink(path)))
+        else:
+            entries.append(
+                (relative, stat.S_IMODE(path.stat().st_mode), path.read_bytes(), None)
+            )
+    return entries
+
+
+def committed_entries() -> list[tuple[str, int, bytes, str | None]]:
+    entries: list[tuple[str, int, bytes, str | None]] = []
+    for line in git("ls-tree", "-r", "HEAD").splitlines():
+        metadata, path = line.split("\t", 1)
+        mode_text, _kind, _object = metadata.split()
+        if not included(path) or excluded(path):
+            continue
+        blob = subprocess.run(
+            ["git", "show", f"HEAD:{path}"],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        if mode_text == "120000":
+            entries.append((path, 0o777, b"", blob.decode().rstrip("\n")))
+        else:
+            entries.append(
+                (path, 0o755 if mode_text == "100755" else 0o644, blob, None)
+            )
+    return entries
+
+
+def build(
+    entries: list[tuple[str, int, bytes, str | None]], version: str
+) -> tuple[bytes, list[dict[str, str]]]:
+    prefix = f"shibumi-shell-{version}"
+    raw = io.BytesIO()
+    inventory: list[dict[str, str]] = []
+    with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as archive:
+        root_info = tarfile.TarInfo(prefix + "/")
+        root_info.type = tarfile.DIRTYPE
+        root_info.mode = 0o755
+        root_info.uid = root_info.gid = 0
+        root_info.uname = root_info.gname = "root"
+        root_info.mtime = 0
+        archive.addfile(root_info)
+        for path, mode, data, link_target in sorted(entries):
+            info = tarfile.TarInfo(f"{prefix}/{path}")
+            info.mode = mode
+            info.uid = info.gid = 0
+            info.uname = info.gname = "root"
+            info.mtime = 0
+            record = {"path": path, "mode": f"{mode:04o}"}
+            if link_target is not None:
+                info.type = tarfile.SYMTYPE
+                info.linkname = link_target
+                archive.addfile(info)
+                record["linkTarget"] = link_target
+            else:
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+                record["sha256"] = hashlib.sha256(data).hexdigest()
+            inventory.append(record)
+    return gzip.compress(raw.getvalue(), compresslevel=9, mtime=0), inventory
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="build from the working tree for local rehearsal only",
+    )
+    parser.add_argument("--check-reproducible", action="store_true")
+    parser.add_argument("--output-dir", default="dist")
+    args = parser.parse_args()
+
+    if not args.allow_dirty and git(
+        "status", "--porcelain", "--untracked-files=no"
+    ).strip():
+        print(
+            "release archive requires a clean worktree; --allow-dirty is rehearsal-only",
+            file=sys.stderr,
+        )
+        return 2
+
+    entries = working_entries() if args.allow_dirty else committed_entries()
+    version_data = next(
+        (data for path, _mode, data, link in entries if path == "VERSION" and link is None),
+        b"",
+    )
+    version = version_data.decode().strip()
+    if not version:
+        print("VERSION is missing from release content", file=sys.stderr)
+        return 1
+    payload, inventory = build(entries, version)
+    if args.check_reproducible:
+        second, second_inventory = build(entries, version)
+        if payload != second or inventory != second_inventory:
+            print("release archive is not reproducible", file=sys.stderr)
+            return 1
+
+    output_dir = Path(args.output_dir)
+    if not output_dir.is_absolute():
+        output_dir = ROOT / output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    name = f"shibumi-shell-{version}.tar.gz"
+    archive_path = output_dir / name
+    archive_path.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    (output_dir / f"{name}.sha256").write_text(
+        f"{digest}  {name}\n", encoding="utf-8"
+    )
+    (output_dir / f"{name}.inventory.json").write_text(
+        json.dumps(
+            {"version": version, "sha256": digest, "files": inventory}, indent=2
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"Built {archive_path} ({len(inventory)} files, {digest})")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

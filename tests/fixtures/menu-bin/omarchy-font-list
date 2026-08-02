@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-printf '%s\n' 'JetBrains Mono' 'Fira Code' "O'Brien Font"

@@ -43,6 +43,9 @@ Column {
     }
     return "Checking …"
   }
+  readonly property string installChannelLabel: report.installOrigin === "package"
+    ? "ARCH PACKAGE" : report.installOrigin === "checkout"
+      ? "SOURCE CHECKOUT" : "CHECKING …"
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(6)
@@ -176,7 +179,7 @@ Column {
     pageKey: "health"
     eyebrow: "RUNTIME DIAGNOSTICS"
     title: "Health"
-    description: "Runtime errors, lifecycle and local source drift."
+    description: "Runtime errors, lifecycle and installation status."
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
@@ -221,7 +224,7 @@ Column {
       Text {
         id: installChannel
         anchors.verticalCenter: parent.verticalCenter
-        text: "LOCAL SUITE"
+        text: root.installChannelLabel
         color: root.foreground
         opacity: 0.46
         font.family: root.controller.marketFont

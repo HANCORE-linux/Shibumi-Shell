@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+publish_check=false
+if [[ ${1:-} == --publish-check ]]; then
+  publish_check=true
+elif [[ $# -gt 0 ]]; then
+  printf 'usage: %s [--publish-check]\n' "$0" >&2
+  exit 2
+fi
+
+readonly pkgbuild="packaging/aur/PKGBUILD"
+readonly srcinfo="packaging/aur/.SRCINFO"
+version=$(<VERSION)
+
+bash -n "$pkgbuild"
+bash -n packaging/shibumi-shell
+shellcheck packaging/shibumi-shell
+python3 -m json.tool packaging/package-metadata.json >/dev/null
+
+mapfile -t package_values < <(bash -c 'source "$1"; printf "%s\n%s\n%s\n%s\n" "$_upstream_version" "$pkgver" "$_source_sha256" "${source[0]}"' _ "$pkgbuild")
+upstream_version=${package_values[0]}
+pkgver=${package_values[1]}
+source_sha256=${package_values[2]}
+source_spec=${package_values[3]}
+expected_pkgver=${version//-/}
+
+[[ $upstream_version == "$version" && $pkgver == "$expected_pkgver" ]] || {
+  printf 'PKGBUILD version does not match VERSION %s\n' "$version" >&2
+  exit 1
+}
+jq -e --arg version "$version" \
+  '.schemaVersion == 1 and .packageName == "shibumi-shell" and .version == $version' \
+  packaging/package-metadata.json >/dev/null
+jq -e --arg version "$version" '.suiteVersion == $version' \
+  contracts/plugin-suite-v1.json >/dev/null
+if ! jq -e --arg version "$version" '.version == $version' \
+    hancore.shibumi.*/manifest.json >/dev/null; then
+  printf 'plugin manifest versions do not match VERSION %s\n' "$version" >&2
+  exit 1
+fi
+
+generated=$(mktemp)
+archive=""
+cleanup() {
+  rm -f "$generated"
+  [[ -z $archive ]] || rm -f "$archive"
+}
+trap cleanup EXIT
+
+(cd packaging/aur && makepkg --printsrcinfo) >"$generated"
+diff -u "$srcinfo" "$generated"
+
+mapfile -t required_dependencies < <(jq -r '.requiredPackages[]' \
+  contracts/package-runtime-v1.json)
+for dependency in "${required_dependencies[@]}"; do
+  grep -Fq $'\tdepends = '"$dependency" "$srcinfo" || {
+    printf 'missing AUR dependency: %s\n' "$dependency" >&2
+    exit 1
+  }
+done
+[[ $source_spec == *"/releases/download/v${version}/shibumi-shell-${version}.tar.gz" ]] || {
+  printf 'AUR source is not the immutable versioned release asset\n' >&2
+  exit 1
+}
+if rg -n '\$HOME|\.config/omarchy|\.local/state' "$pkgbuild"; then
+  printf 'PKGBUILD must not mutate user state\n' >&2
+  exit 1
+fi
+if find packaging -maxdepth 2 -type f \( -name '*.install' -o -name '*.hook' \) | grep -q .; then
+  printf 'package hooks are forbidden for the user lifecycle\n' >&2
+  exit 1
+fi
+
+if $publish_check; then
+  [[ $source_sha256 =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'publish blocked: release archive SHA-256 is still SKIP\n' >&2
+    exit 1
+  }
+  [[ -z $(git status --porcelain) ]] || {
+    printf 'publish blocked: worktree is not clean\n' >&2
+    exit 1
+  }
+  head_commit=$(git rev-parse HEAD)
+  tag_commit=$(git rev-list -n 1 "v${version}" 2>/dev/null || true)
+  [[ $tag_commit == "$head_commit" ]] || {
+    printf 'publish blocked: v%s does not identify the accepted HEAD\n' "$version" >&2
+    exit 1
+  }
+  git ls-remote --exit-code --tags origin "refs/tags/v${version}" >/dev/null 2>&1 || {
+    printf 'publish blocked: v%s is not available on origin\n' "$version" >&2
+    exit 1
+  }
+  source_url=${source_spec#*::}
+  archive=$(mktemp)
+  curl -fsSL "$source_url" -o "$archive" || {
+    printf 'publish blocked: release archive is unavailable\n' >&2
+    exit 1
+  }
+  actual=$(sha256sum "$archive" | awk '{print $1}')
+  [[ $actual == "$source_sha256" ]] || {
+    printf 'publish blocked: release archive checksum mismatch\n' >&2
+    exit 1
+  }
+  printf 'AUR publish prerequisites: PASS\n'
+else
+  printf 'AUR scaffold checks: PASS; publication remains gated\n'
+fi

@@ -130,11 +130,13 @@ class Suite:
         version: str,
         plugins: dict[str, PluginSpec],
         profiles: dict[str, ProfileSpec],
+        retired_plugins: tuple[str, ...],
     ) -> None:
         self.root = root
         self.version = version
         self.plugins = plugins
         self.profiles = profiles
+        self.retired_plugins = retired_plugins
 
     @classmethod
     def load(cls, root: Path) -> "Suite":
@@ -150,6 +152,15 @@ class Suite:
         version = str(data.get("suiteVersion") or "").strip()
         if not version:
             raise ContractError("suiteVersion is required")
+
+        retired_plugins = _strings(
+            data.get("retiredPlugins", []), "retiredPlugins"
+        )
+        if len(set(retired_plugins)) != len(retired_plugins):
+            raise ContractError("retiredPlugins contains duplicate plugin ids")
+        for plugin_id in retired_plugins:
+            if not PLUGIN_ID.fullmatch(plugin_id) or ".." in plugin_id:
+                raise ContractError(f"unsafe retired plugin id: {plugin_id!r}")
 
         plugins: dict[str, PluginSpec] = {}
         for raw in data.get("plugins", []):
@@ -180,6 +191,12 @@ class Suite:
                     f"{spec.id} requires unknown plugins: {', '.join(sorted(unknown))}"
                 )
 
+        overlap = set(retired_plugins) & plugins.keys()
+        if overlap:
+            raise ContractError(
+                "retired plugins remain declared: " + ", ".join(sorted(overlap))
+            )
+
         profiles: dict[str, ProfileSpec] = {}
         for raw in data.get("profiles", []):
             item = _object(raw, "profile")
@@ -209,7 +226,7 @@ class Suite:
 
         if not plugins or not profiles:
             raise ContractError("suite must declare plugins and profiles")
-        return cls(root, version, plugins, profiles)
+        return cls(root, version, plugins, profiles, retired_plugins)
 
     @staticmethod
     def _validate_manifest(spec: PluginSpec) -> None:
@@ -301,7 +318,27 @@ class Suite:
     def selected(self, ids: tuple[str, ...]) -> list[PluginSpec]:
         return [self.plugins[plugin_id] for plugin_id in ids]
 
+    def package_metadata(self) -> dict[str, Any] | None:
+        path = self.root / "PACKAGE-METADATA.json"
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return None
+        except (OSError, json.JSONDecodeError) as error:
+            raise ContractError(f"cannot read packaged payload metadata: {error}") from error
+        if (
+            not isinstance(value, dict)
+            or value.get("schemaVersion") != 1
+            or value.get("packageName") != "shibumi-shell"
+            or value.get("version") != self.version
+        ):
+            raise ContractError("packaged payload metadata drifts from the suite contract")
+        return value
+
     def revision(self) -> str:
+        package = self.package_metadata()
+        if package is not None:
+            return f"package:{package['version']}"
         try:
             result = subprocess.run(
                 ["git", "-C", str(self.root), "rev-parse", "HEAD"],

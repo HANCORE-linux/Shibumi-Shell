@@ -41,8 +41,8 @@ Ui.Panel {
   readonly property var panelItem: panelLoader.item
   readonly property bool animationActive: pointer.containsMouse
   readonly property var launcherConfig: stateService && stateService.config
-    && stateService.config.menu && stateService.config.menu.launcher
-    ? stateService.config.menu.launcher
+    && stateService.config.launcher
+    ? stateService.config.launcher
     : ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property bool iconMode: stockOmarchyHost
     || String(launcherConfig.mode || "text") === "icon"

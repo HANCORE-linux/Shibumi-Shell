@@ -112,7 +112,7 @@ Quattro's configuration writer; a group disabled there unloads its complete
 group tree, including configured optional Quattro children. The eight-choice
 palette, canonical color01 default, migration aliases, contrast-aware labels,
 four-column layout, atomic theme reload, and live radius propagation pass their
-focused and complete Machine2 gates.
+focused and complete validation-system gates.
 
 The G8 center uses one shared minute-precision service for every output and
 keeps the V1 24-hour default, optional 12-hour label, date typography, timezone
@@ -145,7 +145,7 @@ and every transport action come from the single official `omarchy.media`
 service. One lazy process-wide Shibumi spectrum service may own the bounded
 Cava process and degraded state; no per-output, per-panel, or per-view process
 copy is permitted. The default row, lazy panel, and FULL/muse outcome now
-exist. Machine2 accepts a real player, available/unavailable/crash paths,
+exist. the validation system accepts a real player, available/unavailable/crash paths,
 bounded retry and cleanup, Top/Bottom rendering, and the focused
 single-output resource slice. Multiple-real-player source switching, remaining
 media-panel states, and physical multi-output remain acceptance gates.

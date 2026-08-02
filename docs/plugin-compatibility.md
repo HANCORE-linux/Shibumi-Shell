@@ -3,14 +3,13 @@
 Status: user reference
 
 Shibumi can keep another Omarchy bar active while the complete Shibumi suite
-provides its widgets, panels, menu, and internal services. Shibumi must remain
+provides its widgets, panels, and internal services. Shibumi must remain
 suite-installed; individual plugin-root installations are not supported.
 
 ## Compatibility by plugin type
 
 | Plugin type | Stock Omarchy bar | Standard Quattro-compatible bar | Shibumi bar |
 | --- | --- | --- | --- |
-| Shibumi App Menu | Supported | Supported inside Omarchy Shell | Supported |
 | Shibumi bar widgets and panels | Supported | Supported when the host implements the standard Quattro widget contract | Supported |
 | Shibumi service-only plugins | Managed suite dependencies | Managed suite dependencies | Managed suite dependencies |
 | Shibumi full-bar plugin | Installed but inactive | Installed but inactive | Active host |
@@ -38,7 +37,7 @@ hides unsupported layout controls while a standard external host is active.
 
 ## Install without replacing the current bar
 
-Install all 25 managed plugin roots while preserving the current bar and its
+Install all 24 managed plugin roots while preserving the current bar and its
 widget layout:
 
 ```bash
@@ -75,9 +74,8 @@ generic plugin menu. Service-only roots are implementation dependencies, not
 standalone products. Use the [suite lifecycle](install.md) so updates, repair,
 payload verification, and uninstall remain transactional.
 
-The App Menu is bar-independent, but it still requires the suite-managed
-`hancore.shibumi.state` service. Requiring the complete Shibumi installation
-keeps that dependency boundary predictable.
+The application launcher remains owned by Omarchy. Shibumi neither registers
+a `menu` entry point nor enables an application-menu service.
 
 ## Third-party bar acceptance
 
@@ -86,6 +84,6 @@ properties and panel-routing methods. Passing the
 [host-facade acceptance gates](host-facade-v1.md#acceptance) additionally
 enables Shibumi-only layout and shell-surface features.
 
-Validate a new host on Machine2 with the
+Validate a new host on the validation system with the
 [additional bar validation](multi-bar-extension-plan.md#required-gates-for-every-bar)
 before calling it release-supported.

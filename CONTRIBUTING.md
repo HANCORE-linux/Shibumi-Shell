@@ -21,19 +21,19 @@ JavaScript, shell, and Python.
 1. Branch from `main`.
 2. Keep the change focused and match the surrounding two-space QML style.
 3. Update the affected contract and regression test with the implementation.
-4. Synchronize the intended change to Machine2.
-5. Run the smallest affected regression there.
-6. Run the complete Machine2 contract before handoff:
+4. Run the smallest affected regression locally.
+5. Run the complete source contract before handoff:
 
    ```bash
    OMARCHY_PATH=/usr/share/omarchy ./tests/contract-regression.sh
    ```
 
-7. For visible changes, test the real Wayland interaction and capture sanitized
-   evidence.
+6. For visible changes, describe the required real Wayland interaction.
+   Maintainers repeat it on the isolated release-validation system and capture
+   sanitized evidence.
 
-Do not run Shibumi tests or install the suite on the primary development
-machine.
+Do not install a development suite over a primary desktop without an isolated
+test profile and a recovery plan.
 
 ## QML and UI changes
 
@@ -54,7 +54,8 @@ idle/screensaver transitions when relevant.
    services, layout, or defaults.
 4. Update the [plugin catalog](docs/plugins/README.md).
 5. Add focused source and runtime regressions.
-6. Prove self-containment and the host-facade contract on Machine2.
+6. Prove self-containment and the host-facade contract; maintainers repeat the
+   live release gate on the isolated validation system.
 
 ## Documentation
 
@@ -74,5 +75,4 @@ Use concise imperative subjects, for example:
 - `Add storage panel runtime regression`
 
 The pull request or handoff should name the affected plugins, list the exact
-Machine2 checks, describe live UI evidence, and state any remaining physical
-gate.
+checks, describe live UI evidence, and state any remaining physical gate.

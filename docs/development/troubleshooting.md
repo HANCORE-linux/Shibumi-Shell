@@ -18,7 +18,7 @@ If Shibumi is installed but inactive:
 ./scripts/shibumi-suite activate
 ```
 
-Do not use `omarchy plugin add` on the repository root. It is a 25-plugin suite,
+Do not use `omarchy plugin add` on the repository root. It is a 24-plugin suite,
 not one root plugin.
 
 ## A Shibumi plugin was removed or disabled individually
@@ -82,12 +82,12 @@ Do not delete transaction directories or ownership markers manually.
 
 ## A live QML test cannot reach Wayland
 
-Live tests need Machine2's real user runtime, Wayland display, and Hyprland
+Live tests need the validation system's real user runtime, Wayland display, and Hyprland
 instance. A sandbox or plain SSH session without those environment values can
 fail even when the component is correct.
 
 Run component contracts through the repository test scripts. For real-session
-inspection, use the environment of Machine2's running Quickshell process and
+inspection, use the environment of the validation system's running Quickshell process and
 confirm that only one production shell process remains.
 
 ## Collect diagnostics

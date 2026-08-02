@@ -2,6 +2,47 @@
 
 This changelog records user-visible Shibumi changes.
 
+## 0.1.1-beta.1: Arch package candidate
+
+Unreleased.
+
+### Added
+
+- Immutable Arch package payload under `/usr/share/shibumi-shell` and stable
+  `/usr/bin/shibumi-shell` lifecycle command
+- Explicit Omarchy Quattro host-contract preflight before user-state mutation
+- Package-aware Health reporting for Pacman, staged payload, and manual AUR
+  update checks
+- Reproducible release archive, local `makepkg` rehearsal, dependency contract,
+  and SHA-pinned GitHub release gate
+- Transactional source-checkout to package migration and an explicit
+  `--allow-downgrade` package rollback path
+- Shibumi-specific host compatibility record for the validated the validation system
+  Omarchy and Quickshell builds
+
+### Changed
+
+- All 24 plugin manifests and the suite contract now share the beta version
+- Retired the Shibumi-owned application menu and its obsolete configuration;
+  Omarchy is now the sole application-menu owner, while existing G1 logo
+  choices migrate to the dedicated launcher setting
+- Use Quattro's full shell restart for install, migration, activation,
+  deactivation, and uninstall instead of hot-swapping bar owners through
+  `reloadConfig`
+- Drain the previous Quickshell instance before publishing a new bar-owner
+  configuration, including rollback and interrupted-transaction recovery
+- Record the pre-Shibumi bar and restore its complete layout on deactivate or
+  uninstall; older install states fall back to Quattro's stock bar definition
+- Package transactions install no hooks and never mutate a user's Omarchy
+  configuration; setup, update, repair, and removal remain explicit user
+  lifecycle operations
+
+### Known limits
+
+- The `shibumi-shell` AUR name cannot be registered yet
+- The candidate package still requires complete validation-system install, upgrade,
+  rollback, uninstall, and bar-switch acceptance before publication
+
 ## 0.1.0: Private alpha
 
 Released 2026-07-29.

@@ -413,6 +413,32 @@ def reload_shell(runtime_paths: dict[str, Path], timeout: float = 30) -> None:
     raise ManagerError(f"reload did not settle: {detail}")
 
 
+def stop_shell(runtime_paths: dict[str, Path], max_instances: int = 8) -> None:
+    shell_path = runtime_paths["omarchy_root"] / "shell"
+    command = [
+        "quickshell",
+        "kill",
+        "-p",
+        str(shell_path),
+        "--any-display",
+    ]
+    for _attempt in range(max_instances):
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=6,
+                env=runtime_environment(runtime_paths),
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ManagerError(f"cannot stop Omarchy shell: {error}") from error
+        if result.returncode != 0:
+            return
+    raise ManagerError("too many Quickshell instances matched the Omarchy shell")
+
+
 def runtime_environment(runtime_paths: dict[str, Path]) -> dict[str, str]:
     environment = os.environ.copy()
     omarchy_root = runtime_paths.get("omarchy_root")
@@ -620,6 +646,7 @@ def perform(target: str) -> int:
         )
         try:
             write_status(runtime_paths, target, "snapshot")
+            stop_shell(runtime_paths)
             atomic_write(config_path, encode(desired))
             atomic_write(state_path, encode(desired_state))
             write_status(runtime_paths, target, "apply")
@@ -628,6 +655,10 @@ def perform(target: str) -> int:
             verify(runtime_paths, state, runtime_target)
             atomic_write(profile_path(runtime_paths), encode(profiles))
         except Exception:
+            try:
+                stop_shell(runtime_paths)
+            except ManagerError:
+                pass
             if existed:
                 atomic_write(config_path, snapshot.read_bytes())
             else:
@@ -652,6 +683,7 @@ def recover() -> int:
     if not transaction.is_dir():
         return 0
     journal = read_json(transaction / "journal.json", "switch journal")
+    stop_shell(runtime_paths)
     snapshot = transaction / "shell.json.before"
     state_snapshot = transaction / "install.json.before"
     if journal.get("configExisted") is True:

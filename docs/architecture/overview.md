@@ -14,7 +14,8 @@ Omarchy Shell process.
 - `hancore.shibumi.bar` is the selectable full-bar host.
 - `hancore.shibumi.state` owns validated Shibumi configuration.
 - `hancore.shibumi.control-center` owns the G1 configuration surface.
-- `hancore.shibumi.menu` owns the independent App Menu.
+- Omarchy remains the sole owner of the application launcher menu; Shibumi
+  registers no `menu` entry point or application-menu service.
 - `hancore.shibumi.reactor`, telemetry, power-state, and update-center services
   provide shared process-wide state.
 - Feature plugins own their widget, panel, and narrow service adapters.
@@ -57,9 +58,10 @@ must not leave duplicate windows, stale anchors, or orphan owners.
 
 ## Compatibility boundary
 
-The supported host contract is checked against the exact Quattro revision in
-[release readiness](../release-readiness.md). Missing stable host APIs and
-their bounded workarounds are tracked in
+The supported host contract is checked against the exact package versions and
+host-file hashes in the
+[Shibumi host compatibility record](quattro-compatibility.md). Missing
+stable host APIs and their bounded workarounds are tracked in
 [Quattro contract gaps](../omarchy-quattro-contract-gaps.md).
 
 The exact facade is machine-readable in

@@ -16,6 +16,10 @@ Item {
     overall: "loading",
     summary: "Not checked yet",
     fetchRequested: false,
+    installOrigin: "unknown",
+    suiteVersion: "unknown",
+    packageName: "",
+    packageVersion: "",
     checks: []
   })
   property string failure: ""

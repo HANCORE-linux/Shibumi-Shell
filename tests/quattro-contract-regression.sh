@@ -32,7 +32,7 @@ if "$omarchy_path/bin/omarchy" plugin validate "$repo_root" >/dev/null 2>&1; the
 fi
 
 mapfile -t plugin_ids < <(jq -r '.plugins[].id' "$suite")
-[[ ${#plugin_ids[@]} -eq 25 ]] || fail 'suite must contain exactly 25 plugins'
+[[ ${#plugin_ids[@]} -eq 24 ]] || fail 'suite must contain exactly 24 plugins'
 
 for plugin_id in "${plugin_ids[@]}"; do
   directory="$repo_root/$plugin_id"
@@ -60,7 +60,7 @@ for plugin_id in "${plugin_ids[@]}"; do
 done
 
 # Quattro's native add/update flow consumes exactly one root manifest and one
-# manifest id. Shibumi therefore needs its suite adapter for atomic 25-plugin
+# manifest id. Shibumi therefore needs its suite adapter for atomic 24-plugin
 # lifecycle handling instead of pretending that `omarchy plugin add <repo>` is
 # a supported install path.
 plugin_add_contract=$plugin_add_cli

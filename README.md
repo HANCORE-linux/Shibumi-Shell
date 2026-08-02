@@ -2,18 +2,25 @@
 
 # Shibumi Shell
 
-**A native bar and plugin suite for Omarchy Quattro**
-
-Shibumi brings the approved QS Rise V1 and V2 layouts, controls, widgets,
-panels, and interaction model into Omarchy's existing shell process.
-
 <img src="docs/screenshots/shibumi-hikiryo-landing.png"
      alt="Shibumi Shell project artwork"
      width="100%">
 
+<h3>A native bar and plugin suite for Omarchy Quattro</h3>
+
+<p><sub>Shibumi brings the approved QS Rise V1 and V2 layouts, controls,
+widgets, panels, and interaction model into Omarchy's existing shell
+process.</sub></p>
+
 [Get started](docs/getting-started.md) ·
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
+
+The current `0.1.1-beta.1` candidate is reviewed against Omarchy
+`4.0.0.r1508.g12af188-1` and Quickshell
+`0.3.0.r18.g10b439f-3`. See the
+[Shibumi host compatibility record](docs/architecture/quattro-compatibility.md)
+for the latest validated host versions.
 
 </div>
 
@@ -21,13 +28,13 @@ panels, and interaction model into Omarchy's existing shell process.
   <tr>
     <td align="center" width="50%">
       <strong>Quick</strong><br>
-      <img src="docs/screenshots/shibumi-quick-machine2.png"
+      <img src="docs/screenshots/shibumi-quick.png"
            alt="Shibumi Quick controls with V2 active"
            width="100%">
     </td>
     <td align="center" width="50%">
       <strong>Configure</strong><br>
-      <img src="docs/screenshots/shibumi-configure-machine2.png"
+      <img src="docs/screenshots/shibumi-configure.png"
            alt="Shibumi Configure landing page"
            width="100%">
     </td>
@@ -35,13 +42,13 @@ panels, and interaction model into Omarchy's existing shell process.
   <tr>
     <td align="center" width="50%">
       <strong>Bars</strong><br>
-      <img src="docs/screenshots/shibumi-bars-machine2.png"
+      <img src="docs/screenshots/shibumi-bars.png"
            alt="Shibumi V2 bar form controls"
            width="100%">
     </td>
     <td align="center" width="50%">
       <strong>Plugins</strong><br>
-      <img src="docs/screenshots/shibumi-plugins-machine2.png"
+      <img src="docs/screenshots/shibumi-plugins.png"
            alt="Shibumi plugin catalog"
            width="100%">
     </td>
@@ -51,8 +58,21 @@ panels, and interaction model into Omarchy's existing shell process.
 ## Install
 
 > [!IMPORTANT]
-> Version `0.1.0` is a private alpha. The command requires access to the private
-> GitHub repository and an up-to-date Omarchy Quattro installation.
+> `0.1.1-beta.1` is a package candidate and is not registered in the AUR yet.
+> Until its release asset and AUR package are published, use the source path
+> below. Shibumi supports Omarchy Quattro only.
+
+After AUR publication, the supported one-command installation is:
+
+```bash
+omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
+```
+
+Pacman resolves the required runtime packages and skips dependencies already
+provided by the system. The explicit Shibumi command then stages and verifies
+the 24 user plugins without a root package hook touching the user's config.
+
+For the current private candidate:
 
 ```bash
 git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
@@ -65,8 +85,10 @@ git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && 
 Remove all managed Shibumi plugins and restore the stock Omarchy bar:
 
 ```bash
-./scripts/shibumi-suite uninstall
+shibumi-shell uninstall --yes && omarchy pkg drop shibumi-shell
 ```
+
+For a source checkout, use `./scripts/shibumi-suite uninstall` instead.
 
 [Uninstall options and settings preservation](docs/install.md#uninstall)
 
@@ -79,6 +101,7 @@ Remove all managed Shibumi plugins and restore the stock Omarchy bar:
 - [Use Shibumi plugins with other bars](docs/plugin-compatibility.md)
 - [Troubleshoot a problem](docs/development/troubleshooting.md)
 - [Understand the architecture](docs/architecture/overview.md)
+- [Check Omarchy Quattro compatibility](docs/architecture/quattro-compatibility.md)
 - [Review current release readiness](docs/release-readiness.md)
 - [Browse all documentation](docs/README.md)
 

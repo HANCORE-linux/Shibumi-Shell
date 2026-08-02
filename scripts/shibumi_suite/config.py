@@ -13,7 +13,7 @@ from .model import PluginSpec, ProfileSpec
 REGIONS = ("left", "center", "right")
 LEGACY_PLUGIN_PREFIX = "hancore.qsrise"
 PLUGIN_PREFIX = "hancore.shibumi"
-IDENTITY_VERSION = 2
+IDENTITY_VERSION = 3
 
 
 class ConfigError(RuntimeError):
@@ -98,13 +98,19 @@ def apply_identity_contract(config: dict[str, Any]) -> dict[str, Any]:
         current_version = int(settings.get("identityVersion") or 0)
     except (TypeError, ValueError):
         current_version = 0
-    if current_version >= IDENTITY_VERSION:
-        return result
-
     menu = settings.get("menu")
-    launcher = menu.get("launcher") if isinstance(menu, dict) else None
-    if isinstance(launcher, dict) and launcher.get("text") == "omarchy":
+    legacy_launcher = menu.get("launcher") if isinstance(menu, dict) else None
+    launcher = settings.get("launcher")
+    if not isinstance(launcher, dict) and isinstance(legacy_launcher, dict):
+        launcher = copy.deepcopy(legacy_launcher)
+        settings["launcher"] = launcher
+    if (
+        current_version < 2
+        and isinstance(launcher, dict)
+        and launcher.get("text") == "omarchy"
+    ):
         launcher["text"] = "shibumi"
+    settings.pop("menu", None)
     settings["identityVersion"] = IDENTITY_VERSION
     return result
 
@@ -199,6 +205,24 @@ def reconcile_profile_services(
     return result
 
 
+def remove_plugin_ids(
+    config: dict[str, Any], plugin_ids: set[str] | tuple[str, ...]
+) -> dict[str, Any]:
+    """Remove retired Shibumi roots from services and any stale bar layout."""
+    result = _normalize(config)
+    retired = set(plugin_ids)
+    for region in REGIONS:
+        result["bar"]["layout"][region] = [
+            entry
+            for entry in result["bar"]["layout"][region]
+            if entry_id(entry) not in retired
+        ]
+    result["plugins"] = [
+        entry for entry in result["plugins"] if entry_id(entry) not in retired
+    ]
+    return result
+
+
 def reconcile_profile_additions(
     config: dict[str, Any],
     profile: ProfileSpec,
@@ -244,8 +268,10 @@ def remove_suite(
     default_center_anchor: str,
     keep_settings: bool,
     preserve_ids: set[str] | None = None,
+    restore_bar: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     result = _normalize(config)
+    current_bar = copy.deepcopy(result["bar"])
     plugin_ids = set(plugins)
     preserved = preserve_ids or set()
     for region in REGIONS:
@@ -261,7 +287,24 @@ def remove_suite(
         if entry_id(entry) not in plugin_ids
         or entry_id(entry) in preserved
     ]
-    if result["bar"].get("id") == active_bar:
+    if result["bar"].get("id") == active_bar and restore_bar is not None:
+        restored = _object(restore_bar)
+        restored_layout = _object(restored.get("layout"))
+        filtered_layout = result["bar"]["layout"]
+        for region in REGIONS:
+            entries = _array(restored_layout.get(region))
+            known = {entry_id(entry) for entry in entries}
+            entries.extend(
+                copy.deepcopy(entry)
+                for entry in filtered_layout[region]
+                if entry_id(entry) and entry_id(entry) not in known
+            )
+            restored_layout[region] = entries
+        restored["layout"] = restored_layout
+        result["bar"] = restored
+        if keep_settings and isinstance(current_bar.get("shibumi"), dict):
+            result["bar"]["shibumi"] = copy.deepcopy(current_bar["shibumi"])
+    elif result["bar"].get("id") == active_bar:
         result["bar"].pop("id", None)
     if result["bar"].get("centerAnchor") == "hancore.shibumi.center":
         if default_center_anchor:

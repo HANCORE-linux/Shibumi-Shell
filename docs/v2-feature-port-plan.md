@@ -37,7 +37,7 @@ contract suite rejects missing IDs, missing implementation owners, missing
 tests, or stale paths.
 
 On 2026-07-28 the current Full, Fit, Dock, and Notch shells were rendered on
-Machine2 at 1920×1080, scale 1. Full uses the complete output width; Fit, Dock,
+the validation system at 1920×1080, scale 1. Full uses the complete output width; Fit, Dock,
 and Notch shrink to their natural content width; all use the original V2
 33-pixel visible height and 36-pixel exclusive zone. V2 widgets render directly
 on the one shared shell instead of retaining V1 per-widget pills. The contour
@@ -55,15 +55,15 @@ therefore shadowless, while the independent V1/Shibumi presentation may retain
 its configured panel shadow. This distinction is regression-protected.
 
 The corrected live captures are
-`docs/mockups/shibumi-v2-full-open-edge-machine2.png`,
-`docs/mockups/shibumi-v2-fit-closed-frame-machine2.png`,
-`docs/mockups/shibumi-v2-dock-open-edge-machine2.png`, and
-`docs/mockups/shibumi-v2-notch-open-edge-machine2.png`. A direct
+`docs/mockups/shibumi-v2-full-open-edge.png`,
+`docs/mockups/shibumi-v2-fit-closed-frame.png`,
+`docs/mockups/shibumi-v2-dock-open-edge.png`, and
+`docs/mockups/shibumi-v2-notch-open-edge.png`. A direct
 Shibumi-to-Full transition retained the open Icons page (`opened=true`,
 `panelLoaded=true`) and is captured in
-`docs/mockups/shibumi-control-center-survives-shell-switch-machine2.png`.
+`docs/mockups/shibumi-control-center-survives-shell-switch.png`.
 
-The same Machine2 pass audited the complete G1–G18 bar language against both
+The same the validation system pass audited the complete G1–G18 bar language against both
 predecessors. Shibumi keeps the V1 acronym/detail presentations, while Full,
 Fit, Dock, and Notch use the V2 symbol-plus-value presentations. In particular,
 the V2 shells no longer render `MEM`, `CPU`, `VOL`, `NET`, `BAT`, `BRI`, `PWR`,
@@ -71,24 +71,24 @@ the V2 shells no longer render `MEM`, `CPU`, `VOL`, `NET`, `BAT`, `BRI`, `PWR`,
 ships the original card asset inside its plugin, and CPU temperature uses the
 original V2 thermometer glyph. Full mode, icon-only mode, and text-only mode
 remain independent user choices. The two live reference captures are
-`docs/mockups/shibumi-v2-widget-language-machine2.png` and
-`docs/mockups/shibumi-v1-widget-language-preserved-machine2.png`.
+`docs/mockups/shibumi-v2-widget-language.png` and
+`docs/mockups/shibumi-v1-widget-language-preserved.png`.
 
 The G3 tray drawer and DBusMenu path also passes at Top and Bottom on the
-current Machine2 build. A persistent root `QsMenuOpener` keeps Quickshell's
+current the validation system build. A persistent root `QsMenuOpener` keeps Quickshell's
 authoritative DBus menu tree alive while a second opener traverses child
 handles. The application-menu card retains its root height during navigation,
 so a Top submenu cannot shrink away from the pointer and expose the dismiss
 surface. The deterministic fixture produced two real `item=6` nested-action
 events. The corresponding retained-child captures are
-`docs/mockups/shibumi-v1-g3-dbus-submenu-top-machine2.png` and
-`docs/mockups/shibumi-v1-g3-dbus-submenu-bottom-machine2.png`.
+`docs/mockups/shibumi-v1-g3-dbus-submenu-top.png` and
+`docs/mockups/shibumi-v1-g3-dbus-submenu-bottom.png`.
 
 The same screen-local acceptance route now covers the V1 notification card.
 A uniquely tagged notification entered Quattro's single authoritative pending
 model and rendered in Shibumi at Top and Bottom. Clicking the visible row
 dismiss control removed the authoritative pending entry and updated the still
 open Top card to its empty state. Evidence is stored in
-`docs/mockups/shibumi-v1-g3-notifications-populated-top-machine2.png`,
-`docs/mockups/shibumi-v1-g3-notifications-dismissed-top-machine2.png`, and
-`docs/mockups/shibumi-v1-g3-notifications-populated-bottom-machine2.png`.
+`docs/mockups/shibumi-v1-g3-notifications-populated-top.png`,
+`docs/mockups/shibumi-v1-g3-notifications-dismissed-top.png`, and
+`docs/mockups/shibumi-v1-g3-notifications-populated-bottom.png`.

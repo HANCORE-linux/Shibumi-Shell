@@ -8,12 +8,36 @@ Omarchy plugin.
 
 ## Requirements
 
-- An up-to-date Omarchy Quattro installation
-- Git and SSH access to the private Shibumi repository
-- A trusted local checkout
+- Omarchy Quattro; other Omarchy generations are not supported
+- The package workflow installs required commands and fonts through Pacman and
+  skips dependencies that are already installed or provided
+- The source workflow additionally needs Git, SSH access to the private
+  repository, and a trusted local checkout
 
-The current alpha is validated on Machine2 against the exact environment in
-[release readiness](release-readiness.md).
+The exact accepted Omarchy and Quickshell packages are recorded in the
+[Shibumi host compatibility record](architecture/quattro-compatibility.md).
+
+## Install from the Arch package
+
+> [!NOTE]
+> `0.1.1-beta.1` is not registered in the AUR yet. This is the supported flow
+> once the immutable release asset and AUR package are published.
+
+```bash
+omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
+```
+
+The package manager installs immutable files under `/usr/share/shibumi-shell`
+and the stable `/usr/bin/shibumi-shell` command. It does not run an install
+hook, select a desktop user, edit `shell.json`, or copy plugins into a home
+directory. The unprivileged `shibumi-shell install` transaction performs those
+user-scoped operations explicitly and verifies the resulting Quattro runtime.
+
+Preview the same setup without changing user state:
+
+```bash
+shibumi-shell install --dry-run
+```
 
 ## Install from the private repository
 
@@ -80,7 +104,20 @@ directories, invalid state, and unfinished predecessor transactions.
 
 ## Update
 
-Update from a trusted checkout:
+For a package installation, update the system package through Omarchy and then
+stage the new immutable payload into the current user's shell:
+
+```bash
+omarchy update
+shibumi-shell update --dry-run
+shibumi-shell update --yes
+```
+
+Pacman updating `/usr/share/shibumi-shell` does not silently change a running
+desktop. The explicit update validates, stages, reloads, and verifies all 25
+plugins as one transaction.
+
+For a trusted source checkout:
 
 ```bash
 git pull --ff-only
@@ -93,11 +130,42 @@ current plugin roots as one transaction and verifies that the shell executes
 the accepted payload rather than a stale QML cache. For an external-bar
 installation, update preserves the active bar and layout.
 
+### Move from a checkout to the package
+
+Install the package without uninstalling the existing suite, then run:
+
+```bash
+shibumi-shell update --dry-run
+shibumi-shell update --yes
+shibumi-shell status
+```
+
+The transaction adopts the package payload, preserves the active profile,
+layout, settings, and unrelated Omarchy data, and records `package` as the new
+authoritative origin. The old checkout is not deleted or modified.
+
+### Roll back a package version
+
+Install a previously accepted package from Pacman's cache, then explicitly
+authorize staging its older payload:
+
+```bash
+sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-<older-version>-any.pkg.tar.zst
+shibumi-shell update --allow-downgrade --dry-run
+shibumi-shell update --allow-downgrade --yes
+```
+
+Without `--allow-downgrade`, update and repair refuse to replace a newer staged
+suite with an older payload. The authorized rollback still uses the normal
+transaction, runtime verification, and automatic failure recovery.
+
 ## Status
 
 ```bash
-./scripts/shibumi-suite status
+shibumi-shell status
 ```
+
+Use `./scripts/shibumi-suite status` for a source installation.
 
 Status reports the source and installed revision, managed plugin count,
 modified or missing payloads, active bar, and configuration drift. A nonzero
@@ -130,6 +198,11 @@ Keep Shibumi installed but return to the stock Omarchy bar:
 ./scripts/shibumi-suite deactivate
 ```
 
+Switching between the Shibumi and Omarchy bar owners performs Quattro's full
+shell handoff: the previous instance stops before the new bar configuration is
+published, then a fresh instance starts and is verified. V1/V2 presentation
+changes within the Shibumi bar remain live.
+
 Keep the current Shibumi widgets in the stock bar instead:
 
 ```bash
@@ -152,7 +225,24 @@ keeps both return paths visible.
 
 ## Uninstall
 
-Preview and remove all managed Shibumi plugins:
+For a package installation, remove the user-scoped suite first and the system
+package second:
+
+```bash
+shibumi-shell uninstall --dry-run
+shibumi-shell uninstall --yes
+omarchy pkg drop shibumi-shell
+```
+
+This order keeps the lifecycle command and immutable payload available until
+the stock Omarchy bar, menu routing, plugin roots, and installation state have
+been restored or removed. Pacman removal by itself intentionally does not
+mutate user configuration. Uninstall uses Quattro's supported full shell
+restart before removing the complete provider tree. Install, activate,
+deactivate, and migration use the same boundary; this avoids racing Qt's live
+QML loaders during a wholesale bar-owner transition.
+
+For a source installation, preview and remove all managed Shibumi plugins with:
 
 ```bash
 ./scripts/shibumi-suite uninstall --dry-run
@@ -160,7 +250,11 @@ Preview and remove all managed Shibumi plugins:
 ```
 
 The default uninstall restores the stock bar and removes Shibumi's managed
-configuration. Preserve the `bar.shibumi` settings branch with:
+configuration. Shibumi records the bar that was active before installation so
+its widgets and options can be restored as a complete layout. Install states
+created before this record existed fall back to Quattro's current stock-bar
+definition instead of leaving an empty bar. Preserve the `bar.shibumi`
+settings branch with:
 
 ```bash
 ./scripts/shibumi-suite uninstall --keep-settings
@@ -200,6 +294,6 @@ It hashes the staged payload and verifies the running revision before
 committing a transaction.
 
 Shibumi does not fetch its own source updates. During the private alpha, update
-only from a trusted checkout. The planned public AUR boundary and one-command
-stable installation are documented in
+only from a trusted checkout. Package update checks are read-only and package
+installation remains owned by Omarchy/Pacman. The AUR boundary is documented in
 [packaging and AUR strategy](development/packaging.md).

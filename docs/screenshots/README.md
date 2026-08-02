@@ -3,7 +3,7 @@
 Status: placeholder inventory
 
 The private alpha documentation intentionally reserves the following image
-slots. Capture them from the accepted Machine2 release candidate with the
+slots. Capture them from the accepted the validation system release candidate with the
 active Omarchy theme and no private notification, account, network, or device
 data visible.
 

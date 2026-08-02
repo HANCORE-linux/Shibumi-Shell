@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "packageName": "shibumi-shell",
+  "requiredPackages": [
+    "omarchy",
+    "quickshell",
+    "python",
+    "jq",
+    "curl",
+    "networkmanager",
+    "power-profiles-daemon",
+    "upower",
+    "xdg-utils",
+    "libnotify",
+    "wl-clipboard",
+    "ttf-material-symbols-variable",
+    "ttf-jetbrains-mono-nerd-basic",
+    "noto-fonts-cjk",
+    "adwaita-fonts"
+  ],
+  "requiredCommands": {
+    "python3": "python",
+    "jq": "jq",
+    "curl": "curl",
+    "nmcli": "networkmanager",
+    "powerprofilesctl": "power-profiles-daemon",
+    "upower": "upower",
+    "xdg-open": "xdg-utils",
+    "notify-send": "libnotify",
+    "wl-copy": "wl-clipboard"
+  },
+  "requiredFonts": {
+    "Material Symbols Rounded": "ttf-material-symbols-variable",
+    "Material Symbols Sharp": "ttf-material-symbols-variable",
+    "JetBrainsMono Nerd Font": "ttf-jetbrains-mono-nerd-basic",
+    "Noto Sans CJK JP": "noto-fonts-cjk",
+    "Adwaita Mono": "adwaita-fonts"
+  },
+  "optionalPackages": {
+    "cava": "live media spectrum",
+    "ffmpegthumbnailer": "video picker thumbnails",
+    "imagemagick": "additional media thumbnails",
+    "btop": "battery panel system monitor action",
+    "wiremix": "audio panel mixer action",
+    "nvidia-utils": "NVIDIA GPU telemetry",
+    "git": "source-checkout diagnostics and migration"
+  }
+}

@@ -58,11 +58,10 @@ ShibumiPanel {
     return effective
   }
   readonly property var workspaceConfig: stateConfig.workspace || ({})
-  readonly property var menuConfig: stateConfig.menu || ({})
   readonly property var pluginConfig: stateConfig.plugins || ({})
   readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
     ? pluginConfig.favorites : []
-  readonly property var launcherConfig: menuConfig.launcher
+  readonly property var launcherConfig: stateConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
@@ -806,29 +805,24 @@ ShibumiPanel {
   }
 
   function activateLauncherMode(mode) {
-    if (!stateService || typeof stateService.setMenuConfig !== "function")
+    if (!stateService || typeof stateService.setLauncherConfig !== "function")
       return false
 
     const nextMode = String(mode || "")
     if (nextMode !== "text" && nextMode !== "icon") return false
-    const next = JSON.parse(JSON.stringify(menuConfig))
-    if (!next.launcher) next.launcher = {
-      mode: "text", text: "shibumi", icon: "omarchy"
-    }
-    if (String(next.launcher.mode || "text") === nextMode) {
+    const next = JSON.parse(JSON.stringify(launcherConfig))
+    if (String(next.mode || "text") === nextMode) {
       if (nextMode === "text")
-        next.launcher.text = nextLauncherValue(
-          launcherTextOptions, next.launcher.text)
+        next.text = nextLauncherValue(launcherTextOptions, next.text)
       else
-        next.launcher.icon = nextLauncherValue(
-          launcherIconOptions, next.launcher.icon)
+        next.icon = nextLauncherValue(launcherIconOptions, next.icon)
     }
-    next.launcher.mode = nextMode
-    return stateService.setMenuConfig(next)
+    next.mode = nextMode
+    return stateService.setLauncherConfig(next)
   }
 
   function setLauncherSelection(mode, value) {
-    if (!stateService || typeof stateService.setMenuConfig !== "function")
+    if (!stateService || typeof stateService.setLauncherConfig !== "function")
       return false
     const nextMode = String(mode || "")
     const nextValue = String(value || "")
@@ -836,13 +830,10 @@ ShibumiPanel {
       ? launcherTextOptions : nextMode === "icon"
         ? launcherIconOptions : []
     if (options.indexOf(nextValue) < 0) return false
-    const next = JSON.parse(JSON.stringify(menuConfig))
-    if (!next.launcher) next.launcher = {
-      mode: "text", text: "shibumi", icon: "omarchy"
-    }
-    next.launcher.mode = nextMode
-    next.launcher[nextMode] = nextValue
-    return stateService.setMenuConfig(next)
+    const next = JSON.parse(JSON.stringify(launcherConfig))
+    next.mode = nextMode
+    next[nextMode] = nextValue
+    return stateService.setLauncherConfig(next)
   }
 
   function reloadShell() {

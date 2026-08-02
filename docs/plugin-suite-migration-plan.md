@@ -8,24 +8,24 @@
 
 Shibumi is one repository containing a suite of independently
 registered Omarchy plugins. The repository is not one combined
-`bar`/`menu`/`bar-widget`/`service` plugin.
+`bar`/`bar-widget`/`service` plugin.
 
 This boundary is required for three product goals:
 
-1. the Shibumi App Menu, Control Center, widgets, and system surfaces can be
+1. the Shibumi Control Center, widgets, and system surfaces can be
    enabled and updated as explicit plugin units;
 2. the approved V1-style bar remains one selectable full-bar host; and
 3. future Shibumi bar variants can reuse the same widgets and services without
    copying their implementations.
 
-The repository root has no installable `manifest.json`. The historical combined
-manifest is quarantined under `legacy/combined/` and is not a runtime source.
-The historical extraction ledger in `plugin-suite-inventory.md` explains file
+The repository root has no installable `manifest.json`. The retired combined
+prototype and its application-menu declaration have been removed. The
+historical extraction ledger in `plugin-suite-inventory.md` explains file
 provenance but is not normative for the current tree.
 
 ## Verified Host Constraint
 
-Machine2's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` implements
+the validation system's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` implements
 `omarchy plugin add` as a one-Git-repository-to-one-plugin operation. The
 command clones a repository and validates `manifest.json` at its root. It does
 not install a repository containing several top-level plugin manifests.
@@ -57,8 +57,6 @@ shibumi/
     Bar.qml
   hancore.shibumi.control-center/
     manifest.json
-  hancore.shibumi.menu/
-    manifest.json
   hancore.shibumi.<feature>/
     manifest.json
     <self-contained payload>
@@ -68,14 +66,14 @@ shibumi/
   tests/
 ```
 
-`contracts/plugin-suite-v1.json` is the executable list of all 25 plugin roots,
+`contracts/plugin-suite-v1.json` is the executable list of all 24 plugin roots,
 their kinds, ownership roles, dependencies, and the default profile. A runtime
 plugin is valid only when its complete implementation and owner live inside its
 own directory.
 
 ## Plugin Boundary Rules
 
-- A user-selectable bar, widget, menu, panel surface, overlay, or reusable
+- A user-selectable bar, widget, panel surface, overlay, or reusable
   singleton service is a plugin boundary.
 - A widget and its directly attached panel normally remain one plugin. It may
   declare both `bar-widget` and `service` when the state owner belongs to the
@@ -85,9 +83,7 @@ own directory.
 - `hancore.shibumi.bar` owns output windows, groups, split state, drag-and-drop,
   top/bottom geometry, and the host facade. It does not own feature data.
 - `hancore.shibumi.control-center` owns the reusable G1 widget and Shibumi bar
-  configuration panel. It is not the App Menu.
-- `hancore.shibumi.menu` owns the separately summonable application/command
-  menu and has no implicit G1 ownership.
+  configuration panel. Omarchy exclusively owns the application menu.
 - Notification and OSD replacements remain separate plugins and may activate
   only when duplicate first-party ownership is prevented.
 - Every plugin must remain self-contained at runtime. It may not import QML
@@ -183,19 +179,18 @@ bounded compatibility adapter or an explicit release gate.
 ### Phase A: Freeze And Inventory
 
 - Freeze new feature work in the combined root tree.
-- Map every current file to a bar, widget, panel, menu, service, shared helper,
+- Map every current file to a bar, widget, panel, service, shared helper,
   test, or obsolete transitional owner.
-- Record current Machine2 behavior and plugin state before moving files.
+- Record current the validation system behavior and plugin state before moving files.
 
 ### Phase B: Contract Scaffold
 
-- Add top-level manifests for the bar host, state service, Control Center, and
-  App Menu.
+- Add top-level manifests for the bar host, state service, and Control Center.
 - Define and test host-facade version 1.
 - Add plugin self-containment and forbidden sibling-import checks.
 - Add installer dry-run, validation, dependency, and rollback fixtures.
 
-The complete 25-plugin target set is independently loadable. Shared sources are
+The complete 24-plugin target set is independently loadable. Shared sources are
 deterministically vendored, and the active bar satisfies host-facade V1. Every
 fixed G1-G15 slot resolves a registered plugin entry point. Current completion
 evidence belongs in `release-readiness.md`.
@@ -203,9 +198,10 @@ evidence belongs in `release-readiness.md`.
 ### Phase C: Core Separation
 
 - Move the full-bar host without changing its runtime behavior.
-- Separate G1 Control Center from the App Menu.
+- Keep G1 Control Center independent from Omarchy's application menu.
 - Move shared configuration/state behind the narrow state service.
-- Prove the current bar, menu, and Control Center load independently.
+- Prove the current bar and Control Center load independently while Omarchy's
+  menu remains functional.
 
 ### Phase D: Feature Extraction
 
@@ -218,12 +214,12 @@ evidence belongs in `release-readiness.md`.
 ### Phase E: Installer And Lifecycle Acceptance
 
 - Fresh install, update, failed update rollback, partial profile, uninstall,
-  and stock-bar recovery on Machine2.
+  and stock-bar recovery on the validation system.
 - Verify no stale plugin directories, hidden staging paths, processes, cache
   files, or configuration IDs remain after each failure path.
 
 The lifecycle gate requires exact Shibumi evidence for isolated failure paths
-and the real Machine2 runtime. Pre-rename QS Rise runs remain historical
+and the real the validation system runtime. Pre-rename QS Rise runs remain historical
 evidence and cannot accept the Shibumi release payload.
 
 ### Phase F: V1 Product Parity
@@ -238,7 +234,7 @@ evidence and cannot accept the Shibumi release payload.
   passes parity.
 - Reuse the installed widget plugins and services unchanged.
 - Prove switching bars changes only the bar host and does not duplicate
-  services, panels, menu surfaces, or persistent state.
+  services, panels, or persistent state.
 
 The complete supported registration, switching, fallback, state, and
 acceptance procedure is defined in
@@ -251,7 +247,7 @@ The suite is not publishable until all of the following are true:
 - no combined root multi-kind runtime remains;
 - every installed plugin validates independently;
 - every declared bar host satisfies the same host-facade contract;
-- App Menu and G1 Control Center are independent surfaces;
+- no Shibumi application-menu entry point, service, or source remains;
 - installer update and rollback operate on the complete affected plugin batch;
 - V1 quality, behavior, and performance gates pass on the default bar; and
 - a clean uninstall restores a working stock Omarchy shell without artifacts.

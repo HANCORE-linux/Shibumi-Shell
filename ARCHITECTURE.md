@@ -90,8 +90,8 @@ baseline.
   required hardware is absent.
 - Responsive hiding is temporary presentation state. It must not rewrite the
   stored group order, enabled state, compact state, or split state.
-- G1 is the Shibumi wordmark and Control Center. The App Menu is an independent
-  plugin and is not implicitly owned or opened by G1.
+- G1 is the Shibumi wordmark and Control Center. Omarchy remains the sole owner
+  of the application launcher menu; G1 neither owns nor opens it.
 - G1 exposes the current V1 palette contract: colors 01-07 plus foreground,
   contrast-aware swatch labels, and the four-column picker. Color01 is the
   fresh default. Palette values are semantic theme roles, not persisted raw
@@ -177,13 +177,19 @@ The lifecycle contract and uncompleted physical gates are defined in
   files use versioned schemas, validation, bounded data, and atomic writes.
 - Install, update, rollback, and uninstall are transactional. A failed update
   restores the prior working suite and does not invent or overwrite user state.
+- Managed activation records the preceding bar object. Deactivate and uninstall
+  restore that object; older state schemas use Quattro's current stock bar as a
+  compatibility fallback rather than synthesizing an empty layout.
+- Every bar-owner transition uses Quattro's full restart boundary, including
+  rollback and interrupted-transaction recovery. Live reload is reserved for
+  mutations that keep the active bar owner.
 
 ### Release Decision
 
 - Static lint, fixtures, and component smokes are necessary but do not replace
   physical runtime acceptance for session policy, hardware, output, suspend,
   or Wayland behavior.
-- Machine2 is the disposable Omarchy Quattro runtime target. The primary V1
+- the validation system is the disposable Omarchy Quattro runtime target. The primary V1
   machine and the `Quickshell-Dots` working tree must not receive Shibumi
   deployment or source changes during development.
 - A release candidate requires a clean fresh install, update, rollback,
@@ -195,8 +201,9 @@ The lifecycle contract and uncompleted physical gates are defined in
 ## Product Boundary
 
 Shibumi is a third-party native plugin suite for Omarchy Shell. Its default product
-includes a full-bar plugin, independently registered widgets and services, a
-separate App Menu, and a separate G1 Control Center. It is not a second
+includes a full-bar plugin, independently registered widgets and services, and
+a separate G1 Control Center. Omarchy's application menu remains authoritative;
+Shibumi registers no competing `menu` entry point. It is not a second
 Quickshell process and it is not a repackaged copy of QS Rise V1.
 
 The production `shibumi` style must reach visual and behavioral parity with the
@@ -234,7 +241,7 @@ Shibumi controls the bar window.
 ## Verified Host Contract
 
 The installed loader and installation contracts were rechecked against
-Machine2's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` on 2026-07-30.
+the validation system's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` on 2026-07-30.
 The plugin registry, validator, installer, bar selector, bar loader, and
 manifest contract remain compatible. Quattro now provides per-plugin setup
 menus and `barWidget.defaultSection`, but still does not update or protect a
@@ -296,7 +303,8 @@ host API; it must not maintain a competing `shell.json` representation.
   suite lifecycle. Shibumi roots must be managed as one dependency set;
   `shibumi-suite repair` transactionally restores a partial payload and its
   selected profile.
-- Uninstall removes Shibumi plugin references and selects the built-in bar.
+- Uninstall removes Shibumi plugin references, selects the built-in bar, and
+  uses Quattro's full restart boundary before deleting the provider payload.
   It removes `bar.shibumi` unless `--keep-settings` is explicit.
 
 ## Design Rules
@@ -343,7 +351,6 @@ the approved behavior:
 hancore.shibumi.bar/              default bar host and composition
 hancore.shibumi.bar.<variant>/    future independently selectable bar hosts
 hancore.shibumi.control-center/   reusable G1 widget and settings panel
-hancore.shibumi.menu/             App Menu view and service
 hancore.shibumi.<feature>/        complete widget/panel/service slices
 hancore.shibumi.state/            narrow shared live-state service
 shared/                          canonical development sources only
@@ -357,8 +364,8 @@ vendored into plugin directories and checked for drift. Panels may consume
 services; services do not import panels. Widgets do not discover host paths or
 launch shell commands.
 
-The Phase 2 owner for every V1 group and the App Menu, notification, and OSD
-boundaries are recorded in
+The Phase 2 owner for every V1 group and the notification and OSD boundaries
+are recorded in
 [`docs/phase2-ownership-map.md`](docs/phase2-ownership-map.md). That document is
 normative: a port may not introduce a second owner merely to reproduce V1
 presentation.
@@ -369,10 +376,8 @@ The current ownership ledger is
 [`docs/plugin-suite-inventory.md`](docs/plugin-suite-inventory.md), and the
 versioned widget-to-bar API is
 [`docs/host-facade-v1.md`](docs/host-facade-v1.md).
-The independent App Menu boundary is specified in
-[`docs/app-menu-integration-plan.md`](docs/app-menu-integration-plan.md).
-Notification and OSD work remains behind the exclusive-owner gates in that
-plan.
+Application-menu ownership is an explicit exclusion: Omarchy owns it and
+Shibumi must not ship a `menu` kind or application-menu service.
 
 Host capabilities that Quattro does not yet expose without unstable adapters
 are tracked in
@@ -393,26 +398,9 @@ an unquoted shell command.
 Every new recurring timer or process must document its interval, owner,
 activation condition, and shutdown condition.
 
-The App Menu currently owns exactly two non-recurring processes:
-
-- one batched, four-second-bounded guard evaluation after a validated menu
-  source rebuild;
-- one queued, five-second-bounded provider worker used only when the `fonts` or
-  `power-profiles` route is requested.
-
-Unknown providers are rejected, guard and provider output is structurally
-validated, and failed guard evaluation keeps guarded entries hidden. Neither
-process polls while the menu is closed.
-
-Process completion is accepted only when both the exit code is zero and Qt
-reports `NormalExit`. A signalled or crashed guard therefore cannot expose
-guarded rows even if its numeric exit code is ambiguous.
-
-App Menu wallpaper presentation consumes the host-owned
-`omarchy.background` service. The menu adds no wallpaper watcher, process, or
-poller, and its image loaders exist only with the lifecycle-lazy menu card.
-Presentation preferences are normalized by `AppMenuService` and persisted only
-through the host `shell.json` mutation facade.
+The retired Shibumi application menu owns no worker, watcher, timer, service,
+or visible surface. Omarchy's menu and its process budget remain outside the
+Shibumi runtime.
 
 ## Multi-Bar Architecture
 
@@ -467,18 +455,18 @@ Current status:
 - Plugin-suite migration Phase A: complete; the combined tree is frozen as the
   behavior-preserving migration source
 - Plugin-suite migration Phases B-D ownership implementation: complete locally;
-  all 25 declared plugins validate independently, deterministic shared-source
+  all 24 declared plugins validate independently, deterministic shared-source
   vendoring and self-containment are enforced, and all fixed G1-G15 slots load
   through registered plugin entry points. The active bar is a strict
   registry/service-only host and passes a fresh Quattro composition smoke
-- Plugin-suite migration Phase E: complete. Machine2 passed the historical 21-to-22
+- Plugin-suite migration Phase E: complete. the validation system passed the historical 21-to-22
   update migration, final-source uninstall with clean stock-bar recovery, a
-  fresh install, later expansion to 25 plugins, markerless alpha ownership
+  fresh install, later expansion to 24 plugins, markerless alpha ownership
   adoption, and a controlled post-exposure failed-update
   rollback without configuration, state, payload, process, or artifact loss
 - Phase 0: complete
 - Phase 1 implementation: complete locally
-- Phase 1 predecessor runtime paths: passed on Machine2, 2026-07-16; exact
+- Phase 1 predecessor runtime paths: passed on the validation system, 2026-07-16; exact
   Shibumi payload evidence must be recorded separately
 - Phase 1 final acceptance: current upstream broken-plugin fallback and
   fractional-scale behavior still require final runtime evidence
@@ -486,18 +474,18 @@ Current status:
   initial plugin set; final real-Wayland provider/action acceptance remains
 - Phase 2 V1 presentation parity: substantially implemented for G1-G15 and the
   G3 Update Center/tray/notification composition. The current V1 eight-choice
-  palette and G9 FULL/muse outcome are implemented and accepted on Machine2
+  palette and G9 FULL/muse outcome are implemented and accepted on the validation system
   for the current single-output slices. Final Wayland actions, unavailable
   hardware, the remaining same-state comparison matrix, and physical
   multi-output remain open
 - Phase 3 split/drag implementation: present locally; a physical Bottom ghost
   plus successful drop, byte-identical invalid-drop return, and process-restart
-  persistence pass on Machine2. Hotplug and fractional-scale runtime acceptance
+  persistence pass on the validation system. Hotplug and fractional-scale runtime acceptance
   remain open
 - V1 output lifecycle: the native per-output `Variants`, placeholder rejection,
   targeted layer-window recovery, per-output cleanup, focused bar-widget
   routing, and non-persistent narrow/portrait presentation stages are present.
-  Machine2 passes controlled headless add/remove, 800x1280 portrait staging,
+  the validation system passes controlled headless add/remove, 800x1280 portrait staging,
   focused routing, and cleanup without lifecycle warnings. Real DPMS,
   deep/S3 suspend, and S4 hibernate/resume also preserve the same shell process,
   configuration, single bar layer, IPC, and crash baseline. The remaining
@@ -505,7 +493,7 @@ Current status:
   are defined in
   `docs/v1-output-lifecycle-audit.md`
 - Phase 4 picker/media implementation: implemented locally; all four modes,
-  Tanzaku, Hearthstone, and Quattro's native carousel render on Machine2 with
+  Tanzaku, Hearthstone, and Quattro's native carousel render on the validation system with
   focused-output routing and clean close. Theme/wallpaper success plus unique
   screenshot/video copy, open, trash, and Bottom rendering pass. Failure
   feedback, cold-cache timing, remaining Hearthstone, and physical multi-output
@@ -571,13 +559,9 @@ Current Phase 2 foundation:
 - a validated Quattro workspace action adapter, per-screen Shibumi workspace
   widget, and lifecycle-lazy keyboard panel whose backend-free content is
   offscreen tested;
-- the native App Menu command/application model and its lifecycle-lazy visible
-  card are complete locally, including V1 base dimensions, a bounded scrollable
-  settings viewport, launcher/menu presentation, widget enable/compact state,
-  workspace, picker, split/reset, top/bottom, Reactor, appearance, wallpaper,
-  and geometry contracts. Disabled widget loaders and the default-off G7
-  service construct no backend work; Wayland visual and multi-output acceptance
-  is still open.
+- the Control Center owns Shibumi settings while Omarchy exclusively owns the
+  application launcher menu. Disabled widget loaders and the default-off G7
+  service construct no backend work;
 - one root-owned minute-precision clock service and one root-owned weather
   service feed a single V1-compatible G8 center composite on every output;
   the composite owns weather, clock/date/calendar, and active-only status
@@ -594,10 +578,10 @@ Current Phase 2 foundation:
   update detector and launcher, while a worker-free V1 facade restores the
   approved G8 glyph, urgent color, tooltip, and exact `runUpdate()` delegation;
 - the local calendar participates in the same Tab/Shift-Tab sibling routing as
-  the other Shibumi panels. Machine2 top-position evidence covers weather,
+  the other Shibumi panels. the validation system top-position evidence covers weather,
   update availability, and reversible official idle/DND state changes;
   one shared Voxtype stream, a real dictation cycle, and the physical
-  recording-indicator stop action are validated on Machine2; bottom and
+  recording-indicator stop action are validated on the validation system; bottom and
   physical multi-output evidence remain open.
 - G3 replaces the tray and notification group slots with one V1-compatible
   status pill while instantiating the registered `omarchy.tray` and
@@ -629,7 +613,7 @@ Current Phase 2 foundation:
   minutes while OpenCode data exists, writes no cache, makes no network call,
   and is shared by every output. Provider selection, refresh, legacy
   `omarchy.model-usage` summon/hide routing, real Wayland panel mapping, and the
-  complete Quattro contract suite are accepted on Machine2. Real Claude/Codex
+  complete Quattro contract suite are accepted on the validation system. Real Claude/Codex
   account-data and multi-output acceptance remain gates.
 - G9 replaces only the official media presentation. The keep-loaded
   `omarchy.media` service remains the sole MPRIS/PipeWire selection and action
@@ -643,7 +627,7 @@ Current Phase 2 foundation:
   are forbidden, and no path may leave a temporary file. The implementation
   preserves V1's 24-band, 60-fps Cava input while rendering the same geometry
   through bounded scenegraph bars instead of repainting 24 JavaScript canvas
-  paths per frame. Machine2 accepts the real-player, unavailable/crash,
+  paths per frame. the validation system accepts the real-player, unavailable/crash,
   retry/cleanup, Top/Bottom, single-output visual, and resource slices.
   Multiple real players and physical multi-output acceptance remain gates.
 - G11 uses one root-owned `NetworkService`, regardless of output count. It
@@ -655,7 +639,7 @@ Current Phase 2 foundation:
   `nmcli` adapter supplies saved profiles absent from Quickshell's visible AP
   model. Both stop after the final screen-local panel closes. V1's separate
   permanent Ethernet poller is not restored. Top Wayland mapping and cleanup
-  pass on Machine2; bottom, mutation, and physical multi-output gates remain.
+  pass on the validation system; bottom, mutation, and physical multi-output gates remain.
 - G13 has one root-owned `MonitorService` around the registered
   `omarchy.monitor` component. That hidden component remains the only
   brightness, display, scale, IPC, poller, and command owner;
@@ -664,14 +648,14 @@ Current Phase 2 foundation:
   shared owner and creates no process, timer, file watcher, or second monitor
   model. A no-backlight system retains display and scale controls. Top panel
   mapping, reversible laptop brightness mutation, and a real `1.0 -> 1.25 ->
-  1.0` scale round trip pass on Machine2; physical display enable/disable and
+  1.0` scale round trip pass on the validation system; physical display enable/disable and
   multi-output behavior remain gates.
 - G12 and G14 are separate V1 battery and power-profile presentations over one
   root-owned `PowerService`. Battery state stays event-driven through the
   shared UPower singleton, battery details are panel-lifecycle gated, and one
   profile refresh/set owner serves every output. The combined `omarchy.power`
   alias is consumed so it cannot run beside the split views; G14 remains
-  available on batteryless desktops. Machine2 passes a real
+  available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,
   widget, and panel state.
 - G15 has one root-owned `BluetoothService` around the registered
@@ -683,7 +667,7 @@ Current Phase 2 foundation:
   symmetric `omarchy.bluetooth` IPC target. The presentation/service slice has
   no Bluetooth/PipeWire import, process, timer, or file watcher. Top mapping,
   adapter/radio reactivity, discovery teardown, and IPC lifecycle pass on
-  Machine2; real device/audio, bottom, and physical multi-output gates remain.
+  the validation system; real device/audio, bottom, and physical multi-output gates remain.
 - the interaction foundation has a pure fixed-group layout model, one
   root-owned persistent controller, and one transient drag session per output;
 - the group renderer resolves Shibumi and official Quattro widgets without
@@ -699,7 +683,7 @@ Current Phase 2 foundation:
   one process-wide lazy event service over existing Shibumi and Quattro owners;
   Mode 8 uses one process-wide lazy quote reader. Modes 7-8 share the same
   per-output swarm renderer, use physical run gaps, and create no service or
-  renderer in Mode 0. The App Menu persists the selected mode through
+  renderer in Mode 0. The Control Center persists the selected mode through
   host-owned `bar.shibumi.reactor` state. Controlled Mode 7/8 Wayland and CPU
   acceptance remains open.
 
@@ -724,9 +708,9 @@ Current Phase 2 foundation:
 The G10 implementation has one process-wide controller and helper contract.
 Tanzaku and Hearthstone are presentation-only views and own no scanner, timer,
 watcher, or converter. Shibumi does not duplicate Quattro's native carousel
-image-picker plugin. Machine2 proves both retained Shibumi styles and all four
+image-picker plugin. the validation system proves both retained Shibumi styles and all four
 modes open on the focused output, style selection survives restart, and close
-leaves no helper/converter or temporary artifact. Machine2 also passes real
+leaves no helper/converter or temporary artifact. the validation system also passes real
 theme/wallpaper success actions and unique screenshot/video copy, open, and
 two-step trash actions with complete artifact cleanup. Failure feedback,
 cold-cache timing, remaining Hearthstone rendering, and physical multi-output
@@ -809,7 +793,7 @@ cleaner Shibumi architecture alone is not sufficient justification.
 
 These projects are evidence sources, not code templates:
 
-- Official Omarchy Quattro host and built-in bar: Machine2 package
+- Official Omarchy Quattro host and built-in bar: the validation system package
   `4.0.0.r1458.gfa6b5fc-1`
 - ThinkOodle `omarchy-shell-plugins`, commit
   `352b8d69017adae0074453f49dd9bac36cf07a15`

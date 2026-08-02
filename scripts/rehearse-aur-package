@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Build and inspect the Shibumi Arch package without a published release."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PKGBUILD = ROOT / "packaging/aur/PKGBUILD"
+
+
+def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--keep", action="store_true")
+    args = parser.parse_args()
+    missing = [name for name in ("makepkg", "bsdtar") if shutil.which(name) is None]
+    if missing:
+        print(f"missing package rehearsal tools: {', '.join(missing)}", file=sys.stderr)
+        return 2
+
+    temporary = Path(tempfile.mkdtemp(prefix="shibumi-aur-rehearsal-"))
+    try:
+        result = run(
+            [
+                str(ROOT / "scripts/build-release-archive"),
+                "--allow-dirty",
+                "--check-reproducible",
+                "--output-dir",
+                str(temporary / "dist"),
+            ],
+            ROOT,
+        )
+        print(result.stdout, end="")
+        if result.returncode != 0:
+            return result.returncode
+        archive = next((temporary / "dist").glob("*.tar.gz"))
+        checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        build = temporary / "build"
+        build.mkdir()
+        local_archive = build / archive.name
+        shutil.copy2(archive, local_archive)
+
+        pkgbuild = PKGBUILD.read_text(encoding="utf-8")
+        pkgbuild = re.sub(
+            r"^_source_sha256=.+$",
+            f"_source_sha256={checksum}",
+            pkgbuild,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        pkgbuild = re.sub(
+            r"^source=\(.+\)$",
+            f'source=("file://{local_archive}")',
+            pkgbuild,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        (build / "PKGBUILD").write_text(pkgbuild, encoding="utf-8")
+
+        command = ["makepkg", "--nodeps", "--cleanbuild", "--force", "--noconfirm"]
+        result = run(command, build)
+        print(result.stdout, end="")
+        if result.returncode != 0:
+            return result.returncode
+
+        packages = [
+            path
+            for path in build.glob("*.pkg.tar.*")
+            if not path.name.endswith(".sig")
+        ]
+        if len(packages) != 1:
+            print(f"expected one package, found {len(packages)}", file=sys.stderr)
+            return 1
+        package = packages[0]
+        names = subprocess.run(
+            ["bsdtar", "-tf", str(package)],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.splitlines()
+        metadata = {".BUILDINFO", ".MTREE", ".PKGINFO"}
+        outside_usr = [
+            name for name in names
+            if name and not name.startswith("usr/") and name not in metadata
+        ]
+        forbidden = [
+            name for name in names
+            if "__pycache__" in name or name.endswith(".pyc")
+        ]
+        if outside_usr or forbidden:
+            print(f"forbidden package paths: {(outside_usr + forbidden)[:8]}", file=sys.stderr)
+            return 1
+
+        required = {
+            "usr/bin/shibumi-shell",
+            "usr/share/shibumi-shell/VERSION",
+            "usr/share/shibumi-shell/PACKAGE-METADATA.json",
+            "usr/share/shibumi-shell/scripts/shibumi-suite",
+            "usr/share/licenses/shibumi-shell/LICENSE",
+        }
+        absent = sorted(required - set(names))
+        if absent:
+            print(f"missing package paths: {', '.join(absent)}", file=sys.stderr)
+            return 1
+
+        extract = temporary / "root"
+        extract.mkdir()
+        subprocess.run(
+            ["bsdtar", "-xf", str(package), "-C", str(extract)], check=True
+        )
+        payload = extract / "usr/share/shibumi-shell"
+        contract = json.loads(
+            (payload / "contracts/plugin-suite-v1.json").read_text(encoding="utf-8")
+        )
+        expected_plugins = {item["id"] for item in contract["plugins"]}
+        packaged_plugins = {
+            path.parent.name for path in payload.glob("hancore.shibumi.*/manifest.json")
+        }
+        if packaged_plugins != expected_plugins:
+            print(
+                "packaged plugin inventory drift: "
+                f"missing={sorted(expected_plugins - packaged_plugins)} "
+                f"unexpected={sorted(packaged_plugins - expected_plugins)}",
+                file=sys.stderr,
+            )
+            return 1
+        result = run(
+            [sys.executable, str(payload / "scripts/shibumi-suite"), "--help"],
+            extract,
+        )
+        if result.returncode != 0 or "transactionally" not in result.stdout:
+            print(result.stdout, file=sys.stderr)
+            print("packaged lifecycle help smoke failed", file=sys.stderr)
+            return 1
+        marker = json.loads(
+            (payload / "PACKAGE-METADATA.json").read_text(encoding="utf-8")
+        )
+        if marker.get("version") != contract.get("suiteVersion"):
+            print("package marker and suite version diverge", file=sys.stderr)
+            return 1
+        digest = hashlib.sha256(package.read_bytes()).hexdigest()
+        print(
+            f"AUR rehearsal PASS: {package.name} "
+            f"({len(names)} entries, {digest})"
+        )
+        return 0
+    finally:
+        if args.keep:
+            print(f"Kept rehearsal directory: {temporary}")
+        else:
+            shutil.rmtree(temporary, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

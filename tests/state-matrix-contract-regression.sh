@@ -11,7 +11,7 @@ fail() {
   exit 1
 }
 
-jq -e '.schemaVersion == 1 and (.rows | length) >= 28' "$matrix" >/dev/null \
+jq -e '.schemaVersion == 1 and (.rows | length) >= 27' "$matrix" >/dev/null \
   || fail "V1 matrix is incomplete"
 for group in G1 G2 G3 G4 G5 G6 G7 G8 G9 G10 G11 G12 G13 G14 G15; do
   jq -e --arg group "$group" '.rows | any(.group == $group)' "$matrix" >/dev/null \

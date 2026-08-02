@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
   "suiteId": "hancore.shibumi",
-  "suiteVersion": "0.1.0",
+  "suiteVersion": "0.1.1-beta.1",
   "hostContract": "contracts/host-facade-v1.json",
+  "retiredPlugins": ["hancore.shibumi.menu"],
   "plugins": [
     {
       "id": "hancore.shibumi.bar",
@@ -28,14 +29,6 @@
       "defaultSection": "left",
       "requires": ["hancore.shibumi.state"],
       "recommends": []
-    },
-    {
-      "id": "hancore.shibumi.menu",
-      "kinds": ["menu", "service"],
-      "role": "app-menu",
-      "bundle": "core",
-      "requires": ["hancore.shibumi.state"],
-      "recommends": ["hancore.shibumi.control-center"]
     },
     {
       "id": "hancore.shibumi.reactor",
@@ -257,7 +250,6 @@
         "hancore.shibumi.bar",
         "hancore.shibumi.state",
         "hancore.shibumi.control-center",
-        "hancore.shibumi.menu",
         "hancore.shibumi.reactor",
         "hancore.shibumi.telemetry",
         "hancore.shibumi.power-state",
@@ -282,7 +274,6 @@
       ],
       "enableServices": [
         "hancore.shibumi.state",
-        "hancore.shibumi.menu",
         "hancore.shibumi.reactor",
         "hancore.shibumi.telemetry",
         "hancore.shibumi.power-state",

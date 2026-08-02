@@ -1,103 +1,142 @@
-# Packaging and AUR strategy
+# Arch packaging and AUR publication
 
-Status: private-alpha decision
+Status: `0.1.1-beta.1` candidate contract
 
-An Arch package is a useful future distribution layer for Shibumi, but it does
-not replace the suite lifecycle. Shibumi remains one release containing 25
-separately validated Omarchy plugin roots with dependencies, shared state, and
-one transactional activation profile.
+Shibumi ships one versioned suite containing 25 separately validated Omarchy
+Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
+lifecycle owns explicit per-user staging, activation, repair, and removal.
 
-## Decision
+## Package boundary
 
-Publish the first stable public release through an AUR package named
-`shibumi-shell`. Do not publish the package while the source repository is
-private or the stable release gates remain open.
+The `shibumi-shell` package installs:
 
-A normal public AUR package needs a publicly retrievable, immutable source
-archive and checksum. A private GitHub release would require user-specific
-credentials and cannot provide the expected public AUR build path. During the
-private alpha, use the trusted Git checkout and `shibumi-suite` directly. A
-local `makepkg` build or private Arch repository can be added later if
-installation on several controlled machines justifies that extra release
-surface.
+- the immutable suite under `/usr/share/shibumi-shell`;
+- the stable command `/usr/bin/shibumi-shell`;
+- the suite, host-facade, and package-runtime contracts;
+- package-origin metadata, license, and runtime user documentation.
 
-The stable-release user experience must be one copyable command, without a
-manual clone or multi-step configuration guide. The current safe target is:
-
-```bash
-yay -S shibumi-shell && shibumi-shell install --yes
-```
-
-This is one shell command but intentionally keeps the two ownership domains
-separate: the AUR helper installs the immutable system package, then the
-unprivileged Shibumi lifecycle command configures the current user's Omarchy
-session. A package hook must not guess the desktop user or mutate that user's
-home directory while running as root.
-
-## Intended package boundary
-
-A future package should:
-
-- install an immutable release payload under `/usr/share/shibumi-shell`;
-- install a stable command under `/usr/bin`;
-- include the contracts, plugin roots, lifecycle implementation, licenses, and
-  user documentation needed at runtime;
-- use a tagged source archive and pinned checksum;
-- leave user state under the XDG state and configuration directories; and
-- require an explicit user command to install, update, repair, activate,
-  deactivate, or uninstall the Omarchy plugin suite.
-
-Package installation and package upgrade must not edit
-`~/.config/omarchy/shell.json`, remove plugin directories, or activate a bar
-from a package-manager hook. Those operations are user-session state and
-belong to the transactional suite command.
-
-The resulting flow is:
+It has no `.install` script or Pacman hook. A package transaction must never
+guess a logged-in desktop user or write `~/.config/omarchy`, `~/.local/state`,
+or `~/.cache`. Those paths belong to an explicit unprivileged lifecycle
+transaction:
 
 ```text
-pacman/AUR updates immutable Shibumi source
-                 |
-                 v
-user runs shibumi-suite update or repair
-                 |
-                 v
-suite stages, verifies, activates, and records 25 plugin roots atomically
+Omarchy/Pacman installs immutable /usr payload
+                    |
+                    v
+user runs shibumi-shell install or update
+                    |
+                    v
+24 plugin roots are staged, reloaded, and verified transactionally
 ```
 
-## What becomes easier
+## Quattro and dependency policy
 
-- installation of the command and immutable payload;
-- version discovery, dependency declaration, upgrades, and removal through
-  normal Arch tooling;
-- reproducible source/checksum review; and
-- later delivery to users who do not maintain a Git checkout.
+Shibumi supports Omarchy Quattro only. The PKGBUILD depends on `omarchy`
+rather than `omarchy>=4`: the Quattro development package currently declares
+an unversioned `provides=omarchy`, so Pacman cannot satisfy a versioned virtual
+dependency even though the installed host is Quattro. The lifecycle closes
+that packaging gap by verifying the exact Shibumi-required Quattro APIs before
+any mutation.
 
-## What does not become easier
+Required commands, services, and fonts are declared in
+[`../../contracts/package-runtime-v1.json`](../../contracts/package-runtime-v1.json).
+Pacman skips packages that are already installed or provided. Optional
+packages enable bounded features such as the media spectrum, thumbnails,
+external mixer, and NVIDIA telemetry; their absence does not prevent the core
+suite from starting.
 
-- dependency-aware enable/disable behavior inside Omarchy;
-- switching the complete Shibumi and stock Omarchy bar hosts;
-- preserving per-bar layout and service state;
-- repairing one plugin root removed by a generic plugin manager; or
-- verifying that the running Quickshell process executes the new QML payload.
+## User lifecycle
 
-Those remain responsibilities of `shibumi-suite`.
+After AUR publication, the normal installation is one copyable command:
 
-## Public packaging gate
+```bash
+omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
+```
 
-Before publishing to the AUR:
+Package upgrades require an explicit staging step:
 
-1. make the tagged release archive publicly retrievable;
-2. follow the
-   [AUR submission guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines);
-3. add and review `PKGBUILD` and generated `.SRCINFO`;
-4. build with `pkgctl build` in a
-   [clean Arch chroot](https://wiki.archlinux.org/title/Creating_packages#Set_up_clean_chroot);
-5. verify file ownership, runtime dependencies, licenses, and reproducibility;
-6. test package install, package upgrade, suite install/update/repair, and
-   package removal on Machine2; and
-7. confirm that no package lifecycle hook mutates user Omarchy configuration.
-8. prove the documented one-command installation from a clean supported
-   Omarchy user on Machine2.
+```bash
+omarchy update
+shibumi-shell update --yes
+```
 
-Until these gates pass, AUR metadata would add maintenance and
-supply-chain surface without simplifying Shibumi's core runtime architecture.
+A source-managed installation moves to package ownership by installing the
+package and running `shibumi-shell update --yes`. User configuration, the
+active profile, external layouts, and unrelated plugins are preserved.
+
+Package rollback is deliberately two-step and opt-in:
+
+```bash
+sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-<older-version>-any.pkg.tar.zst
+shibumi-shell update --allow-downgrade --yes
+```
+
+Removal reverses the user lifecycle before dropping the immutable payload:
+
+```bash
+shibumi-shell uninstall --yes
+omarchy pkg drop shibumi-shell
+```
+
+## Immutable release asset
+
+`scripts/build-release-archive` builds a deterministic, single-root archive
+named `shibumi-shell-<version>.tar.gz`. It normalizes ownership, timestamps,
+ordering, and compression metadata and emits a SHA-256 file plus a complete
+inventory.
+
+The AUR metadata directory is intentionally excluded from the archive. Keeping
+the PKGBUILD containing `_source_sha256` inside the bytes it hashes would make
+the checksum self-referential. The runtime package helpers under `packaging/`
+remain in the asset.
+
+The GitHub tag workflow rebuilds the archive from the accepted clean commit,
+requires `v<VERSION>`, compares the result with the pinned PKGBUILD checksum,
+and publishes the archive, checksum, and inventory as immutable prerelease
+assets. The checkout action is pinned to a full commit SHA.
+
+## Local rehearsal
+
+Run the complete local package rehearsal without a published tag:
+
+```bash
+./scripts/check-aur-package
+./scripts/rehearse-aur-package
+```
+
+The rehearsal creates the release archive twice, replaces the remote source
+with that local asset in a temporary PKGBUILD, runs `makepkg`, and inspects the
+result. It requires:
+
+- a successful source checksum validation;
+- files only below `/usr` plus normal package metadata;
+- no install hook, user path, bytecode cache, or unexpected payload;
+- the stable command, package marker, license, and suite contract;
+- exactly the 25 contract-declared plugin manifests;
+- a successful packaged lifecycle help smoke.
+
+`--nodeps` is used only by this controlled rehearsal because dependency
+resolution is verified separately against the validation system. A clean-chroot build must
+perform normal dependency resolution before publication.
+
+## Publication gates
+
+The AUR entry remains blocked until all of these are true:
+
+1. The exact candidate commit passes the source, package, and Health tests.
+2. the validation system passes package install, source-to-package migration, update,
+   intentional rollback, repair, uninstall, and stock recovery.
+3. Every Shibumi V1/V2/Omarchy bar-switch transition passes with one responsive
+   production Quickshell process and no new bounded runtime error.
+4. A clean Arch chroot resolves every required dependency and builds the
+   package.
+5. The immutable GitHub release asset exists and its SHA-256 equals PKGBUILD
+   and `.SRCINFO`.
+6. `scripts/check-aur-package --publish-check` passes against the remote tag
+   and asset.
+7. The AUR package name can be registered and the one-command install is
+   repeated from a clean supported Omarchy Quattro account.
+
+AUR unavailability blocks only gates 6–7. It does not block local package
+construction or the validation system lifecycle acceptance.

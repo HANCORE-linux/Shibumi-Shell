@@ -202,6 +202,37 @@ class HealthDiagnosticsTests(unittest.TestCase):
     def write_state(self, value: dict[str, object]) -> None:
         self.write_json(self.state_dir / "install.json", value)
 
+    def use_package_install(
+        self,
+        *,
+        installed_version: str | None = "0.1.1beta.1-1",
+        available_version: str | None = None,
+        fetch_error: str = "",
+    ) -> Path:
+        self.state.pop("sourceRoot", None)
+        self.state.update(
+            {
+                "suiteVersion": "0.1.1-beta.1",
+                "installOrigin": "package",
+                "payloadRoot": "/usr/share/shibumi-shell",
+                "sourceRevision": "package:0.1.1-beta.1",
+                "packageName": "shibumi-shell",
+                "packageVersion": "0.1.1-beta.1",
+            }
+        )
+        self.write_state(self.state)
+        fixture: dict[str, object] = {}
+        if installed_version is not None:
+            fixture["installedVersion"] = installed_version
+        if available_version is not None:
+            fixture["availableVersion"] = available_version
+        if fetch_error:
+            fixture["fetchError"] = fetch_error
+        path = self.root / "package.json"
+        self.write_json(path, fixture)
+        self.environment["SHIBUMI_HEALTH_PACKAGE_FILE"] = str(path)
+        return path
+
     def run_health(self, *arguments: str) -> dict[str, object]:
         result = subprocess.run(
             [str(HEALTH), *arguments],
@@ -236,6 +267,72 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(checks["managed-plugins"]["value"], "2/2 installed")
         self.assertEqual(checks["source-status"]["value"], "Current · clean")
         self.assertEqual(checks["source-update"]["value"], "Not checked")
+        self.assertEqual(payload["installOrigin"], "checkout")
+
+    def test_package_health_uses_pacman_metadata_and_skips_git(self) -> None:
+        self.use_package_install()
+
+        payload = self.run_health()
+        checks = self.by_id(payload)
+
+        self.assertEqual(payload["overall"], "healthy")
+        self.assertEqual(payload["installOrigin"], "package")
+        self.assertEqual(payload["packageName"], "shibumi-shell")
+        self.assertEqual(payload["packageVersion"], "0.1.1-beta.1")
+        self.assertEqual(checks["package-status"]["status"], "ok")
+        self.assertEqual(checks["package-status"]["value"], "0.1.1beta.1-1")
+        self.assertEqual(checks["package-update"]["value"], "Not checked")
+        self.assertNotIn("source-status", checks)
+        self.assertNotIn("source-update", checks)
+
+    def test_package_health_reports_unstaged_package_upgrade(self) -> None:
+        self.use_package_install(installed_version="0.1.2beta.1-1")
+
+        payload = self.run_health()
+        check = self.by_id(payload)["package-status"]
+
+        self.assertEqual(payload["overall"], "warning")
+        self.assertEqual(check["status"], "warning")
+        self.assertIn("0.1.2beta.1-1 installed", check["value"])
+        self.assertIn("shibumi-shell update --yes", check["action"])
+
+    def test_package_fetch_reports_unpublished_aur_candidate(self) -> None:
+        self.use_package_install()
+
+        payload = self.run_health("--fetch")
+        check = self.by_id(payload)["package-update"]
+
+        self.assertEqual(check["status"], "info")
+        self.assertEqual(check["value"], "Not published")
+
+    def test_package_fetch_reports_available_aur_version(self) -> None:
+        self.use_package_install(available_version="0.1.2beta.1-1")
+
+        payload = self.run_health("--fetch")
+        check = self.by_id(payload)["package-update"]
+
+        self.assertEqual(check["status"], "warning")
+        self.assertIn("0.1.2beta.1-1", check["value"])
+
+    def test_package_fetch_failure_is_bounded_without_git_fallback(self) -> None:
+        self.use_package_install(fetch_error="fixture offline")
+
+        payload = self.run_health("--fetch")
+        checks = self.by_id(payload)
+
+        self.assertEqual(checks["package-update"]["status"], "warning")
+        self.assertEqual(checks["package-update"]["value"], "Check failed")
+        self.assertIn("fixture offline", checks["package-update"]["detail"])
+        self.assertNotIn("source-status", checks)
+
+    def test_package_origin_without_installed_package_is_an_error(self) -> None:
+        self.use_package_install(installed_version=None)
+
+        payload = self.run_health()
+        check = self.by_id(payload)["package-status"]
+
+        self.assertEqual(payload["overall"], "error")
+        self.assertEqual(check["value"], "Not installed")
 
     def test_dirty_checkout_is_a_warning(self) -> None:
         (self.source / "README.md").write_text("dirty\n", encoding="utf-8")

@@ -1,7 +1,7 @@
 # QS Rise predecessor release evidence
 
 > **Document status: Historical validation evidence.** This document preserves
-> the last suite-managed QS Rise Machine2 gate before the Shibumi rename. It
+> the last suite-managed QS Rise the validation system gate before the Shibumi rename. It
 > cannot accept the Shibumi payload or override `../ARCHITECTURE.md`.
 
 Date: 2026-07-22
@@ -18,18 +18,18 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
 - Transactional install, update, rollback, interrupted recovery, uninstall,
   cache cleanup, collision handling, and 21-to-22 profile migration pass in
   isolated lifecycle tests.
-- Machine2 runs the 22-plugin default profile with no disabled QS Rise plugin;
+- the validation system runs the 22-plugin default profile with no disabled QS Rise plugin;
   the live bar confirms the installed payload digest.
-- The real 21-to-22 update completed on Machine2 without replacing the user's
+- The real 21-to-22 update completed on the validation system without replacing the user's
   bar layout or leaving helper processes.
-- Every enabled top-bar panel opens and closes on Machine2 without a QS Rise
+- Every enabled top-bar panel opens and closes on the validation system without a QS Rise
   QML error or retained worker. Update Center package/theme state is populated.
 - G3 contains the local Update Center facade plus the authoritative Quattro
   tray and notification owners. No second tray or notification service exists.
 - The rebuilt G1 Control main surface and G3 package/theme tabs load on
-  Machine2 with real state. Focused regressions cover every V1 Control setting,
+  the validation system with real state. Focused regressions cover every V1 Control setting,
   package-state parsing, pinned theme actions, and panel component loading.
-- A controlled second-output run on Machine2 passed live add/remove, 800x1280
+- A controlled second-output run on the validation system passed live add/remove, 800x1280
   portrait staging, focused widget routing, output-local panel opening, and
   cleanup. The shell stayed reachable and logged no binding loop, invalid QML
   context, or false output-recovery warning.
@@ -38,12 +38,12 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   its internal V1 semantic names private, and parses only the bounded V1
   `color02`/`color03` accent extensions from `colors.toml`. Model, Quattro
   runtime, and style-contract regressions pass.
-- Machine2 hardware checks prove the reversible laptop paths: brightness moved
+- the validation system hardware checks prove the reversible laptop paths: brightness moved
   from 100 to 95 and back through the official monitor IPC, the power profile
   moved from performance to balanced and back in `app-graphical.slice`, and
   opening/closing the QS Rise Bluetooth panel started and released discovery.
   BAT0 is detected through UPower as present, fully charged, and healthy.
-- A reversible real-Wayland Bottom run on Machine2 placed the 35 px bar at
+- A reversible real-Wayland Bottom run on the validation system placed the 35 px bar at
   `y=1045` on the 1920x1080 output. The G1 Control, G3 Update Center, centered
   G8 calendar, and right-anchored G11 Network panels all opened upward at the
   correct output-local anchor. The original `shell.json` hash and Top position
@@ -73,9 +73,9 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   `Configuration Loaded`, answered IPC, and created no crash report.
 - V1 split handles remain hover-revealed at Bottom: the 14 px `•`/`│` handle
   may overlap the 6 px unsplit cell boundary instead of being clipped. The
-  focused style contract, Qt 6 lint, live restart, and Machine2 visual check
+  focused style contract, Qt 6 lint, live restart, and the validation system visual check
   pass with unchanged layout state.
-- Real picker actions pass on Machine2: the current theme was reapplied, the
+- Real picker actions pass on the validation system: the current theme was reapplied, the
   wallpaper moved from BG2 to BG3 and was restored to BG2, and unique
   screenshot/video fixtures passed copy, open, and two-step trash actions.
   Clipboard contents were restored, the exact media windows and trash entries
@@ -102,13 +102,13 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   cycle also passed through `recording`, `transcribing`, and back to `idle`;
   the dictated text was inserted and the single shared status stream remained.
 - The complete focused regression matrix passes against a read-only snapshot
-  of Machine2's current Quattro shell: status, network, quick-access,
+  of the validation system's current Quattro shell: status, network, quick-access,
   audio/media, style, and full contract suites. Both repository synchronization
   checks, `git diff --check`, and the focused Qt 6 `qmllint` pass. The linter
   reports 83 existing dynamic-type warnings and no errors. This snapshot run
   validates the source contracts but does not replace the final live-log check
   on the exact release payload.
-- The follow-up live snapshot on Machine2 passes: PID 185076 remains the sole
+- The follow-up live snapshot on the validation system passes: PID 185076 remains the sole
   QS Rise shell in `app-graphical.slice`, `shell ping` returns `ok`, and the
   Bottom geometry is anchored at y=1043 on eDP-1 at 1920x1080 and scale 1.0.
   The picker is closed, Reactor is inactive in mode 0, and only the Network
@@ -125,7 +125,7 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   picker, presentation, Reactor, splits, widgets, and workspaces. Transient
   panel-open state correctly returned closed. The restart produced no crash or
   worker and reached `Configuration Loaded`.
-- The final-source lifecycle gate passes on Machine2. A complete backup was
+- The final-source lifecycle gate passes on the validation system. A complete backup was
   taken, the manually patched pre-test payload was normalized out of the plugin
   root, and the suite uninstaller removed all 22 QS Rise registrations,
   directories, state, cache, and transaction paths. A fresh stock process then
@@ -165,13 +165,13 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   0 but is not used as a quality metric because vendored copies amplify
   incomplete external Quattro type metadata.
 - After the final Control Center and Update Center label cleanup, the complete
-  contract suite was repeated against the exact shell payload from Machine2's
+  contract suite was repeated against the exact shell payload from the validation system's
   `omarchy-dev 4.0.0.r1160.ga64d895-1`. All 22 independent plugin contracts,
   host-facade checks, offscreen widget/panel smokes, update safety regressions,
   and 11 transactional suite lifecycle tests pass. Bash syntax, ShellCheck for
   all 46 shell files, Python bytecode validation for all eight Python files,
   and `git diff --check` also pass. The same payload updated transactionally on
-  Machine2, retained one running Quattro shell and a clean 22-plugin managed
+  the validation system, retained one running Quattro shell and a clean 22-plugin managed
   state, and contains neither the Control Center `Text`/`Icon` launcher-label
   prefixes nor icons in the `Check themes` and `Reapply` text actions.
 - The matching live audit kept PID 1016328 in the dedicated
@@ -204,17 +204,17 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   clipping or overlap and closed without retained state. The same counter-check
   initially found zero registered StatusNotifier items on the session bus. A
   deterministic session-bus fixture now registers one `NeedsAttention`
-  StatusNotifier item with a nested DBusMenu. Machine2 accepted the populated
+  StatusNotifier item with a nested DBusMenu. the validation system accepted the populated
   V1 drawer and root app-menu surfaces in
   `docs/mockups/shibumi-v1-parity-g3-tray-drawer-top.png` and
   `docs/mockups/shibumi-v1-parity-g3-tray-app-menu-top-v3.png`; the menu covers
   enabled, checked, disabled, separator, and submenu rows. The current Shibumi
   candidate additionally retains the authoritative root handle while traversing
-  children and keeps the root card height during navigation. Machine2 therefore
+  children and keeps the root card height during navigation. the validation system therefore
   reaches and triggers `Nested action` at both Top and Bottom; the fixture log
   records two `item=6` menu events. The retained child states are captured in
-  `docs/mockups/shibumi-v1-g3-dbus-submenu-top-machine2.png` and
-  `docs/mockups/shibumi-v1-g3-dbus-submenu-bottom-machine2.png`. The fixture is
+  `docs/mockups/shibumi-v1-g3-dbus-submenu-top.png` and
+  `docs/mockups/shibumi-v1-g3-dbus-submenu-bottom.png`. The fixture is
   not a substitute for the remaining real third-party SNI and multi-output
   gates.
 - Theme and wallpaper failure feedback is now deterministic without mutating a
@@ -224,19 +224,19 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   isolated real Quickshell/Quattro smoke drove wallpaper exit 7 and theme exit
   8, then verified the exact notification title and reason for each. The
   focused plugin validation, Qt 6 lint, quick-access regression, and complete
-  contract suite pass; Machine2 also confirms `/usr/bin/notify-send` exists.
+  contract suite pass; the validation system also confirms `/usr/bin/notify-send` exists.
 - The automatic screensaver lifecycle now consumes Quattro's first-party
   `omarchy.idle` service. A sampled real cycle hid the only QS Rise bar layer
   254 ms before the fullscreen screensaver mapped, restored exactly one layer
   after wake, and never created a second shell instance or bar layer.
-- Real output-power and system-sleep gates pass on Machine2. eDP-1 completed a
+- Real output-power and system-sleep gates pass on the validation system. eDP-1 completed a
   DPMS off/on cycle, the laptop completed deep/S3 suspend/resume, and S4
   hibernate restored the saved image. Across all three gates, the shell PID,
   systemd unit, configuration hash, and crash count remained unchanged; one
   fully opaque bar layer, IPC, Idle state, and closed panel/picker state returned
   without a QML error or worker residue.
 - A reversible single-output Reactor gate used the production IPC and real
-  split-gap renderer on Machine2. Mode 7 formed the expected two-part text and
+  split-gap renderer on the validation system. Mode 7 formed the expected two-part text and
   rendered a monitor sweep; Mode 8 followed the unchanged V1 fit contract and
   selected its bounded fallback glyph because no bundled quote met the minimum
   cell size in the current dense 1920 px layout. One-second `/proc` samples
@@ -248,7 +248,7 @@ Every result below belongs to the former `hancore.qsrise.*` namespace. Use
   configuration hash, zero-split layout, Mode 0, unloaded backend, and closed
   surface state; physical multi-output Reactor acceptance remains open.
 - A content-unique 3840x2160 wallpaper completed the real cold-cache path on
-  Machine2 through the production Hearthstone picker. The live scan added the
+  the validation system through the production Hearthstone picker. The live scan added the
   twelfth row and produced its non-empty 512 px preview in 2,091 ms. After the
   exact source, thumbnail, and cache state were restored, the normal warm
   picker exposed all 11 cached entries in 275 ms with 11/11 previews ready.
@@ -295,7 +295,7 @@ This is retained as non-blocking host behavior, not a QS Rise lifecycle failure.
 
 1. Repeat a drag during physical output removal. Bottom ghost tracking,
    successful drop, byte-identical invalid-drop return, and process-restart
-   persistence are already accepted on Machine2.
+   persistence are already accepted on the validation system.
 2. Complete a real connection to a new protected WLAN, including the password
    path. Network disconnect, saved-profile Forget, reversible DNS mutation,
    Voxtype dictation, theme/wallpaper success and controlled failure feedback,
@@ -305,7 +305,7 @@ This is retained as non-blocking host behavior, not a QS Rise lifecycle failure.
    and Bluetooth pair/connect/forget plus Bluetooth audio where suitable
    devices are available. Brightness and scale mutation, power-profile
    mutation, a physical battery discharge/charge transition, and Bluetooth
-   discovery lifecycle are already accepted on Machine2.
+   discovery lifecycle are already accepted on the validation system.
 4. Complete the V1 presentation gate for every shipped widget, tooltip, panel,
    picker, and Control Center state. Compare V1 and QS Rise side by side at the same
    theme and scale; stock Quattro presentation does not satisfy this gate.
@@ -320,8 +320,8 @@ This is retained as non-blocking host behavior, not a QS Rise lifecycle failure.
 - Physical multi-monitor, hot-unplug, and mixed-scale acceptance require a
   second real output. Existing model, offscreen, and historical headless-output
   tests do not replace that gate.
-- The independent App Menu is implemented and its populated 260 px root card
-  passes Top/Bottom Machine2 rendering and lifecycle checks. Empty, provider
+- Historical predecessor evidence included an independent App Menu and its populated 260 px root card
+  passes Top/Bottom the validation system rendering and lifecycle checks. Empty, provider
   error, deeper action routes, and physical multi-output states remain open;
   it is no longer treated as deferred work.
 - A new picker style is post-parity work. Quattro remains the native carousel

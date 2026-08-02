@@ -15,6 +15,8 @@ command -v rg >/dev/null 2>&1 || fail "rg is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
 "$repo_root/tests/documentation-regression.py"
+python3 "$repo_root/tests/test_package_release.py"
+python3 "$repo_root/tests/test_shibumi_suite.py"
 "$repo_root/tests/state-matrix-contract-regression.sh"
 "$repo_root/tests/v1-feature-evidence-regression.sh"
 "$repo_root/tests/v2-source-evidence-regression.sh"
@@ -33,82 +35,18 @@ jq -e '
 ' hancore.shibumi.bar/manifest.json >/dev/null \
   || fail "invalid Shibumi bar manifest"
 
-jq -e '
-  .schemaVersion == 1 and
-  .id == "hancore.shibumi.menu" and
-  .kinds == ["menu", "service"] and
-  .entryPoints.menu == "Menu.qml" and
-  .entryPoints.service == "AppMenuService.qml"
-' hancore.shibumi.menu/manifest.json >/dev/null \
-  || fail "invalid Shibumi menu manifest"
-
-for entry_point in menu/Menu.qml menu/BarWidget.qml menu/AppMenuService.qml; do
-  [[ -s $entry_point ]] || fail "missing App Menu entry point: $entry_point"
-  if rg -q '^ShellRoot \{' "$entry_point"; then
-    fail "native App Menu entry point creates a ShellRoot: $entry_point"
-  fi
-done
-rg -q 'function open\(payloadJson\)' menu/Menu.qml \
-  || fail "App Menu does not implement open(payloadJson)"
-rg -q 'function close\(\)' menu/Menu.qml \
-  || fail "App Menu does not implement close()"
-rg -q 'function refresh\(\)' menu/Menu.qml \
-  || fail "App Menu does not implement refresh()"
-rg -q 'if \(!opened \|\| !source\)' menu/Menu.qml \
-  || fail "App Menu surface is not lifecycle-lazy"
-rg -q '^PanelWindow \{' menu/MenuSurface.qml \
-  || fail "App Menu visual surface is not a native PanelWindow"
-rg -q 'screen: controller\.targetScreen' menu/MenuSurface.qml \
-  || fail "App Menu surface is not bound to the invoking screen"
-rg -U -q 'function screenValues\(\) \{\n[[:space:]]*const source = Quickshell\.screens\n[[:space:]]*if \(source && typeof source\.length === "number"\) return source\n[[:space:]]*if \(source && source\.values' menu/Menu.qml \
-  || fail "App Menu must prefer Quattro's direct Quickshell.screens model"
-rg -q 'hostShell\.toggle\(moduleName' menu/BarWidget.qml \
-  || fail "App Menu launcher does not use the injected host shell"
-if rg -q 'execDetached|Process \{|\.run\(' menu/BarWidget.qml; then
-  fail "App Menu launcher must not shell out"
-fi
 [[ -s assets/logo-tint.frag.qsb ]] \
   || fail "G1 exact flat-tint shader is missing"
-[[ $(rg -c 'FlatTintedImage' menu/BarWidget.qml) -eq 3 ]] \
-  || fail "G1 wordmarks do not all use the V1 flat-tint renderer"
-if rg -q 'Timer \{' menu/AppMenuService.qml; then
-  fail "App Menu service must not poll through a timer"
-fi
-[[ $(rg -c 'Process \{' menu/AppMenuService.qml) -eq 2 ]] \
-  || fail "App Menu service must own exactly one guard and one provider process"
-rg -q 'id: guardProc' menu/AppMenuService.qml \
-  || fail "App Menu guard process is missing"
-rg -q 'id: providerProc' menu/AppMenuService.qml \
-  || fail "App Menu provider process is missing"
-rg -q '\["timeout", "--kill-after=1s", "4s", "bash", "-lc", script\]' menu/AppMenuService.qml \
-  || fail "App Menu guard evaluation is not timeout-bounded"
-if rg -q 'Process \{' menu/MenuActions.qml; then
-  fail "App Menu action adapter must not own a process"
-fi
-rg -q 'Commons\.Util\.execDetached\(action\)' menu/MenuActions.qml \
-  || fail "App Menu action adapter bypasses Quattro's current process contract"
-if rg -q 'hyprExecCommand|omarchy-hyprland-launch' menu/MenuActions.qml; then
-  fail "App Menu action adapter retains the removed Quattro launcher contract"
-fi
-for view in menu/Menu.qml menu/MenuSurface.qml menu/MenuCard.qml \
-  menu/MenuSettings.qml menu/MenuCommandRow.qml menu/MenuAppRow.qml; do
-  if rg -q 'Process \{|Timer \{|FileView \{' "$view"; then
-    fail "App Menu view must not own workers, polling, or file watchers: $view"
-  fi
-done
-if rg -q 'popupBorder: Commons\.Color\.(menu|popups)\.border' \
-    hancore.shibumi.menu/MenuSettings.qml; then
-  fail "App Menu settings retain a bright surface border on dropdowns"
-fi
-rg -q 'popupBorder: root\.controlBorderColor' \
-  hancore.shibumi.menu/MenuSettings.qml \
-  || fail "App Menu dropdowns bypass the shared normal control border"
-rg -q 'firstPartyServiceFor\("omarchy\.background"\)' menu/Menu.qml \
-  || fail "App Menu wallpaper must reuse the first-party background service"
-rg -q 'function setPresentation\(name, value\)' menu/AppMenuService.qml \
-  || fail "App Menu presentation settings are not service-owned"
-rg -q 'shell\.mutateShellConfig' menu/AppMenuService.qml \
-  || fail "App Menu presentation settings bypass host configuration"
+[[ ! -e hancore.shibumi.menu && ! -e menu ]] \
+  || fail "retired Shibumi App Menu source is still present"
+jq -e '
+  .retiredPlugins == ["hancore.shibumi.menu"] and
+  ([.plugins[].kinds[]] | index("menu") | not) and
+  ([.plugins[].id] | index("hancore.shibumi.menu") | not) and
+  ([.profiles[].install[]] | index("hancore.shibumi.menu") | not) and
+  ([.profiles[].enableServices[]] | index("hancore.shibumi.menu") | not)
+' contracts/plugin-suite-v1.json >/dev/null \
+  || fail "suite still installs or exposes the retired Shibumi App Menu"
 
 rg -q '^Item \{' Bar.qml || fail "Bar.qml must use Item as its root"
 if rg -q '^ShellRoot \{' Bar.qml; then
@@ -812,14 +750,6 @@ rg -q 'function setBarPosition\(value\)' Bar.qml \
   || fail "G1 cannot persist top/bottom position"
 rg -q 'function setAllSplits\(value\)' Bar.qml \
   || fail "G1 cannot persist split presets"
-rg -q 'settingsScrollRequired' menu/MenuCard.qml \
-  || fail "expanded G1 settings are not viewport-bounded"
-rg -q 'tokens\.panelBackground' menu/MenuCard.qml \
-  || fail "G1 App Menu does not use the Shibumi panel background"
-rg -q 'tokens\.panelRadius' menu/MenuCard.qml \
-  || fail "G1 App Menu does not use the Shibumi panel radius"
-rg -q 'visible: card\.tokens && card\.tokens\.shadowEnabled' menu/MenuSurface.qml \
-  || fail "G1 App Menu does not follow the Shibumi shadow setting"
 detail_panel_count=$(rg --files widgets -g '*Panel.qml' \
   | rg -v '(^|/)ShibumiPanel\.qml$' | wc -l)
 [[ $(rg -l '^ShibumiPanel \{' widgets/*Panel.qml | wc -l) \
@@ -861,11 +791,6 @@ for pair in \
   token=${pair#*:}
   rg -Fq "$token" "$file" \
     || fail "$file bypasses the shared inner-control appearance"
-done
-for settings_contract in WIDGETS 'COMPACT DISPLAY' WORKSPACES LAYOUT \
-  APPEARANCE REACTOR; do
-  rg -q "text: \"${settings_contract}\"" menu/MenuSettings.qml \
-    || fail "G1 settings section is missing: $settings_contract"
 done
 [[ $(rg -c 'FileView \{' hancore.shibumi.state/ThemePalette.qml) -eq 2 ]] \
   || fail "V1 accent swatches require one palette reader and one theme swap watcher"
@@ -964,16 +889,6 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/panel-routing-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/app-index-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/menu-model-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/menu-runtime-model-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/menu-view-model-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/menu-geometry-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/workspace-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-model-regression.qml"
@@ -1014,7 +929,6 @@ fi
 if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell ]]; then
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/theme-palette-runtime-regression.sh"
-  OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/menu-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/control-center-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/telemetry-plugins-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/audio-media-plugins-regression.sh"
@@ -1492,81 +1406,6 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
       <<<"$workspace_panel_output"; then
     fail "workspace panel smoke has an undefined control appearance token"
   fi
-
-  mkdir -p "$smoke_root/menu" "$smoke_root/assets"
-  mkdir -p "$smoke_root/core"
-  cp core/ShibumiConfig.js "$smoke_root/core/"
-  cp menu/AppIndex.js menu/GuardModel.js menu/MenuGeometry.js menu/MenuModel.js menu/MenuViewModel.js \
-    menu/ProcessResult.js menu/ProviderModel.js menu/AppMenuService.qml menu/Menu.qml menu/MenuSurface.qml menu/MenuCard.qml \
-    menu/MenuSettings.qml menu/ShibumiButtonGroup.qml menu/ShibumiDropdown.qml \
-    menu/ShibumiTextField.qml \
-    menu/MenuCommandRow.qml menu/MenuAppRow.qml menu/MenuActions.qml menu/BarWidget.qml \
-    menu/FlatTintedImage.qml menu/TintedImage.qml \
-    "$smoke_root/menu/"
-  cp assets/*.png "$smoke_root/assets/"
-  cp assets/logo-tint.frag.qsb "$smoke_root/assets/"
-  cp tests/app-menu-contract-smoke.qml "$smoke_root/shell.qml"
-
-  set +e
-  menu_smoke_output=$(timeout 5 env \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
-    QML_IMPORT_PATH="${OMARCHY_PATH}/shell${QML_IMPORT_PATH:+:${QML_IMPORT_PATH}}" \
-    QML2_IMPORT_PATH="${OMARCHY_PATH}/shell${QML2_IMPORT_PATH:+:${QML2_IMPORT_PATH}}" \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
-  menu_smoke_rc=$?
-  set -e
-  printf '%s\n' "$menu_smoke_output"
-  [[ $menu_smoke_rc -eq 0 ]] || fail "App Menu contract smoke exited $menu_smoke_rc"
-  grep -q 'app menu contract smoke passed' <<<"$menu_smoke_output" \
-    || fail "App Menu contract smoke did not reach its lifecycle marker"
-
-  cp tests/fixtures/MenuTestSurface.qml "$smoke_root/"
-  cp tests/app-menu-lifecycle-smoke.qml "$smoke_root/shell.qml"
-  set +e
-  menu_lifecycle_output=$(timeout 5 env \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
-    QML_IMPORT_PATH="${OMARCHY_PATH}/shell${QML_IMPORT_PATH:+:${QML_IMPORT_PATH}}" \
-    QML2_IMPORT_PATH="${OMARCHY_PATH}/shell${QML2_IMPORT_PATH:+:${QML2_IMPORT_PATH}}" \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
-  menu_lifecycle_rc=$?
-  set -e
-  printf '%s\n' "$menu_lifecycle_output"
-  [[ $menu_lifecycle_rc -eq 0 ]] || fail "App Menu lifecycle smoke exited $menu_lifecycle_rc"
-  grep -q 'app menu lifecycle smoke passed' <<<"$menu_lifecycle_output" \
-    || fail "App Menu lifecycle smoke did not reach its marker"
-
-  cp tests/app-menu-runtime-smoke.qml "$smoke_root/shell.qml"
-  set +e
-  menu_runtime_output=$(timeout 8 env \
-    PATH="$repo_root/tests/fixtures/menu-bin:$PATH" \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
-    QML_IMPORT_PATH="${OMARCHY_PATH}/shell${QML_IMPORT_PATH:+:${QML_IMPORT_PATH}}" \
-    QML2_IMPORT_PATH="${OMARCHY_PATH}/shell${QML2_IMPORT_PATH:+:${QML2_IMPORT_PATH}}" \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
-  menu_runtime_rc=$?
-  set -e
-  printf '%s\n' "$menu_runtime_output"
-  [[ $menu_runtime_rc -eq 0 ]] || fail "App Menu runtime smoke exited $menu_runtime_rc"
-  grep -q 'app menu runtime smoke passed' <<<"$menu_runtime_output" \
-    || fail "App Menu runtime smoke did not reach its lifecycle marker"
-
-  cp tests/app-menu-card-smoke.qml "$smoke_root/shell.qml"
-  set +e
-  menu_card_output=$(timeout 5 env \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
-    QML_IMPORT_PATH="${OMARCHY_PATH}/shell${QML_IMPORT_PATH:+:${QML_IMPORT_PATH}}" \
-    QML2_IMPORT_PATH="${OMARCHY_PATH}/shell${QML2_IMPORT_PATH:+:${QML2_IMPORT_PATH}}" \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
-  menu_card_rc=$?
-  set -e
-  printf '%s\n' "$menu_card_output"
-  [[ $menu_card_rc -eq 0 ]] || fail "App Menu card smoke exited $menu_card_rc"
-  grep -q 'app menu card smoke passed' <<<"$menu_card_output" \
-    || fail "App Menu card smoke did not reach its lifecycle marker"
 
 fi
 

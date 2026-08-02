@@ -27,5 +27,5 @@ design references are:
   release requirements rather than polish.
 
 Before changing a visible surface, validate the source contract and the real
-Machine2 runtime state. A functional backend alone does not establish UI or UX
+the validation system runtime state. A functional backend alone does not establish UI or UX
 parity.

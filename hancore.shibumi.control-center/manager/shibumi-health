@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Shibumi runtime and development-checkout diagnostics."""
+"""Read-only Shibumi runtime, package, and source-checkout diagnostics."""
 
 from __future__ import annotations
 
@@ -28,6 +28,10 @@ ERROR_PATTERNS = re.compile(
 SENSITIVE_PATTERNS = re.compile(
     r"authorization|cookie|credential|password|secret|ssid|token",
     re.IGNORECASE,
+)
+PACKAGE_NAME = "shibumi-shell"
+AUR_INFO_URL = (
+    "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=shibumi-shell"
 )
 
 
@@ -203,6 +207,15 @@ class Probe:
                 or not isinstance(activation, dict)
             ):
                 raise ValueError("unsupported install-state schema")
+            origin = str(self.state.get("installOrigin") or "checkout")
+            if origin not in ("checkout", "package"):
+                raise ValueError("unsupported install origin")
+            if origin == "package" and (
+                self.state.get("packageName") != PACKAGE_NAME
+                or not isinstance(self.state.get("packageVersion"), str)
+                or not self.state.get("packageVersion")
+            ):
+                raise ValueError("package install metadata is incomplete")
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.add(
                 "install-state",
@@ -719,6 +732,11 @@ class Probe:
         recorded = self.state.get("sourceRoot")
         return Path(override or recorded or self.home / "Projects/shibumi")
 
+    def install_origin(self) -> str:
+        if not self.state:
+            return "unknown"
+        return str(self.state.get("installOrigin") or "checkout")
+
     def git(self, root: Path, arguments: list[str], timeout: float = 5) -> str:
         result = run(["git", "-C", str(root), *arguments], timeout=timeout)
         if result.returncode != 0:
@@ -838,6 +856,206 @@ class Probe:
                 "Confirm the branch has a configured upstream.",
             )
 
+    def package_fixture(self) -> dict[str, Any] | None:
+        path = os.environ.get("SHIBUMI_HEALTH_PACKAGE_FILE")
+        return read_json(Path(path)) if path else None
+
+    def installed_package_version(
+        self, fixture: dict[str, Any] | None
+    ) -> str:
+        if fixture is not None:
+            value = fixture.get("installedVersion")
+            return str(value).strip() if isinstance(value, str) else ""
+        result = run(["pacman", "-Q", PACKAGE_NAME], timeout=3)
+        if result.returncode != 0:
+            return ""
+        fields = result.stdout.strip().split(maxsplit=1)
+        return fields[1] if len(fields) == 2 and fields[0] == PACKAGE_NAME else ""
+
+    @staticmethod
+    def package_payload_version(value: str) -> str:
+        return value.rsplit("-", 1)[0] if "-" in value else value
+
+    @staticmethod
+    def arch_payload_version(value: str) -> str:
+        return value.replace("-", "")
+
+    @staticmethod
+    def compare_arch_versions(installed: str, available: str) -> int | None:
+        try:
+            result = run(["vercmp", available, installed], timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            return 0 if available == installed else None
+        if result.returncode != 0:
+            return 0 if available == installed else None
+        try:
+            return int(result.stdout.strip())
+        except ValueError:
+            return 0 if available == installed else None
+
+    def available_package_version(
+        self, fixture: dict[str, Any] | None
+    ) -> str | None:
+        if fixture is not None:
+            error = fixture.get("fetchError")
+            if isinstance(error, str) and error.strip():
+                raise RuntimeError(error.strip())
+            value = fixture.get("availableVersion")
+            return str(value).strip() if isinstance(value, str) and value.strip() else None
+        timeout = configured_timeout("SHIBUMI_HEALTH_AUR_TIMEOUT", 8)
+        result = run(
+            [
+                "curl",
+                "-fsSL",
+                "--max-time",
+                str(timeout),
+                AUR_INFO_URL,
+            ],
+            timeout=timeout + 1,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                result.stderr.strip() or result.stdout.strip() or "AUR RPC failed"
+            )
+        response = json.loads(result.stdout)
+        if (
+            not isinstance(response, dict)
+            or response.get("type") not in ("multiinfo", "info")
+            or not isinstance(response.get("results"), list)
+        ):
+            raise ValueError("AUR RPC returned an unsupported response")
+        for item in response["results"]:
+            if isinstance(item, dict) and item.get("Name") == PACKAGE_NAME:
+                version = item.get("Version")
+                if isinstance(version, str) and version.strip():
+                    return version.strip()
+        return None
+
+    def check_package(self) -> None:
+        fixture: dict[str, Any] | None = None
+        try:
+            fixture = self.package_fixture()
+            installed = self.installed_package_version(fixture)
+        except (
+            OSError,
+            ValueError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as error:
+            self.add(
+                "package-status",
+                "Package",
+                "Arch package",
+                "error",
+                "Check failed",
+                str(error),
+                PACKAGE_NAME,
+                "Confirm that pacman can read the local package database.",
+            )
+            return
+
+        staged = str(self.state.get("packageVersion") or "")
+        expected = self.arch_payload_version(staged)
+        installed_payload = self.package_payload_version(installed)
+        if not installed:
+            self.add(
+                "package-status",
+                "Package",
+                "Arch package",
+                "error",
+                "Not installed",
+                "User plugins are staged from a package that pacman no longer owns.",
+                PACKAGE_NAME,
+                "Reinstall shibumi-shell, then run shibumi-shell repair --yes.",
+            )
+        elif installed_payload != expected:
+            self.add(
+                "package-status",
+                "Package",
+                "Package staging",
+                "warning",
+                f"{installed} installed · {staged} staged",
+                "The system package and the user-staged plugin suite differ.",
+                self.state_dir / "install.json",
+                "Run shibumi-shell update --yes; add --allow-downgrade only "
+                "after intentionally installing an older package.",
+            )
+        else:
+            self.add(
+                "package-status",
+                "Package",
+                "Arch package",
+                "ok",
+                installed,
+                f"The staged suite matches package payload {staged}.",
+                PACKAGE_NAME,
+            )
+
+        if not self.fetch:
+            self.add(
+                "package-update",
+                "Package",
+                "AUR update check",
+                "info",
+                "Not checked",
+                "The AUR was not contacted during this local health run.",
+                PACKAGE_NAME,
+                "Use Check for updates to query the AUR manually.",
+            )
+            return
+        try:
+            available = self.available_package_version(fixture)
+            if available is None:
+                self.add(
+                    "package-update",
+                    "Package",
+                    "AUR update check",
+                    "info",
+                    "Not published",
+                    "No shibumi-shell package is currently registered in the AUR.",
+                    PACKAGE_NAME,
+                )
+                return
+            comparison = self.compare_arch_versions(installed, available)
+            if not installed:
+                status, value = "warning", f"AUR {available} available"
+            elif comparison is not None and comparison > 0:
+                status, value = "warning", f"Update available · {available}"
+            elif comparison is not None and comparison < 0:
+                status, value = "info", f"Installed newer · {available}"
+            elif comparison == 0:
+                status, value = "ok", f"Current · {available}"
+            else:
+                status, value = "warning", f"Version differs · {available}"
+            self.add(
+                "package-update",
+                "Package",
+                "AUR update check",
+                status,
+                value,
+                f"Installed package: {installed or 'none'}.",
+                PACKAGE_NAME,
+                "Use Omarchy's package update flow, then run shibumi-shell update --yes."
+                if status == "warning" else "",
+            )
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            json.JSONDecodeError,
+            subprocess.TimeoutExpired,
+        ) as error:
+            self.add(
+                "package-update",
+                "Package",
+                "AUR update check",
+                "warning",
+                "Check failed",
+                safe_text(str(error).splitlines()[-1], 280),
+                PACKAGE_NAME,
+                "Check the network connection and retry manually.",
+            )
+
     def check_versions(self) -> None:
         values = []
         for package in ("omarchy-dev", "quickshell-git"):
@@ -871,7 +1089,10 @@ class Probe:
         self.check_plugins()
         self.check_lifecycle()
         self.check_logs()
-        self.check_source()
+        if self.install_origin() == "package":
+            self.check_package()
+        elif self.install_origin() == "checkout":
+            self.check_source()
         self.check_versions()
         self.checks.sort(key=lambda item: (STATUS_ORDER[item.status], item.group, item.label))
         errors = sum(check.status == "error" for check in self.checks)
@@ -890,6 +1111,10 @@ class Probe:
             "overall": overall,
             "summary": summary,
             "fetchRequested": self.fetch,
+            "installOrigin": self.install_origin(),
+            "suiteVersion": str(self.state.get("suiteVersion") or "unknown"),
+            "packageName": str(self.state.get("packageName") or ""),
+            "packageVersion": str(self.state.get("packageVersion") or ""),
             "checks": [asdict(check) for check in self.checks],
         }
 
@@ -899,7 +1124,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--fetch",
         action="store_true",
-        help="refresh the configured Git upstream before reporting source status",
+        help="check the applicable Git upstream or AUR package for updates",
     )
     return result
 
@@ -915,6 +1140,10 @@ def main() -> int:
             "overall": "error",
             "summary": "Health runner failed",
             "fetchRequested": args.fetch,
+            "installOrigin": "unknown",
+            "suiteVersion": "unknown",
+            "packageName": "",
+            "packageVersion": "",
             "checks": [
                 asdict(
                     Check(

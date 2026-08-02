@@ -64,6 +64,38 @@ class RuntimePaths:
                 raise RuntimeFailure(
                     f"Omarchy command is missing: {self.omarchy_root / 'bin' / command}"
                 )
+        quattro_sources = {
+            self.omarchy_root / "shell/services/PluginRegistry.qml": (
+                "function entryPointUrl",
+                "function isEnabled",
+            ),
+            self.omarchy_root / "shell/shell.qml": (
+                "function configureBar",
+                "target.pluginRegistry = shell.pluginRegistry",
+            ),
+            self.omarchy_root / "shell/Ui/KeyboardPanel.qml": (
+                "property var borderSpec:",
+                "BorderSurface {",
+            ),
+        }
+        validator = self.omarchy_root / "bin/omarchy-plugin-validate"
+        if not validator.is_file():
+            raise RuntimeFailure(
+                "Shibumi supports Omarchy Quattro only: plugin validator is missing"
+            )
+        for path, required_symbols in quattro_sources.items():
+            try:
+                source = path.read_text(encoding="utf-8")
+            except OSError as error:
+                raise RuntimeFailure(
+                    f"Shibumi supports Omarchy Quattro only: missing {path}: {error}"
+                ) from error
+            missing = [symbol for symbol in required_symbols if symbol not in source]
+            if missing:
+                raise RuntimeFailure(
+                    "Shibumi supports Omarchy Quattro only: incompatible host "
+                    f"contract in {path} ({', '.join(missing)})"
+                )
         if (
             not self.plugin_dir.is_absolute()
             or self.plugin_dir.name != "plugins"
@@ -186,6 +218,29 @@ class OmarchyRuntime:
             )
             time.sleep(0.1)
         raise RuntimeFailure(f"reloadConfig did not settle: {detail}")
+
+    def restart_shell(self, *, timeout: float = 30) -> None:
+        """Restart Quattro for wholesale provider removal without hot-unload races."""
+        self.run([self.command("omarchy-restart-shell")], timeout=timeout)
+        self.ping()
+
+    def stop_shell(self, *, max_instances: int = 8) -> None:
+        """Drain running Quattro instances before changing the active bar owner."""
+        shell_path = self.omarchy_root / "shell" if self.omarchy_root else None
+        if shell_path is None:
+            raise RuntimeFailure("cannot stop shell without an Omarchy root")
+        command = [
+            "quickshell",
+            "kill",
+            "-p",
+            str(shell_path),
+            "--any-display",
+        ]
+        for _attempt in range(max_instances):
+            result = self.run(command, timeout=6, check=False)
+            if result.returncode != 0:
+                return
+        raise RuntimeFailure("too many Quickshell instances matched the Omarchy shell")
 
     def reload_payload(self, *, timeout: float = 8) -> None:
         deadline = time.monotonic() + timeout
@@ -387,13 +442,23 @@ class OmarchyRuntime:
             time.sleep(0.1)
         raise RuntimeFailure(f"Shibumi uninstall verification failed: {detail}")
 
-    def reconcile_best_effort(self) -> None:
-        for action in (
-            self.rescan,
-            self.reload_config,
-            self.reload_payload,
-            self.refresh_menu,
-        ):
+    def reconcile_best_effort(self, *, restart_shell: bool = False) -> None:
+        actions = (
+            (
+                self.restart_shell,
+                self.rescan,
+                self.reload_payload,
+                self.refresh_menu,
+            )
+            if restart_shell
+            else (
+                self.rescan,
+                self.reload_config,
+                self.reload_payload,
+                self.refresh_menu,
+            )
+        )
+        for action in actions:
             try:
                 action()
             except RuntimeFailure:

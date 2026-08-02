@@ -14,7 +14,7 @@ QtObject {
 
   Component.onCompleted: {
     const defaults = Config.defaultConfig()
-    if (defaults.version !== 1 || defaults.identityVersion !== 2)
+    if (defaults.version !== 1 || defaults.identityVersion !== 3)
       fail("unexpected schema or identity version")
     if (defaults.order.left.length !== 7 || defaults.order.center.length !== 1
         || defaults.order.right.length !== 7) fail("invalid default region sizes")
@@ -42,12 +42,10 @@ QtObject {
         || !trimmed || trimmed.center.length !== 1
         || V2Layout.removeSlotAt(defaults.v2Layout, "left", 3) !== null)
       fail("V2 extra slot add/remove contract")
-    if (defaults.menu.version !== 1 || defaults.menu.favorites.length !== 0
-        || defaults.menu.hidden.length !== 0
-        || defaults.menu.launcher.mode !== "text"
-        || defaults.menu.launcher.text !== "shibumi"
-        || defaults.menu.launcher.icon !== "omarchy")
-      fail("invalid default menu state")
+    if (defaults.launcher.mode !== "text"
+        || defaults.launcher.text !== "shibumi"
+        || defaults.launcher.icon !== "omarchy")
+      fail("invalid default launcher state")
     if (defaults.workspace.version !== 1 || defaults.workspace.mode !== "10"
         || defaults.workspace.style !== "default")
       fail("invalid default workspace state")
@@ -101,8 +99,9 @@ QtObject {
         launcher: { mode: "text", text: "omarchy", icon: "omarchy" }
       }
     })
-    if (inheritedBrand.identityVersion !== 2
-        || inheritedBrand.menu.launcher.text !== "shibumi")
+    if (inheritedBrand.identityVersion !== 3
+        || inheritedBrand.launcher.text !== "shibumi"
+        || inheritedBrand.menu !== undefined)
       fail("pre-release inherited wordmark was not migrated")
 
     const explicitOmarchy = Config.normalize({
@@ -113,7 +112,7 @@ QtObject {
         launcher: { mode: "text", text: "omarchy", icon: "omarchy" }
       }
     })
-    if (explicitOmarchy.menu.launcher.text !== "omarchy")
+    if (explicitOmarchy.launcher.text !== "omarchy")
       fail("explicit post-migration wordmark choice was overwritten")
 
     const valid = Config.normalize({
@@ -147,18 +146,7 @@ QtObject {
         mode: "active",
         style: "magic"
       },
-      menu: {
-        version: 1,
-        favorites: ["org.example.Editor.desktop", "org.example.Editor", "bad/path"],
-        hidden: ["org.example.Hidden"],
-        launcher: { mode: "icon", text: "arch", icon: "rebel" },
-        presentation: {
-          icons: false,
-          scale: 80,
-          selectionStyle: "glide",
-          background: "full"
-        }
-      },
+      launcher: { mode: "icon", text: "arch", icon: "rebel" },
       picker: {
         style: "tanzaku",
         imageStyle: "omarchy",
@@ -283,37 +271,15 @@ QtObject {
     if (legacyFrame.workspace.style !== "rings"
         || legacyAurora.workspace.style !== "aurora")
       fail("pre-alpha workspace style aliases were not migrated")
-    if (valid.menu.favorites.join(",") !== "org.example.Editor"
-        || valid.menu.hidden.join(",") !== "org.example.Hidden")
-      fail("menu ids were not normalized")
-    if (valid.menu.launcher.mode !== "icon" || valid.menu.launcher.text !== "arch"
-        || valid.menu.launcher.icon !== "rebel")
+    if (valid.launcher.mode !== "icon" || valid.launcher.text !== "arch"
+        || valid.launcher.icon !== "rebel")
       fail("launcher presentation was not normalized")
     const shibumiIcon = Config.normalize({
       version: 1,
-      menu: {
-        version: 1,
-        favorites: [],
-        hidden: [],
-        launcher: {
-          mode: "icon",
-          text: "shibumi",
-          icon: "shibumi"
-        },
-        presentation: {
-          icons: true,
-          scale: 100,
-          selectionStyle: "default",
-          background: "off"
-        }
-      }
+      launcher: { mode: "icon", text: "shibumi", icon: "shibumi" }
     })
-    if (shibumiIcon.menu.launcher.icon !== "shibumi")
+    if (shibumiIcon.launcher.icon !== "shibumi")
       fail("Shibumi launcher icon was not normalized")
-    if (valid.menu.presentation.icons !== false || valid.menu.presentation.scale !== 80
-        || valid.menu.presentation.selectionStyle !== "glide"
-        || valid.menu.presentation.background !== "full")
-      fail("menu presentation was not normalized")
     if (valid.picker.style !== "hearthstone"
         || valid.picker.imageStyle !== "omarchy"
         || valid.picker.mediaStyle !== "hearthstone")
@@ -356,24 +322,11 @@ QtObject {
     })
     if (!same(wrongSchema, defaults)) fail("unknown schema must fail closed")
 
-    const malformedMenu = Config.normalize({
-      version: 1,
-      menu: {
-        version: 99,
-        favorites: ["org.example.Editor"],
-        presentation: { scale: 12, selectionStyle: "unsafe" }
-      }
-    })
-    if (!same(malformedMenu.menu, defaults.menu)) fail("unknown menu schema must fail closed")
-
     const malformedLauncher = Config.normalize({
       version: 1,
-      menu: {
-        version: 1,
-        launcher: { mode: "animated", text: "unknown", icon: "unsafe" }
-      }
+      launcher: { mode: "animated", text: "unknown", icon: "unsafe" }
     })
-    if (!same(malformedLauncher.menu.launcher, defaults.menu.launcher))
+    if (!same(malformedLauncher.launcher, defaults.launcher))
       fail("malformed launcher must fail closed")
 
     const malformedWorkspace = Config.normalize({

@@ -946,7 +946,10 @@ for health_contract in \
     'horizontalAlignment: Text.AlignLeft' \
     'anchors.leftMargin: 0' \
     'text: "Shibumi " + root.installedShibumiVersion' \
-    'text: "LOCAL SUITE"' \
+    'text: root.installChannelLabel' \
+    'report.installOrigin === "package"' \
+    '? "ARCH PACKAGE" : report.installOrigin === "checkout"' \
+    '? "SOURCE CHECKOUT" : "CHECKING …"' \
     'return "SHIBUMI-HEALTH/" + String(check.id || "UNKNOWN")' \
     'function diagnosticIssueUrl(check)' \
     'Qt.openUrlExternally(diagnosticIssueUrl(check))' \

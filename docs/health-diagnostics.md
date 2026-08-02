@@ -41,7 +41,10 @@ The local run covers:
 - configuration/schema readability;
 - bounded QML loader, type, reference, binding-loop, and provider compatibility
   failures since the current configuration was loaded;
-- source branch, commit, upstream, dirty state, and cached ahead/behind state;
+- for a source install: branch, commit, upstream, dirty state, and cached
+  ahead/behind state;
+- for a package install: local Pacman version, staged Shibumi payload version,
+  and package ownership;
 - Shibumi, Omarchy, and Quickshell versions.
 
 The page shows every warning or error, including its bounded evidence and next
@@ -61,15 +64,16 @@ bug report without evidence of an actual failure.
 The collapsed report fits without a scrollbar. Expanding an Attention detail
 uses the existing page scroll when the additional evidence needs more room.
 
-A compact information band shows the installed Shibumi version and its current
-local-suite origin. The origin slot is intentionally stable so a later package
-or AUR channel can replace it without changing the Health layout.
+A compact information band shows the installed Shibumi version and whether it
+was staged from an `ARCH PACKAGE` or a `SOURCE CHECKOUT`.
 
 **Check for updates** is a separate explicit action. It performs only a
-timeout-bounded `git fetch` of the configured upstream and never pulls,
-checks out, merges, installs, or changes the working tree. A private remote
-without Machine2 credentials is reported as a check failure rather than as
-current or offline.
+timeout-bounded read-only query appropriate to the install origin. A checkout
+uses `git fetch` for its configured upstream and never pulls, checks out,
+merges, installs, or changes the working tree. A package install queries the
+official AUR RPC for the published `shibumi-shell` version and never treats
+`/usr/share/shibumi-shell` as Git. Before AUR publication, a successful empty
+result is shown as **Not published**, not as a failure.
 
 ## Privacy and lifecycle
 
@@ -83,8 +87,9 @@ deadline to `timeout`, which terminates and then kills an unresponsive child.
 
 The automated acceptance matrix covers healthy and dirty checkouts plus local
 fixtures for ahead, behind, diverged, missing-upstream, offline, and hard-fetch-
-timeout states. Remote refresh is asserted to leave `HEAD` unchanged. Malformed
-reports must preserve the last valid result.
+timeout states. It also covers matching, unstaged, missing, unpublished,
+update-available, and offline package states. Remote refresh is asserted to
+leave `HEAD` unchanged. Malformed reports must preserve the last valid result.
 
 The Control Center smoke test starts a deliberately slow report, navigates away,
 closes and reopens the panel while it is running, and confirms that the same

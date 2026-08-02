@@ -21,6 +21,7 @@ from .config import (
     read_config,
     reconcile_profile_additions,
     reconcile_profile_services,
+    remove_plugin_ids,
     remove_suite,
     select_omarchy_image_picker,
 )
@@ -44,6 +45,7 @@ from .transaction import (
     is_managed_target,
     preflight_legacy_removals,
     preflight_removals,
+    preflight_removal_ids,
     preflight_replacements,
     recover_transactions,
 )
@@ -141,7 +143,11 @@ def load_install_state(paths: RuntimePaths, suite: Suite) -> dict[str, Any]:
     ):
         raise CliError(f"invalid Shibumi install state: {path}")
     plugin_ids = state["plugins"]
-    if any(not isinstance(plugin_id, str) or plugin_id not in suite.plugins for plugin_id in plugin_ids):
+    known_or_retired = set(suite.plugins) | set(suite.retired_plugins)
+    if any(
+        not isinstance(plugin_id, str) or plugin_id not in known_or_retired
+        for plugin_id in plugin_ids
+    ):
         raise CliError("install state references unknown plugins")
     if set(state["pluginDigests"]) != set(plugin_ids) or any(
         not re.fullmatch(r"[0-9a-f]{64}", str(value))
@@ -150,7 +156,50 @@ def load_install_state(paths: RuntimePaths, suite: Suite) -> dict[str, Any]:
         raise CliError("install state contains invalid plugin payload digests")
     if suite_payload_digest(state["pluginDigests"]) != state["payloadDigest"]:
         raise CliError("install state payload digest is inconsistent")
+    origin = str(state.get("installOrigin") or "checkout")
+    if origin not in ("checkout", "package"):
+        raise CliError("install state contains an invalid payload origin")
+    if origin == "package" and (
+        state.get("packageName") != "shibumi-shell"
+        or not isinstance(state.get("packageVersion"), str)
+        or not state.get("packageVersion")
+    ):
+        raise CliError("package install state is missing authoritative metadata")
     return state
+
+
+def version_key(value: str) -> tuple[int, int, int, int, tuple[tuple[int, Any], ...]]:
+    match = re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+        r"(?:-([0-9A-Za-z.-]+))?",
+        value,
+    )
+    if not match:
+        raise CliError(f"unsupported Shibumi version: {value}")
+    prerelease = match.group(4)
+    identifiers: tuple[tuple[int, Any], ...] = tuple(
+        (0, int(item)) if item.isdigit() else (1, item)
+        for item in prerelease.split(".")
+    ) if prerelease else ()
+    return (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3)),
+        0 if prerelease else 1,
+        identifiers,
+    )
+
+
+def refuse_downgrade(
+    state: dict[str, Any], suite: Suite, *, allow: bool = False
+) -> None:
+    installed = str(state.get("suiteVersion") or "")
+    if not allow and version_key(suite.version) < version_key(installed):
+        raise CliError(
+            f"refusing downgrade from {installed} to {suite.version}; "
+            "install a compatible newer package or rerun an intentional package "
+            "rollback with --allow-downgrade"
+        )
 
 
 def make_install_state(
@@ -165,23 +214,23 @@ def make_install_state(
     activation_mode: str = "managed",
     layout_policy: str = "managed",
     configured_bar: str | None = None,
+    previous_bar: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     selected_profile = suite.profile(profile)
     if activation_mode not in ("managed", "external"):
         raise CliError(f"invalid activation mode: {activation_mode}")
     if layout_policy not in ("managed", "preserved"):
         raise CliError(f"invalid layout policy: {layout_policy}")
-    return {
+    package = suite.package_metadata()
+    result = {
         "schemaVersion": STATE_SCHEMA_VERSION,
         "suiteId": SUITE_ID,
         "suiteVersion": suite.version,
         "profile": profile,
         "activeBar": active_bar,
         "plugins": plugin_ids,
-        # Development installs retain the checkout that produced the staged
-        # payload. Health uses it for read-only branch/upstream diagnostics;
-        # package metadata will replace this authority in the AUR lifecycle.
-        "sourceRoot": str(suite.root),
+        "installOrigin": "package" if package is not None else "checkout",
+        "payloadRoot": str(suite.root),
         "sourceRevision": revision,
         "payloadDigest": payload_digest,
         "pluginDigests": plugin_digests,
@@ -199,6 +248,25 @@ def make_install_state(
         },
         "updatedEpoch": int(time.time()),
     }
+    if package is not None:
+        result["packageName"] = package["packageName"]
+        result["packageVersion"] = package["version"]
+    else:
+        result["sourceRoot"] = str(suite.root)
+    if isinstance(previous_bar, dict):
+        result["previousBar"] = copy.deepcopy(previous_bar)
+    return result
+
+
+def previous_bar_for_state(
+    state: dict[str, Any], defaults: dict[str, Any]
+) -> dict[str, Any]:
+    """Return the pre-Shibumi bar or a Quattro default for older state files."""
+    previous = state.get("previousBar")
+    if isinstance(previous, dict):
+        return copy.deepcopy(previous)
+    fallback = defaults.get("bar")
+    return copy.deepcopy(fallback) if isinstance(fallback, dict) else {}
 
 
 def confirm(action: str, assume_yes: bool) -> None:
@@ -429,14 +497,15 @@ def command_install(
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
     external = args.no_activate and args.keep_layout
-    desired = (
+    desired = remove_plugin_ids((
         preserve_external_bar(current, profile)
         if external
         else apply_identity_contract(
             apply_profile(current, profile, suite.plugins)
         )
-    )
+    ), suite.retired_plugins)
     preflight_replacements(paths.plugin_dir, specs)
+    preflight_removal_ids(paths.plugin_dir, suite.retired_plugins)
     label = (
         f"Install Shibumi profile {profile.id} with the current bar and layout"
         if external else f"Install Shibumi profile {profile.id}"
@@ -452,7 +521,9 @@ def command_install(
     )
 
     revision = suite.revision()
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=not external
+    ) as transaction:
         transaction.preflight_targets(specs)
         payload_digest, plugin_digests = transaction.stage(
             specs, revision=revision, suite_version=suite.version
@@ -468,11 +539,18 @@ def command_install(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
+            previous_bar=current.get("bar"),
         )
         transaction.expose()
+        transaction.stage_removal_ids(suite.retired_plugins)
         runtime.rescan()
+        if not external:
+            runtime.stop_shell()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
+        if external:
+            runtime.reload_config()
+        else:
+            runtime.restart_shell()
         if PICKER_PLUGIN_ID in profile.install:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime
@@ -521,6 +599,7 @@ def command_migrate(
     old_plugin_ids = legacy_plugin_ids(suite)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
+    defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
     # Migration changes the private namespace and applies the versioned Shibumi
     # identity contract. User layout order, widget options, third-party entries,
     # bar position, and all unrelated keys stay equivalent after JSON decoding.
@@ -538,7 +617,9 @@ def command_migrate(
     confirm("Migrate QS Rise to Shibumi", args.yes)
 
     revision = suite.revision()
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=True
+    ) as transaction:
         transaction.preflight_targets(specs)
         payload_digest, plugin_digests = transaction.stage(
             specs, revision=revision, suite_version=suite.version
@@ -551,6 +632,7 @@ def command_migrate(
             revision,
             payload_digest,
             plugin_digests,
+            previous_bar=previous_bar_for_state(legacy_state, defaults),
         )
         desired_state["migratedFrom"] = {
             "suiteId": LEGACY_SUITE_ID,
@@ -562,8 +644,9 @@ def command_migrate(
 
         transaction.expose()
         runtime.rescan()
+        runtime.stop_shell()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
+        runtime.restart_shell()
         if PICKER_PLUGIN_ID in profile.install:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime
@@ -601,13 +684,19 @@ def command_update(
     runtime: OmarchyRuntime,
 ) -> int:
     state = load_install_state(paths, suite)
+    refuse_downgrade(
+        state, suite, allow=bool(getattr(args, "allow_downgrade", False))
+    )
     profile_id = str(state.get("profile") or "default")
     profile = suite.profile(profile_id)
     plugin_ids = list(profile.install)
     specs = suite.selected(profile.install)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
+    defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
     external = external_activation(state, current)
+    retired_installed = set(state["plugins"]) & set(suite.retired_plugins)
+    current_installed = set(state["plugins"]) - retired_installed
     drift = (
         external_activation_drift(current, suite, profile_id)
         if external
@@ -616,7 +705,7 @@ def command_update(
             suite,
             profile_id,
             str(state.get("activeBar") or "hancore.shibumi.bar"),
-            set(state["plugins"]),
+            current_installed,
         )
     )
     if drift and not external:
@@ -624,24 +713,27 @@ def command_update(
             "Shibumi is installed but inactive; run 'shibumi-suite activate' "
             f"first ({'; '.join(drift)})"
         )
-    desired = (
+    desired = remove_plugin_ids((
         preserve_external_bar(current, profile)
         if external
         else reconcile_profile_services(
             reconcile_profile_additions(
                 apply_identity_contract(current),
                 profile,
-                set(state["plugins"]),
+                current_installed,
                 suite.plugins,
             ),
             profile,
         )
-    )
-    adoptable_plugin_ids = set(state["plugins"])
+    ), suite.retired_plugins)
+    adoptable_plugin_ids = current_installed
     preflight_replacements(
         paths.plugin_dir, specs, adoptable_plugin_ids
     )
+    preflight_removal_ids(paths.plugin_dir, retired_installed)
     print_plan("Update installed Shibumi plugins", specs, paths)
+    if retired_installed:
+        print("  retire:           " + ", ".join(sorted(retired_installed)))
     if args.dry_run:
         print("Dry run complete; no files changed.")
         return 0
@@ -664,8 +756,10 @@ def command_update(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
+            previous_bar=previous_bar_for_state(state, defaults),
         )
         transaction.expose()
+        transaction.stage_removal_ids(retired_installed)
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
@@ -696,24 +790,31 @@ def command_repair(
 ) -> int:
     """Restore the complete suite payload and its active profile atomically."""
     state = load_install_state(paths, suite)
+    refuse_downgrade(
+        state, suite, allow=bool(getattr(args, "allow_downgrade", False))
+    )
     profile_id = str(state.get("profile") or "default")
     profile = suite.profile(profile_id)
     plugin_ids = list(profile.install)
     specs = suite.selected(profile.install)
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
+    defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
     external = external_activation(state, current)
-    desired = (
+    retired_installed = set(state["plugins"]) & set(suite.retired_plugins)
+    current_installed = set(state["plugins"]) - retired_installed
+    desired = remove_plugin_ids((
         preserve_external_bar(current, profile)
         if external
         else apply_identity_contract(
             apply_profile(current, profile, suite.plugins)
         )
-    )
-    adoptable_plugin_ids = set(state["plugins"])
+    ), suite.retired_plugins)
+    adoptable_plugin_ids = current_installed
     preflight_replacements(
         paths.plugin_dir, specs, adoptable_plugin_ids
     )
+    preflight_removal_ids(paths.plugin_dir, retired_installed)
     print_plan(
         f"Repair Shibumi profile {profile.id}",
         specs,
@@ -748,8 +849,10 @@ def command_repair(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
+            previous_bar=previous_bar_for_state(state, defaults),
         )
         transaction.expose()
+        transaction.stage_removal_ids(retired_installed)
         runtime.rescan()
         transaction.write_config(encode_config(desired))
         runtime.reload_config()
@@ -793,6 +896,12 @@ def command_activate(
     runtime: OmarchyRuntime,
 ) -> int:
     state = load_install_state(paths, suite)
+    retired_installed = set(state["plugins"]) & set(suite.retired_plugins)
+    if retired_installed:
+        raise CliError(
+            "installed Shibumi contains retired plugins; run "
+            "'shibumi-suite update' before activation"
+        )
     profile_id = str(state.get("profile") or "default")
     profile = suite.profile(profile_id)
     current, _ = read_config(paths.config_file, paths.defaults_file)
@@ -807,9 +916,12 @@ def command_activate(
         return 0
     confirm("Activate Shibumi and restore its configured layout", args.yes)
 
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=True
+    ) as transaction:
+        runtime.stop_shell()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
+        runtime.restart_shell()
         runtime.verify_install(
             set(profile.install),
             str(state.get("activeBar") or profile.active_bar),
@@ -842,9 +954,9 @@ def command_deactivate(
     profile_id = str(state.get("profile") or "default")
     profile = suite.profile(profile_id)
     if args.keep_layout:
-        desired = select_omarchy_image_picker(
+        desired = remove_plugin_ids(select_omarchy_image_picker(
             preserve_external_bar(current, profile)
-        )
+        ), suite.retired_plugins)
         bar = desired.get("bar")
         if isinstance(bar, dict) and str(bar.get("id") or "") == active_bar:
             bar.pop("id", None)
@@ -855,7 +967,7 @@ def command_deactivate(
         activation["configuredBar"] = configured_bar_id(desired)
         desired_state["updatedEpoch"] = int(time.time())
     else:
-        desired = select_omarchy_image_picker(
+        desired = remove_plugin_ids(select_omarchy_image_picker(
             remove_suite(
                 current,
                 suite.plugins,
@@ -863,8 +975,9 @@ def command_deactivate(
                 default_center_anchor(defaults),
                 True,
                 CONTINUITY_PLUGIN_IDS,
+                previous_bar_for_state(state, defaults),
             )
-        )
+        ), suite.retired_plugins)
         desired_state = state
     print_plan(
         (
@@ -872,7 +985,11 @@ def command_deactivate(
             if args.keep_layout
             else "Deactivate Shibumi and restore the stock Omarchy bar"
         ),
-        suite.selected(tuple(state["plugins"])),
+        suite.selected(tuple(
+            plugin_id
+            for plugin_id in state["plugins"]
+            if plugin_id in suite.plugins
+        )),
         paths,
     )
     if args.dry_run:
@@ -887,9 +1004,12 @@ def command_deactivate(
         args.yes,
     )
 
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=True
+    ) as transaction:
+        runtime.stop_shell()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
+        runtime.restart_shell()
         if args.keep_layout:
             runtime.verify_update(
                 set(state["plugins"]),
@@ -925,30 +1045,47 @@ def command_uninstall(
 ) -> int:
     state = load_install_state(paths, suite)
     plugin_ids = list(dict.fromkeys(state["plugins"]))
-    specs = suite.selected(tuple(plugin_ids))
+    current_plugin_ids = [
+        plugin_id for plugin_id in plugin_ids if plugin_id in suite.plugins
+    ]
+    retired_plugin_ids = [
+        plugin_id for plugin_id in plugin_ids if plugin_id in suite.retired_plugins
+    ]
+    specs = suite.selected(tuple(current_plugin_ids))
     current, _ = read_config(paths.config_file, paths.defaults_file)
     defaults, _ = read_config(paths.defaults_file, paths.defaults_file)
-    desired = select_omarchy_image_picker(
+    desired = remove_plugin_ids(select_omarchy_image_picker(
         remove_suite(
             current,
             suite.plugins,
             str(state.get("activeBar") or "hancore.shibumi.bar"),
             default_center_anchor(defaults),
             args.keep_settings,
+            restore_bar=(
+                previous_bar_for_state(state, defaults)
+                if str(state.get("activation", {}).get("mode") or "managed")
+                == "managed"
+                else None
+            ),
         )
-    )
+    ), retired_plugin_ids)
     preflight_removals(paths.plugin_dir, specs)
+    preflight_removal_ids(paths.plugin_dir, retired_plugin_ids)
     print_plan("Uninstall Shibumi", specs, paths)
     if args.dry_run:
         print("Dry run complete; no files changed.")
         return 0
     confirm("Uninstall Shibumi and restore the stock bar", args.yes)
 
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=True
+    ) as transaction:
         remove_picker_menu_extension(transaction, runtime, state)
+        runtime.stop_shell()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
+        runtime.restart_shell()
         transaction.stage_removal(specs)
+        transaction.stage_removal_ids(retired_plugin_ids)
         runtime.rescan()
         runtime.verify_uninstall(set(plugin_ids))
         transaction.finish(None, archive_previous=False)
@@ -970,7 +1107,12 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         except CliError as error:
             print(f"State: invalid ({error})")
             return 1
-    print(f"Suite source: {suite.version} ({suite.revision()})")
+    package = suite.package_metadata()
+    print(
+        "Suite payload: "
+        f"{suite.version} ({'package ' + package['packageName'] if package else 'source checkout'}; "
+        f"{suite.revision()})"
+    )
     if state is None:
         if legacy_install_state_file(paths).exists():
             print("Install state: legacy QS Rise detected; run migrate")
@@ -981,6 +1123,13 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         "Install state: "
         f"{state.get('suiteVersion')} ({state.get('sourceRevision')})"
     )
+    if state.get("installOrigin") == "package":
+        print(
+            "Staged from package: "
+            f"{state.get('packageName')} {state.get('packageVersion')}"
+        )
+    else:
+        print(f"Staged from checkout: {state.get('sourceRoot', 'unknown')}")
     print(f"Profile: {state.get('profile')}")
     missing: list[str] = []
     unmanaged: list[str] = []
@@ -1064,6 +1213,11 @@ def parser() -> argparse.ArgumentParser:
     update = subparsers.add_parser("update", help="update the installed plugin set")
     update.add_argument("--dry-run", action="store_true")
     update.add_argument("--yes", "-y", action="store_true")
+    update.add_argument(
+        "--allow-downgrade",
+        action="store_true",
+        help="stage an intentionally installed older package payload",
+    )
 
     repair = subparsers.add_parser(
         "repair",
@@ -1071,6 +1225,11 @@ def parser() -> argparse.ArgumentParser:
     )
     repair.add_argument("--dry-run", action="store_true")
     repair.add_argument("--yes", "-y", action="store_true")
+    repair.add_argument(
+        "--allow-downgrade",
+        action="store_true",
+        help="repair from an intentionally installed older package payload",
+    )
 
     activate = subparsers.add_parser(
         "activate", help="activate Shibumi and restore its managed layout"

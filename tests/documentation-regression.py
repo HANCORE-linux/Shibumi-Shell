@@ -70,17 +70,24 @@ def main() -> None:
             fail(f"broken README image: {raw_target}")
 
     bash_blocks = re.findall(r"```bash\n.*?\n```", readme, flags=re.DOTALL)
-    if len(bash_blocks) != 2:
-        fail("README landing page must contain install and uninstall Bash blocks")
-    install_command = (
+    if len(bash_blocks) != 3:
+        fail("README landing page must contain package, source, and uninstall Bash blocks")
+    package_install_command = (
+        "omarchy pkg aur add shibumi-shell && shibumi-shell install --yes"
+    )
+    source_install_command = (
         "git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && "
         "cd Shibumi-Shell && ./scripts/shibumi-suite install --yes"
     )
-    if sum(install_command in block for block in bash_blocks) != 1:
-        fail("README landing page is missing the private-alpha install command")
-    uninstall_command = "./scripts/shibumi-suite uninstall"
+    if sum(package_install_command in block for block in bash_blocks) != 1:
+        fail("README landing page is missing the package install command")
+    if sum(source_install_command in block for block in bash_blocks) != 1:
+        fail("README landing page is missing the source install command")
+    uninstall_command = (
+        "shibumi-shell uninstall --yes && omarchy pkg drop shibumi-shell"
+    )
     if sum(uninstall_command in block for block in bash_blocks) != 1:
-        fail("README landing page is missing the uninstall command")
+        fail("README landing page is missing the package uninstall command")
     if "docs/plugin-compatibility.md" not in readme:
         fail("README landing page is missing the plugin compatibility guide")
 

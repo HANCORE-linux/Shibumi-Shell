@@ -11,7 +11,7 @@ populated, hover, active, error, or degraded presentation.
 
 The matrix covers the closed bar, edit/split/drag state, G1-G15 surfaces,
 tooltips, keyboard focus, Top, and Bottom. Its status is deliberately not
-“passed”: several principal surfaces have earlier Machine2 evidence, but the
+“passed”: several principal surfaces have earlier the validation system evidence, but the
 complete same-state set has not yet been captured against the current payload.
 
 Hardware-independent states are executed first. These three physical families
@@ -38,7 +38,7 @@ gates.
   `docs/mockups/v1-reference-g2-workspaces-bottom.png`, and
   `docs/mockups/shibumi-v1-parity-g2-workspaces-bottom-v2.png`.
 
-- `G4.memory` Top and Bottom were captured in one Machine2 session against an
+- `G4.memory` Top and Bottom were captured in one the validation system session against an
   instrumented-but-visually-unchanged V1 reference. The Shibumi card now has
   the same 320×201 outer geometry (318×199 contiguous fill), 8 px bar gap,
   12 px content insets, and the same Y coordinates: fill `+44` at Top and

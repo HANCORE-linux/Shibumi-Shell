@@ -1,8 +1,7 @@
 .pragma library
 
 var SchemaVersion = 1
-var IdentityVersion = 2
-var MenuSchemaVersion = 1
+var IdentityVersion = 3
 var WorkspaceSchemaVersion = 1
 var MaxWidgetCollectionItems = 128
 var MaxWidgetObjectKeys = 128
@@ -79,7 +78,7 @@ function defaultConfig() {
     widgets: defaultWidgetConfig(),
     presentation: defaultPresentationConfig(),
     workspace: defaultWorkspaceConfig(),
-    menu: defaultMenuConfig(),
+    launcher: defaultLauncherConfig(),
     plugins: defaultPluginConfig(),
     picker: defaultPickerConfig(),
     reactor: defaultReactorConfig()
@@ -117,21 +116,6 @@ function defaultWorkspaceConfig() {
     version: WorkspaceSchemaVersion,
     mode: "10",
     style: "default"
-  }
-}
-
-function defaultMenuConfig() {
-  return {
-    version: MenuSchemaVersion,
-    favorites: [],
-    hidden: [],
-    launcher: defaultLauncherConfig(),
-    presentation: {
-      icons: true,
-      scale: 100,
-      selectionStyle: "default",
-      background: "off"
-    }
   }
 }
 
@@ -416,33 +400,18 @@ function normalizePlugins(value) {
   return result
 }
 
-function normalizeMenu(value) {
-  var result = defaultMenuConfig()
-  if (!isPlainObject(value) || Number(value.version) !== MenuSchemaVersion) return result
-
-  result.favorites = normalizedDesktopIds(value.favorites)
-  result.hidden = normalizedDesktopIds(value.hidden)
-  if (isPlainObject(value.launcher)) {
-    if (["text", "icon"].indexOf(String(value.launcher.mode || "")) !== -1)
-      result.launcher.mode = String(value.launcher.mode)
+function normalizeLauncher(value) {
+  var result = defaultLauncherConfig()
+  if (!isPlainObject(value)) return result
+  if (["text", "icon"].indexOf(String(value.mode || "")) !== -1)
+      result.mode = String(value.mode)
     if (["shibumi", "omarchy", "hyprland", "arch", "omacom"]
-        .indexOf(String(value.launcher.text || "")) !== -1)
-      result.launcher.text = String(value.launcher.text)
+        .indexOf(String(value.text || "")) !== -1)
+      result.text = String(value.text)
     if (["shibumi", "omarchy", "hyprland", "arch", "grid", "spark", "power",
          "dragon", "mark", "nix", "branch", "rebel"]
-        .indexOf(String(value.launcher.icon || "")) !== -1)
-      result.launcher.icon = String(value.launcher.icon)
-  }
-  if (!isPlainObject(value.presentation)) return result
-
-  if (typeof value.presentation.icons === "boolean")
-    result.presentation.icons = value.presentation.icons
-  if ([60, 80, 100].indexOf(Number(value.presentation.scale)) !== -1)
-    result.presentation.scale = Number(value.presentation.scale)
-  if (["default", "gradient", "glide"].indexOf(value.presentation.selectionStyle) !== -1)
-    result.presentation.selectionStyle = value.presentation.selectionStyle
-  if (["off", "search", "full"].indexOf(value.presentation.background) !== -1)
-    result.presentation.background = value.presentation.background
+        .indexOf(String(value.icon || "")) !== -1)
+      result.icon = String(value.icon)
   return result
 }
 
@@ -516,14 +485,17 @@ function normalize(value) {
   result.widgets = mergeWidgetConfig(value.widgets)
   result.presentation = normalizePresentation(value.presentation)
   result.workspace = normalizeWorkspace(value.workspace)
-  result.menu = normalizeMenu(value.menu)
+  var launcherSource = value.launcher
+  if (!isPlainObject(launcherSource) && isPlainObject(value.menu))
+    launcherSource = value.menu.launcher
+  result.launcher = normalizeLauncher(launcherSource)
   result.plugins = normalizePlugins(value.plugins)
   // Initial pre-release Shibumi payloads inherited the predecessor's Omarchy
   // wordmark. Migrate that one default once, while retaining Omarchy as an
   // explicit choice after the identity contract has been recorded.
-  if (Number(value.identityVersion || 0) < IdentityVersion
-      && result.menu.launcher.text === "omarchy")
-    result.menu.launcher.text = "shibumi"
+  if (Number(value.identityVersion || 0) < 2
+      && result.launcher.text === "omarchy")
+    result.launcher.text = "shibumi"
   result.picker = normalizePicker(value.picker)
   result.reactor = normalizeReactor(value.reactor)
   return result

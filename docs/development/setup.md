@@ -10,9 +10,10 @@ git status --short
 rg --files
 ```
 
-Shibumi source may be inspected and edited locally, but all automated and live
-runtime tests run on Machine2. Do not deploy Shibumi into the primary
-development desktop's Omarchy plugin directory.
+Shibumi source inspection and automated tests run locally. Live release
+acceptance is repeated by maintainers on an isolated Omarchy Quattro system;
+external contributors do not need access to it. Avoid deploying development
+payloads into a primary desktop's Omarchy plugin directory.
 
 ## Repository shape
 
@@ -24,11 +25,11 @@ development desktop's Omarchy plugin directory.
 - `tests/` contains source, component, runtime, and lifecycle regressions.
 - `docs/` contains user references, contracts, evidence, and historical notes.
 
-## Machine2 test checkout
+## Maintainer runtime acceptance
 
-Synchronize only the intended source changes into the Machine2 checkout, then
-run the relevant test there. Keep Machine2's Omarchy runtime at
-`/usr/share/omarchy` unless the compatibility target changes deliberately.
+Maintainers synchronize only the intended source changes into the isolated
+validation checkout and run the relevant test there. Its Omarchy runtime stays
+at `/usr/share/omarchy` unless the compatibility target changes deliberately.
 
 Do not start a second long-lived Quickshell process. Component smokes use
 isolated temporary runtimes and must clean them up on exit.

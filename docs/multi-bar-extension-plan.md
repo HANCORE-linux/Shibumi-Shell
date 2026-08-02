@@ -6,9 +6,9 @@
 
 ## Verified Quattro capability
 
-This contract was tested against Machine2's Omarchy Quattro commit
+This contract was tested against the validation system's Omarchy Quattro commit
 `1b6ab15331bfc88eb66746021d9e32c976ed438a` and package
-`4.0.0.r1242.g1b6ab15-1` on 2026-07-23. Machine2 matches the protected online
+`4.0.0.r1242.g1b6ab15-1` on 2026-07-23. the validation system matches the protected online
 `quattro` head checked that day. The plugin registry, installer, manifest,
 selector, and bar-loader contract remain compatible.
 
@@ -176,9 +176,9 @@ rollback, and uninstall selection rules for more than one declared bar. A
 failed optional bar update must restore the prior payload and `bar.id` as one
 transaction.
 
-### 5. Accept on Machine2
+### 5. Accept on the internal validation system
 
-All runtime execution occurs on Machine2 under the installed Quattro session.
+All runtime execution occurs on the validation system under the installed Quattro session.
 The source V1 repository remains read-only.
 
 ## Required gates for every bar
@@ -203,4 +203,4 @@ The source V1 repository remains read-only.
 
 No additional bar is release-supported merely because Quattro discovers its
 manifest. Registration, ownership, switching, recovery, and the complete
-Machine2 gate are one feature.
+the validation system gate are one feature.

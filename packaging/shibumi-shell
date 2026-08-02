@@ -1,0 +1,14 @@
+#!/usr/bin/bash
+
+set -euo pipefail
+
+readonly shibumi_payload="/usr/share/shibumi-shell"
+readonly shibumi_lifecycle="$shibumi_payload/scripts/shibumi-suite"
+
+if [[ ! -x $shibumi_lifecycle ]]; then
+  printf 'shibumi-shell: packaged lifecycle command is missing: %s\n' \
+    "$shibumi_lifecycle" >&2
+  exit 1
+fi
+
+exec "$shibumi_lifecycle" "$@"

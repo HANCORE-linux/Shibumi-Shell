@@ -2,7 +2,7 @@
 
 Status: reference
 
-Shibumi `0.1.0` contains 25 independently registered Omarchy plugins. The
+Shibumi `0.1.1-beta.1` contains 24 independently registered Omarchy plugins. The
 default suite profile installs all of them as one verified transaction.
 
 The authoritative inventory is
@@ -16,7 +16,6 @@ Each plugin's `manifest.json` defines its Omarchy kinds and entry points.
 | `hancore.shibumi.bar` | Selectable full-bar host |
 | `hancore.shibumi.state` | Validated persistent Shibumi configuration |
 | `hancore.shibumi.control-center` | G1 Control Center and bar wordmark |
-| `hancore.shibumi.menu` | Independent App Menu and menu service |
 | `hancore.shibumi.reactor` | Cross-feature event choreography |
 | `hancore.shibumi.telemetry` | Shared process-wide telemetry |
 | `hancore.shibumi.power-state` | Shared battery and power-profile state |
@@ -61,12 +60,13 @@ platform owner.
 ## Installation model
 
 Quattro's repository installer expects one root manifest. Shibumi instead has
-25 top-level plugin roots and uses `scripts/shibumi-suite` to install, update,
+24 top-level plugin roots and uses `scripts/shibumi-suite` to install, update,
 verify, roll back, and remove them together.
 
 Individual plugin directories are not advertised as unsupported ad hoc
 installs. Use the suite adapter so dependencies, ownership markers, config
 continuity, and runtime verification remain intact.
 
-Read [plugin compatibility](../plugin-compatibility.md) before using the App
-Menu or visible Shibumi widgets with another bar host.
+Shibumi deliberately does not ship an application launcher menu. Omarchy's
+native menu remains the sole owner. Read [plugin compatibility](../plugin-compatibility.md)
+before using visible Shibumi widgets with another bar host.

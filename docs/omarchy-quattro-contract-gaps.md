@@ -19,7 +19,7 @@ and safe fallback to the stock bar.
 Initially verified against `basecamp/omarchy` branch `quattro` at commit
 [`4a02da20d58d912a74748845bc55b5ec73acd65f`](https://github.com/basecamp/omarchy/tree/4a02da20d58d912a74748845bc55b5ec73acd65f)
 on 2026-07-22.
-Machine2 was updated and the register revalidated against
+the validation system was updated and the register revalidated against
 [`1b6ab15331bfc88eb66746021d9e32c976ed438a`](https://github.com/basecamp/omarchy/tree/1b6ab15331bfc88eb66746021d9e32c976ed438a)
 and package `4.0.0.r1242.g1b6ab15-1` on 2026-07-23. This matches the protected
 online head checked that day. The newer code does not change the plugin
@@ -30,18 +30,18 @@ remain exact source evidence for the originally audited contracts.
 
 Revalidated again on 2026-07-27 against online Quattro commit
 [`e55f130d55c8f9e5b7b6074c20225f5222ca063c`](https://github.com/basecamp/omarchy/tree/e55f130d55c8f9e5b7b6074c20225f5222ca063c).
-Machine2 then ran package `4.0.0.r1423.gc1647fa-1` at `c1647fab`; the only checked
+the validation system then ran package `4.0.0.r1423.gc1647fa-1` at `c1647fab`; the only checked
 source commit after that packaged revision changes the Edge glyph. Quattro
 commit `fc4caf3c` removed the notification bar-widget entry point and retained
 `omarchy.notifications` as a presentation-neutral service. Shibumi now consumes
 that service directly, which partially resolves QTR-005/QTR-006 for
-notifications. Quattro's enterprise Wi-Fi path is also available on Machine2;
+notifications. Quattro's enterprise Wi-Fi path is also available on the validation system;
 Shibumi delegates identity and password to its official `connectEnterprise`
 action and does not add a second NetworkManager owner.
 
 Revalidated on 2026-07-28 against current online Quattro head
 [`f4e8470c3a1becd01164e4787b23f6ce09460b57`](https://github.com/basecamp/omarchy/tree/f4e8470c3a1becd01164e4787b23f6ce09460b57).
-That head was six commits ahead of Machine2's packaged `c1647fab` source. The
+That head was six commits ahead of the validation system's packaged `c1647fab` source. The
 host-relevant change removes the short-lived `omarchy.tmux` service,
 `TmuxAlert` indicator, and associated manifest option; Shibumi has no reference
 to that service or indicator and its 25 independently validated plugins pass
@@ -50,17 +50,17 @@ recovery, migration notification, mise failure handling, and an Edge glyph;
 they do not change the plugin registry, manifest schema, bar loader, service
 injection, or third-party discovery contracts used by Shibumi.
 
-Revalidated on 2026-07-29 against Machine2 package
+Revalidated on 2026-07-29 against the validation system package
 `4.0.0.r1441.g9174fbf-1`. The current `PluginRegistry.qml` discovers and
 enables plugins but exposes no repository update contract. Shibumi therefore
 retains its transactional `shibumi-suite` source updater. The current registry,
 manifest, bar loader, service injection, and third-party discovery contracts
-pass the complete 25-plugin regression.
+pass the complete 24-plugin regression.
 
 Reviewed on 2026-07-30 against upstream commit
 [`09b955dc751c4282e893dc753788f335b0dcae57`](https://github.com/basecamp/omarchy/commit/09b955dc751c4282e893dc753788f335b0dcae57).
 The new Setup > Plugins menu adds generic enable, disable, and remove actions
-and a `barWidget.defaultSection` placement hint. Machine2's packaged
+and a `barWidget.defaultSection` placement hint. the validation system's packaged
 `4.0.0.r1441.g9174fbf-1` does not yet contain that menu. The change improves
 single-plugin management but does not add suite, dependency, or external
 lifecycle ownership metadata: every Shibumi root is still shown as an
@@ -70,8 +70,8 @@ and validates every widget's default section, keeps suite-internal helpers out
 of its own free-toggle catalog, and provides `shibumi-suite repair` for an
 accidental partial removal. QTR-001 and QTR-002 remain open.
 
-Machine2 then updated to package `4.0.0.r1458.gfa6b5fc-1`, which contains this
-menu. All 25 manifests and the complete Shibumi contract pass. A real
+the validation system then updated to package `4.0.0.r1458.gfa6b5fc-1`, which contains this
+menu. All 24 manifests and the complete Shibumi contract pass. A real
 individual disable of `hancore.shibumi.bluetooth` was detected as profile
 drift and repaired transactionally. The live test also confirmed a mixed-kind
 edge case: when a third-party plugin is both `bar-widget` and `service`, is
@@ -199,10 +199,9 @@ Evidence:
 
 **Impact**
 
-`hancore.shibumi.menu` can be registered and summoned, but the existing Omarchy
-keybindings and commands still open the stock menu. Replacing user keybindings
-would make the plugin responsible for host configuration and future route
-changes.
+Shibumi no longer provides a menu implementation and therefore does not
+consume this proposed contract. Omarchy keybindings and commands continue to
+open the stock menu.
 
 **Minimal proposed contract**
 
@@ -488,7 +487,7 @@ stock bar. A conforming fixture passes a shared contract test.
 `shell.reloadPlugins()` deactivates plugin loaders, calls
 `Qt.clearComponentCache()`, rescans manifests, and recreates the selected bar,
 services, panels, and bar widgets. With an in-place update whose entry-point
-URLs are unchanged, Machine2 proved that new marker files and the new suite
+URLs are unchanged, the validation system proved that new marker files and the new suite
 payload digest can be visible while QML components are still created from the
 previous cached code. A newly added IPC function returned `Function not found`
 after multiple successful rescans and a stock-bar round trip.
@@ -534,7 +533,6 @@ feature is intentionally implemented by Shibumi and is not an upstream gap.
 | `hancore.shibumi.bar` | QTR-001, QTR-002, QTR-008, QTR-009, QTR-010 | Host integration |
 | `hancore.shibumi.state` | QTR-001, QTR-002 | Host integration |
 | `hancore.shibumi.control-center` | QTR-009 | Host integration; UI is Own |
-| `hancore.shibumi.menu` | QTR-003; background data via QTR-007 | Host routing; UI is Own |
 | `hancore.shibumi.reactor` | Media service already exists | Own |
 | `hancore.shibumi.telemetry` | None | Own `/proc` and GPU telemetry |
 | `hancore.shibumi.power-state` | QTR-005 power service | Host service gap |
@@ -567,7 +565,7 @@ Quattro shortcomings:
 - Tanzaku and Hearthstone picker views, thumbnail caches, and media
   browsing;
 - Reactor animations and quote/event presentation;
-- Shibumi App Menu contents and Control Center UI; and
+- Shibumi Control Center UI; and
 - additional Shibumi bar variants.
 
 ## Suggested Alpha Order
@@ -576,8 +574,7 @@ Quattro shortcomings:
    versioning. These make all third-party compositions more deterministic.
 2. **Distribution:** QTR-001 suite sources, so one repository can remain
    modular without custom install/update plumbing.
-3. **Safe replacement:** QTR-003 default menu routing and QTR-004 exclusive
-   provider selection.
+3. **Safe replacement:** QTR-004 exclusive provider selection.
 4. **Reusable platform behavior:** QTR-005 services, beginning with Network,
    Audio, Bluetooth, Monitor, and Power; then Weather and Model Usage.
 5. **Shared status and UX context:** QTR-006, QTR-007, and QTR-008.

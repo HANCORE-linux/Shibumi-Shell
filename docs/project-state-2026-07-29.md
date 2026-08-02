@@ -11,8 +11,8 @@
   `/home/hancore/Projects/Quickshell-Dots/versions/V1`
 - read-only V2 reference:
   `/home/hancore/Projects/Quickshell-Dots/versions/V2`
-- runtime target: `drdeltree@192.168.2.202`
-- Machine2 physical output: `eDP-1`, 1920x1080, scale 1.0
+- runtime target: isolated internal Omarchy Quattro validation system
+- the validation system physical output: `eDP-1`, 1920x1080, scale 1.0
 - active runtime: official Omarchy Quattro shell with the Shibumi suite
 
 Do not clean, reset, or recreate the working tree. Most of the product tree is
@@ -36,7 +36,7 @@ The Control Center button language now maps the interaction logic observed on
   geometry remain exempt.
 - `color08` is exposed in the widget and appearance palette selectors.
 
-Machine2 resolved `color08` to `#3A4849` during the accepted run. The value is
+the validation system resolved `color08` to `#3A4849` during the accepted run. The value is
 not hard-coded and follows the active Omarchy theme.
 
 The residual shadow visible inside the V2 Notch was also removed. The shared
@@ -75,15 +75,15 @@ OMARCHY_PATH=/tmp/omarchy-quattro-latest ./tests/contract-regression.sh
 ```
 
 The complete contract log contained no `Binding loop`, `Unable to assign`,
-`TypeError`, or `ReferenceError`. Machine2 retained exactly one official
+`TypeError`, or `ReferenceError`. the validation system retained exactly one official
 Quickshell process after payload reload. Its final live log contained no new
 Shibumi/QML error, and checksum-mode `rsync -ainc` reported no differing
 deployed files; only directory timestamps differed.
 
 Retained visual evidence:
 
-- `docs/mockups/control-center-color08-buttons-notch-machine2.png`
-- `docs/mockups/control-center-color08-appearance-machine2.png`
+- `docs/mockups/control-center-color08-buttons-notch.png`
+- `docs/mockups/control-center-color08-appearance.png`
 
 ## Continue from here
 

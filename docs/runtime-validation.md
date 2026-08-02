@@ -9,7 +9,7 @@ not run it on the primary QS Rise V1 session.
 
 ## Latest Run
 
-Machine2 was tested on 2026-07-16 with Omarchy Quattro, Hyprland 0.55.4,
+the validation system was tested on 2026-07-16 with Omarchy Quattro, Hyprland 0.55.4,
 Quickshell running the official `/usr/share/omarchy/shell/shell.qml`, and one
 physical 1920x1080 output at scale 1.0.
 
@@ -38,7 +38,7 @@ Open gates:
   built-in bar does not become visible. This must be fixed upstream before the
   fallback gate can pass.
 
-Machine2 was restored after the run: its original `shell.json` hash matched,
+the validation system was restored after the run: its original `shell.json` hash matched,
 `omarchy.bar` was the only bar option, the original `bar-off` state was
 restored, and no staged plugin, headless output, or test file remained.
 
@@ -58,7 +58,7 @@ This accepts the live headless add/remove, portrait, routing, and cleanup
 contracts. A physical second monitor, mixed scale, display sleep, suspend, and
 hibernate remain separate gates.
 
-The multi-style foundation was re-tested on Machine2 later the same day:
+The multi-style foundation was re-tested on the validation system later the same day:
 
 - a missing `bar.style` loaded the default `qsrise` renderer
 - an unknown style id fell back to `qsrise` on a cold shell start
@@ -72,7 +72,7 @@ The earlier left/right checks are retained as historical defensive-host
 evidence only. QS Rise V1 and the V2 product contract require top and bottom;
 vertical layouts are not a release gate.
 
-Machine2 was again restored byte-for-byte afterward. Only `omarchy.bar`
+the validation system was again restored byte-for-byte afterward. Only `omarchy.bar`
 remained registered and no staged V2 plugin or style-test cache remained.
 
 ## Preconditions

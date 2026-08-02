@@ -47,7 +47,7 @@ Implemented:
   with hysteresis. Hidden groups retain user settings and order but release
   drag-target ownership until visible again.
 
-Runtime-proven on Machine2 against the official Quattro shell:
+Runtime-proven on the validation system against the official Quattro shell:
 
 - A temporary 800x1280 headless output and the physical 1920x1080 eDP-1 output
   received independent bar instances in the same shell process.

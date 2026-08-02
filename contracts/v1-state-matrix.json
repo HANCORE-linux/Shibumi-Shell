@@ -14,7 +14,6 @@
     {"id":"bar.closed","group":"bar","surface":"bar","states":["closed","hover","active"],"positions":["top","bottom"],"status":"partial"},
     {"id":"bar.edit","group":"bar","surface":"split and drag editor","states":["open","active","error"],"positions":["top","bottom"],"status":"partial"},
     {"id":"G1.control","group":"G1","surface":"Control Center","states":["closed","open","hover","active"],"positions":["top","bottom"],"status":"partial"},
-    {"id":"G1.menu","group":"G1","surface":"application menu","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},
     {"id":"G2.workspaces","group":"G2","surface":"workspace bar and panel","states":["empty","populated","hover","active"],"positions":["top","bottom"],"status":"partial"},
     {"id":"G3.updates","group":"G3","surface":"update center","states":["empty","populated","active","error","degraded"],"positions":["top","bottom"],"status":"partial"},
     {"id":"G3.tray","group":"G3","surface":"tray drawer and item menu","states":["empty","populated","hover","active","error"],"positions":["top","bottom"],"status":"partial"},

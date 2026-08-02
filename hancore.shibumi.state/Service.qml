@@ -479,11 +479,10 @@ Item {
     })
   }
 
-  function setMenuConfig(value) {
-    const normalized = ShibumiConfig.normalizeMenu(value)
-    if (!ShibumiConfig.isPlainObject(value)
-        || Number(value.version) !== ShibumiConfig.MenuSchemaVersion) return false
-    return commit(function(next) { next.menu = normalized })
+  function setLauncherConfig(value) {
+    if (!ShibumiConfig.isPlainObject(value)) return false
+    const normalized = ShibumiConfig.normalizeLauncher(value)
+    return commit(function(next) { next.launcher = normalized })
   }
 
   function setPluginFavorite(pluginId, favorite) {
@@ -500,12 +499,12 @@ Item {
     })
   }
 
-  function defaultMenuConfig() {
-    return ShibumiConfig.defaultMenuConfig()
+  function defaultLauncherConfig() {
+    return ShibumiConfig.defaultLauncherConfig()
   }
 
-  function normalizeMenuConfig(value) {
-    return ShibumiConfig.normalizeMenu(value)
+  function normalizeLauncherConfig(value) {
+    return ShibumiConfig.normalizeLauncher(value)
   }
 
   function setReactorMode(value) {

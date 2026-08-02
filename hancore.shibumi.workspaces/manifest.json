@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.workspaces",
   "name": "Shibumi Workspaces",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.1",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shared Hyprland workspace state with the Shibumi workspace presentation.",

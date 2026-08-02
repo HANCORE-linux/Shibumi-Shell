@@ -23,7 +23,7 @@ and normalizes this branch before using it. It includes:
 - V1 border, frost, shadow, and Radius 12/6 settings;
 - V2 bar-border and panel/tooltip-border settings;
 - workspace mode and presentation;
-- App Menu favorites, hidden entries, launcher identity, and presentation;
+- G1 launcher identity;
 - image and media picker styles;
 - V1 Reactor mode, selected through **Bars → Gap Animations** from nine direct
   preview tiles.
@@ -85,8 +85,8 @@ outside V1's managed layout.
 
 ## Picker routing
 
-The **Themes & Wallpapers** choice is also the provider used by the Shibumi
-App Menu:
+The **Themes & Wallpapers** choice controls which provider handles Omarchy's
+authoritative menu actions:
 
 - **Omarchy** runs the original Quattro carousel action;
 - **Tanzaku** opens the Shibumi Tanzaku picker;

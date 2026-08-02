@@ -1,0 +1,63 @@
+# Maintainer: HANCORE Linux <hancore@users.noreply.github.com>
+pkgname=shibumi-shell
+_upstream_version=0.1.1-beta.1
+_source_sha256=SKIP
+pkgver=${_upstream_version//-/}
+pkgrel=6
+pkgdesc="Transactional Shibumi desktop shell plugins for Omarchy Quattro"
+arch=('any')
+url="https://github.com/HANCORE-linux/Shibumi-Shell"
+license=('MIT')
+depends=(
+  'omarchy'
+  'quickshell'
+  'python'
+  'jq'
+  'curl'
+  'networkmanager'
+  'power-profiles-daemon'
+  'upower'
+  'xdg-utils'
+  'libnotify'
+  'wl-clipboard'
+  'ttf-material-symbols-variable'
+  'ttf-jetbrains-mono-nerd-basic'
+  'noto-fonts-cjk'
+  'adwaita-fonts'
+)
+optdepends=(
+  'cava: live media spectrum'
+  'ffmpegthumbnailer: video picker thumbnails'
+  'imagemagick: additional media thumbnails'
+  'btop: battery panel system monitor action'
+  'wiremix: audio panel mixer action'
+  'nvidia-utils: NVIDIA GPU telemetry'
+  'git: source-checkout diagnostics and migration'
+)
+source=("${pkgname}-${_upstream_version}.tar.gz::${url}/releases/download/v${_upstream_version}/${pkgname}-${_upstream_version}.tar.gz")
+sha256sums=("${_source_sha256}")
+
+package() {
+  cd "$srcdir/$pkgname-${_upstream_version}"
+
+  local appdir="$pkgdir/usr/share/$pkgname"
+  install -dm755 "$appdir" "$appdir/contracts" "$appdir/scripts"
+  cp -a --no-preserve=ownership hancore.shibumi.* "$appdir/"
+  install -Dm644 contracts/plugin-suite-v1.json \
+    "$appdir/contracts/plugin-suite-v1.json"
+  install -Dm644 contracts/host-facade-v1.json \
+    "$appdir/contracts/host-facade-v1.json"
+  install -Dm644 contracts/package-runtime-v1.json \
+    "$appdir/contracts/package-runtime-v1.json"
+  install -Dm755 scripts/shibumi-suite "$appdir/scripts/shibumi-suite"
+  cp -a --no-preserve=ownership scripts/shibumi_suite "$appdir/scripts/"
+  install -Dm644 VERSION "$appdir/VERSION"
+  install -Dm644 packaging/package-metadata.json \
+    "$appdir/PACKAGE-METADATA.json"
+
+  install -Dm755 packaging/shibumi-shell \
+    "$pkgdir/usr/bin/shibumi-shell"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 docs/install.md "$pkgdir/usr/share/doc/$pkgname/install.md"
+}

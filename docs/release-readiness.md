@@ -2,23 +2,23 @@
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `v0.1.0` is ready for private alpha testing. Machine2 passes the
+Shibumi `v0.1.0` is ready for private alpha testing. the validation system passes the
 complete automated contract and the affected live Wayland workflows. Physical
 multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
 block a public release.
 
 ## Current test target
 
-The current acceptance target is Machine2:
+The current acceptance target is an internal validation system. Its hostname,
+account, and network address are intentionally not part of the public product
+documentation and are not required by Shibumi users.
 
-- **Host account**: `drdeltree`
-- **Address**: DHCP-managed; resolve or confirm the current Machine2 address
-  before connecting instead of relying on a saved IP
 - **Omarchy**: `4.0.0.r1458.gfa6b5fc-1`
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `eDP-1`, `1920x1080`, scale `1.0`
-- **Candidate**: 25 plugins under `hancore.shibumi.*`
-- **Policy**: Run Shibumi tests only on Machine2
+- **Candidate**: 24 plugins under `hancore.shibumi.*`
+- **Policy**: Maintainers run destructive runtime acceptance only on the
+  isolated validation system
 
 `/home/hancore/Projects/Quickshell-Dots` remains a read-only V1 and V2 reference.
 
@@ -33,11 +33,11 @@ produced these results:
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 7 intentional differences classified |
 | Quattro compatibility | Passed against `4.0.0.r1458.gfa6b5fc-1` |
-| Plugin validation and self-containment | Passed for all 25 plugins |
-| Complete repository contract | Passed on Machine2 |
+| Plugin validation and self-containment | Passed for all 24 plugins |
+| Complete repository contract | Passed on the validation system |
 | Suite lifecycle unit tests | Passed: 27 of 27 |
 | Control Center manager tests | Passed: 7 of 7 |
-| Transactional live update | Passed for all 25 plugins |
+| Transactional live update | Passed for all 24 plugins |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: 25 markerless alpha plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
@@ -78,7 +78,7 @@ Quattro validates and loads each plugin, but it doesn't update this multi-plugin
 
 The lifecycle adapter enforces these controls:
 
-- It validates all 25 manifests with the official Omarchy validator
+- It validates all 24 manifests with the official Omarchy validator
 - It rejects symlinks, special files, unsafe entry points, foreign markers, and unknown replacement directories
 - It hashes each plugin and the complete suite before activation
 - It snapshots installed plugins and `shell.json`
@@ -94,7 +94,7 @@ The V1 and V2 shell-update interface is adapted to `shibumi-suite`. The Update C
 The alpha may be committed and pushed to the private repository with these limits:
 
 - The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
-- Machine2 has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
+- the validation system has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
 - No enterprise Wi-Fi credentials were supplied for a real authentication test
 - A live Bluetooth phone connection and panel pass; pairing, audio routing,
   disconnect, and forget still need complete physical acceptance
@@ -113,7 +113,7 @@ Before making the repository public:
 2. Test a physical second display, mixed scale, hotplug, and unplug during drag
 3. Test a real enterprise Wi-Fi authentication failure and reconnect
 4. Test Bluetooth pairing, audio routing, disconnect, and forget
-5. Repeat the complete Machine2 contract on the exact public-release commit
+5. Repeat the complete validation contract on the exact public-release commit
 
 ## Release evidence
 

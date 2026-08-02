@@ -8,9 +8,8 @@
 ## Resume coordinates
 
 - source workspace: `/home/hancore/Projects/shibumi`
-- Machine2 workspace: `/home/drdeltree/Projects/shibumi`
-- Machine2 account: `drdeltree`
-- Machine2 address: DHCP-managed; confirm the current address before SSH
+- validation target: isolated internal Omarchy Quattro system; connection
+  details intentionally omitted from product documentation
 - runtime: `/usr/share/omarchy/shell`
 - tested Quattro package: `4.0.0.r1458.gfa6b5fc-1`
 - physical output: `eDP-1`, 1920×1080, scale 1.0
@@ -19,7 +18,7 @@
 - read-only V2 reference:
   `/home/hancore/Projects/Quickshell-Dots/versions/V2`
 
-All runtime tests belong on Machine2. Do not deploy Shibumi into the
+All runtime tests belong on the validation system. Do not deploy Shibumi into the
 `Quickshell-Dots` reference tree.
 
 ## Accepted implementation slice
@@ -71,7 +70,7 @@ All runtime tests belong on Machine2. Do not deploy Shibumi into the
 
 ## Validation evidence
 
-Machine2 uses 25 managed Shibumi plugins. The affected regression passes on
+the validation system uses 25 managed Shibumi plugins. The affected regression passes on
 2026-07-30 include:
 
 ```text
@@ -92,7 +91,7 @@ made the pure Qt layout-controller model test unloadable. The implementation
 now uses the native `QQuickItem.window` property, preserving the runtime
 capture while keeping the model host-independent. After this correction,
 `OMARCHY_PATH=/usr/share/omarchy ./tests/contract-regression.sh` passed in full
-on Machine2.
+on the validation system.
 
 ## Continue from here
 
@@ -103,5 +102,5 @@ on Machine2.
    add per-plugin caret, radius, border, or bar-cutout patches.
 4. Implement issue #2 only as an explicit V1 layout migration; do not modify
    the fixed V1 layout opportunistically while working on V2.
-5. Before a release tag, run the complete Machine2 contract on the exact commit
+5. Before a release tag, run the complete validation contract on the exact commit
    and complete the remaining physical gates listed in release readiness.

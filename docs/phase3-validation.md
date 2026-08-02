@@ -5,7 +5,7 @@
 > current acceptance summary.
 
 Phase 3 preserves the V1 interaction outcome without copying V1 persistence or
-creating per-style runtime owners. Most evidence is local. Machine2 additionally
+creating per-style runtime owners. Most evidence is local. the validation system additionally
 passes the physical Bottom ghost, successful-drop, and byte-identical
 invalid-drop return paths plus process-restart persistence; the remaining
 real-Wayland edge cases are listed below.

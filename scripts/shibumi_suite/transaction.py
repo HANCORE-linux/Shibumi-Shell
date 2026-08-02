@@ -152,6 +152,17 @@ def preflight_removals(plugin_dir: Path, specs: Iterable[PluginSpec]) -> None:
             )
 
 
+def preflight_removal_ids(plugin_dir: Path, plugin_ids: Iterable[str]) -> None:
+    for plugin_id in plugin_ids:
+        target = plugin_dir / plugin_id
+        if (target.exists() or target.is_symlink()) and not is_managed_target(
+            target, plugin_id
+        ):
+            raise TransactionError(
+                f"refusing to remove non-Shibumi plugin directory: {target}"
+            )
+
+
 def preflight_legacy_removals(plugin_dir: Path, plugin_ids: Iterable[str]) -> None:
     for plugin_id in plugin_ids:
         target = plugin_dir / plugin_id
@@ -162,9 +173,16 @@ def preflight_legacy_removals(plugin_dir: Path, plugin_ids: Iterable[str]) -> No
 
 
 class PluginTransaction:
-    def __init__(self, paths: RuntimePaths, runtime: OmarchyRuntime) -> None:
+    def __init__(
+        self,
+        paths: RuntimePaths,
+        runtime: OmarchyRuntime,
+        *,
+        restart_on_reconcile: bool = False,
+    ) -> None:
         self.paths = paths
         self.runtime = runtime
+        self.restart_on_reconcile = restart_on_reconcile
         self.token = f"{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         self.transaction_dir = paths.state_dir / "transactions" / self.token
         self.journal_file = self.transaction_dir / "journal.json"
@@ -199,6 +217,7 @@ class PluginTransaction:
                 self.paths.menu_extension_file.resolve(strict=False)
             ),
             "menuExtensionExisted": self.menu_extension_existed,
+            "restartOnReconcile": self.restart_on_reconcile,
             "records": self.records,
         }
         if desired_state != "unchanged":
@@ -307,19 +326,22 @@ class PluginTransaction:
             self._write_journal("exposed")
 
     def stage_removal(self, specs: Iterable[PluginSpec]) -> None:
+        self.stage_removal_ids(spec.id for spec in specs)
+
+    def stage_removal_ids(self, plugin_ids: Iterable[str]) -> None:
         self.paths.plugin_dir.mkdir(parents=True, exist_ok=True)
-        for spec in specs:
-            target = self.paths.plugin_dir / spec.id
+        for plugin_id in plugin_ids:
+            target = self.paths.plugin_dir / plugin_id
             if not (target.exists() or target.is_symlink()):
                 continue
-            if not is_managed_target(target, spec.id):
+            if not is_managed_target(target, plugin_id):
                 raise TransactionError(
                     f"refusing to remove non-Shibumi plugin directory: {target}"
                 )
-            backup = self.paths.plugin_dir / f".shibumi-backup.{self.token}.{spec.id}"
+            backup = self.paths.plugin_dir / f".shibumi-backup.{self.token}.{plugin_id}"
             record = {
                 "action": "remove",
-                "pluginId": spec.id,
+                "pluginId": plugin_id,
                 "target": str(target),
                 "stage": "",
                 "backup": str(backup),
@@ -382,13 +404,20 @@ class PluginTransaction:
         if self.finished:
             return
         try:
+            if self.restart_on_reconcile:
+                try:
+                    self.runtime.stop_shell()
+                except RuntimeFailure:
+                    pass
             _restore_records(self.paths.plugin_dir, self.token, self.records)
             if self.config_existed:
                 atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
             else:
                 self.paths.config_file.unlink(missing_ok=True)
             self._restore_menu_extension()
-            self.runtime.reconcile_best_effort()
+            self.runtime.reconcile_best_effort(
+                restart_shell=self.restart_on_reconcile
+            )
         finally:
             self._cleanup_transaction()
             self.finished = True
@@ -563,6 +592,12 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 if backup.exists() or backup.is_symlink():
                     _remove_path(backup)
         else:
+            restart_on_reconcile = bool(journal.get("restartOnReconcile"))
+            if restart_on_reconcile:
+                try:
+                    runtime.stop_shell()
+                except RuntimeFailure:
+                    pass
             _restore_records(plugin_root, token, records)
             snapshot = directory / "shell.json.before"
             if journal.get("configExisted") is True:
@@ -578,7 +613,9 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                     if menu_extension_path.parent.is_dir() \
                             and not any(menu_extension_path.parent.iterdir()):
                         menu_extension_path.parent.rmdir()
-            runtime.reconcile_best_effort()
+            runtime.reconcile_best_effort(
+                restart_shell=restart_on_reconcile
+            )
         shutil.rmtree(directory)
         recovered += 1
     if root.is_dir() and not any(root.iterdir()):

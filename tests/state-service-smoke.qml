@@ -151,12 +151,13 @@ ShellRoot {
             || state.setWorkspacePreference("mode", "invalid")
             || state.config.workspace.mode !== "active")
           return root.fail("workspace mutation validation")
-        const menuConfig = state.defaultMenuConfig()
-        menuConfig.presentation.scale = 80
-        if (!state.setMenuConfig(menuConfig)
-            || state.normalizeMenuConfig(menuConfig).presentation.scale !== 80
-            || state.config.menu.presentation.scale !== 80)
-          return root.fail("menu configuration contract")
+        const launcherConfig = state.defaultLauncherConfig()
+        launcherConfig.mode = "icon"
+        launcherConfig.icon = "rebel"
+        if (!state.setLauncherConfig(launcherConfig)
+            || state.normalizeLauncherConfig(launcherConfig).icon !== "rebel"
+            || state.config.launcher.icon !== "rebel")
+          return root.fail("launcher configuration contract")
         root.stage = 2
         return
       }

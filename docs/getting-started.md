@@ -60,12 +60,13 @@ transaction recovery data in the XDG state directory.
 Use the Control Center for normal changes. Read [configuration](configuration.md)
 before editing JSON or suite state by hand.
 
-## Know the alpha boundary
+## Know the beta boundary
 
-Version `0.1.0` is ready for private alpha testing. The current release passes
-the complete automated contract and affected live Wayland workflows on
-Machine2, while physical mixed-scale multi-monitor, enterprise Wi-Fi, and
-remaining Bluetooth acceptance still block a public release.
+Version `0.1.1-beta.1` is the current Arch-package candidate. Its package and
+source contracts are tested locally; AUR publication and the complete package
+lifecycle on the validation system remain release gates. Shibumi supports Omarchy Quattro
+only. The exact accepted host packages are recorded in the
+[Shibumi host compatibility record](architecture/quattro-compatibility.md).
 
 Read [release readiness](release-readiness.md) for the current evidence and
 open gates. Use [troubleshooting](development/troubleshooting.md) if the bar,

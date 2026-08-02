@@ -119,9 +119,8 @@ state API through `shell.serviceFor("hancore.qsrise.state")`; they do not import
 Target: `hancore.qsrise.control-center`
 
 ```text
-menu/BarWidget.qml                         split and migrate G1 presentation
-menu/MenuSettings.qml                     move BAR/WORKSPACES/PICKER/WIDGETS/
-                                          COMPACT/LAYOUT/APPEARANCE sections
+hancore.shibumi.control-center/BarWidget.qml
+hancore.shibumi.control-center/ControlCenterPanel.qml
 assets/arch-header-arch.png
 assets/arch-header-linux.png
 assets/bob2.png
@@ -130,39 +129,14 @@ assets/omacom-text.png
 assets/logo-tint.frag.qsb
 ```
 
-The present `BarWidget.qml` opens the App Menu and uses module ID
-`hancore.qsrise.bar`; this behavior is transitional. The target G1 widget opens
-the Control Center. An optional menu button, if later wanted, is a separate
-plugin and is not implicitly G1.
+The extracted G1 widget opens only the Control Center. Omarchy owns the
+application launcher menu.
 
-### App Menu
+### Application Menu
 
-Target: `hancore.qsrise.menu`
-
-```text
-menu/AppIndex.js
-menu/AppMenuService.qml
-menu/FlatTintedImage.qml
-menu/GuardModel.js
-menu/Menu.qml
-menu/MenuActions.qml
-menu/MenuAppRow.qml
-menu/MenuCard.qml
-menu/MenuCommandRow.qml
-menu/MenuGeometry.js
-menu/MenuModel.js
-menu/MenuSurface.qml
-menu/MenuViewModel.js
-menu/ProcessResult.js
-menu/ProviderModel.js
-menu/TintedImage.qml
-menu/MenuSettings.qml                     keep launcher/application/selection/
-                                          scale/background menu-only sections
-```
-
-`MenuSettings.qml` must be split rather than copied. Menu settings remain here;
-bar, workspace, picker, widget, split, Reactor and appearance settings move to
-the Control Center.
+Retired from Shibumi. Omarchy is the sole application-menu owner. The former
+prototype sources, manifest, service, workers, settings, and dedicated tests
+are intentionally absent from the current tree.
 
 ### Reactor
 
@@ -423,7 +397,6 @@ the root. Paths in the table are relative to `tests/`.
 | Repository/installer | `contract-regression.sh`, future manifest/dependency/self-containment/install/rollback tests |
 | Bar | `group-interaction-regression.qml`, `group-registry-regression.qml`, `group-renderer-regression.qml`, `host-widget-resolver-regression.qml`, `layout-controller-regression.qml`, `layout-model-regression.qml`, `panel-routing-regression.qml`, `qsrise-presentation-smoke.qml`, `reactor-renderer-regression.qml`, `run-geometry-regression.qml`, `style-contract-regression.sh`, `fixtures/ResolverTestWidget.qml` |
 | State | `qsrise-config-regression.qml`, `theme-palette-model-regression.qml` |
-| Menu | `app-index-regression.qml`, `app-menu-card-smoke.qml`, `app-menu-contract-smoke.qml`, `app-menu-lifecycle-smoke.qml`, `app-menu-runtime-smoke.qml`, `menu-geometry-regression.qml`, `menu-model-regression.qml`, `menu-runtime-model-regression.qml`, `menu-view-model-regression.qml`, `fixtures/MenuTestSurface.qml`, `fixtures/menu-bin/*` |
 | Reactor | `quote-service-smoke.qml`, `reactor-model-regression.qml` |
 | Workspaces | `workspace-model-regression.qml`, `workspace-panel-smoke.qml`, `workspace-widget-smoke.qml`, `fixtures/WorkspaceTestPanel.qml` |
 | Status | `status-widget-smoke.qml`, `fixtures/StatusTestWidget.qml`, `fixtures/TrayDrawerTestPanel.qml` |
@@ -440,13 +413,13 @@ the root. Paths in the table are relative to `tests/`.
 | Shared panel primitives | `panel-surface-smoke.qml` |
 
 Missing focused CPU, picker-overlay, and multi-bar reuse tests must be added
-before their slices are declared complete. Focused State, App Menu, Control
-Center, telemetry, and power-state contract/runtime tests now exist.
+before their slices are declared complete. Focused State, Control Center,
+telemetry, and power-state contract/runtime tests now exist.
 
 ## Cross-Boundary Blockers
 
-1. **Combined manifest:** the root declares four kinds and makes the G1 widget,
-   App Menu and service share the bar ID.
+1. **Combined manifest:** resolved by deleting the combined prototype and
+   leaving Omarchy as the sole application-menu owner.
 2. **Internal registry:** `WidgetRegistry.qml` hardcodes QS Rise widget
    components, bypassing Omarchy's independently enabled widget registry.
 3. **Bar-owned feature services:** `Bar.qml` creates telemetry, power, AI,
@@ -455,10 +428,10 @@ Center, telemetry, and power-state contract/runtime tests now exist.
 4. **Unversioned host object:** widgets consume dozens of ad-hoc `bar.*`
    properties and methods. The supported subset needs a versioned host facade
    and contract test.
-5. **Direct sibling imports:** menu configuration, power model, adapters, style
+5. **Direct sibling imports:** power model, adapters, style
    core helpers and AI visual helpers currently cross future plugin boundaries.
-6. **Mixed settings surface:** `MenuSettings.qml` combines App Menu settings
-   with bar, workspace, picker, widget, split, Reactor and appearance settings.
+6. **Mixed settings surface:** resolved by moving Shibumi settings to the
+   Control Center and deleting the former menu surface.
 7. **Bar-specific Reactor coupling:** Reactor reads `bar.moduleSlots` and several
    bar-owned services. It must consume service contracts and publish events,
    while the selected bar owns rendering.
@@ -475,11 +448,12 @@ bar incrementally:
 
 1. add `state`, host-facade v1, vendoring and self-containment checks;
 2. add `telemetry` and `power-state` services;
-3. separate `menu` and `control-center` without changing G1 visually;
+3. separate the Control Center and retire the Shibumi application menu without
+   changing G1 visually;
 4. extract Memory and CPU as the first low-action widget proof;
 5. extract Media and Audio using official services;
 6. extract Workspaces, Status and Center with multi-output lifecycle tests;
-7. extract Network, Brightness and Bluetooth with Machine2 mutation tests;
+7. extract Network, Brightness and Bluetooth with the validation system mutation tests;
 8. extract Battery and Power Profile over the shared power service;
 9. extract AI, Quick Access and Reactor with process/cache/IPC cleanup gates;
 10. move the now feature-free bar host and replace `WidgetRegistry` with host
@@ -490,17 +464,17 @@ bar incrementally:
 
 Current extraction status (2026-07-19): steps 1 through 11 are implemented.
 The active bar is registry/service-only; every G1-G15 feature, Update Center,
-App Menu, shared state, telemetry, power state, and Reactor owner loads from an
-independently validated plugin. The 25-plugin profile passes the fresh Quattro
+shared state, telemetry, power state, and Reactor owner loads from an
+independently validated plugin. The 24-plugin profile passes the fresh Quattro
 contract suite, isolated transactional lifecycle tests, and a real 21-to-22
-Machine2 update. Remaining work is release acceptance rather than another
+the validation system update. Remaining work is release acceptance rather than another
 ownership extraction; see `release-readiness.md`.
 
 ## Exit Criteria For Inventory Phase
 
 - every current runtime file has one target owner or is marked transitional;
 - no feature service remains intentionally owned by a bar variant;
-- G1 Control Center and App Menu are separate;
+- G1 Control Center remains separate from Omarchy's application menu;
 - common code has a vendoring owner rather than a sibling runtime import;
 - target IDs and dependencies are stable enough to scaffold manifests; and
 - no runtime file has been moved before these contracts are tested.

@@ -53,7 +53,7 @@ official Omarchy contract.
 The bar continues to expose the standard Omarchy color, font, position,
 tooltip, shell and bar-widget-registry properties consumed by official
 components. Compatibility is verified against the supported Quattro commit and
-Machine2; it is not inferred from successful QML parsing.
+the validation system; it is not inferred from successful QML parsing.
 
 ## Internal State
 

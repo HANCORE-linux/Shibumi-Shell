@@ -21,14 +21,14 @@ For users:
 For maintainers:
 
 1. [Architecture overview](architecture/overview.md)
-2. [Canonical architecture contract](../ARCHITECTURE.md)
-3. [Host facade](host-facade-v1.md)
-4. [Plugin suite migration and lifecycle](plugin-suite-migration-plan.md)
-5. [Testing](development/testing.md)
-6. [Packaging and AUR strategy](development/packaging.md)
-7. [Release workflow](development/release.md)
-8. [Current release readiness](release-readiness.md)
-9. [Current development handoff](project-state-2026-07-30.md)
+2. [Shibumi host compatibility record](architecture/quattro-compatibility.md)
+3. [Canonical architecture contract](../ARCHITECTURE.md)
+4. [Host facade](host-facade-v1.md)
+5. [Plugin suite migration and lifecycle](plugin-suite-migration-plan.md)
+6. [Testing](development/testing.md)
+7. [Packaging and AUR strategy](development/packaging.md)
+8. [Release workflow](development/release.md)
+9. [Current release readiness](release-readiness.md)
 
 For design and UI work:
 
@@ -64,13 +64,14 @@ For parity and release evidence:
 | [Get started](getting-started.md) | Control Center, bar switching, customization, and saved state |
 | [Install and update](install.md) | Install, migrate, activate, update, deactivate, and remove the suite |
 | [Configuration](configuration.md) | Omarchy shell settings, Shibumi state, and ownership |
-| [Plugin catalog](plugins/README.md) | The 25 plugin roots, roles, and host dependencies |
+| [Plugin catalog](plugins/README.md) | The 24 plugin roots, roles, and host dependencies |
 | [Plugin compatibility](plugin-compatibility.md) | Supported use with stock, Shibumi-compatible, and third-party bars |
 | [Architecture overview](architecture/overview.md) | Short runtime and ownership map |
-| [Testing](development/testing.md) | Machine2-only validation workflow |
-| [Packaging and AUR strategy](development/packaging.md) | Public AUR and private-alpha package boundary |
+| [Host compatibility record](architecture/quattro-compatibility.md) | Exact accepted Omarchy Quattro and Quickshell package baseline |
+| [Testing](development/testing.md) | Local automation and maintainer release-validation workflow |
+| [Packaging and AUR strategy](development/packaging.md) | Arch package boundary, dependencies, rehearsal, and AUR publication gates |
 | [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
-| [Release workflow](development/release.md) | Private-alpha preparation and publication gates |
+| [Release workflow](development/release.md) | Beta preparation, immutable assets, and publication gates |
 | [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
 | [Development handoff](project-state-2026-07-30.md) | Resume coordinates, latest implementation slice, open issues, and next work |
 | [Changelog](../CHANGELOG.md) | User-visible changes by version |
@@ -89,7 +90,6 @@ current source define exact schema fields, plugin IDs, and executable defaults.
 | [Control Center v4](control-center-v4.md) | Control Center design and runtime contract |
 | [Health diagnostics](health-diagnostics.md) | Read-only runtime, error, and source-drift contract |
 | [Multi-bar extension plan](multi-bar-extension-plan.md) | Registration and validation rules for additional bar hosts |
-| [App Menu integration](app-menu-integration-plan.md) | App Menu ownership and separation from G1 |
 | [V1 output lifecycle audit](v1-output-lifecycle-audit.md) | Multi-output, scale, hotplug, DPMS, suspend, and resume behavior |
 
 ## Validation and historical records

@@ -322,8 +322,10 @@ class ContinuityManagerTests(unittest.TestCase):
         }
         globals_map = self.module["perform"].__globals__
         original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
         original_verify = globals_map["verify"]
         globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+        globals_map["stop_shell"] = lambda *_args, **_kwargs: None
 
         def reject(*_args: object, **_kwargs: object) -> None:
             raise self.module["ManagerError"]("injected verification failure")
@@ -337,6 +339,7 @@ class ContinuityManagerTests(unittest.TestCase):
                     self.module["perform"]("omarchy")
         finally:
             globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
             globals_map["verify"] = original_verify
 
         self.assertEqual(config.read_bytes(), original)
@@ -396,6 +399,30 @@ class ContinuityManagerTests(unittest.TestCase):
             timeout=12,
             env=self.module["runtime_environment"](runtime_paths),
         )
+
+    def test_stop_drains_shell_instances_before_config_handoff(self) -> None:
+        omarchy_root = self.root / "omarchy"
+        runtime_paths = {
+            "omarchy_root": omarchy_root,
+            "shell": omarchy_root / "bin/omarchy-shell",
+        }
+        running = Mock(returncode=0, stdout="", stderr="")
+        drained = Mock(returncode=1, stdout="", stderr="")
+        globals_map = self.module["stop_shell"].__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", side_effect=[running, drained]
+        ) as run:
+            self.module["stop_shell"](runtime_paths)
+        command = [
+            "quickshell",
+            "kill",
+            "-p",
+            str(omarchy_root / "shell"),
+            "--any-display",
+        ]
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0], command)
 
     def test_reload_falls_back_for_older_omarchy(self) -> None:
         runtime_paths = {

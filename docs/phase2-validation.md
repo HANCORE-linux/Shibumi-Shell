@@ -1,5 +1,9 @@
 # Phase 2 Validation
 
+> Historical note: the Shibumi application-menu experiment documented below
+> was retired before `0.1.1-beta.1`. Omarchy now exclusively owns the
+> application menu; none of the menu payload described here ships.
+
 > **Document status: Historical validation evidence.** This document preserves
 > combined-plugin and feature-slice evidence. It does not describe the current
 > release gate and cannot override `../ARCHITECTURE.md`.
@@ -118,7 +122,7 @@ multi-output pointer behavior remains a Wayland acceptance gate; see
 
 ## G10 Picker And Media Slice
 
-Validated locally and against the real Quattro host on Machine2 on 2026-07-17:
+Validated locally and against the real Quattro host on the validation system on 2026-07-17:
 
 - one process-wide controller owns theme, wallpaper, screenshot, and video
   scan/cache/warmup state for every output;
@@ -140,9 +144,9 @@ Theme/wallpaper apply, screenshot/video open/copy/trash feedback, cold-cache
 timing, top/bottom placement, and multi-output/hotplug behavior remain explicit
 runtime gates.
 
-## Machine2 Wayland Evidence
+## Internal Wayland validation evidence
 
-Validated against the real Quattro host on Machine2 on 2026-07-16:
+Validated against the real Quattro host on the validation system on 2026-07-16:
 
 - one Omarchy Shell process loaded the private development plugin on `eDP-1`;
 - the full memory and CPU widgets were each present exactly once in the top bar;
@@ -155,7 +159,7 @@ Validated against the real Quattro host on Machine2 on 2026-07-16:
 - the production Omarchy Shell instance remained running throughout the isolated
   panel test.
 
-Machine2 was then restored and checked:
+the validation system was then restored and checked:
 
 - `~/.config/omarchy/shell.json` again had its original SHA-256
   `7b2bde9f1c7d247cd7988fc7b00a0743fb6114b16ceb181f90d30515ca9785a1`;
@@ -182,7 +186,7 @@ The foundation slice is runtime-valid, but full V1 parity still requires:
 
 ## App Menu Contract Foundation
 
-Validated locally and against the real Quattro host on Machine2 on 2026-07-16:
+Validated locally and against the real Quattro host on the validation system on 2026-07-16:
 
 - the historical combined root manifest was accepted with `bar`, `menu`,
   `bar-widget`, and `service` kinds and safe entry points; this proves the
@@ -201,7 +205,7 @@ Validated locally and against the real Quattro host on Machine2 on 2026-07-16:
 - the active test log reached `Configuration Loaded` without QS Rise errors;
 - no App Menu scanner or helper process existed.
 
-After the test, Machine2 was restored to the original configuration hash, the
+After the test, the validation system was restored to the original configuration hash, the
 private plugin and backup were removed, and the official menu was summoned
 again successfully. That deployment validated the lifecycle foundation only;
 the local data foundation below was added afterward and has not been deployed.
@@ -387,7 +391,7 @@ placement, and multi-output ownership remain real-Wayland acceptance gates.
 
 ## G8 Center Composition
 
-Validated locally and on Machine2 through 2026-07-20:
+Validated locally and on the validation system through 2026-07-20:
 
 - G8 renders one local V1 center pill with weather, clock/date/calendar,
   active-only status indicators, and the Omarchy update indicator;
@@ -399,12 +403,12 @@ Validated locally and on Machine2 through 2026-07-20:
 - local component tests cover normal/compact/minimal staging, update facade
   visibility/tooltip/action forwarding, recording elapsed formatting, and all
   four status action boundaries;
-- on Machine2's top-position eDP-1 output, the weather panel opens and closes,
+- on the validation system's top-position eDP-1 output, the weather panel opens and closes,
   the real Omarchy update-available state is visible, and reversible official
   idle/DND mutations changed the center width from 151 to 207 and back to 151;
 - a clean shell restart ended in `Configuration Loaded`, with no new QML or
   JavaScript errors and no diagnostic IPC hook left in the runtime.
-- Machine2 exposes the complete Quattro command contract for recording and
+- the validation system exposes the complete Quattro command contract for recording and
   Voxtype. Exactly one long-lived `voxtype status --follow --extended --format
   json` process runs below the shared Quickshell service and reports the real
   inactive snapshot; no duplicate QS Rise poller or probe process remains.
@@ -415,7 +419,7 @@ Validated locally and on Machine2 through 2026-07-20:
 Recording-active behavior is accepted through the physical G8 indicator click,
 including valid MP4 finalization and complete test-artifact cleanup. Active
 dictation also passed `recording`, `transcribing`, and `idle` with text
-insertion. Machine2 has no second output. Remaining Bottom panels,
+insertion. the validation system has no second output. Remaining Bottom panels,
 edit/split/drag, mixed scale, and physical multi-output remain explicit
 acceptance gates. Tooltip
 content is covered by the component contract, not claimed as visual evidence
@@ -424,7 +428,7 @@ screensaver.
 
 ## Representative Bottom Placement
 
-Validated on Machine2 on 2026-07-20 using the real 1920x1080 eDP-1 Wayland
+Validated on the validation system on 2026-07-20 using the real 1920x1080 eDP-1 Wayland
 output:
 
 - the complete QS Rise bar rendered at the bottom while preserving all G1-G15
@@ -443,7 +447,7 @@ multi-output behavior remain release gates.
 
 ## G11 Shared Network Service And Panel
 
-Validated locally and on Machine2 on 2026-07-18:
+Validated locally and on the validation system on 2026-07-18:
 
 - G11 resolves one `hancore.qsrise.network` presentation, consumes the
   original `omarchy.network` alias, and preserves a configured optional
@@ -465,7 +469,7 @@ Validated locally and on Machine2 on 2026-07-18:
 - left/right click, legacy `omarchy.network` alias routing, two screen-local
   sessions, state propagation, final-close worker cancellation, and destruction
   cleanup pass the component regression;
-- Quattro's validator and the complete contract suite pass on Machine2. A real
+- Quattro's validator and the complete contract suite pass on the validation system. A real
   top-anchored panel shows correct metrics, saved count, expanded security/
   signal/saved metadata, and no warning/error log; close leaves no `nmcli` or
   speed-test worker.
@@ -476,7 +480,7 @@ separate permanent Ethernet poller is intentionally not restored.
 
 ## G13 Shared Monitor Ownership And Local Panel
 
-Validated locally and on Machine2 on 2026-07-18:
+Validated locally and on the validation system on 2026-07-18:
 
 - `Bar.qml` creates exactly one root `MonitorService`, which owns exactly one
   hidden instance of the registered official `omarchy.monitor` component;
@@ -492,7 +496,7 @@ Validated locally and on Machine2 on 2026-07-18:
   display toggle, alias routing, compact layout, and unavailable state pass the
   component regression;
 - the complete contract suite, Qt 6 lint, plugin validation, and live/repo
-  comparison pass on Machine2;
+  comparison pass on the validation system;
 - the real top-anchored panel maps to the invoking BRI widget without clipping
   or log errors. A real laptop brightness mutation completed and was restored
   exactly (`57 -> 62 -> 57`), and closing left no monitor or brightness worker.
@@ -507,11 +511,11 @@ multi-output ownership remain real-session acceptance gates.
 ## G12/G14 Shared Power Ownership
 
 Validated locally on 2026-07-17 and checked read-only against Machine1 and
-Machine2:
+the validation system:
 
 - Machine1 has no laptop battery but exposes `power-saver`, `balanced`, and
   `performance`, proving G14 must not depend on G12 visibility;
-- Machine2 exposes a charging BAT0 through UPower plus the same three profiles
+- the validation system exposes a charging BAT0 through UPower plus the same three profiles
   through the installed Quattro helper contract;
 - a later physical transition captured `BAT0=Discharging`, AC offline, and the
   matching UPower/helper state before the charger was connected. Kernel sysfs,
@@ -538,7 +542,7 @@ interaction remains a controlled Wayland acceptance gate.
 
 ## G15 Shared Bluetooth Service And Local Panel
 
-Validated offscreen and on Machine2 on 2026-07-18:
+Validated offscreen and on the validation system on 2026-07-18:
 
 - G15 creates one root `BluetoothService` and one hidden registered
   `omarchy.bluetooth` component for the entire process;
@@ -553,7 +557,7 @@ Validated offscreen and on Machine2 on 2026-07-18:
   open/show/toggle/close/hide symmetrically to the local panel;
 - full/compact geometry, two-output session accounting, action forwarding,
   missing-adapter cleanup, and worker-free ownership pass the component smoke;
-- Machine2 proves one IPC target, top panel mapping, real adapter/radio
+- the validation system proves one IPC target, top panel mapping, real adapter/radio
   reactivity, discovery start/teardown, and a clean runtime log.
 
 Pair/connect/disconnect/forget with real devices, Bluetooth default-sink
