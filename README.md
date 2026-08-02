@@ -98,7 +98,15 @@ Remove all managed Shibumi plugins and restore the stock Omarchy bar:
 shibumi-shell uninstall --yes && omarchy pkg drop shibumi-shell
 ```
 
-For a source checkout, use `./scripts/shibumi-suite uninstall` instead.
+For the transitional source installation, run this from its checkout instead:
+
+```bash
+./scripts/shibumi-suite uninstall --yes
+```
+
+Do not run `omarchy pkg drop shibumi-shell` after a source uninstall: that
+workflow did not install a `shibumi-shell` package. Pacman-managed runtime
+dependencies remain installed because they may be shared with other software.
 
 [Uninstall options and settings preservation](docs/install.md#uninstall)
 

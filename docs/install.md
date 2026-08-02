@@ -256,8 +256,13 @@ For a source installation, preview and remove all managed Shibumi plugins with:
 
 ```bash
 ./scripts/shibumi-suite uninstall --dry-run
-./scripts/shibumi-suite uninstall
+./scripts/shibumi-suite uninstall --yes
 ```
+
+Do not follow the source uninstall with `omarchy pkg drop shibumi-shell`.
+The transitional source workflow did not install a package with that name.
+Its Pacman-managed runtime dependencies remain installed because they may be
+shared with Omarchy or other software.
 
 The default uninstall restores the stock bar and removes Shibumi's managed
 configuration. Shibumi records the bar that was active before installation so
