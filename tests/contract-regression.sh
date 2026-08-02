@@ -213,6 +213,11 @@ for compatibility_contract in \
     'hostedModule' \
     'hostPanelChromeEnabled' \
     'hostPanelPlacementEnabled' \
+    'hostPanelHeightRepairEnabled' \
+    'compatibilityAvailableContentHeight' \
+    'findCompatibilityContentHolder' \
+    'measureCompatibilityContent' \
+    'compatibilityMeasureTimer' \
     'hostedCardOrigin' \
     'publishCompatibilityConnection'; do
   rg -Fq "$compatibility_contract" core/WidgetSlot.qml \
@@ -231,6 +236,12 @@ rg -Fq 'Binding.RestoreBindingOrValue' core/WidgetSlot.qml \
   || fail "hosted panels do not translate both card axes to the visible bar"
 rg -Fq 'y = barThickness + gap' core/WidgetSlot.qml \
   || fail "top hosted panels still derive their offset from the host window"
+rg -Fq 'property: "contentHeight"' core/WidgetSlot.qml \
+  || fail "screen-sized hosted panels do not repair KeyboardPanel height"
+rg -Fq 'screenHeight - barThickness - gap - margin' core/WidgetSlot.qml \
+  || fail "hosted panel height is not capped at the visible bar edge"
+rg -Fq 'item.mapToItem(holder, 0, 0)' core/WidgetSlot.qml \
+  || fail "hosted panel height does not follow rendered child geometry"
 rg -q '^PanelWindow \{' core/HostedPanelConnector.qml \
   || fail "hosted V2 caret overlay is missing"
 rg -q 'mask: Region \{\}' core/HostedPanelConnector.qml \

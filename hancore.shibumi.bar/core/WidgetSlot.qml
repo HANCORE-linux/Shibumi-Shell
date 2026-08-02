@@ -57,6 +57,10 @@ Item {
   }
   property var compatibilityPanel: null
   property var compatibilityCard: null
+  property var compatibilityContentHolder: null
+  property real compatibilityNativeContentHeight: 0
+  property real compatibilityMeasuredContentHeight: 0
+  property int compatibilityContentResolutionAttempts: 0
   readonly property bool hostPanelChromeEnabled: hostedModule
     && compatibilityPanel !== null
     && compatibilityCard !== null
@@ -70,6 +74,31 @@ Item {
     && "screenH" in compatibilityPanel
     && Number(compatibilityPanel.screenW) > 0
     && Number(compatibilityPanel.screenH) > 0
+  readonly property real compatibilityDesiredContentHeight: {
+    const card = compatibilityCard
+    if (!card || !compatibilityContentHolder) return 0
+    return Math.ceil(compatibilityMeasuredContentHeight
+      + (Number(card.contentTopInset) || 0)
+      + (Number(card.contentBottomInset) || 0))
+  }
+  readonly property real compatibilityAvailableContentHeight: {
+    const panel = compatibilityPanel
+    if (!panel || !bar) return 0
+    const screenHeight = Math.max(0, Number(panel.screenH) || 0)
+    const margin = Math.max(0, Number(panel.margin) || 0)
+    const gap = Math.max(0, Number(panel.gap) || 0)
+    const barThickness = Math.max(0, Number(bar.barSize) || 0)
+    return Math.max(120, screenHeight - barThickness - gap - margin)
+  }
+  readonly property real compatibilityHostedContentHeight: Math.min(
+    compatibilityDesiredContentHeight,
+    compatibilityAvailableContentHeight)
+  readonly property bool hostPanelHeightRepairEnabled:
+    hostPanelPlacementEnabled
+    && (bar.position === "top" || bar.position === "bottom")
+    && compatibilityNativeContentHeight <= 120
+    && compatibilityHostedContentHeight
+      > compatibilityNativeContentHeight + 0.5
   readonly property bool v2PanelConnectionEnabled: hostPanelChromeEnabled
     && String(bar.visualTokens.shellStyle || "shibumi") !== "shibumi"
     && (bar.position === "top" || bar.position === "bottom")
@@ -136,6 +165,10 @@ Item {
       clearCompatibilityConnection()
     compatibilityPanel = null
     compatibilityCard = null
+    compatibilityContentHolder = null
+    compatibilityNativeContentHeight = 0
+    compatibilityMeasuredContentHeight = 0
+    compatibilityContentResolutionAttempts = 0
     syncActiveItemMetrics()
     deferredSync.restart()
   }
@@ -200,6 +233,59 @@ Item {
     return null
   }
 
+  function compatibilityDescendantCount(item, depth) {
+    if (!item || depth > 16) return 0
+    const children = item.children || []
+    let count = children.length
+    for (let index = 0; index < children.length; index++)
+      count += compatibilityDescendantCount(children[index], depth + 1)
+    return count
+  }
+
+  function findCompatibilityContentHolder(card) {
+    const children = card && card.children ? card.children : []
+    let best = null
+    let bestCount = 0
+    for (let index = 0; index < children.length; index++) {
+      const candidate = children[index]
+      const count = compatibilityDescendantCount(candidate, 0)
+      if (count > bestCount) {
+        best = candidate
+        bestCount = count
+      }
+    }
+    return best
+  }
+
+  function measureCompatibilityContent(holder) {
+    if (!holder) return 0
+    let bottom = 0
+
+    function visit(item, depth) {
+      if (!item || depth > 16 || item.visible === false) return
+      if (depth > 0) {
+        let point = Qt.point(0, 0)
+        try { point = item.mapToItem(holder, 0, 0) } catch (error) {}
+        const itemHeight = Math.max(Number(item.height) || 0,
+          Number(item.implicitHeight) || 0)
+        const fillsHolder = Math.abs(Number(point.x) || 0) < 0.5
+          && Math.abs(Number(point.y) || 0) < 0.5
+          && Math.abs((Number(item.width) || 0)
+            - (Number(holder.width) || 0)) < 0.5
+          && Math.abs((Number(item.height) || 0)
+            - (Number(holder.height) || 0)) < 0.5
+        if (!fillsHolder)
+          bottom = Math.max(bottom, (Number(point.y) || 0) + itemHeight)
+      }
+      const children = item.children || []
+      for (let index = 0; index < children.length; index++)
+        visit(children[index], depth + 1)
+    }
+
+    visit(holder, 0)
+    return Math.ceil(Math.max(0, bottom))
+  }
+
   function hostedCardOrigin(panel) {
     if (!panel || !bar) return Qt.point(0, 0)
     const screenWidth = Math.max(0, Number(panel.screenW) || 0)
@@ -253,7 +339,24 @@ Item {
     const panel = findCompatibilityPanel(activeItem)
     compatibilityPanel = panel
     compatibilityCard = findCompatibilityCard(panel)
+    compatibilityNativeContentHeight = panel
+      ? Math.max(0, Number(panel.contentHeight) || 0) : 0
+    compatibilityContentHolder = findCompatibilityContentHolder(
+      compatibilityCard)
+    compatibilityMeasuredContentHeight = measureCompatibilityContent(
+      compatibilityContentHolder)
+    compatibilityContentResolutionAttempts = 0
+    if (hostedModule && compatibilityCard) compatibilityMeasureTimer.restart()
     publishCompatibilityConnection()
+  }
+
+  function refreshCompatibilityContent() {
+    if (!compatibilityCard || !activeItem) return
+    compatibilityContentHolder = findCompatibilityContentHolder(
+      compatibilityCard)
+    compatibilityMeasuredContentHeight = measureCompatibilityContent(
+      compatibilityContentHolder)
+    compatibilityContentResolutionAttempts++
   }
 
   function clearCompatibilityConnection() {
@@ -364,6 +467,19 @@ Item {
     restoreMode: Binding.RestoreBindingOrValue
   }
 
+  // KeyboardPanel measures its available height from the anchor window. The
+  // Shibumi bar host is intentionally screen-sized, so hosted panels otherwise
+  // mistake the whole screen for the bar and collapse to the 120px safety
+  // minimum. Recover the provider's actual content height and cap it against
+  // the visible screen edge; native-sized panels remain untouched.
+  Binding {
+    target: root.compatibilityPanel
+    property: "contentHeight"
+    value: root.compatibilityHostedContentHeight
+    when: root.hostPanelHeightRepairEnabled
+    restoreMode: Binding.RestoreBindingOrValue
+  }
+
   Binding {
     target: root.compatibilityCard
     property: "radius"
@@ -396,7 +512,13 @@ Item {
     function onVisibleChanged() { root.syncActiveItemMetrics() }
     function onImplicitWidthChanged() { root.syncActiveItemMetrics() }
     function onImplicitHeightChanged() { root.syncActiveItemMetrics() }
-    function onOpenedChanged() { root.publishCompatibilityConnection() }
+    function onOpenedChanged() {
+      root.publishCompatibilityConnection()
+      if (root.hostedModule && root.compatibilityCard) {
+        root.compatibilityContentResolutionAttempts = 0
+        compatibilityMeasureTimer.restart()
+      }
+    }
   }
 
   Connections {
@@ -423,6 +545,17 @@ Item {
       root.injectProperties()
       root.syncActiveItemMetrics()
       root.resolveCompatibilitySurface()
+    }
+  }
+
+  Timer {
+    id: compatibilityMeasureTimer
+
+    interval: 40
+    repeat: true
+    onTriggered: {
+      root.refreshCompatibilityContent()
+      if (root.compatibilityContentResolutionAttempts >= 20) stop()
     }
   }
 
