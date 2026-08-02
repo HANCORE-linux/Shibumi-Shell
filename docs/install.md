@@ -11,8 +11,8 @@ Omarchy plugin.
 - Omarchy Quattro; other Omarchy generations are not supported
 - The package workflow installs required commands and fonts through Pacman and
   skips dependencies that are already installed or provided
-- The source workflow additionally needs Git, SSH access to the private
-  repository, and a trusted local checkout
+- The source workflow additionally needs Git, HTTPS access to the repository,
+  and a trusted local checkout
 
 The exact accepted Omarchy and Quickshell packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
@@ -44,13 +44,23 @@ shibumi-shell install --dry-run
 For an intentional non-interactive installation:
 
 ```bash
-git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
+sudo pacman -S --needed \
+  python jq curl networkmanager power-profiles-daemon upower xdg-utils \
+  libnotify wl-clipboard ttf-material-symbols-variable \
+  ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts && \
+git clone https://github.com/HANCORE-linux/Shibumi-Shell.git && \
+cd Shibumi-Shell && \
+./scripts/shibumi-suite install --yes
 ```
+
+This temporary source path installs the package-managed runtime dependencies
+first. `sudo` applies only to Pacman; the suite transaction still runs as the
+desktop user and never lets a package hook modify the home directory.
 
 To inspect the transaction before installing:
 
 ```bash
-git clone git@github.com:HANCORE-linux/Shibumi-Shell.git
+git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install

@@ -75,8 +75,18 @@ the 24 user plugins without a root package hook touching the user's config.
 For the current private candidate:
 
 ```bash
-git clone https://github.com/HANCORE-linux/Shibumi-Shell.git && cd Shibumi-Shell && ./scripts/shibumi-suite install --yes
+sudo pacman -S --needed \
+  python jq curl networkmanager power-profiles-daemon upower xdg-utils \
+  libnotify wl-clipboard ttf-material-symbols-variable \
+  ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts && \
+git clone https://github.com/HANCORE-linux/Shibumi-Shell.git && \
+cd Shibumi-Shell && \
+./scripts/shibumi-suite install --yes
 ```
+
+This transitional source command asks for root privileges only while Pacman
+installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
+as the desktop user and writes only user-scoped plugin state.
 
 [Installation, updates, recovery, and removal](docs/install.md)
 
@@ -104,6 +114,9 @@ For a source checkout, use `./scripts/shibumi-suite uninstall` instead.
 - [Check Omarchy Quattro compatibility](docs/architecture/quattro-compatibility.md)
 - [Review current release readiness](docs/release-readiness.md)
 - [Browse all documentation](docs/README.md)
+- Credit: [Lacuna Shell](https://github.com/OldJobobo/lacuna-shell) by
+  [@OldJobobo](https://github.com/OldJobobo) provided structural inspiration
+  for the Omarchy Quattro plugin-suite layout
 
 [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) ·
 [MIT License](LICENSE)

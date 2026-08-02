@@ -75,13 +75,19 @@ def main() -> None:
     package_install_command = (
         "omarchy pkg aur add shibumi-shell && shibumi-shell install --yes"
     )
-    source_install_command = (
-        "git clone git@github.com:HANCORE-linux/Shibumi-Shell.git && "
-        "cd Shibumi-Shell && ./scripts/shibumi-suite install --yes"
+    source_install_markers = (
+        "sudo pacman -S --needed",
+        "ttf-material-symbols-variable",
+        "git clone https://github.com/HANCORE-linux/Shibumi-Shell.git",
+        "cd Shibumi-Shell",
+        "./scripts/shibumi-suite install --yes",
     )
     if sum(package_install_command in block for block in bash_blocks) != 1:
         fail("README landing page is missing the package install command")
-    if sum(source_install_command in block for block in bash_blocks) != 1:
+    if sum(
+        all(marker in block for marker in source_install_markers)
+        for block in bash_blocks
+    ) != 1:
         fail("README landing page is missing the source install command")
     uninstall_command = (
         "shibumi-shell uninstall --yes && omarchy pkg drop shibumi-shell"
