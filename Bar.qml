@@ -143,6 +143,47 @@ Item {
       ? shell.serviceFor(id) : null
   }
 
+  function setWidgetAppearance(groupId, key, valueJson) {
+    const name = String(key || "")
+    // The legacy endpoint only owns appearance shared by both variants.
+    // Variant-scoped values must never report success after writing a
+    // top-level fallback that the active renderer may ignore.
+    if (name !== "separator") return "variant-required"
+    const state = pluginService("hancore.shibumi.state")
+    if (!state || typeof state.setGroupSetting !== "function")
+      return "not-ready"
+    let value = String(valueJson || "")
+    try {
+      value = JSON.parse(value)
+    } catch (error) {
+      return "invalid-value"
+    }
+    if (typeof value !== "boolean") return "invalid-value"
+    return state.setGroupSetting(String(groupId || ""), name, value)
+      ? "ok" : "rejected"
+  }
+
+  function setWidgetAppearanceForVariant(groupId, variantValue, key,
+      valueJson) {
+    const variant = String(variantValue || "").toLowerCase()
+    if (["v1", "v2"].indexOf(variant) < 0) return "invalid-variant"
+    const state = pluginService("hancore.shibumi.state")
+    if (!state
+        || typeof state.setGroupAppearanceSettingForVariant !== "function")
+      return "not-ready"
+    const name = String(key || "")
+    if (Array.isArray(state.appearanceKeys)
+        && state.appearanceKeys.indexOf(name) < 0) return "invalid-key"
+    let value = String(valueJson || "")
+    try {
+      value = JSON.parse(value)
+    } catch (error) {
+      // Plain strings remain convenient for CLI callers.
+    }
+    return state.setGroupAppearanceSettingForVariant(
+      String(groupId || ""), variant, name, value) ? "ok" : "rejected"
+  }
+
   function applyBarConfig() {
     const config = Util.isPlainObject(barConfig) ? barConfig : fallbackBarConfig
     position = normalizePosition(config.position)
@@ -1013,17 +1054,13 @@ Item {
 
     function setWidgetAppearance(groupId: string, key: string,
         valueJson: string): string {
-      const state = root.pluginService("hancore.shibumi.state")
-      if (!state || typeof state.setGroupSetting !== "function")
-        return "not-ready"
-      let value = String(valueJson || "")
-      try {
-        value = JSON.parse(value)
-      } catch (error) {
-        // Plain strings remain convenient for CLI callers.
-      }
-      return state.setGroupSetting(String(groupId || ""),
-        String(key || ""), value) ? "ok" : "rejected"
+      return root.setWidgetAppearance(groupId, key, valueJson)
+    }
+
+    function setWidgetAppearanceForVariant(groupId: string, variant: string,
+        key: string, valueJson: string): string {
+      return root.setWidgetAppearanceForVariant(
+        groupId, variant, key, valueJson)
     }
 
     function setBarAppearance(key: string, valueJson: string): string {

@@ -30,12 +30,65 @@ ShellRoot {
       reactor: { mode: 0 }
     })
     readonly property color selectedColor: "#55aa77"
+    readonly property var appearanceKeys: [
+      "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
+      "widgetBorder", "widgetBorderWidth", "widgetBorderColor",
+      "widgetBorderUsesSurfaceColor", "widgetPadding", "widgetRadius",
+      "surfaceOpacity"
+    ]
 
     function setLayout(order, splits) {
       const next = JSON.parse(JSON.stringify(config))
       next.order = order
       next.splits = splits
       config = next
+      return true
+    }
+
+    function publishConfig(next) {
+      config = next
+      const shellConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+      if (!shellConfig.bar) shellConfig.bar = ({})
+      shellConfig.bar.shibumi = next
+      fakeShell.shellConfig = shellConfig
+    }
+
+    function setGroupSetting(groupId, key, value) {
+      const next = JSON.parse(JSON.stringify(config))
+      if (!next.widgets) next.widgets = ({})
+      if (!next.widgets[groupId]) next.widgets[groupId] = ({})
+      if (next.widgets[groupId][key] === value) return false
+      next.widgets[groupId][key] = value
+      publishConfig(next)
+      return true
+    }
+
+    function setGroupEnabledForVariant(groupId, variant, enabled) {
+      if (["v1", "v2"].indexOf(variant) < 0
+          || typeof enabled !== "boolean") return false
+      const next = JSON.parse(JSON.stringify(config))
+      if (!next.widgets) next.widgets = ({})
+      if (!next.widgets[groupId]) next.widgets[groupId] = ({})
+      const key = variant === "v2" ? "enabledV2" : "enabledV1"
+      if (next.widgets[groupId][key] === enabled) return false
+      next.widgets[groupId][key] = enabled
+      publishConfig(next)
+      return true
+    }
+
+    function setGroupAppearanceSettingForVariant(
+        groupId, variant, key, value) {
+      if (["v1", "v2"].indexOf(variant) < 0
+          || appearanceKeys.indexOf(key) < 0) return false
+      const next = JSON.parse(JSON.stringify(config))
+      if (!next.widgets) next.widgets = ({})
+      if (!next.widgets[groupId]) next.widgets[groupId] = ({})
+      const settings = next.widgets[groupId]
+      if (!settings.appearance) settings.appearance = ({})
+      if (!settings.appearance[variant]) settings.appearance[variant] = ({})
+      if (settings.appearance[variant][key] === value) return false
+      settings.appearance[variant][key] = value
+      publishConfig(next)
       return true
     }
 
@@ -373,6 +426,30 @@ ShellRoot {
       if (!hostBar.removeWidgetFamilyAlternatives("G8")
           || (fakeShell.shellConfig.bar.layout.center || []).length !== 0) {
         return root.fail("Shibumi Center did not remove its alternatives")
+      }
+
+      if (hostBar.setWidgetAppearance(
+            "G1", "widgetPadding", '"roomy"') !== "variant-required"
+          || hostBar.setWidgetAppearanceForVariant(
+            "G1", "v3", "widgetPadding", '"roomy"') !== "invalid-variant"
+          || hostBar.setWidgetAppearanceForVariant(
+            "G1", "v2", "notAnAppearanceKey", "true") !== "invalid-key"
+          || hostBar.setWidgetAppearanceForVariant(
+            "G1", "v2", "widgetPadding", '"roomy"') !== "ok") {
+        return root.fail("variant appearance IPC result contract")
+      }
+      const appearanceConfig = stateService.config.widgets.G1
+      if (appearanceConfig.widgetPadding !== undefined
+          || !appearanceConfig.appearance
+          || !appearanceConfig.appearance.v2
+          || appearanceConfig.appearance.v2.widgetPadding !== "roomy"
+          || appearanceConfig.appearance.v1 !== undefined) {
+        return root.fail("variant appearance IPC state isolation")
+      }
+      if (hostBar.setWidgetAppearance(
+            "G1", "separator", "true") !== "ok"
+          || stateService.config.widgets.G1.separator !== true) {
+        return root.fail("shared appearance IPC compatibility")
       }
 
       hostBar.activePopout = firstConnectedPanelOwner

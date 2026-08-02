@@ -31,6 +31,24 @@ and normalizes this branch before using it. It includes:
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema.
 
+### Appearance IPC
+
+Maintainer automation must name the owning appearance profile explicitly:
+
+```text
+qs ipc -p /usr/share/omarchy/shell call shibumi-suite \
+  setWidgetAppearanceForVariant G1 v2 widgetPadding '"roomy"'
+```
+
+The accepted variants are `v1` and `v2`. Variant-scoped values such as display
+mode, color, border, padding, radius, and opacity are stored only below the
+matching `widgets.Gx.appearance.<variant>` object. Updating one profile cannot
+change the other profile.
+
+The legacy `setWidgetAppearance` IPC method remains available only for the
+group-wide `separator` boolean. It returns `variant-required` for scoped
+appearance keys instead of writing an ignored top-level fallback.
+
 ### V1 layout slots
 
 V1 keeps seven base slots on the left, one in the center, and seven on the

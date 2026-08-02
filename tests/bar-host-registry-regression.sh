@@ -12,10 +12,14 @@ fail() {
 }
 
 for endpoint in 'function openControlCenter(): string' \
-    'function closeControlCenter(): string'; do
+    'function closeControlCenter(): string' \
+    'function setWidgetAppearanceForVariant(groupId: string, variant: string,'; do
   rg -Fq "$endpoint" "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "missing Shibumi Control Center IPC endpoint: $endpoint"
 done
+rg -Fq 'if (name !== "separator") return "variant-required"' \
+  "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail "legacy appearance IPC still accepts variant-scoped keys"
 for v2_native_widget in \
     'hancore.shibumi.temperature' \
     'hancore.shibumi.gpu' \
