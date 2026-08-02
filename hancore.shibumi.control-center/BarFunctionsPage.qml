@@ -93,7 +93,7 @@ Column {
     pageKey: "appearance"
     eyebrow: "WIDGET VISUALS"
     title: "Icons"
-    description: "Choose each widget's supported icon and label presentation."
+    description: "Style widget content and surfaces. Launcher identity stays under Logo."
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale

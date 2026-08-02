@@ -60,6 +60,7 @@ Column {
     selectedWidgetGroup, selectedWidgetId)
   readonly property string selectedCatalogGroup:
     String(selectedWidget ? selectedWidget.catalogGroup || "" : "")
+  readonly property bool selectedLauncher: selectedCatalogGroup === "G1"
   readonly property bool selectedMedia: selectedCatalogGroup === "G9"
   readonly property bool v1LayoutActive: controller.v2LayoutActive !== true
   readonly property var selectedModeOptions: modeOptionsForGroup(
@@ -69,7 +70,10 @@ Column {
   readonly property bool selectedSupported: selectedWidget
     && String(selectedWidget.group || "") !== ""
   readonly property string selectedDisplayMode: selectedSupported
-    ? widgetMode(selectedWidget.group, selectedCatalogGroup) : "full"
+    ? selectedLauncher
+      ? String(controller.launcherConfig.mode || "text")
+      : widgetMode(selectedWidget.group, selectedCatalogGroup)
+    : "full"
   readonly property string selectedSurfaceMode: selectedSupported
     ? String(widgetSetting(selectedWidget.group, "colorMode", "fill")) : "none"
   readonly property string selectedColor: selectedSupported
@@ -387,7 +391,8 @@ Column {
       group, "widgetBorderUsesSurfaceColor", false) === true
     const borderColor = String(widgetSetting(group, "widgetBorderColor",
       usesSurfaceColor ? color : "inherit"))
-    return widgetMode(group, catalogGroup) !== "full"
+    return (catalogGroup !== "G1"
+        && widgetMode(group, catalogGroup) !== "full")
       || color !== "inherit"
       || String(widgetSetting(group, "colorMode", "fill")) !== "fill"
       || String(widgetSetting(group, "tone", "auto")) !== "auto"
@@ -418,6 +423,7 @@ Column {
   function modeOptionsForGroup(groupValue, catalogGroupValue) {
     const catalogGroup = String(catalogGroupValue
       || catalogGroupForSettingsGroup(groupValue) || "")
+    if (catalogGroup === "G1") return []
     if (catalogGroup === "G9") return mediaStyleOptions
     if (controller.v2LayoutActive === true) return displayModeOptions
     const compactAvailable = v1CompactGroupIds.indexOf(catalogGroup) >= 0
@@ -460,8 +466,17 @@ Column {
     return options.length > 0 ? String(options[0].label) : "Default"
   }
 
+  function widgetPresentationLabel(group, catalogGroupValue) {
+    const catalogGroup = String(catalogGroupValue
+      || catalogGroupForSettingsGroup(group) || "")
+    if (catalogGroup === "G1")
+      return "Logo · " + (String(controller.launcherConfig.mode || "text")
+        === "icon" ? "Icon" : "Wordmark")
+    return displayModeLabel(group, widgetMode(group, catalogGroup))
+  }
+
   function setWidgetMode(mode) {
-    if (!selectedSupported) return false
+    if (!selectedSupported || selectedLauncher) return false
     const value = String(mode)
     const available = selectedModeOptions.some(function(option) {
       return String(option.value) === value && option.enabled !== false
@@ -823,7 +838,9 @@ Column {
                       ? Commons.Style.space(5) : 0
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.selectedDisplayMode !== "icon"
-                    text: root.selectedWidget.label
+                    text: root.selectedLauncher
+                      ? root.controller.launcherChoiceLabel("text")
+                      : root.selectedWidget.label
                     color: root.selectedHasFill
                         && root.selectedColor !== "inherit"
                       ? root.controller.contrastColor(root.selectedColor)
@@ -994,10 +1011,12 @@ Column {
           Row {
             visible: root.selectedSupported
               && !root.selectedMedia
+              && (!root.selectedLauncher || !root.v1LayoutActive)
             width: parent.width
             spacing: Commons.Style.space(8)
 
             Column {
+              visible: !root.selectedLauncher
               width: root.v1LayoutActive ? parent.width
                 : (parent.width - parent.spacing * 2) / 3 * 2
                   + parent.spacing
@@ -1016,7 +1035,8 @@ Column {
 
             Column {
               visible: !root.v1LayoutActive
-              width: (parent.width - parent.spacing * 2) / 3
+              width: root.selectedLauncher ? parent.width
+                : (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
               FieldLabel { text: "CONTENT TONE" }
@@ -1225,9 +1245,8 @@ Column {
           visible: widgetRow.active || widgetRow.hasToggleError
           text: widgetRow.hasToggleError
             ? root.toggleErrorMessage
-            : root.displayModeLabel(widgetRow.option.group,
-                root.widgetMode(widgetRow.option.group,
-                  widgetRow.option.catalogGroup))
+            : root.widgetPresentationLabel(widgetRow.option.group,
+                widgetRow.option.catalogGroup)
           color: widgetRow.hasToggleError
             ? root.controller.accentColor("color01")
             : widgetRow.selected || editorPointer.containsMouse

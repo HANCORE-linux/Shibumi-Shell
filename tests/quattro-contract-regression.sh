@@ -7,7 +7,8 @@ omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
 suite="$repo_root/contracts/plugin-suite-v1.json"
 registry="$omarchy_path/shell/services/PluginRegistry.qml"
 shell_root="$omarchy_path/shell/shell.qml"
-plugin_cli="$omarchy_path/bin/omarchy-plugin"
+plugin_add_cli="$omarchy_path/bin/omarchy-plugin-add"
+legacy_plugin_cli="$omarchy_path/bin/omarchy-plugin"
 keyboard_panel="$omarchy_path/shell/Ui/KeyboardPanel.qml"
 
 fail() {
@@ -19,8 +20,10 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required'
 command -v rg >/dev/null 2>&1 || fail 'ripgrep is required'
 [[ -x $omarchy_path/bin/omarchy ]] || fail "missing Omarchy CLI below $omarchy_path"
 [[ -x $omarchy_path/bin/omarchy-plugin-validate ]] || fail 'missing official plugin validator'
-[[ -f $registry && -f $shell_root && -f $keyboard_panel && -x $plugin_cli ]] \
+[[ -f $registry && -f $shell_root && -f $keyboard_panel ]] \
   || fail 'Omarchy Quattro plugin host sources are incomplete'
+[[ -x $plugin_add_cli || -x $legacy_plugin_cli ]] \
+  || fail 'Omarchy Quattro plugin add command is missing'
 
 [[ ! -e $repo_root/manifest.json ]] \
   || fail 'suite root must not masquerade as one native Omarchy plugin'
@@ -60,11 +63,21 @@ done
 # manifest id. Shibumi therefore needs its suite adapter for atomic 25-plugin
 # lifecycle handling instead of pretending that `omarchy plugin add <repo>` is
 # a supported install path.
-rg -Fq 'omarchy-plugin-validate "$stage"' "$plugin_cli" \
+plugin_add_contract=$plugin_add_cli
+if [[ ! -x $plugin_add_contract ]]; then
+  plugin_add_contract=$legacy_plugin_cli
+fi
+rg -Fq 'omarchy-plugin-validate "$stage"' "$plugin_add_contract" \
   || fail 'native plugin add no longer validates one staged root'
-rg -Fq 'id=$(jq -r '\''.id'\'' "$stage/manifest.json")' "$plugin_cli" \
+rg -Fq 'id=$(jq -r '\''.id'\'' "$stage/manifest.json")' "$plugin_add_contract" \
   || fail 'native plugin add no longer resolves one root manifest id'
-
+if [[ -x $plugin_add_cli ]]; then
+  rg -Fq 'omarchy-shell shell rescanPlugins' "$plugin_add_cli" \
+    || fail 'split plugin add no longer rescans through the shell IPC contract'
+fi
+rg -Fq 'self.run([self.command("omarchy-shell"), "shell", "rescanPlugins"])' \
+  "$repo_root/scripts/shibumi_suite/runtime.py" \
+  || fail 'suite lifecycle adapter retains the retired plugin rescan route'
 rg -Fq 'def reload_config(self, *, timeout: float = 30)' \
   "$repo_root/scripts/shibumi_suite/runtime.py" \
   || fail 'suite reload settling window is too short for a full-bar switch'
@@ -103,6 +116,13 @@ for needle in \
     || fail "KeyboardPanel compatibility surface drift: $needle"
 done
 
+omarchy_version=unknown
+for package_name in omarchy omarchy-dev; do
+  if package_version=$(pacman -Q "$package_name" 2>/dev/null | awk '{print $2}'); then
+    omarchy_version=$package_version
+    break
+  fi
+done
+
 printf 'Quattro contract regression passed (%s, %d plugins)\n' \
-  "$(pacman -Q omarchy 2>/dev/null | awk '{print $2}' || printf unknown)" \
-  "${#plugin_ids[@]}"
+  "$omarchy_version" "${#plugin_ids[@]}"

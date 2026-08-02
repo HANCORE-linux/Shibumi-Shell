@@ -44,6 +44,7 @@ Rectangle {
       anchors.fill: parent
       controller: root.controller
       routeId: root.semanticKey
+      compact: true
       foreground: root.foreground
       accent: root.accent
     }

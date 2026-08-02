@@ -419,6 +419,16 @@ class SuiteLifecycleTests(unittest.TestCase):
             runtime.refresh_menu(timeout=1)
         self.assertEqual(runtime.run.call_count, 2)
 
+    def test_rescan_uses_shell_ipc_contract(self) -> None:
+        runtime = OmarchyRuntime()
+        runtime.run = Mock()
+
+        runtime.rescan()
+
+        runtime.run.assert_called_once_with(
+            ["omarchy-shell", "shell", "rescanPlugins"]
+        )
+
     def test_install_and_uninstall_manage_picker_routes(self) -> None:
         self.install()
         extension = self.paths.menu_extension_file

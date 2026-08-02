@@ -158,6 +158,12 @@ Item {
     const next = String(value || "")
     if (["top", "bottom"].indexOf(next) < 0 || !shell
         || typeof shell.mutateShellConfig !== "function") return false
+    const preservePanel = root.isBarWidgetOpen(
+      "hancore.shibumi.control-center")
+    if (preservePanel)
+      root.scheduleWidgetRestore(
+        "hancore.shibumi.control-center",
+        root.barWidgetPage("hancore.shibumi.control-center", "bars"), false)
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.position = next

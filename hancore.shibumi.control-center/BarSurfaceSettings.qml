@@ -45,7 +45,6 @@ Column {
     { value: "color05", label: "05" },
     { value: "color06", label: "06" },
     { value: "color07", label: "07" },
-    { value: "color08", label: "08" },
     { value: "foreground", label: "FG" }
   ]
   readonly property bool ready:
@@ -93,7 +92,9 @@ Column {
   }
 
   Row {
+    id: radiusRow
     width: parent.width
+    height: visible ? Commons.Style.space(30) : 0
     spacing: Commons.Style.space(4)
     visible: root.showSurface && root.radiusOptions.length > 0
 
@@ -111,6 +112,7 @@ Column {
         foreground: root.foreground
         accent: root.accent
         uiScale: root.uiScale
+        controlHeight: radiusRow.height
         onClicked: root.controller.setBarPresentation(
           "radius", modelData.value)
       }
@@ -124,7 +126,7 @@ Column {
 
   Grid {
     width: parent.width
-    columns: 9
+    columns: 8
     columnSpacing: Commons.Style.space(6)
     visible: root.showAccent
 
@@ -139,12 +141,16 @@ Column {
           String(root.controller.barPresentation.accent || "color01")
           === modelData.value
         readonly property bool hovered: swatchMouse.containsMouse
-        width: (parent.width - parent.columnSpacing * 8) / 9
+        width: (parent.width - parent.columnSpacing * 7) / 8
         height: Commons.Style.space(26)
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: "Bar accent " + swatch.modelData.label
         radius: root.controller.controlRadius
         color: root.controller.accentColor(modelData.value)
         border.width: 1
-        border.color: root.controller.controlBorderColor
+        border.color: swatch.activeFocus
+          ? root.accent : root.controller.controlBorderColor
         scale: hovered ? 1.04 : 1
         z: hovered ? 1 : 0
 
@@ -180,6 +186,13 @@ Column {
           onClicked: root.controller.setBarPresentation(
             "accent", swatch.modelData.value)
         }
+
+        Keys.onReturnPressed: root.controller.setBarPresentation(
+          "accent", swatch.modelData.value)
+        Keys.onEnterPressed: root.controller.setBarPresentation(
+          "accent", swatch.modelData.value)
+        Keys.onSpacePressed: root.controller.setBarPresentation(
+          "accent", swatch.modelData.value)
       }
     }
   }

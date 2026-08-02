@@ -93,7 +93,7 @@ plugin_dir="$HOME/.config/omarchy/plugins/hancore.qsrise.bar"
 mkdir -p "$plugin_dir"
 rsync -a --delete --exclude .git /path/to/omarchy-qsrise-bar/ "$plugin_dir/"
 omarchy plugin validate "$plugin_dir"
-omarchy plugin rescan
+omarchy-shell shell rescanPlugins
 omarchy bar options
 ```
 

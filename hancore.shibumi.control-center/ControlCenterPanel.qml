@@ -137,9 +137,6 @@ ShibumiPanel {
   readonly property var v1LayoutSlots: bar && bar.layoutController
     ? bar.layoutController.v1Slots
     : ({ left: [], center: [], right: [] })
-  readonly property var v2LayoutSlots: bar && bar.layoutController
-    ? bar.layoutController.v2Slots
-    : ({ left: [], center: [], right: [] })
   readonly property var networkService: shellService(
     "hancore.shibumi.network")
   readonly property var bluetoothService: shellService(
@@ -205,6 +202,7 @@ ShibumiPanel {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property int headerHealthErrorCount: settings.healthErrorCount
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property var healthReport: healthService.report
   readonly property bool healthRunning: healthService.running
@@ -224,8 +222,20 @@ ShibumiPanel {
           switchPhase === "error" ? 250 : 205), Commons.Style.space(260))
       : fittedContentHeight(Commons.Style.space(
           switchPhase === "error" ? 488 : 436), Commons.Style.space(495))
+    : settings.compactConfigureLanding
+      ? fittedContentHeight(settings.compactConfigureLandingPanelHeight,
+          Commons.Style.space(680))
     : settings.compactIconsOverview
       ? fittedContentHeight(settings.compactIconsPanelHeight,
+          Commons.Style.space(680))
+    : settings.compactPickersPage
+      ? fittedContentHeight(settings.compactPickersPanelHeight,
+          Commons.Style.space(680))
+    : settings.compactWorkspacesPage
+      ? fittedContentHeight(settings.compactWorkspacesPanelHeight,
+          Commons.Style.space(680))
+    : settings.compactLogoPage
+      ? fittedContentHeight(settings.compactLogoPanelHeight,
           Commons.Style.space(680))
     : fittedContentHeight(Commons.Style.space(610),
         Commons.Style.space(680))
@@ -749,16 +759,6 @@ ShibumiPanel {
       ? bar.resetBarLayout() : false
   }
 
-  function addV2Slot(region) {
-    return bar && typeof bar.addV2Slot === "function"
-      ? bar.addV2Slot(region) : false
-  }
-
-  function removeV2Slot(region) {
-    return bar && typeof bar.removeV2Slot === "function"
-      ? bar.removeV2Slot(region) : false
-  }
-
   function addV1Slot(region) {
     return bar && typeof bar.addV1Slot === "function"
       ? bar.addV1Slot(region) : false
@@ -993,12 +993,12 @@ ShibumiPanel {
             + (settings.restorePage === "quick" ? "QUICK"
               : settings.restorePage === "configure" ? "CONFIGURE"
               : settings.restorePage === "bars" ? "BARS"
+              : settings.restorePage === "bars-motion" ? "BARS  /  GAP ANIMATIONS"
               : settings.restorePage === "plugins" ? "PLUGINS"
               : settings.restorePage === "workspaces" ? "WORKSPACES"
               : settings.restorePage === "pickers" ? "PICKERS"
               : settings.restorePage === "logo" ? "LOGO"
               : settings.restorePage === "functions" ? "ICONS"
-              : settings.restorePage === "splits" ? "LAYOUT"
               : settings.restorePage === "health" ? "HEALTH"
               : "OVERVIEW")
           color: panel.marketText

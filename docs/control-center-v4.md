@@ -10,13 +10,20 @@ language:
 - **Quick** keeps the active bar, plugin installation, shell reload, Bars,
   Pickers, and the four Omarchy session actions immediately available. The
   compact surface beside Quick/Configure divides the Active Bar width between
-  direct Health and Plugins routes; Registry shows the abbreviated
-  Shibumi/Omarchy/external plugin breakdown. The
+  direct Health and Plugins routes. Health shows `PASS` in `color03` after a
+  fully successful run, `REVIEW` in the accent color when warnings remain, and
+  turns to `color01` with the error count when diagnostics contain errors. It
+  stays neutral before the first report. Plugins keeps its label neutral and
+  renders the abbreviated Shibumi/Omarchy/external counts in `color03`. The
   redundant bar-position statistic is omitted.
-- **Configure** opens a route landing page for Bars, Icons, Logo, Workspaces,
-  Pickers, Plugins, and Health. Focusing a route updates its
-  semantic preview at the right. Selecting a route fades the
-  landing graph and moves the complete route list into a compact left-hand
+- **Configure** opens a content-matched route landing page for Bars, Icons,
+  Logo, Workspaces, Pickers, Plugins, and Health. Focusing a route updates its
+  semantic preview at the right; every miniature mirrors the route's current
+  control language instead of using a generic placeholder. The larger landing
+  previews may compare several representative choices; the compact preview in
+  an editor header shows exactly one example so it cannot overlap its bounded
+  stage. Selecting a route
+  fades the landing graph and moves the complete route list into a compact left-hand
   master column while revealing the matching editor on the right. Every route
   remains visible and switches the right-hand editor directly; no nested menu
   or isolated back tile is created. Selecting the top Configure mode returns
@@ -90,11 +97,13 @@ interaction roles explicit.
 Every page uses a contained semantic preview of the settings behind that route.
 The preview is static until its route or represented state changes; no
 decorative timer, frame loop, random preset rotation, or background animation
-remains. A route change uses one short opacity-and-scale transition so the image
-changes smoothly without continuously consuming rendering time. Hovering a
-selector previews its appearance without changing the active bar. In Shibumi,
-the settled Active Bar preview retains its hover state and opens Bars; in the
-Omarchy return-only surface it remains passive.
+remains. Editor-header previews use one short opacity-and-scale transition when
+the page changes. Configure landing previews switch directly without dimming
+or scaling, and crossing the gap between route cards retains the last preview
+instead of flashing back to Bars. Hovering a selector previews its appearance
+without changing the active bar. In Shibumi, the settled Active Bar preview
+retains its hover state and opens Bars; in the Omarchy return-only surface it
+remains passive.
 
 ## Bar switch and Quick-action logic
 
@@ -118,19 +127,18 @@ route line sits outside the unchanged card axis, with one 3.6-unit circular
 node and a short card connector per Configure area. The active node uses the
 accent; inactive nodes remain neutral. The landing introduction collapses
 structurally when the master column opens, so every visible route remains
-inside its actual pointer hit-test bounds.
+inside its actual pointer hit-test bounds. Entering Configure by pointer starts
+with a neutral route overview; the first route receives focus styling only
+after keyboard navigation enters the route list.
 
-Bars adds one contextual child node, `Surface & Color`, only while the Bars
-editor and a Shibumi bar are active. It is an in-page anchor rather than a
-nested settings page: selecting it scrolls the existing editor to the
-version-gated accent/detail block after Bar Form, while selecting Bars returns
-to the top of the same editor. Position and the compact border controls share
-one two-column row above Bar Form. The child node disappears for the stock
-Omarchy bar and every other Configure route. When the child is active, the
-complete branch from the Bars node to `Surface & Color` uses the accent rather
-than highlighting only the final connector. The shared scrollspy activation
-line is the upper two thirds of the visible detail viewport, so a child route
-activates while its section enters focus rather than only at the scroll limit.
+Bars adds one contextual child node, `Gap Animations`, only while the V1 Bars
+editor is active. It is a real detail route containing the nine direct Reactor
+previews; selecting Bars returns to the compact V1 editor without changing the
+selected mode. Position/Layout and the compact surface controls share one
+two-column row above Bar Form. The child node disappears for V2, the stock
+Omarchy bar, and every other Configure route. When the child is active, the
+complete branch from the Bars node to `Gap Animations` uses the accent rather
+than highlighting only the final connector.
 
 The selector distinguishes three separate outcomes:
 
@@ -184,11 +192,22 @@ stable plugin-derived V1 G-group in an outer extra position. That group uses
 the same per-output rendering and shared split/drag state as the built-in V1
 groups. Uninstall removes the group without renumbering any remaining plugin.
 If all four optional V1 positions are occupied, the add action fails closed.
-V2 exposes divider editing, layout restore, and left/center/right slot capacity
-with valid minimum and maximum limits. V2 never exposes V1 gap-animation or
-split-island controls. The former
-Layout route remains only as an internal compatibility target and is absent
-from Configure, search, Icons, and Bars navigation.
+The bulk Split all and Merge all actions sit directly below Top/Bottom in the
+V1 `Position & Layout` column, using the height beside V1's three surface rows
+instead of consuming another full-width row below.
+V2 exposes a single bar edit mode for adding slots and placing dividers, plus
+layout restore. Bars does not duplicate slot-capacity controls in a second
+editor. V2 never exposes V1 gap-animation or split-island controls. The former
+Layout deep links remain compatible by resolving directly to Bars; there is no
+second Layout editor in Configure, search, Icons, or Bars navigation.
+
+V1 keeps the Islands form preview on the compact Bars page. Its nine Reactor
+modes live in the Bars child route **Gap Animations** as direct `3 × 3` preview
+tiles: Off/Stream/Stream 2, Reactor/Surge/Surge 2, and
+Quotes/Bolt/Bolt 2. A tile never hides another mode behind repeated clicks.
+Only the selected or hovered preview animates, while the actual selection is
+persisted through the shared state service. Returning through the Bars node
+restores the compact page; the child route is absent when V2 is active.
 
 Accent swatches keep a neutral one-pixel border. Selection is communicated by
 the QS-Dots two-pixel underline beneath the palette number or `FG`, while a
@@ -231,8 +250,9 @@ The Bars page selects its layout section from the active Shibumi presentation:
 
 V1 controls are not merely described as incompatible on V2: they are removed
 from the V2 interaction surface. V2 slot and divider controls are likewise
-absent from V1. The capability boundary is visible within Bars without a
-second navigation level.
+absent from V1. The only Bars child route is V1-only Gap Animations; all layout,
+surface, accent, form, slot, and divider controls remain on their owning
+profile's compact Bars page.
 
 ## Plugins and Icons
 
@@ -323,20 +343,25 @@ not secondary sections inside Icons:
   active, occupied, and empty state before it is applied. V1 and V2 expose the
   same Default, Numbers, Magic, Kanji, Frame (persisted as `rings`), and Aurora
   choices. V1's Radius 12/6 setting affects the Numbers and Frame marker
-  geometry only; V2 keeps its fixed marker radii.
+  geometry only; V2 keeps its fixed marker radii. The shared Workspaces route
+  uses the same content-matched compact panel height as Pickers, without a
+  redundant explanation below the self-describing marker previews.
 - **Pickers** exclusively owns the theme/wallpaper browser and the
   screenshot/video browser. Themes and wallpapers default to Omarchy's
   carousel, with Tanzaku and Hearthstone as the two Shibumi alternatives.
   Screenshots and videos retain Tanzaku, Hearthstone, and Carousel. The same
-  picker routes, choices, and persisted selections are used by V1 and V2.
+  picker routes, choices, and persisted selections are used by V1 and V2. The
+  shared Pickers route uses a content-matched compact panel height instead of
+  inheriting the taller generic Configure surface.
 - **Bars** owns the active bar's supported surface and accent settings. V1
   exposes border, frost, shadow, and Radius 12/6. V2 exposes Bar Border and
   Panel + Tooltip; its fixed V2 radii and unsupported V1 effects are not
-  presented as editable settings;
-  the same tokens are consumed by both the V1 and V2 renderers.
-- **Logo** owns launcher wordmark/icon format and visual choices. V1 and V2
-  consume the same launcher selection and expose the same built-in wordmarks
-  and icons.
+  presented as editable settings. Both generations expose the eight palette
+  roles supported by the accepted references: `color01` through `color07` and
+  foreground. The same tokens are consumed by both the V1 and V2 renderers.
+- **Logo** owns launcher wordmark/icon format and visual choices. Its selection
+  is authoritative in V1 and V2: choosing a wordmark or icon immediately sets
+  that launcher presentation, independent of stored per-widget appearance.
 - **Icons** owns per-widget icon/content modes plus their surfaces, colors,
   shape, spacing, and opacity. It follows the active bar's canonical
   left/center/right layout order and lists only enabled groups that implement
@@ -383,8 +408,9 @@ not secondary sections inside Icons:
   without a collapsed `More` section or a second scroll surface. Surface color
   and outline width remain visible but disabled when the selected surface
   cannot consume them. A V1/V2 Active label communicates the current
-  capability context; split, gap, slot, and bar-divider ownership remains in
-  Bars and is not duplicated here. Icons alone uses a shorter semantic page
+  capability context; the Launcher omits the generic Presentation control
+  because Logo owns its identity. Split, gap, slot, and bar-divider ownership
+  remains in Bars and is not duplicated here. Icons alone uses a shorter semantic page
   preview, which disappears during focused editing.
 
 The Workspaces and Pickers controls are not repeated on another page. Quick

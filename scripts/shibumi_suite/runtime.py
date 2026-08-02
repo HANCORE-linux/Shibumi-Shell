@@ -170,7 +170,7 @@ class OmarchyRuntime:
         self.run([self.command("omarchy"), "plugin", "validate", str(directory)])
 
     def rescan(self) -> None:
-        self.run([self.command("omarchy"), "plugin", "rescan"])
+        self.run([self.command("omarchy-shell"), "shell", "rescanPlugins"])
 
     def reload_config(self, *, timeout: float = 30) -> None:
         command = [self.command("omarchy-shell"), "shell", "reloadConfig"]

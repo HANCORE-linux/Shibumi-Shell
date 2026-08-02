@@ -117,7 +117,7 @@ managed bundle marker.
 
 Evidence:
 
-- [`bin/omarchy-plugin`, add path](https://github.com/basecamp/omarchy/blob/4a02da20d58d912a74748845bc55b5ec73acd65f/bin/omarchy-plugin#L178-L264)
+- [`bin/omarchy-plugin-add`](https://github.com/basecamp/omarchy/blob/f54edbe/bin/omarchy-plugin-add)
 - [`PluginRegistry.qml`, third-party scan depth](https://github.com/basecamp/omarchy/blob/4a02da20d58d912a74748845bc55b5ec73acd65f/shell/services/PluginRegistry.qml#L296-L319)
 - [`bin/omarchy-menu-plugin`, generic per-root actions](https://github.com/basecamp/omarchy/blob/09b955dc751c4282e893dc753788f335b0dcae57/bin/omarchy-menu-plugin)
 

@@ -11,6 +11,7 @@ Column {
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
   property bool motionActive: false
+  property bool motionDetailOpen: false
 
   readonly property bool shibumiActive:
     controller.activeShell === "shibumi"
@@ -22,10 +23,12 @@ Column {
     controller.barPresentation.shellStyle || "shibumi")
   readonly property string activeDetail: !shibumiActive
     ? "Stock Omarchy bar"
+    : motionDetailOpen && !v2Active
+      ? "Nine direct previews for V1 animated gaps"
     : v2Active
       ? activeStyle.charAt(0).toUpperCase() + activeStyle.slice(1)
         + " · slots and dividers"
-      : "Split islands and gap motion"
+      : "Split islands, slots and layout"
   readonly property var shellStyleOptions: [
     {
       value: "shibumi", label: "V1 · Islands",
@@ -54,22 +57,24 @@ Column {
     barSurfaceSettings.effectOptions.length
   readonly property int surfaceRadiusOptionCount:
     barSurfaceSettings.radiusOptions.length
-  readonly property bool surfaceSectionAvailable: shibumiActive
-  readonly property real surfaceSectionY: barAccentSettings.y
+  readonly property bool childRouteAvailable:
+    shibumiActive && !v2Active
+  readonly property string childRouteLabel: "Gap Animations"
+  readonly property bool mainSettingsVisible:
+    !motionDetailOpen || v2Active
   readonly property var reactorOptions: [
     { value: 0, label: "Off" },
     { value: 1, label: "Stream" },
     { value: 5, label: "Stream 2" },
+    { value: 7, label: "Reactor" },
     { value: 2, label: "Surge" },
     { value: 6, label: "Surge 2" },
+    { value: 8, label: "Quotes" },
     { value: 3, label: "Bolt" },
-    { value: 4, label: "Bolt 2" },
-    { value: 7, label: "Reactor" },
-    { value: 8, label: "Quotes" }
+    { value: 4, label: "Bolt 2" }
   ]
   readonly property bool ready:
     shellStyleRepeater.count === visibleShellStyleOptions.length
-    && v2SlotRepeater.count === 3
     && reactorRepeater.count === reactorOptions.length
     && barSurfaceSettings.ready && barAccentSettings.ready
 
@@ -128,6 +133,7 @@ Column {
   Row {
     id: primaryControlRow
     width: parent.width
+    visible: root.mainSettingsVisible
     spacing: Commons.Style.space(8)
 
     Column {
@@ -136,7 +142,9 @@ Column {
         : primaryControlRow.width
       spacing: Commons.Style.space(8)
 
-      SectionLabel { text: "POSITION" }
+      SectionLabel {
+        text: root.v2Active ? "POSITION" : "POSITION & LAYOUT"
+      }
 
       Row {
         id: positionChoiceRow
@@ -168,6 +176,36 @@ Column {
           onClicked: root.controller.setBarPosition("bottom")
         }
       }
+
+      Row {
+        id: v1SplitChoiceRow
+        width: parent.width
+        height: visible ? Commons.Style.space(30) : 0
+        spacing: Commons.Style.space(8)
+        visible: !root.v2Active
+
+        CompactSettingChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Split all"
+          controlHeight: v1SplitChoiceRow.height
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setAllSplits(true)
+        }
+
+        CompactSettingChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Merge all"
+          controlHeight: v1SplitChoiceRow.height
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setAllSplits(false)
+        }
+      }
     }
 
     BarSurfaceSettings {
@@ -187,22 +225,9 @@ Column {
   Column {
     width: parent.width
     spacing: Commons.Style.space(8)
-    visible: root.shibumiActive
+    visible: root.shibumiActive && root.mainSettingsVisible
 
     SectionLabel { text: "BAR FORM" }
-
-    Text {
-      width: parent.width
-      text: root.v2Active
-        ? "Choose the active V2 shape. The previews follow the current "
-          + "top or bottom position."
-        : "V1 uses the Islands form. Switch bar versions from Quick."
-      color: root.foreground
-      opacity: 0.48
-      wrapMode: Text.WordWrap
-      font.family: root.controller.marketFont
-      font.pixelSize: Commons.Style.font.caption * root.uiScale
-    }
 
     Flow {
       id: styleFlow
@@ -236,7 +261,7 @@ Column {
   BarSurfaceSettings {
     id: barAccentSettings
     width: parent.width
-    visible: root.shibumiActive
+    visible: root.shibumiActive && root.mainSettingsVisible
     controller: root.controller
     v2Active: root.v2Active
     showSurface: false
@@ -250,12 +275,13 @@ Column {
     width: parent.width
     spacing: Commons.Style.space(8)
     visible: root.shibumiActive && !root.v2Active
+      && root.mainSettingsVisible
 
     SectionLabel { text: "V1 LAYOUT" }
 
     Text {
       width: parent.width
-      text: "V1 supports positional slots, split islands and animated gaps."
+      text: "V1 supports positional slots, live split islands and drag editing."
       color: root.foreground
       opacity: 0.48
       wrapMode: Text.WordWrap
@@ -273,7 +299,7 @@ Column {
         controller: root.controller
         glyph: "view_column"
         label: "Edit slots"
-        detail: "Add, move or remove on the bar"
+        detail: "Add, move and drag on the bar"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.beginBarEditing()
@@ -284,87 +310,19 @@ Column {
         controller: root.controller
         glyph: "restart_alt"
         label: "Restore layout"
-        detail: "Reset slots and split positions"
+        detail: "Reset V1 slots, order and splits"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.resetBarLayout()
       }
     }
 
-    Row {
-      width: parent.width
-      height: Commons.Style.space(30)
-      spacing: Commons.Style.space(7)
-
-      CompactSettingChoice {
-        width: (parent.width - parent.spacing) / 2
-        controller: root.controller
-        label: "Split all"
-        controlHeight: parent.height
-        foreground: root.foreground
-        accent: root.accent
-        uiScale: root.uiScale
-        onClicked: root.controller.setAllSplits(true)
-      }
-
-      CompactSettingChoice {
-        width: (parent.width - parent.spacing) / 2
-        controller: root.controller
-        label: "Merge all"
-        controlHeight: parent.height
-        foreground: root.foreground
-        accent: root.accent
-        uiScale: root.uiScale
-        onClicked: root.controller.setAllSplits(false)
-      }
-
-    }
-
-    SectionLabel { text: "GAP ANIMATION" }
-
-    Grid {
-      width: parent.width
-      columns: 3
-      columnSpacing: Commons.Style.space(5)
-      rowSpacing: Commons.Style.space(6)
-
-      Repeater {
-        id: reactorRepeater
-        model: root.reactorOptions
-
-        delegate: CompactSettingChoice {
-          required property var modelData
-          width: (parent.width - parent.columnSpacing * 2) / 3
-          controller: root.controller
-          label: modelData.label
-          selected: root.controller.reactorMode === modelData.value
-          foreground: root.foreground
-          accent: root.accent
-          fontSize: Commons.Style.font.caption * root.uiScale
-          horizontalPadding: Commons.Style.space(3)
-          onClicked: root.controller.setReactorMode(modelData.value)
-        }
-      }
-    }
   }
 
   Column {
     width: parent.width
     spacing: Commons.Style.space(8)
-    visible: root.v2Active
-
-    SectionLabel { text: "V2 LAYOUT" }
-
-    Text {
-      width: parent.width
-      text: "V2 uses three slots and dividers; "
-        + "V1 split/gap controls stay hidden."
-      color: root.foreground
-      opacity: 0.48
-      wrapMode: Text.WordWrap
-      font.family: root.controller.marketFont
-      font.pixelSize: Commons.Style.font.caption * root.uiScale
-    }
+    visible: root.v2Active && root.mainSettingsVisible
 
     Row {
       width: parent.width
@@ -375,8 +333,8 @@ Column {
         width: (parent.width - parent.spacing) / 2
         controller: root.controller
         glyph: "splitscreen"
-        label: "Edit dividers"
-        detail: "Choose boundaries on the bar"
+        label: "Edit layout"
+        detail: "Add slots and place dividers"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.beginBarEditing()
@@ -387,132 +345,58 @@ Column {
         controller: root.controller
         glyph: "restart_alt"
         label: "Restore layout"
-        detail: "Reset slots and dividers"
+        detail: "Reset V2 slots, order and dividers"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.resetBarLayout()
       }
     }
 
-    SectionLabel { text: "SLOT CAPACITY" }
+  }
 
-    Repeater {
-      id: v2SlotRepeater
-      model: [
-        { id: "left", label: "Left", min: 10, max: 13 },
-        { id: "center", label: "Center", min: 1, max: 4 },
-        { id: "right", label: "Right", min: 7, max: 13 }
-      ]
+  Column {
+    width: parent.width
+    spacing: Commons.Style.space(8)
+    visible: root.motionDetailOpen && root.shibumiActive && !root.v2Active
 
-      delegate: Rectangle {
-        id: slotRow
-        required property var modelData
-        readonly property int slotCount:
-          root.controller.v2LayoutSlots
-          && Array.isArray(root.controller.v2LayoutSlots[modelData.id])
-            ? root.controller.v2LayoutSlots[modelData.id].length : 0
-        readonly property int emptyCount:
-          root.controller.v2LayoutSlots
-          && Array.isArray(root.controller.v2LayoutSlots[modelData.id])
-            ? root.controller.v2LayoutSlots[modelData.id].filter(
-              function(value) { return String(value || "") === "" }).length
-            : 0
-        width: parent.width
-        height: Commons.Style.space(46)
-        radius: root.controller.controlRadius
-        color: root.controller.controlFillColor
-        border.width: root.controller.controlBorderWidth
-        border.color: root.controller.controlBorderColor
+    SectionLabel { text: "GAP ANIMATIONS" }
 
-        Row {
-          anchors.fill: parent
-          anchors.margins: Commons.Style.space(8)
-          spacing: Commons.Style.space(8)
+    Text {
+      width: parent.width
+      text: "Choose one V1 gap renderer directly. Only the selected or "
+        + "hovered preview moves; Reactor and Quotes respond to live events."
+      color: root.foreground
+      opacity: 0.48
+      wrapMode: Text.WordWrap
+      font.family: root.controller.marketFont
+      font.pixelSize: Commons.Style.font.caption * root.uiScale
+    }
 
-          Column {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Commons.Style.space(82)
-            spacing: 0
+    Grid {
+      id: reactorGrid
+      width: parent.width
+      columns: 3
+      columnSpacing: Commons.Style.space(7)
+      rowSpacing: Commons.Style.space(7)
 
-            Text {
-              text: slotRow.modelData.label
-              color: root.foreground
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
-              font.weight: Font.DemiBold
-            }
+      Repeater {
+        id: reactorRepeater
+        model: root.reactorOptions
 
-            Text {
-              text: slotRow.slotCount + " / " + slotRow.modelData.max
-              color: root.foreground
-              opacity: 0.42
-              font.family: root.controller.marketFont
-              font.pixelSize: Commons.Style.font.caption * root.uiScale
-            }
-          }
-
-          Item {
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - x - removeSlot.width - addSlot.width
-              - parent.spacing * 2
-            height: Commons.Style.space(12)
-
-            Row {
-              anchors.centerIn: parent
-              spacing: Commons.Style.space(3)
-
-              Repeater {
-                model: slotRow.modelData.max
-
-                delegate: Rectangle {
-                  required property int index
-                  width: Commons.Style.space(5)
-                  height: Commons.Style.space(10)
-                  radius: Math.min(root.controller.controlRadius, width / 2)
-                  color: index < slotRow.slotCount
-                    ? Commons.Util.alpha(root.accent, 0.74)
-                    : Commons.Util.alpha(root.foreground, 0.10)
-                }
-              }
-            }
-          }
-
-          StepButton {
-            id: removeSlot
-            controller: root.controller
-            symbol: "−"
-            enabled: slotRow.slotCount > slotRow.modelData.min
-              && slotRow.emptyCount > 0
-            foreground: root.foreground
-            accent: root.accent
-            onClicked: root.controller.removeV2Slot(slotRow.modelData.id)
-          }
-
-          StepButton {
-            id: addSlot
-            controller: root.controller
-            symbol: "+"
-            enabled: slotRow.slotCount < slotRow.modelData.max
-            foreground: root.foreground
-            accent: root.accent
-            onClicked: root.controller.addV2Slot(slotRow.modelData.id)
-          }
+        delegate: GapAnimationChoice {
+          required property var modelData
+          width: (reactorGrid.width - reactorGrid.columnSpacing * 2) / 3
+          controller: root.controller
+          mode: modelData.value
+          label: modelData.label
+          selected: root.controller.reactorMode === modelData.value
+          motionEnabled: root.motionActive
+          foreground: root.foreground
+          accent: root.accent
+          onClicked: root.controller.setReactorMode(modelData.value)
         }
       }
     }
-  }
-
-  ActionCard {
-    width: parent.width
-    controller: root.controller
-    glyph: "swap_horiz"
-    label: "Switch to "
-      + (root.shibumiActive ? "Omarchy Bar" : "Shibumi Bar")
-    detail: "Snapshot · apply · verify with rollback"
-    foreground: root.foreground
-    accent: root.accent
-    onClicked: root.controller.switchShell(
-      root.shibumiActive ? "omarchy" : "shibumi")
   }
 
   component SectionLabel: Text {
@@ -522,6 +406,186 @@ Column {
     font.pixelSize: Commons.Style.font.caption * root.uiScale
     font.weight: Font.DemiBold
     font.letterSpacing: 1
+  }
+
+  component GapAnimationChoice: Rectangle {
+    id: gapChoice
+
+    required property var controller
+    property int mode: 0
+    property string label: ""
+    property bool selected: false
+    property bool motionEnabled: false
+    property color foreground: "white"
+    property color accent: "white"
+    readonly property bool previewRunning:
+      motionEnabled && (selected || previewPointer.containsMouse)
+    signal clicked()
+
+    height: Commons.Style.space(82)
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: label + " gap animation"
+    Accessible.description: selected ? "Selected" : "Not selected"
+    radius: controller.controlRadius
+    color: selected || previewPointer.containsMouse
+      ? controller.controlHoverFillColor : controller.controlFillColor
+    border.width: selected || activeFocus
+      ? Math.max(1, controller.controlBorderWidth)
+      : controller.controlBorderWidth
+    border.color: selected ? accent : activeFocus
+      ? foreground : previewPointer.containsMouse
+        ? controller.controlHoverBorderColor : controller.controlBorderColor
+
+    Canvas {
+      id: previewCanvas
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      anchors.margins: Commons.Style.space(8)
+      height: Commons.Style.space(42)
+      renderStrategy: Canvas.Threaded
+
+      function repaint() { requestPaint() }
+
+      onPaint: {
+        const context = getContext("2d")
+        context.reset()
+        const cy = height / 2
+        const leftEdge = width * 0.37
+        const rightEdge = width * 0.63
+        const phase = gapChoice.previewRunning
+          ? (Date.now() % 2600) / 2600 : 0.56
+        const pulse = 0.55 + 0.45 * Math.sin(phase * Math.PI * 2)
+
+        context.fillStyle = gapChoice.controller.marketPanelRaised
+        context.fillRect(0, cy - 7, leftEdge, 14)
+        context.fillRect(rightEdge, cy - 7, width - rightEdge, 14)
+
+        context.strokeStyle = gapChoice.accent
+        context.fillStyle = gapChoice.foreground
+        context.lineCap = "round"
+        context.lineJoin = "round"
+
+        if (gapChoice.mode === 0) {
+          context.globalAlpha = 0.25
+          context.lineWidth = 1
+          context.beginPath()
+          context.moveTo(leftEdge + 5, cy)
+          context.lineTo(rightEdge - 5, cy)
+          context.stroke()
+        } else if (gapChoice.mode === 1 || gapChoice.mode === 5) {
+          const travel = gapChoice.mode === 1
+            ? phase : Math.min(1, Math.max(0, (phase - 0.12) / 0.72))
+          const x = leftEdge + 4 + travel * (rightEdge - leftEdge - 8)
+          context.globalAlpha = 0.38
+          context.lineWidth = gapChoice.mode === 1 ? 1 : 1.5
+          context.beginPath()
+          context.moveTo(leftEdge + 3, cy)
+          context.lineTo(x, cy)
+          context.stroke()
+          context.globalAlpha = 0.95
+          context.beginPath()
+          context.arc(x, cy, gapChoice.mode === 1 ? 2 : 2.6,
+            0, Math.PI * 2)
+          context.fill()
+        } else if (gapChoice.mode === 2 || gapChoice.mode === 6) {
+          const approach = Math.min(1, phase * 1.35)
+          const middle = width / 2
+          const lx = leftEdge + 3 + approach * (middle - leftEdge - 3)
+          const rx = rightEdge - 3 - approach * (rightEdge - middle - 3)
+          context.globalAlpha = 0.92
+          context.beginPath()
+          context.arc(lx, cy, 1.8, 0, Math.PI * 2)
+          context.arc(rx, cy, 1.8, 0, Math.PI * 2)
+          context.fill()
+          if (gapChoice.mode === 6 && approach > 0.82) {
+            context.globalAlpha = 0.72 * (1 - approach) / 0.18
+            context.lineWidth = 1
+            for (let shard = 0; shard < 4; shard++) {
+              const angle = shard * Math.PI / 2 + phase
+              context.beginPath()
+              context.moveTo(middle, cy)
+              context.lineTo(middle + Math.cos(angle) * 8,
+                cy + Math.sin(angle) * 5)
+              context.stroke()
+            }
+          }
+        } else if (gapChoice.mode === 3 || gapChoice.mode === 4) {
+          context.globalAlpha = gapChoice.mode === 3 ? 0.82 : 0.95 * pulse
+          context.lineWidth = gapChoice.mode === 3 ? 1.2 : 1.6
+          context.beginPath()
+          context.moveTo(leftEdge + 2, cy)
+          const segments = gapChoice.mode === 3 ? 8 : 5
+          for (let index = 1; index <= segments; index++) {
+            const x = leftEdge + 2
+              + index / segments * (rightEdge - leftEdge - 4)
+            const y = index === segments ? cy
+              : cy + Math.sin(index * 4.7 + phase * Math.PI * 2)
+                * (gapChoice.mode === 3 ? 3.2 : 6)
+            context.lineTo(x, y)
+          }
+          context.stroke()
+        } else {
+          context.globalAlpha = 0.88
+          context.font = "600 " + Math.round(height * 0.24) + "px "
+            + gapChoice.controller.marketFont
+          context.textAlign = "center"
+          context.textBaseline = "middle"
+          context.fillText(gapChoice.mode === 7 ? "EVENT" : "“  ”",
+            width / 2, cy)
+          context.globalAlpha = 0.34 + pulse * 0.28
+          context.fillRect(leftEdge + 4, cy + 8,
+            (rightEdge - leftEdge - 8) * phase, 1)
+        }
+        context.globalAlpha = 1
+      }
+
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+      Component.onCompleted: requestPaint()
+    }
+
+    Timer {
+      interval: 33
+      repeat: true
+      running: gapChoice.previewRunning
+      onTriggered: previewCanvas.requestPaint()
+    }
+
+    Text {
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: Commons.Style.space(8)
+      text: gapChoice.label
+      color: gapChoice.selected ? gapChoice.accent : gapChoice.foreground
+      opacity: gapChoice.selected || previewPointer.containsMouse
+        || gapChoice.activeFocus ? 1 : 0.64
+      horizontalAlignment: Text.AlignHCenter
+      elide: Text.ElideRight
+      font.family: gapChoice.controller.marketFont
+      font.pixelSize: Commons.Style.font.caption * root.uiScale
+      font.weight: gapChoice.selected ? Font.DemiBold : Font.Medium
+    }
+
+    MouseArea {
+      id: previewPointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: {
+        gapChoice.forceActiveFocus()
+        gapChoice.clicked()
+      }
+      onContainsMouseChanged: previewCanvas.requestPaint()
+    }
+
+    onSelectedChanged: previewCanvas.requestPaint()
+    onPreviewRunningChanged: previewCanvas.requestPaint()
+    Keys.onReturnPressed: gapChoice.clicked()
+    Keys.onEnterPressed: gapChoice.clicked()
+    Keys.onSpacePressed: gapChoice.clicked()
   }
 
   component ActionCard: Rectangle {
@@ -535,12 +599,16 @@ Column {
     signal clicked()
 
     height: Commons.Style.space(50)
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: label
     radius: controller.controlRadius
     color: actionPointer.containsMouse
       ? controller.controlHoverFillColor : controller.controlFillColor
     border.width: controller.controlBorderWidth
-    border.color: actionPointer.containsMouse
-      ? controller.controlHoverBorderColor : controller.controlBorderColor
+    border.color: activeFocus ? accent
+      : actionPointer.containsMouse
+        ? controller.controlHoverBorderColor : controller.controlBorderColor
 
     Row {
       anchors.fill: parent
@@ -591,43 +659,10 @@ Column {
       cursorShape: Qt.PointingHandCursor
       onClicked: actionCard.clicked()
     }
+
+    Keys.onReturnPressed: actionCard.clicked()
+    Keys.onEnterPressed: actionCard.clicked()
+    Keys.onSpacePressed: actionCard.clicked()
   }
 
-  component StepButton: Rectangle {
-    id: stepButton
-    required property var controller
-    property string symbol: ""
-    property color foreground: "white"
-    property color accent: "white"
-    signal clicked()
-
-    anchors.verticalCenter: parent.verticalCenter
-    width: Commons.Style.space(30)
-    height: width
-    radius: controller.controlRadius
-    color: stepPointer.containsMouse && enabled
-      ? controller.controlHoverFillColor : controller.controlFillColor
-    opacity: enabled ? 1 : 0.34
-    border.width: controller.controlBorderWidth
-    border.color: stepPointer.containsMouse && enabled
-      ? accent : controller.controlBorderColor
-
-    Text {
-      anchors.centerIn: parent
-      text: stepButton.symbol
-      color: stepButton.foreground
-      font.family: stepButton.controller.marketFont
-      font.pixelSize: Commons.Style.font.body * root.uiScale
-      font.weight: Font.Medium
-    }
-
-    MouseArea {
-      id: stepPointer
-      anchors.fill: parent
-      enabled: stepButton.enabled
-      hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
-      onClicked: stepButton.clicked()
-    }
-  }
 }

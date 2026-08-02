@@ -11,7 +11,7 @@ ShellRoot {
   property int phase: 0
   property int ticks: 0
   property var clickTargets: []
-  property bool surfaceScrollRequested: false
+  property int barsRouteStep: 0
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -250,7 +250,32 @@ ShellRoot {
 
         const appearance = panel.settingsPageItem
         if (appearance.widgetDetailOpen
-            || !appearance.openWidgetDetails("G4", "")
+            || !appearance.openWidgetDetails("G1", "")
+            || !appearance.widgetDetailOpen)
+          return root.fail("Icons did not open Launcher details")
+        appearance.controller.setGroupSetting("G1", "displayMode", "text")
+        if (!widget.iconMode)
+          return root.fail("V1 generic presentation overrode launcher icon")
+        if (!panel.setLauncherSelection("text", "arch"))
+          return root.fail("V1 launcher wordmark selection was rejected")
+        appearance.controller.setGroupSetting("G1", "displayMode", "icon")
+        if (widget.iconMode || widget.effectiveLauncherText !== "arch")
+          return root.fail("V1 generic presentation overrode launcher wordmark")
+        panel.v2LayoutActive = true
+        appearance.controller.setGroupSetting("G1", "displayMode", "text")
+        if (!panel.setLauncherSelection("icon", "mark") || !widget.iconMode)
+          return root.fail("V2 launcher icon did not own its presentation")
+        appearance.controller.setGroupSetting("G1", "displayMode", "icon")
+        if (!panel.setLauncherSelection("text", "shibumi")
+            || widget.iconMode
+            || widget.effectiveLauncherText !== "shibumi")
+          return root.fail("V2 launcher wordmark did not own its presentation")
+        if (!panel.setLauncherSelection("icon", "hyprland"))
+          return root.fail("launcher contract fixture did not restore")
+        appearance.controller.setGroupSetting("G1", "displayMode", "full")
+        panel.v2LayoutActive = false
+        appearance.showWidgetOverview()
+        if (!appearance.openWidgetDetails("G4", "")
             || !appearance.widgetDetailOpen)
           return root.fail("Icons overview did not drill into one widget")
         const modeBeforeCycle = appearance.selectedWidgetMode
@@ -554,7 +579,7 @@ ShellRoot {
             || plugins.feedbackTitle !== "Acme Weather removed")
           return root.fail("third-party plugin removal flow failed")
         if (!panel.showSettingsPage("splits"))
-          return root.fail("Plugins page did not open layout")
+          return root.fail("Legacy layout route did not resolve")
         root.phase++
         root.ticks = 0
         return
@@ -564,8 +589,8 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "splits")
-          return root.fail("splits page did not instantiate")
+            || panel.settingsPage !== "bars")
+          return root.fail("legacy layout route did not resolve to Bars")
         panel.v2LayoutActive = true
         if (!panel.showSettingsPage("bars"))
           return root.fail("V2 Bars page rejected")
@@ -577,40 +602,51 @@ ShellRoot {
       if (root.phase === 5) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
-        if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "bars"
-            || !panel.settingsPageItem
-            || panel.settingsPageItem.surfaceEffectOptionCount !== 2
-            || panel.settingsPageItem.surfaceRadiusOptionCount !== 0)
-          return root.fail("V2 exposed V1 Bar Surface settings"
-            + " effects=" + (panel && panel.settingsPageItem
-              ? panel.settingsPageItem.surfaceEffectOptionCount : "missing")
-            + " radii=" + (panel && panel.settingsPageItem
-              ? panel.settingsPageItem.surfaceRadiusOptionCount : "missing")
-            + " active=" + (panel ? panel.v2LayoutActive : "missing")
-            + " page-v2=" + (panel && panel.settingsPageItem
-              ? panel.settingsPageItem.v2Active : "missing")
-            + " shell=" + (panel ? panel.activeShell : "missing"))
-        if (!root.surfaceScrollRequested) {
-          if (panel.barsSurfaceActivationY < 0
-              || panel.barsDetailScrollMaximum <= 0
-              || panel.barsSurfaceActivationY
-                >= panel.barsDetailScrollMaximum - 1
-              || !panel.scrollToBarSurface())
-            return root.fail("bar child route does not activate before scroll end"
-              + " activation=" + panel.barsSurfaceActivationY
-              + " maximum=" + panel.barsDetailScrollMaximum)
-          root.surfaceScrollRequested = true
+        if (root.barsRouteStep === 0) {
+          if (!panel || !panel.settingsPageReady
+              || panel.settingsPage !== "bars"
+              || !panel.settingsPageItem
+              || panel.settingsPageItem.surfaceEffectOptionCount !== 2
+              || panel.settingsPageItem.surfaceRadiusOptionCount !== 0
+              || panel.settingsPageItem.childRouteAvailable)
+            return root.fail("V2 exposed V1 Bar Surface settings"
+              + " effects=" + (panel && panel.settingsPageItem
+                ? panel.settingsPageItem.surfaceEffectOptionCount : "missing")
+              + " radii=" + (panel && panel.settingsPageItem
+                ? panel.settingsPageItem.surfaceRadiusOptionCount : "missing")
+              + " active=" + (panel ? panel.v2LayoutActive : "missing")
+              + " page-v2=" + (panel && panel.settingsPageItem
+                ? panel.settingsPageItem.v2Active : "missing")
+              + " shell=" + (panel ? panel.activeShell : "missing"))
+          panel.v2LayoutActive = false
+          if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
+              || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
+              || !panel.settingsPageItem.childRouteAvailable
+              || panel.settingsPageItem.childRouteLabel !== "Gap Animations"
+              || !panel.showSettingsPage("bars-motion"))
+            return root.fail("V1 Gap Animations child route was unavailable")
+          root.barsRouteStep = 1
           root.ticks = 0
           return
         }
-        if (root.ticks < 24) return
-        if (!panel.barsSurfaceRouteActive)
-          return root.fail("bar child route did not follow detail scrolling")
-        panel.v2LayoutActive = false
-        if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
+        if (root.barsRouteStep === 1) {
+          if (panel.settingsPage !== "bars-motion"
+              || !panel.settingsPageItem
+              || !panel.settingsPageItem.motionDetailOpen
+              || panel.settingsPageItem.reactorOptions.length !== 9
+              || !panel.setReactorMode(5)
+              || stateService.config.reactor.mode !== 5
+              || !panel.showSettingsPage("bars"))
+            return root.fail("V1 Gap Animations route or selection failed")
+          root.barsRouteStep = 2
+          root.ticks = 0
+          return
+        }
+        if (panel.settingsPage !== "bars"
+            || panel.settingsPageItem.motionDetailOpen
+            || panel.settingsPageItem.surfaceEffectOptionCount !== 3
             || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)
-          return root.fail("V1 Bar Surface settings did not restore")
+          return root.fail("Bars return navigation did not restore V1")
         panel.healthService.report = {
           schemaVersion: 1,
           generatedEpoch: 1785570000,
@@ -640,6 +676,7 @@ ShellRoot {
         if (!panel || !panel.settingsPageReady
             || panel.settingsPage !== "health"
             || !panel.settingsPageItem
+            || panel.headerHealthErrorCount !== 1
             || panel.settingsPageItem.attentionChecks.length !== 1)
           return root.fail("Health page did not instantiate")
         const health = panel.settingsPageItem

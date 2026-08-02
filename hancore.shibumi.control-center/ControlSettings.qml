@@ -25,7 +25,6 @@ Item {
   property string installUrl: ""
   property string installStatus: ""
   readonly property bool returnOnly: controller.stockOmarchyHost === true
-  readonly property real routeActivationViewportRatio: 2 / 3
 
   readonly property var pageOptions: {
     const pages = [
@@ -91,7 +90,44 @@ Item {
     })
     return values.concat(plugins)
   }
+  readonly property int healthErrorCount: {
+    const report = controller && controller.healthReport
+      ? controller.healthReport : ({ checks: [] })
+    const checks = Array.isArray(report.checks) ? report.checks : []
+    const errors = checks.filter(function(check) {
+      return String(check.status || "") === "error"
+    }).length
+    return errors > 0 ? errors
+      : String(controller.healthFailure || "") !== "" ? 1 : 0
+  }
+  readonly property int healthWarningCount: {
+    const report = controller && controller.healthReport
+      ? controller.healthReport : ({ checks: [] })
+    const checks = Array.isArray(report.checks) ? report.checks : []
+    return checks.filter(function(check) {
+      return String(check.status || "") === "warning"
+    }).length
+  }
+  readonly property bool healthChecked: {
+    const report = controller && controller.healthReport
+      ? controller.healthReport : ({ checks: [] })
+    return Array.isArray(report.checks) && report.checks.length > 0
+  }
+  readonly property bool healthPassed: healthChecked
+    && healthErrorCount === 0 && healthWarningCount === 0
+  readonly property color healthErrorColor:
+    controller.accentColor("color01")
+  readonly property color healthPassColor:
+    controller.accentColor("color03")
+  readonly property color registryValueColor:
+    controller.accentColor("color03")
   readonly property bool configureDetailOpen: configureDetailPage !== ""
+  readonly property bool compactConfigureLanding:
+    currentPage === "configure"
+    && !configureDetailOpen
+    && settingsQuery.trim() === ""
+  readonly property real compactConfigureLandingPanelHeight:
+    Commons.Style.space(550)
   readonly property bool compactIconsOverview:
     currentPage === "configure"
     && configureDetailPage === "functions"
@@ -103,29 +139,38 @@ Item {
     + Math.max(0, Number(pageLoader.item
       ? pageLoader.item.widgetOverviewRowCount : 5) - 5)
       * Commons.Style.space(41)
-  readonly property bool barsSurfaceAvailable:
-    currentPage === "configure" && configureDetailPage === "bars"
+  readonly property bool compactPickersPage:
+    currentPage === "configure"
+    && configureDetailPage === "pickers"
+    && settingsQuery.trim() === ""
+  readonly property real compactPickersPanelHeight:
+    Commons.Style.space(470)
+  readonly property bool compactWorkspacesPage:
+    currentPage === "configure"
+    && configureDetailPage === "workspaces"
+    && settingsQuery.trim() === ""
+  readonly property real compactWorkspacesPanelHeight:
+    Commons.Style.space(470)
+  readonly property bool compactLogoPage:
+    currentPage === "configure"
+    && configureDetailPage === "logo"
+    && settingsQuery.trim() === ""
+  readonly property real compactLogoPanelHeight:
+    Commons.Style.space(470)
+    + Math.max(0, Number(pageLoader.item
+      ? pageLoader.item.optionRowCount : 2) - 2)
+      * Commons.Style.space(63)
+  readonly property bool barsChildRouteAvailable:
+    currentPage === "configure"
+    && (configureDetailPage === "bars"
+      || configureDetailPage === "bars-motion")
     && pageLoader.item !== null
-    && pageLoader.item.surfaceSectionAvailable === true
-  readonly property real barsSurfaceTargetY: {
-    if (!barsSurfaceAvailable
-        || pageLoader.item.surfaceSectionY === undefined)
-      return -1
-    return Number(pageLoader.item.surfaceSectionY)
-  }
-  readonly property real detailScrollMaximum: Math.max(
-    0, pageFlick.contentHeight - pageFlick.height)
-  readonly property real barsSurfaceActivationY: {
-    if (barsSurfaceTargetY < 0) return -1
-    // Shared scrollspy convention: activate a child route once its heading
-    // reaches the upper two thirds of the visible detail viewport.
-    const requested = Math.max(0, barsSurfaceTargetY
-      - pageFlick.height * routeActivationViewportRatio)
-    return Math.min(requested, detailScrollMaximum)
-  }
-  readonly property bool barsSurfaceRouteActive:
-    barsSurfaceActivationY >= 0
-    && pageFlick.contentY >= barsSurfaceActivationY - 0.5
+    && pageLoader.item.childRouteAvailable === true
+  readonly property bool barsChildRouteActive:
+    barsChildRouteAvailable && configureDetailPage === "bars-motion"
+  readonly property string barsChildRouteLabel:
+    barsChildRouteAvailable && pageLoader.item.childRouteLabel !== undefined
+      ? String(pageLoader.item.childRouteLabel) : ""
   readonly property bool pluginFavoritesRouteAvailable:
     currentPage === "configure" && configureDetailPage === "plugins"
   readonly property bool pluginFavoritesRouteActive:
@@ -169,18 +214,18 @@ Item {
     .test(installUrl.trim())
   readonly property var validPageIds: pageOptions.map(function(page) {
     return page.id
-  }).concat(returnOnly ? ["quick"] : ["quick", "configure", "main", "splits"])
+  }).concat(returnOnly ? ["quick"]
+    : ["quick", "configure", "main", "bars-motion"])
 
   implicitWidth: Commons.Style.space(720)
   implicitHeight: Commons.Style.space(500)
 
   function pageComponent(page) {
-    if (page === "bars") return activeBarPage
+    if (page === "bars" || page === "bars-motion") return activeBarPage
     if (page === "plugins") return pluginsPage
     if (page === "workspaces") return workspacesPage
     if (page === "pickers") return pickersPage
     if (page === "logo") return logoPage
-    if (page === "splits") return splitPage
     if (page === "functions") return functionsPage
     if (page === "health") return healthPage
     return overviewPage
@@ -188,8 +233,10 @@ Item {
 
   function setPage(value) {
     const requested = String(value || "")
-    // Keep external/restore callers from the former Advanced route working.
-    const next = requested === "preferences" ? "health" : requested
+    // Keep former Advanced and Layout deep links working without retaining a
+    // second editor for controls that are now owned by Health and Bars.
+    const next = requested === "preferences" ? "health"
+      : requested === "splits" ? "bars" : requested
     if (returnOnly && next !== "quick") return false
     if (validPageIds.indexOf(next) < 0)
       return false
@@ -209,28 +256,24 @@ Item {
       pluginFavoritesOnly = false
       configureDetailPage = ""
       configureLanding.cancelTransition()
-      Qt.callLater(function() { configureLanding.forceActiveFocus() })
+      configureLanding.focusIndex = -1
+      configureLanding.focus = false
       return true
     }
     pluginFavoritesOnly = false
     configureDetailPage = next
-    lastConfigurePage = next
+    lastConfigurePage = next === "bars-motion" ? "bars" : next
     Qt.callLater(function() {
-      configureLanding.showRoute(next)
+      configureLanding.showRoute(next === "bars-motion" ? "bars" : next)
       pageScrollAnimation.stop()
       pageFlick.contentY = 0
     })
     return true
   }
 
-  function scrollToBarSurface() {
-    if (!barsSurfaceAvailable || barsSurfaceTargetY < 0) return false
-    pageScrollAnimation.stop()
-    pageScrollAnimation.from = pageFlick.contentY
-    pageScrollAnimation.to = Math.max(0, Math.min(
-      detailScrollMaximum, barsSurfaceTargetY - Commons.Style.space(8)))
-    pageScrollAnimation.start()
-    return true
+  function showBarsChildRoute() {
+    if (!barsChildRouteAvailable) return false
+    return setPage("bars-motion")
   }
 
   function showPluginFavorites() {
@@ -557,8 +600,16 @@ Item {
 
               Text {
                 anchors.centerIn: parent
-                text: "HEALTH"
-                color: root.foreground
+                text: root.healthErrorCount > 0
+                  ? "HEALTH  ·  " + root.healthErrorCount
+                  : root.healthWarningCount > 0
+                    ? "HEALTH  ·  REVIEW"
+                    : root.healthPassed ? "HEALTH  ·  PASS" : "HEALTH"
+                color: root.healthErrorCount > 0
+                  ? root.healthErrorColor
+                  : root.healthWarningCount > 0
+                    ? root.accent
+                    : root.healthPassed ? root.healthPassColor : root.foreground
                 opacity: root.configureDetailPage === "health"
                   || healthStatusPointer.containsMouse ? 1 : 0.62
                 font.family: root.controller.marketFont
@@ -585,25 +636,31 @@ Item {
                 || root.configureDetailPage === "plugins"
                 ? root.controller.marketPanelRaised : "transparent"
 
-              Text {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.leftMargin: Commons.Style.space(7)
-                anchors.rightMargin: Commons.Style.space(7)
-                text: "REGISTRY  "
-                  + root.controller.registryShibumiPluginCount + " S · "
-                  + root.controller.registryOmarchyPluginCount + " O · "
-                  + root.controller.registryExternalPluginCount + " EXT"
-                color: root.foreground
+              Row {
+                anchors.centerIn: parent
+                spacing: Commons.Style.space(6)
                 opacity: root.configureDetailPage === "plugins"
                   || pluginRegistryPointer.containsMouse ? 1 : 0.62
-                elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
-                font.family: root.controller.marketFont
-                font.pixelSize: Commons.Style.font.caption * root.uiScale
-                font.weight: Font.DemiBold
-                font.letterSpacing: 0.8
+
+                Text {
+                  text: "PLUGINS"
+                  color: root.foreground
+                  font.family: root.controller.marketFont
+                  font.pixelSize: Commons.Style.font.caption * root.uiScale
+                  font.weight: Font.DemiBold
+                  font.letterSpacing: 0.8
+                }
+
+                Text {
+                  text: root.controller.registryShibumiPluginCount + " S · "
+                    + root.controller.registryOmarchyPluginCount + " O · "
+                    + root.controller.registryExternalPluginCount + " EXT"
+                  color: root.registryValueColor
+                  font.family: root.controller.marketFont
+                  font.pixelSize: Commons.Style.font.caption * root.uiScale
+                  font.weight: Font.DemiBold
+                  font.letterSpacing: 0.8
+                }
               }
 
               MouseArea {
@@ -675,15 +732,16 @@ Item {
           activePage: root.currentPage === "configure"
             && !root.configureDetailOpen
           detailOpen: root.configureDetailOpen
-          surfaceRouteAvailable: root.barsSurfaceAvailable
-          surfaceRouteActive: root.barsSurfaceRouteActive
+          barsChildRouteAvailable: root.barsChildRouteAvailable
+          barsChildRouteActive: root.barsChildRouteActive
+          barsChildRouteLabel: root.barsChildRouteLabel
           favoritesRouteAvailable: root.pluginFavoritesRouteAvailable
           favoritesRouteActive: root.pluginFavoritesRouteActive
           motionActive: root.controller.open === true
             && root.currentPage === "configure"
             && !root.configureDetailOpen && !root.paletteOpen
           onPageRequested: function(pageId) { root.setPage(pageId) }
-          onSurfaceRequested: root.scrollToBarSurface()
+          onBarsChildRequested: root.showBarsChildRoute()
           onFavoritesRequested: root.showPluginFavorites()
           onBackRequested: root.setPage("configure")
         }
@@ -739,6 +797,11 @@ Item {
               sourceComponent: root.pageComponent(
                 root.configureDetailPage)
               onLoaded: {
+                if (root.configureDetailPage === "bars-motion"
+                    && item.childRouteAvailable !== true) {
+                  Qt.callLater(function() { root.setPage("bars") })
+                  return
+                }
                 if (root.configureDetailPage === "functions"
                     && root.controller
                     && typeof root.controller.restoreWidgetDetails
@@ -1268,8 +1331,10 @@ Item {
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent
+      motionDetailOpen: root.configureDetailPage === "bars-motion"
       motionActive: root.controller.open === true
-        && root.configureDetailPage === "bars"
+        && (root.configureDetailPage === "bars"
+          || root.configureDetailPage === "bars-motion")
         && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }
@@ -1336,19 +1401,6 @@ Item {
       accent: root.accent
       motionActive: root.controller.open === true
         && root.configureDetailPage === "logo"
-        && root.settingsQuery.trim() === "" && !root.paletteOpen
-    }
-  }
-
-  Component {
-    id: splitPage
-    SplitSettingsPage {
-      controller: root.controller
-      uiScale: root.uiScale
-      foreground: root.foreground
-      accent: root.accent
-      motionActive: root.controller.open === true
-        && root.configureDetailPage === "splits"
         && root.settingsQuery.trim() === "" && !root.paletteOpen
     }
   }

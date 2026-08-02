@@ -40,7 +40,7 @@ Therefore:
   contract.
 
 Primary source locations at the checked online head are
-[`bin/omarchy-plugin`](https://github.com/basecamp/omarchy/blob/1b6ab15331bfc88eb66746021d9e32c976ed438a/bin/omarchy-plugin),
+[`bin/omarchy-plugin-add`](https://github.com/basecamp/omarchy/blob/f54edbe/bin/omarchy-plugin-add),
 [`bin/omarchy-bar`](https://github.com/basecamp/omarchy/blob/1b6ab15331bfc88eb66746021d9e32c976ed438a/bin/omarchy-bar),
 [`PluginRegistry.qml`](https://github.com/basecamp/omarchy/blob/1b6ab15331bfc88eb66746021d9e32c976ed438a/shell/services/PluginRegistry.qml),
 and

@@ -94,16 +94,6 @@ Column {
     }
   }
 
-  Text {
-    width: parent.width
-    text: "Each marker is a workspace. The highlighted marker is the active one."
-    color: root.foreground
-    opacity: 0.52
-    wrapMode: Text.WordWrap
-    font.family: root.controller.marketFont
-    font.pixelSize: Commons.Style.font.caption * root.uiScale
-  }
-
   component SectionLabel: Text {
     color: root.foreground
     opacity: 0.58

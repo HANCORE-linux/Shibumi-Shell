@@ -15,6 +15,7 @@ Column {
     String(controller.launcherConfig.mode || "text")
   readonly property var activeOptions: activeMode === "icon"
     ? controller.launcherIconOptions : controller.launcherTextOptions
+  readonly property int optionRowCount: Math.ceil(activeOptions.length / 4)
   readonly property bool ready: modeRepeater.count === 2
     && optionRepeater.count === activeOptions.length
 

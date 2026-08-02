@@ -86,12 +86,9 @@ fi
 for contract in \
   'ControlMainPage.qml:ATTENTION  ·  ' \
   'ControlMainPage.qml:RUNTIME' \
-  'SplitSettingsPage.qml:SPLIT & MERGE' \
-  'SplitSettingsPage.qml:GAP ANIMATION' \
   'ActiveBarSettingsPage.qml:BAR FORM' \
   'ActiveBarSettingsPage.qml:V1 LAYOUT' \
-  'ActiveBarSettingsPage.qml:V2 LAYOUT' \
-  'ActiveBarSettingsPage.qml:SLOT CAPACITY' \
+  'ActiveBarSettingsPage.qml:GAP ANIMATIONS' \
   'BarSurfaceSettings.qml:BAR SURFACE' \
   'BarSurfaceSettings.qml:BAR ACCENT' \
   'WorkspaceSettingsPage.qml:VISIBLE WORKSPACES' \
@@ -103,6 +100,25 @@ for contract in \
   rg -Fq "text: \"$section\"" "$control_dir/$file" \
     || fail "missing control-center section: $section"
 done
+
+for launcher_owner_contract in \
+    'BarWidget.qml:|| String(launcherConfig.mode || "text") === "icon"' \
+    'BarWidget.qml:String(launcherConfig.text || "shibumi")' \
+    'WidgetAppearanceWorkbench.qml:readonly property bool selectedLauncher: selectedCatalogGroup === "G1"' \
+    'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G1") return []' \
+    'WidgetAppearanceWorkbench.qml:if (!selectedSupported || selectedLauncher) return false' \
+    'WidgetAppearanceWorkbench.qml:visible: !root.selectedLauncher' \
+    'WidgetAppearanceWorkbench.qml:return "Logo · " + (String(controller.launcherConfig.mode || "text")' \
+    'BarFunctionsPage.qml:Launcher identity stays under Logo.'; do
+  file=${launcher_owner_contract%%:*}
+  label=${launcher_owner_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "launcher presentation ownership drifted: $label"
+done
+if rg -q 'setting\("displayMode"|displayMode ===' \
+    "$control_dir/BarWidget.qml"; then
+  fail "launcher rendering still depends on generic widget presentation"
+fi
 for header_contract in \
   'ControlCenterPanel.qml:id: headerBand' \
   'ControlCenterPanel.qml:id: headerDivider' \
@@ -147,6 +163,10 @@ rg -Fq 'presentationName === "shellStyle"' \
 rg -Fq 'preservePage, true)' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "V1/V2 restore does not wait for the replacement panel owner"
+rg -A14 -F 'function setBarPosition(value)' \
+    "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  | rg -Fq 'root.scheduleWidgetRestore(' \
+  || fail "Top/Bottom changes do not preserve the Control Center route"
 rg -Fq 'pendingWidgetRestoreAttempts < 20' \
   "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail "V1/V2 restore window no longer covers late owner replacement"
@@ -183,9 +203,9 @@ rg -Fq 'root.controller.restoreWidgetDetails(item)' \
 rg -Fq '"accent", "border", "panelBorder", "frost", "shadow"' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "bar presentation changes do not preserve the Control Center page"
-rg -Fq 'barsSurfaceActivationY' \
+rg -Fq 'readonly property bool barsChildRouteActive:' \
   "$control_dir/ControlSettings.qml" \
-  || fail "bar surface route cannot activate at the scroll boundary"
+  || fail "V1 Gap Animations child route has no active-state contract"
 rg -Fq 'anchors.bottomMargin: Commons.Style.space(3)' \
   "$control_dir/BarSurfaceSettings.qml" \
   || fail "selected accent does not use the QS-Dots underline treatment"
@@ -216,7 +236,7 @@ for installer_contract in \
     || fail "direct Git installer contract drifted: $installer_contract"
 done
 
-for page in quick configure main bars plugins workspaces pickers logo splits \
+for page in quick configure main bars bars-motion plugins workspaces pickers logo splits \
     functions health preferences; do
   rg -Fq "\"$page\"" "$control_dir/ControlSettings.qml" \
     || fail "missing control-center page: $page"
@@ -249,16 +269,19 @@ for configure_contract in \
   'ControlSettings.qml:sourceComponent: root.pageComponent(' \
   'ControlSettings.qml:id: activeBarPage' \
   'ControlSettings.qml:ActiveBarSettingsPage {' \
-  'ControlSettings.qml:function scrollToBarSurface()' \
-  'ControlSettings.qml:onSurfaceRequested: root.scrollToBarSurface()' \
+  'ControlSettings.qml:function showBarsChildRoute()' \
+  'ControlSettings.qml:onBarsChildRequested: root.showBarsChildRoute()' \
   'ConfigureLandingPage.qml:function openRoute(pageId)' \
   'ConfigureLandingPage.qml:function showRoute(pageId)' \
   'ConfigureLandingPage.qml:signal backRequested()' \
-  'ConfigureLandingPage.qml:signal surfaceRequested()' \
+  'ConfigureLandingPage.qml:signal barsChildRequested()' \
   'ConfigureLandingPage.qml:context.bezierCurveTo(' \
   'ConfigureLandingPage.qml:routeColumn.width + routeGraph.portOffset' \
   'ConfigureLandingPage.qml:context.arc(startX, startY, 3.6, 0, Math.PI * 2)' \
   'ConfigureLandingPage.qml:activeFocusOnTab: true' \
+  'ConfigureLandingPage.qml:property int focusIndex: -1' \
+  'ConfigureLandingPage.qml:onActiveFocusChanged:' \
+  'ControlSettings.qml:configureLanding.focus = false' \
   'ConfigureLandingPage.qml:Keys.onReturnPressed:' \
   'ConfigureLandingPage.qml:function activateFocusedRoute()' \
   'ConfigureLandingPage.qml:id: detailRouteCanvas' \
@@ -268,7 +291,7 @@ for configure_contract in \
   'ConfigureLandingPage.qml:return 0' \
   'ConfigureLandingPage.qml:context.lineTo(nodeX, lastY)' \
   'ConfigureLandingPage.qml:context.arc(nodeX, nodeY, 3.6, 0, Math.PI * 2)' \
-  'ConfigureLandingPage.qml:text: root.pluginFavoritesVisible ? "Favorites" : "Surface & Color"' \
+  'ConfigureLandingPage.qml:? "Favorites" : root.barsChildRouteLabel' \
   'ConfigureLandingPage.qml:activeFocusOnTab: visible' \
   'ConfigureLandingPage.qml:if (root.childRouteActive) {' \
   'ConfigureLandingPage.qml:context.lineTo(railX, nodeY)' \
@@ -280,8 +303,11 @@ for configure_contract in \
   'ConfigureLandingPage.qml:opacity: 1' \
   'ConfigureLandingPage.qml:Behavior on x {' \
   'ConfigureLandingPage.qml:interval: 330' \
-  'ActiveBarSettingsPage.qml:surfaceSectionY: barAccentSettings.y' \
-  'ActiveBarSettingsPage.qml:V1 split/gap controls stay hidden.' \
+  'ActiveBarSettingsPage.qml:readonly property string childRouteLabel: "Gap Animations"' \
+  'ActiveBarSettingsPage.qml:property bool motionDetailOpen: false' \
+  'ActiveBarSettingsPage.qml:columns: 3' \
+  'ActiveBarSettingsPage.qml:motionEnabled && (selected || previewPointer.containsMouse)' \
+  'ActiveBarSettingsPage.qml:detail: "Add slots and place dividers"' \
   'ControlSettings.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
@@ -297,6 +323,61 @@ fi
   || fail "Configure route preview is missing"
 rg -Fq 'ConfigureRoutePreview {' "$control_dir/ConfigureLandingPage.qml" \
   || fail "Configure landing does not show route-specific previews"
+for configure_preview_contract in \
+    'SemanticPreviewImage.qml:if (route === "bars") {' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "plugins"' \
+    'SemanticPreviewImage.qml:text: String(modelData.provider || "Community").toUpperCase()' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "workspaces"' \
+    'SemanticPreviewImage.qml:delegate: WorkspaceMarkerPreviewCard {' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "pickers"' \
+    'SemanticPreviewImage.qml:delegate: PickerPreviewCard {' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "appearance"' \
+    'SemanticPreviewImage.qml:text: modelData.mode' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "health"' \
+    'SemanticPreviewImage.qml:text: "RUNTIME HEALTH"' \
+    'SemanticPreviewImage.qml:root.healthPreviewWarningCount > 0 ? "REVIEW" : "HEALTHY"' \
+    'SemanticPreviewImage.qml:property bool compact: false' \
+    'PageMotionStage.qml:compact: true' \
+    'SemanticPreviewImage.qml:visible: root.semanticRoute === "logo"' \
+    'SemanticPreviewImage.qml:source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
+    'ConfigureLandingPage.qml:property int lastPreviewIndex: 0' \
+    'ConfigureLandingPage.qml:previewDetail: previewDetails[page.id] || "Settings preview"' \
+    'ConfigureLandingPage.qml:detail: root.previewRoute.previewDetail' \
+    'ControlSettings.qml:readonly property bool compactConfigureLanding:' \
+    'ControlSettings.qml:readonly property real compactConfigureLandingPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactConfigureLanding' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactConfigureLandingPanelHeight,'; do
+  file=${configure_preview_contract%%:*}
+  label=${configure_preview_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Configure semantic preview contract drifted: $label"
+done
+if rg -q 'previewTransition|previewScale|previewOpacity' \
+    "$control_dir/ConfigureRoutePreview.qml"; then
+  fail "Configure route preview still dims or scales on hover changes"
+fi
+for header_status_contract in \
+    'ControlSettings.qml:readonly property int healthErrorCount:' \
+    'ControlSettings.qml:readonly property int healthWarningCount:' \
+    'ControlSettings.qml:readonly property bool healthPassed:' \
+    'ControlSettings.qml:controller.accentColor("color01")' \
+    'ControlSettings.qml:? "HEALTH  ·  " + root.healthErrorCount' \
+    'ControlSettings.qml:? "HEALTH  ·  REVIEW"' \
+    'ControlSettings.qml:root.healthPassed ? "HEALTH  ·  PASS" : "HEALTH"' \
+    'ControlSettings.qml:controller.accentColor("color03")' \
+    'ControlSettings.qml:text: "PLUGINS"' \
+    'ControlSettings.qml:color: root.registryValueColor' \
+    'ControlCenterPanel.qml:readonly property int headerHealthErrorCount: settings.healthErrorCount' \
+    'control-center-smoke.qml:panel.headerHealthErrorCount !== 1'; do
+  file=${header_status_contract%%:*}
+  label=${header_status_contract#*:}
+  target="$control_dir/$file"
+  if [[ $file == control-center-smoke.qml ]]; then
+    target="$repo_root/tests/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "Control header status contract drifted: $label"
+done
 if rg -Fq 'ConfigureNavigation {' "$control_dir/ControlSettings.qml"; then
   fail "retired Configure sidebar is still instantiated"
 fi
@@ -443,7 +524,7 @@ for disabled_search_contract in \
 done
 for favorite_contract in \
     'ConfigureLandingPage.qml:signal favoritesRequested()' \
-    'ConfigureLandingPage.qml:text: root.pluginFavoritesVisible ? "Favorites"' \
+    'ConfigureLandingPage.qml:text: root.pluginFavoritesVisible' \
     'ControlSettings.qml:function showPluginFavorites()' \
     'ControlSettings.qml:onFavoritesRequested: root.showPluginFavorites()' \
     'PluginCatalogPage.qml:property bool favoritesOnly: false' \
@@ -621,16 +702,20 @@ for route_contract in \
   'label: "Split all"' \
   'label: "Merge all"' \
   'label: "Edit slots"' \
-  'label: "Edit dividers"' \
+  'label: "Edit layout"' \
   'label: "Restore layout"' \
-  'id: v2SlotRepeater' \
-  'root.controller.addV2Slot(' \
-  'root.controller.removeV2Slot(' \
-  'id: reactorRepeater' \
-  'root.controller.switchShell('; do
+  'id: reactorRepeater'; do
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
     || fail "active Bars drill-down drifted: $route_contract"
 done
+if rg -q 'SLOT CAPACITY|V2 LAYOUT|v2SlotRepeater|controller\.(add|remove)V2Slot|Add slots and place dividers directly' \
+    "$control_dir/ActiveBarSettingsPage.qml"; then
+  fail "Bars reintroduced redundant V2 layout or slot-capacity copy"
+fi
+if rg -q 'Choose the active V2 shape|V1 uses the Islands form' \
+    "$control_dir/ActiveBarSettingsPage.qml"; then
+  fail "Bars reintroduced redundant copy below Bar Form"
+fi
 for v1_slot_contract in \
   'ControlCenterPanel.qml:v1LayoutSlots' \
   'ControlCenterPanel.qml:function addV1Slot(region)' \
@@ -641,6 +726,17 @@ for v1_slot_contract in \
   rg -Fq "$contract" "$control_dir/$file" \
     || fail "V1 slot editor contract drifted: $v1_slot_contract"
 done
+position_layout_line=$(rg -n -m1 '"POSITION & LAYOUT"' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+split_row_line=$(rg -n -m1 'id: v1SplitChoiceRow' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+v1_layout_line=$(rg -n -m1 'text: "V1 LAYOUT"' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
+if [[ -z $position_layout_line || -z $split_row_line || -z $v1_layout_line ]] \
+    || (( split_row_line <= position_layout_line \
+      || split_row_line >= v1_layout_line )); then
+  fail "V1 Split/Merge is not compactly grouped under Position & Layout"
+fi
 if rg -Fq 'showSettingsPage("splits")' \
     "$control_dir/ActiveBarSettingsPage.qml"; then
   fail "Bars still delegates layout settings to a submenu"
@@ -655,8 +751,7 @@ if rg -q 'shellStyleRepeater|positionRepeater|BAR SHELL' \
 fi
 
 for page_file in ControlOverviewPage.qml \
-    SplitSettingsPage.qml BarFunctionsPage.qml ControlMainPage.qml \
-    BarsPage.qml WorkspaceSettingsPage.qml \
+    BarFunctionsPage.qml ControlMainPage.qml WorkspaceSettingsPage.qml \
     PickerSettingsPage.qml LogoSettingsPage.qml ControlSearchPage.qml \
     PluginCatalogPage.qml; do
   rg -Fq 'PageHeaderHero {' "$control_dir/$page_file" \
@@ -675,15 +770,15 @@ for header_contract in \
     || fail "shared Configure header geometry drifted: $header_contract"
 done
 
-rg -Fq 'visible: root.controller.v2LayoutActive !== true' \
-  "$control_dir/SplitSettingsPage.qml" \
+rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V1 split and gap controls are not capability-gated"
-rg -Fq 'visible: root.controller.v2LayoutActive === true' \
-  "$control_dir/SplitSettingsPage.qml" \
+rg -Fq 'visible: root.v2Active' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 slot and divider controls are not capability-gated"
-rg -Fq 'V1 split islands, merge and gap animations do not apply.' \
-  "$control_dir/SplitSettingsPage.qml" \
-  || fail "V2 layout does not explain its capability boundary"
+rg -Fq 'detail: "Add slots and place dividers"' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
+  || fail "V2 edit mode does not explain its layout capability"
 
 for theme_contract in \
   'ControlCenterPanel.qml:surfaceOverrideEnabled: false' \
@@ -734,8 +829,7 @@ rg -Fq 'if (kinds.indexOf("bar") >= 0) continue' \
 rg -Fq 'Control Center rejected full-bar toggle:' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "controller does not reject full-bar mutations defensively"
-for icon in radio_button_checked align_vertical_center widgets brush \
-    view_week health_and_safety download; do
+for icon in align_vertical_center widgets brush health_and_safety download; do
   rg -Fq "\"$icon\"" "$control_dir" --glob '*.qml' \
     || fail "missing Material Symbol in V4 navigation: $icon"
 done
@@ -748,13 +842,6 @@ rg -Fq 'fill: 0' "$control_dir/ConfigureLandingPage.qml" \
   || fail "Configure route icons change shape between states"
 
 for contract in \
-  'BarsPage.qml:SHELL CONTINUITY' \
-  'BarsPage.qml:SNAPSHOT' \
-  'BarsPage.qml:APPLY' \
-  'BarsPage.qml:VERIFY' \
-  'BarsPage.qml:USER EXTRAS' \
-  'BarsPage.qml:ROLLBACK' \
-  'BarsPage.qml:RECOVERY READY' \
   'ControlCenterPanel.qml:switchShell' \
   'ControlCenterPanel.qml:manager/shibumi-manager'; do
   file=${contract%%:*}
@@ -762,6 +849,14 @@ for contract in \
   rg -Fq "$label" "$control_dir/$file" \
     || fail "missing V5 State Canvas contract: $label"
 done
+for duplicate_page in BarsPage.qml SplitSettingsPage.qml ConfigureNavigation.qml; do
+  [[ ! -e $control_dir/$duplicate_page ]] \
+    || fail "retired duplicate control surface remains: $duplicate_page"
+done
+if rg -Fq 'label: "Switch to "' \
+    "$control_dir/ActiveBarSettingsPage.qml"; then
+  fail "Bars still duplicates the Quick-level host switch"
+fi
 [[ -x $control_dir/manager/shibumi-manager ]] \
   || fail "persistent continuity manager is missing or not executable"
 
@@ -829,7 +924,7 @@ for health_contract in \
     'label: root.copiedCheckId === String(checkRow.check.id || "")' \
     'label: "Open issue ↗"' \
     'interactive: false' \
-    'const next = requested === "preferences" ? "health" : requested'; do
+    'const next = requested === "preferences" ? "health"'; do
   rg -Fq "$health_contract" "$control_dir/ControlMainPage.qml" \
     "$control_dir/ControlSettings.qml" \
     || fail "Health route contract drifted: $health_contract"
@@ -952,14 +1047,14 @@ if rg -Fq 'text: "ACTIVE BAR"' \
     "$control_dir/ActiveBarSettingsPage.qml"; then
   fail "Bars repeats the already explicit V1/V2 active state"
 fi
-position_line=$(rg -n -m1 'SectionLabel \{ text: "POSITION" \}' \
+position_line=$(rg -n -m1 'text: root.v2Active ? "POSITION"' -F \
   "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
 surface_line=$(rg -n -m1 'id: barSurfaceSettings' \
   "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
 form_line=$(rg -n -m1 'SectionLabel \{ text: "BAR FORM" \}' \
   "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)
 if (( surface_line <= position_line || surface_line >= form_line )); then
-  fail "Surface & Color is not directly ordered after Position"
+  fail "Bar Surface is not directly aligned with Position"
 fi
 
 for color_contract in \
@@ -970,16 +1065,24 @@ for color_contract in \
   '{ value: "color05", label: "05" }' \
   '{ value: "color06", label: "06" }' \
   '{ value: "color07", label: "07" }' \
-  '{ value: "color08", label: "08" }' \
   '{ value: "foreground", label: "FG" }'; do
   rg -Fq "$color_contract" "$control_dir/BarSurfaceSettings.qml" \
     || fail "missing V1 palette choice: $color_contract"
 done
-rg -Fq 'columns: 9' "$control_dir/BarSurfaceSettings.qml" \
-  || fail "Bars palette picker is not a compact nine-column strip"
+rg -Fq 'columns: 8' "$control_dir/BarSurfaceSettings.qml" \
+  || fail "Bars palette picker is not a compact eight-column strip"
+rg -Fq 'activeFocusOnTab: true' "$control_dir/BarSurfaceSettings.qml" \
+  || fail "Bars palette choices are not keyboard-focusable"
+if rg -Fq '{ value: "color08", label: "08" }' \
+    "$control_dir/BarSurfaceSettings.qml"; then
+  fail "Bars exposes color08 beyond the accepted V1/V2 palette contract"
+fi
 rg -Fq 'radius: root.controller.controlRadius' \
   "$control_dir/BarSurfaceSettings.qml" \
   || fail "V1 palette swatches do not follow the live radius setting"
+rg -Fq 'controlHeight: radiusRow.height' \
+  "$control_dir/BarSurfaceSettings.qml" \
+  || fail "V1 surface and radius controls do not share one row height"
 rg -Fq 'root.controller.contrastColor(swatch.modelData.value)' \
   "$control_dir/BarSurfaceSettings.qml" \
   || fail "V1 palette swatches lack contrast-aware labels"
@@ -1168,9 +1271,6 @@ done
 if rg -q 'model: 5' "$control_dir/WidgetModuleTile.qml"; then
   fail "decorative connector contacts remain on widget tiles"
 fi
-if rg -q 'model: 5' "$control_dir/BarsPage.qml"; then
-  fail "ambiguous five-box decoration remains in the shell preview"
-fi
 for visual_contract in \
     'value: "icon", label: "Icon"' \
     'value: "full", label: "Icon + text"' \
@@ -1180,7 +1280,7 @@ for visual_contract in \
     'text: "FILL COLOR"' \
     'text: "OUTLINE COLOR"' \
     'root.displayModeLabel(' \
-    'root.widgetMode(widgetRow.option.group,' \
+    'root.widgetPresentationLabel(widgetRow.option.group,' \
     '{ value: "none", label: "None" }' \
     '{ value: "fill", label: "Fill" }' \
     '{ value: "border", label: "Outline" }' \
@@ -1200,11 +1300,14 @@ for visual_contract in \
     || fail "Appearance is missing widget visual control: $visual_contract"
 done
 for workspace_contract in 'label: "Magic"' 'label: "Kanji"' \
-    'label: "Frame"' 'label: "Aurora"' \
-    'Each marker is a workspace.'; do
+    'label: "Frame"' 'label: "Aurora"'; do
   rg -Fq "$workspace_contract" "$control_dir/WorkspaceSettingsPage.qml" \
     || fail "Workspaces is missing visual control: $workspace_contract"
 done
+if rg -Fq 'Each marker is a workspace.' \
+    "$control_dir/WorkspaceSettingsPage.qml"; then
+  fail "Workspaces reintroduced redundant marker explanation copy"
+fi
 if rg -Fq 'concat(v2Active ?' "$control_dir/WorkspaceSettingsPage.qml"; then
   fail "Workspace marker choices still differ between V1 and V2"
 fi
@@ -1215,18 +1318,18 @@ for radius_contract in \
     "$control_dir/WorkspaceMarkerPreviewCard.qml" \
     || fail "Workspace preview is missing radius contract: $radius_contract"
 done
-rg -Fq 'label: "Edit dividers on bar"' \
-  "$control_dir/SplitSettingsPage.qml" \
+rg -Fq 'label: "Edit layout"' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 settings are missing the direct divider editor"
 rg -Fq 'function beginBarEditing()' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "control center cannot enter bar edit mode"
-rg -Fq 'visible: root.controller.v2LayoutActive !== true' \
-  "$control_dir/SplitSettingsPage.qml" \
+rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V1-only split and gap controls are not capability-gated"
-rg -Fq 'V1 split islands, merge and gap animations do not apply.' \
-  "$control_dir/SplitSettingsPage.qml" \
-  || fail "V2 layout does not explain its reduced capability contract"
+rg -Fq 'detail: "Add slots and place dividers"' \
+  "$control_dir/ActiveBarSettingsPage.qml" \
+  || fail "V2 layout action does not explain its capability contract"
 if rg -Fq 'label: "Group separator"' "$control_dir/BarFunctionsPage.qml"; then
   fail "separator placement still appears as a widget Appearance option"
 fi
@@ -1476,6 +1579,40 @@ for icons_height_contract in \
   label=${icons_height_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
     || fail "Icons compact panel-height contract drifted: $label"
+done
+for pickers_height_contract in \
+    'ControlSettings.qml:readonly property bool compactPickersPage:' \
+    'ControlSettings.qml:configureDetailPage === "pickers"' \
+    'ControlSettings.qml:readonly property real compactPickersPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactPickersPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactPickersPanelHeight,'; do
+  file=${pickers_height_contract%%:*}
+  label=${pickers_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Pickers compact panel-height contract drifted: $label"
+done
+for workspaces_height_contract in \
+    'ControlSettings.qml:readonly property bool compactWorkspacesPage:' \
+    'ControlSettings.qml:configureDetailPage === "workspaces"' \
+    'ControlSettings.qml:readonly property real compactWorkspacesPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactWorkspacesPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactWorkspacesPanelHeight,'; do
+  file=${workspaces_height_contract%%:*}
+  label=${workspaces_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Workspaces compact panel-height contract drifted: $label"
+done
+for logo_height_contract in \
+    'LogoSettingsPage.qml:readonly property int optionRowCount:' \
+    'ControlSettings.qml:readonly property bool compactLogoPage:' \
+    'ControlSettings.qml:configureDetailPage === "logo"' \
+    'ControlSettings.qml:readonly property real compactLogoPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactLogoPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactLogoPanelHeight,'; do
+  file=${logo_height_contract%%:*}
+  label=${logo_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Logo compact panel-height contract drifted: $label"
 done
 for icons_hero_contract in \
     'PageHeaderHero.qml:property real preferredHeight:' \

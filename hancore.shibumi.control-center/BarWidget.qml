@@ -44,15 +44,10 @@ Ui.Panel {
     && stateService.config.menu && stateService.config.menu.launcher
     ? stateService.config.menu.launcher
     : ({ mode: "text", text: "shibumi", icon: "omarchy" })
-  readonly property string displayMode: String(
-    setting("displayMode", setting("compact", false) ? "icon" : "full"))
-  readonly property bool compact: displayMode === "icon"
   readonly property bool iconMode: stockOmarchyHost
-    || displayMode === "icon"
-    || (displayMode === "full" && launcherConfig.mode === "icon")
-  readonly property string effectiveLauncherText: displayMode === "text"
-    && launcherConfig.mode === "icon" ? "shibumi"
-    : String(launcherConfig.text || "shibumi")
+    || String(launcherConfig.mode || "text") === "icon"
+  readonly property string effectiveLauncherText:
+    String(launcherConfig.text || "shibumi")
   readonly property bool shibumiWordmark: !iconMode
     && effectiveLauncherText === "shibumi"
   readonly property bool archWordmark: !iconMode && effectiveLauncherText === "arch"

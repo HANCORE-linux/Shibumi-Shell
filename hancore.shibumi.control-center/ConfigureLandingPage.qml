@@ -14,36 +14,53 @@ Column {
   property bool motionActive: false
   property bool activePage: false
   property bool detailOpen: false
-  property bool surfaceRouteAvailable: false
-  property bool surfaceRouteActive: false
+  property bool barsChildRouteAvailable: false
+  property bool barsChildRouteActive: false
+  property string barsChildRouteLabel: ""
   property bool favoritesRouteAvailable: false
   property bool favoritesRouteActive: false
   property bool transitioning: false
   property string selectedPage: ""
   property int hoveredIndex: -1
-  property int focusIndex: 0
+  property int focusIndex: -1
+  property int lastPreviewIndex: 0
   readonly property var routeOptions: pageOptions.map(function(page) {
     const details = {
-      plugins: "Installed bar modules",
-      workspaces: "Count and marker style",
-      pickers: "Image and media browsers",
-      logo: "Wordmark and icon previews",
-      functions: "Widget icons and presentation",
-      bars: "Shibumi and Omarchy handoff",
+      plugins: "Installed and available modules",
+      workspaces: "Count and marker previews",
+      pickers: "Image and media style previews",
+      logo: "Launcher wordmarks and icons",
+      functions: "Per-widget content and surfaces",
+      bars: "Position, layout and profile styles",
       health: "Runtime and error diagnostics"
+    }
+    const previewDetails = {
+      bars: "V1 Islands, V2 Notch and the Omarchy host",
+      functions: "Content modes across active widgets",
+      logo: "Independent wordmark and icon identities",
+      workspaces: "Default, Numbers, Magic and Frame samples",
+      pickers: "Carousel, Tanzaku and Hearthstone at a glance",
+      plugins: "Installed modules as marketplace cards",
+      health: "Live checks with attention states first"
     }
     return {
       id: page.id,
       label: page.label,
       glyph: page.glyph,
-      detail: details[page.id] || "Control Center settings"
+      detail: details[page.id] || "Control Center settings",
+      previewDetail: previewDetails[page.id] || "Settings preview"
     }
   })
   readonly property bool ready: routeRepeater.count === routeOptions.length
-  readonly property int previewIndex: hoveredIndex >= 0
-    ? hoveredIndex : Math.max(0, Math.min(focusIndex, routeOptions.length - 1))
+  readonly property int previewIndex: {
+    const candidate = hoveredIndex >= 0
+      ? hoveredIndex : focusIndex >= 0 ? focusIndex : lastPreviewIndex
+    return Math.max(0, Math.min(candidate, routeOptions.length - 1))
+  }
   readonly property var previewRoute: routeOptions.length > 0
-    ? routeOptions[previewIndex] : ({ id: "", label: "", detail: "" })
+      && previewIndex >= 0 && previewIndex < routeOptions.length
+    ? routeOptions[previewIndex]
+    : ({ id: "", label: "", detail: "", previewDetail: "" })
   readonly property int barsRouteIndex: {
     for (let index = 0; index < routeOptions.length; index++) {
       if (routeOptions[index].id === "bars") return index
@@ -56,20 +73,20 @@ Column {
     }
     return -1
   }
-  readonly property bool barsSurfaceVisible: detailOpen
-    && selectedPage === "bars" && surfaceRouteAvailable
+  readonly property bool barsChildRouteVisible: detailOpen
+    && selectedPage === "bars" && barsChildRouteAvailable
   readonly property bool pluginFavoritesVisible: detailOpen
     && selectedPage === "plugins" && favoritesRouteAvailable
   readonly property bool childRouteVisible:
-    barsSurfaceVisible || pluginFavoritesVisible
-  readonly property bool childRouteActive: barsSurfaceVisible
-    ? surfaceRouteActive : favoritesRouteActive
-  readonly property int childRouteIndex: barsSurfaceVisible
+    barsChildRouteVisible || pluginFavoritesVisible
+  readonly property bool childRouteActive: barsChildRouteVisible
+    ? barsChildRouteActive : favoritesRouteActive
+  readonly property int childRouteIndex: barsChildRouteVisible
     ? barsRouteIndex : pluginsRouteIndex
   readonly property real surfaceRouteExtension: childRouteVisible
     ? Commons.Style.space(34) : 0
   signal pageRequested(string pageId)
-  signal surfaceRequested()
+  signal barsChildRequested()
   signal favoritesRequested()
   signal backRequested()
 
@@ -136,9 +153,22 @@ Column {
   onActivePageChanged: {
     if (activePage) {
       cancelTransition()
-      focusIndex = 0
-      Qt.callLater(function() { root.forceActiveFocus() })
+      focusIndex = -1
     }
+  }
+
+  onActiveFocusChanged: {
+    if (activeFocus && activePage && focusIndex < 0)
+      focusIndex = 0
+  }
+
+  onHoveredIndexChanged: {
+    if (hoveredIndex >= 0) lastPreviewIndex = hoveredIndex
+  }
+
+  onFocusIndexChanged: {
+    if (focusIndex >= 0 && hoveredIndex < 0)
+      lastPreviewIndex = focusIndex
   }
 
   Keys.onUpPressed: function(event) {
@@ -329,7 +359,7 @@ Column {
         function onDetailOpenChanged() {
           detailRouteCanvas.requestPaint()
         }
-        function onBarsSurfaceVisibleChanged() {
+        function onBarsChildRouteVisibleChanged() {
           detailRouteCanvas.requestPaint()
         }
         function onPluginFavoritesVisibleChanged() {
@@ -511,10 +541,10 @@ Column {
 
         Connections {
           target: root
-          function onSurfaceRouteActiveChanged() {
+          function onBarsChildRouteActiveChanged() {
             surfaceRouteCanvas.requestPaint()
           }
-          function onBarsSurfaceVisibleChanged() {
+          function onBarsChildRouteVisibleChanged() {
             surfaceRouteCanvas.requestPaint()
           }
           function onPluginFavoritesVisibleChanged() {
@@ -562,7 +592,8 @@ Column {
           anchors.verticalCenter: parent.verticalCenter
           anchors.leftMargin: Commons.Style.space(9)
           anchors.rightMargin: Commons.Style.space(7)
-          text: root.pluginFavoritesVisible ? "Favorites" : "Surface & Color"
+          text: root.pluginFavoritesVisible
+            ? "Favorites" : root.barsChildRouteLabel
           color: root.childRouteActive ? root.accent : root.foreground
           opacity: root.childRouteActive || parent.activeFocus
             || surfaceRoutePointer.containsMouse ? 1 : 0.62
@@ -580,18 +611,18 @@ Column {
           onClicked: {
             surfaceRouteRow.forceActiveFocus()
             if (root.pluginFavoritesVisible) root.favoritesRequested()
-            else root.surfaceRequested()
+            else root.barsChildRequested()
           }
         }
 
         Keys.onReturnPressed: function(event) {
           if (root.pluginFavoritesVisible) root.favoritesRequested()
-          else root.surfaceRequested()
+          else root.barsChildRequested()
           event.accepted = true
         }
         Keys.onEnterPressed: function(event) {
           if (root.pluginFavoritesVisible) root.favoritesRequested()
-          else root.surfaceRequested()
+          else root.barsChildRequested()
           event.accepted = true
         }
       }
@@ -606,7 +637,7 @@ Column {
       controller: root.controller
       routeId: root.previewRoute.id
       label: root.previewRoute.label
-      detail: root.previewRoute.detail
+      detail: root.previewRoute.previewDetail
       uiScale: root.uiScale
       foreground: root.foreground
       accent: root.accent

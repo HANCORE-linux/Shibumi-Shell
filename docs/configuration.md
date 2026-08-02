@@ -25,7 +25,8 @@ and normalizes this branch before using it. It includes:
 - workspace mode and presentation;
 - App Menu favorites, hidden entries, launcher identity, and presentation;
 - image and media picker styles;
-- Reactor mode.
+- V1 Reactor mode, selected through **Bars → Gap Animations** from nine direct
+  preview tiles.
 
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema.
@@ -95,7 +96,8 @@ is retained. When Shibumi is activated again, Theme & Wallpaper remains on
 `bar.id` selects the active full-bar host. Shibumi and Omarchy retain separate
 layout snapshots through the suite's continuity manager.
 
-- **Bars** in the Control Center switches hosts.
+- **Quick** in the Control Center switches between V1, V2, and Omarchy Bar.
+- **Bars** configures only the currently active Shibumi generation.
 - `shibumi-suite deactivate` selects Omarchy while retaining Shibumi.
 - `shibumi-suite activate` restores Shibumi and its managed layout.
 - `omarchy bar reset` selects the stock host without a full defaults reset.

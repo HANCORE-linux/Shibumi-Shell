@@ -215,15 +215,10 @@ Item {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property int headerHealthErrorCount: settings.healthErrorCount
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property bool pluginInstallerOpen: settings.paletteOpen
     && settings.installMode && settings.installerDirect
-  readonly property bool barsSurfaceRouteActive:
-    settings.barsSurfaceRouteActive
-  readonly property real barsSurfaceActivationY:
-    settings.barsSurfaceActivationY
-  readonly property real barsDetailScrollMaximum:
-    settings.detailScrollMaximum
   readonly property var settingsSearchSuggestions:
     settings.settingsSearchSuggestions
   readonly property var settingsSearchResults:
@@ -258,10 +253,6 @@ Item {
       bar.requestPopout(ownerWidget)
     else if (!open && typeof bar.releasePopout === "function")
       bar.releasePopout(ownerWidget)
-  }
-
-  function scrollToBarSurface() {
-    return settings.scrollToBarSurface()
   }
 
   function focusPredictiveSettingsSearch() {
@@ -467,6 +458,24 @@ Item {
           launcherIconOptions, next.launcher.icon)
     }
     next.launcher.mode = nextMode
+    return stateService.setMenuConfig(next)
+  }
+
+  function setLauncherSelection(mode, value) {
+    if (!stateService || typeof stateService.setMenuConfig !== "function")
+      return false
+    const nextMode = String(mode || "")
+    const nextValue = String(value || "")
+    const options = nextMode === "text"
+      ? launcherTextOptions : nextMode === "icon"
+        ? launcherIconOptions : []
+    if (options.indexOf(nextValue) < 0) return false
+    const next = JSON.parse(JSON.stringify(menuConfig))
+    if (!next.launcher) next.launcher = {
+      mode: "text", text: "shibumi", icon: "omarchy"
+    }
+    next.launcher.mode = nextMode
+    next.launcher[nextMode] = nextValue
     return stateService.setMenuConfig(next)
   }
 
