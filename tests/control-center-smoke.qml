@@ -813,8 +813,9 @@ ShellRoot {
 
       if (root.phase === 11) {
         if (!widget || root.ticks < 2) return
-        if (!widget.stockOmarchyHost || !widget.iconMode)
-          return root.fail("stock Omarchy host identity was not detected")
+        if (!widget.stockOmarchyHost || !widget.iconMode
+            || widget.nativePillSurfaceVisible)
+          return root.fail("stock Omarchy return icon was not neutral")
         widgetLoader.active = false
         root.phase++
         root.ticks = 0

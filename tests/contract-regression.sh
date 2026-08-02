@@ -1063,6 +1063,9 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
     rg -q "$status_contract" "$official_update_widget" \
       || fail "official update widget contract changed: $status_contract"
   done
+  rg -Fq 'root.bar.run("omarchy-launch-floating-terminal-with-presentation omarchy-update")' \
+    "$official_update_widget" \
+    || fail "official update widget no longer opens the Omarchy updater terminal"
   for status_contract in pinnedItems drawerItems close; do
     rg -q "$status_contract" "$official_tray_widget" \
       || fail "official tray widget contract changed: $status_contract"

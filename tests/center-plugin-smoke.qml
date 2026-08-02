@@ -127,6 +127,7 @@ ShellRoot {
     property var shell: fakeShell
     property var barWidgetRegistry: registry
     property var clickTargets: root.clickTargets
+    property int summonCount: 0
     property var visualTokens: ({
       pillHeight: 24,
       pillRadius: 12,
@@ -161,6 +162,10 @@ ShellRoot {
     }
     function setWidgetSetting(_group, _module, _key, _value) { return true }
     function run(_command) {}
+    function summonBarWidget(_module, _mode) {
+      summonCount++
+      return true
+    }
     function showTooltip(_target, _text) {}
     function hideTooltip(_target) {}
     function registerClickTarget(target) {
@@ -230,7 +235,8 @@ ShellRoot {
             || !center.updateWidget.activate()
             || !center.updateWidget.refresh()
             || center.updateBackend.runCount !== 1
-            || center.updateBackend.refreshCount !== 1)
+            || center.updateBackend.refreshCount !== 1
+            || fakeBar.summonCount !== 0)
           return root.fail("update facade/backend contract")
         if (center.childPanelWidget("omarchy.weather") !== center.weatherWidget
             || center.childPanelWidget("omarchy.indicators") !== null)

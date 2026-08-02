@@ -38,8 +38,6 @@ Ui.BarWidget {
   height: implicitHeight
 
   function activate() {
-    if (bar && typeof bar.summonBarWidget === "function")
-      return bar.summonBarWidget("hancore.shibumi.update-center", "")
     if (!backendWidget || typeof backendWidget.runUpdate !== "function") return false
     backendWidget.runUpdate()
     return true

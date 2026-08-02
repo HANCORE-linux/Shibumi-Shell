@@ -27,15 +27,15 @@ Ui.Panel {
   readonly property bool surfaceDisabled: !!(tokens
     && typeof tokens.widgetColorMode === "function"
     && tokens.widgetColorMode(settings) === "none")
-  readonly property bool nativePillSurfaceVisible: !!(tokens
+  readonly property bool stockOmarchyHost:
+    HostIdentity.isStockOmarchyHost(bar)
+  readonly property bool nativePillSurfaceVisible: !stockOmarchyHost && !!(tokens
     && String(tokens.shellStyle || "shibumi") === "shibumi"
     && !customDecorated && !surfaceDisabled)
   readonly property var stateService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.state") : null
   readonly property bool vertical: bar ? bar.vertical === true : false
-  readonly property bool stockOmarchyHost:
-    HostIdentity.isStockOmarchyHost(bar)
   readonly property int barSize: bar ? Number(bar.barSize || 0) : 0
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item

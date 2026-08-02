@@ -54,6 +54,9 @@ rg -q 'root\.toggle\(\)' "$control_dir/BarWidget.qml" \
 rg -Fq 'readonly property bool animationActive: pointer.containsMouse' \
   "$control_dir/BarWidget.qml" \
   || fail "G1 background motion is not hover-only"
+rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost && !!(tokens' \
+  "$control_dir/BarWidget.qml" \
+  || fail "stock Omarchy return icon inherits a Shibumi pill surface"
 if rg -Fq 'pointer.containsMouse || opened' "$control_dir/BarWidget.qml"; then
   fail "G1 background motion still runs for the full panel lifetime"
 fi
