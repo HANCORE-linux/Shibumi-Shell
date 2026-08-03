@@ -57,8 +57,18 @@ rg -q 'anchorItem: button' "$widget" \
   || fail 'update panel is not anchored to its own bar button'
 rg -Fq 'open: ownerWidget.opened' "$panel" \
   || fail 'update panel does not consume the inherited panel state'
-rg -Fq 'onOpenedChanged: syncPanelLoader()' "$widget" \
-  || fail 'update panel loader does not follow the inherited panel state'
+for deferred_loader_contract in \
+  'onOpenedChanged: panelSyncTimer.restart()' \
+  'onUpdateServiceChanged: panelSyncTimer.restart()' \
+  'onTriggered: root.syncPanelLoader()' \
+  'bar.releasePopout(root)' \
+  'bar.clearConnectedPanel(root)'; do
+  rg -Fq "$deferred_loader_contract" "$widget" \
+    || fail "update panel loader lost its deferred lifecycle: $deferred_loader_contract"
+done
+if rg -Fq 'onOpenedChanged: syncPanelLoader()' "$widget"; then
+  fail 'update panel loader synchronously re-enters the inherited open binding'
+fi
 if rg -q 'popupOpen' "$widget" "$panel"; then
   fail 'update center reintroduces a duplicate popup state'
 fi
@@ -148,6 +158,24 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "UI smoke exited $rc"
 grep -F 'update center UI smoke passed' <<<"$output" >/dev/null \
   || fail 'UI smoke success marker is missing'
+
+install -m 0644 "$repo_root/tests/update-center-owner-smoke.qml" \
+  "$tmpdir/shell.qml"
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+rc=$?
+set -e
+printf '%s\n' "$output"
+[[ $rc -eq 0 ]] || fail "owner smoke exited $rc"
+grep -F 'update center owner smoke passed' <<<"$output" >/dev/null \
+  || fail 'owner smoke success marker is missing'
+if grep -F 'Binding loop detected' <<<"$output" >/dev/null; then
+  fail 'update center owner lifecycle produced a binding loop'
+fi
 
 "$repo_root/tests/update-center-package-regression.sh"
 "$repo_root/tests/update-center-theme-regression.sh"

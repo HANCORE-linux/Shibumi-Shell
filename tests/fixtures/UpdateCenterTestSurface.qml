@@ -24,6 +24,7 @@ Item {
   readonly property color controlHoverBorderColor: "#d75f5f"
   readonly property color dividerColor: "#303030"
   readonly property real controlBorderWidth: 1
+  readonly property real controlRadius: 6
 
   width: contentWidth
   height: contentHeight

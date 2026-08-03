@@ -48,6 +48,7 @@ Ui.Panel {
     : Commons.Style.font.family
   readonly property bool hasMaterialSymbols:
     Qt.fontFamilies().indexOf("Material Symbols Rounded") !== -1
+  readonly property bool panelLoaded: panelLoader.item !== null
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
@@ -88,6 +89,13 @@ Ui.Panel {
   }
 
   function syncPanelLoader() {
+    if (!opened) {
+      if (bar && bar.activePopout === root
+          && typeof bar.releasePopout === "function")
+        bar.releasePopout(root)
+      if (bar && typeof bar.clearConnectedPanel === "function")
+        bar.clearConnectedPanel(root)
+    }
     panelLoader.source = ""
     if (!opened || !updateService) return
     panelLoader.setSource(panelSource, {
@@ -109,8 +117,12 @@ Ui.Panel {
       registeredBar.registerClickTarget(root)
   }
 
-  onOpenedChanged: syncPanelLoader()
-  onUpdateServiceChanged: syncPanelLoader()
+  // Loading UpdateCenterPanel synchronously from openedChanged re-enters the
+  // inherited Ui.Panel.opened binding when the panel binds its open state back
+  // to ownerWidget.opened. Queue the lifecycle handoff to the next event-loop
+  // turn so the controller binding settles before the panel is constructed.
+  onOpenedChanged: panelSyncTimer.restart()
+  onUpdateServiceChanged: panelSyncTimer.restart()
   onBarChanged: syncClickRegistration()
   Component.onCompleted: syncClickRegistration()
   Component.onDestruction: {
@@ -178,6 +190,13 @@ Ui.Panel {
         }
       }
     }
+  }
+
+  Timer {
+    id: panelSyncTimer
+    interval: 0
+    repeat: false
+    onTriggered: root.syncPanelLoader()
   }
 
   Loader { id: panelLoader }
