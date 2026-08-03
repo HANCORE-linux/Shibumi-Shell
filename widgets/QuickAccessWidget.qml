@@ -88,7 +88,8 @@ Item {
     }
 
     ActionIcon {
-      icon: "collections"
+      icon: "images"
+      glyphsIcon: true
       active: root.picker && root.picker.opened && root.picker.mediaMode
       tooltip: "Left: Screenshots  Right: Videos"
       onTriggered: function(button) {
@@ -98,6 +99,7 @@ Item {
 
     ActionIcon {
       icon: "palette"
+      glyphsIcon: true
       active: root.picker && root.picker.opened && root.picker.imageMode
       tooltip: "Left: Themes  Right: Wallpapers"
       onTriggered: function(button) {
@@ -112,6 +114,7 @@ Item {
     required property bool active
     required property string tooltip
     property bool nerdGlyph: false
+    property bool glyphsIcon: false
     property real inactiveOpacity: 0.62
     readonly property color iconColor: root.bar
       ? (active ? root.bar.urgent
@@ -124,12 +127,22 @@ Item {
 
     IconText {
       anchors.centerIn: parent
-      visible: !action.nerdGlyph
+      visible: !action.nerdGlyph && !action.glyphsIcon
       text: action.icon
       color: action.iconColor
       font.pixelSize: 14
       font.weight: Font.Medium
       fill: action.active ? 1 : 0
+      Behavior on color { ColorAnimation { duration: 150 } }
+    }
+
+    GlyphsQuickAccessIcon {
+      anchors.centerIn: parent
+      width: Commons.Style.space(20)
+      height: width
+      visible: action.glyphsIcon
+      name: action.icon
+      color: action.iconColor
       Behavior on color { ColorAnimation { duration: 150 } }
     }
 

@@ -251,7 +251,7 @@ QtObject {
       fail("V1/V2 border profiles were not retained independently")
     if (valid.workspace.mode !== "active" || valid.workspace.style !== "magic")
       fail("workspace settings were not normalized")
-    const v2WorkspaceStyles = ["kanji", "rings", "aurora"]
+    const v2WorkspaceStyles = ["kanji", "rings", "aurora", "pacman"]
     for (let workspaceStyle of v2WorkspaceStyles) {
       const workspaceState = Config.normalize({
         version: 1,

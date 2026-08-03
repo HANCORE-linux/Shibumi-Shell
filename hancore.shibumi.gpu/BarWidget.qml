@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
 
@@ -93,21 +92,9 @@ Ui.Panel {
         width: Commons.Style.space(20)
         height: Commons.Style.space(14)
 
-        Image {
-          id: gpuIconSource
+        GpuCardIcon {
           anchors.fill: parent
-          visible: false
-          source: Qt.resolvedUrl("gpu-card.svg")
-          sourceSize: Qt.size(Math.round(width), Math.round(height))
-          fillMode: Image.PreserveAspectFit
-          smooth: false
-        }
-
-        MultiEffect {
-          anchors.fill: parent
-          source: gpuIconSource
-          colorization: 1
-          colorizationColor: root.widgetInk
+          color: root.widgetInk
         }
       }
 

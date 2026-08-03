@@ -15,6 +15,9 @@ Ui.Panel {
   property var workspaceService: bar && bar.shell
     && typeof bar.shell.serviceFor === "function"
     ? bar.shell.serviceFor("hancore.shibumi.workspaces") : null
+  readonly property var stateService: bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.state") : null
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -62,6 +65,7 @@ Ui.Panel {
   readonly property int workspaceGap: renderStyle === "rings"
     ? Commons.Style.space(3)
     : renderStyle === "aurora" ? Commons.Style.space(4)
+    : renderStyle === "pacman" ? Commons.Style.space(2)
     : tokens ? tokens.contentGap : Commons.Style.space(5)
   readonly property int focusedDisplayIndex: {
     for (var index = 0; index < displayedWorkspaceIds.length; index++) {
@@ -69,6 +73,34 @@ Ui.Panel {
     }
     return -1
   }
+  readonly property int focusedWorkspaceId: focusedDisplayIndex >= 0
+    ? Number(displayedWorkspaceIds[focusedDisplayIndex]) || -1 : -1
+  readonly property color pacmanActiveColor:
+    paletteColor("color03", tokens && tokens.seal !== undefined
+      ? tokens.seal : widgetInk)
+  readonly property color pacmanOccupiedColor: widgetInk
+  readonly property color pacmanEmptyColor: widgetInk
+  readonly property color pacmanHoverColor: widgetInk
+  property int pacmanLastFocusedWorkspaceId: -1
+  property int pacmanTargetWorkspaceId: -1
+  property bool pacmanTraveling: false
+  property real pacmanMouthClosure: 0
+  property int pacmanTravelDirection: 1
+  property int pacmanTravelSteps: 1
+  property real pacmanTravelFromX: 0
+  property real pacmanTravelTargetX: 0
+  property real pacmanTravelX: 0
+  property real pacmanEatProgress: 0
+  readonly property int pacmanTravelDuration:
+    Math.min(720, 320 + pacmanTravelSteps * 100)
+  readonly property int pacmanBiteCount:
+    Math.max(3, Math.min(5, pacmanTravelSteps + 2))
+  readonly property int pacmanBiteHalfDuration: Math.max(60,
+    Math.round(pacmanTravelDuration / (pacmanBiteCount * 2)))
+  readonly property real pacmanMaxMouthClosure: 0.82
+  readonly property int pacmanEatDuration: 120
+  readonly property int pacmanEatLeadIn:
+    Math.max(0, pacmanTravelDuration - pacmanEatDuration)
   readonly property var frameTarget: {
     void(renderedWorkspaceCount)
     return focusedDisplayIndex >= 0
@@ -94,6 +126,87 @@ Ui.Panel {
 
   function activateWorkspace(id) {
     return workspaceService ? workspaceService.focusWorkspace(id) : false
+  }
+
+  function paletteColor(id, fallback) {
+    return stateService && typeof stateService.paletteColor === "function"
+      ? stateService.paletteColor(id) : fallback
+  }
+
+  function workspaceCell(id) {
+    for (var index = 0; index < workspaceRepeater.count; index++) {
+      const item = workspaceRepeater.itemAt(index)
+      if (item && Number(item.modelData) === Number(id)) return item
+    }
+    return null
+  }
+
+  function workspaceCellIndex(id) {
+    for (var index = 0; index < workspaceRepeater.count; index++) {
+      const item = workspaceRepeater.itemAt(index)
+      if (item && Number(item.modelData) === Number(id)) return index
+    }
+    return -1
+  }
+
+  function pacmanCenterX(id) {
+    const item = workspaceCell(id)
+    return item ? workspaceRow.x + item.x + item.width / 2 : -1
+  }
+
+  function finishPacmanTravel() {
+    pacmanTraveling = false
+    pacmanMouthClosure = 0
+    pacmanEatProgress = 0
+    pacmanTargetWorkspaceId = -1
+  }
+
+  function resetPacmanTravel() {
+    pacmanTravel.stop()
+    finishPacmanTravel()
+    pacmanLastFocusedWorkspaceId = focusedWorkspaceId
+  }
+
+  function beginPacmanTravel(sourceId, targetId) {
+    if (renderStyle !== "pacman" || focusedWorkspaceId !== targetId) {
+      resetPacmanTravel()
+      return false
+    }
+    const sourceX = pacmanCenterX(sourceId)
+    const targetX = pacmanCenterX(targetId)
+    if (sourceX < 0 || targetX < 0 || sourceX === targetX) {
+      finishPacmanTravel()
+      return false
+    }
+    pacmanTravel.stop()
+    pacmanTravelFromX = sourceX
+    pacmanTravelTargetX = targetX
+    pacmanTravelX = sourceX
+    pacmanTravelDirection = targetX >= sourceX ? 1 : -1
+    const sourceIndex = workspaceCellIndex(sourceId)
+    const targetIndex = workspaceCellIndex(targetId)
+    pacmanTravelSteps = sourceIndex >= 0 && targetIndex >= 0
+      ? Math.max(1, Math.abs(targetIndex - sourceIndex)) : 1
+    pacmanTargetWorkspaceId = targetId
+    pacmanEatProgress = 0
+    pacmanMouthClosure = 0
+    pacmanTraveling = true
+    pacmanTravel.restart()
+    return true
+  }
+
+  function observePacmanFocus() {
+    const targetId = focusedWorkspaceId
+    if (targetId < 1) return
+    if (renderStyle !== "pacman" || pacmanLastFocusedWorkspaceId < 1) {
+      resetPacmanTravel()
+      pacmanLastFocusedWorkspaceId = targetId
+      return
+    }
+    if (targetId === pacmanLastFocusedWorkspaceId) return
+    const sourceId = pacmanLastFocusedWorkspaceId
+    pacmanLastFocusedWorkspaceId = targetId
+    Qt.callLater(function() { root.beginPacmanTravel(sourceId, targetId) })
   }
 
   function workspaceState(id) {
@@ -124,6 +237,9 @@ Ui.Panel {
   }
 
   onOpenedChanged: syncPanelLoader()
+  onFocusedWorkspaceIdChanged: observePacmanFocus()
+  onRenderStyleChanged: resetPacmanTravel()
+  Component.onCompleted: pacmanLastFocusedWorkspaceId = focusedWorkspaceId
 
   Item {
     id: workspaceSurface
@@ -246,6 +362,8 @@ Ui.Panel {
             : root.renderStyle === "rings" ? Commons.Style.space(20)
             : root.renderStyle === "aurora"
               ? Commons.Style.space(focused ? 34 : 12)
+            : root.renderStyle === "pacman"
+              ? Commons.Style.space(22)
             : Commons.Style.space(focused ? 32 : 16)
           implicitHeight: workspaceSurface.height
 
@@ -386,6 +504,23 @@ Ui.Panel {
             }
           }
 
+          PacmanWorkspaceMarker {
+            visible: root.renderStyle === "pacman"
+            anchors.centerIn: parent
+            focused: cell.focused && !(root.pacmanTraveling
+              && cell.modelData === root.pacmanTargetWorkspaceId)
+            occupied: cell.occupied
+            hovered: cellPointer.containsMouse
+            eatProgress: root.pacmanTraveling
+                && cell.modelData === root.pacmanTargetWorkspaceId
+              ? root.pacmanEatProgress : 0
+            eatDirection: root.pacmanTravelDirection
+            activeColor: root.pacmanActiveColor
+            occupiedColor: root.pacmanOccupiedColor
+            emptyColor: root.pacmanEmptyColor
+            hoverColor: root.pacmanHoverColor
+          }
+
           MouseArea {
             id: cellPointer
             anchors.fill: parent
@@ -394,7 +529,8 @@ Ui.Panel {
             cursorShape: Qt.PointingHandCursor
             onEntered: {
               cell.scale = root.renderStyle === "rings" ? 1
-                : root.renderStyle === "aurora" ? 1.04 : 1.15
+                : root.renderStyle === "aurora"
+                    || root.renderStyle === "pacman" ? 1.04 : 1.15
               if (root.bar) root.bar.showTooltip(
                 workspaceSurface, root.workspaceTooltip(cell.modelData))
             }
@@ -411,6 +547,117 @@ Ui.Panel {
         }
       }
     }
+
+    Item {
+      id: pacmanRunner
+      visible: root.pacmanTraveling && root.renderStyle === "pacman"
+      z: 4
+      x: root.pacmanTravelX - width / 2
+      y: Math.round((parent.height - height) / 2)
+      width: Commons.Style.space(22)
+      height: Commons.Style.space(18)
+
+      Item {
+        id: pacmanRunnerVisual
+        anchors.fill: parent
+        transform: Scale {
+          origin.x: pacmanRunnerVisual.width / 2
+          origin.y: pacmanRunnerVisual.height / 2
+          xScale: root.pacmanTravelDirection
+        }
+
+        Text {
+          id: pacmanRunnerGlyph
+          anchors.centerIn: parent
+          text: "󰮯"
+          color: root.pacmanActiveColor
+          font.family: "JetBrainsMono Nerd Font"
+          font.pixelSize: 14
+          font.weight: Font.Bold
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          renderType: Text.NativeRendering
+        }
+
+        Canvas {
+          id: pacmanMouthFill
+          anchors.centerIn: parent
+          width: Commons.Style.space(16)
+          height: width
+          property real closure: root.pacmanMouthClosure
+          property color fillColor: root.pacmanActiveColor
+
+          onClosureChanged: requestPaint()
+          onFillColorChanged: requestPaint()
+          onPaint: {
+            const context = getContext("2d")
+            const centerX = width / 2
+            const centerY = height / 2
+            const radius = Math.min(width, height) * 0.38
+            const angle = 0.70 * Math.max(0, Math.min(1, closure))
+            context.clearRect(0, 0, width, height)
+            if (angle <= 0.001) return
+            context.fillStyle = String(fillColor)
+            context.beginPath()
+            context.moveTo(centerX, centerY)
+            context.arc(centerX, centerY, radius,
+              -angle, angle, false)
+            context.closePath()
+            context.fill()
+          }
+        }
+      }
+    }
+  }
+
+  SequentialAnimation {
+    id: pacmanTravel
+    running: false
+
+    ParallelAnimation {
+      NumberAnimation {
+        target: root
+        property: "pacmanTravelX"
+        from: root.pacmanTravelFromX
+        to: root.pacmanTravelTargetX
+        duration: root.pacmanTravelDuration
+        easing.type: Easing.InOutSine
+      }
+
+      SequentialAnimation {
+        loops: root.pacmanBiteCount
+        NumberAnimation {
+          target: root
+          property: "pacmanMouthClosure"
+          from: 0
+          to: root.pacmanMaxMouthClosure
+          duration: root.pacmanBiteHalfDuration
+          easing.type: Easing.InOutSine
+        }
+        NumberAnimation {
+          target: root
+          property: "pacmanMouthClosure"
+          from: root.pacmanMaxMouthClosure
+          to: 0
+          duration: root.pacmanBiteHalfDuration
+          easing.type: Easing.InOutSine
+        }
+      }
+
+      SequentialAnimation {
+        PauseAnimation { duration: root.pacmanEatLeadIn }
+        NumberAnimation {
+          target: root
+          property: "pacmanEatProgress"
+          from: 0
+          to: 1
+          duration: root.pacmanEatDuration
+          easing.type: Easing.InCubic
+        }
+      }
+    }
+
+    ScriptAction { script: root.finishPacmanTravel() }
   }
 
   Loader { id: panelLoader }

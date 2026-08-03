@@ -198,7 +198,9 @@ for v2_shadow_contract in \
 done
 for v2_edge_contract in \
   'visible: (root.shellStyle === "full" || root.shellStyle === "fit")' \
-  'strokeWidth: root.shellStyle === "fit"' \
+  'id: fitOuterBorder' \
+  'visible: root.shellStyle === "fit"' \
+  'strokeWidth: root.bar.visualTokens.pillBorderWidth' \
   '&& (root.shellStyle === "dock" || root.shellStyle === "notch")' \
   '? bar.visualTokens.shellWingWidth : 0' \
   'readonly property real notchBodyRadius: shellStyle === "notch" ? 9 : 0' \
@@ -577,24 +579,24 @@ rg -Fq 'text: "󰋊"' hancore.shibumi.storage/BarWidget.qml \
 if rg -Fq 'text: "HDD "' hancore.shibumi.storage/BarWidget.qml; then
   fail "storage bar restored the obsolete HDD prefix"
 fi
-rg -Fq 'source: Qt.resolvedUrl("gpu-card.svg")' \
+rg -Fq 'GpuCardIcon {' \
   hancore.shibumi.gpu/BarWidget.qml \
-  || fail "GPU bar icon drifted from the original V2 card"
-[[ -f hancore.shibumi.gpu/gpu-card.svg ]] \
-  || fail "GPU plugin is missing its self-contained V2 card asset"
-rg -Fq 'stroke-width="1.4"' hancore.shibumi.gpu/gpu-card.svg \
-  || fail "GPU card lost its high-contrast native-size contour"
+  || fail "GPU bar icon is not rendered by its native QML component"
+[[ -f hancore.shibumi.gpu/GpuCardIcon.qml ]] \
+  || fail "GPU plugin is missing its native QML icon"
 for gpu_icon_contract in \
-  'width: Commons.Style.space(20)' \
-  'height: Commons.Style.space(14)' \
-  'sourceSize: Qt.size(Math.round(width), Math.round(height))' \
-  'smooth: false'; do
-  rg -Fq "$gpu_icon_contract" hancore.shibumi.gpu/BarWidget.qml \
-    || fail "GPU bar icon lost its native-size rendering: $gpu_icon_contract"
+  'implicitWidth: 20' \
+  'implicitHeight: 14' \
+  'radius: 1.5' \
+  'radius: 2.5' \
+  'border.width: 1' \
+  'color: root.color'; do
+  rg -Fq "$gpu_icon_contract" hancore.shibumi.gpu/GpuCardIcon.qml \
+    || fail "GPU bar icon lost its rounded native geometry: $gpu_icon_contract"
 done
-if rg -q 'sourceSize: Qt\.size\(54, 39\)|mipmap: true' \
+if rg -q 'MultiEffect|sourceSize:|mipmap:|smooth:' \
     hancore.shibumi.gpu/BarWidget.qml; then
-  fail "GPU bar icon reintroduced filtered three-times downsampling"
+  fail "GPU bar icon reintroduced a filtered rendering stage"
 fi
 if rg -Fq 'text: "GPU "' hancore.shibumi.gpu/BarWidget.qml; then
   fail "GPU bar restored the obsolete GPU prefix"

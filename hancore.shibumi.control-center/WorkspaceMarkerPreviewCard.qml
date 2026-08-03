@@ -24,11 +24,19 @@ Rectangle {
   readonly property real frameMarkerRadius: v2Active
     ? Commons.Style.space(5)
     : v1RadiusSmall ? Commons.Style.space(6) : Commons.Style.space(9)
+  readonly property color pacmanActiveColor: paletteColor("color03", accent)
+  readonly property color pacmanOccupiedColor: foreground
+  readonly property color pacmanEmptyColor: foreground
 
   signal chosen(string styleValue)
 
   function ink(alpha) {
     return Qt.rgba(foreground.r, foreground.g, foreground.b, alpha)
+  }
+
+  function paletteColor(id, fallback) {
+    return controller && typeof controller.accentColor === "function"
+      ? controller.accentColor(id) : fallback
   }
 
   height: Commons.Style.space(68)
@@ -62,6 +70,8 @@ Rectangle {
           : root.styleValue === "rings" ? Commons.Style.space(20)
           : root.styleValue === "aurora"
             ? Commons.Style.space(focused ? 34 : 12)
+          : root.styleValue === "pacman"
+            ? Commons.Style.space(22)
           : Commons.Style.space(focused ? 32 : 16)
         height: Commons.Style.space(24)
 
@@ -157,6 +167,17 @@ Rectangle {
           color: root.foreground
           opacity: marker.focused ? 0.92 : marker.occupied ? 0.62 : 0.18
           antialiasing: true
+        }
+
+        PacmanWorkspaceMarker {
+          visible: root.styleValue === "pacman"
+          anchors.centerIn: parent
+          focused: marker.focused
+          occupied: marker.occupied
+          activeColor: root.pacmanActiveColor
+          occupiedColor: root.pacmanOccupiedColor
+          emptyColor: root.pacmanEmptyColor
+          hoverColor: root.foreground
         }
       }
     }

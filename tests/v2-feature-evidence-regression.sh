@@ -13,7 +13,7 @@ fail() {
 
 jq -e '
   .schemaVersion == 1
-  and (.features | length) == 36
+  and (.features | length) == 37
   and (.features | all(
     (.implementation | type) == "array" and (.implementation | length) > 0
     and (.tests | type) == "array" and (.tests | length) > 0))

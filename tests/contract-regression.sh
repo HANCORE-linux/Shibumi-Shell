@@ -1379,7 +1379,8 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
 
   cp adapters/WorkspaceActions.qml "$smoke_root/adapters/"
   cp services/WorkspaceModel.js services/WorkspaceService.qml "$smoke_root/services/"
-  cp widgets/WorkspaceWidget.qml widgets/WorkspacePanel.qml \
+  cp widgets/WorkspaceWidget.qml widgets/PacmanWorkspaceMarker.qml \
+    widgets/WorkspacePanel.qml \
     widgets/WorkspacePanelContent.qml widgets/ShibumiPanelToolTip.qml \
     "$smoke_root/widgets/"
   cp tests/fixtures/WorkspaceTestPanel.qml "$smoke_root/"

@@ -424,10 +424,10 @@ function normalizeWorkspace(value) {
   var style = String(value.style || "")
   // Pre-alpha Shibumi briefly exposed two names that never existed in the
   // QS Rise contract. Preserve their visual intent while returning to the
-  // six canonical V2 tokens.
+  // canonical V2 tokens.
   if (style === "frame") style = "rings"
   if (style === "aurora-streak") style = "aurora"
-  if (["default", "numbers", "magic", "kanji", "rings", "aurora"]
+  if (["default", "numbers", "magic", "kanji", "rings", "aurora", "pacman"]
       .indexOf(style) !== -1)
     result.style = style
   return result

@@ -65,10 +65,50 @@ rg -q 'height: 30' \
   "$repo_root/hancore.shibumi.workspaces/WorkspacePanelContent.qml" \
   || fail "workspace rows do not retain the compact V1 height"
 
-for v2_style in kanji rings aurora; do
+for v2_style in kanji rings aurora pacman; do
   rg -Fq "root.renderStyle === \"$v2_style\"" \
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
     || fail "V2 workspace style is missing: $v2_style"
+done
+pacman_marker="$repo_root/shared/presentation/PacmanWorkspaceMarker.qml"
+rg -Fq 'root.focused ? "󰮯" : root.occupied ? "󰊠" : "󱙝"' \
+  "$pacman_marker" \
+  || fail "Pacman state glyphs drifted from the V2.1-2 reference"
+rg -Fq 'font.family: "JetBrainsMono Nerd Font"' "$pacman_marker" \
+  || fail "Pacman marker does not use the reference Nerd Font"
+rg -Fq 'paletteColor("color03"' \
+  "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
+  || fail "Pacman does not follow the colors.toml yellow role"
+for neutral_contract in \
+    'readonly property color pacmanOccupiedColor: widgetInk' \
+    'readonly property color pacmanEmptyColor: widgetInk' \
+    'readonly property color pacmanHoverColor: widgetInk'; do
+  rg -Fq "$neutral_contract" \
+    "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
+    || fail "Pacman ghosts do not follow the selected bar color: $neutral_contract"
+done
+if rg -q 'paletteColor\("color0[16]"' \
+    "$repo_root/hancore.shibumi.workspaces/BarWidget.qml"; then
+  fail "Pacman ghosts still use dedicated colors.toml accents"
+fi
+for motion_contract in \
+    'id: pacmanTravel' \
+    'property: "pacmanTravelX"' \
+    'property: "pacmanMouthClosure"' \
+    'property: "pacmanEatProgress"' \
+    'property int pacmanTravelSteps: 1' \
+    'Math.min(720, 320 + pacmanTravelSteps * 100)' \
+    'readonly property real pacmanMaxMouthClosure: 0.82' \
+    'loops: root.pacmanBiteCount' \
+    'id: pacmanRunnerGlyph' \
+    'text: "󰮯"' \
+    'id: pacmanMouthFill' \
+    'context.arc(centerX, centerY, radius' \
+    'readonly property int pacmanEatDuration: 120' \
+    'root.finishPacmanTravel()'; do
+  rg -Fq "$motion_contract" \
+    "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
+    || fail "Pacman eat animation is missing: $motion_contract"
 done
 rg -Fq 'readonly property real numberMarkerRadius:' \
   "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \

@@ -103,11 +103,8 @@ Item {
       id: topCompactPath
       readonly property real r: root.shellStyle === "fit"
         ? root.cornerRadius : 0
-      strokeColor: root.shellStyle === "fit"
-        && root.bar.visualTokens.pillBorderWidth > 0
-        ? root.shellBorder : "transparent"
-      strokeWidth: root.shellStyle === "fit"
-        ? root.bar.visualTokens.pillBorderWidth : 0
+      strokeColor: "transparent"
+      strokeWidth: 0
       fillColor: root.bar.background
       capStyle: ShapePath.FlatCap
       joinStyle: ShapePath.RoundJoin
@@ -175,11 +172,8 @@ Item {
       id: bottomCompactPath
       readonly property real r: root.shellStyle === "fit"
         ? root.cornerRadius : 0
-      strokeColor: root.shellStyle === "fit"
-        && root.bar.visualTokens.pillBorderWidth > 0
-        ? root.shellBorder : "transparent"
-      strokeWidth: root.shellStyle === "fit"
-        ? root.bar.visualTokens.pillBorderWidth : 0
+      strokeColor: "transparent"
+      strokeWidth: 0
       fillColor: root.bar.background
       capStyle: ShapePath.FlatCap
       joinStyle: ShapePath.RoundJoin
@@ -232,6 +226,69 @@ Item {
         y: 0
         controlX: 0
         controlY: 0
+      }
+    }
+  }
+
+  // Fit's fill terminates on the item boundary. Its border is inset by half a
+  // pixel and leaves the panel-facing edge to the straight/connected contour
+  // below, so the curve renderer cannot produce a second parallel edge row.
+  Shape {
+    id: fitOuterBorder
+    anchors.fill: parent
+    visible: root.shellStyle === "fit"
+      && root.bar.visualTokens.pillBorderWidth > 0
+    antialiasing: true
+    preferredRendererType: Shape.CurveRenderer
+    z: 5
+
+    ShapePath {
+      strokeColor: root.shellBorder
+      strokeWidth: root.bar.visualTokens.pillBorderWidth
+      fillColor: "transparent"
+      capStyle: ShapePath.FlatCap
+      joinStyle: ShapePath.RoundJoin
+      startX: root.cornerRadius
+      startY: root.atTop ? root.height - 0.5 : 0.5
+      PathQuad {
+        x: 0.5
+        y: root.atTop
+          ? root.height - root.cornerRadius : root.cornerRadius
+        controlX: 0.5
+        controlY: root.atTop ? root.height - 0.5 : 0.5
+      }
+      PathLine {
+        x: 0.5
+        y: root.atTop
+          ? root.cornerRadius : root.height - root.cornerRadius
+      }
+      PathQuad {
+        x: root.cornerRadius
+        y: root.atTop ? 0.5 : root.height - 0.5
+        controlX: 0.5
+        controlY: root.atTop ? 0.5 : root.height - 0.5
+      }
+      PathLine {
+        x: root.width - root.cornerRadius
+        y: root.atTop ? 0.5 : root.height - 0.5
+      }
+      PathQuad {
+        x: root.width - 0.5
+        y: root.atTop
+          ? root.cornerRadius : root.height - root.cornerRadius
+        controlX: root.width - 0.5
+        controlY: root.atTop ? 0.5 : root.height - 0.5
+      }
+      PathLine {
+        x: root.width - 0.5
+        y: root.atTop
+          ? root.height - root.cornerRadius : root.cornerRadius
+      }
+      PathQuad {
+        x: root.width - root.cornerRadius
+        y: root.atTop ? root.height - 0.5 : 0.5
+        controlX: root.width - 0.5
+        controlY: root.atTop ? root.height - 0.5 : 0.5
       }
     }
   }

@@ -465,7 +465,7 @@ Item {
     if (name === "mode") {
       if (["10", "5", "active"].indexOf(String(value || "")) < 0) return false
     } else if (name === "style") {
-      if (["default", "numbers", "magic", "kanji", "rings", "aurora"]
+      if (["default", "numbers", "magic", "kanji", "rings", "aurora", "pacman"]
           .indexOf(String(value || "")) < 0)
         return false
     } else {

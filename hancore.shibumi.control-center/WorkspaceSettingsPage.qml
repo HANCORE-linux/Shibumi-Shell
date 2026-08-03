@@ -17,7 +17,8 @@ Column {
     { value: "magic", label: "Magic" },
     { value: "kanji", label: "Kanji" },
     { value: "rings", label: "Frame" },
-    { value: "aurora", label: "Aurora" }
+    { value: "aurora", label: "Aurora" },
+    { value: "pacman", label: "Pacman" }
   ]
   readonly property bool ready: workspaceModeRepeater.count === 3
     && workspaceStyleRepeater.count === workspaceStyleOptions.length

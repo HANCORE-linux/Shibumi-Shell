@@ -15,6 +15,7 @@
     {"id":"workspace.kanji","implementation":["hancore.shibumi.workspaces/BarWidget.qml"],"tests":["tests/workspaces-plugin-smoke.qml"]},
     {"id":"workspace.rings","implementation":["hancore.shibumi.workspaces/BarWidget.qml"],"tests":["tests/workspaces-plugin-smoke.qml"]},
     {"id":"workspace.aurora","implementation":["hancore.shibumi.workspaces/BarWidget.qml"],"tests":["tests/workspaces-plugin-smoke.qml"]},
+    {"id":"workspace.pacman","implementation":["hancore.shibumi.workspaces/BarWidget.qml","shared/presentation/PacmanWorkspaceMarker.qml"],"tests":["tests/workspaces-plugin-smoke.qml","tests/workspaces-plugin-regression.sh"]},
     {"id":"picker.tanzaku","implementation":["hancore.shibumi.quick-access/TanzakuPickerView.qml"],"tests":["tests/quick-access-plugin-smoke.qml","tests/quick-access-plugin-regression.sh"]},
     {"id":"picker.hearthstone","implementation":["hancore.shibumi.quick-access/HearthstonePickerView.qml"],"tests":["tests/quick-access-plugin-smoke.qml","tests/quick-access-plugin-regression.sh"]},
     {"id":"picker.carousel","implementation":["hancore.shibumi.quick-access/CarouselPickerView.qml","hancore.shibumi.quick-access/Service.qml"],"tests":["tests/quick-access-plugin-regression.sh","tests/shibumi-config-regression.qml"]},

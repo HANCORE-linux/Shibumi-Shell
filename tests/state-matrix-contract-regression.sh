@@ -40,7 +40,7 @@ jq -e '
 ' "$v2" >/dev/null || fail "V2 is not an all-port contract"
 for feature in \
   bar-shell.full bar-shell.fit bar-shell.dock bar-shell.notch \
-  workspace.kanji workspace.rings workspace.aurora \
+  workspace.kanji workspace.rings workspace.aurora workspace.pacman \
   picker.tanzaku picker.hearthstone picker.carousel \
   widget.palette widget.separators temperature.widget thermals.panel \
   gpu.widget-panel storage.widget-panel media.artwork \

@@ -1167,7 +1167,8 @@ for marker_preview in \
     'root.styleValue === "magic"' \
     'root.styleValue === "kanji"' \
     'root.styleValue === "rings"' \
-    'root.styleValue === "aurora"'; do
+    'root.styleValue === "aurora"' \
+    'root.styleValue === "pacman"'; do
   rg -Fq "$marker_preview" "$control_dir/WorkspaceMarkerPreviewCard.qml" \
     || fail "workspace marker preview is missing: $marker_preview"
 done

@@ -14,9 +14,21 @@ ShellRoot {
   }
 
   QtObject {
+    id: paletteState
+    function paletteColor(id) {
+      if (id === "color03") return "#d4a72c"
+      if (id === "color06") return "#45a8a0"
+      if (id === "color01") return "#d84a5b"
+      return "#e8e8e8"
+    }
+  }
+
+  QtObject {
     id: fakeShell
     function serviceFor(id) {
-      return id === "hancore.shibumi.workspaces" ? workspaceState : null
+      if (id === "hancore.shibumi.workspaces") return workspaceState
+      if (id === "hancore.shibumi.state") return paletteState
+      return null
     }
   }
 
@@ -197,13 +209,46 @@ ShellRoot {
           return root.fail("V2 Aurora presentation geometry: " + widget.implicitWidth)
         }
         root.geometryWaits = 0
+        if (!workspaceState.setPreference("style", "pacman"))
+          return root.fail("Pacman workspace preference")
+      } else if (root.phase === 5) {
+        if (widget.workspaceStyle !== "pacman"
+            || widget.renderStyle !== "pacman"
+            || Math.round(widget.implicitWidth) !== 54
+            || String(widget.pacmanActiveColor).toLowerCase() !== "#d4a72c"
+            || String(widget.pacmanOccupiedColor).toLowerCase() !== "#88bbee"
+            || String(widget.pacmanEmptyColor).toLowerCase() !== "#88bbee"
+            || String(widget.pacmanHoverColor).toLowerCase() !== "#88bbee") {
+          root.geometryWaits++
+          if (root.geometryWaits < 10) return
+          return root.fail("V2 Pacman presentation geometry: " + widget.implicitWidth)
+        }
+        root.geometryWaits = 0
+        workspaceState.focusedWorkspaceSource = ({ id: 2 })
+      } else if (root.phase === 6) {
+        if (!widget.pacmanTraveling
+            || widget.pacmanTargetWorkspaceId !== 2
+            || widget.pacmanTravelDirection !== -1
+            || widget.pacmanTravelSteps !== 1
+            || widget.pacmanTravelDuration !== 420
+            || widget.pacmanBiteCount !== 3)
+          return root.fail("Pacman eat animation did not start")
         fakeBar.layoutController = ({ v2Mode: false })
+      } else if (root.phase === 7) {
+        if (widget.workspaceStyle !== "pacman"
+            || widget.renderStyle !== "pacman"
+            || Math.round(widget.implicitWidth) !== 54) {
+          root.geometryWaits++
+          if (root.geometryWaits < 10) return
+          return root.fail("V1 Pacman presentation geometry: " + widget.implicitWidth)
+        }
+        root.geometryWaits = 0
         const smallTokens = Object.assign({}, fakeBar.visualTokens)
         smallTokens.presentation = ({ radius: "small" })
         fakeBar.visualTokens = smallTokens
         if (!workspaceState.setPreference("style", "rings"))
           return root.fail("V1 Frame workspace preference")
-      } else if (root.phase === 5) {
+      } else if (root.phase === 8) {
         if (widget.renderStyle !== "rings"
             || widget.numberMarkerRadius !== 5
             || widget.frameMarkerRadius !== 6)
@@ -211,7 +256,7 @@ ShellRoot {
         const largeTokens = Object.assign({}, fakeBar.visualTokens)
         largeTokens.presentation = ({ radius: "large" })
         fakeBar.visualTokens = largeTokens
-      } else if (root.phase === 6) {
+      } else if (root.phase === 9) {
         if (widget.renderStyle !== "rings"
             || widget.numberMarkerRadius !== 10
             || widget.frameMarkerRadius !== 9)

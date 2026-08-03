@@ -11,11 +11,21 @@ Ui.Panel {
   manageIpc: false
   property url panelSource: Qt.resolvedUrl("WorkspacePanel.qml")
   readonly property var workspaceService: bar ? bar.workspaceService : null
+  readonly property var stateService: bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.state") : null
   readonly property var tokens: bar ? bar.visualTokens : null
   readonly property var workspaceIds: workspaceService
     ? workspaceService.visibleWorkspaceIds : []
   readonly property string workspaceStyle: workspaceService
     ? workspaceService.style : "default"
+  readonly property color pacmanActiveColor:
+    paletteColor("color03", bar ? bar.urgent : Commons.Color.accent)
+  readonly property color pacmanBarColor: bar
+    ? bar.foreground : Commons.Color.foreground
+  readonly property color pacmanOccupiedColor: pacmanBarColor
+  readonly property color pacmanEmptyColor: pacmanBarColor
+  readonly property color pacmanHoverColor: pacmanBarColor
   readonly property int renderedWorkspaceCount: workspaceRepeater.count
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property bool panelLoaderReady: panelLoader.item
@@ -24,6 +34,7 @@ Ui.Panel {
     ? tokens.workspacePillPadding(workspaceStyle) : 4
   readonly property int workspaceGap: workspaceStyle === "rings"
     || workspaceStyle === "aurora" ? Commons.Style.space(3)
+    : workspaceStyle === "pacman" ? Commons.Style.space(2)
     : tokens ? tokens.contentGap : Commons.Style.space(5)
   readonly property real workspaceContentWidth: {
     void(workspaceIds)
@@ -45,6 +56,11 @@ Ui.Panel {
 
   function activateWorkspace(id) {
     return workspaceService ? workspaceService.focusWorkspace(id) : false
+  }
+
+  function paletteColor(id, fallback) {
+    return stateService && typeof stateService.paletteColor === "function"
+      ? stateService.paletteColor(id) : fallback
   }
 
   function workspaceState(id) {
@@ -124,6 +140,8 @@ Ui.Panel {
             : root.workspaceStyle === "rings" ? Commons.Style.space(19)
             : root.workspaceStyle === "aurora"
               ? Commons.Style.space(focused ? 38 : 20)
+            : root.workspaceStyle === "pacman"
+              ? Commons.Style.space(22)
               : Commons.Style.space(focused ? 32 : 16)
           implicitHeight: workspaceSurface.height
 
@@ -257,6 +275,18 @@ Ui.Panel {
             Behavior on color { ColorAnimation { duration: 250 } }
           }
 
+          PacmanWorkspaceMarker {
+            visible: root.workspaceStyle === "pacman"
+            anchors.centerIn: parent
+            focused: cell.focused
+            occupied: cell.occupied
+            hovered: cellPointer.containsMouse
+            activeColor: root.pacmanActiveColor
+            occupiedColor: root.pacmanOccupiedColor
+            emptyColor: root.pacmanEmptyColor
+            hoverColor: root.pacmanHoverColor
+          }
+
           MouseArea {
             id: cellPointer
             anchors.fill: parent
@@ -265,7 +295,8 @@ Ui.Panel {
             cursorShape: Qt.PointingHandCursor
             onEntered: {
               cell.scale = root.workspaceStyle === "rings" ? 1.06
-                : root.workspaceStyle === "aurora" ? 1.03 : 1.15
+                : root.workspaceStyle === "aurora"
+                    || root.workspaceStyle === "pacman" ? 1.03 : 1.15
               if (root.bar) root.bar.showTooltip(
                 workspaceSurface, root.workspaceTooltip(cell.modelData))
             }
