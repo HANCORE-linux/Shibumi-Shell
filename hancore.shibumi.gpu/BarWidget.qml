@@ -90,18 +90,17 @@ Ui.Panel {
       Item {
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
-        width: Commons.Style.space(18)
-        height: Commons.Style.space(13)
+        width: Commons.Style.space(20)
+        height: Commons.Style.space(14)
 
         Image {
           id: gpuIconSource
           anchors.fill: parent
           visible: false
           source: Qt.resolvedUrl("gpu-card.svg")
-          sourceSize: Qt.size(54, 39)
+          sourceSize: Qt.size(Math.round(width), Math.round(height))
           fillMode: Image.PreserveAspectFit
-          smooth: true
-          mipmap: true
+          smooth: false
         }
 
         MultiEffect {

@@ -573,6 +573,20 @@ rg -Fq 'source: Qt.resolvedUrl("gpu-card.svg")' \
   || fail "GPU bar icon drifted from the original V2 card"
 [[ -f hancore.shibumi.gpu/gpu-card.svg ]] \
   || fail "GPU plugin is missing its self-contained V2 card asset"
+rg -Fq 'stroke-width="1.4"' hancore.shibumi.gpu/gpu-card.svg \
+  || fail "GPU card lost its high-contrast native-size contour"
+for gpu_icon_contract in \
+  'width: Commons.Style.space(20)' \
+  'height: Commons.Style.space(14)' \
+  'sourceSize: Qt.size(Math.round(width), Math.round(height))' \
+  'smooth: false'; do
+  rg -Fq "$gpu_icon_contract" hancore.shibumi.gpu/BarWidget.qml \
+    || fail "GPU bar icon lost its native-size rendering: $gpu_icon_contract"
+done
+if rg -q 'sourceSize: Qt\.size\(54, 39\)|mipmap: true' \
+    hancore.shibumi.gpu/BarWidget.qml; then
+  fail "GPU bar icon reintroduced filtered three-times downsampling"
+fi
 if rg -Fq 'text: "GPU "' hancore.shibumi.gpu/BarWidget.qml; then
   fail "GPU bar restored the obsolete GPU prefix"
 fi
