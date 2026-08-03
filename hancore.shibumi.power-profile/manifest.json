@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.power-profile",
   "name": "Shibumi Power Profile",
-  "version": "0.1.1-beta.2",
+  "version": "0.1.1-beta.3",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi power-profile status and profile selector.",

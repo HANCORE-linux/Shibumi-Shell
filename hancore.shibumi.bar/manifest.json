@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.bar",
   "name": "Shibumi Bar",
-  "version": "0.1.1-beta.2",
+  "version": "0.1.1-beta.3",
   "author": "HANCORE",
   "license": "MIT",
   "description": "The Shibumi full-bar host for Omarchy Shell.",

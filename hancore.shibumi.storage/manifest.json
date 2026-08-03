@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.storage",
   "name": "Shibumi Storage",
-  "version": "0.1.1-beta.2",
+  "version": "0.1.1-beta.3",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Demand-driven root storage widget and drive inventory.",

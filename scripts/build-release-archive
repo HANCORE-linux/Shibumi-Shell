@@ -131,7 +131,20 @@ def build(
                 archive.addfile(info, io.BytesIO(data))
                 record["sha256"] = hashlib.sha256(data).hexdigest()
             inventory.append(record)
-    return gzip.compress(raw.getvalue(), compresslevel=9, mtime=0), inventory
+    compressed = io.BytesIO()
+    # GzipFile writes the RFC 1952 "unknown" OS byte (255) consistently.
+    # gzip.compress(..., mtime=0) wrote a platform-specific byte before
+    # Python 3.13, which made otherwise identical archives hash differently
+    # between local Python and GitHub-hosted runners.
+    with gzip.GzipFile(
+        filename="",
+        mode="wb",
+        compresslevel=9,
+        fileobj=compressed,
+        mtime=0,
+    ) as stream:
+        stream.write(raw.getvalue())
+    return compressed.getvalue(), inventory
 
 
 def main() -> int:

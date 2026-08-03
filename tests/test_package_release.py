@@ -23,7 +23,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.2")
+        self.assertEqual(version, "0.1.1-beta.3")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -82,7 +82,16 @@ class PackageReleaseTests(unittest.TestCase):
             inventory = json.loads(
                 next(output.glob("*.inventory.json")).read_text(encoding="utf-8")
             )
-            self.assertEqual(hashlib.sha256(archive.read_bytes()).hexdigest(), inventory["sha256"])
+            archive_bytes = archive.read_bytes()
+            self.assertEqual(
+                hashlib.sha256(archive_bytes).hexdigest(), inventory["sha256"]
+            )
+            self.assertEqual(archive_bytes[:3], b"\x1f\x8b\x08")
+            self.assertEqual(
+                archive_bytes[9],
+                255,
+                "gzip OS header must be independent of the Python host",
+            )
             with tarfile.open(archive, "r:gz") as payload:
                 names = payload.getnames()
             roots = {name.split("/", 1)[0] for name in names}

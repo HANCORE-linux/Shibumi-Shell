@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "suiteId": "hancore.shibumi",
-  "suiteVersion": "0.1.1-beta.2",
+  "suiteVersion": "0.1.1-beta.3",
   "hostContract": "contracts/host-facade-v1.json",
   "retiredPlugins": ["hancore.shibumi.menu"],
   "plugins": [

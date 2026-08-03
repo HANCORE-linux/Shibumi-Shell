@@ -2,7 +2,7 @@
 
 This changelog records user-visible Shibumi changes.
 
-## 0.1.1-beta.2: Arch package candidate
+## 0.1.1-beta.3: Arch package candidate
 
 Released 2026-08-03.
 
@@ -44,6 +44,8 @@ Released 2026-08-03.
 - Restored outside-click dismissal across all picker modes
 - Added mouse-wheel navigation to themes, wallpapers, screenshots, and videos
 - Restored widget loading for hosts that use the registry fallback
+- Made release-archive checksums independent of the Python host's Gzip OS
+  header
 - Clarified that source installation remains transitional until AUR publication
 
 ### Known limits
@@ -52,6 +54,11 @@ Released 2026-08-03.
   published there yet
 - The candidate package still requires complete validation-system install, upgrade,
   rollback, uninstall, and bar-switch acceptance before publication
+
+## 0.1.1-beta.2: Unpublished release candidate
+
+Tagged 2026-08-03, but not published. Its release gate exposed a
+Python-version-dependent Gzip header; `0.1.1-beta.3` supersedes it.
 
 ## 0.1.0: Private alpha
 

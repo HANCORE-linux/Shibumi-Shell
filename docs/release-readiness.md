@@ -1,8 +1,8 @@
-# Is Shibumi 0.1.1-beta.2 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.3 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.2` is ready for prerelease testing. The validation system passes the
+Shibumi `0.1.1-beta.3` is ready for prerelease testing. The validation system passes the
 complete automated contract and the affected live Wayland workflows. Physical
 multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
 block a stable public release.
