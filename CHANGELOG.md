@@ -81,7 +81,7 @@ Released 2026-07-29.
 - Adopted markerless suite-owned alpha plugins during a safe update
 - Rejected missing production panel types in the center runtime smoke
 - Included Frame and Aurora streak in the workspace-style contract
-- Waited for all eight workspace-style controls before marking Appearance ready
+- Waited for every workspace-style control before marking Appearance ready
 - Aligned the Bluetooth panel controls with Quattro and suppressed unreliable
   phone battery percentages
 - Closed active panels before idle and screensaver bar pre-hide to prevent

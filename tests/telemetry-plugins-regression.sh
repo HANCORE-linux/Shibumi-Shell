@@ -19,6 +19,7 @@ fail() {
 cp -a -- "$repo_root/hancore.shibumi.telemetry" "$tmpdir/telemetry"
 cp -a -- "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 cp -a -- "$repo_root/hancore.shibumi.cpu" "$tmpdir/cpu"
+cp -a -- "$repo_root/hancore.shibumi.gpu" "$tmpdir/gpu"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -Dm0644 "$repo_root/tests/telemetry-plugins-smoke.qml" "$tmpdir/shell.qml"

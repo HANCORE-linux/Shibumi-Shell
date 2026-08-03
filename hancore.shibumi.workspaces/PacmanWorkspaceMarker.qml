@@ -1,4 +1,5 @@
 import QtQuick
+import qs.Commons as Commons
 
 Item {
   id: root
@@ -13,13 +14,27 @@ Item {
   property color emptyColor: "white"
   property color hoverColor: "white"
 
-  implicitWidth: 22
-  implicitHeight: 18
-  opacity: 1 - Math.max(0, Math.min(1, eatProgress))
-  scale: 1 - 0.45 * Math.max(0, Math.min(1, eatProgress))
+  readonly property int glyphSize: Commons.Style.space(14)
+  readonly property int pelletSize: Commons.Style.space(5)
+  readonly property real eatOffset: Commons.Style.spaceReal(3)
+  readonly property real boundedEatProgress:
+    Math.max(0, Math.min(1, eatProgress))
+  readonly property real hoverFactor:
+    hovered && boundedEatProgress === 0 ? 1.08 : 1
+
+  implicitWidth: Commons.Style.space(22)
+  implicitHeight: Commons.Style.space(18)
+  opacity: 1 - boundedEatProgress
+  scale: (1 - 0.45 * boundedEatProgress) * hoverFactor
   transformOrigin: Item.Center
   transform: Translate {
-    x: -root.eatDirection * 3 * Math.max(0, Math.min(1, root.eatProgress))
+    x: -root.eatDirection * root.eatOffset
+      * root.boundedEatProgress
+  }
+
+  Behavior on scale {
+    enabled: root.boundedEatProgress === 0
+    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
   }
 
   Text {
@@ -30,7 +45,7 @@ Item {
       : root.focused ? root.activeColor
       : root.occupiedColor
     font.family: "JetBrainsMono Nerd Font"
-    font.pixelSize: 14
+    font.pixelSize: root.glyphSize
     font.weight: Font.Bold
     horizontalAlignment: Text.AlignHCenter
     verticalAlignment: Text.AlignVCenter
@@ -46,7 +61,7 @@ Item {
 
     visible: !root.focused && !root.occupied
     anchors.centerIn: parent
-    width: 5
+    width: root.pelletSize
     height: width
     radius: width / 2
     color: root.hovered ? root.hoverColor : root.emptyColor

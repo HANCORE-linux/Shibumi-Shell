@@ -5,6 +5,7 @@ import Quickshell
 import "telemetry" as Telemetry
 import "memory" as Memory
 import "cpu" as Cpu
+import "gpu" as Gpu
 
 ShellRoot {
   id: root
@@ -97,6 +98,17 @@ ShellRoot {
     }
   }
 
+  Loader {
+    id: gpuLoader
+    active: true
+    sourceComponent: Component {
+      Gpu.BarWidget {
+        bar: fakeBar
+        settings: ({ displayMode: "icon" })
+      }
+    }
+  }
+
   Timer {
     interval: 40
     running: true
@@ -105,20 +117,23 @@ ShellRoot {
       root.attempts++
       const memory = memoryLoader.item
       const cpu = cpuLoader.item
-      if (!memory || !cpu || root.attempts < 4) return
+      const gpu = gpuLoader.item
+      if (!memory || !cpu || !gpu || root.attempts < 4) return
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
       if (memory.telemetry !== telemetryService.system
           || cpu.telemetry !== telemetryService.system
-          || cpu.gpuTelemetry !== cpuService.gpu)
+          || cpu.gpuTelemetry !== cpuService.gpu
+          || gpu.gpu !== cpuService.gpu)
         return root.fail("service resolution crossed plugin ownership")
-      if (!memory.compact || cpu.compact)
+      if (!memory.compact || cpu.compact || gpu.displayMode !== "icon"
+          || !gpu.visible || gpu.implicitWidth <= 0)
         return root.fail("widget settings were not retained")
       if (telemetryService.system.memoryConsumers !== 1
           || telemetryService.system.cpuConsumers !== 1)
         return root.fail("shared telemetry leases are not balanced per widget")
-      if (cpuService.gpu.consumers !== 0)
-        return root.fail("GPU polling started while the CPU panel is closed")
+      if (cpuService.gpu.consumers !== 1)
+        return root.fail("GPU widget did not own exactly one telemetry lease")
       if (!memory.openSystemMonitor()
           || fakeBar.lastCommand !== "omarchy-launch-or-focus-tui btop"
           || !cpu.openSystemMonitor()
@@ -128,6 +143,7 @@ ShellRoot {
 
       memoryLoader.active = false
       cpuLoader.active = false
+      gpuLoader.active = false
       releaseCheck.restart()
       stop()
     }
@@ -138,7 +154,8 @@ ShellRoot {
     interval: 0
     onTriggered: {
       if (telemetryService.system.memoryConsumers !== 0
-          || telemetryService.system.cpuConsumers !== 0)
+          || telemetryService.system.cpuConsumers !== 0
+          || cpuService.gpu.consumers !== 0)
         return root.fail("widget destruction leaked telemetry leases")
       console.log("telemetry plugins smoke passed")
       Qt.quit()

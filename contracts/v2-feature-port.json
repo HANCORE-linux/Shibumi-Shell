@@ -21,7 +21,6 @@
     {"id":"workspace.kanji","decision":"port","owner":"hancore.shibumi.workspaces","strategy":"presentation","phase":1},
     {"id":"workspace.rings","decision":"port","owner":"hancore.shibumi.workspaces","strategy":"presentation","phase":1},
     {"id":"workspace.aurora","decision":"port","owner":"hancore.shibumi.workspaces","strategy":"presentation","phase":1},
-    {"id":"workspace.pacman","decision":"port","owner":"hancore.shibumi.workspaces","strategy":"presentation","phase":1},
     {"id":"picker.tanzaku","decision":"port","owner":"hancore.shibumi.quick-access","strategy":"presentation","phase":1},
     {"id":"picker.hearthstone","decision":"port","owner":"hancore.shibumi.quick-access","strategy":"presentation","phase":1},
     {"id":"picker.carousel","decision":"port","owner":"hancore.shibumi.quick-access","strategy":"official-picker-adapter","phase":3},

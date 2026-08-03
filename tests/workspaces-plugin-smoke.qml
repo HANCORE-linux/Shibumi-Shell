@@ -7,6 +7,9 @@ ShellRoot {
 
   property int phase: 0
   property int geometryWaits: 0
+  property int animationWaits: 0
+  property real preInterruptX: 0
+  property real oldPacmanTargetX: 0
 
   function fail(message) {
     console.error("workspace-widget-smoke:", message)
@@ -231,32 +234,71 @@ ShellRoot {
             || widget.pacmanTravelDirection !== -1
             || widget.pacmanTravelSteps !== 1
             || widget.pacmanTravelDuration !== 420
+            || widget.pacmanEatDuration !== 240
             || widget.pacmanBiteCount !== 3)
           return root.fail("Pacman eat animation did not start")
-        fakeBar.layoutController = ({ v2Mode: false })
       } else if (root.phase === 7) {
+        if (widget.pacmanTraveling) {
+          root.animationWaits++
+          if (root.animationWaits < 12) return
+          return root.fail("Pacman eat animation did not finish")
+        }
+        if (widget.pacmanTargetWorkspaceId !== -1
+            || widget.pacmanMouthClosure !== 0
+            || widget.pacmanEatProgress !== 0)
+          return root.fail("Pacman animation retained completed state")
+        root.animationWaits = 0
+        fakeBar.layoutController = ({ v2Mode: false })
+      } else if (root.phase === 8) {
         if (widget.workspaceStyle !== "pacman"
             || widget.renderStyle !== "pacman"
             || Math.round(widget.implicitWidth) !== 54) {
           root.geometryWaits++
           if (root.geometryWaits < 10) return
-          return root.fail("V1 Pacman presentation geometry: " + widget.implicitWidth)
+          return root.fail("V1 Pacman presentation geometry: "
+            + widget.implicitWidth)
         }
         root.geometryWaits = 0
+        workspaceState.focusedWorkspaceSource = ({ id: 8 })
+      } else if (root.phase === 9) {
+        if (!widget.pacmanTraveling
+            || widget.pacmanTargetWorkspaceId !== 8
+            || widget.pacmanTravelDirection !== 1)
+          return root.fail("V1 Pacman animation did not start: "
+            + JSON.stringify({
+              focused: widget.focusedWorkspaceId,
+              lastFocused: widget.pacmanLastFocusedWorkspaceId,
+              sourceX: widget.pacmanCenterX(2),
+              targetX: widget.pacmanCenterX(8),
+              displayed: widget.displayedWorkspaceIds,
+              target: widget.pacmanTargetWorkspaceId,
+              direction: widget.pacmanTravelDirection
+            }))
+        root.preInterruptX = widget.pacmanTravelX
+        root.oldPacmanTargetX = widget.pacmanTravelTargetX
+        workspaceState.focusedWorkspaceSource = ({ id: 2 })
+      } else if (root.phase === 10) {
+        if (!widget.pacmanTraveling
+            || widget.pacmanTargetWorkspaceId !== 2
+            || widget.pacmanTravelDirection !== -1
+            || Math.abs(widget.pacmanTravelFromX - root.preInterruptX) > 2
+            || Math.abs(widget.pacmanTravelFromX - root.oldPacmanTargetX) < 2)
+          return root.fail("interrupted Pacman animation jumped to its old target")
         const smallTokens = Object.assign({}, fakeBar.visualTokens)
         smallTokens.presentation = ({ radius: "small" })
         fakeBar.visualTokens = smallTokens
         if (!workspaceState.setPreference("style", "rings"))
           return root.fail("V1 Frame workspace preference")
-      } else if (root.phase === 8) {
+      } else if (root.phase === 11) {
         if (widget.renderStyle !== "rings"
+            || widget.pacmanTraveling
             || widget.numberMarkerRadius !== 5
             || widget.frameMarkerRadius !== 6)
           return root.fail("V1 Radius 6 marker contract")
         const largeTokens = Object.assign({}, fakeBar.visualTokens)
         largeTokens.presentation = ({ radius: "large" })
         fakeBar.visualTokens = largeTokens
-      } else if (root.phase === 9) {
+      } else if (root.phase === 12) {
         if (widget.renderStyle !== "rings"
             || widget.numberMarkerRadius !== 10
             || widget.frameMarkerRadius !== 9)

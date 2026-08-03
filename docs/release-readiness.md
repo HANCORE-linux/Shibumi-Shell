@@ -48,7 +48,7 @@ runtime verification produced these results:
 | Bluetooth connection and panel | Passed with a live connected phone |
 | Idle/screensaver panel cleanup | Passed in the bar-host regression and deployed live |
 | Temperature sources | Passed: CPU and core live; absent sources disabled |
-| Workspace styles | Passed: eight supported styles and geometry checks |
+| Workspace styles | Passed: seven supported styles and geometry checks |
 
 The hardened center smoke fails on unavailable QML types or a missing `PanelWindow` backend. The earlier WeatherPanel false pass no longer exists.
 
@@ -61,7 +61,9 @@ The audit fixed these release blockers:
 - Markerless suite-owned alpha installs can update without accepting foreign plugin directories
 - Temperature selection supports CPU package, hottest core, GPU, NVMe, and memory sources
 - The standalone and embedded V2 workspace styles remain available, including Frame and Aurora streak
-- The Control Center waits for all eight workspace-style controls
+- The Shibumi Pacman style is available in both layout variants and remains
+  explicitly separate from the QS Rise V2 port inventory
+- The Control Center waits for all seven workspace-style controls
 - V1 and V2 evidence covers every source surface instead of selected feature samples
 - The center smoke rejects missing production panel types
 - Bluetooth reports the live connection without presenting an untrusted phone battery value

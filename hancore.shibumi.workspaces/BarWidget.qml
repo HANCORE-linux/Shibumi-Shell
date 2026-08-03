@@ -98,7 +98,7 @@ Ui.Panel {
   readonly property int pacmanBiteHalfDuration: Math.max(60,
     Math.round(pacmanTravelDuration / (pacmanBiteCount * 2)))
   readonly property real pacmanMaxMouthClosure: 0.82
-  readonly property int pacmanEatDuration: 120
+  readonly property int pacmanEatDuration: 240
   readonly property int pacmanEatLeadIn:
     Math.max(0, pacmanTravelDuration - pacmanEatDuration)
   readonly property var frameTarget: {
@@ -172,7 +172,15 @@ Ui.Panel {
       resetPacmanTravel()
       return false
     }
-    const sourceX = pacmanCenterX(sourceId)
+    // A live V1/V2 or spacing change can leave freshly rebound Row delegates
+    // at x=0 until the next polish pass. Resolve the positioner synchronously
+    // before measuring the travel path so a valid focus change is not mistaken
+    // for a zero-distance transition.
+    if (typeof workspaceRow.forceLayout === "function")
+      workspaceRow.forceLayout()
+    const interrupted = pacmanTraveling
+    const currentX = pacmanTravelX
+    const sourceX = interrupted ? currentX : pacmanCenterX(sourceId)
     const targetX = pacmanCenterX(targetId)
     if (sourceX < 0 || targetX < 0 || sourceX === targetX) {
       finishPacmanTravel()
@@ -529,8 +537,8 @@ Ui.Panel {
             cursorShape: Qt.PointingHandCursor
             onEntered: {
               cell.scale = root.renderStyle === "rings" ? 1
-                : root.renderStyle === "aurora"
-                    || root.renderStyle === "pacman" ? 1.04 : 1.15
+                : root.renderStyle === "pacman" ? 1
+                : root.renderStyle === "aurora" ? 1.04 : 1.15
               if (root.bar) root.bar.showTooltip(
                 workspaceSurface, root.workspaceTooltip(cell.modelData))
             }
@@ -572,7 +580,7 @@ Ui.Panel {
           text: "󰮯"
           color: root.pacmanActiveColor
           font.family: "JetBrainsMono Nerd Font"
-          font.pixelSize: 14
+          font.pixelSize: Commons.Style.space(14)
           font.weight: Font.Bold
           horizontalAlignment: Text.AlignHCenter
           verticalAlignment: Text.AlignVCenter

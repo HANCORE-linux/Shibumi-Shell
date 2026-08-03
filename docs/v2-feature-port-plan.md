@@ -27,6 +27,11 @@ The implementation order is:
 The V1 presentation remains available; V2 capabilities are selectable Shibumi
 functions rather than an implicit replacement of the default.
 
+Pacman is a Shibumi workspace presentation adapted from the separate
+[`HANCORE-linux/waybar-themes` V2.1-2 configuration](https://github.com/HANCORE-linux/waybar-themes/tree/main/config/V2.1-2).
+It is available in both Shibumi layout variants, but it is deliberately not
+listed as a QS Rise V2 port and does not change that repository boundary.
+
 ## Verification
 
 The executable evidence map is

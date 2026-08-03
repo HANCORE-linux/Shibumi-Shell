@@ -78,8 +78,11 @@ rg -Fq 'id: emptyPellet' "$pacman_marker" \
   || fail "Pacman empty workspace pellet is missing"
 rg -Fq 'visible: !root.focused && !root.occupied' "$pacman_marker" \
   || fail "Pacman pellet no longer represents empty workspaces"
-rg -Fq 'width: 5' "$pacman_marker" \
-  || fail "Pacman empty workspace pellet size drifted"
+rg -Fq 'readonly property int pelletSize: Commons.Style.space(5)' \
+  "$pacman_marker" \
+  || fail "Pacman empty workspace pellet does not follow theme scaling"
+rg -Fq 'font.pixelSize: root.glyphSize' "$pacman_marker" \
+  || fail "Pacman glyph does not follow theme scaling"
 rg -Fq 'font.family: "JetBrainsMono Nerd Font"' "$pacman_marker" \
   || fail "Pacman marker does not use the reference Nerd Font"
 rg -Fq 'paletteColor("color03"' \
@@ -110,7 +113,7 @@ for motion_contract in \
     'text: "󰮯"' \
     'id: pacmanMouthFill' \
     'context.arc(centerX, centerY, radius' \
-    'readonly property int pacmanEatDuration: 120' \
+    'readonly property int pacmanEatDuration: 240' \
     'root.finishPacmanTravel()'; do
   rg -Fq "$motion_contract" \
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
