@@ -131,4 +131,23 @@ if grep -q 'connected' <<<"$forget_function"; then
   fail "network panel still blocks Forget for the connected saved profile"
 fi
 
+# Preserve the two reference presentations independently: V1 owns the wide
+# history/rate view, while V2 owns the LAN glyph and compact RX/TX meter.
+for contract in \
+  'readonly property int trafficHistoryLimit: 30' \
+  'width: visible ? 36 : 0' \
+  'height: 14' \
+  'text: "↓" + root.v1Rate(root.downloadRate)' \
+  'text: "↑" + root.v1Rate(root.uploadRate)' \
+  'font.pixelSize: 10' \
+  'text: root.stateGlyph' \
+  'font.pixelSize: root.mode === "ethernet" ? 14 : 15' \
+  'component V2TrafficMeter: Item' \
+  'x: 10' \
+  'text: "RX"' \
+  'text: "TX"'; do
+  rg -Fq "$contract" "$widget" \
+    || fail "network reference presentation drifted: $contract"
+done
+
 printf 'network plugin regression passed\n'

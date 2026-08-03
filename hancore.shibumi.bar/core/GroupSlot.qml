@@ -15,16 +15,28 @@ Item {
     ? bar.shell.serviceFor("hancore.shibumi.state") : null
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
+  readonly property int stateRevision: stateService
+    && "revision" in stateService
+      ? Number(stateService.revision) || 0 : 0
+  readonly property bool v2Shell: !!(bar.visualTokens
+    && bar.visualTokens.v2Shell === true)
   readonly property var groupSettings: stateService
     && typeof stateService.groupSettingsForVariant === "function"
     ? stateService.groupSettingsForVariant(groupId,
         v2Shell ? "v2" : "v1")
     : stateConfig.widgets ? stateConfig.widgets[groupId] || ({}) : ({})
-  readonly property bool groupEnabled: stateService
-    && typeof stateService.groupEnabled === "function"
-      ? stateService.groupEnabled(groupId) : groupSettings.enabled !== false
-  readonly property bool v2Shell: !!(bar.visualTokens
-    && bar.visualTokens.v2Shell === true)
+  readonly property bool groupEnabled: {
+    // Calls across the plugin-service boundary do not reliably retain nested
+    // config dependencies. Observe the published config/revision explicitly
+    // so an optional group enabled after startup actually creates its slot.
+    void(stateConfig)
+    void(stateRevision)
+    return stateService
+      && typeof stateService.groupEnabledForVariant === "function"
+        ? stateService.groupEnabledForVariant(
+            groupId, v2Shell ? "v2" : "v1")
+        : groupSettings.enabled !== false
+  }
   readonly property bool dynamicV1Group: !v2Shell
     && GroupRegistry.dynamicModuleIdForGroup(groupId) !== ""
   // Per-group fill, border, radius, and padding belong to V2. V1 preserves

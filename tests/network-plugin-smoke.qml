@@ -183,13 +183,30 @@ ShellRoot {
 
         sharedNetworkService.kind = "ethernet"
         sharedNetworkService.label = "enp1s0"
+        sharedNetworkService.downloadRate = 1536
+        sharedNetworkService.uploadRate = 2 * 1024 * 1024
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 3) {
         if (root.phaseTicks < 2) return
         if (first.mode !== "ethernet" || second.label !== "enp1s0"
+            || second.displayLabel !== "Ethernet"
+            || !second.v1TrafficPresentation || second.v2TrafficPresentation
+            || second.compactRate(second.downloadRate) !== "1.5K"
+            || second.compactRate(second.uploadRate) !== "2.0M"
             || first.tooltipText.indexOf("Ethernet") !== 0)
           return root.fail("shared reactive ethernet state")
+        const v2Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          v2Tokens[key] = fakeBar.visualTokens[key]
+        v2Tokens.v2Shell = true
+        fakeBar.visualTokens = v2Tokens
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 4) {
+        if (root.phaseTicks < 2) return
+        if (second.v1TrafficPresentation || !second.v2TrafficPresentation)
+          return root.fail("V2 ethernet traffic presentation")
         first.close()
         secondLoader.active = false
         root.phase++

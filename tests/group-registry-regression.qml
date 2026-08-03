@@ -25,8 +25,11 @@ QtObject {
       ]
     }
     const g4 = GroupRegistry.entriesFor("G4", { compact: true }, layout)
-    const g7 = GroupRegistry.entriesFor("G7",
-      ShibumiConfig.defaultConfig().widgets.G7, layout)
+    const g7 = GroupRegistry.entriesFor("G7", {
+      enabled: false,
+      enabledV2: true,
+      compact: true
+    }, layout)
     const g3 = GroupRegistry.entriesFor("G3", {}, layout)
     const g6 = GroupRegistry.entriesFor("G6", {
       compact: true,
@@ -63,8 +66,9 @@ QtObject {
         || g6[1].compact !== false)
       fail("optional module settings precedence")
     if (g7.length !== 1 || g7[0].id !== "hancore.shibumi.ai"
-        || g7[0].enabled !== false)
-      fail("optional group default visibility")
+        || g7[0].enabled !== undefined || g7[0].enabledV2 !== undefined
+        || g7[0].compact !== true)
+      fail("variant group activation leaked into the module loader")
     if (g8.length !== 1 || g8[0].id !== "hancore.shibumi.center"
         || clockSettings.format !== "HH:mm")
       fail("center ownership/host child settings")

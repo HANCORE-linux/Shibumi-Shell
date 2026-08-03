@@ -93,6 +93,17 @@ function copySettings(value) {
   return result
 }
 
+function copyGroupModuleSettings(value) {
+  var result = copySettings(value)
+  // Group activation is owned by GroupSlot and is variant-aware. Forwarding
+  // the legacy group-level `enabled` flag to WidgetSlot would disable the
+  // inner loader even when enabledV1/enabledV2 activates the group.
+  delete result.enabled
+  delete result.enabledV1
+  delete result.enabledV2
+  return result
+}
+
 function configuredEntries(layout) {
   var result = []
   var source = isObject(layout) ? layout : {}
@@ -116,13 +127,14 @@ function configuredEntry(layout, moduleId) {
 
 function groupSettings(groupValue, moduleId, moduleCount) {
   if (!isObject(groupValue)) return {}
-  if (moduleId === "hancore.shibumi.center") return copySettings(groupValue)
+  if (moduleId === "hancore.shibumi.center")
+    return copyGroupModuleSettings(groupValue)
   if (moduleId === "hancore.shibumi.audio"
       || moduleId === "hancore.shibumi.network") {
     if (isObject(groupValue[moduleId])) return copySettings(groupValue[moduleId])
-    return copySettings(groupValue)
+    return copyGroupModuleSettings(groupValue)
   }
-  if (moduleCount === 1) return copySettings(groupValue)
+  if (moduleCount === 1) return copyGroupModuleSettings(groupValue)
   return copySettings(groupValue[moduleId])
 }
 

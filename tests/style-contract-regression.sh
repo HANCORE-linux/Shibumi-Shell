@@ -126,6 +126,14 @@ rg -Fq 'height: root.v2Shell' core/GroupSlot.qml \
   || fail "V2 widget fill is no longer constrained to the pill height"
 rg -Fq 'decorated ? v2SurfaceHeight : 0' core/GroupSlot.qml \
   || fail "V2 fill height no longer follows the fixed 24px surface contract"
+for group_activation_contract in \
+  'void(stateConfig)' \
+  'void(stateRevision)' \
+  'stateService.groupEnabledForVariant(' \
+  'groupId, v2Shell ? "v2" : "v1")'; do
+  rg -Fq "$group_activation_contract" core/GroupSlot.qml \
+    || fail "optional group activation is not reactive: $group_activation_contract"
+done
 rg -Fq 'markerCenter: item.x + item.separatorCenter' \
   styles/shibumi/GroupSection.qml \
   || fail "separator geometry is not derived from the live widget edge"
@@ -493,12 +501,20 @@ done
 
 [[ $(rg -Fc 'font.pixelSize: 14' hancore.shibumi.bluetooth/BarWidget.qml) -eq 2 ]] \
   || fail "Bluetooth icon sizing drifted from V1"
-rg -Fq 'font.pixelSize: root.mode === "none" ? 15 : 14' \
-  hancore.shibumi.network/BarWidget.qml \
-  || fail "full network icon sizing drifted from V1"
 [[ $(rg -Fc 'font.pixelSize: root.mode === "none" ? 15 : 14' \
-  hancore.shibumi.network/BarWidget.qml) -eq 3 ]] \
-  || fail "network icon sizing drifted across appearance modes"
+  hancore.shibumi.network/BarWidget.qml) -eq 2 ]] \
+  || fail "compact/vertical network icon sizing drifted"
+rg -Fq 'font.pixelSize: root.mode === "ethernet" ? 14 : 15' \
+  hancore.shibumi.network/BarWidget.qml \
+  || fail "V2 LAN icon sizing drifted from the reference"
+rg -Fq 'width: visible ? 36 : 0' hancore.shibumi.network/BarWidget.qml \
+  || fail "V1 network graph width drifted from the reference"
+[[ $(rg -Fc 'width: 54' hancore.shibumi.network/BarWidget.qml) -eq 2 ]] \
+  || fail "V1 stacked network rates drifted from the reference"
+rg -Fq 'component V2TrafficMeter: Item' hancore.shibumi.network/BarWidget.qml \
+  || fail "V2 RX/TX meter is missing"
+rg -Fq 'width: visible ? 16 : 0' hancore.shibumi.network/BarWidget.qml \
+  || fail "V2 RX/TX geometry drifted from the reference"
 for power_glyph in '\uF06C' '\uF0E7' '\uF24E'; do
   rg -Fq "$power_glyph" hancore.shibumi.power-profile/BarWidget.qml \
     || fail "power-profile icon drifted from V1: $power_glyph"

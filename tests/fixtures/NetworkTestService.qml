@@ -10,6 +10,8 @@ QtObject {
   property string kind: "wifi"
   property string label: "Test Network"
   property int signalStrength: 73
+  property real downloadRate: 0
+  property real uploadRate: 0
   property bool scanning: false
   property bool busy: false
   property var sessionOwners: []

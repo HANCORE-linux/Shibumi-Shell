@@ -23,11 +23,10 @@ Item {
   // revision once that component can be created again.
   readonly property int resolverRevision: bar && "hostWidgetResolver" in bar
     && bar.hostWidgetResolver ? bar.hostWidgetResolver.revision : 0
-  readonly property var resolvedComponent: {
-    void(resolverRevision)
-    return bar && typeof bar.registeredWidgetComponent === "function"
-      ? bar.registeredWidgetComponent(moduleName) : null
-  }
+  // Component handles are synchronized imperatively. Binding this property to
+  // resolverRevision makes component creation publish a dependency change
+  // while the same binding is still being evaluated on a fresh shell start.
+  property var resolvedComponent: null
   property int resolutionAttempts: 0
   readonly property var activeItem: widgetLoader.item
   readonly property var containingWindow: activeItem && activeItem.QsWindow
@@ -141,6 +140,7 @@ Item {
   }
   onModuleSettingsChanged: injectProperties()
   onModuleNameChanged: {
+    resolvedComponent = null
     resolutionAttempts = 0
     ensureResolvedComponent()
   }
@@ -189,6 +189,7 @@ Item {
       ? bar.hostWidgetResolver : null
     const component = resolver && typeof resolver.ensureComponent === "function"
       ? resolver.ensureComponent(moduleName) : null
+    if (resolvedComponent !== component) resolvedComponent = component
     if (component || !moduleEnabled) {
       resolutionAttempts = 0
       resolutionRetry.stop()
@@ -201,6 +202,13 @@ Item {
       resolutionAttempts++
       resolutionRetry.restart()
     }
+  }
+
+  function refreshResolvedComponent() {
+    const component = bar && typeof bar.registeredWidgetComponent === "function"
+      ? bar.registeredWidgetComponent(moduleName) : null
+    if (resolvedComponent !== component) resolvedComponent = component
+    if (component === null && moduleEnabled) ensureResolvedComponent()
   }
 
   function findCompatibilityPanel(owner) {
@@ -535,7 +543,18 @@ Item {
   Connections {
     target: root.bar && "hostWidgetResolver" in root.bar
       ? root.bar.hostWidgetResolver : null
-    function onRevisionChanged() { root.ensureResolvedComponent() }
+    // A registry refresh publishes its revision from inside the resolver.
+    // Re-entering ensureComponent() from that signal can publish a second
+    // revision while resolvedComponent is still being evaluated. Defer the
+    // lookup to the next event-loop turn so component resolution stays acyclic.
+    function onRevisionChanged() { resolverRefresh.restart() }
+  }
+
+  Timer {
+    id: resolverRefresh
+    interval: 0
+    repeat: false
+    onTriggered: root.refreshResolvedComponent()
   }
 
   Timer {

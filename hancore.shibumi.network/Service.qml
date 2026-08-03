@@ -133,8 +133,12 @@ Item {
     if (!owner) return
     sessionOwners = sessionOwners.filter(candidate => candidate !== owner)
     if (sessionCount !== 0) return
-    detailsPoll.stop()
-    detailsProc.running = false
+    // Ethernet bar presentations consume the same central throughput sample as
+    // the panel. Keep that one worker alive while a wired route is active.
+    if (kind !== "ethernet") {
+      detailsPoll.stop()
+      detailsProc.running = false
+    }
     profileList.running = false
     if (backend && backend.wifiDevice) backend.wifiDevice.scannerEnabled = false
   }
@@ -372,9 +376,11 @@ Item {
 
   Timer {
     id: detailsPoll
-    interval: 1500
+    interval: 2000
     repeat: true
-    running: root.sessionCount > 0 && root.ready
+    running: root.ready
+      && (root.sessionCount > 0 || root.kind === "ethernet")
+    triggeredOnStart: true
     onTriggered: {
       if (!detailsProc.running) detailsProc.running = true
     }
