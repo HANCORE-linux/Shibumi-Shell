@@ -60,7 +60,15 @@ function visibleIds(modeValue, entries, focusedValue) {
 
   var limit = mode === "5" ? 5 : 10
   for (var id = 1; id <= limit; id++) ids.push(id)
-  if (focusedId > limit) ids.push(focusedId)
+  // Persist modes guarantee a minimum range; they are not a visibility cap.
+  // Keep every real positive Hyprland workspace reachable even when it sits
+  // beyond that range, including occupied workspaces on another monitor.
+  for (var entryIndex = 0; entryIndex < source.length; entryIndex++) {
+    var existingId = positiveId(source[entryIndex] ? source[entryIndex].id : 0)
+    if (existingId && ids.indexOf(existingId) === -1) ids.push(existingId)
+  }
+  if (focusedId && ids.indexOf(focusedId) === -1) ids.push(focusedId)
+  ids.sort(function(left, right) { return left - right })
   return ids
 }
 

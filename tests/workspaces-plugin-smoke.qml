@@ -109,6 +109,24 @@ ShellRoot {
     ]
   }
 
+  QtObject {
+    id: persistFiveState
+    property var config: ({
+      workspace: ({ version: 1, mode: "5", style: "numbers" })
+    })
+  }
+
+  Workspaces.WorkspaceService {
+    id: occupiedOutsidePersistState
+    stateService: persistFiveState
+    actionAdapter: actions
+    focusedWorkspaceSource: ({ id: 2 })
+    workspaceSource: [
+      { id: 2, toplevels: { values: [{}] } },
+      { id: 7, toplevels: { values: [{}] } }
+    ]
+  }
+
   Workspaces.BarWidget {
     id: widget
     bar: fakeBar
@@ -131,6 +149,8 @@ ShellRoot {
       if (root.phase === 0) {
         if (workspaceState.entries.length !== 2
             || workspaceState.visibleWorkspaceIds.join(",") !== "1,2,3,4,5,8"
+            || occupiedOutsidePersistState.visibleWorkspaceIds.join(",")
+              !== "1,2,3,4,5,7"
             || widget.renderedWorkspaceCount !== 6
             || secondWidget.renderedWorkspaceCount !== 6
             || widget.workspaceService !== secondWidget.workspaceService

@@ -80,6 +80,17 @@ ShellRoot {
     ]
   }
 
+  Services.WorkspaceService {
+    id: occupiedOutsidePersistState
+    actionAdapter: actions
+    config: ({ version: 1, mode: "5", style: "numbers" })
+    focusedWorkspaceSource: ({ id: 2 })
+    workspaceSource: [
+      { id: 2, toplevels: { values: [{}] } },
+      { id: 7, toplevels: { values: [{}] } }
+    ]
+  }
+
   Widgets.WorkspaceWidget {
     id: widget
     bar: fakeBar
@@ -95,6 +106,8 @@ ShellRoot {
       if (root.phase === 0) {
         if (workspaceState.entries.length !== 2
             || workspaceState.visibleWorkspaceIds.join(",") !== "1,2,3,4,5,8"
+            || occupiedOutsidePersistState.visibleWorkspaceIds.join(",")
+              !== "1,2,3,4,5,7"
             || widget.renderedWorkspaceCount !== 6 || widget.panelLoaded)
           return root.fail("initial service/widget contract")
         if (widget.workspacePadding !== 2 || Math.round(widget.implicitWidth) !== 161)

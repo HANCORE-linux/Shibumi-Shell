@@ -888,8 +888,8 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/responsive-layout-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/panel-routing-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/workspace-model-regression.qml"
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner \
+  -input "$repo_root/tests/workspace-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
