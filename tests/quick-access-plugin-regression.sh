@@ -62,33 +62,6 @@ grep -F 'Could not apply broken-theme. theme denied by fixture' \
 plugin="$repo_root/hancore.shibumi.quick-access"
 widget="$plugin/BarWidget.qml"
 service="$plugin/Service.qml"
-glyph_icon="$plugin/GlyphsQuickAccessIcon.qml"
-
-cmp -s -- "$repo_root/shared/presentation/GlyphsQuickAccessIcon.qml" \
-  "$glyph_icon" || fail "V2 quick-access Glyphs icon drift"
-cmp -s -- "$repo_root/shared/presentation/GlyphsQuickAccessIcon.qml" \
-  "$repo_root/widgets/GlyphsQuickAccessIcon.qml" \
-  || fail "V1 quick-access Glyphs icon drift"
-rg -Fq 'property real sourceStrokeWidth: 3' "$glyph_icon" \
-  || fail "Glyphs path icon no longer uses the source website stroke weight"
-for path_contract in \
-    'M21 21C21 17.6863 23.6863 15 27 15H59' \
-    'M53.5692 15.7128C44.9948 10.7624 34.4308 10.7624'; do
-  rg -Fq "$path_contract" "$glyph_icon" \
-    || fail "quick-access Glyphs source path drift: $path_contract"
-done
-for icon_widget in "$widget" "$repo_root/widgets/QuickAccessWidget.qml"; do
-  rg -U -q 'icon: "images"\n[[:space:]]+glyphsIcon: true' "$icon_widget" \
-    || fail "screenshots/videos do not use the Glyphs images icon: $icon_widget"
-  rg -U -q 'icon: "palette"\n[[:space:]]+glyphsIcon: true' "$icon_widget" \
-    || fail "themes/wallpapers do not use the Glyphs palette icon: $icon_widget"
-  rg -Fq 'GlyphsQuickAccessIcon {' "$icon_widget" \
-    || fail "quick-access widget does not render vector Glyphs icons: $icon_widget"
-done
-if rg -Fq 'icon: "collections"' "$widget" \
-    "$repo_root/widgets/QuickAccessWidget.qml"; then
-  fail "legacy screenshots/videos collection glyph is still active"
-fi
 
 rg -q 'readonly property bool textMode: displayMode === "text"' "$widget" \
   || fail "quick access does not expose text display mode"

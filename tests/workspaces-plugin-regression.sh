@@ -71,9 +71,15 @@ for v2_style in kanji rings aurora pacman; do
     || fail "V2 workspace style is missing: $v2_style"
 done
 pacman_marker="$repo_root/shared/presentation/PacmanWorkspaceMarker.qml"
-rg -Fq 'root.focused ? "󰮯" : root.occupied ? "󰊠" : "󱙝"' \
+rg -Fq 'text: root.focused ? "󰮯" : "󰊠"' \
   "$pacman_marker" \
-  || fail "Pacman state glyphs drifted from the V2.1-2 reference"
+  || fail "Pacman/ghost state glyphs drifted from the V2.1-2 reference"
+rg -Fq 'id: emptyPellet' "$pacman_marker" \
+  || fail "Pacman empty workspace pellet is missing"
+rg -Fq 'visible: !root.focused && !root.occupied' "$pacman_marker" \
+  || fail "Pacman pellet no longer represents empty workspaces"
+rg -Fq 'width: 5' "$pacman_marker" \
+  || fail "Pacman empty workspace pellet size drifted"
 rg -Fq 'font.family: "JetBrainsMono Nerd Font"' "$pacman_marker" \
   || fail "Pacman marker does not use the reference Nerd Font"
 rg -Fq 'paletteColor("color03"' \

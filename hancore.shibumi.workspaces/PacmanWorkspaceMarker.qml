@@ -24,10 +24,11 @@ Item {
 
   Text {
     anchors.centerIn: parent
-    text: root.focused ? "󰮯" : root.occupied ? "󰊠" : "󱙝"
+    visible: root.focused || root.occupied
+    text: root.focused ? "󰮯" : "󰊠"
     color: root.hovered ? root.hoverColor
       : root.focused ? root.activeColor
-      : root.occupied ? root.occupiedColor : root.emptyColor
+      : root.occupiedColor
     font.family: "JetBrainsMono Nerd Font"
     font.pixelSize: 14
     font.weight: Font.Bold
@@ -37,6 +38,26 @@ Item {
 
     Behavior on color {
       ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+  }
+
+  Rectangle {
+    id: emptyPellet
+
+    visible: !root.focused && !root.occupied
+    anchors.centerIn: parent
+    width: 5
+    height: width
+    radius: width / 2
+    color: root.hovered ? root.hoverColor : root.emptyColor
+    opacity: root.hovered ? 0.90 : 0.55
+    antialiasing: true
+
+    Behavior on color {
+      ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+    Behavior on opacity {
+      NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
     }
   }
 }

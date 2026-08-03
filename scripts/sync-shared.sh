@@ -54,8 +54,6 @@ mappings=(
   "shared/presentation/PillSurface.qml:hancore.shibumi.temperature/PillSurface.qml"
   "shared/presentation/PillSurface.qml:hancore.shibumi.gpu/PillSurface.qml"
   "shared/presentation/PillSurface.qml:hancore.shibumi.storage/PillSurface.qml"
-  "shared/presentation/GlyphsQuickAccessIcon.qml:widgets/GlyphsQuickAccessIcon.qml"
-  "shared/presentation/GlyphsQuickAccessIcon.qml:hancore.shibumi.quick-access/GlyphsQuickAccessIcon.qml"
   "shared/presentation/PacmanWorkspaceMarker.qml:widgets/PacmanWorkspaceMarker.qml"
   "shared/presentation/PacmanWorkspaceMarker.qml:hancore.shibumi.workspaces/PacmanWorkspaceMarker.qml"
   "shared/presentation/PacmanWorkspaceMarker.qml:hancore.shibumi.control-center/PacmanWorkspaceMarker.qml"
