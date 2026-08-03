@@ -1,0 +1,308 @@
+documentation regression passed
+state matrix contract regression passed
+V1 feature evidence regression passed (72 source surfaces)
+V2 source evidence regression passed (80 source surfaces)
+embedded V2 differences regression passed (7 reviewed deltas)
+V2 feature evidence regression passed
+Quattro contract regression passed (4.0.0.r1508.g12af188-1, 25 plugins)
+Shibumi style contract regression passed
+picker helper regression passed
+plugin suite contract regression passed
+plugin self-containment regression passed (25 extracted plugins)
+host facade contract regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-core-services.xUGUkI/shell.qml"
+[32m  INFO[0m: Shell ID: "b9dd3faa735f5f722e56339944140300" Path ID "b9dd3faa735f5f722e56339944140300"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-core-services.xUGUkI/runtime/quickshell/by-id/egr6b745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: core services smoke passed
+core services regression passed
+........
+----------------------------------------------------------------------
+Ran 8 tests in 1.441s
+
+OK
+health diagnostics regression passed
+warning: You appear to have cloned an empty repository.
+plugin update selector regression passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.NQRBSUwpbN/shell.qml"
+[32m  INFO[0m: Shell ID: "b0600ae8aa8715c6b5c385865ba092f8" Path ID "b0600ae8aa8715c6b5c385865ba092f8"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.NQRBSUwpbN/runtime/quickshell/by-id/csr6e745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: quote service smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-state.Naf8bY/shell.qml"
+[32m  INFO[0m: Shell ID: "92cb695e00aa402c89c5c45ecf0f0bef" Path ID "92cb695e00aa402c89c5c45ecf0f0bef"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-state.Naf8bY/runtime/quickshell/by-id/xsr6g745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: state service smoke passed
+state service regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-theme-palette.VvBdJL/shell.qml"
+[32m  INFO[0m: Shell ID: "7e428dfa0e816d57ed28e02d22565fe6" Path ID "7e428dfa0e816d57ed28e02d22565fe6"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-theme-palette.VvBdJL/runtime/quickshell/by-id/rtr6g745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: theme palette runtime smoke passed
+theme palette runtime regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-menu.gKUIjY/shell.qml"
+[32m  INFO[0m: Shell ID: "64b973764cfca2f6e8ec24ea37e3fcf7" Path ID "64b973764cfca2f6e8ec24ea37e3fcf7"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-menu.gKUIjY/runtime/quickshell/by-id/mur6g745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: menu plugin smoke passed
+menu plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-control-center.B5U1co/shell.qml"
+[32m  INFO[0m: Shell ID: "19c6123f49d4336f06ab66342304247d" Path ID "19c6123f49d4336f06ab66342304247d"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-control-center.B5U1co/runtime/quickshell/by-id/awr6g745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: control center smoke passed
+control center regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-telemetry-plugins.K17IW2/shell.qml"
+[32m  INFO[0m: Shell ID: "6e088f0246c8bb1173ab7f4ac45732ed" Path ID "6e088f0246c8bb1173ab7f4ac45732ed"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-telemetry-plugins.K17IW2/runtime/quickshell/by-id/x2t6l745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: telemetry plugins smoke passed
+telemetry plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-audio-media.9c5qGi/audio/shell.qml"
+[32m  INFO[0m: Shell ID: "2ef7b10e81246a5f4618c1f8598cbe33" Path ID "2ef7b10e81246a5f4618c1f8598cbe33"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-audio-media.9c5qGi/audio/runtime/quickshell/by-id/o4t6m745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: audio plugin smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-audio-media.9c5qGi/media/shell.qml"
+[32m  INFO[0m: Shell ID: "2654f40c6d535634758d39f5a9b328f9" Path ID "2654f40c6d535634758d39f5a9b328f9"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-audio-media.9c5qGi/media/runtime/quickshell/by-id/d5t6n745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: media plugin smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-available/shell.qml"
+[32m  INFO[0m: Shell ID: "d5643a3b39694890c9476f4f84cce8c5" Path ID "d5643a3b39694890c9476f4f84cce8c5"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-available/runtime/quickshell/by-id/26t6n745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: media spectrum service smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-unavailable/shell.qml"
+[32m  INFO[0m: Shell ID: "e8bdecb22a52f92e54f5dc536f80dc1d" Path ID "e8bdecb22a52f92e54f5dc536f80dc1d"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-unavailable/runtime/quickshell/by-id/o6t6o745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: media spectrum unavailable smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-failure/shell.qml"
+[32m  INFO[0m: Shell ID: "4ff5baf0b5aca367cababfab0700392b" Path ID "4ff5baf0b5aca367cababfab0700392b"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-audio-media.9c5qGi/media-spectrum-failure/runtime/quickshell/by-id/97t6o745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: media spectrum failure smoke passed
+audio/media plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-workspaces.1euNxv/shell.qml"
+[32m  INFO[0m: Shell ID: "8bfb4ca5f99758a9b89bf52f314a554b" Path ID "8bfb4ca5f99758a9b89bf52f314a554b"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-workspaces.1euNxv/runtime/quickshell/by-id/t9t6r745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: workspaces plugin smoke passed
+workspaces plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-update-center.To7c2e/shell.qml"
+[32m  INFO[0m: Shell ID: "73ab9ef7e227269df9dd3b62cc5e2fcf" Path ID "73ab9ef7e227269df9dd3b62cc5e2fcf"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-update-center.To7c2e/runtime/quickshell/by-id/2dt6s745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: update center model smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-update-center.To7c2e/shell.qml"
+[32m  INFO[0m: Shell ID: "73ab9ef7e227269df9dd3b62cc5e2fcf" Path ID "73ab9ef7e227269df9dd3b62cc5e2fcf"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-update-center.To7c2e/runtime/quickshell/by-id/fdt6s745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: update center UI smoke passed
+ok: structured package status preserves all repository updates
+ok: structured package status distinguishes no updates
+ok: structured package status rejects empty success output
+ok: structured package status rejects rows with the no-updates exit code
+ok: structured package status reports checker failure without stale rows
+ok: structured package status fails closed on malformed output
+ok: structured package status rejects duplicate package rows
+ok: structured package status bounds a stalled package check
+ok: structured package status reports a missing checker explicitly
+ok: theme review shows only the checked target
+ok: theme review fails closed for drift and malformed arguments
+ok: theme apply remains pinned when the remote advances
+ok: theme apply rejects a reviewed target removed from its upstream
+ok: theme apply rejects manipulated target commits before mutation
+ok: theme check blocks tracked local edits
+ok: theme check catches untracked file-to-directory prefix collisions
+ok: theme check catches untracked directory-to-file prefix collisions
+ok: theme apply rechecks untracked collisions immediately before mutation
+ok: theme apply rechecks tracked edits immediately before mutation
+ok: theme check reports an unreachable remote without actionable state
+ok: theme apply rejects changed remote provenance before fetch
+ok: theme check and apply reject executable repository Git filters
+ok: no-argument theme update preserves the existing update-all command flow
+ok: theme update state is written atomically with private permissions
+ok: theme check and apply share a non-overlapping state lock
+update center regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-status.Wsp589/shell.qml"
+[32m  INFO[0m: Shell ID: "2f035b7c52a59a5da185f44bd874dd45" Path ID "2f035b7c52a59a5da185f44bd874dd45"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-status.Wsp589/runtime/quickshell/by-id/71v6x745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: status plugin smoke passed
+status plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-center.ZdghGq/shell.qml"
+[32m  INFO[0m: Shell ID: "49e2a104d537131197f1a05e5c78ed13" Path ID "49e2a104d537131197f1a05e5c78ed13"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-center.ZdghGq/runtime/quickshell/by-id/04v6z745jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: center plugin smoke passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-center.ZdghGq/shell.qml"
+[32m  INFO[0m: Shell ID: "49e2a104d537131197f1a05e5c78ed13" Path ID "49e2a104d537131197f1a05e5c78ed13"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-center.ZdghGq/weather-runtime/quickshell/by-id/o4v60845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: weather service start smoke passed
+center plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-network.dbRrBX/shell.qml"
+[32m  INFO[0m: Shell ID: "352d753a6596a4797f06abba0038e530" Path ID "352d753a6596a4797f06abba0038e530"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-network.dbRrBX/runtime/quickshell/by-id/x5v60845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: network plugin smoke passed
+network plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-brightness.qhYaWg/shell.qml"
+[32m  INFO[0m: Shell ID: "b5853590c12636b0183158d7936ac6b5" Path ID "b5853590c12636b0183158d7936ac6b5"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-brightness.qhYaWg/runtime/quickshell/by-id/e8v61845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: brightness plugin smoke passed
+brightness plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-bluetooth.VhlMM1/shell.qml"
+[32m  INFO[0m: Shell ID: "0df8760faf6724c987f675bb7966ae55" Path ID "0df8760faf6724c987f675bb7966ae55"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-bluetooth.VhlMM1/runtime/quickshell/by-id/bav62845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: bluetooth plugin smoke passed
+bluetooth plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-power-plugins.O6TRT7/shell.qml"
+[32m  INFO[0m: Shell ID: "1b9ffb644e22075798849413d19fde96" Path ID "1b9ffb644e22075798849413d19fde96"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-power-plugins.O6TRT7/runtime/quickshell/by-id/fcv64845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: power plugins smoke passed
+power plugins regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-ai-plugin.sq3bxN/shell.qml"
+[32m  INFO[0m: Shell ID: "b497333c54459b6beb42b3905915ec71" Path ID "b497333c54459b6beb42b3905915ec71"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-ai-plugin.sq3bxN/runtime/quickshell/by-id/yev66845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: ai plugin smoke passed
+AI plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-quick-access-plugin.2GLIhQ/shell.qml"
+[32m  INFO[0m: Shell ID: "11290d5a8f5600399a0aa992b4d8c0db" Path ID "11290d5a8f5600399a0aa992b4d8c0db"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-quick-access-plugin.2GLIhQ/runtime/quickshell/by-id/rgv67845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[33m  WARN[97m qml[0m: Shibumi wallpaper action failed: Could not apply broken.jpg. denied by fixture
+[33m  WARN[97m qml[0m: Shibumi theme action failed: Could not apply broken-theme. theme denied by fixture
+[34m DEBUG[97m qml[0m: quick access plugin smoke passed
+quick access plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-reactor-plugin.v3FeAU/shell.qml"
+[32m  INFO[0m: Shell ID: "4732227ca23bff4025156bffb4291dc6" Path ID "4732227ca23bff4025156bffb4291dc6"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-reactor-plugin.v3FeAU/runtime/quickshell/by-id/0tv69845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[33m  WARN[0m: $HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.
+[34m DEBUG[97m qml[0m: reactor plugin smoke passed
+reactor plugin regression passed
+[32m  INFO[0m: Launching config: "/tmp/shibumi-bar-host.hOwWDw/shell.qml"
+[32m  INFO[0m: Shell ID: "5c170a33cec2bf01c24d827ffd9b1bcb" Path ID "5c170a33cec2bf01c24d827ffd9b1bcb"
+[32m  INFO[0m: Saving logs to "/tmp/shibumi-bar-host.hOwWDw/runtime/quickshell/by-id/lvv6b845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: bar host registry smoke passed
+bar host registry regression passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/31w6c845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: group renderer regression passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/h1w6c845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: group interaction regression passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/v1w6c845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: V1 slot interaction regression passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/e2w6d845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: telemetry widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/y2w6e845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: clock widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/e3w6e845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: center widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/24w6f845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: audio widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/n4w6g845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: network widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/a5w6h845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: brightness widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/z5w6i845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: power widgets smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/q6w6j845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: power service runtime smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/67w6k845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: bluetooth widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/w7w6l845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: status widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/p8w6n845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: ai usage widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/79w6n845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: media widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/s9w6o845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: shibumi presentation smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/faw6p845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: workspace widget smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/taw6p845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: workspace panel smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/hbw6q845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: app menu contract smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/tcw6q845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: app menu lifecycle smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/1dw6r845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: app menu runtime smoke passed
+[32m  INFO[0m: Launching config: "/tmp/tmp.1O7lDHdFC4/shell.qml"
+[32m  INFO[0m: Shell ID: "e45600b8533edb0abe849fd2973d7af7" Path ID "e45600b8533edb0abe849fd2973d7af7"
+[32m  INFO[0m: Saving logs to "/tmp/tmp.1O7lDHdFC4/runtime/quickshell/by-id/wzw6v845jt/log.qslog"
+[32m  INFO[0m: Configuration Loaded
+[34m DEBUG[97m qml[0m: app menu card smoke passed
+Shibumi contract regression passed

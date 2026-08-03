@@ -144,7 +144,9 @@ ShellRoot {
           return root.fail("nested panel routing")
         if (!status.updatePresented || !status.trayPresented
             || !status.notificationPresented
-            || status.notificationService.pendingModel.count !== 3)
+            || status.notificationService.pendingModel.count !== 3
+            || status.pendingCount !== 3 || status.recentCount !== 0
+            || status.notificationCount !== 3)
           return root.fail("V1 tray/notification facade state")
         status.updateWidget.open()
         if (!status.toggleTrayDrawer() || !status.trayDrawerOpen

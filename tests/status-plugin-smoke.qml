@@ -245,7 +245,9 @@ ShellRoot {
           return root.fail("nested panel routing")
         if (!status.updatePresented || !status.trayPresented
             || !status.notificationPresented
-            || status.notificationService.pendingModel.count !== 3)
+            || status.notificationService.pendingModel.count !== 3
+            || status.pendingCount !== 3 || status.recentCount !== 1
+            || status.notificationCount !== 4)
           return root.fail("V1 tray/notification facade state")
         statusService.recordingPid = "42"
         if (!statusService.stayAwake

@@ -41,6 +41,9 @@ Item {
   readonly property bool updatePresented: updateWidget !== null
   readonly property bool trayPresented: trayView.presented
   readonly property bool notificationPresented: notificationView.presented
+  readonly property int pendingCount: notificationView.pendingCount
+  readonly property int recentCount: notificationView.recentCount
+  readonly property int notificationCount: notificationView.notificationCount
   readonly property bool ready: updateWidget !== null || trayWidget !== null
     || notificationService !== null
   readonly property bool opened: trayDrawerOpen || trayAppMenuOpen

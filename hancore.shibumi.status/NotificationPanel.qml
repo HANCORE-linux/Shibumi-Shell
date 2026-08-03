@@ -9,15 +9,36 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var notificationService
-  readonly property var activeModel: notificationService
-    ? notificationService.pendingModel : null
   readonly property int pendingCount: notificationService
     && notificationService.pendingModel
     ? notificationService.pendingModel.count : 0
   readonly property int recentCount: notificationService
     && notificationService.pastModel
     ? notificationService.pastModel.count : 0
-  readonly property int activeCount: pendingCount
+  readonly property int activeCount: pendingCount + recentCount
+  readonly property var activeRows: {
+    const rows = []
+    function append(model, bucket) {
+      if (!model) return
+      for (let index = 0; index < model.count; index++) {
+        const entry = model.get(index)
+        if (!entry) continue
+        rows.push({
+          bucket: bucket,
+          sourceIndex: index,
+          app: String(entry.app || ""),
+          appIcon: String(entry.appIcon || ""),
+          summary: String(entry.summary || ""),
+          body: String(entry.body || "")
+        })
+      }
+    }
+    append(notificationService ? notificationService.pendingModel : null,
+      "pending")
+    append(notificationService ? notificationService.pastModel : null,
+      "past")
+    return rows
+  }
 
   owner: ownerWidget
   open: ownerWidget.notificationPanelOpen && notificationService !== null
@@ -37,25 +58,36 @@ ShibumiPanel {
       notificationService.setDoNotDisturb(value === true)
   }
 
-  function dismiss(index) {
-    if (notificationService
+  function dismiss(bucket, index) {
+    if (!notificationService) return
+    if (bucket === "past"
+        && typeof notificationService.dismissPast === "function")
+      notificationService.dismissPast(index)
+    else if (bucket === "pending"
         && typeof notificationService.dismissPending === "function")
       notificationService.dismissPending(index)
   }
 
   function clearActive() {
-    if (notificationService
-        && typeof notificationService.clearPending === "function")
+    if (!notificationService) return
+    if (typeof notificationService.clearPending === "function")
       notificationService.clearPending()
+    if (typeof notificationService.clearPast === "function")
+      notificationService.clearPast()
   }
 
-  function openNotification(index) {
-    if (!notificationService || !activeModel
-        || index < 0 || index >= activeModel.count) {
+  function openNotification(bucket, index) {
+    if (!notificationService) {
       closePanel()
       return
     }
-    const entry = activeModel.get(index)
+    const model = bucket === "past" ? notificationService.pastModel
+      : notificationService.pendingModel
+    if (!model || index < 0 || index >= model.count) {
+      closePanel()
+      return
+    }
+    const entry = model.get(index)
     if (entry && typeof notificationService.focusApp === "function")
       notificationService.focusApp(entry)
     closePanel()
@@ -101,8 +133,8 @@ ShibumiPanel {
             ? closeText.left : closeAction.left
           anchors.rightMargin: 8
           anchors.verticalCenter: parent.verticalCenter
-          text: panel.pendingCount > 0
-            ? "Notifications · " + panel.pendingCount : "Notifications"
+          text: panel.activeCount > 0
+            ? "Notifications · " + panel.activeCount : "Notifications"
           color: panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily
             : Commons.Style.font.family
@@ -167,11 +199,13 @@ ShibumiPanel {
           clip: true
           spacing: 6
           boundsBehavior: Flickable.StopAtBounds
-          model: panel.activeModel
+          model: panel.activeRows
 
           delegate: Rectangle {
             id: notificationRow
             required property int index
+            required property string bucket
+            required property int sourceIndex
             required property string app
             required property string appIcon
             required property string summary
@@ -194,7 +228,8 @@ ShibumiPanel {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: panel.openNotification(notificationRow.index)
+              onClicked: panel.openNotification(notificationRow.bucket,
+                notificationRow.sourceIndex)
             }
 
             Column {
@@ -271,7 +306,8 @@ ShibumiPanel {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: panel.dismiss(notificationRow.index)
+                onClicked: panel.dismiss(notificationRow.bucket,
+                  notificationRow.sourceIndex)
               }
             }
           }

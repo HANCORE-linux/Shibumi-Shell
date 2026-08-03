@@ -25,8 +25,10 @@ Ui.Panel {
   readonly property int connectedCount: bluetoothReady
     ? bluetoothService.connectedCount : 0
   readonly property bool connected: connectedCount > 0
-  readonly property string stateIcon: !radioEnabled ? "bluetooth_disabled"
-    : connected ? "bluetooth_connected" : "bluetooth"
+  readonly property bool showConnectedCount: connected
+    && bar && !bar.vertical
+  readonly property string stateIcon: !radioEnabled ? "\uE1A9"
+    : connected ? "\uE1A8" : "\uE1A7"
   readonly property string tooltipText: !bluetoothReady ? "Bluetooth unavailable"
     : !adapterAvailable ? "No Bluetooth adapter"
     : connected ? "Bluetooth · " + connectedCount + " connected"
@@ -166,7 +168,7 @@ Ui.Panel {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.connected
+        visible: root.showConnectedCount
         text: String(root.connectedCount)
         color: root.bar ? root.bar.urgent : Commons.Color.accent
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -195,7 +197,7 @@ Ui.Panel {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.connected && !root.bar.vertical
+        visible: root.showConnectedCount
         text: String(root.connectedCount)
         color: root.bar ? root.bar.urgent : Commons.Color.accent
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family

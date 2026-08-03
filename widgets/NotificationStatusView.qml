@@ -11,6 +11,10 @@ Item {
   readonly property int pendingCount: notificationService
     && notificationService.pendingModel
     ? Math.max(0, Number(notificationService.pendingModel.count) || 0) : 0
+  readonly property int recentCount: notificationService
+    && notificationService.pastModel
+    ? Math.max(0, Number(notificationService.pastModel.count) || 0) : 0
+  readonly property int notificationCount: pendingCount + recentCount
   readonly property bool presented: notificationService !== null
   signal toggleRequested()
   signal dndRequested()
@@ -42,7 +46,7 @@ Item {
     anchors.centerIn: parent
     text: "\uE7F4"
     font.pixelSize: 15
-    color: root.pendingCount > 0 && root.bar
+    color: root.notificationCount > 0 && root.bar
       ? root.bar.urgent
       : root.bar ? Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
         root.bar.foreground.b, 0.4) : Commons.Color.foreground
@@ -51,7 +55,7 @@ Item {
   }
 
   Rectangle {
-    visible: root.pendingCount > 0
+    visible: root.notificationCount > 0
     width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
     height: Commons.Style.space(12)
     radius: height / 2
@@ -64,7 +68,8 @@ Item {
     Text {
       id: badgeText
       anchors.centerIn: parent
-      text: root.pendingCount > 99 ? "99" : String(root.pendingCount)
+      text: root.notificationCount > 99 ? "99"
+        : String(root.notificationCount)
       color: root.bar ? root.bar.background : Commons.Color.background
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: 7
@@ -79,8 +84,8 @@ Item {
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     onEntered: if (root.bar) root.bar.showTooltip(root,
-      root.pendingCount > 0
-        ? root.pendingCount + (root.pendingCount === 1
+      root.notificationCount > 0
+        ? root.notificationCount + (root.notificationCount === 1
           ? " notification" : " notifications")
         : "No notifications")
     onExited: if (root.bar) root.bar.hideTooltip(root)

@@ -151,6 +151,24 @@ rg -q 'notificationService\.pendingModel' \
 rg -q 'notificationService\.pastModel' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification panel does not consume the official recent model"
+rg -Fq 'readonly property int notificationCount: pendingCount + recentCount' \
+  "$repo_root/hancore.shibumi.status/NotificationStatusView.qml" \
+  || fail "notification badge drops seen history entries"
+rg -Fq 'visible: root.notificationCount > 0' \
+  "$repo_root/hancore.shibumi.status/NotificationStatusView.qml" \
+  || fail "notification badge visibility ignores retained history"
+rg -Fq 'readonly property int activeCount: pendingCount + recentCount' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel drops seen notifications from history"
+rg -Fq 'model: panel.activeRows' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification list is not backed by pending and past rows"
+rg -Fq 'notificationService.dismissPast(index)' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel cannot dismiss recent notifications"
+rg -Fq 'notificationService.clearPast()' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel cannot clear recent notifications"
 if rg -q 'PopupCard|Quickshell\.Services\.Notifications|makoctl' \
     "$repo_root/hancore.shibumi.status/NotificationPanel.qml"; then
   fail "V1 notification presentation duplicates stock chrome or backend ownership"

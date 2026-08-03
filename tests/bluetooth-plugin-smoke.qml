@@ -166,6 +166,8 @@ ShellRoot {
         if (root.phaseTicks < 3) return
         if (!first.compact || first.implicitWidth >= root.fullWidth)
           return root.fail("compact presentation width")
+        if (!first.showConnectedCount || first.connectedCount !== 1)
+          return root.fail("connected count hidden in compact presentation")
 
         first.toggleBluetooth()
         first.toggleBluetooth()

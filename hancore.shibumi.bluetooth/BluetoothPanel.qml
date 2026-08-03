@@ -238,9 +238,9 @@ ShibumiPanel {
 
         IconText {
           anchors.verticalCenter: parent.verticalCenter
-          text: !panel.bluetoothService.radioEnabled ? "bluetooth_disabled"
+          text: !panel.bluetoothService.radioEnabled ? "\uE1A9"
             : panel.bluetoothService.connectedCount > 0
-              ? "bluetooth_connected" : "bluetooth"
+              ? "\uE1A8" : "\uE1A7"
           color: panel.bar ? panel.bar.urgent : Commons.Color.accent
           opacity: panel.bluetoothService.radioEnabled ? 1 : 0.45
           font.pixelSize: Commons.Style.font.display
@@ -486,7 +486,7 @@ ShibumiPanel {
 
         IconText {
           anchors.verticalCenter: parent.verticalCenter
-          text: entryItem.connected ? "bluetooth_connected" : "bluetooth"
+          text: entryItem.connected ? "\uE1A8" : "\uE1A7"
           color: entryItem.connected && panel.bar
             ? panel.bar.urgent : deviceSurface.foreground
           font.pixelSize: Commons.Style.font.heading

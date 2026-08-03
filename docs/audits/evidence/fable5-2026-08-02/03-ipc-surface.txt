@@ -1,0 +1,3 @@
+No running instances for "/usr/share/omarchy/shell/shell.qml"  present on the current display "unk"
+Some instances on other displays match:
+ - quxdw4jt (wayland/wayland-1)

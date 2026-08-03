@@ -1,0 +1,218 @@
+===== Version Information =====
+Quickshell: 0.3.0 (revision 10b439fc6e3fd65c15fe1c486271b31da05ed023, distributed by AUR (package: quickshell-git))
+Qt: 6.11.1 (built against 6.11.1)
+
+===== Build Information =====
+Build Type: RelWithDebInfo
+Compiler: GNU (16.1.1)
+Compile Flags: -march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions         -Wp,-D_FORTIFY_SOURCE=3 -Wformat -Werror=format-security         -fstack-clash-protection -fcf-protection         -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -Wp,-D_GLIBCXX_ASSERTIONS -g -ffile-prefix-map=/src/quickshell-git/src=/usr/src/debug/quickshell-git -flto=auto
+Configuration:
+  Distributor: AUR (package: quickshell-git)
+  Disable precompild headers (dev): OFF
+  Build tests (dev): OFF
+  ASAN (dev): OFF
+  Keep Frame Pointers (dev): OFF
+  Use jemalloc: ON
+  Crash Handling: ON
+  Unix Sockets: ON
+  Wayland: ON
+    Wlroots Layer-Shell: ON
+    Session Lock: ON
+    Foreign Toplevel Management: ON
+    Hyprland: ON
+      Hyprland IPC: ON
+      Hyprland Global Shortcuts: ON
+      Hyprland Focus Grabbing: ON
+      Hyprland Surface Extensions: ON
+    Screencopy: ON
+      Image Copy Capture: ON
+      Wlroots Screencopy: ON
+      Hyprland Toplevel Export: ON
+  X11: ON
+  I3/Sway: ON
+    I3/Sway IPC: ON
+  System Tray: ON
+  PipeWire: ON
+  Mpris: ON
+  Pam: ON
+  Polkit: ON
+  Greetd: ON
+  UPower: ON
+  Notifications: ON
+  Bluetooth: ON
+  Network: ON
+
+===== System Information =====
+GPU /dev/dri/renderD128
+  Driver: i915 1.6.0 (Intel Graphics)
+  Model: 8086:5917
+  Address: PCI 00:02.0
+
+/etc/os-release:
+NAME="Omarchy"
+PRETTY_NAME="Omarchy"
+ID=omarchy
+ID_LIKE=arch
+BUILD_ID="4.0.0.r1508.g12af188"
+VERSION_ID="4.0.0.r1508.g12af188"
+ANSI_COLOR="38;2;158;206;106"
+HOME_URL="https://omarchy.org/"
+DOCUMENTATION_URL="https://learn.omacom.io/2/the-omarchy-manual"
+SUPPORT_URL="https://discord.gg/tXFUdasqhY"
+BUG_REPORT_URL="https://github.com/basecamp/omarchy/issues"
+LOGO=omarchy
+
+/etc/lsb-release:
+DISTRIB_ID="Arch"
+DISTRIB_RELEASE="rolling"
+DISTRIB_DESCRIPTION="Arch Linux"
+
+===== Environment (trimmed) =====
+QT_QPA_PLATFORMTHEME=gtk3
+XDG_CURRENT_DESKTOP=Hyprland
+QT_QPA_PLATFORM=wayland;xcb
+QT_IM_MODULE=fcitx
+QT_QUICK_CONTROLS_STYLE=Fusion
+
+===== Instance Information =====
+Signal: Segmentation fault (11)
+Crashed process ID: 38302
+Run ID: quajv4jt
+Shell ID: c0240dfe8c8e8a421e1f8db23a03fc60
+Config Path: /usr/share/omarchy/shell/shell.qml
+
+===== Stacktrace =====
+#0  0x00007f1c15c3e6ef at /usr/bin/../lib/libc.so.6
+#1  0x00007f1c17fb9f3f in QQuickLoader::setSourceUrlHelper(QUrl const&) at /usr/bin/../lib/libQt6Quick.so.6
+#2  0x00007f1c17fba057 in QQuickLoader::setSource(QUrl const&, QJSValue) at /usr/bin/../lib/libQt6Quick.so.6
+#3  0x00007f1c17fbbdf8 at /usr/bin/../lib/libQt6Quick.so.6
+#4  0x00007f1c17fbc32e in QQuickLoader::qt_metacall(QMetaObject::Call, int, void**) at /usr/bin/../lib/libQt6Quick.so.6
+#5  0x00007f1c17167362 at /usr/bin/../lib/libQt6Qml.so.6
+#6  0x00007f1c16ffc8da at /usr/bin/../lib/libQt6Qml.so.6
+#7  0x00007f1c16ffe707 in QV4::QObjectMethod::callPrecise(QQmlObjectOrGadget const&, QQmlPropertyData const&, QV4::ExecutionEngine*, QV4::CallData*, QMetaObject::Call) at /usr/bin/../lib/libQt6Qml.so.6
+#8  0x00007f1c17007dc4 in QV4::QObjectMethod::callInternal(QV4::Value const*, QV4::Value const*, int) const at /usr/bin/../lib/libQt6Qml.so.6
+#9  0x00007f1c170270c5 in QV4::Runtime::CallPropertyLookup::call(QV4::ExecutionEngine*, QV4::Value const&, unsigned int, QV4::Value*, int) at /usr/bin/../lib/libQt6Qml.so.6
+#10 0x00007f1beaa02453 
+#11 0x00007f1c1706a70c at /usr/bin/../lib/libQt6Qml.so.6
+#12 0x00007f1c16fb8776 at /usr/bin/../lib/libQt6Qml.so.6
+#13 0x00007f1c170dc146 at /usr/bin/../lib/libQt6Qml.so.6
+#14 0x00007f1c165e7d45 in QObject::event(QEvent*) at /usr/bin/../lib/libQt6Core.so.6
+#15 0x00007f1c16583657 in QCoreApplication::notifyInternal2(QObject*, QEvent*) at /usr/bin/../lib/libQt6Core.so.6
+#16 0x00007f1c16583a60 in QCoreApplicationPrivate::sendPostedEvents(QObject*, int, QThreadData*) at /usr/bin/../lib/libQt6Core.so.6
+#17 0x00007f1c1689fc97 at /usr/bin/../lib/libQt6Core.so.6
+#18 0x00007f1c18ef5c75 at /usr/bin/../lib/libglib-2.0.so.0
+#19 0x00007f1c18ef7ed6 at /usr/bin/../lib/libglib-2.0.so.0
+#20 0x00007f1c18ef8054 in g_main_context_iteration at /usr/bin/../lib/libglib-2.0.so.0
+#21 0x00007f1c1689d0b1 in QEventDispatcherGlib::processEvents(QFlags<QEventLoop::ProcessEventsFlag>) at /usr/bin/../lib/libQt6Core.so.6
+#22 0x00007f1c16591982 in QEventLoop::exec(QFlags<QEventLoop::ProcessEventsFlag>) at /usr/bin/../lib/libQt6Core.so.6
+#23 0x00007f1c16586ea9 in QCoreApplication::exec() at /usr/bin/../lib/libQt6Core.so.6
+#24 0x000055993076def1 in qs::launch::launch(qs::launch::LaunchArgs const&, char**, QCoreApplication*) at /usr/src/debug/quickshell-git/quickshell/src/launch/launch.cpp:320:35
+#25 0x000055993075f1af in launchFromCommand at /usr/src/debug/quickshell-git/quickshell/src/launch/command.cpp:482:15
+#26 0x00005599307658d3 in qs::launch::runCommand(int, char**, QCoreApplication*) at /usr/src/debug/quickshell-git/quickshell/src/launch/command.cpp:580:27
+#27 (inlined)          in qs::launch::main(int, char**) at /usr/src/debug/quickshell-git/quickshell/src/launch/main.cpp:136:24
+#28 0x000055993074d2f0 in main at /usr/src/debug/quickshell-git/quickshell/src/main.cpp:3:58
+#29 0x00007f1c15c27780 at /usr/bin/../lib/libc.so.6
+#30 0x00007f1c15c278b8 in __libc_start_main at /usr/bin/../lib/libc.so.6
+#31 0x000055993074fef4 in _start at /usr/bin/quickshell
+
+===== Log Tail =====
+2026-08-02 10:46:36.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f6f80) of "/proc/stat"
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f7140) of "/proc/meminfo"
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Reader started for "/proc/stat"
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Reader started for "/proc/meminfo"
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f7140)
+2026-08-02 10:46:38.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)
+2026-08-02 10:46:39.000 DEBUG quickshell.dbus.properties: Received property change set and invalidations for org.freedesktop.NetworkManager/org/freedesktop/NetworkManager/AccessPoint/1/org.freedesktop.NetworkManager.AccessPoint
+2026-08-02 10:46:39.000 DEBUG quickshell.dbus.properties: Updated property org.freedesktop.NetworkManager/org/freedesktop/NetworkManager/AccessPoint/1/org.freedesktop.NetworkManager.AccessPoint:Strength to 79 
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f6f80) of "/proc/stat"
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f7140) of "/proc/meminfo"
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Reader started for "/proc/stat"
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Reader started for "/proc/meminfo"
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)
+2026-08-02 10:46:40.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f7140)
+2026-08-02 10:46:41.000  INFO quickshell.ipc: New IPC connection qs::ipc::IpcServerConnection(0x7f1c0a810a00)
+2026-08-02 10:46:41.000  INFO quickshell.ipc: New IPC connection qs::ipc::IpcServerConnection(0x7f1be6c68c80)
+2026-08-02 10:46:41.000 DEBUG quickshell.hyprland.ipc.events: Received event: "closelayer>>omarchy-keyboard-panel" parsed as "closelayer" "omarchy-keyboard-panel"
+2026-08-02 10:46:41.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bd4ed1800) of "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:41.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bd4ed1800) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:41.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:41.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bd4ed1800) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f6f80) of "/proc/stat"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Reader started for "/proc/stat"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f7140) of "/proc/meminfo"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Reader started for "/proc/meminfo"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1be1b05980) of "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1be1b05980) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1be1b05980) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Starting async save for FileView_QMLTYPE_5(0x7f1bc38e0780) of "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Writer started for "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwNode(0x7f1be90d7a00, id=55/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwNode(0x7f1be90d2e00, id=56/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bd4ed1800)
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Bound object PwNode(0x7f1be90d2e00, id=56/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Bound object PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.registry: Bound object PwNode(0x7f1be90d7a00, id=55/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f7140)
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1be1b05980)
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bc38e0780) at "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:42.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bc38e0780)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Pipewire event loop received new events, iterating.
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Done iterating pipewire event loop.
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Pipewire event loop received new events, iterating.
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Initializing volume props for PwNode(0x7f1be90d2e00, id=56/bound) with known values from backing device.
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Got updated channels of PwNode(0x7f1be90d2e00, id=56/bound) - QList(qs::service::pipewire::PwAudioChannel::FrontLeft, qs::service::pipewire::PwAudioChannel::FrontRight)
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Got updated volumes of PwNode(0x7f1be90d2e00, id=56/bound) - QList(1, 1)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Enumerating props param for PwNode(0x7f1be90d2e00, id=56/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.device: Enumerating routes param for PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Initializing volume props for PwNode(0x7f1be90d7a00, id=55/bound) with known values from backing device.
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Got updated channels of PwNode(0x7f1be90d7a00, id=55/bound) - QList(qs::service::pipewire::PwAudioChannel::FrontLeft, qs::service::pipewire::PwAudioChannel::FrontRight)
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Got updated volumes of PwNode(0x7f1be90d7a00, id=55/bound) - QList(0.0500031, 0.0500031)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Enumerating props param for PwNode(0x7f1be90d7a00, id=55/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Done iterating pipewire event loop.
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Pipewire event loop received new events, iterating.
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Completed initial sync for PwNode(0x7f1be90d2e00, id=56/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.device: Registered device/index pair for PwDevice(0x7f1be2f11da0, id=48/bound): [device: 0, index: 0]
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Got updated device volume props for PwNode(0x7f1be90d2e00, id=56/bound) via PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.device: Registered device/index pair for PwDevice(0x7f1be2f11da0, id=48/bound): [device: 6, index: 2]
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Got updated device volume props for PwNode(0x7f1be90d7a00, id=55/bound) via PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.node: Skipping node volume props update for PwNode(0x7f1be90d7a00, id=55/bound) in favor of device updates from routeDevice 6 of PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:42.000  INFO quickshell.service.pipewire.node: Completed initial sync for PwNode(0x7f1be90d7a00, id=55/bound)
+2026-08-02 10:46:42.000 DEBUG quickshell.service.pipewire.loop: Done iterating pipewire event loop.
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f6f80) of "/proc/stat"
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f7140) of "/proc/meminfo"
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Reader started for "/proc/meminfo"
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Reader started for "/proc/stat"
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f7140)
+2026-08-02 10:46:44.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bc38e0780) of "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bc38e0780) at "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.config/omarchy/shell.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bc38e0780)
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bc408fdc0) of "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bc408fdc0) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bc408fdc0) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f7140) of "/proc/meminfo"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/proc/meminfo"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bea4f6f80) of "/proc/stat"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/proc/stat"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bd8e063c0) of "/home/drdeltree/.local/state/omarchy/toggles"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bd8e063c0) at "/home/drdeltree/.local/state/omarchy/toggles"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/omarchy/toggles"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1be1b03840) of "/home/drdeltree/.local/state/omarchy/current"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1be1b03840) at "/home/drdeltree/.local/state/omarchy/current"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/omarchy/current"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Starting async load for FileView_QMLTYPE_5(0x7f1bd4f8a980) of "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bd4f8a980) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Reader started for "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Creating watcher for FileView_QMLTYPE_5(0x7f1bd4f8a980) at "/home/drdeltree/.local/state/shibumi/switch-status.json"
+2026-08-02 10:46:45.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwNode(0x7f1be90d7a00, id=55/bound)
+2026-08-02 10:46:45.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwNode(0x7f1be90d2e00, id=56/bound)
+2026-08-02 10:46:45.000 DEBUG quickshell.service.pipewire.registry: Unbinding object PwDevice(0x7f1be2f11da0, id=48/bound)
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bc408fdc0)
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f7140)
+2026-08-02 10:46:45.000 DEBUG quickshell.io.fileview: Async operation finished for FileView_QMLTYPE_5(0x7f1bea4f6f80)

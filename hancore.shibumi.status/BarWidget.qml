@@ -57,9 +57,13 @@ Item {
   readonly property bool trayPresented: trayView.presented
   readonly property bool notificationPresented: notificationView.presented
   readonly property int pendingCount: notificationView.pendingCount
+  readonly property int recentCount: notificationView.recentCount
+  readonly property int notificationCount: notificationView.notificationCount
   readonly property string textLabel: notificationService
     && notificationService.doNotDisturb === true ? "DND"
-    : pendingCount > 0 ? pendingCount + " NEW" : "CLEAR"
+    : notificationCount > 0
+      ? notificationCount + (notificationCount === 1
+        ? " NOTIFICATION" : " NOTIFICATIONS") : "CLEAR"
   readonly property bool ready: updateWidget !== null || trayWidget !== null
     || notificationService !== null
   readonly property bool opened: trayDrawerOpen || trayAppMenuOpen
@@ -538,8 +542,9 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onEntered: if (root.bar) root.bar.showTooltip(textStatus,
-          root.pendingCount > 0
-            ? root.pendingCount + " notifications" : root.textLabel)
+          root.notificationCount > 0
+            ? root.notificationCount + (root.notificationCount === 1
+              ? " notification" : " notifications") : root.textLabel)
         onExited: if (root.bar) root.bar.hideTooltip(textStatus)
         onClicked: function(mouse) {
           if (root.bar) root.bar.hideTooltip(textStatus)

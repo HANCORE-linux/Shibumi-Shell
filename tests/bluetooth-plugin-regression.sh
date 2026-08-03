@@ -77,6 +77,14 @@ if sed -n '/id: headerActions/,/^        }/p' "$panel" \
 fi
 rg -Fq 'const current = rowAt(index)' "$panel" \
   || fail "Bluetooth section boundaries do not guard transient model rows"
+rg -Fq 'connected ? "\uE1A8" : "\uE1A7"' "$widget" \
+  || fail "connected Bluetooth bar state does not use stable glyph codepoints"
+rg -Fq 'readonly property bool showConnectedCount: connected' "$widget" \
+  || fail "connected Bluetooth count has no horizontal bar presentation state"
+[[ $(rg -Fc 'visible: root.showConnectedCount' "$widget") -eq 2 ]] \
+  || fail "connected Bluetooth count is not shown in every horizontal mode"
+rg -Fq '? "\uE1A8" : "\uE1A7"' "$panel" \
+  || fail "connected Bluetooth panel state does not use stable glyph codepoints"
 rg -Fq 'if (icon === "phone" || icon === "smartphone") return ""' "$panel" \
   || fail "Bluetooth phone rows expose untrusted battery precision"
 if rg -q 'omarchy-launch-bluetooth|Bluetooth settings' "$widget" "$panel"; then
