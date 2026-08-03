@@ -22,7 +22,6 @@ ShibumiPanel {
   focusTarget: keyCatcher
   centerOnBar: true
   centerOnBarOffset: 1
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(300)
   contentHeight: fittedContentHeight(contentColumn.implicitHeight,

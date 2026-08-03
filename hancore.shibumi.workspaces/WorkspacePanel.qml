@@ -17,7 +17,6 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.opened
   focusTarget: panelContent.focusTarget
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(240)
   contentHeight: fittedContentHeight(panelContent.implicitHeight)

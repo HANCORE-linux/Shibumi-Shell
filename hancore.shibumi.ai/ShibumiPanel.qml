@@ -23,7 +23,9 @@ PanelWindow {
   property bool centerOnBar: false
   property real centerOnBarOffset: 0
   property bool open: false
-  property int gap: Commons.Style.gapsOut
+  // Preserve the reference panel offset across both shell variants:
+  // V1 panels sit 8 px beyond the 35 px bar; V2 connected panels use 6 px.
+  property int gap: shellStyle === "shibumi" ? 8 : 6
   property bool popoutSwitching: false
   property bool popoutSwitchClosing: false
   property Item focusTarget: null

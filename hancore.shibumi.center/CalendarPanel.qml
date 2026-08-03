@@ -28,7 +28,6 @@ ShibumiPanel {
   open: ownerWidget.opened
   focusTarget: keyCatcher
   centerOnBar: true
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(280)
   contentHeight: fittedContentHeight(content.implicitHeight)

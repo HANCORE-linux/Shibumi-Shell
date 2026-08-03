@@ -24,7 +24,6 @@ ShibumiPanel {
   open: ownerWidget.trayDrawerOpen
   focusTarget: keyCatcher
   // V1 contract: 328px outer card with 304px usable row width.
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(328)
   contentHeight: fittedContentHeight(contentColumn.implicitHeight)

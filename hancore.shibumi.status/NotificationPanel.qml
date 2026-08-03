@@ -22,7 +22,6 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.notificationPanelOpen && notificationService !== null
   focusTarget: keyCatcher
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(contentColumn.implicitHeight,

@@ -415,6 +415,13 @@ fi
 
 panel_surface=shared/presentation/ShibumiPanel.qml
 [[ -f $panel_surface ]] || fail "shared Shibumi panel surface is missing"
+rg -Fq 'property int gap: shellStyle === "shibumi" ? 8 : 6' \
+  "$panel_surface" \
+  || fail "V1/V2 panel offset drifted from the reference 8px/6px contract"
+if rg -n '^\s+gap: 8\s*$' hancore.shibumi.* -g '*Panel.qml' \
+    --glob '!ShibumiPanel.qml'; then
+  fail "a panel bypasses the variant-aware shared offset"
+fi
 rg -q '^PanelWindow \{' "$panel_surface" \
   || fail "Shibumi panel does not own its single visible surface"
 if rg -q '^Ui\.KeyboardPanel|shibumiSurfaceBleed' "$panel_surface"; then

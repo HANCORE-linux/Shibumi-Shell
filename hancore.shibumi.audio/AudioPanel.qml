@@ -31,7 +31,6 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.opened && audioBackend && audioBackend.ready
   focusTarget: keyCatcher
-  gap: 8
   padding: 12
   contentWidth: fittedContentWidth(280)
   contentHeight: fittedContentHeight(contentColumn.implicitHeight,
