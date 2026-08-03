@@ -112,6 +112,12 @@ class FakeOmarchyRuntime(OmarchyRuntime):
     def ping(self) -> None:
         return
 
+    def verify_single_shell_instance(self) -> None:
+        return
+
+    def verify_bar_layer_ownership(self, expected_namespace: str) -> None:
+        return
+
     def payload_ready(self, payload_digest: str) -> bool:
         target = self.paths.plugin_dir / "hancore.shibumi.state"
         try:
@@ -191,6 +197,144 @@ class FakeOmarchyRuntime(OmarchyRuntime):
                 "active": is_bar and active_bar == plugin_id,
             }
         return result
+
+
+class RuntimeProcessTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="shibumi-runtime-test.")
+        self.omarchy_root = Path(self.temporary.name) / "omarchy"
+        bin_dir = self.omarchy_root / "bin"
+        bin_dir.mkdir(parents=True)
+        (bin_dir / "omarchy-restart-shell").write_text(
+            "#!/bin/sh\n", encoding="utf-8"
+        )
+        self.runtime = OmarchyRuntime(self.omarchy_root)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    @staticmethod
+    def result(stdout: str = "", returncode: int = 0) -> SimpleNamespace:
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+
+    def instance_json(self, *paths: Path) -> str:
+        return json.dumps([
+            {"config_path": str(path), "pid": index + 100}
+            for index, path in enumerate(paths)
+        ])
+
+    def test_restart_waits_for_instance_without_redundant_ping(self) -> None:
+        config = self.omarchy_root / "shell/shell.qml"
+        self.runtime.run = Mock(side_effect=[
+            self.result(),
+            self.result(self.instance_json(config)),
+        ])
+
+        self.runtime.restart_shell(timeout=1)
+
+        calls = [call.args[0] for call in self.runtime.run.call_args_list]
+        self.assertEqual(calls[0], [str(
+            self.omarchy_root / "bin/omarchy-restart-shell"
+        )])
+        self.assertEqual(
+            calls[1],
+            ["quickshell", "list", "--all", "--json"],
+        )
+        self.assertNotIn([str(
+            self.omarchy_root / "bin/omarchy-shell"
+        ), "shell", "ping"], calls)
+
+    def test_instance_guard_ignores_foreign_config_but_rejects_duplicates(self) -> None:
+        config = self.omarchy_root / "shell/shell.qml"
+        foreign = Path(self.temporary.name) / "foreign/shell.qml"
+        self.runtime.run = Mock(return_value=self.result(
+            self.instance_json(config, foreign)
+        ))
+        self.runtime.verify_single_shell_instance()
+
+        self.runtime.run = Mock(return_value=self.result(
+            self.instance_json(config, config, foreign)
+        ))
+        with self.assertRaisesRegex(RuntimeFailure, "found 2"):
+            self.runtime.verify_single_shell_instance()
+
+    def test_stop_drains_matching_instances_without_killing_foreign_config(
+        self,
+    ) -> None:
+        config = self.omarchy_root / "shell/shell.qml"
+        foreign = Path(self.temporary.name) / "foreign/shell.qml"
+        self.runtime.run = Mock(side_effect=[
+            self.result(),
+            self.result(self.instance_json(config, foreign)),
+            self.result(),
+            self.result(self.instance_json(foreign)),
+        ])
+
+        self.runtime.stop_shell()
+
+        commands = [call.args[0] for call in self.runtime.run.call_args_list]
+        kill = [
+            "quickshell",
+            "kill",
+            "-p",
+            str(self.omarchy_root / "shell"),
+            "--any-display",
+        ]
+        self.assertEqual(commands.count(kill), 2)
+
+    def test_layer_guard_rejects_stock_and_shibumi_bars_together(self) -> None:
+        layers = {
+            "DP-1": {
+                "levels": {
+                    "2": [
+                        {"namespace": "shibumi-bar", "pid": 100},
+                        {"namespace": "omarchy-bar", "pid": 200},
+                    ]
+                }
+            }
+        }
+        self.runtime.run = Mock(return_value=self.result(json.dumps(layers)))
+
+        with self.assertRaisesRegex(RuntimeFailure, "conflicting"):
+            self.runtime.verify_bar_layer_ownership("shibumi-bar")
+
+    def test_layer_guard_accepts_only_the_expected_bar(self) -> None:
+        layers = {
+            "DP-1": {
+                "levels": {
+                    "2": [{"namespace": "shibumi-bar", "pid": 100}]
+                }
+            }
+        }
+        config = self.omarchy_root / "shell/shell.qml"
+        self.runtime.run = Mock(side_effect=[
+            self.result(json.dumps(layers)),
+            self.result(self.instance_json(config)),
+        ])
+
+        self.runtime.verify_bar_layer_ownership("shibumi-bar")
+
+    def test_layer_guard_rejects_managed_bar_owned_by_foreign_config(self) -> None:
+        layers = {
+            "DP-1": {
+                "levels": {
+                    "2": [{"namespace": "shibumi-bar", "pid": 200}]
+                }
+            }
+        }
+        config = self.omarchy_root / "shell/shell.qml"
+        foreign = Path(self.temporary.name) / "foreign/shell.qml"
+        instances = json.dumps([
+            {"config_path": str(config), "pid": 100},
+            {"config_path": str(foreign), "pid": 200},
+        ])
+        self.runtime.run = Mock(side_effect=[
+            self.result(json.dumps(layers)),
+            self.result(instances),
+        ])
+
+        with self.assertRaisesRegex(RuntimeFailure, "foreign Quickshell"):
+            self.runtime.verify_bar_layer_ownership("shibumi-bar")
 
 
 class SuiteLifecycleTests(unittest.TestCase):

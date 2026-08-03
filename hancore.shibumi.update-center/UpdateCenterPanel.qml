@@ -41,7 +41,6 @@ ShibumiPanel {
     : Commons.Style.font.family
 
   owner: ownerWidget
-  open: ownerWidget.opened
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Commons.Style.space(520))
   contentHeight: cappedContentHeight(Commons.Style.space(460))

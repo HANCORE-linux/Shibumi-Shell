@@ -101,6 +101,7 @@ Ui.Panel {
     panelLoader.setSource(panelSource, {
       anchorItem: button,
       bar: root.bar,
+      open: true,
       ownerWidget: root,
       updateService: root.updateService,
       stateService: root.stateService
@@ -117,10 +118,8 @@ Ui.Panel {
       registeredBar.registerClickTarget(root)
   }
 
-  // Loading UpdateCenterPanel synchronously from openedChanged re-enters the
-  // inherited Ui.Panel.opened binding when the panel binds its open state back
-  // to ownerWidget.opened. Queue the lifecycle handoff to the next event-loop
-  // turn so the controller binding settles before the panel is constructed.
+  // Queue construction to the next event-loop turn so the inherited widget
+  // controller settles before the panel starts its one-way open lifecycle.
   onOpenedChanged: panelSyncTimer.restart()
   onUpdateServiceChanged: panelSyncTimer.restart()
   onBarChanged: syncClickRegistration()

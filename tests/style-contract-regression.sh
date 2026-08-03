@@ -241,6 +241,15 @@ rg -Fq 'clip: false' styles/shibumi/GroupSection.qml \
 awk '/id: separatorHitRepeater/{seen=1} seen && /hoverEnabled: true/{found=1; exit} END{exit !found}' \
   styles/shibumi/GroupSection.qml \
   || fail "within-region split handles cannot reveal their V1 hover marker"
+for inactive_drag_contract in \
+  'visible: enabled' \
+  'hoverEnabled: enabled' \
+  ': Qt.ArrowCursor'; do
+  sed -n '/id: dragMouse/,/function windowPoint/p' \
+    styles/shibumi/GroupSection.qml \
+    | rg -Fq "$inactive_drag_contract" \
+    || fail "inactive drag handles can own the cursor: $inactive_drag_contract"
+done
 rg -Fq 'radius: root.bar.visualTokens.pillRadius' \
   styles/shibumi/GroupSection.qml \
   || fail "drop targets do not follow the selected V1 radius"

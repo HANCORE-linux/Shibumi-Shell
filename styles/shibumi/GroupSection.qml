@@ -634,10 +634,13 @@ Item {
             enabled: root.layoutSession && root.layoutSession.editing
               && horizontalCell.modelData !== ""
               && horizontalCell.effectiveHasContent
+            visible: enabled
             acceptedButtons: Qt.LeftButton
-            hoverEnabled: true
+            hoverEnabled: enabled
             preventStealing: true
-            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            cursorShape: enabled
+              ? (pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
+              : Qt.ArrowCursor
             z: 30
 
             function windowPoint(mouse) {

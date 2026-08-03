@@ -222,7 +222,127 @@ class OmarchyRuntime:
     def restart_shell(self, *, timeout: float = 30) -> None:
         """Restart Quattro for wholesale provider removal without hot-unload races."""
         self.run([self.command("omarchy-restart-shell")], timeout=timeout)
-        self.ping()
+        self.wait_for_single_shell_instance(timeout=timeout)
+
+    @property
+    def shell_config_file(self) -> Path:
+        if self.omarchy_root is None:
+            raise RuntimeFailure(
+                "cannot inspect shell instances without an Omarchy root"
+            )
+        return (self.omarchy_root / "shell/shell.qml").resolve(strict=False)
+
+    def quickshell_instances(self) -> list[dict[str, Any]]:
+        result = self.run(
+            ["quickshell", "list", "--all", "--json"],
+            timeout=6,
+        )
+        try:
+            values = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise RuntimeFailure(
+                "Quickshell returned malformed instance JSON"
+            ) from error
+        if not isinstance(values, list):
+            raise RuntimeFailure("Quickshell instance response is not an array")
+        return [value for value in values if isinstance(value, dict)]
+
+    def shell_instances(self) -> list[dict[str, Any]]:
+        expected = self.shell_config_file
+        matches: list[dict[str, Any]] = []
+        for value in self.quickshell_instances():
+            config_path = value.get("config_path")
+            if not isinstance(config_path, str) or not config_path:
+                continue
+            if Path(config_path).resolve(strict=False) == expected:
+                matches.append(value)
+        return matches
+
+    def verify_single_shell_instance(self) -> None:
+        instances = self.shell_instances()
+        if len(instances) != 1:
+            raise RuntimeFailure(
+                "expected exactly one Omarchy shell instance, "
+                f"found {len(instances)}; foreign Quickshell configs were left untouched"
+            )
+
+    def wait_for_single_shell_instance(self, *, timeout: float = 30) -> None:
+        deadline = time.monotonic() + timeout
+        detail = "the Omarchy shell instance is not registered"
+        while time.monotonic() < deadline:
+            try:
+                self.verify_single_shell_instance()
+                return
+            except RuntimeFailure as error:
+                detail = str(error)
+            time.sleep(0.1)
+        raise RuntimeFailure(f"Omarchy shell restart did not settle: {detail}")
+
+    def bar_layers(self) -> list[tuple[str, int | None]] | None:
+        result = self.run(["hyprctl", "layers", "-j"], timeout=6, check=False)
+        if result.returncode != 0:
+            return None
+        try:
+            values = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise RuntimeFailure("Hyprland returned malformed layer JSON") from error
+
+        layers: list[tuple[str, int | None]] = []
+
+        def collect(value: Any) -> None:
+            if isinstance(value, dict):
+                namespace = value.get("namespace")
+                if isinstance(namespace, str):
+                    raw_pid = value.get("pid")
+                    pid = (
+                        raw_pid
+                        if isinstance(raw_pid, int)
+                        and not isinstance(raw_pid, bool)
+                        and raw_pid > 0
+                        else None
+                    )
+                    layers.append((namespace, pid))
+                for child in value.values():
+                    collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+
+        collect(values)
+        return layers
+
+    def verify_bar_layer_ownership(self, expected_namespace: str) -> None:
+        layers = self.bar_layers()
+        if layers is None:
+            return
+        names = {namespace for namespace, _pid in layers}
+        managed = names & {"omarchy-bar", "shibumi-bar"}
+        if len(managed) > 1:
+            raise RuntimeFailure(
+                "conflicting Omarchy and Shibumi bar layers are active; "
+                "foreign Quickshell instances were left untouched"
+            )
+        if expected_namespace not in managed:
+            raise RuntimeFailure(
+                f"expected bar layer {expected_namespace!r}, found {sorted(managed)}"
+            )
+        production_pids = {
+            value.get("pid")
+            for value in self.shell_instances()
+            if isinstance(value.get("pid"), int)
+        }
+        foreign_pids = {
+            pid
+            for namespace, pid in layers
+            if namespace in managed
+            and pid is not None
+            and pid not in production_pids
+        }
+        if foreign_pids:
+            raise RuntimeFailure(
+                "a managed bar layer belongs to a foreign Quickshell instance; "
+                "the foreign instance was left untouched"
+            )
 
     def stop_shell(self, *, max_instances: int = 8) -> None:
         """Drain running Quattro instances before changing the active bar owner."""
@@ -238,8 +358,13 @@ class OmarchyRuntime:
         ]
         for _attempt in range(max_instances):
             result = self.run(command, timeout=6, check=False)
-            if result.returncode != 0:
+            try:
+                instances = self.shell_instances()
+            except RuntimeFailure:
+                instances = [{}] if result.returncode == 0 else []
+            if not instances:
                 return
+            time.sleep(0.1)
         raise RuntimeFailure("too many Quickshell instances matched the Omarchy shell")
 
     def reload_payload(self, *, timeout: float = 8) -> None:
@@ -344,6 +469,8 @@ class OmarchyRuntime:
                 active = plugins.get(active_bar, {}).get("active") is True
                 payload_ready = self.payload_ready(payload_digest)
                 if not missing and not disabled and active and payload_ready:
+                    self.verify_single_shell_instance()
+                    self.verify_bar_layer_ownership("shibumi-bar")
                     self.ping()
                     return
                 detail = (
@@ -379,6 +506,7 @@ class OmarchyRuntime:
                 }
                 payload_ready = self.payload_ready(payload_digest)
                 if not missing and not disabled and payload_ready:
+                    self.verify_single_shell_instance()
                     self.ping()
                     return
                 detail = (
@@ -414,6 +542,8 @@ class OmarchyRuntime:
                     if plugins.get(plugin_id, {}).get("enabled") is True
                 } - allowed
                 if stock_active and not shibumi_active and not enabled:
+                    self.verify_single_shell_instance()
+                    self.verify_bar_layer_ownership("omarchy-bar")
                     self.ping()
                     return
                 detail = (
@@ -434,6 +564,8 @@ class OmarchyRuntime:
                 plugins = self.list_plugins()
                 remaining = plugin_ids & plugins.keys()
                 if not remaining:
+                    self.verify_single_shell_instance()
+                    self.verify_bar_layer_ownership("omarchy-bar")
                     self.ping()
                     return
                 detail = f"remaining={sorted(remaining)}"

@@ -55,8 +55,11 @@ rg -q 'panelSource: Qt\.resolvedUrl\("UpdateCenterPanel\.qml"\)' "$widget" \
   || fail 'update widget does not lazy-load its panel'
 rg -q 'anchorItem: button' "$widget" \
   || fail 'update panel is not anchored to its own bar button'
-rg -Fq 'open: ownerWidget.opened' "$panel" \
-  || fail 'update panel does not consume the inherited panel state'
+if rg -Fq 'open: ownerWidget.opened' "$panel"; then
+  fail 'update panel binds its lifecycle back to the owner widget'
+fi
+rg -Fq 'open: true' "$widget" \
+  || fail 'update panel does not receive a one-way initial open state'
 for deferred_loader_contract in \
   'onOpenedChanged: panelSyncTimer.restart()' \
   'onUpdateServiceChanged: panelSyncTimer.restart()' \

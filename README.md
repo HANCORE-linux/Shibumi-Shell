@@ -76,12 +76,9 @@ the 24 user plugins without a root package hook touching the user's config.
 Until the AUR package is released, use this transitional source installation:
 
 ```bash
-sudo pacman -S --needed \
-  python jq curl networkmanager power-profiles-daemon upower xdg-utils \
-  libnotify wl-clipboard ttf-material-symbols-variable \
-  ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts && \
-git clone https://github.com/HANCORE-linux/Shibumi-Shell.git && \
-cd Shibumi-Shell && \
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
+git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
+cd Shibumi-Shell
 ./scripts/shibumi-suite install --yes
 ```
 
