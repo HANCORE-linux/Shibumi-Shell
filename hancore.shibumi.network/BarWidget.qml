@@ -50,6 +50,7 @@ Ui.Panel {
   readonly property real uploadRate: networkReady
     ? Math.max(0, Number(networkService.uploadRate || 0)) : 0
   readonly property bool v2Presentation: tokens && tokens.v2Shell === true
+  readonly property string v2MonoFont: "JetBrainsMono Nerd Font"
   readonly property bool v1TrafficPresentation: mode === "ethernet"
     && displayMode === "full" && !v2Presentation
   readonly property bool v2TrafficPresentation: mode === "ethernet"
@@ -387,6 +388,7 @@ Ui.Panel {
         text: root.stateGlyph
         color: root.widgetInk
         font.pixelSize: 15
+        Behavior on color { ColorAnimation { duration: 160 } }
       }
 
       IconText {
@@ -396,6 +398,7 @@ Ui.Panel {
         color: root.mode === "ethernet" ? root.widgetInk
           : Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
         font.pixelSize: root.mode === "ethernet" ? 14 : 15
+        Behavior on color { ColorAnimation { duration: 160 } }
       }
 
       Text {
@@ -404,7 +407,7 @@ Ui.Panel {
         width: visible ? Math.min(88, implicitWidth) : 0
         text: root.label !== "" ? root.label : "Wi-Fi"
         color: root.widgetInk
-        font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+        font.family: root.v2MonoFont
         font.pixelSize: 11
         elide: Text.ElideRight
         renderType: Text.NativeRendering
@@ -444,12 +447,13 @@ Ui.Panel {
       width: 8
       height: 8
       text: "RX"
-      color: Qt.rgba(parent.ink.r, parent.ink.g, parent.ink.b, 0.62)
-      font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+      color: Qt.rgba(parent.ink.r, parent.ink.g, parent.ink.b, 0.72)
+      font.family: root.v2MonoFont
       font.pixelSize: 7
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       renderType: Text.NativeRendering
+      Behavior on color { ColorAnimation { duration: 160 } }
     }
 
     Column {
@@ -467,6 +471,7 @@ Ui.Panel {
             ? parent.parent.ink
             : Qt.rgba(parent.parent.ink.r, parent.parent.ink.g,
                 parent.parent.ink.b, 0.18)
+          Behavior on color { ColorAnimation { duration: 160 } }
         }
       }
     }
@@ -486,22 +491,24 @@ Ui.Panel {
             ? parent.parent.ink
             : Qt.rgba(parent.parent.ink.r, parent.parent.ink.g,
                 parent.parent.ink.b, 0.18)
+          Behavior on color { ColorAnimation { duration: 160 } }
         }
       }
     }
 
     Text {
       x: 8
-      y: 12
+      y: 13
       width: 8
       height: 8
       text: "TX"
-      color: Qt.rgba(parent.ink.r, parent.ink.g, parent.ink.b, 0.62)
-      font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+      color: Qt.rgba(parent.ink.r, parent.ink.g, parent.ink.b, 0.72)
+      font.family: root.v2MonoFont
       font.pixelSize: 7
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       renderType: Text.NativeRendering
+      Behavior on color { ColorAnimation { duration: 160 } }
     }
   }
 

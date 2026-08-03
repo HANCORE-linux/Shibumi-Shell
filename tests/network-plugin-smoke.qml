@@ -154,6 +154,14 @@ ShellRoot {
             || extractedService.connectEnterprise(enterpriseEntry, "", "test-secret")
             || extractedService.connectEnterprise(enterpriseEntry, "user@example.test", ""))
           return root.fail("enterprise credential forwarding and validation")
+        if (!extractedService.runSpeedTest()
+            || extractedService.backend.speedTestRunCount !== 1
+            || !extractedService.speedTestRunning
+            || extractedService.formatSpeed("107") !== "107 Mbps"
+            || extractedService.formatSpeed("9.25") !== "9.3 Mbps"
+            || extractedService.formatSpeed("") !== "—")
+          return root.fail("speed test forwarding and inline Mbps formatting")
+        extractedService.backend.speedTestRunning = false
 
         root.fullWidth = first.implicitWidth
         first.settings = ({ compact: true })

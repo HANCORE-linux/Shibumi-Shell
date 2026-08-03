@@ -43,8 +43,8 @@ Item {
     ? backend.dnsProviders : ["DHCP", "Cloudflare", "Google", "Custom"]
   readonly property bool speedTestRunning: backend
     ? backend.speedTestRunning === true : false
-  readonly property bool speedTestHasRun: backend
-    ? backend.speedTestHasRun === true : false
+  readonly property bool speedTestHasRun: speedTestDownloadMbps !== ""
+    || speedTestUploadMbps !== ""
   readonly property string speedTestPhase: backend ? String(backend.speedTestPhase || "") : ""
   readonly property string speedTestDownloadMbps: backend
     ? String(backend.speedTestDownloadMbps || "") : ""
@@ -100,6 +100,9 @@ Item {
     if (!owner) return
     sessionOwners = sessionOwners.filter(candidate => candidate !== owner)
     if (sessionCount !== 0) return
+    if (speedTestRunning && backend
+        && typeof backend.hideSpeedTest === "function")
+      backend.hideSpeedTest()
     detailsPoll.stop()
     detailsProc.running = false
     profileList.running = false
@@ -108,14 +111,15 @@ Item {
 
   function refresh(scanWifi) {
     if (!ready || typeof backend.refresh !== "function") return false
-    backend.refresh(scanWifi === true)
-    if (sessionCount > 0 && scanWifi === true && !profileList.running)
+    const shouldScanWifi = scanWifi === true && wifiAvailable
+    backend.refresh(shouldScanWifi)
+    if (sessionCount > 0 && shouldScanWifi && !profileList.running)
       refreshProfiles()
     return true
   }
 
   function toggleWifi() {
-    if (!backendAvailable) return false
+    if (!backendAvailable || !wifiAvailable) return false
     Networking.wifiEnabled = !Networking.wifiEnabled
     if (Networking.wifiEnabled) Qt.callLater(function() { root.refresh(true) })
     return true
@@ -306,8 +310,9 @@ Item {
   }
 
   function formatSpeed(value) {
-    return ready && typeof backend.formatSpeedMbps === "function"
-      ? backend.formatSpeedMbps(value) : "--"
+    const speed = Number(value)
+    if (!(speed > 0)) return "—"
+    return (speed >= 100 ? speed.toFixed(0) : speed.toFixed(1)) + " Mbps"
   }
 
   function refreshProfiles() {

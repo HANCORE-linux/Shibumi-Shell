@@ -28,6 +28,10 @@ Item {
   readonly property var displays: bridge.displays
   readonly property int enabledDisplayCount: bridge.enabledDisplayCount
   readonly property var scaleValues: ["1", "1.25", "1.6", "2", "3", "4"]
+  readonly property bool textSizeAvailable: bridge.textSizeAvailable
+  readonly property var textSizeStops: bridge.textSizeStops
+  readonly property int textSizeIndex: bridge.textSizeIndex
+  readonly property real textSizePx: bridge.textSizePx
 
   function registeredSource(id) {
     if (bar && typeof bar.registeredWidgetSource === "function")
@@ -64,6 +68,8 @@ Item {
   function setBrightness(value) { return bridge.setBrightness(value) }
   function previewBrightness(value) { return bridge.previewBrightness(value) }
   function setScale(value) { return bridge.setScale(value) }
+  function setTextSize(value) { return bridge.setTextSize(value) }
+  function adjustTextSize(delta) { return bridge.adjustTextSize(delta) }
   function toggleDisplay(name, enabled) {
     return bridge.toggleDisplay(name, enabled)
   }

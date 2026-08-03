@@ -26,7 +26,10 @@ Item {
   property int setCount: 0
   property int scaleCount: 0
   property int toggleCount: 0
+  property int textSizeSetCount: 0
+  property int textSizePx: 12
   property int viewLoadCount: 0
+  readonly property var textSizeStops: [9, 10, 11, 12, 14, 16, 20]
   property var displays: [
     { name: "eDP-1", enabled: true, focused: true },
     { name: "DP-1", enabled: true, focused: false }
@@ -57,6 +60,12 @@ Item {
   function setScale(value) {
     scaleCount++
     monitorScale = normalizeScale(value)
+  }
+  function currentTextIndex() { return textSizeStops.indexOf(textSizePx) }
+  function displayedTextPx() { return textSizePx }
+  function setTextSize(value) {
+    textSizeSetCount++
+    textSizePx = Math.round(Number(value))
   }
   function toggleDisplay(name, enabled) {
     toggleCount++

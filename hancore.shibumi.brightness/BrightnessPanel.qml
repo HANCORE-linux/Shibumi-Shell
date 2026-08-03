@@ -16,6 +16,7 @@ ShibumiPanel {
   readonly property var visibleSections: {
     const result = []
     if (monitorService.brightnessAvailable) result.push("brightness")
+    if (monitorService.textSizeAvailable) result.push("textsize")
     result.push("scale")
     if (monitorService.displays.length > 1) result.push("displays")
     return result
@@ -61,12 +62,17 @@ ShibumiPanel {
 
     current = Math.max(0, Math.min(sections.length - 1, current + delta))
     cursorSection = sections[current]
-    cursorIndex = cursorSection === "brightness" ? -1 : 0
+    cursorIndex = cursorSection === "brightness"
+      || cursorSection === "textsize" ? -1 : 0
   }
 
   function moveHorizontal(delta) {
     if (cursorSection === "brightness") {
       monitorService.setBrightness(monitorService.brightnessPercent + delta * 5)
+      return
+    }
+    if (cursorSection === "textsize") {
+      monitorService.adjustTextSize(delta)
       return
     }
     if (cursorSection !== "scale") return
@@ -287,6 +293,95 @@ ShibumiPanel {
               label: "+ 5%"
               onClicked: panel.monitorService.setBrightness(
                 panel.monitorService.brightnessPercent + 5)
+            }
+          }
+        }
+
+        Ui.PanelSeparator {
+          width: parent.width
+          visible: panel.monitorService.textSizeAvailable
+        }
+
+        Column {
+          width: parent.width
+          visible: panel.monitorService.textSizeAvailable
+          spacing: Commons.Style.space(5)
+
+          Item {
+            width: parent.width
+            implicitHeight: Math.max(textSizeLabel.implicitHeight,
+              textSizeValue.implicitHeight)
+
+            SectionLabel {
+              id: textSizeLabel
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              text: "TEXT SIZE"
+            }
+
+            Text {
+              id: textSizeValue
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              text: (textSizeSlider.dragging
+                ? panel.monitorService.textSizeStops[
+                  Math.round(textSizeSlider.liveValue)]
+                : panel.monitorService.textSizePx) + "px"
+              color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
+                panel.bar.foreground.g, panel.bar.foreground.b, 0.58)
+                : Commons.Color.foreground
+              font.family: panel.bar ? panel.bar.fontFamily
+                : Commons.Style.font.family
+              font.pixelSize: Commons.Style.font.caption
+              font.weight: Font.Medium
+              renderType: Text.NativeRendering
+            }
+          }
+
+          Ui.CursorSurface {
+            id: textSizeRow
+            width: parent.width
+            height: textSizeSlider.implicitHeight
+              + Commons.Style.spacing.controlGap
+            hasCursor: panel.cursorActive
+              && panel.cursorSection === "textsize" && panel.cursorIndex === -1
+            foreground: panel.controlForeground
+            accent: panel.controlAccent
+            outline: true
+            onHasCursorChanged: if (hasCursor) panel.ensureVisible(textSizeRow)
+
+            Ui.PanelSlider {
+              id: textSizeSlider
+              anchors.fill: parent
+              anchors.leftMargin: Commons.Style.space(6)
+              anchors.rightMargin: Commons.Style.space(6)
+              bar: panel.bar
+              minimum: 0
+              maximum: Math.max(0,
+                panel.monitorService.textSizeStops.length - 1)
+              step: 1
+              integer: true
+              tickCount: panel.monitorService.textSizeStops.length
+              trackColor: panel.controlActiveFillColor
+              fillColor: panel.controlAccent
+              knobColor: panel.controlAccent
+              tickColor: panel.renderedSurfaceColor
+              value: panel.monitorService.textSizeIndex
+              onReleased: function(value) {
+                const index = Math.max(0, Math.min(
+                  panel.monitorService.textSizeStops.length - 1,
+                  Math.round(value)))
+                panel.monitorService.setTextSize(
+                  panel.monitorService.textSizeStops[index])
+              }
+            }
+
+            HoverHandler {
+              onHoveredChanged: if (hovered) {
+                panel.cursorActive = true
+                panel.cursorSection = "textsize"
+                panel.cursorIndex = -1
+              }
             }
           }
         }

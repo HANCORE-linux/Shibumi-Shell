@@ -41,6 +41,18 @@ Item {
   readonly property int enabledDisplayCount: ready
     && panel.enabledDisplayCount !== undefined
     ? Math.max(0, Number(panel.enabledDisplayCount) || 0) : 0
+  readonly property bool textSizeAvailable: ready
+    && Array.isArray(panel.textSizeStops) && panel.textSizeStops.length > 0
+    && typeof panel.currentTextIndex === "function"
+    && typeof panel.displayedTextPx === "function"
+    && typeof panel.setTextSize === "function"
+  readonly property var textSizeStops: textSizeAvailable
+    ? panel.textSizeStops : []
+  readonly property int textSizeIndex: textSizeAvailable
+    ? Math.max(0, Math.min(textSizeStops.length - 1,
+      Number(panel.currentTextIndex()) || 0)) : 0
+  readonly property real textSizePx: textSizeAvailable
+    ? Number(panel.displayedTextPx()) || textSizeStops[textSizeIndex] : 0
 
   function refresh() {
     if (!ready || typeof panel.refresh !== "function") return false
@@ -67,6 +79,21 @@ Item {
     if (!ready || typeof panel.setScale !== "function") return false
     panel.setScale(String(value || ""))
     return true
+  }
+
+  function setTextSize(value) {
+    if (!textSizeAvailable) return false
+    const px = Math.round(Number(value) || 0)
+    if (textSizeStops.indexOf(px) < 0) return false
+    panel.setTextSize(px)
+    return true
+  }
+
+  function adjustTextSize(delta) {
+    if (!textSizeAvailable) return false
+    const next = Math.max(0, Math.min(textSizeStops.length - 1,
+      textSizeIndex + Math.sign(Number(delta) || 0)))
+    return setTextSize(textSizeStops[next])
   }
 
   function toggleDisplay(name, enabled) {

@@ -20,6 +20,12 @@ Item {
     { ssid: "Fixture Network", connected: true }
   ]
   property int enterpriseConnectCount: 0
+  property bool speedTestRunning: false
+  property string speedTestPhase: ""
+  property string speedTestDownloadMbps: ""
+  property string speedTestUploadMbps: ""
+  property string speedTestError: ""
+  property int speedTestRunCount: 0
   property string enterpriseSsid: ""
   property string enterpriseIdentity: ""
   property string enterprisePassphrase: ""
@@ -32,5 +38,10 @@ Item {
     enterpriseSsid = ssid
     enterpriseIdentity = identity
     enterprisePassphrase = passphrase
+  }
+  function runSpeedTest() {
+    speedTestRunCount++
+    speedTestRunning = true
+    speedTestPhase = "down"
   }
 }

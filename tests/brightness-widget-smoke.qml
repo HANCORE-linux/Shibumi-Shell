@@ -147,6 +147,9 @@ ShellRoot {
             || first.monitorService !== sharedMonitorService
             || !first.brightnessAvailable || first.percent !== 64
             || first.displayCount !== 2 || first.implicitHeight !== 35
+            || !sharedMonitorService.textSizeAvailable
+            || sharedMonitorService.textSizePx !== 12
+            || sharedMonitorService.textSizeIndex !== 3
             || unavailableBrightness.visible)
           return root.fail("shared backend readiness/state/geometry")
         if (backend.opacity !== 0 || backend.manageIpc !== false
@@ -176,8 +179,11 @@ ShellRoot {
           return root.fail("wheel brightness forwarding")
         sharedMonitorService.previewBrightness(71)
         sharedMonitorService.setScale("1.6")
+        sharedMonitorService.setTextSize(14)
+        sharedMonitorService.adjustTextSize(1)
         sharedMonitorService.toggleDisplay("DP-1", true)
         if (backend.previewCount !== 1 || backend.scaleCount !== 1
+            || backend.textSizeSetCount !== 2 || backend.textSizePx !== 16
             || backend.toggleCount !== 1 || sharedMonitorService.monitorScale !== "1.6"
             || sharedMonitorService.enabledDisplayCount !== 1)
           return root.fail("monitor action forwarding")
@@ -200,11 +206,15 @@ ShellRoot {
           return root.fail("hidden official popup remained open")
 
         backend.brightnessAvailable = false
+        backend.internalMonitor = ""
+        backend.displays = [
+          { name: "DP-1", enabled: true, focused: true }
+        ]
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 3) {
         if (root.phaseTicks < 2) return
-        if (!first.visible || first.brightnessAvailable
+        if (!first.visible || first.brightnessAvailable || first.internalDisplay
             || first.tooltipText !== "Display controls" || first.implicitWidth <= 0)
           return root.fail("display controls fallback without backlight")
         first.close()

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 import qs.Commons as Commons
 import qs.Ui as Ui
 
@@ -19,10 +20,14 @@ Ui.Panel {
   readonly property bool monitorReady: monitorService && monitorService.ready
   readonly property bool brightnessAvailable: monitorReady
     && monitorService.brightnessAvailable
+  readonly property bool internalDisplay: monitorReady
+    && hasInternalDisplay(monitorService.displays)
   readonly property int percent: monitorReady
     ? monitorService.brightnessPercent : 0
   readonly property int displayCount: monitorReady
     && Array.isArray(monitorService.displays) ? monitorService.displays.length : 0
+  readonly property string displayGlyph: Quickshell.screens.length > 1
+    ? "󰍺" : "󰍹"
   readonly property string tooltipText: !monitorReady ? "Display unavailable"
     : brightnessAvailable ? "Brightness · " + percent + "%"
     : "Display controls"
@@ -38,6 +43,15 @@ Ui.Panel {
   function setting(name, fallback) {
     const value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
+  }
+
+  function hasInternalDisplay(displays) {
+    const rows = Array.isArray(displays) ? displays : []
+    for (let i = 0; i < rows.length; i++) {
+      if (/^(eDP|LVDS|DSI)-/.test(String(rows[i] && rows[i].name || "")))
+        return true
+    }
+    return false
   }
 
   function childPanelWidget(pluginId) {
@@ -98,7 +112,7 @@ Ui.Panel {
       id: content
       anchors.centerIn: parent
       sourceComponent: !root.bar || !root.tokens ? null
-        : root.brightnessAvailable
+        : root.internalDisplay
         ? (root.compact ? compactBrightnessContent : fullBrightnessContent)
         : displayContent
     }
@@ -187,12 +201,12 @@ Ui.Panel {
   Component {
     id: displayContent
 
-    IconText {
-      text: root.displayCount > 1 ? "desktop_windows" : "monitor"
+    Text {
+      text: root.displayGlyph
       color: root.bar ? root.bar.urgent : Commons.Color.accent
+      font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: root.tokens.iconSize
-      font.weight: Font.Medium
-      fill: 1
+      renderType: Text.NativeRendering
     }
   }
 

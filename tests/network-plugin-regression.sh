@@ -46,6 +46,20 @@ widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 service="$repo_root/hancore.shibumi.network/Service.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.network"\)' "$widget" \
   || fail "network widget does not resolve the shared service"
+rg -Fq 'property url popupSource: Qt.resolvedUrl("NetworkPanel.qml")' "$widget" \
+  || fail "V1 and V2 do not resolve the same NetworkPanel content"
+rg -Fq 'if (networkService.kind === "ethernet") return ethernetAddress()' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "Ethernet headline does not show its address beside the panel icon"
+rg -Fq 'return String(info.ip) + (info.prefix ? "/" + info.prefix : "")' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "Ethernet headline dropped the network prefix"
+rg -Fq 'if (networkService.kind !== "ethernet" && info.ip)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "Ethernet metadata still repeats the IP address"
+rg -Fq 'if (networkService.kind === "wifi") return networkService.label || "Wi-Fi connected"' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "Wi-Fi headline behavior changed while adjusting Ethernet"
 if rg -q 'bar\.networkService' "$repo_root/hancore.shibumi.network"; then
   fail "network plugin depends on transitional bar-owned network state"
 fi
@@ -107,6 +121,45 @@ rg -q 'info\.bitrate' \
 rg -Fq 'label: panel.networkService.wifiEnabled ? "ON" : "OFF"' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
   || fail "network panel dropped the V1 Wi-Fi state button"
+rg -Fq 'readonly property bool wifiControlsVisible: networkService' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "network panel does not derive Wi-Fi UI from adapter availability"
+[[ $(rg -c 'visible: panel\.wifiControlsVisible' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml") -ge 6 ]] \
+  || fail "desktop network panel still exposes Wi-Fi-only controls"
+rg -Fq 'const shouldScanWifi = scanWifi === true && wifiAvailable' "$service" \
+  || fail "desktop network sessions still request Wi-Fi scans"
+rg -Fq 'if (!backendAvailable || !wifiAvailable) return false' "$service" \
+  || fail "Wi-Fi toggle is not guarded by adapter availability"
+rg -Fq 'return (speed >= 100 ? speed.toFixed(0) : speed.toFixed(1)) + " Mbps"' \
+  "$service" || fail "speed-test results do not use the source Mbps formatter"
+status_block=$(sed -n '/^[[:space:]]*Ui\.PanelSeparator { width: parent.width }$/,/^[[:space:]]*Grid {$/p' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml")
+grep -Fq 'spacing: Commons.Style.space(8)' <<<"$status_block" \
+  || fail "network panel status row drifted from the repository layout"
+grep -Fq 'source: Qt.resolvedUrl("lan.svg")' <<<"$status_block" \
+  || fail "network panel Ethernet status does not use the crisp LAN vector"
+grep -Fq 'sourceSize: Qt.size(20, 20)' <<<"$status_block" \
+  || fail "network panel LAN vector is not rasterized on its native 20px grid"
+grep -Fq 'smooth: false' <<<"$status_block" \
+  || fail "network panel LAN vector is still being smoothed"
+grep -Fq 'colorizationColor: panel.bar' <<<"$status_block" \
+  || fail "network panel LAN vector does not follow the active theme"
+grep -Fq 'font.pixelSize: Commons.Style.font.heading' <<<"$status_block" \
+  || fail "network panel status icon drifted from the repository size"
+grep -Fq 'font.hintingPreference: Font.PreferFullHinting' <<<"$status_block" \
+  || fail "network panel status icon lacks the crisp hinted render path"
+grep -Fq 'renderType: Text.NativeRendering' <<<"$status_block" \
+  || fail "network panel status icon does not use native glyph rasterization"
+if grep -Eq 'height: 8|id: connectionStatus|statusHeadline' <<<"$status_block" \
+    || grep -Fq '"\uEB2F"' <<<"$status_block"; then
+  fail "network panel still contains the non-repository hero/progress layout"
+fi
+rg -Fq 'backend.runSpeedTest()' "$service" \
+  || fail "inline speed test does not delegate directly to Omarchy's runner"
+if rg -q 'showSpeedTest\(' "$repo_root/hancore.shibumi.network"; then
+  fail "network plugin opens Omarchy's external speed-test overlay"
+fi
 [[ $(rg -c 'onClicked: panel\.networkService\.toggleWifi\(\)' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml") -eq 1 ]] \
   || fail "network panel must expose exactly one V1 Wi-Fi state button"
@@ -148,6 +201,16 @@ for contract in \
   'text: "TX"'; do
   rg -Fq "$contract" "$widget" \
     || fail "network reference presentation drifted: $contract"
+done
+
+v2_meter=$(sed -n '/^  component V2TrafficMeter: Item {$/,/^  }$/p' "$widget")
+for source_contract in \
+  'color: Qt.rgba(parent.ink.r, parent.ink.g, parent.ink.b, 0.72)' \
+  'font.family: root.v2MonoFont' \
+  'y: 13' \
+  'Behavior on color { ColorAnimation { duration: 160 } }'; do
+  grep -Fq "$source_contract" <<<"$v2_meter" \
+    || fail "V2 RX/TX meter drifted from source: $source_contract"
 done
 
 printf 'network plugin regression passed\n'

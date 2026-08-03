@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
 
@@ -19,6 +20,8 @@ ShibumiPanel {
   property string identityText: ""
   property string pendingForgetKey: ""
   property int cursorIndex: -1
+  readonly property bool wifiControlsVisible: networkService
+    && networkService.wifiAvailable === true
   readonly property var displayNetworks: filteredNetworks()
   readonly property int savedCount: {
     let count = 0
@@ -38,6 +41,7 @@ ShibumiPanel {
 
   function filteredNetworks() {
     const result = []
+    if (!wifiControlsVisible) return result
     const rows = networkService ? networkService.networks : []
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -51,20 +55,27 @@ ShibumiPanel {
 
   function signalIcon(value) {
     const signal = Number(value || 0)
-    if (signal <= 0) return "signal_wifi_off"
-    if (signal < 22) return "network_wifi_1_bar"
-    if (signal < 44) return "network_wifi_2_bar"
-    if (signal < 66) return "network_wifi_3_bar"
-    return "signal_wifi_4_bar"
+    if (signal <= 0) return "\uE1DA"
+    if (signal < 22) return "\uEBE4"
+    if (signal < 44) return "\uEBD6"
+    if (signal < 66) return "\uEBE1"
+    return "\uF065"
   }
 
   function statusText() {
     if (!networkService.backendAvailable) return "NetworkManager unavailable"
-    if (!networkService.wifiEnabled && networkService.kind === "disconnected")
+    if (wifiControlsVisible && !networkService.wifiEnabled
+        && networkService.kind === "disconnected")
       return "Wi-Fi disabled"
     if (networkService.kind === "wifi") return networkService.label || "Wi-Fi connected"
-    if (networkService.kind === "ethernet") return networkService.label || "Ethernet connected"
+    if (networkService.kind === "ethernet") return ethernetAddress()
     return "Offline"
+  }
+
+  function ethernetAddress() {
+    const info = networkService.info || ({})
+    if (!info.ip) return networkService.label || "Ethernet connected"
+    return String(info.ip) + (info.prefix ? "/" + info.prefix : "")
   }
 
   function statusMeta() {
@@ -73,7 +84,8 @@ ShibumiPanel {
     if (networkService.kind === "wifi") fields.push("Wi-Fi")
     else if (networkService.kind === "ethernet") fields.push("Ethernet")
     if (info.iface) fields.push(String(info.iface))
-    if (info.ip) fields.push(String(info.ip) + (info.prefix ? "/" + info.prefix : ""))
+    if (networkService.kind !== "ethernet" && info.ip)
+      fields.push(String(info.ip) + (info.prefix ? "/" + info.prefix : ""))
     if (networkService.kind === "wifi" && networkService.signalStrength >= 0)
       fields.push(networkService.signalStrength + "% signal")
     return fields.join(" · ")
@@ -283,6 +295,7 @@ ShibumiPanel {
             spacing: Commons.Style.space(2)
 
             IconAction {
+              visible: panel.wifiControlsVisible
               icon: panel.networkService.scanning ? "sync" : "refresh"
               tooltip: "Rescan Wi-Fi"
               enabled: panel.networkService.wifiAvailable
@@ -308,13 +321,42 @@ ShibumiPanel {
             width: parent.width
             spacing: Commons.Style.space(8)
 
+            Item {
+              visible: panel.networkService.kind === "ethernet"
+              anchors.verticalCenter: parent.verticalCenter
+              width: 20
+              height: 20
+
+              Image {
+                id: ethernetIconSource
+                anchors.fill: parent
+                visible: false
+                source: Qt.resolvedUrl("lan.svg")
+                sourceSize: Qt.size(20, 20)
+                fillMode: Image.PreserveAspectFit
+                smooth: false
+                mipmap: false
+              }
+
+              MultiEffect {
+                anchors.fill: parent
+                source: ethernetIconSource
+                colorization: 1
+                colorizationColor: panel.bar
+                  ? panel.bar.urgent : Commons.Color.accent
+              }
+            }
+
             IconText {
+              visible: panel.networkService.kind !== "ethernet"
               anchors.verticalCenter: parent.verticalCenter
               text: panel.networkService.kind === "wifi"
                 ? panel.signalIcon(panel.networkService.signalStrength)
-                : panel.networkService.kind === "ethernet" ? "lan" : "cloud_off"
+                : "\uE2C1"
               color: panel.bar ? panel.bar.urgent : Commons.Color.accent
               font.pixelSize: Commons.Style.font.heading
+              font.hintingPreference: Font.PreferFullHinting
+              renderType: Text.NativeRendering
               fill: 1
             }
 
@@ -484,11 +526,15 @@ ShibumiPanel {
           }
         }
 
-        Ui.PanelSeparator { width: parent.width }
+        Ui.PanelSeparator {
+          width: parent.width
+          visible: panel.wifiControlsVisible
+        }
 
         Row {
           width: parent.width
           height: Commons.Style.space(24)
+          visible: panel.wifiControlsVisible
 
           Text {
             width: parent.width - wifiToggle.width
@@ -514,6 +560,7 @@ ShibumiPanel {
         Row {
           width: parent.width
           spacing: Commons.Style.space(4)
+          visible: panel.wifiControlsVisible
 
           PanelButton {
             width: (parent.width - parent.spacing) / 2
@@ -535,6 +582,7 @@ ShibumiPanel {
 
         Row {
           width: parent.width
+          visible: panel.wifiControlsVisible
 
           SectionLabel {
             width: parent.width - scanState.width
@@ -553,6 +601,7 @@ ShibumiPanel {
         Column {
           width: parent.width
           spacing: Commons.Style.space(3)
+          visible: panel.wifiControlsVisible
 
           Repeater {
             model: panel.displayNetworks
@@ -806,7 +855,8 @@ ShibumiPanel {
 
           Text {
             width: parent.width
-            visible: panel.displayNetworks.length === 0
+            visible: panel.wifiControlsVisible
+              && panel.displayNetworks.length === 0
             text: panel.savedOnly
               ? (panel.networkService.profilesLoaded
                 ? "No saved networks" : "Loading saved networks...")

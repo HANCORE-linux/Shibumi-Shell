@@ -74,11 +74,48 @@ rg -q '^  function refreshDisplayState\(\)' "$panel" \
   || fail "display panel does not expose its explicit refresh action"
 rg -q 'onClicked: panel\.refreshDisplayState\(\)' "$panel" \
   || fail "display refresh button bypasses the tested action path"
-rg -q '^[[:space:]]+ShibumiSlider \{' "$panel" \
+[[ $(rg -c '^[[:space:]]+ShibumiSlider \{' "$panel") -eq 1 ]] \
   || fail "brightness control does not use the Shibumi slider"
-if rg -q 'Ui\.PanelSlider' "$panel"; then
-  fail "brightness control still uses the host slider appearance"
-fi
+[[ $(rg -c '^[[:space:]]+Ui\.PanelSlider \{' "$panel") -eq 1 ]] \
+  || fail "Text Size does not use Omarchy's exact PanelSlider"
+rg -Fq 'tickCount: panel.monitorService.textSizeStops.length' "$panel" \
+  || fail "Text Size does not expose Omarchy's curated slider notches"
+rg -Fq 'id: textSizeRow' "$panel" \
+  || fail "Text Size does not expose Omarchy's slider row"
+rg -Fq 'height: textSizeSlider.implicitHeight' "$panel" \
+  || fail "Text Size row does not use Omarchy's implicit slider height"
+rg -Fq '+ Commons.Style.spacing.controlGap' "$panel" \
+  || fail "Text Size row does not use Omarchy's control gap"
+rg -Fq 'outline: true' "$panel" \
+  || fail "Text Size row does not use Omarchy's cursor outline"
+rg -Fq 'accent: panel.controlAccent' "$panel" \
+  || fail "Text Size row cursor does not follow the Shibumi theme"
+for colorBinding in \
+  'trackColor: panel.controlActiveFillColor' \
+  'fillColor: panel.controlAccent' \
+  'knobColor: panel.controlAccent' \
+  'tickColor: panel.renderedSurfaceColor'; do
+  rg -Fq "$colorBinding" "$panel" \
+    || fail "Text Size slider is not bound to the Shibumi theme: $colorBinding"
+done
+rg -Fq 'readonly property string displayGlyph: Quickshell.screens.length > 1' \
+  "$widget" || fail "desktop display glyph does not follow the Omarchy screen-count source"
+rg -Fq '&& hasInternalDisplay(monitorService.displays)' "$widget" \
+  || fail "brightness presentation does not distinguish laptop and desktop displays"
+rg -Fq '/^(eDP|LVDS|DSI)-/' "$widget" \
+  || fail "internal display detection drifted from Omarchy's monitor source"
+rg -Fq ': root.internalDisplay' "$widget" \
+  || fail "desktop Display glyph is not selected from internal display availability"
+rg -Fq '? "󰍺" : "󰍹"' "$widget" \
+  || fail "desktop display glyphs drifted from the Omarchy Display widget"
+rg -Fq 'text: "TEXT SIZE"' "$panel" \
+  || fail "display panel does not expose Omarchy Text Size"
+rg -Fq 'panel.monitorService.setTextSize(' "$panel" \
+  || fail "Text Size slider does not forward its selected stop"
+rg -Fq 'function setTextSize(value) { return bridge.setTextSize(value) }' \
+  "$service" || fail "monitor service does not forward Text Size"
+rg -Fq 'typeof panel.setTextSize === "function"' "$bridge" \
+  || fail "monitor bridge does not feature-detect Omarchy Text Size"
 for token in controlFillColor controlHoverFillColor controlActiveFillColor \
   controlBorderColor controlHoverBorderColor controlAccent; do
   rg -q "panel\.${token}" "$panel" \
