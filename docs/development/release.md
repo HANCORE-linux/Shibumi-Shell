@@ -13,10 +13,11 @@ tag must agree.
    [release readiness](../release-readiness.md).
 2. Update the suite version and every plugin manifest together.
 3. Move user-visible changelog entries into the target version.
-4. Update user guides, architecture contracts, compatibility evidence, and
+4. Add concise, versioned notes under `.github/release-notes/`.
+5. Update user guides, architecture contracts, compatibility evidence, and
    screenshot placeholders or captures affected by the release.
-5. Confirm the repository visibility and remaining public-release blockers.
-6. Keep AUR publication behind the source, package, and clean-build gates in
+6. Confirm the repository visibility and remaining public-release blockers.
+7. Keep AUR publication behind the source, package, and clean-build gates in
    [packaging and AUR strategy](packaging.md).
 
 ## Prepare the package checksum

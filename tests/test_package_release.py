@@ -23,7 +23,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.1")
+        self.assertEqual(version, "0.1.1-beta.2")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -41,6 +41,16 @@ class PackageReleaseTests(unittest.TestCase):
         hooks = list((ROOT / "packaging").rglob("*.install"))
         hooks += list((ROOT / "packaging").rglob("*.hook"))
         self.assertEqual(hooks, [])
+
+    def test_release_workflow_uses_curated_notes(self) -> None:
+        version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        notes = ROOT / f".github/release-notes/v{version}.md"
+        self.assertTrue(notes.is_file())
+        self.assertIn('--notes-file "$notes_file"', workflow)
+        self.assertNotIn("--generate-notes", workflow)
 
     def test_dependency_contract_matches_pkgbuild(self) -> None:
         contract = json.loads(

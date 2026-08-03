@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.status",
   "name": "Shibumi Status",
-  "version": "0.1.1-beta.1",
+  "version": "0.1.1-beta.2",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi tray and notification composition with shared desktop status state.",

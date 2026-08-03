@@ -58,15 +58,31 @@ PanelWindow {
     Behavior on opacity { NumberAnimation { duration: 170 } }
   }
 
-  MouseArea {
-    anchors.fill: parent
-    onClicked: root.controller.close()
-  }
-
   FocusScope {
     id: stage
     anchors.fill: parent
     focus: root.visible
+
+    MouseArea {
+      id: dismissArea
+      anchors.fill: parent
+      acceptedButtons: Qt.LeftButton
+      onClicked: root.controller.close()
+    }
+
+    WheelHandler {
+      target: null
+      acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+      onWheel: function(event) {
+        const vertical = Number(event.angleDelta.y || event.pixelDelta.y || 0)
+        const horizontal = Number(event.angleDelta.x || event.pixelDelta.x || 0)
+        const delta = Math.abs(vertical) >= Math.abs(horizontal)
+          ? vertical : horizontal
+        if (delta === 0) return
+        root.controller.moveSelection(delta > 0 ? -1 : 1)
+        event.accepted = true
+      }
+    }
 
     Keys.onPressed: function(event) {
       if (event.key === Qt.Key_Escape) {

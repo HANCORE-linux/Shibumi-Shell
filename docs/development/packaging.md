@@ -1,8 +1,8 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.1` candidate contract
+Status: `0.1.1-beta.2` candidate contract
 
-Shibumi ships one versioned suite containing 25 separately validated Omarchy
+Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
 lifecycle owns explicit per-user staging, activation, repair, and removal.
 
@@ -113,7 +113,7 @@ result. It requires:
 - files only below `/usr` plus normal package metadata;
 - no install hook, user path, bytecode cache, or unexpected payload;
 - the stable command, package marker, license, and suite contract;
-- exactly the 25 contract-declared plugin manifests;
+- exactly the 24 contract-declared plugin manifests;
 - a successful packaged lifecycle help smoke.
 
 `--nodeps` is used only by this controlled rehearsal because dependency

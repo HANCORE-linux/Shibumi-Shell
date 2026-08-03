@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.network",
   "name": "Shibumi Network",
-  "version": "0.1.1-beta.1",
+  "version": "0.1.1-beta.2",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi network presentation over Omarchy's NetworkManager owner.",

@@ -87,6 +87,9 @@ ShellRoot {
     property string title: "Wallpapers"
     property string emptyText: "No wallpapers found"
     function thumbnailUrl(_entry) { return "" }
+    function isThumbnailReady(entry) {
+      return entry && entry.thumbnailReady === true
+    }
     function activateSelected() { return true }
     function selectIndex(index) { selectedIndex = Number(index); return true }
   }
@@ -240,6 +243,21 @@ ShellRoot {
             || quickAccessService.mode !== "wallpaper"
             || fakeBar.activePopout !== first)
           return root.fail("first-screen picker routing")
+        const rows = []
+        for (let i = 0; i < 70; i++)
+          rows.push("/tmp/source-" + i + ".png\t/tmp/thumb-" + i
+            + ".jpg\tentry-" + i + "\t/tmp\t0")
+        quickAccessService.applyRows(
+          rows.join("\n"), false, quickAccessService.requestSerial)
+        const stableEntries = quickAccessService.entries
+        const initialRevision = quickAccessService.thumbnailRevision
+        for (let i = 0; i < 70; i++)
+          quickAccessService.noteThumbnailReady(
+            "/tmp/thumb-" + i + ".jpg", quickAccessService.requestSerial)
+        if (quickAccessService.entries !== stableEntries
+            || quickAccessService.thumbnailRevision !== initialRevision + 70
+            || !quickAccessService.isThumbnailReady(stableEntries[69]))
+          return root.fail("thumbnail warmup replaced the picker model")
         quickAccessService.cycleStyle(1)
         second.openMode("videos")
         quickAccessService.cycleStyle(1)

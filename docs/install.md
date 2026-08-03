@@ -2,7 +2,7 @@
 
 Status: user reference
 
-Shibumi installs 25 independent plugin roots into Omarchy's normal plugin
+Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
@@ -20,8 +20,9 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> `0.1.1-beta.1` is not registered in the AUR yet. This is the supported flow
-> once the immutable release asset and AUR package are published.
+> AUR registration is currently unavailable, so `0.1.1-beta.2` is not
+> published there yet. This is the supported flow once AUR access returns and
+> the package is released.
 
 ```bash
 omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
@@ -39,7 +40,7 @@ Preview the same setup without changing user state:
 shibumi-shell install --dry-run
 ```
 
-## Install from the private repository
+## Install from source
 
 For an intentional non-interactive installation:
 
@@ -92,7 +93,7 @@ layout:
 ```
 
 The two flags form one safety policy and must be used together. The adapter
-stages all 25 roots, enables required Shibumi services, records external layout
+stages all 24 roots, enables required Shibumi services, records external layout
 ownership, and verifies the running payload through the bar-independent state
 service. It does not install individual plugin roots.
 
@@ -124,7 +125,7 @@ shibumi-shell update --yes
 ```
 
 Pacman updating `/usr/share/shibumi-shell` does not silently change a running
-desktop. The explicit update validates, stages, reloads, and verifies all 25
+desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
 For a trusted source checkout:
@@ -135,7 +136,7 @@ git pull --ff-only
 ./scripts/shibumi-suite update
 ```
 
-An update requires a suite-managed Shibumi installation. It stages all 25
+An update requires a suite-managed Shibumi installation. It stages all 24
 current plugin roots as one transaction and verifies that the shell executes
 the accepted payload rather than a stale QML cache. For an external-bar
 installation, update preserves the active bar and layout.
@@ -308,7 +309,7 @@ entry points, foreign ownership markers, and unknown replacement directories.
 It hashes the staged payload and verifies the running revision before
 committing a transaction.
 
-Shibumi does not fetch its own source updates. During the private alpha, update
-only from a trusted checkout. Package update checks are read-only and package
+Shibumi does not fetch its own source updates. For a source installation,
+update only from a trusted checkout. Package update checks are read-only and package
 installation remains owned by Omarchy/Pacman. The AUR boundary is documented in
 [packaging and AUR strategy](development/packaging.md).

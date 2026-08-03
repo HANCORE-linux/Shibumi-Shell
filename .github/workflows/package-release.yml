@@ -49,6 +49,7 @@ jobs:
           set -euo pipefail
           version=$(<VERSION)
           test "$GITHUB_REF_NAME" = "v$version"
+          test -s ".github/release-notes/v$version.md"
           scripts/build-release-archive --check-reproducible
           archive="dist/shibumi-shell-$version.tar.gz"
           expected=$(sed -n 's/^_source_sha256=//p' packaging/aur/PKGBUILD)
@@ -62,11 +63,12 @@ jobs:
         run: |
           set -euo pipefail
           version=$(<VERSION)
+          notes_file=".github/release-notes/v$version.md"
           gh release create "v$version" \
             "dist/shibumi-shell-$version.tar.gz" \
             "dist/shibumi-shell-$version.tar.gz.sha256" \
             "dist/shibumi-shell-$version.tar.gz.inventory.json" \
             --verify-tag \
             --prerelease \
-            --generate-notes \
+            --notes-file "$notes_file" \
             --title "Shibumi Shell $version"

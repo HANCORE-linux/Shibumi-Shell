@@ -2,9 +2,9 @@
 
 This changelog records user-visible Shibumi changes.
 
-## 0.1.1-beta.1: Arch package candidate
+## 0.1.1-beta.2: Arch package candidate
 
-Unreleased.
+Released 2026-08-03.
 
 ### Added
 
@@ -17,8 +17,8 @@ Unreleased.
   and SHA-pinned GitHub release gate
 - Transactional source-checkout to package migration and an explicit
   `--allow-downgrade` package rollback path
-- Shibumi-specific host compatibility record for the validated the validation system
-  Omarchy and Quickshell builds
+- Shibumi-specific host compatibility record for the validated Omarchy and
+  Quickshell builds
 
 ### Changed
 
@@ -37,9 +37,19 @@ Unreleased.
   configuration; setup, update, repair, and removal remain explicit user
   lifecycle operations
 
+### Fixed
+
+- Removed the Update Center panel-state binding loop
+- Kept video and screenshot thumbnails stable while previews finish loading
+- Restored outside-click dismissal across all picker modes
+- Added mouse-wheel navigation to themes, wallpapers, screenshots, and videos
+- Restored widget loading for hosts that use the registry fallback
+- Clarified that source installation remains transitional until AUR publication
+
 ### Known limits
 
-- The `shibumi-shell` AUR name cannot be registered yet
+- AUR registration is currently unavailable, so `shibumi-shell` cannot be
+  published there yet
 - The candidate package still requires complete validation-system install, upgrade,
   rollback, uninstall, and bar-switch acceptance before publication
 

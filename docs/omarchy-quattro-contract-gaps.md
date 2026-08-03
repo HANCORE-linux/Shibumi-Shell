@@ -44,7 +44,7 @@ Revalidated on 2026-07-28 against current online Quattro head
 That head was six commits ahead of the validation system's packaged `c1647fab` source. The
 host-relevant change removes the short-lived `omarchy.tmux` service,
 `TmuxAlert` indicator, and associated manifest option; Shibumi has no reference
-to that service or indicator and its 25 independently validated plugins pass
+to that service or indicator and its 24 independently validated plugins pass
 the current host contract. The remaining commits concern update conflict
 recovery, migration notification, mise failure handling, and an Edge glyph;
 they do not change the plugin registry, manifest schema, bar loader, service

@@ -33,9 +33,18 @@ QtObject {
         || PickerModel.mediaLabel("/Videos/custom capture.webm")
         !== "custom capture")
       return fail("V1 media label formatting")
+    const equivalent = PickerModel.parseRows(rows)
+    if (!PickerModel.entriesEqual(entries, equivalent))
+      return fail("equivalent entry lists")
+    equivalent[1].thumbnailReady = true
+    if (PickerModel.entriesEqual(entries, equivalent))
+      return fail("thumbnail readiness difference")
     const ready = PickerModel.replaceThumbnailReady(entries, "/cache/b.jpg")
     if (!ready[1].thumbnailReady || entries[1].thumbnailReady)
       return fail("immutable thumbnail update")
+    if (PickerModel.replaceThumbnailReady(ready, "/cache/b.jpg") !== ready
+        || PickerModel.replaceThumbnailReady(ready, "/cache/missing.jpg") !== ready)
+      return fail("no-op thumbnail update changed array identity")
     console.log("picker model regression passed")
     Qt.exit(0)
   }

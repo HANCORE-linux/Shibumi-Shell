@@ -132,7 +132,7 @@ Item {
 
           IconText {
             anchors.centerIn: parent
-            visible: !card.modelData || !card.modelData.thumbnailReady
+            visible: !root.controller.isThumbnailReady(card.modelData)
             text: root.controller.videoMode ? "movie" : "image"
             color: Qt.rgba(root.textColor.r, root.textColor.g,
               root.textColor.b, 0.34)

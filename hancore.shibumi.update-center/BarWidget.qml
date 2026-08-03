@@ -10,11 +10,9 @@ Ui.Panel {
   moduleName: "hancore.shibumi.update-center"
   manageIpc: false
 
-  property bool popupOpen: false
   property url panelSource: Qt.resolvedUrl("UpdateCenterPanel.qml")
   property var registeredBar: null
 
-  readonly property bool opened: popupOpen
   readonly property bool vertical: bar ? bar.vertical === true : false
   readonly property int barSize: bar ? Number(bar.barSize || 0) : 0
   readonly property var updateService: bar && bar.shell
@@ -54,10 +52,6 @@ Ui.Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  function open() { popupOpen = true }
-  function close() { popupOpen = false }
-  function toggle() { popupOpen = !popupOpen }
-
   function tooltipText() {
     if (!updateService) return "Update center is loading"
     if (updateService.packageRefreshing || updateService.themeRefreshing)
@@ -95,7 +89,7 @@ Ui.Panel {
 
   function syncPanelLoader() {
     panelLoader.source = ""
-    if (!popupOpen || !updateService) return
+    if (!opened || !updateService) return
     panelLoader.setSource(panelSource, {
       anchorItem: button,
       bar: root.bar,
@@ -115,7 +109,7 @@ Ui.Panel {
       registeredBar.registerClickTarget(root)
   }
 
-  onPopupOpenChanged: syncPanelLoader()
+  onOpenedChanged: syncPanelLoader()
   onUpdateServiceChanged: syncPanelLoader()
   onBarChanged: syncClickRegistration()
   Component.onCompleted: syncClickRegistration()

@@ -1,11 +1,11 @@
-# Is Shibumi v0.1.0 ready for alpha testing?
+# Is Shibumi 0.1.1-beta.2 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `v0.1.0` is ready for private alpha testing. the validation system passes the
+Shibumi `0.1.1-beta.2` is ready for prerelease testing. The validation system passes the
 complete automated contract and the affected live Wayland workflows. Physical
 multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
-block a public release.
+block a stable public release.
 
 ## Current test target
 
@@ -13,7 +13,7 @@ The current acceptance target is an internal validation system. Its hostname,
 account, and network address are intentionally not part of the public product
 documentation and are not required by Shibumi users.
 
-- **Omarchy**: `4.0.0.r1458.gfa6b5fc-1`
+- **Omarchy**: `4.0.0.r1508.g12af188-1`
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `eDP-1`, `1920x1080`, scale `1.0`
 - **Candidate**: 24 plugins under `hancore.shibumi.*`
@@ -22,20 +22,20 @@ documentation and are not required by Shibumi users.
 
 `/home/hancore/Projects/Quickshell-Dots` remains a read-only V1 and V2 reference.
 
-## Alpha acceptance summary
+## Prerelease acceptance summary
 
-The 2026-07-29 audit plus the 2026-07-30 Quattro plugin-manager revalidation
-produced these results:
+The existing audit evidence plus the 2026-08-03 beta.2 regression and live
+runtime verification produced these results:
 
 | Gate | Result |
 | --- | --- |
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
-| Embedded V2 differences | Passed: 7 intentional differences classified |
-| Quattro compatibility | Passed against `4.0.0.r1458.gfa6b5fc-1` |
+| Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
+| Quattro compatibility | Passed against `4.0.0.r1508.g12af188-1` |
 | Plugin validation and self-containment | Passed for all 24 plugins |
 | Complete repository contract | Passed on the validation system |
-| Suite lifecycle unit tests | Passed: 27 of 27 |
+| Suite lifecycle unit tests | Passed: 46 of 46 |
 | Control Center manager tests | Passed: 7 of 7 |
 | Transactional live update | Passed for all 24 plugins |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
@@ -52,7 +52,7 @@ produced these results:
 
 The hardened center smoke fails on unavailable QML types or a missing `PanelWindow` backend. The earlier WeatherPanel false pass no longer exists.
 
-## Fixed alpha blockers
+## Fixed prerelease blockers
 
 The audit fixed these release blockers:
 

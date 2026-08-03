@@ -110,6 +110,7 @@ ShellRoot {
   Widgets.AiUsageWidget {
     id: aiWidget
     bar: fakeBar
+    aiServiceOverride: sharedAi
     panelSource: Qt.resolvedUrl("AiTestPanel.qml")
   }
 

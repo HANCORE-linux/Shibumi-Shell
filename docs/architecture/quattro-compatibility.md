@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.1` candidate is reviewed against this internal validation
+The `0.1.1-beta.2` candidate is reviewed against this internal validation
 baseline:
 
 | Component | Observed value |

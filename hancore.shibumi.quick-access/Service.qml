@@ -41,6 +41,8 @@ Item {
   property var activeScreen: null
   property string activeScreenName: activeScreen ? String(activeScreen.name || "") : ""
   property var entries: []
+  property var readyThumbnails: ({})
+  property int thumbnailRevision: 0
   readonly property var filteredEntries: PickerModel.filtered(entries, filterText)
   property int selectedIndex: 0
   readonly property var selectedEntry: filteredEntries.length > 0
@@ -144,6 +146,8 @@ Item {
     currentSelection = ""
     statusText = ""
     clearThemeMetadata()
+    readyThumbnails = ({})
+    thumbnailRevision++
     entries = []
     cachedRowsApplied = false
     scanComplete = false
@@ -240,10 +244,14 @@ Item {
     if (fromCache && entries.length > 0) return
     if (!fromCache) scanComplete = true
     if (parsed.length === 0 && fromCache) return
-    entries = parsed
+    const entriesChanged = !PickerModel.entriesEqual(entries, parsed)
+    if (entriesChanged) {
+      entries = parsed
+      selectedIndex = selectedIndexForCurrent(parsed)
+    }
     cachedRowsApplied = fromCache
-    selectedIndex = selectedIndexForCurrent(parsed)
     loading = fromCache ? true : false
+    if (!entriesChanged) return
     Qt.callLater(function() {
       if (!root.opened || serial !== root.requestSerial) return
       root.warmVisible()
@@ -306,8 +314,15 @@ Item {
   }
 
   function thumbnailUrl(entry) {
-    if (!entry || !entry.thumbnailReady || !entry.thumbnailPath) return ""
+    if (!isThumbnailReady(entry) || !entry.thumbnailPath) return ""
     return Commons.Util.fileUrl(entry.thumbnailPath)
+  }
+
+  function isThumbnailReady(entry) {
+    if (!entry) return false
+    const thumbnailPath = String(entry.thumbnailPath || "")
+    return thumbnailRevision >= 0 && (entry.thumbnailReady === true
+      || (thumbnailPath !== "" && readyThumbnails[thumbnailPath] === true))
   }
 
   function sourcePaths(visibleOnly) {
@@ -319,7 +334,7 @@ Item {
           : [selectedIndex - distance, selectedIndex + distance]
         for (let j = 0; j < indexes.length; j++) {
           const entry = filteredEntries[indexes[j]]
-          if (!entry || !entry.sourcePath || entry.thumbnailReady
+          if (!entry || !entry.sourcePath || isThumbnailReady(entry)
               || seen[entry.sourcePath]) continue
           seen[entry.sourcePath] = true
           result.push(entry.sourcePath)
@@ -329,7 +344,7 @@ Item {
     }
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]
-      if (!entry || !entry.sourcePath || entry.thumbnailReady
+      if (!entry || !entry.sourcePath || isThumbnailReady(entry)
           || seen[entry.sourcePath]) continue
       seen[entry.sourcePath] = true
       result.push(entry.sourcePath)
@@ -355,7 +370,16 @@ Item {
 
   function noteThumbnailReady(path, serial) {
     if (!opened || serial !== requestSerial) return
-    entries = PickerModel.replaceThumbnailReady(entries, String(path || "").trim())
+    const thumbnailPath = String(path || "").trim()
+    if (thumbnailPath === "") return
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
+      if (!entry || String(entry.thumbnailPath || "") !== thumbnailPath) continue
+      if (isThumbnailReady(entry)) return
+      readyThumbnails[thumbnailPath] = true
+      thumbnailRevision++
+      return
+    }
   }
 
   function actionFailureDetail(text, exitCode) {

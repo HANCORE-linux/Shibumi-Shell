@@ -188,7 +188,9 @@ Item {
     const resolver = bar && "hostWidgetResolver" in bar
       ? bar.hostWidgetResolver : null
     const component = resolver && typeof resolver.ensureComponent === "function"
-      ? resolver.ensureComponent(moduleName) : null
+      ? resolver.ensureComponent(moduleName)
+      : bar && typeof bar.registeredWidgetComponent === "function"
+        ? bar.registeredWidgetComponent(moduleName) : null
     if (resolvedComponent !== component) resolvedComponent = component
     if (component || !moduleEnabled) {
       resolutionAttempts = 0

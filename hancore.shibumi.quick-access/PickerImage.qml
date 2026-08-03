@@ -60,7 +60,7 @@ Item {
 
     IconText {
       anchors.centerIn: parent
-      visible: !root.entry || !root.entry.thumbnailReady
+      visible: !root.controller.isThumbnailReady(root.entry)
       text: root.controller.videoMode ? "movie" : "image"
       color: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
         root.bar.foreground.b, 0.34)

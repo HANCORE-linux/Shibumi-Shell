@@ -1175,7 +1175,13 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
   grep -q 'audio widget smoke passed' <<<"$audio_smoke_output" \
     || fail "audio widget smoke did not reach its lifecycle marker"
 
-  cp widgets/NetworkWidget.qml "$smoke_root/widgets/"
+  # Exercise the packaged plugin payload. The predecessor widget tree is not
+  # part of release archives and may intentionally lag the extracted plugin.
+  cp hancore.shibumi.network/BarWidget.qml \
+    "$smoke_root/widgets/NetworkWidget.qml"
+  cp hancore.shibumi.network/HostTokens.qml \
+    hancore.shibumi.network/IconText.qml \
+    hancore.shibumi.network/PillSurface.qml "$smoke_root/widgets/"
   cp tests/fixtures/NetworkTestService.qml tests/fixtures/NetworkTestView.qml \
     "$smoke_root/fixtures/"
   cp tests/network-widget-smoke.qml "$smoke_root/shell.qml"
@@ -1304,11 +1310,16 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
   grep -q 'status widget smoke passed' <<<"$status_smoke_output" \
     || fail "status widget smoke did not reach its lifecycle marker"
 
-  mkdir -p "$smoke_root/menu" "$smoke_root/assets"
-  cp widgets/AiUsageWidget.qml widgets/AiUsagePanel.qml \
-    "$smoke_root/widgets/"
-  cp menu/TintedImage.qml "$smoke_root/menu/"
-  cp assets/codex.svg assets/opencode-mark.svg "$smoke_root/assets/"
+  mkdir -p "$smoke_root/widgets/assets"
+  cp hancore.shibumi.ai/BarWidget.qml \
+    "$smoke_root/widgets/AiUsageWidget.qml"
+  cp hancore.shibumi.ai/HostTokens.qml \
+    hancore.shibumi.ai/IconText.qml \
+    hancore.shibumi.ai/PillSurface.qml \
+    hancore.shibumi.ai/TintedImage.qml "$smoke_root/widgets/"
+  cp hancore.shibumi.ai/assets/codex.svg \
+    hancore.shibumi.ai/assets/opencode-mark.svg \
+    "$smoke_root/widgets/assets/"
   cp tests/fixtures/AiTestPanel.qml "$smoke_root/"
   cp tests/ai-usage-widget-smoke.qml "$smoke_root/shell.qml"
   set +e

@@ -1,7 +1,7 @@
 pkgbase = shibumi-shell
 	pkgdesc = Transactional Shibumi desktop shell plugins for Omarchy Quattro
-	pkgver = 0.1.1beta.1
-	pkgrel = 6
+	pkgver = 0.1.1beta.2
+	pkgrel = 1
 	url = https://github.com/HANCORE-linux/Shibumi-Shell
 	arch = any
 	license = MIT
@@ -27,7 +27,7 @@ pkgbase = shibumi-shell
 	optdepends = wiremix: audio panel mixer action
 	optdepends = nvidia-utils: NVIDIA GPU telemetry
 	optdepends = git: source-checkout diagnostics and migration
-	source = shibumi-shell-0.1.1-beta.1.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.1/shibumi-shell-0.1.1-beta.1.tar.gz
-	sha256sums = SKIP
+	source = shibumi-shell-0.1.1-beta.2.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.2/shibumi-shell-0.1.1-beta.2.tar.gz
+	sha256sums = a3ec499e88886a18e982c1a9fa71105f7fa7a2563e23af60e17745cc7ffa0b2b
 
 pkgname = shibumi-shell

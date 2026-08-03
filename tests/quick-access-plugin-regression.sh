@@ -178,8 +178,36 @@ rg -Fq '[scriptPath, "cleanup"]' "$service" \
   || fail "picker close does not reconcile interrupted scan artifacts"
 rg -q 'activeScreenName' "$service" \
   || fail "picker does not retain focused-output routing"
+rg -Fq 'PickerModel.entriesEqual(entries, parsed)' "$service" \
+  || fail "equivalent cache/live scans still replace the picker model"
+rg -Fq 'readyThumbnails[thumbnailPath] = true' "$service" \
+  || fail "thumbnail readiness is not tracked outside the picker model"
+rg -Fq 'thumbnailRevision++' "$service" \
+  || fail "thumbnail readiness does not refresh image bindings"
+if sed -n '/function noteThumbnailReady(/,/^[[:space:]]*}/p' "$service" \
+    | rg -q 'entries[[:space:]]*='; then
+  fail "thumbnail readiness still replaces the complete picker model"
+fi
+stage_line=$(rg -n 'id: stage' "$plugin/PickerOverlay.qml" | cut -d: -f1)
+dismiss_line=$(rg -n 'id: dismissArea' "$plugin/PickerOverlay.qml" | cut -d: -f1)
+view_line=$(rg -n 'id: viewLoader' "$plugin/PickerOverlay.qml" | cut -d: -f1)
+if [[ -z $stage_line || -z $dismiss_line || -z $view_line \
+    || $dismiss_line -le $stage_line || $dismiss_line -ge $view_line ]]; then
+  fail "picker dismiss target is not below the views in the active focus scope"
+fi
+rg -q 'WheelHandler \{' "$plugin/PickerOverlay.qml" \
+  || fail "picker modes do not share mouse-wheel navigation"
+rg -Fq 'root.controller.moveSelection(delta > 0 ? -1 : 1)' \
+  "$plugin/PickerOverlay.qml" \
+  || fail "picker wheel events do not move the current selection"
 rg -q 'ClippingRectangle \{' "$plugin/PickerImage.qml" \
   || fail "picker images lost the V1 anti-aliased rounded mask"
+rg -Fq 'root.controller.isThumbnailReady(root.entry)' \
+  "$plugin/PickerImage.qml" \
+  || fail "rounded picker images ignore incremental thumbnail readiness"
+rg -Fq 'root.controller.isThumbnailReady(card.modelData)' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone images ignore incremental thumbnail readiness"
 rg -q 'radius: Math\.max\(0, root\.imageRadius - anchors\.margins\)' \
   "$plugin/PickerImage.qml" \
   || fail "picker image mask is no longer concentric with the outer frame"

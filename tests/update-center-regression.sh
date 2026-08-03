@@ -55,6 +55,13 @@ rg -q 'panelSource: Qt\.resolvedUrl\("UpdateCenterPanel\.qml"\)' "$widget" \
   || fail 'update widget does not lazy-load its panel'
 rg -q 'anchorItem: button' "$widget" \
   || fail 'update panel is not anchored to its own bar button'
+rg -Fq 'open: ownerWidget.opened' "$panel" \
+  || fail 'update panel does not consume the inherited panel state'
+rg -Fq 'onOpenedChanged: syncPanelLoader()' "$widget" \
+  || fail 'update panel loader does not follow the inherited panel state'
+if rg -q 'popupOpen' "$widget" "$panel"; then
+  fail 'update center reintroduces a duplicate popup state'
+fi
 rg -q '^ShibumiPanel \{' "$panel" \
   || fail 'update panel does not use the Shibumi panel surface'
 rg -q 'property Component packagesComponent:' "$panel" \

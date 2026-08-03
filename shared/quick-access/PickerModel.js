@@ -56,13 +56,32 @@ function clampIndex(index, length) {
   return Math.max(0, Math.min(length - 1, Number(index) || 0))
 }
 
+function entriesEqual(left, right) {
+  var first = Array.isArray(left) ? left : []
+  var second = Array.isArray(right) ? right : []
+  if (first.length !== second.length) return false
+  for (var i = 0; i < first.length; i++) {
+    if (String(first[i].sourcePath || "") !== String(second[i].sourcePath || "")
+        || String(first[i].thumbnailPath || "")
+          !== String(second[i].thumbnailPath || "")
+        || String(first[i].label || "") !== String(second[i].label || "")
+        || String(first[i].directory || "") !== String(second[i].directory || "")
+        || (first[i].thumbnailReady === true)
+          !== (second[i].thumbnailReady === true)) return false
+  }
+  return true
+}
+
 function replaceThumbnailReady(entries, thumbnailPath) {
-  var result = Array.isArray(entries) ? entries.slice() : []
+  var source = Array.isArray(entries) ? entries : []
+  var result = source
   var wanted = String(thumbnailPath || "")
   if (!wanted) return result
-  for (var i = 0; i < result.length; i++) {
-    if (String(result[i].thumbnailPath || "") !== wanted) continue
-    var old = result[i]
+  for (var i = 0; i < source.length; i++) {
+    if (String(source[i].thumbnailPath || "") !== wanted
+        || source[i].thumbnailReady === true) continue
+    if (result === source) result = source.slice()
+    var old = source[i]
     result[i] = {
       sourcePath: old.sourcePath,
       thumbnailPath: old.thumbnailPath,

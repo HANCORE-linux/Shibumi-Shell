@@ -12,9 +12,12 @@ fail() {
 
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 command -v realpath >/dev/null 2>&1 || fail "realpath is required"
+command -v git >/dev/null 2>&1 || fail "git is required"
 
 jq -e '
   .schemaVersion == 1
+  and (.referenceRepository | type == "string" and length > 0)
+  and (.referenceRevision | type == "string" and test("^[0-9a-f]{40}$"))
   and (.standaloneOnly | type == "array")
   and (.differences | type == "array" and length > 0)
   and all(.standaloneOnly[], .differences[];
@@ -29,6 +32,18 @@ embedded_root=$(realpath -e \
 standalone_root=$(realpath -e \
   "$repo_root/$(jq -r '.standaloneRoot' "$contract")") \
   || fail "standalone V2 root is missing"
+
+reference_root=$(git -C "$embedded_root" rev-parse --show-toplevel 2>/dev/null) \
+  || fail "embedded V2 root is not in the declared Git reference"
+standalone_reference_root=$(git -C "$standalone_root" \
+  rev-parse --show-toplevel 2>/dev/null) \
+  || fail "standalone V2 root is not in the declared Git reference"
+[[ $reference_root == "$standalone_reference_root" ]] \
+  || fail "embedded and standalone V2 roots use different Git references"
+reference_revision=$(git -C "$reference_root" rev-parse HEAD)
+declared_reference_revision=$(jq -r '.referenceRevision' "$contract")
+[[ $reference_revision == "$declared_reference_revision" ]] \
+  || fail "reference revision changed: expected $declared_reference_revision, got $reference_revision"
 
 embedded_files=$(mktemp)
 standalone_files=$(mktemp)
