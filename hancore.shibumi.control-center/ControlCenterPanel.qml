@@ -199,6 +199,12 @@ ShibumiPanel {
     ? String(switchService.detail || "") : ""
   readonly property bool switchBusy: switchService
     ? switchService.busy === true : false
+  readonly property real returnOnlyQuickPanelHeight:
+    Commons.Style.space(28) + Commons.Style.spacing.sm * 2
+      + Commons.Style.space(1) + Commons.Style.space(130)
+      + Commons.Style.space(12)
+      + (switchPhase === "error"
+        ? Commons.Style.space(10) + Commons.Style.space(42) : 0)
   readonly property bool settingsReady: settings.ready
   readonly property bool settingsFitsWidth: settings.fitsWidth
   readonly property bool settingsPageReady: settings.pageReady
@@ -220,8 +226,8 @@ ShibumiPanel {
     Commons.Style.space(900))
   contentHeight: settings.currentPage === "quick"
     ? settings.returnOnly
-      ? fittedContentHeight(Commons.Style.space(
-          switchPhase === "error" ? 250 : 205), Commons.Style.space(260))
+      ? fittedContentHeight(returnOnlyQuickPanelHeight,
+          Commons.Style.space(260))
       : fittedContentHeight(Commons.Style.space(
           switchPhase === "error" ? 488 : 436), Commons.Style.space(495))
     : settings.compactConfigureLanding

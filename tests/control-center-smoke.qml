@@ -158,7 +158,10 @@ ShellRoot {
             || root.clickTargets.length !== 1)
           return root.fail("closed G1 lifecycle or identity")
 
-        widget.open()
+        if (typeof widget.triggerPress !== "function"
+            || widget.triggerPress(Qt.RightButton) || widget.opened
+            || !widget.triggerPress(Qt.LeftButton) || !widget.opened)
+          return root.fail("G1 host click forwarding contract")
         root.phase++
         root.ticks = 0
         return

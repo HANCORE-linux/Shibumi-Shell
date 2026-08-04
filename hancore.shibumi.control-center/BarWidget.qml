@@ -168,6 +168,13 @@ Ui.Panel {
     controller.hide()
   }
 
+  function triggerPress(mouseButton) {
+    if (mouseButton !== Qt.LeftButton) return false
+    if (bar) bar.hideTooltip(root)
+    root.toggle()
+    return true
+  }
+
   function syncClickRegistration() {
     if (registeredBar && typeof registeredBar.unregisterClickTarget === "function")
       registeredBar.unregisterClickTarget(root)
@@ -414,9 +421,6 @@ Ui.Panel {
     cursorShape: Qt.PointingHandCursor
     onEntered: if (root.bar) root.bar.showTooltip(root, "Shibumi settings")
     onExited: if (root.bar) root.bar.hideTooltip(root)
-    onClicked: {
-      if (root.bar) root.bar.hideTooltip(root)
-      root.toggle()
-    }
+    onClicked: function(mouse) { root.triggerPress(mouse.button) }
   }
 }

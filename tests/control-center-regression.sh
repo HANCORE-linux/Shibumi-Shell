@@ -86,6 +86,11 @@ rg -Fq 'text: "SHIBUMI"' "$control_dir/BarWidget.qml" \
   || fail "G1 does not render the Shibumi wordmark"
 rg -Fq 'HostIdentity.isStockOmarchyHost(bar)' "$control_dir/BarWidget.qml" \
   || fail "G1 does not resolve the active host through Quattro shell state"
+rg -Fq 'function triggerPress(mouseButton)' "$control_dir/BarWidget.qml" \
+  || fail "G1 does not expose the Omarchy bar click-forwarding contract"
+rg -Fq 'onClicked: function(mouse) { root.triggerPress(mouse.button) }' \
+  "$control_dir/BarWidget.qml" \
+  || fail "G1 bypasses its shared host click path"
 [[ -f $control_dir/assets/shibumi-icon-hikiryo.svg ]] \
   || fail "stock Omarchy host icon is missing"
 rg -Fq 'source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
@@ -100,6 +105,12 @@ if rg -A8 -F 'source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
 fi
 rg -Fq 'HostIdentity.shellName(bar)' "$control_dir/ControlCenterPanel.qml" \
   || fail "Bars page does not resolve the active host through Quattro shell state"
+rg -Fq 'readonly property real returnOnlyQuickPanelHeight:' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "Omarchy return panel does not derive its compact content height"
+rg -Fq '? fittedContentHeight(returnOnlyQuickPanelHeight,' \
+  "$control_dir/ControlCenterPanel.qml" \
+  || fail "Omarchy return panel still reserves a full Control Center viewport"
 rg -Fq 'text: "shibumi"' "$repo_root/hancore.shibumi.state/ShibumiConfig.js" \
   || fail "G1 does not default to the Shibumi identity"
 
@@ -711,7 +722,7 @@ for quick_contract in \
   'ControlSettings.qml:radius: Math.max(0, root.controller.controlRadius - 2)' \
   'ControlSettings.qml:id: activePage' \
   'ControlSettings.qml:width: parent.width' \
-  'ControlCenterPanel.qml:switchPhase === "error" ? 250 : 205' \
+  'ControlSettings.qml:const acceptedPages = Array.isArray(validPageIds)' \
   'ControlCenterPanel.qml:switchPhase === "error" ? 488 : 436' \
   'ControlCenterPanel.qml:Commons.Style.space(495))'; do
   file=${quick_contract%%:*}

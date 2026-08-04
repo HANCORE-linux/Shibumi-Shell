@@ -245,7 +245,9 @@ Item {
     const next = requested === "preferences" ? "health"
       : requested === "splits" ? "bars" : requested
     if (returnOnly && next !== "quick") return false
-    if (validPageIds.indexOf(next) < 0)
+    const acceptedPages = Array.isArray(validPageIds)
+      ? validPageIds : ["quick"]
+    if (acceptedPages.indexOf(next) < 0)
       return false
     if (controller && typeof controller.trackSettingsPage === "function")
       controller.trackSettingsPage(next)
