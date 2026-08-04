@@ -237,6 +237,9 @@ ShellRoot {
             || status.updateWidget.settings.marker !== "hancore.shibumi.update-center"
             || status.trayWidget.settings.marker !== "omarchy.tray")
           return root.fail("child identity/settings injection")
+        if (String(status.updateWidget.contentColor).toLowerCase()
+            !== "#88bbee")
+          return root.fail("initial embedded updater color")
         if (status.childPanelWidget("hancore.shibumi.update-center")
               !== status.updateWidget
             || status.childPanelWidget("omarchy.notifications") !== status
@@ -294,10 +297,14 @@ ShellRoot {
         fakeBar.layoutConfig = ({
           left: [], center: [], right: [], revision: 1
         })
+        fakeBar.urgent = "#cc8844"
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 1) {
         if (!status.trayDrawerLoaded || root.phaseTicks < 3) return
+        if (String(status.updateWidget.contentColor).toLowerCase()
+            !== "#cc8844")
+          return root.fail("embedded updater color did not follow live theme")
         if (status.trayWidget.settings.layoutRevision !== 1)
           return root.fail("tray settings did not react to host layout changes")
         const drawer = status.trayDrawerItem

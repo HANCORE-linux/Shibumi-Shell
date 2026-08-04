@@ -5,7 +5,7 @@
   "version": "0.1.1-beta.3",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Demand-driven root storage widget and drive inventory.",
+  "description": "Read-only root usage and physical drive inventory.",
   "kinds": ["bar-widget", "service"],
   "keepLoaded": true,
   "entryPoints": {
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "Shibumi Storage",
-    "description": "Filesystem usage and mounted drive inventory",
+    "description": "Filesystem usage and read-only removable media inventory",
     "category": "System",
     "defaultSection": "right",
     "allowMultiple": false

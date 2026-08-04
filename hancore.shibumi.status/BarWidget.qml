@@ -134,6 +134,11 @@ Item {
     if ("contentColor" in item) item.contentColor = root.widgetInk
   }
 
+  function syncUpdateInk() {
+    if (updateWidget && "contentColor" in updateWidget)
+      updateWidget.contentColor = root.widgetInk
+  }
+
   function injectChildren() {
     injectUpdateChild(updateWidget)
     injectChild(trayWidget, "omarchy.tray")
@@ -384,6 +389,8 @@ Item {
     ignoreUnknownSignals: true
     function onLayoutConfigChanged() { root.injectChildren() }
   }
+
+  onWidgetInkChanged: syncUpdateInk()
 
   Component.onCompleted: {
     scheduleChildSync()

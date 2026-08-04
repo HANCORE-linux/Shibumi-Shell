@@ -17,6 +17,9 @@ Ui.Panel {
     ? hostShell.serviceFor("hancore.shibumi.storage") : null
   readonly property var storage: storageService
     ? storageService.storage : null
+  readonly property var stateService: hostShell
+    && typeof hostShell.serviceFor === "function"
+    ? hostShell.serviceFor("hancore.shibumi.state") : null
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -26,6 +29,16 @@ Ui.Panel {
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property string configuredSource: String(setting("source", "root"))
+  readonly property var selectedDrive: driveForSource(configuredSource)
+  readonly property string selectedSource:
+    configuredSource === "root" || selectedDrive ? configuredSource : "root"
+  readonly property int selectedPercent: selectedSource === "root"
+    ? (storage ? storage.percent : 0)
+    : selectedDrive ? selectedDrive.percent : 0
+  readonly property string selectedLabel: selectedSource === "root"
+    ? "Root filesystem"
+    : selectedDrive ? String(selectedDrive.model || selectedDrive.name) : "Storage"
   property var acquiredStorage: null
 
   implicitWidth: bar && bar.vertical ? bar.barSize : surface.implicitWidth
@@ -38,6 +51,30 @@ Ui.Panel {
     if (acquiredStorage) acquiredStorage.release()
     acquiredStorage = storage
     if (acquiredStorage) acquiredStorage.acquire()
+  }
+
+  function driveForSource(source) {
+    const target = String(source || "")
+    const rows = storage && Array.isArray(storage.drives)
+      ? storage.drives : []
+    for (let index = 0; index < rows.length; index++) {
+      if (String(rows[index].path || "") === target
+          && Number(rows[index].percent) >= 0) return rows[index]
+    }
+    return null
+  }
+
+  function storageSourceAvailable(source) {
+    const target = String(source || "")
+    return target === "root" ? !!(storage && storage.available)
+      : driveForSource(target) !== null
+  }
+
+  function setStorageSource(source) {
+    const target = String(source || "")
+    if (!storageSourceAvailable(target)) return false
+    return stateService && typeof stateService.setGroupSetting === "function"
+      ? stateService.setGroupSetting("G18", "source", target) : false
   }
 
   function syncPanelLoader() {
@@ -96,8 +133,7 @@ Ui.Panel {
       Text {
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
-        text: String(Math.min(100,
-          root.storage ? root.storage.percent : 0)).padStart(2, "0") + "%"
+        text: String(Math.min(100, root.selectedPercent)).padStart(2, "0") + "%"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
@@ -111,8 +147,7 @@ Ui.Panel {
       cursorShape: Qt.PointingHandCursor
       onEntered: if (root.bar && root.storage)
         root.bar.showTooltip(surface,
-          root.storage.usedGiB.toFixed(1) + " / "
-          + root.storage.totalGiB.toFixed(1) + " GiB")
+          root.selectedLabel + " · " + root.selectedPercent + "%")
       onExited: if (root.bar) root.bar.hideTooltip(surface)
       onClicked: root.toggle()
     }

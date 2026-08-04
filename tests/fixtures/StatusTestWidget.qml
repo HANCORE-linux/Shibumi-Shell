@@ -9,6 +9,7 @@ Item {
   property var bar: null
   property string moduleName: ""
   property var settings: ({})
+  property color contentColor: "transparent"
   property bool updateAvailable: true
   property bool popupOpen: false
   property bool managePopupOpen: false

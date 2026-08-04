@@ -27,7 +27,7 @@
     {"id":"temperature.source-selection","implementation":["hancore.shibumi.telemetry/ThermalTelemetry.qml"],"tests":["tests/telemetry-plugins-smoke.qml","tests/telemetry-plugins-regression.sh"]},
     {"id":"thermals.panel","implementation":["hancore.shibumi.temperature/TemperaturePanel.qml"],"tests":["tests/telemetry-plugins-smoke.qml","tests/telemetry-plugins-regression.sh"]},
     {"id":"gpu.widget-panel","implementation":["hancore.shibumi.gpu/BarWidget.qml","hancore.shibumi.gpu/GpuPanel.qml"],"tests":["tests/telemetry-plugins-smoke.qml","tests/telemetry-plugins-regression.sh"]},
-    {"id":"storage.widget-panel","implementation":["hancore.shibumi.storage/BarWidget.qml","hancore.shibumi.storage/StoragePanel.qml"],"tests":["tests/telemetry-plugins-smoke.qml","tests/telemetry-plugins-regression.sh"]},
+    {"id":"storage.widget-panel","implementation":["hancore.shibumi.storage/BarWidget.qml","hancore.shibumi.storage/StoragePanel.qml","hancore.shibumi.storage/StorageTelemetry.qml"],"tests":["tests/storage-plugin-smoke.qml","tests/storage-plugin-regression.sh"]},
     {"id":"media.full-muse","implementation":["hancore.shibumi.media/BarWidget.qml","hancore.shibumi.media/Service.qml"],"tests":["tests/media-plugin-smoke.qml","tests/media-widget-smoke.qml"]},
     {"id":"media.artwork","implementation":["hancore.shibumi.media/MediaPanel.qml"],"tests":["tests/media-plugin-smoke.qml","tests/media-widget-smoke.qml"]},
     {"id":"tray.drawer","implementation":["hancore.shibumi.status/TrayDrawerPanel.qml"],"tests":["tests/status-plugin-smoke.qml","tests/status-plugin-regression.sh"]},

@@ -12,11 +12,20 @@ Item {
   property real contentWidth: 0
   property real contentHeight: 0
   readonly property color controlFillColor: "transparent"
+  readonly property color controlAccent: "#d75f5f"
+  readonly property color controlMutedHigh: "#a0a0a0"
   readonly property color controlBorderColor: "transparent"
   readonly property color controlHoverBorderColor: "transparent"
+  readonly property color controlHoverFillColor: "#202020"
+  readonly property color controlActiveFillColor: "#282828"
   readonly property real controlBorderWidth: 0
   readonly property real controlRadius: 6
-  readonly property var shibumiTokens: ({ separator: "#404040" })
+  readonly property var shibumiTokens: ({
+    separator: "#404040",
+    fillIdle: "#202020",
+    fillHover: "#282828",
+    fillActive: "#303030"
+  })
 
   width: contentWidth
   height: contentHeight
