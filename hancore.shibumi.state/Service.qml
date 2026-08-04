@@ -422,7 +422,8 @@ Item {
   }
 
   function setPickerStyle(value) {
-    const style = String(value || "")
+    const candidate = String(value || "")
+    const style = candidate === "default" ? "carousel" : candidate
     if (["tanzaku", "hearthstone", "carousel"].indexOf(style) < 0) return false
     return commit(function(next) {
       next.picker = {
@@ -434,7 +435,8 @@ Item {
   }
 
   function setImagePickerStyle(value) {
-    const style = String(value || "")
+    const candidate = String(value || "")
+    const style = candidate === "default" ? "omarchy" : candidate
     if (["omarchy", "tanzaku", "hearthstone"].indexOf(style) < 0)
       return false
     return commit(function(next) {
@@ -448,7 +450,8 @@ Item {
   }
 
   function setMediaPickerStyle(value) {
-    const style = String(value || "")
+    const candidate = String(value || "")
+    const style = candidate === "default" ? "carousel" : candidate
     if (["tanzaku", "hearthstone", "carousel"].indexOf(style) < 0) return false
     return commit(function(next) {
       const picker = ShibumiConfig.normalize(next).picker

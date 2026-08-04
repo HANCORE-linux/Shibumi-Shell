@@ -1,18 +1,16 @@
 import QtQuick
+import QtTest
 import "../core/ShibumiConfig.js" as Config
 import "../core/V2LayoutModel.js" as V2Layout
 
-QtObject {
-  function fail(message) {
-    console.error("shibumi-config-regression:", message)
-    Qt.exit(1)
-  }
+TestCase {
+  name: "ShibumiConfig"
 
   function same(a, b) {
     return JSON.stringify(a) === JSON.stringify(b)
   }
 
-  Component.onCompleted: {
+  function test_configContract() {
     const defaults = Config.defaultConfig()
     if (defaults.version !== 1 || defaults.identityVersion !== 3)
       fail("unexpected schema or identity version")
@@ -49,9 +47,9 @@ QtObject {
     if (defaults.workspace.version !== 1 || defaults.workspace.mode !== "10"
         || defaults.workspace.style !== "default")
       fail("invalid default workspace state")
-    if (defaults.picker.style !== "tanzaku"
+    if (defaults.picker.style !== "carousel"
         || defaults.picker.imageStyle !== "omarchy"
-        || defaults.picker.mediaStyle !== "tanzaku")
+        || defaults.picker.mediaStyle !== "carousel")
       fail("invalid default picker state")
     if (defaults.reactor.mode !== 0)
       fail("reactor must default to zero-work mode 0")
@@ -296,6 +294,22 @@ QtObject {
         || carousel.picker.mediaStyle !== "carousel")
       fail("legacy carousel state was not split by media type")
 
+    const defaultPicker = Config.normalize({
+      version: 1,
+      picker: { style: "default" }
+    })
+    if (!same(defaultPicker.picker, defaults.picker))
+      fail("legacy default picker state did not select media carousel")
+
+    const defaultMedia = Config.normalize({
+      version: 1,
+      picker: { imageStyle: "tanzaku", mediaStyle: "default" }
+    })
+    if (defaultMedia.picker.style !== "carousel"
+        || defaultMedia.picker.imageStyle !== "tanzaku"
+        || defaultMedia.picker.mediaStyle !== "carousel")
+      fail("explicit media default did not select carousel")
+
     const legacyPicker = Config.normalize({
       version: 1,
       picker: { style: "hearthstone" }
@@ -388,7 +402,5 @@ QtObject {
     if (boundedWidgets.widgets.G5 !== undefined)
       fail("unsafe widget object key must fail closed")
 
-    console.log("shibumi config regression passed")
-    Qt.exit(0)
   }
 }

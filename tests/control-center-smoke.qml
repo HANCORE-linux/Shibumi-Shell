@@ -859,6 +859,8 @@ ShellRoot {
             || !panel.showSettingsPage("quick"))
           return root.fail("Quick Bars tile did not open its existing editor")
         if (!quick.activateAction("pickers") || panel.settingsPage !== "pickers"
+            || !panel.settingsPageItem || !panel.settingsPageItem.ready
+            || panel.settingsPageItem.previewCardCount !== 6
             || !panel.showSettingsPage("quick"))
           return root.fail("Quick Pickers tile did not open its existing page")
         if (!quick.activateAction("reboot") || quick.pendingAction !== "reboot"

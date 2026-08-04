@@ -118,6 +118,25 @@ rg -q 'CarouselPickerView' "$plugin/PickerOverlay.qml" \
   || fail "V2 carousel picker is not reachable from the overlay"
 rg -q '"carousel"' "$plugin/Service.qml" \
   || fail "V2 carousel picker is not reachable from the service"
+for carousel_contract in \
+  'readonly property real sliceHeight: previewHeight * 0.90' \
+  'readonly property real sliceGap: -sliceWidth * 0.28' \
+  'readonly property real skewOffset: Commons.Style.space(20)' \
+  'function itemHeight(relative)' \
+  'CarouselPickerImage {'; do
+  rg -Fq "$carousel_contract" "$plugin/CarouselPickerView.qml" \
+    || fail "Carousel lost its distinct stepped-card geometry: $carousel_contract"
+done
+for skew_contract in \
+  'import QtQuick.Effects' \
+  'import QtQuick.Shapes' \
+  'readonly property real topLeft:' \
+  'readonly property real bottomRight:' \
+  'maskSource: maskShape' \
+  'PathLine { x: root.bottomRight; y: root.height }'; do
+  rg -Fq "$skew_contract" "$plugin/CarouselPickerImage.qml" \
+    || fail "Carousel lost its skewed mask geometry: $skew_contract"
+done
 rg -q 'centerY: height / 2 - Commons\.Style\.space\(10\)' \
   "$plugin/TanzakuPickerView.qml" \
   || fail "Tanzaku stage no longer matches the V1 vertical center"
@@ -208,6 +227,33 @@ rg -Fq 'root.controller.isThumbnailReady(root.entry)' \
 rg -Fq 'root.controller.isThumbnailReady(card.modelData)' \
   "$plugin/HearthstonePickerView.qml" \
   || fail "Hearthstone images ignore incremental thumbnail readiness"
+rg -Fq 'source: root.sourceActive ? root.controller.thumbnailUrl(root.entry) : ""' \
+  "$plugin/PickerImage.qml" \
+  || fail "rounded picker images are not bounded to the active source window"
+rg -Fq 'source: card.imageSourceActive' \
+  "$plugin/HearthstonePickerView.qml" \
+  || fail "Hearthstone images are not bounded to the active source window"
+for picker_view in TanzakuPickerView.qml HearthstonePickerView.qml \
+    CarouselPickerView.qml; do
+  rg -Fq 'readonly property int activeImageSourceCount:' "$plugin/$picker_view" \
+    || fail "picker view does not expose the real active source count: $picker_view"
+done
+rg -Fq 'readonly property int imagePreloadRadius: imageVisibleRadius + 1' \
+  "$service" || fail "picker image preloading is not bounded to one extra entry"
+rg -Fq 'Math.abs(candidate - selectedIndex) <= imagePreloadRadius' "$service" \
+  || fail "picker image sources are not tied to the current bounded window"
+if rg -q 'visitedImageSources|markImageWindowVisited|resetVisitedImages' \
+    "$service"; then
+  fail "picker image sources can grow beyond the current bounded window"
+fi
+rg -Fq 'function finishCacheLoad(text, serial)' "$service" \
+  || fail "picker cache load does not own deferred refresh scheduling"
+rg -Fq 'id: scanDelay' "$service" \
+  || fail "picker live scan is not delayed after a warm cache hit"
+rg -Fq 'scanDelay.stop()' "$service" \
+  || fail "picker close does not cancel the deferred live scan"
+rg -Fq '["nice", "-n", "10", scriptPath,' "$service" \
+  || fail "picker refresh scan does not yield priority to the first render"
 rg -q 'radius: Math\.max\(0, root\.imageRadius - anchors\.margins\)' \
   "$plugin/PickerImage.qml" \
   || fail "picker image mask is no longer concentric with the outer frame"

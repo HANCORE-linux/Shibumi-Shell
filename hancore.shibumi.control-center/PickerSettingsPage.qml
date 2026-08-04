@@ -13,6 +13,8 @@ Column {
   property bool motionActive: false
   readonly property bool ready: imagePickerRepeater.count === 3
     && mediaPickerRepeater.count === 3
+  readonly property int previewCardCount:
+    imagePickerRepeater.count + mediaPickerRepeater.count
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
@@ -70,7 +72,7 @@ Column {
     Repeater {
       id: mediaPickerRepeater
       model: [
-        { value: "carousel", label: "Carousel" },
+        { value: "carousel", label: "Carousel · Default" },
         { value: "tanzaku", label: "Tanzaku" },
         { value: "hearthstone", label: "Hearthstone" }
       ]

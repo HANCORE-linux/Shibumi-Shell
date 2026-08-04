@@ -1,13 +1,11 @@
 import QtQuick
+import QtTest
 import "../services/PickerModel.js" as PickerModel
 
-QtObject {
-  function fail(message) {
-    console.error("picker-model-regression:", message)
-    Qt.exit(1)
-  }
+TestCase {
+  name: "PickerModel"
 
-  Component.onCompleted: {
+  function test_modelContract() {
     const rows = [
       "/a.png\t/cache/a.jpg\tAlpha\t/themes/a\t1",
       "/b.png\t/cache/b.jpg\tBeta\t/themes/b\t0",
@@ -45,7 +43,5 @@ QtObject {
     if (PickerModel.replaceThumbnailReady(ready, "/cache/b.jpg") !== ready
         || PickerModel.replaceThumbnailReady(ready, "/cache/missing.jpg") !== ready)
       return fail("no-op thumbnail update changed array identity")
-    console.log("picker model regression passed")
-    Qt.exit(0)
   }
 }

@@ -124,6 +124,8 @@ mappings=(
 )
 
 executable_mappings=(
+  "shared/telemetry/shibumi-gpu-probe:scripts/shibumi-gpu-probe"
+  "shared/telemetry/shibumi-gpu-probe:hancore.shibumi.cpu/scripts/shibumi-gpu-probe"
   "shared/quick-access/shibumi-picker:scripts/shibumi-picker"
   "shared/quick-access/shibumi-picker:hancore.shibumi.quick-access/scripts/shibumi-picker"
 )

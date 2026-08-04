@@ -74,10 +74,10 @@ ShibumiPanel {
     ? String(bar.position || "top") : "top"
   readonly property string imagePickerStyle: stateConfig.picker
     ? String(stateConfig.picker.imageStyle || stateConfig.picker.style
-      || "tanzaku") : "tanzaku"
+      || "omarchy") : "omarchy"
   readonly property string mediaPickerStyle: stateConfig.picker
     ? String(stateConfig.picker.mediaStyle || stateConfig.picker.style
-      || "tanzaku") : "tanzaku"
+      || "carousel") : "carousel"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
   readonly property var pluginRegistry: bar && "pluginRegistry" in bar

@@ -25,9 +25,9 @@ ShellRoot {
     property int revision: 0
     property var config: ({
       picker: {
-        style: "tanzaku",
+        style: "default",
         imageStyle: "tanzaku",
-        mediaStyle: "tanzaku"
+        mediaStyle: "default"
       }
     })
     function setPickerStyle(value) {
@@ -94,6 +94,38 @@ ShellRoot {
     function selectIndex(index) { selectedIndex = Number(index); return true }
   }
 
+  QtObject {
+    id: imageWindowController
+    property bool opened: true
+    property int requestSerial: 1
+    property int imageSourceRevision: 1
+    property int thumbnailRevision: 1
+    property string mode: "screenshots"
+    property string currentSelection: ""
+    property int selectedIndex: 50
+    property bool videoMode: false
+    property var filteredEntries: {
+      const rows = []
+      for (let i = 0; i < 100; i++)
+        rows.push({ label: "entry-" + i, sourcePath: "/tmp/source-" + i,
+          thumbnailPath: "/tmp/thumb-" + i, thumbnailReady: true })
+      return rows
+    }
+    readonly property var selectedEntry: filteredEntries[selectedIndex]
+    property string title: "Screenshots"
+    property string emptyText: "No screenshots found"
+    function thumbnailUrl(_entry) {
+      return "data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22"
+        + "%20width=%221%22%20height=%221%22/%3E"
+    }
+    function isThumbnailReady(_entry) { return true }
+    function shouldLoadImage(_entry, index) {
+      return Math.abs(Number(index) - selectedIndex) <= 6
+    }
+    function activateSelected() { return true }
+    function selectIndex(index) { selectedIndex = Number(index); return true }
+  }
+
   Item {
     id: fakeBar
     visible: false
@@ -148,6 +180,33 @@ ShellRoot {
     height: 1080
     bar: fakeBar
     controller: fakePickerController
+  }
+
+  QuickAccess.TanzakuPickerView {
+    id: imageWindowTanzaku
+    visible: false
+    width: 1920
+    height: 1080
+    bar: fakeBar
+    controller: imageWindowController
+  }
+
+  QuickAccess.HearthstonePickerView {
+    id: imageWindowHearthstone
+    visible: false
+    width: 1920
+    height: 1080
+    bar: fakeBar
+    controller: imageWindowController
+  }
+
+  QuickAccess.CarouselPickerView {
+    id: imageWindowCarousel
+    visible: false
+    width: 1920
+    height: 1080
+    bar: fakeBar
+    controller: imageWindowController
   }
 
   QuickAccess.Service {
@@ -231,6 +290,19 @@ ShellRoot {
             || hearthstoneProbe.spreadDegrees !== 6
             || hearthstoneProbe.dealProgress < 0.99)
           return root.fail("Hearthstone V1 presentation contract")
+        if (imageWindowTanzaku.activeImageSourceCount !== 13
+            || imageWindowHearthstone.activeImageSourceCount !== 13
+            || imageWindowCarousel.activeImageSourceCount !== 13)
+          return root.fail("picker image sources exceeded the preload window")
+        if (imageWindowCarousel.itemWidth(0)
+              !== imageWindowCarousel.previewWidth
+            || imageWindowCarousel.itemWidth(1)
+              !== imageWindowCarousel.sliceWidth
+            || imageWindowCarousel.itemHeight(1)
+              >= imageWindowCarousel.itemHeight(0)
+            || imageWindowCarousel.sliceGap >= 0
+            || imageWindowCarousel.skewOffset <= 0)
+          return root.fail("Carousel did not retain its skewed-slice geometry")
         if (!first.toggleIdleInhibitor() || !first.idleInhibited
             || !second.idleInhibited)
           return root.fail("shared idle-inhibitor state")
@@ -244,35 +316,79 @@ ShellRoot {
             || fakeBar.activePopout !== first)
           return root.fail("first-screen picker routing")
         const rows = []
-        for (let i = 0; i < 70; i++)
+        for (let i = 0; i < 100; i++)
           rows.push("/tmp/source-" + i + ".png\t/tmp/thumb-" + i
             + ".jpg\tentry-" + i + "\t/tmp\t0")
-        quickAccessService.applyRows(
-          rows.join("\n"), false, quickAccessService.requestSerial)
+        quickAccessService.currentSelection = "/tmp/source-50.png"
+        quickAccessService.loading = true
+        quickAccessService.scanComplete = false
+        quickAccessService.finishCacheLoad(
+          rows.join("\n"), quickAccessService.requestSerial)
         const stableEntries = quickAccessService.entries
         const initialRevision = quickAccessService.thumbnailRevision
-        for (let i = 0; i < 70; i++)
+        for (let i = 0; i < 100; i++)
           quickAccessService.noteThumbnailReady(
             "/tmp/thumb-" + i + ".jpg", quickAccessService.requestSerial)
-        if (quickAccessService.entries !== stableEntries
-            || quickAccessService.thumbnailRevision !== initialRevision + 70
-            || !quickAccessService.isThumbnailReady(stableEntries[69]))
+        if (!quickAccessService.refreshScanPending || quickAccessService.loading
+            || quickAccessService.scanComplete
+            || quickAccessService.entries !== stableEntries
+            || quickAccessService.thumbnailRevision !== initialRevision + 100
+            || !quickAccessService.isThumbnailReady(stableEntries[99]))
           return root.fail("thumbnail warmup replaced the picker model")
+        let activeSources = 0
+        for (let i = 0; i < stableEntries.length; i++)
+          if (quickAccessService.shouldLoadImage(stableEntries[i], i)) activeSources++
+        if (quickAccessService.selectedIndex !== 50 || activeSources !== 13
+            || quickAccessService.shouldLoadImage(stableEntries[43], 43))
+          return root.fail("initial picker image window is not bounded")
+        quickAccessService.selectIndex(57)
+        let maxActiveSources = 0
+        const longNavigationIndexes = [0, 25, 50, 75, 99]
+        for (let navigation = 0; navigation < longNavigationIndexes.length;
+            navigation++) {
+          quickAccessService.selectIndex(longNavigationIndexes[navigation])
+          let navigationActiveSources = 0
+          for (let entryIndex = 0; entryIndex < stableEntries.length;
+              entryIndex++) {
+            if (quickAccessService.shouldLoadImage(
+                stableEntries[entryIndex], entryIndex)) navigationActiveSources++
+          }
+          maxActiveSources = Math.max(maxActiveSources, navigationActiveSources)
+        }
+        if (maxActiveSources !== 13
+            || quickAccessService.shouldLoadImage(stableEntries[50], 50)
+            || !quickAccessService.shouldLoadImage(stableEntries[99], 99))
+          return root.fail("picker image window grew during long navigation")
         quickAccessService.cycleStyle(1)
         second.openMode("videos")
+        if (quickAccessService.pickerStyle !== "carousel"
+            || quickAccessService.normalizeMediaStyle("default") !== "carousel"
+            || quickAccessService.normalizeMediaStyle("unknown") !== "carousel")
+          return root.fail("media default did not route to Carousel")
         quickAccessService.cycleStyle(1)
         root.phase++
         root.ticks = 0
       } else if (root.phase === 3) {
-        if (quickAccessService.pickerStyle !== "hearthstone"
+        if (quickAccessService.pickerStyle !== "tanzaku"
             || quickAccessService.imagePickerStyle !== "hearthstone"
-            || quickAccessService.mediaPickerStyle !== "hearthstone"
+            || quickAccessService.mediaPickerStyle !== "tanzaku"
             || fakeState.revision !== 2 || first.opened || !second.opened
             || quickAccessService.activeScreenName !== secondScreen.name
             || quickAccessService.mode !== "videos"
             || fakeBar.activePopout !== second)
           return root.fail("style persistence or second-screen routing")
         second.close()
+        quickAccessService.openMode("theme", firstScreen)
+        const imageSerial = quickAccessService.requestSerial
+        if (!quickAccessService.cycleStyle(1)
+            || quickAccessService.imagePickerStyle !== "omarchy"
+            || !quickAccessService.usingOfficialPicker
+            || !quickAccessService.opened
+            || quickAccessService.mode !== "theme"
+            || quickAccessService.activeScreenName !== firstScreen.name
+            || quickAccessService.requestSerial !== imageSerial + 2)
+          return root.fail("live switch to official image picker")
+        quickAccessService.close()
         root.phase++
         root.ticks = 0
       } else if (root.phase === 4) {

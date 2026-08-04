@@ -18,6 +18,14 @@ Item {
   readonly property int maxVisible: 5
   property bool navigationAnimationsEnabled: false
   property int layoutGeneration: 0
+  readonly property int activeImageSourceCount: {
+    let count = 0
+    for (let i = 0; i < tanzakuRepeater.count; i++) {
+      const item = tanzakuRepeater.itemAt(i)
+      if (item && String(item.loadedThumbnailSource || "") !== "") count++
+    }
+    return count
+  }
 
   function settleInitialLayout() {
     navigationAnimationsEnabled = false
@@ -55,6 +63,7 @@ Item {
   }
 
   Repeater {
+    id: tanzakuRepeater
     model: root.controller.filteredEntries
 
     delegate: Item {
@@ -64,6 +73,11 @@ Item {
       readonly property int relative: index - root.controller.selectedIndex
       readonly property bool focused: relative === 0
       readonly property bool neighbor: Math.abs(relative) === 1
+      readonly property bool imageSourceActive:
+        typeof root.controller.shouldLoadImage === "function"
+          ? root.controller.shouldLoadImage(modelData, index)
+          : Math.abs(relative) <= root.maxVisible
+      readonly property string loadedThumbnailSource: pickerImage.loadedSource
 
       visible: Math.abs(relative) <= root.maxVisible
       width: root.itemWidth(relative)
@@ -87,6 +101,7 @@ Item {
       }
 
       PickerImage {
+        id: pickerImage
         anchors.fill: parent
         bar: root.bar
         controller: root.controller
@@ -98,6 +113,7 @@ Item {
         washOpacity: slice.focused ? 0 : slice.neighbor ? 0.28 : 0.5
         decodeWidth: root.focusedWidth
         decodeHeight: root.focusedHeight
+        sourceActive: slice.imageSourceActive
         onActivated: slice.focused
           ? root.controller.activateSelected() : root.controller.selectIndex(slice.index)
       }

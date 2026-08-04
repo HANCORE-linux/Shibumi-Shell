@@ -76,6 +76,14 @@ system. The real transaction:
 7. reloads the shell and verifies the running payload;
 8. restores the previous state if a gate fails.
 
+Shibumi's lifecycle does not edit files below `~/.config/hypr/` and does not
+change Hyprland window borders, inner gaps, or outer gaps. Such changes are not
+an expected effect of installing, updating, activating, deactivating, or
+uninstalling Shibumi. Keep a separately run `omarchy update` distinct when
+diagnosing an installation: Omarchy owns its own Hyprland defaults and config
+migrations, while Shibumi only owns its plugin payload, `shell.json`, menu
+routing, and Shibumi state.
+
 Pass `--yes` only when you intentionally want to skip the confirmation prompt.
 Do not run `omarchy plugin add` against the repository root. Quattro installs
 one root manifest at a time, while Shibumi is a managed suite.

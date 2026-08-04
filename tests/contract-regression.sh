@@ -870,16 +870,19 @@ fi
 "$repo_root/tests/plugin-self-containment-regression.sh"
 "$repo_root/tests/host-facade-contract-regression.sh" --strict-ownership
 "$repo_root/tests/core-services-regression.sh"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/shibumi-config-regression.qml"
+"$repo_root/tests/gpu-probe-regression.sh"
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' \
+  /usr/lib/qt6/bin/qmltestrunner \
+  -input "$repo_root/tests/shibumi-config-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/theme-palette-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/reactor-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/reactor-renderer-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
-  "$repo_root/tests/picker-model-regression.qml"
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' \
+  /usr/lib/qt6/bin/qmltestrunner \
+  -input "$repo_root/tests/picker-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/group-registry-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
@@ -888,7 +891,8 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/responsive-layout-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/panel-routing-regression.qml"
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner \
+QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' \
+  /usr/lib/qt6/bin/qmltestrunner \
   -input "$repo_root/tests/workspace-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-model-regression.qml"

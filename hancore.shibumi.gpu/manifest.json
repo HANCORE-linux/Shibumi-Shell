@@ -5,14 +5,14 @@
   "version": "0.1.1-beta.3",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Lazy GPU load, temperature, and VRAM widget.",
+  "description": "Lazy GPU load, hardware, driver, VRAM, and process widget.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Shibumi GPU",
-    "description": "GPU activity and VRAM details",
+    "description": "GPU activity, hardware, driver, VRAM, and process details",
     "category": "System",
     "defaultSection": "right",
     "allowMultiple": false

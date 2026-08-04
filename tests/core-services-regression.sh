@@ -19,6 +19,7 @@ cp -a "$repo_root/hancore.shibumi.telemetry" "$smoke_root/telemetry"
 mkdir -p "$smoke_root/cpu"
 cp "$repo_root/hancore.shibumi.cpu/Service.qml" \
   "$repo_root/hancore.shibumi.cpu/GpuTelemetry.qml" "$smoke_root/cpu/"
+cp -a "$repo_root/hancore.shibumi.cpu/scripts" "$smoke_root/cpu/scripts"
 cp -a "$repo_root/hancore.shibumi.power-state" "$smoke_root/powerstate"
 cp "$repo_root/tests/core-services-smoke.qml" "$smoke_root/shell.qml"
 

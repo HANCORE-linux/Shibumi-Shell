@@ -137,6 +137,12 @@ ShellRoot {
             || state.config.presentation.v1Border !== true)
           return root.fail("V1/V2 variant memory")
         if (!state.setImagePickerStyle("tanzaku")
+            || !state.setImagePickerStyle("default")
+            || state.config.picker.imageStyle !== "omarchy"
+            || !state.setMediaPickerStyle("hearthstone")
+            || !state.setMediaPickerStyle("default")
+            || state.config.picker.mediaStyle !== "carousel"
+            || !state.setImagePickerStyle("tanzaku")
             || !state.setMediaPickerStyle("hearthstone")
             || state.setImagePickerStyle("carousel")
             || state.setImagePickerStyle("unknown")

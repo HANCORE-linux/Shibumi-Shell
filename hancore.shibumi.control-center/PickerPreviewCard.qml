@@ -63,6 +63,72 @@ Rectangle {
       context.stroke()
     }
 
+    function skewedCard(context, x, y, width, height, skew, emphasized) {
+      context.beginPath()
+      context.moveTo(x + skew, y)
+      context.lineTo(x + width, y)
+      context.lineTo(x + width - skew, y + height)
+      context.lineTo(x, y + height)
+      context.closePath()
+      context.fillStyle = emphasized
+        ? Commons.Util.alpha(root.accent, 0.24)
+        : Commons.Util.alpha(root.foreground, 0.09)
+      context.fill()
+      context.strokeStyle = emphasized
+        ? Commons.Util.alpha(root.accent, 0.86)
+        : Commons.Util.alpha(root.foreground, 0.34)
+      context.lineWidth = emphasized ? 1.25 : 1
+      context.stroke()
+    }
+
+    function drawOmarchy(context, w, h) {
+      drawCarousel(context, w, h)
+    }
+
+    function drawCarousel(context, w, h) {
+      // Match CarouselPickerView and its source design: skewed, overlapping
+      // slices with one expanded trapezoid-like focus card.
+      const focusX = w * 0.24
+      const focusY = h * 0.06
+      const focusWidth = w * 0.52
+      const focusHeight = h * 0.76
+      const sliceWidth = w * 0.09
+      const sliceHeight = h * 0.69
+      const sliceY = h * 0.095
+      const step = w * 0.065
+      const skew = w * 0.025
+      skewedCard(context, focusX - step * 2, sliceY,
+        sliceWidth, sliceHeight, skew, false)
+      skewedCard(context, focusX - step, sliceY,
+        sliceWidth, sliceHeight, skew, false)
+      skewedCard(context, focusX + focusWidth - w * 0.025, sliceY,
+        sliceWidth, sliceHeight, skew, false)
+      skewedCard(context, focusX + focusWidth - w * 0.025 + step, sliceY,
+        sliceWidth, sliceHeight, skew, false)
+      skewedCard(context, focusX, focusY,
+        focusWidth, focusHeight, skew, true)
+    }
+
+    function drawTanzaku(context, w, h) {
+      // This exact focus-and-slice schematic was previously assigned to
+      // Carousel. It describes the real Tanzaku layout instead.
+      const focusX = w * 0.24
+      const focusY = h * 0.06
+      const focusWidth = w * 0.52
+      const focusHeight = h * 0.76
+      const sliceWidth = w * 0.055
+      const gap = w * 0.025
+      card(context, focusX - gap * 2 - sliceWidth * 2, focusY,
+        sliceWidth, focusHeight, 3, false)
+      card(context, focusX - gap - sliceWidth, focusY,
+        sliceWidth, focusHeight, 3, false)
+      card(context, focusX, focusY, focusWidth, focusHeight, 5, true)
+      card(context, focusX + focusWidth + gap, focusY,
+        sliceWidth, focusHeight, 3, false)
+      card(context, focusX + focusWidth + gap * 2 + sliceWidth, focusY,
+        sliceWidth, focusHeight, 3, false)
+    }
+
     function hearthCard(context, centerX, bottomY, width, height,
         angle, emphasized) {
       context.save()
@@ -88,52 +154,29 @@ Rectangle {
       context.restore()
     }
 
+    function drawHearthstone(context, w, h) {
+      hearthCard(context, w * 0.25, h * 0.93,
+        w * 0.23, h * 0.66, -0.16, false)
+      hearthCard(context, w * 0.75, h * 0.93,
+        w * 0.23, h * 0.66, 0.16, false)
+      hearthCard(context, w * 0.50, h * 0.86,
+        w * 0.29, h * 0.80, 0, true)
+      context.fillStyle = Commons.Util.alpha(root.accent, 0.94)
+      context.beginPath()
+      context.arc(w * 0.50, h * 0.18, 2.2, 0, Math.PI * 2)
+      context.fill()
+    }
+
     onPaint: {
       const context = getContext("2d")
       context.reset()
       const w = width
       const h = height
 
-      if (root.styleValue === "omarchy"
-          || root.styleValue === "carousel") {
-        card(context, w * 0.06, h * 0.18, w * 0.25, h * 0.64, 4, false)
-        card(context, w * 0.69, h * 0.18, w * 0.25, h * 0.64, 4, false)
-        card(context, w * 0.24, h * 0.06, w * 0.52, h * 0.76, 5, true)
-        context.fillStyle = Commons.Util.alpha(root.foreground, 0.72)
-        for (let index = 0; index < 3; index++) {
-          context.beginPath()
-          context.arc(w * 0.46 + index * w * 0.04, h * 0.92,
-            index === 1 ? 2 : 1.4, 0, Math.PI * 2)
-          context.fill()
-        }
-      } else if (root.styleValue === "tanzaku") {
-        const widths = [0.17, 0.20, 0.17, 0.20]
-        const tops = [0.15, 0.04, 0.20, 0.09]
-        for (let index = 0; index < 4; index++) {
-          const x = w * (0.09 + index * 0.22)
-          const y = h * tops[index]
-          card(context, x, y, w * widths[index],
-            h * (0.78 - tops[index]), 3, index === 1)
-          context.fillStyle = index === 1
-            ? Commons.Util.alpha(root.accent, 0.72)
-            : Commons.Util.alpha(root.foreground, 0.34)
-          context.fillRect(x + w * 0.025, y + h * 0.12,
-            w * (widths[index] - 0.05), 1)
-        }
-      } else {
-        // Match the real Hearthstone hand: dim fanned side cards and one
-        // larger, lifted focus card with a framed image and title strip.
-        hearthCard(context, w * 0.25, h * 0.93,
-          w * 0.23, h * 0.66, -0.16, false)
-        hearthCard(context, w * 0.75, h * 0.93,
-          w * 0.23, h * 0.66, 0.16, false)
-        hearthCard(context, w * 0.50, h * 0.86,
-          w * 0.29, h * 0.80, 0, true)
-        context.fillStyle = Commons.Util.alpha(root.accent, 0.94)
-        context.beginPath()
-        context.arc(w * 0.50, h * 0.18, 2.2, 0, Math.PI * 2)
-        context.fill()
-      }
+      if (root.styleValue === "omarchy") drawOmarchy(context, w, h)
+      else if (root.styleValue === "carousel") drawCarousel(context, w, h)
+      else if (root.styleValue === "tanzaku") drawTanzaku(context, w, h)
+      else drawHearthstone(context, w, h)
     }
 
     Connections {
@@ -179,4 +222,5 @@ Rectangle {
     cursorShape: Qt.PointingHandCursor
     onClicked: root.chosen(root.styleValue)
   }
+
 }

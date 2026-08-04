@@ -23,6 +23,14 @@ Item {
   property real dealProgress: 0
   property bool dealStarted: false
   readonly property bool dealSettled: dealProgress >= 0.999
+  readonly property int activeImageSourceCount: {
+    let count = 0
+    for (let i = 0; i < hearthstoneRepeater.count; i++) {
+      const item = hearthstoneRepeater.itemAt(i)
+      if (item && String(item.loadedThumbnailSource || "") !== "") count++
+    }
+    return count
+  }
 
   function startDeal() {
     if (dealStarted || controller.filteredEntries.length === 0) return
@@ -68,6 +76,7 @@ Item {
     height: root.cardHeight + root.focusLift + Commons.Style.space(40)
 
     Repeater {
+      id: hearthstoneRepeater
       model: root.controller.filteredEntries
 
       delegate: Item {
@@ -77,6 +86,11 @@ Item {
         readonly property int relative: index - root.controller.selectedIndex
         readonly property bool focused: relative === 0
         readonly property bool nearby: Math.abs(relative) <= root.maxVisible
+        readonly property bool imageSourceActive:
+          typeof root.controller.shouldLoadImage === "function"
+            ? root.controller.shouldLoadImage(modelData, index) : nearby
+        readonly property string loadedThumbnailSource: String(
+          thumbnailImage.source || "")
         readonly property real shade: focused ? 0
           : Math.min(0.62, 0.30 + Math.abs(relative) * 0.05)
         readonly property bool current: root.controller.mode === "theme"
@@ -120,11 +134,13 @@ Item {
           clip: true
 
           Image {
+            id: thumbnailImage
             anchors.fill: parent
-            source: root.controller.thumbnailUrl(card.modelData)
+            source: card.imageSourceActive
+              ? root.controller.thumbnailUrl(card.modelData) : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            cache: false
+            cache: true
             retainWhileLoading: true
             sourceSize.width: Math.round(root.cardWidth * 2)
             sourceSize.height: Math.round(root.cardHeight * 2)

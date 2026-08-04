@@ -6,13 +6,29 @@ Scope {
   id: root
 
   property int consumers: 0
+  property int detailsConsumers: 0
+  property string helperPath: String(Qt.resolvedUrl(
+    "../scripts/shibumi-gpu-probe")).replace("file://", "")
   property string backend: ""
+  property string name: ""
+  property string driverName: ""
+  property string driverVersion: ""
   property int utilization: 0
   property int temperatureC: 0
   property int memoryUsedMiB: 0
   property int memoryTotalMiB: 0
+  property var topProcesses: []
+  property bool detailsReady: false
+  property bool detailsFailed: false
+  property bool probeFailed: false
+  property var previousProcessCounters: ({})
+  property double previousProcessEpoch: 0
+  property bool probeDetails: false
+  property bool pendingRefresh: false
   readonly property bool available: backend !== ""
   readonly property int intervalMs: 1500
+  readonly property int detailsIntervalMs: 2500
+  readonly property int probeTimeoutSeconds: 2
 
   function acquire() {
     consumers++
@@ -21,56 +37,173 @@ Scope {
 
   function release() {
     consumers = Math.max(0, consumers - 1)
-    if (consumers === 0) probe.running = false
+    if (consumers === 0) {
+      pendingRefresh = false
+      probe.running = false
+    }
+  }
+
+  function acquireDetails() {
+    detailsConsumers++
+    if (detailsConsumers === 1) {
+      detailsReady = false
+      detailsFailed = false
+    }
+    refresh()
+  }
+
+  function releaseDetails() {
+    detailsConsumers = Math.max(0, detailsConsumers - 1)
+    if (detailsConsumers === 0) {
+      topProcesses = []
+      detailsReady = false
+      detailsFailed = false
+      previousProcessCounters = ({})
+      previousProcessEpoch = 0
+      pendingRefresh = false
+      if (probe.running && probeDetails) probe.running = false
+    }
   }
 
   function refresh() {
-    if (consumers <= 0 || probe.running) return
+    if (consumers <= 0) return
+    if (probe.running) {
+      if (detailsConsumers > 0 && !probeDetails) pendingRefresh = true
+      return
+    }
+    probeDetails = detailsConsumers > 0
+    pendingRefresh = false
     probe.running = true
   }
 
-  function parse(line) {
-    const fields = String(line || "").trim().split("|")
-    if (fields.length < 5 || fields[0] === "none") {
+  function parse(line, includeDetails) {
+    const parseDetails = includeDetails === undefined
+      ? true : includeDetails === true
+    const lines = String(line || "").trim().split("\n").filter(
+      function(value) { return String(value || "").trim() !== "" })
+    const completed = lines.some(function(value) {
+      const parts = String(value || "").split("|")
+      return parts[0] === "status" && parts[1] === "ok"
+    })
+    if (lines.length === 0) {
+      probeFailed = true
+      if (parseDetails) {
+        detailsReady = true
+        detailsFailed = true
+      }
+      return
+    }
+    const fields = lines.length > 0 ? lines[0].split("|") : []
+    if (fields.length < 5) {
+      probeFailed = true
+      if (parseDetails) {
+        detailsReady = true
+        detailsFailed = true
+      }
+      return
+    }
+    if (fields[0] === "none") {
       backend = ""
+      name = ""
+      driverName = ""
+      driverVersion = ""
       utilization = 0
       temperatureC = 0
       memoryUsedMiB = 0
       memoryTotalMiB = 0
+      topProcesses = []
+      detailsReady = parseDetails
+      detailsFailed = !completed && parseDetails
+      probeFailed = !completed
+      previousProcessCounters = ({})
+      previousProcessEpoch = 0
       return
     }
 
-    backend = fields[0]
+    probeFailed = !completed
+    backend = String(fields[0] || "").trim()
     utilization = Math.max(0, Math.min(100, parseInt(fields[1]) || 0))
     temperatureC = Math.max(0, parseInt(fields[2]) || 0)
     memoryUsedMiB = Math.max(0, parseInt(fields[3]) || 0)
     memoryTotalMiB = Math.max(0, parseInt(fields[4]) || 0)
+
+    const now = Date.now()
+    const elapsedMs = previousProcessEpoch > 0
+      ? Math.max(1, now - previousProcessEpoch) : 0
+    const counters = ({})
+    const processes = []
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("|")
+      const kind = String(parts[0] || "").trim()
+      if (kind === "meta" && parts.length >= 4) {
+        name = String(parts[1] || "").trim()
+        driverName = String(parts[2] || "").trim()
+        driverVersion = String(parts[3] || "").trim()
+      } else if (parseDetails && kind === "proc" && parts.length >= 5) {
+        const percent = parseInt(parts[2])
+        processes.push({
+          pid: Math.max(0, parseInt(parts[1]) || 0),
+          percent: Number.isFinite(percent) && percent >= 0
+            ? Math.min(100, percent) : -1,
+          memoryMiB: Math.max(0, parseInt(parts[3]) || 0),
+          name: String(parts.slice(4).join("|") || "GPU process").trim()
+        })
+      } else if (parseDetails && kind === "counter" && parts.length >= 5) {
+        const pid = Math.max(0, parseInt(parts[1]) || 0)
+        const ticks = Math.max(0, Number(parts[2]) || 0)
+        const key = String(pid)
+        const previous = Number(previousProcessCounters[key])
+        const percent = elapsedMs > 0 && Number.isFinite(previous)
+          && ticks >= previous
+          ? Math.min(100, Math.round((ticks - previous) / elapsedMs / 10000))
+          : -1
+        counters[key] = ticks
+        processes.push({
+          pid: pid,
+          percent: percent,
+          memoryMiB: Math.max(0, parseInt(parts[3]) || 0),
+          name: String(parts.slice(4).join("|") || "GPU process").trim()
+        })
+      }
+    }
+    processes.sort(function(left, right) {
+      const leftKnown = left.percent >= 0 ? 1 : 0
+      const rightKnown = right.percent >= 0 ? 1 : 0
+      if (leftKnown !== rightKnown) return rightKnown - leftKnown
+      if (left.percent !== right.percent) return right.percent - left.percent
+      if (left.memoryMiB !== right.memoryMiB)
+        return right.memoryMiB - left.memoryMiB
+      return left.name.localeCompare(right.name)
+    })
+    if (parseDetails && completed) {
+      topProcesses = processes.slice(0, 3)
+      detailsReady = true
+      detailsFailed = false
+      previousProcessCounters = counters
+      previousProcessEpoch = Object.keys(counters).length > 0 ? now : 0
+    } else if (parseDetails) {
+      detailsReady = true
+      detailsFailed = true
+    }
   }
 
   Process {
     id: probe
-    command: [
-      "bash", "-c",
-      "if command -v nvidia-smi >/dev/null 2>&1; then "
-        + "IFS=, read -r util temp used total < <(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1); "
-        + "if [[ $util =~ ^[[:space:]]*[0-9]+[[:space:]]*$ && $temp =~ ^[[:space:]]*[0-9]+[[:space:]]*$ && $used =~ ^[[:space:]]*[0-9]+[[:space:]]*$ && $total =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]]; then "
-        + "printf 'nvidia|%s|%s|%s|%s\\n' \"$util\" \"$temp\" \"$used\" \"$total\"; exit 0; fi; "
-        + "fi; "
-        + "for busy in /sys/class/drm/card*/device/gpu_busy_percent; do "
-        + "[[ -r $busy ]] || continue; read -r util < \"$busy\"; temp=0; "
-        + "for sensor in \"${busy%/gpu_busy_percent}\"/hwmon/hwmon*/temp1_input; do "
-        + "[[ -r $sensor ]] || continue; read -r raw < \"$sensor\"; temp=$((raw / 1000)); break; done; "
-        + "printf 'sysfs|%s|%s|0|0\\n' \"$util\" \"$temp\"; exit 0; done; "
-        + "printf 'none|0|0|0|0\\n'"
-    ]
+    command: ["timeout", "--signal=TERM",
+      String(root.probeTimeoutSeconds), root.helperPath,
+      root.probeDetails ? "1" : "0"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.parse(text)
+      onStreamFinished: root.parse(text,
+        root.probeDetails && root.detailsConsumers > 0)
     }
+    onExited: if (root.pendingRefresh && root.consumers > 0)
+      Qt.callLater(root.refresh)
   }
 
   Timer {
-    interval: root.intervalMs
+    interval: root.detailsConsumers > 0
+      ? root.detailsIntervalMs : root.intervalMs
     running: root.consumers > 0
     repeat: true
     onTriggered: root.refresh()

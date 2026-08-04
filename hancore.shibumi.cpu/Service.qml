@@ -15,5 +15,7 @@ Item {
 
   GpuTelemetry {
     id: gpuState
+    helperPath: String(Qt.resolvedUrl(
+      "scripts/shibumi-gpu-probe")).replace("file://", "")
   }
 }

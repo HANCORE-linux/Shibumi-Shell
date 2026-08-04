@@ -11,6 +11,7 @@ ShellRoot {
   id: root
 
   property int attempts: 0
+  property int phase: 0
 
   function fail(message) {
     console.error("telemetry-plugins-smoke:", message)
@@ -121,6 +122,22 @@ ShellRoot {
       if (!memory || !cpu || !gpu || root.attempts < 4) return
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
+      if (root.phase === 1) {
+        if (cpuService.gpu.detailsConsumers !== 1) return
+        gpu.close()
+        root.phase = 2
+        return
+      }
+      if (root.phase === 2) {
+        if (cpuService.gpu.detailsConsumers !== 0) return
+        memoryLoader.active = false
+        cpuLoader.active = false
+        gpuLoader.active = false
+        releaseCheck.restart()
+        stop()
+        return
+      }
+
       if (memory.telemetry !== telemetryService.system
           || cpu.telemetry !== telemetryService.system
           || cpu.gpuTelemetry !== cpuService.gpu
@@ -141,11 +158,8 @@ ShellRoot {
           || fakeBar.runCount !== 2)
         return root.fail("system monitor action did not use the Quattro TUI launcher")
 
-      memoryLoader.active = false
-      cpuLoader.active = false
-      gpuLoader.active = false
-      releaseCheck.restart()
-      stop()
+      gpu.toggle()
+      root.phase = 1
     }
   }
 

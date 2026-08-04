@@ -18,6 +18,8 @@ Item {
   property bool selected: false
   property bool current: false
   property bool interactive: true
+  property bool sourceActive: true
+  readonly property string loadedSource: String(thumbnailImage.source || "")
   signal activated()
 
   Rectangle {
@@ -37,11 +39,12 @@ Item {
       color: "transparent"
 
       Image {
+        id: thumbnailImage
         anchors.fill: parent
-        source: root.controller.thumbnailUrl(root.entry)
+        source: root.sourceActive ? root.controller.thumbnailUrl(root.entry) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        cache: false
+        cache: true
         retainWhileLoading: true
         sourceSize.width: Math.max(1, Math.round(root.decodeWidth > 0
           ? root.decodeWidth : width * 1.25))

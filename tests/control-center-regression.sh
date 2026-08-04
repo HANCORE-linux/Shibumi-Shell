@@ -1137,7 +1137,7 @@ fi
 rg -Fq 'readonly property bool ready: imagePickerRepeater.count === 3' \
   "$control_dir/PickerSettingsPage.qml" \
   || fail "theme/wallpaper picker exposes more than three choices"
-rg -U -q 'id: mediaPickerRepeater[\s\S]*model: \[\n[[:space:]]*\{ value: "carousel", label: "Carousel" \},\n[[:space:]]*\{ value: "tanzaku", label: "Tanzaku" \},\n[[:space:]]*\{ value: "hearthstone", label: "Hearthstone" \}' \
+rg -U -q 'id: mediaPickerRepeater[\s\S]*model: \[\n[[:space:]]*\{ value: "carousel", label: "Carousel · Default" \},\n[[:space:]]*\{ value: "tanzaku", label: "Tanzaku" \},\n[[:space:]]*\{ value: "hearthstone", label: "Hearthstone" \}' \
   "$control_dir/PickerSettingsPage.qml" \
   || fail "media picker choices are not ordered Carousel, Tanzaku, Hearthstone"
 [[ -f $control_dir/PickerPreviewCard.qml ]] \
@@ -1147,14 +1147,37 @@ if [[ $(rg -F -c 'delegate: PickerPreviewCard {' \
   fail "picker choices remain text-only controls"
 fi
 for picker_preview in \
-    'root.styleValue === "omarchy"' \
-    'root.styleValue === "carousel"' \
-    'root.styleValue === "tanzaku"' \
-    'function hearthCard(' \
-    'larger, lifted focus card'; do
+    'function drawOmarchy(context, w, h)' \
+    'function drawCarousel(context, w, h)' \
+    'function drawTanzaku(context, w, h)' \
+    'function drawHearthstone(context, w, h)' \
+    'root.styleValue === "carousel") drawCarousel(context, w, h)' \
+    'root.styleValue === "tanzaku") drawTanzaku(context, w, h)'; do
   rg -Fq "$picker_preview" "$control_dir/PickerPreviewCard.qml" \
     || fail "missing picker preview contract: $picker_preview"
 done
+omarchy_preview_block=$(sed -n \
+  '/function drawOmarchy(context, w, h)/,/function drawCarousel(context, w, h)/p' \
+  "$control_dir/PickerPreviewCard.qml")
+rg -Fq 'drawCarousel(context, w, h)' <<<"$omarchy_preview_block" \
+  || fail "Omarchy Default does not reuse the Carousel schematic"
+carousel_preview_block=$(sed -n \
+  '/function drawCarousel(context, w, h)/,/function drawTanzaku(context, w, h)/p' \
+  "$control_dir/PickerPreviewCard.qml")
+for carousel_shape in 'skewedCard(context' 'const sliceWidth = w * 0.09' \
+    'const skew = w * 0.025' 'focusWidth, focusHeight, skew, true'; do
+  rg -Fq "$carousel_shape" <<<"$carousel_preview_block" \
+    || fail "Carousel schematic lost its skewed slices: $carousel_shape"
+done
+tanzaku_preview_block=$(sed -n \
+  '/function drawTanzaku(context, w, h)/,/function hearthCard(/p' \
+  "$control_dir/PickerPreviewCard.qml")
+rg -Fq 'const sliceWidth = w * 0.055' <<<"$tanzaku_preview_block" \
+  || fail "Tanzaku did not receive the former focus-and-slice schematic"
+if rg -q 'Image[[:space:]]*\{|previewSource' \
+    "$control_dir/PickerPreviewCard.qml"; then
+  fail "picker schematic previews unexpectedly load image content"
+fi
 
 [[ -f $control_dir/WorkspaceMarkerPreviewCard.qml ]] \
   || fail "workspace marker preview card is missing"

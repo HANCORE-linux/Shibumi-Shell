@@ -409,6 +409,53 @@ class SuiteLifecycleTests(unittest.TestCase):
             command_install(self.args(), self.suite, self.paths, self.runtime), 0
         )
 
+    def test_lifecycle_never_mutates_hyprland_appearance_config(self) -> None:
+        hypr_root = self.root / "config/hypr"
+        hypr_root.mkdir(parents=True)
+        looknfeel_lua = hypr_root / "looknfeel.lua"
+        looknfeel_conf = hypr_root / "looknfeel.conf"
+        looknfeel_lua.write_text(
+            "hl.config({ general = { gaps_in = 3, gaps_out = 7, "
+            "border_size = 2 } })\n",
+            encoding="utf-8",
+        )
+        looknfeel_conf.write_text(
+            "general { gaps_in = 3; gaps_out = 7; border_size = 2 }\n",
+            encoding="utf-8",
+        )
+        expected = {
+            path.name: (path.read_bytes(), path.stat().st_mtime_ns)
+            for path in (looknfeel_lua, looknfeel_conf)
+        }
+
+        def assert_appearance_unchanged(operation: str) -> None:
+            self.assertEqual(
+                sorted(path.name for path in hypr_root.iterdir()),
+                sorted(expected),
+                f"{operation} changed the Hyprland file set",
+            )
+            for name, (content, mtime_ns) in expected.items():
+                path = hypr_root / name
+                self.assertEqual(
+                    path.read_bytes(), content,
+                    f"{operation} rewrote {name}",
+                )
+                self.assertEqual(
+                    path.stat().st_mtime_ns, mtime_ns,
+                    f"{operation} touched {name}",
+                )
+
+        self.install()
+        assert_appearance_unchanged("install")
+        command_update(self.args(), self.suite, self.paths, self.runtime)
+        assert_appearance_unchanged("update")
+        command_deactivate(self.args(), self.suite, self.paths, self.runtime)
+        assert_appearance_unchanged("deactivate")
+        command_activate(self.args(), self.suite, self.paths, self.runtime)
+        assert_appearance_unchanged("activate")
+        command_uninstall(self.args(), self.suite, self.paths, self.runtime)
+        assert_appearance_unchanged("uninstall")
+
     def inject_retired_app_menu(self) -> None:
         """Recreate the managed 0.1.0 menu state an upgrade must retire."""
         plugin_id = "hancore.shibumi.menu"

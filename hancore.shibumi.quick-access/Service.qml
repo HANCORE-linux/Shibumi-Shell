@@ -32,7 +32,7 @@ Item {
   readonly property string imagePickerStyle: normalizeImageStyle(
     pickerConfig.imageStyle || pickerConfig.style || "omarchy")
   readonly property string mediaPickerStyle: normalizeMediaStyle(
-    pickerConfig.mediaStyle || pickerConfig.style || "tanzaku")
+    pickerConfig.mediaStyle || pickerConfig.style || "carousel")
   readonly property string pickerStyle: imageMode
     ? imagePickerStyle : mediaPickerStyle
   readonly property bool usingOfficialPicker: imageMode
@@ -57,6 +57,8 @@ Item {
   readonly property bool actionRunning: actionProc.running
   property int requestSerial: 0
   property bool cachedRowsApplied: false
+  readonly property int imageVisibleRadius: 5
+  readonly property int imagePreloadRadius: imageVisibleRadius + 1
   property string selectedThemeAuthor: ""
   property string selectedThemeRepo: ""
   property var selectedThemePalette: []
@@ -72,6 +74,7 @@ Item {
   readonly property string currentThemeNamePath:
     home + "/.local/state/omarchy/current/theme.name"
   readonly property bool overlayLoaded: overlayLoader.item !== null
+  readonly property bool refreshScanPending: scanDelay.running
 
   function normalizeImageStyle(value) {
     const candidate = String(value || "")
@@ -82,8 +85,9 @@ Item {
 
   function normalizeMediaStyle(value) {
     const candidate = String(value || "")
+    if (candidate === "default") return "carousel"
     return ["tanzaku", "hearthstone", "carousel"].indexOf(candidate) >= 0
-      ? candidate : "tanzaku"
+      ? candidate : "carousel"
   }
 
   function resolveTargetScreen(preferred) {
@@ -104,8 +108,15 @@ Item {
     const step = Number(direction) < 0 ? -1 : 1
     const next = styles[(current + step + styles.length) % styles.length]
     if (!stateService) return false
-    if (imageMode && typeof stateService.setImagePickerStyle === "function")
-      return stateService.setImagePickerStyle(next)
+    if (imageMode && typeof stateService.setImagePickerStyle === "function") {
+      const reopenOfficial = opened && next === "omarchy"
+      const reopenMode = mode
+      const reopenScreen = activeScreen
+      const changed = stateService.setImagePickerStyle(next)
+      if (!changed || !reopenOfficial) return changed
+      close()
+      return openMode(reopenMode, reopenScreen)
+    }
     return typeof stateService.setMediaPickerStyle === "function"
       ? stateService.setMediaPickerStyle(next) : false
   }
@@ -219,6 +230,7 @@ Item {
     priorityWarmProc.running = false
     warmProc.running = false
     warmDelay.stop()
+    scanDelay.stop()
     clearThemeMetadata()
     if (runtimeWorkersEnabled) {
       cleanupProc.running = false
@@ -227,36 +239,59 @@ Item {
     }
   }
 
-  function beginLoads(serial) {
+  function beginLoads(serial, forceScan) {
     if (!runtimeWorkersEnabled || !opened || serial !== requestSerial) return
+    if (forceScan === true) {
+      startScan(serial)
+      return
+    }
     cacheProc.activeSerial = serial
     cacheProc.command = [scriptPath, "cached", mode]
     cacheProc.running = true
+  }
+
+  function startScan(serial) {
+    if (!runtimeWorkersEnabled || !opened || serial !== requestSerial
+        || scanProc.running) return
     scanProc.activeSerial = serial
-    scanProc.command = [scriptPath, "scan", mode, omarchyPath]
+    scanProc.command = ["nice", "-n", "10", scriptPath,
+      "scan", mode, omarchyPath]
     scanProc.running = true
+  }
+
+  function finishCacheLoad(text, serial) {
+    if (!opened || serial !== requestSerial) return
+    const hasCachedRows = applyRows(text, true, serial)
+    if (!hasCachedRows) {
+      startScan(serial)
+      return
+    }
+    loading = false
+    scanDelay.activeSerial = serial
+    scanDelay.restart()
   }
 
   function applyRows(text, fromCache, serial) {
     if (!opened || serial !== requestSerial) return
     const parsed = PickerModel.parseRows(text)
-    if (fromCache && (cachedRowsApplied || parsed.length === 0)) return
-    if (fromCache && entries.length > 0) return
+    if (fromCache && (cachedRowsApplied || parsed.length === 0)) return false
+    if (fromCache && entries.length > 0) return false
     if (!fromCache) scanComplete = true
-    if (parsed.length === 0 && fromCache) return
+    if (parsed.length === 0 && fromCache) return false
     const entriesChanged = !PickerModel.entriesEqual(entries, parsed)
     if (entriesChanged) {
       entries = parsed
       selectedIndex = selectedIndexForCurrent(parsed)
     }
     cachedRowsApplied = fromCache
-    loading = fromCache ? true : false
-    if (!entriesChanged) return
+    loading = false
+    if (!entriesChanged) return parsed.length > 0
     Qt.callLater(function() {
       if (!root.opened || serial !== root.requestSerial) return
       root.warmVisible()
       warmDelay.restart()
     })
+    return parsed.length > 0
   }
 
   function selectedIndexForCurrent(nextEntries) {
@@ -323,6 +358,13 @@ Item {
     const thumbnailPath = String(entry.thumbnailPath || "")
     return thumbnailRevision >= 0 && (entry.thumbnailReady === true
       || (thumbnailPath !== "" && readyThumbnails[thumbnailPath] === true))
+  }
+
+  function shouldLoadImage(entry, index) {
+    if (!opened || !entry) return false
+    const candidate = Number(index)
+    return Number.isFinite(candidate)
+      && Math.abs(candidate - selectedIndex) <= imagePreloadRadius
   }
 
   function sourcePaths(visibleOnly) {
@@ -510,7 +552,7 @@ Item {
     }
     onExited: {
       if (activeSerial === root.requestSerial && root.opened && !cacheProc.running
-          && !scanProc.running) root.beginLoads(activeSerial)
+          && !scanProc.running && !scanDelay.running) root.beginLoads(activeSerial)
     }
   }
 
@@ -519,7 +561,7 @@ Item {
     property int activeSerial: 0
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyRows(text, true, cacheProc.activeSerial)
+      onStreamFinished: root.finishCacheLoad(text, cacheProc.activeSerial)
     }
   }
 
@@ -614,7 +656,7 @@ Item {
         return
       }
       root.statusText = "Moved to trash"
-      if (root.opened) root.beginLoads(root.requestSerial)
+      if (root.opened) root.beginLoads(root.requestSerial, true)
     }
   }
 
@@ -630,6 +672,13 @@ Item {
     id: warmDelay
     interval: 450
     onTriggered: root.warmAll()
+  }
+
+  Timer {
+    id: scanDelay
+    property int activeSerial: 0
+    interval: 650
+    onTriggered: root.startScan(activeSerial)
   }
 
   Timer {

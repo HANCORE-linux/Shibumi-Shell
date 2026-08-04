@@ -16,6 +16,7 @@ Item {
   readonly property color controlHoverBorderColor: "transparent"
   readonly property real controlBorderWidth: 0
   readonly property real controlRadius: 6
+  readonly property var shibumiTokens: ({ separator: "#404040" })
 
   width: contentWidth
   height: contentHeight

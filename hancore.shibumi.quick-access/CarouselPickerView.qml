@@ -12,12 +12,22 @@ Item {
   readonly property real previewWidth: Math.min(
     Commons.Style.space(560), width * 0.54)
   readonly property real previewHeight: previewWidth * 9 / 16
-  readonly property real sliceWidth: Commons.Style.space(58)
-  readonly property real sliceGap: Commons.Style.space(10)
+  readonly property real sliceWidth: previewWidth * 0.14
+  readonly property real sliceHeight: previewHeight * 0.90
+  readonly property real sliceGap: -sliceWidth * 0.28
+  readonly property real skewOffset: Commons.Style.space(20)
   readonly property real centerY: height / 2 - Commons.Style.space(24)
   readonly property int maxVisible: 5
   property bool navigationAnimationsEnabled: false
   property int layoutGeneration: 0
+  readonly property int activeImageSourceCount: {
+    let count = 0
+    for (let i = 0; i < carouselRepeater.count; i++) {
+      const item = carouselRepeater.itemAt(i)
+      if (item && String(item.loadedThumbnailSource || "") !== "") count++
+    }
+    return count
+  }
 
   function settleInitialLayout() {
     navigationAnimationsEnabled = false
@@ -41,16 +51,20 @@ Item {
     return relative === 0 ? previewWidth : sliceWidth
   }
 
+  function itemHeight(relative) {
+    return relative === 0 ? previewHeight : sliceHeight
+  }
+
   function itemX(relative) {
     const previewX = (width - previewWidth) / 2
+    const step = sliceWidth + sliceGap
     if (relative === 0) return previewX
-    if (relative < 0)
-      return previewX + relative * (sliceWidth + sliceGap)
-    return previewX + previewWidth + sliceGap
-      + (relative - 1) * (sliceWidth + sliceGap)
+    if (relative < 0) return previewX + relative * step
+    return previewX + previewWidth + sliceGap + (relative - 1) * step
   }
 
   Repeater {
+    id: carouselRepeater
     model: root.controller.filteredEntries
 
     delegate: Item {
@@ -59,12 +73,17 @@ Item {
       required property var modelData
       readonly property int relative: index - root.controller.selectedIndex
       readonly property bool focused: relative === 0
+      readonly property bool imageSourceActive:
+        typeof root.controller.shouldLoadImage === "function"
+          ? root.controller.shouldLoadImage(modelData, index)
+          : Math.abs(relative) <= root.maxVisible
+      readonly property string loadedThumbnailSource: pickerImage.loadedSource
 
       visible: Math.abs(relative) <= root.maxVisible
       x: root.itemX(relative)
       y: root.centerY - height / 2
       width: root.itemWidth(relative)
-      height: root.previewHeight
+      height: root.itemHeight(relative)
       z: focused ? 20 : 10 - Math.abs(relative)
 
       Behavior on x {
@@ -75,33 +94,32 @@ Item {
         enabled: root.navigationAnimationsEnabled
         NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
       }
-
-      PickerImage {
+      Behavior on height {
+        enabled: root.navigationAnimationsEnabled
+        NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+      }
+      Behavior on y {
+        enabled: root.navigationAnimationsEnabled
+        NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+      }
+      CarouselPickerImage {
+        id: pickerImage
         anchors.fill: parent
         bar: root.bar
         controller: root.controller
         entry: card.modelData
         selected: card.focused
         current: root.isCurrent(card.modelData)
-        imageRadius: Commons.Style.space(10)
-        imageInset: Commons.Style.space(3)
-        washOpacity: card.focused ? 0 : 0.38
+        skewOffset: root.skewOffset
+        washOpacity: card.focused ? 0 : 0.42
         decodeWidth: root.previewWidth
         decodeHeight: root.previewHeight
+        sourceActive: card.imageSourceActive
         onActivated: card.focused
           ? root.controller.activateSelected()
           : root.controller.selectIndex(card.index)
       }
 
-      Rectangle {
-        anchors.fill: parent
-        visible: !card.focused
-        radius: Commons.Style.space(10)
-        color: "transparent"
-        border.width: 1
-        border.color: Qt.rgba(root.bar.foreground.r,
-          root.bar.foreground.g, root.bar.foreground.b, 0.18)
-      }
     }
   }
 

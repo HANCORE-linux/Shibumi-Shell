@@ -134,9 +134,9 @@ function defaultLauncherConfig() {
 function defaultPickerConfig() {
   return {
     // `style` remains a compatibility alias for mixed-version deployments.
-    style: "tanzaku",
+    style: "carousel",
     imageStyle: "omarchy",
-    mediaStyle: "tanzaku"
+    mediaStyle: "carousel"
   }
 }
 
@@ -438,6 +438,7 @@ function normalizePicker(value) {
   if (!isPlainObject(value)) return result
 
   var legacyCandidate = String(value.style || "")
+  if (legacyCandidate === "default") legacyCandidate = "carousel"
   var legacyStyle = ["tanzaku", "hearthstone", "carousel"].indexOf(
     legacyCandidate) >= 0 ? legacyCandidate : ""
   var imageStyle = String(value.imageStyle || legacyStyle || result.imageStyle)
@@ -446,7 +447,8 @@ function normalizePicker(value) {
   // Carousel is the stock Omarchy experience for themes and wallpapers.
   // Pre-release Shibumi configs used the same name for a separate image view;
   // migrate those configs instead of retaining a hidden fourth UI state.
-  if (imageStyle === "carousel") imageStyle = "omarchy"
+  if (imageStyle === "default" || imageStyle === "carousel") imageStyle = "omarchy"
+  if (mediaStyle === "default") mediaStyle = "carousel"
   if (["omarchy", "tanzaku", "hearthstone"].indexOf(imageStyle) >= 0)
     result.imageStyle = imageStyle
   if (["tanzaku", "hearthstone", "carousel"].indexOf(mediaStyle) >= 0)

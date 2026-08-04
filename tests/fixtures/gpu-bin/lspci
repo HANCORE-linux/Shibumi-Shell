@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+printf '%s VGA compatible controller: %s\n' \
+  "${3:-0000:03:00.0}" "${SHIBUMI_TEST_GPU_MODEL:-Fixture GPU}"
