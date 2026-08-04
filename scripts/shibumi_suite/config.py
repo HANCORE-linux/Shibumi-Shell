@@ -13,6 +13,7 @@ from .model import PluginSpec, ProfileSpec
 REGIONS = ("left", "center", "right")
 LEGACY_PLUGIN_PREFIX = "hancore.qsrise"
 PLUGIN_PREFIX = "hancore.shibumi"
+OMARCHY_PLUGIN_PREFIX = "omarchy."
 IDENTITY_VERSION = 3
 
 
@@ -161,6 +162,7 @@ def apply_profile(
             entry
             for entry in result["bar"]["layout"][region]
             if entry_id(entry) not in managed_widget_ids
+            and not entry_id(entry).startswith(OMARCHY_PLUGIN_PREFIX)
         ]
         managed = [
             copy.deepcopy(existing_entries.get(plugin_id, {"id": plugin_id}))

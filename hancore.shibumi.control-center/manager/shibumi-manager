@@ -177,23 +177,36 @@ def snapshot_layout(
     state: dict[str, Any],
     *,
     legacy: bool,
+    trusted_layout: dict[str, list[Any]] | None = None,
 ) -> dict[str, list[Any]]:
     layout = copy_layout(config["bar"]["layout"])
-    if shell_id != "shibumi" or not legacy:
+    if shell_id != "shibumi":
         return layout
-    managed = set(state["plugins"])
-    # Pre-profile continuity builds merged the complete stock layout into
-    # Shibumi as "extras". Clean that one legacy snapshot; later intentional
-    # Omarchy widgets are retained because they live in a real Shibumi profile.
-    return {
-        region: [
-            entry
-            for entry in layout[region]
-            if entry_id(entry) in managed
-            or not entry_id(entry).startswith("omarchy.")
-        ]
-        for region in REGIONS
-    }
+
+    trusted_omarchy: dict[str, int] = {}
+    if not legacy and trusted_layout is not None:
+        for region in REGIONS:
+            for entry in trusted_layout[region]:
+                plugin_id = entry_id(entry)
+                if plugin_id.startswith("omarchy."):
+                    trusted_omarchy[plugin_id] = (
+                        trusted_omarchy.get(plugin_id, 0) + 1
+                    )
+
+    # Pre-profile continuity builds and the suite CLI could merge the complete
+    # stock layout into Shibumi as "extras". Keep user/third-party widgets and
+    # only those Omarchy widgets already recorded in the trusted Shibumi profile.
+    snapshot: dict[str, list[Any]] = {region: [] for region in REGIONS}
+    for region in REGIONS:
+        for entry in layout[region]:
+            plugin_id = entry_id(entry)
+            if plugin_id.startswith("omarchy."):
+                remaining = trusted_omarchy.get(plugin_id, 0)
+                if remaining <= 0:
+                    continue
+                trusted_omarchy[plugin_id] = remaining - 1
+            snapshot[region].append(entry)
+    return snapshot
 
 
 def load_state(runtime_paths: dict[str, Path]) -> dict[str, Any]:
@@ -598,11 +611,13 @@ def perform(target: str) -> int:
             == str(state["activation"]["activeBar"])
             else "omarchy"
         )
+        trusted_layout = layouts.get(current_shell)
         layouts[current_shell] = snapshot_layout(
             current,
             current_shell,
             state,
-            legacy=current_shell not in profiles["layouts"],
+            legacy=trusted_layout is None,
+            trusted_layout=trusted_layout,
         )
         target_layout = layouts.get(runtime_target)
         if target_layout is None:

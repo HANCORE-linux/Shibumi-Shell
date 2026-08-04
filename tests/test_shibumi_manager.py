@@ -297,6 +297,70 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertIn("user.widget", ids)
         self.assertNotIn("omarchy.weather", ids)
 
+    def test_saved_shibumi_profile_rejects_new_stock_contamination(self) -> None:
+        config = self.root / "config/omarchy/shell.json"
+        defaults = self.root / "omarchy/config/omarchy/shell.json"
+        state_dir = self.root / "state/shibumi"
+        runtime = self.root / "runtime"
+        config.parent.mkdir(parents=True)
+        defaults.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+
+        trusted_layout = self.module["copy_layout"](
+            self.active["bar"]["layout"]
+        )
+        contaminated = copy.deepcopy(self.active)
+        contaminated["bar"]["layout"]["left"].append(
+            {"id": "omarchy.menu"}
+        )
+        contaminated["bar"]["layout"]["center"].append(
+            {"id": "omarchy.clock"}
+        )
+        config.write_text(json.dumps(contaminated) + "\n", encoding="utf-8")
+        defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
+        (state_dir / "install.json").write_text(
+            json.dumps(self.state) + "\n", encoding="utf-8"
+        )
+        profile = state_dir / "shell-layout-profiles.json"
+        profile.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "layouts": {
+                        "shibumi": trusted_layout,
+                        "omarchy": self.defaults["bar"]["layout"],
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["perform"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        original_verify = globals_map["verify"]
+        globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+        globals_map["stop_shell"] = lambda *_args, **_kwargs: None
+        globals_map["verify"] = lambda *_args, **_kwargs: None
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["perform"]("omarchy"), 0)
+        finally:
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+            globals_map["verify"] = original_verify
+
+        saved = json.loads(profile.read_text(encoding="utf-8"))
+        self.assertEqual(saved["layouts"]["shibumi"], trusted_layout)
+
     def test_failed_worker_restores_exact_shell_config(self) -> None:
         config = self.root / "config/omarchy/shell.json"
         defaults = self.root / "omarchy/config/omarchy/shell.json"

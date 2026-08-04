@@ -887,6 +887,37 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.restarts, restarts_before + 3)
         self.assertEqual(self.runtime.stops, stops_before + 3)
 
+    def test_activate_after_deactivate_keeps_host_layouts_separate(self) -> None:
+        self.install()
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        inactive = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        inactive_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in inactive["bar"]["layout"][region]
+        }
+        self.assertIn("omarchy.menu", inactive_ids)
+
+        self.assertEqual(
+            command_activate(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        active = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        active_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in active["bar"]["layout"][region]
+        }
+        self.assertIn("local.extra", active_ids)
+        self.assertFalse(
+            any(plugin_id.startswith("omarchy.") for plugin_id in active_ids)
+        )
+
     def test_uninstall_preserves_existing_menu_extension(self) -> None:
         extension = self.paths.menu_extension_file
         extension.parent.mkdir(parents=True)
@@ -919,6 +950,21 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertTrue(set(profile.disabled_by_default).issubset(layout_ids))
         self.assertEqual(result["bar"]["position"], "top")
         self.assertIn("local.extra", layout_ids)
+
+    def test_profile_excludes_stock_widgets_and_keeps_third_party_extras(self) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        profile = self.suite.profile("default")
+        result = apply_profile(base, profile, self.suite.plugins)
+        layout_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in result["bar"]["layout"][region]
+        }
+
+        self.assertIn("local.extra", layout_ids)
+        self.assertFalse(
+            any(plugin_id.startswith("omarchy.") for plugin_id in layout_ids)
+        )
 
     def test_migrate_preserves_settings_and_retires_legacy_namespace(self) -> None:
         legacy_state = self.prepare_legacy_install()
