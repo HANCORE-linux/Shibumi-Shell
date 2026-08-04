@@ -159,6 +159,11 @@ ShellRoot {
             || audio.panelItem.renderedSourceCount !== 2
             || audio.panelItem.renderedStreamCount !== 2)
           return root.fail("local mixer model/popout ownership")
+        if (audio.panelItem.firstSinkLabel()
+              !== "SteelSeries Arctis 7 Chat"
+            || audio.panelItem.secondSinkLabel()
+              !== "SteelSeries Arctis 7 Game")
+          return root.fail("description-first output device labels")
         if (!audio.panelItem.selectSecondSink()
             || audio.audioPanel.defaultSinkChanges !== 1
             || audio.audioPanel.sink.id !== 2)
@@ -173,6 +178,10 @@ ShellRoot {
         if (!audio.panelItem.toggleFirstStreamMute()
             || !audio.audioPanel.audioStreams[0].audio.muted)
           return root.fail("stream mute forwarding")
+        if (!audio.panelItem.setInputVolume(0.35)
+            || audio.audioPanel.inputVolumeChanges !== 1
+            || Math.abs(audio.audioPanel.inputVolume - 0.35) > 0.001)
+          return root.fail("input volume forwarding")
         if (!audio.panelItem.toggleInputMute() || !audio.audioPanel.inputMuted)
           return root.fail("input mute forwarding fixture")
         audio.close()

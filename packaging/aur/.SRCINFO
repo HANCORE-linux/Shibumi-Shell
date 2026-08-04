@@ -24,7 +24,6 @@ pkgbase = shibumi-shell
 	optdepends = ffmpegthumbnailer: video picker thumbnails
 	optdepends = imagemagick: additional media thumbnails
 	optdepends = btop: battery panel system monitor action
-	optdepends = wiremix: audio panel mixer action
 	optdepends = nvidia-utils: NVIDIA GPU telemetry
 	optdepends = git: source-checkout diagnostics and migration
 	source = shibumi-shell-0.1.1-beta.3.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.3/shibumi-shell-0.1.1-beta.3.tar.gz

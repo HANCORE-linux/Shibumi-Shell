@@ -42,9 +42,8 @@ any mutation.
 Required commands, services, and fonts are declared in
 [`../../contracts/package-runtime-v1.json`](../../contracts/package-runtime-v1.json).
 Pacman skips packages that are already installed or provided. Optional
-packages enable bounded features such as the media spectrum, thumbnails,
-external mixer, and NVIDIA telemetry; their absence does not prevent the core
-suite from starting.
+packages enable bounded features such as the media spectrum, thumbnails, and
+NVIDIA telemetry; their absence does not prevent the core suite from starting.
 
 ## User lifecycle
 

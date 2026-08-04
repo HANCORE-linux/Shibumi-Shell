@@ -13,6 +13,14 @@ Item {
   readonly property int renderedSourceCount: audioBackend.audioSources.length
   readonly property int renderedStreamCount: audioBackend.audioStreams.length
 
+  function firstSinkLabel() {
+    return audioBackend.nodeLabel(audioBackend.audioSinks[0])
+  }
+
+  function secondSinkLabel() {
+    return audioBackend.nodeLabel(audioBackend.audioSinks[1])
+  }
+
   function selectSecondSink() {
     return audioBackend.setDefaultSink(audioBackend.audioSinks[1])
   }
@@ -31,6 +39,10 @@ Item {
 
   function toggleInputMute() {
     return audioBackend.toggleInputMute()
+  }
+
+  function setInputVolume(value) {
+    return audioBackend.setInputVolume(value)
   }
 
   Component.onCompleted: {

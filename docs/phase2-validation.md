@@ -317,8 +317,8 @@ Validated locally on 2026-07-16 without changing the running desktop shell:
 - full and compact layouts have stable, distinct widths and preserve V1 label,
   slider, percentage, and compact-glyph structure;
 - the lazy QS Rise panel restores output/input volume, output/input device
-  selection, per-app volume and mute, microphone mute/meter, and the external
-  mixer action over the official state and commands;
+  selection, per-app volume and mute, microphone mute/meter, and descriptive
+  device labels over the official state and commands;
 - right-click mute, wheel volume, open/close, host settings, screen-aware alias
   routing, unavailable-backend behavior, model actions, and teardown pass the
   offscreen component smoke;

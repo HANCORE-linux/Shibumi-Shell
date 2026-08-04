@@ -41,7 +41,6 @@
     "ffmpegthumbnailer": "video picker thumbnails",
     "imagemagick": "additional media thumbnails",
     "btop": "battery panel system monitor action",
-    "wiremix": "audio panel mixer action",
     "nvidia-utils": "NVIDIA GPU telemetry",
     "git": "source-checkout diagnostics and migration"
   }

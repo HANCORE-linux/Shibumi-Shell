@@ -174,20 +174,28 @@ rg -q 'enabled: panel\.open && panel\.audioBackend' \
 if rg -q 'Ui\.PanelSlider' "$audio_panel"; then
   fail "audio panel exposes stock Quattro slider presentation"
 fi
-[[ $(rg -c 'ShibumiSlider \{' "$audio_panel") -eq 1 ]] \
-  || fail "only optional application streams may use the interactive track slider"
+[[ $(rg -c 'ShibumiSlider \{' "$audio_panel") -eq 3 ]] \
+  || fail "output, input, and application rows must share the interactive slider"
 rg -q 'contentWidth: fittedContentWidth\(280\)' \
   "$audio_panel" \
   || fail "audio panel does not preserve the V1 280px card width"
-rg -q 'panel\.audioBackend\.setOutputVolume\(' "$audio_panel" \
-  || fail "V1 output meter does not retain direct Quattro volume control"
-rg -q 'height: 8' "$audio_panel" \
-  || fail "V1 output meter does not preserve its eight-pixel track"
+rg -q 'panel\.audioBackend\.setOutputVolume\(value\)' "$audio_panel" \
+  || fail "output slider does not retain direct Quattro volume control"
+rg -q 'id: outputControl' "$audio_panel" \
+  || fail "output heading and slider are not compactly grouped"
+rg -q 'height: Commons\.Style\.space\(8\)' "$audio_panel" \
+  || fail "audio sliders do not preserve the shared eight-pixel track"
+rg -q 'function descriptiveNodeLabel\(node\)' "$audio_bridge" \
+  || fail "audio bridge does not restore descriptive device labels"
+if rg -q 'wiremix|Open audio|openMixer' "$audio_panel"; then
+  fail "audio panel exposes the retired external mixer action"
+fi
 rg -Fq 'text: panel.inputMuted ? "Muted"' "$audio_panel" \
-  || fail "V1 microphone row does not expose its active or muted state"
-if rg -q 'text: "ACTIVITY"|panel\.audioBackend\.setInputVolume\(value\)' \
-    "$audio_panel"; then
-  fail "audio panel reintroduces the non-V1 microphone activity or volume rows"
+  || fail "microphone row does not expose its muted state and volume"
+rg -q 'panel\.audioBackend\.setInputVolume\(value\)' "$audio_panel" \
+  || fail "microphone slider does not forward input volume changes"
+if rg -q 'text: "ACTIVITY"' "$audio_panel"; then
+  fail "audio panel exposes a redundant microphone activity heading"
 fi
 [[ $(rg -c 'width: Commons\.Style\.space\(30\)' "$audio_widget") -eq 2 ]] \
   || fail "audio percentage labels do not preserve a stable panel anchor width"

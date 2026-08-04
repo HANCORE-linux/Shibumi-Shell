@@ -23,6 +23,7 @@ Item {
   property int defaultSinkChanges: 0
   property int defaultSourceChanges: 0
   property int outputVolumeChanges: 0
+  property int inputVolumeChanges: 0
   property int openCount: 0
   readonly property var internalButton: button
 
@@ -47,7 +48,10 @@ Item {
     outputVolume = Math.max(0, Math.min(1, value))
   }
   function toggleInputMute() { inputMuted = !inputMuted }
-  function setInputVolume(value) { inputVolume = Math.max(0, Math.min(1, value)) }
+  function setInputVolume(value) {
+    inputVolumeChanges++
+    inputVolume = Math.max(0, Math.min(1, value))
+  }
   function setDefaultSink(node) {
     sink = node
     defaultSinkChanges++
@@ -56,7 +60,11 @@ Item {
     source = node
     defaultSourceChanges++
   }
-  function nodeLabel(node) { return node ? String(node.description || node.name || "") : "" }
+  // Match the current Omarchy helper's nickname-first behavior so the Shibumi
+  // bridge test proves that visible labels restore the fuller description.
+  function nodeLabel(node) {
+    return node ? String(node.nickname || node.description || node.name || "") : ""
+  }
   function sinkGlyph(_node) { return "speaker" }
   function sourceGlyph(_node) { return "mic" }
   function streamLabel(node) { return node ? String(node.description || "App") : "App" }
@@ -101,7 +109,13 @@ Item {
     id: sinkA
     property int id: 1
     property string name: "sink-a"
-    property string description: "Built-in Audio"
+    property bool ready: true
+    property string nickname: "SteelSeries Arctis 7"
+    property string description: "SteelSeries Arctis 7 Chat"
+    property var properties: ({
+      "node.nick": "SteelSeries Arctis 7",
+      "device.profile.description": "Chat"
+    })
     property var audio: sinkAudioA
   }
 
@@ -109,7 +123,13 @@ Item {
     id: sinkB
     property int id: 2
     property string name: "sink-b"
-    property string description: "USB Headset"
+    property bool ready: true
+    property string nickname: "USB Audio #1"
+    property string description: "SteelSeries Arctis 7 Game"
+    property var properties: ({
+      "node.nick": "USB Audio #1",
+      "device.profile.description": "Game"
+    })
     property var audio: sinkAudioB
   }
 

@@ -131,8 +131,8 @@ G6 preserves the V1 `VOL` label, capsule fill, percentage, compact
 view does not own audio state. It overlays one registered Shibumi interaction
 surface on the hidden official `omarchy.audio` component, whose stock button
 and popup stay inactive. The lazy local panel restores V1 output/input volume,
-device switching, per-app mixing, microphone feedback, mute actions, and the
-external audio action while delegating every mutation to the official object.
+description-first device labels, device switching, per-app mixing, microphone
+feedback, and mute actions while delegating every mutation to the official object.
 Full/compact geometry, lazy model release, action routing, and bridge teardown
 are proven locally; the real Wayland mixer window and multi-output anchors
 remain open acceptance gates.

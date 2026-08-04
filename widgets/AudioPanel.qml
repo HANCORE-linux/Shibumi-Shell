@@ -85,12 +85,6 @@ ShibumiPanel {
     if (audioBackend) audioBackend.setOutputVolume(outputVolume + delta)
   }
 
-  function openMixer() {
-    ownerWidget.close()
-    if (bar && typeof bar.run === "function")
-      bar.run("omarchy-launch-floating-terminal-with-presentation wiremix")
-  }
-
   onOpenChanged: {
     if (open) {
       refreshModels()
@@ -190,56 +184,43 @@ ShibumiPanel {
 
         PanelDivider {}
 
-        SectionLabel { text: "OUTPUT" }
-
-        Item {
+        Column {
+          id: outputControl
           width: parent.width
-          height: 30
+          spacing: Commons.Style.space(2)
 
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: parent.top
-            text: panel.outputMuted ? "Muted"
-              : Math.round(panel.outputVolume * 100) + "%"
-            color: panel.outputMuted
-              ? Commons.Util.alpha(panel.controlAccent, 0.4)
-              : panel.controlAccent
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: 11
-            font.weight: Font.Medium
-            renderType: Text.NativeRendering
-          }
+          SectionLabel { text: "OUTPUT" }
 
-          Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 8
-            radius: 4
-            color: panel.controlActiveFillColor
+          Item {
+            width: parent.width
+            height: Commons.Style.space(30)
 
-            Rectangle {
-              width: parent.width * (panel.outputMuted
-                ? 0 : Math.min(panel.outputVolume, 1))
-              height: parent.height
-              radius: 4
-              color: panel.controlAccent
-              Behavior on width { NumberAnimation { duration: 300 } }
+            Text {
+              anchors.horizontalCenter: parent.horizontalCenter
+              anchors.top: parent.top
+              text: panel.outputMuted ? "Muted"
+                : Math.round(panel.outputVolume * 100) + "%"
+              color: panel.outputMuted
+                ? Commons.Util.alpha(panel.controlAccent, 0.4)
+                : panel.controlAccent
+              font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+              font.pixelSize: 11
+              font.weight: Font.Medium
+              renderType: Text.NativeRendering
             }
 
-            MouseArea {
-              anchors.fill: parent
-              anchors.topMargin: -8
-              anchors.bottomMargin: -4
+            ShibumiSlider {
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.bottom: parent.bottom
+              height: Commons.Style.space(8)
+              bar: panel.bar
+              maximum: 1
+              value: panel.outputVolume
+              muted: panel.outputMuted
               enabled: panel.audioBackend && panel.audioBackend.sink !== null
-              cursorShape: Qt.PointingHandCursor
-              function moveTo(x) {
-                panel.audioBackend.setOutputVolume(
-                  Math.max(0, Math.min(1, x / parent.width)))
-              }
-              onPressed: function(mouse) { moveTo(mouse.x) }
-              onPositionChanged: function(mouse) {
-                if (pressed) moveTo(mouse.x)
+              onMoved: function(value) {
+                panel.audioBackend.setOutputVolume(value)
               }
             }
           }
@@ -313,62 +294,87 @@ ShibumiPanel {
           spacing: 8
           visible: panel.audioBackend && panel.audioBackend.source !== null
 
-          SectionLabel { text: "INPUT" }
-
-          Row {
+          Column {
+            id: inputControl
             width: parent.width
+            spacing: Commons.Style.space(2)
 
-            Text {
-              width: parent.width / 2
-              text: "Microphone"
-              color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
-                panel.bar.foreground.g, panel.bar.foreground.b, 0.68)
-                : Commons.Color.foreground
-              font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: 11
-              renderType: Text.NativeRendering
-            }
+            SectionLabel { text: "INPUT" }
 
-            Text {
-              width: parent.width / 2
-              text: panel.inputMuted ? "Muted"
-                : "Active"
-              color: panel.inputMuted
-                ? Commons.Util.alpha(panel.controlAccent, 0.5)
-                : Commons.Util.alpha(panel.controlForeground, 0.7)
-              font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: 11
-              font.weight: Font.Medium
-              horizontalAlignment: Text.AlignRight
-              renderType: Text.NativeRendering
-            }
-          }
+            Item {
+              width: parent.width
+              height: inputState.implicitHeight + Commons.Style.space(20)
 
-          Item {
-            width: parent.width
-            height: 8
+              Row {
+                id: inputState
+                width: parent.width
 
-            Rectangle {
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              height: 4
-              radius: height / 2
-              color: panel.controlFillColor
-              border.color: panel.controlBorderColor
-              border.width: 1
+                Text {
+                  width: parent.width / 2
+                  text: "Microphone"
+                  color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
+                    panel.bar.foreground.g, panel.bar.foreground.b, 0.68)
+                    : Commons.Color.foreground
+                  font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+                  font.pixelSize: 11
+                  renderType: Text.NativeRendering
+                }
+
+                Text {
+                  width: parent.width / 2
+                  text: panel.inputMuted ? "Muted"
+                    : Math.round(panel.inputVolume * 100) + "%"
+                  color: panel.inputMuted
+                    ? Commons.Util.alpha(panel.controlAccent, 0.4)
+                    : panel.controlAccent
+                  font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+                  font.pixelSize: 11
+                  font.weight: Font.Medium
+                  horizontalAlignment: Text.AlignRight
+                  renderType: Text.NativeRendering
+                }
+              }
+
+              ShibumiSlider {
+                id: inputSlider
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: inputState.bottom
+                anchors.topMargin: Commons.Style.space(4)
+                height: Commons.Style.space(8)
+                bar: panel.bar
+                maximum: 1
+                value: panel.inputVolume
+                muted: panel.inputMuted
+                enabled: panel.audioBackend && panel.audioBackend.source !== null
+                onMoved: function(value) {
+                  panel.audioBackend.setInputVolume(value)
+                }
+              }
 
               Rectangle {
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: parent.width * panel.microphoneLevel
-                radius: parent.radius
-                color: panel.inputMuted
-                  ? Commons.Util.alpha(panel.controlAccent, 0.25)
-                  : panel.controlAccent
-                Behavior on width {
-                  NumberAnimation { duration: 70; easing.type: Easing.OutCubic }
+                anchors.right: parent.right
+                anchors.top: inputSlider.bottom
+                anchors.topMargin: Commons.Style.space(4)
+                height: Commons.Style.space(4)
+                radius: height / 2
+                color: panel.controlFillColor
+                border.color: panel.controlBorderColor
+                border.width: 1
+
+                Rectangle {
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  width: parent.width * panel.microphoneLevel
+                  radius: parent.radius
+                  color: panel.inputMuted
+                    ? Commons.Util.alpha(panel.controlAccent, 0.25)
+                    : panel.controlAccent
+                  Behavior on width {
+                    NumberAnimation { duration: 70; easing.type: Easing.OutCubic }
+                  }
                 }
               }
             }
@@ -410,14 +416,6 @@ ShibumiPanel {
             action: function() { panel.audioBackend.toggleInputMute() }
           }
         }
-
-        PanelDivider {}
-
-        ActionButton {
-          label: "Open audio"
-          primary: true
-          action: panel.openMixer
-        }
       }
     }
   }
@@ -441,19 +439,14 @@ ShibumiPanel {
     required property string label
     required property var action
     property bool active: false
-    property bool primary: false
     width: contentColumn.width
     height: 28
     radius: panel.controlRadius
-    color: primary
-      ? actionMouse.containsMouse && panel.bar
-        ? panel.controlPrimaryHoverColor
-        : panel.bar ? panel.bar.urgent : Commons.Color.accent
-      : active
-        ? panel.controlActiveFillColor
-        : actionMouse.containsMouse ? panel.controlHoverFillColor
-          : panel.controlFillColor
-    border.width: primary ? 0 : panel.controlBorderWidth
+    color: active
+      ? panel.controlActiveFillColor
+      : actionMouse.containsMouse ? panel.controlHoverFillColor
+        : panel.controlFillColor
+    border.width: panel.controlBorderWidth
     border.color: active
       ? panel.bar ? panel.bar.urgent : Commons.Color.accent
       : actionMouse.containsMouse ? panel.controlHoverBorderColor
@@ -462,11 +455,9 @@ ShibumiPanel {
     Text {
       anchors.centerIn: parent
       text: actionButton.label
-      color: actionButton.primary
-        ? panel.bar ? panel.bar.background : Commons.Color.background
-        : parent.active || actionMouse.containsMouse
-          ? panel.bar ? panel.bar.urgent : Commons.Color.accent
-          : panel.bar ? panel.bar.foreground : Commons.Color.foreground
+      color: parent.active || actionMouse.containsMouse
+        ? panel.bar ? panel.bar.urgent : Commons.Color.accent
+        : panel.bar ? panel.bar.foreground : Commons.Color.foreground
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: 11
       renderType: Text.NativeRendering

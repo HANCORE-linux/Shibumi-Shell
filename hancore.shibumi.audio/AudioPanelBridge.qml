@@ -86,7 +86,33 @@ Item {
     return String(panel[name](node) || fallback || "")
   }
 
-  function nodeLabel(node) { return callLabelHelper("nodeLabel", node, "Audio device") }
+  function usableDeviceLabel(value) {
+    const label = String(value || "").trim()
+    return !label || label === "(null)" ? "" : label
+  }
+
+  function descriptiveNodeLabel(node) {
+    if (!node) return ""
+    let label = usableDeviceLabel(node.description)
+    if (label) return label
+
+    const properties = node.ready !== false && node.properties
+      ? node.properties : ({})
+    label = usableDeviceLabel(properties["node.description"])
+    if (label) return label
+
+    const device = usableDeviceLabel(properties["device.description"])
+    const profile = usableDeviceLabel(properties["device.profile.description"])
+    if (device && profile
+        && device.toLowerCase().indexOf(profile.toLowerCase()) < 0)
+      return device + " " + profile
+    return device || profile
+  }
+
+  function nodeLabel(node) {
+    return descriptiveNodeLabel(node)
+      || callLabelHelper("nodeLabel", node, "Audio device")
+  }
   function sinkGlyph(node) { return callLabelHelper("sinkGlyph", node, "speaker") }
   function sourceGlyph(node) { return callLabelHelper("sourceGlyph", node, "mic") }
   function streamLabel(node) { return callLabelHelper("streamLabel", node, "Application") }
