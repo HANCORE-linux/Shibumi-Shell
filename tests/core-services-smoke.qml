@@ -68,50 +68,30 @@ ShellRoot {
       cpu.gpu.parse([
         "nvidia|52|63|2048|8192",
         "meta|NVIDIA GeForce RTX 2080 SUPER|nvidia|610.43.03",
-        "proc|11|17|120|renderer",
-        "proc|12|-1|940|electron",
-        "proc|13|31|80|compute",
-        "proc|14|4|300|shell",
         "status|ok"
       ].join("\n"))
       root.check(cpu.gpu.name === "NVIDIA GeForce RTX 2080 SUPER"
         && cpu.gpu.driverName === "nvidia"
-        && cpu.gpu.driverVersion === "610.43.03"
-        && cpu.gpu.topProcesses.length === 3
-        && cpu.gpu.topProcesses[0].name === "compute"
-        && cpu.gpu.topProcesses[1].name === "renderer"
-        && cpu.gpu.topProcesses[2].name === "shell",
-        "NVIDIA model, driver, or top-process parsing changed")
+        && cpu.gpu.driverVersion === "610.43.03",
+        "NVIDIA model or driver parsing changed")
 
-      cpu.gpu.previousProcessCounters = ({ "21": 100000000 })
-      cpu.gpu.previousProcessEpoch = Date.now() - 1000
       cpu.gpu.parse([
         "sysfs|38|54|0|0",
         "meta|AMD Radeon RX 7900 XTX|amdgpu|",
-        "counter|21|600000000|512|game",
         "status|ok"
       ].join("\n"))
       root.check(cpu.gpu.name === "AMD Radeon RX 7900 XTX"
-        && cpu.gpu.driverName === "amdgpu"
-        && cpu.gpu.topProcesses.length === 1
-        && cpu.gpu.topProcesses[0].percent >= 49
-        && cpu.gpu.topProcesses[0].percent <= 50,
-        "AMD DRM process-counter parsing changed")
+        && cpu.gpu.driverName === "amdgpu",
+        "AMD model or driver parsing changed")
 
-      cpu.gpu.previousProcessCounters = ({ "31": 300000000 })
-      cpu.gpu.previousProcessEpoch = Date.now() - 1000
       cpu.gpu.parse([
         "sysfs|29|48|0|0",
         "meta|Intel Arc A770|xe|",
-        "counter|31|550000000|256|compositor",
         "status|ok"
       ].join("\n"))
       root.check(cpu.gpu.name === "Intel Arc A770"
-        && cpu.gpu.driverName === "xe"
-        && cpu.gpu.topProcesses.length === 1
-        && cpu.gpu.topProcesses[0].percent >= 24
-        && cpu.gpu.topProcesses[0].percent <= 25,
-        "Intel DRM process-counter parsing changed")
+        && cpu.gpu.driverName === "xe",
+        "Intel model or driver parsing changed")
 
       cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
 
@@ -138,27 +118,16 @@ ShellRoot {
       root.check(telemetry.system.cpuConsumers === 0,
         "CPU lease did not balance")
       cpu.gpu.acquire()
-      cpu.gpu.acquireDetails()
-      root.check(cpu.gpu.detailsConsumers === 1 && !cpu.gpu.detailsReady,
-        "GPU detail lease did not start cleanly")
       cpu.gpu.parse([
         "nvidia|12|45|256|8192",
         "meta|Fixture GPU|nvidia|1.0",
-        "proc|41|8|64|fixture",
         "status|ok"
-      ].join("\n"), true)
-      root.check(cpu.gpu.detailsReady
-        && cpu.gpu.topProcesses.length === 1,
-        "GPU detail sample did not become ready")
-      cpu.gpu.parse("", true)
-      root.check(cpu.gpu.detailsFailed && cpu.gpu.probeFailed
-        && cpu.gpu.topProcesses.length === 1,
-        "failed GPU probe replaced the last complete detail sample")
-      cpu.gpu.releaseDetails()
-      root.check(cpu.gpu.detailsConsumers === 0
-        && !cpu.gpu.detailsReady
-        && cpu.gpu.topProcesses.length === 0,
-        "GPU detail lease did not clear transient state")
+      ].join("\n"))
+      cpu.gpu.parse("")
+      root.check(cpu.gpu.probeFailed
+        && cpu.gpu.name === "Fixture GPU"
+        && cpu.gpu.utilization === 12,
+        "failed GPU probe replaced the last complete summary sample")
       cpu.gpu.release()
       root.check(cpu.gpu.consumers === 0,
         "GPU lease did not balance")

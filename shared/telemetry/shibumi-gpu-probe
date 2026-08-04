@@ -3,10 +3,7 @@
 set -uo pipefail
 shopt -s extglob nullglob
 
-details=${1:-0}
-[[ $details == 1 ]] || details=0
 sys_root=${SHIBUMI_GPU_SYS_ROOT:-/sys}
-proc_root=${SHIBUMI_GPU_PROC_ROOT:-/proc}
 
 clean_field() {
   local value=${1:-}
@@ -49,112 +46,6 @@ probe_nvidia() {
 
   printf 'nvidia|%s|%s|%s|%s\n' "$util" "$temp" "$used" "$total"
   printf 'meta|%s|nvidia|%s\n' "$name" "$version"
-  [[ $details == 1 ]] || return 0
-
-  local gpu_id pid _type sm mem enc dec jpg ofa fb _ccpm command_name _extra
-  local metric parsed percent memory previous_percent
-  local -a process_order=()
-  declare -A process_seen=()
-  declare -A process_percent=()
-  declare -A process_memory=()
-  declare -A process_name=()
-  while read -r gpu_id pid _type sm mem enc dec jpg ofa fb _ccpm \
-      command_name _extra; do
-    [[ $gpu_id == 0 && $pid =~ ^[0-9]+$ ]] || continue
-    if [[ ${process_seen[$pid]:-0} != 1 ]]; then
-      process_seen[$pid]=1
-      process_order+=("$pid")
-      process_percent[$pid]=-1
-    fi
-
-    # NVIDIA uses '-' when a single pmon sample cannot attribute engine load
-    # to a process. Keep that state unknown and aggregate the highest real
-    # value across two samples; treating '-' as 0 would fabricate idle load.
-    percent=-1
-    for metric in "$sm" "$mem" "$enc" "$dec" "$jpg" "$ofa"; do
-      parsed=$(integer_field "$metric") || continue
-      (( parsed > percent )) && percent=$parsed
-    done
-    previous_percent=${process_percent[$pid]}
-    (( percent > previous_percent )) && process_percent[$pid]=$percent
-    memory=$(integer_field "$fb") || memory=0
-    (( memory >= ${process_memory[$pid]:-0} )) && process_memory[$pid]=$memory
-    command_name=$(clean_field "${command_name:-GPU process}")
-    [[ -n $command_name ]] || command_name="GPU process"
-    process_name[$pid]=$command_name
-  done < <("$nvidia_bin" pmon -d 1 -c 2 -s um 2>/dev/null)
-
-  for pid in "${process_order[@]}"; do
-    printf 'proc|%s|%s|%s|%s\n' \
-      "$pid" "${process_percent[$pid]}" "${process_memory[$pid]:-0}" \
-      "${process_name[$pid]:-GPU process}"
-  done
-  return 0
-}
-
-emit_drm_processes() {
-  local slot=$1
-  local driver=$2
-  local info relative pid key value compact number client_key name
-  local fd_driver pdev client engine memory_kib
-  declare -A seen=()
-  declare -A ticks=()
-  declare -A memory=()
-  declare -A pids=()
-
-  for info in "$proc_root"/[0-9]*/fdinfo/*; do
-    [[ -r $info ]] || continue
-    relative=${info#"$proc_root"/}
-    pid=${relative%%/*}
-    [[ $pid =~ ^[0-9]+$ ]] || continue
-    fd_driver=""
-    pdev=""
-    client=""
-    engine=0
-    memory_kib=0
-    while IFS=: read -r key value; do
-      compact=${value//[[:space:]]/}
-      case $key in
-        drm-driver)
-          fd_driver=$compact
-          ;;
-        drm-pdev)
-          pdev=$compact
-          ;;
-        drm-client-id)
-          client=$compact
-          ;;
-        drm-engine-*)
-          number=${value//[^0-9]/}
-          [[ -n $number ]] && engine=$((engine + number))
-          ;;
-        drm-memory-*)
-          number=${value//[^0-9]/}
-          [[ -n $number ]] && memory_kib=$((memory_kib + number))
-          ;;
-      esac
-    done <"$info"
-
-    [[ $pdev == "$slot" || (-z $pdev && $fd_driver == "$driver") ]] \
-      || continue
-    (( engine > 0 || memory_kib > 0 )) || continue
-    client_key="$pid:${client:-$info}"
-    [[ ${seen[$client_key]:-0} != 1 ]] || continue
-    seen[$client_key]=1
-    ticks[$pid]=$(( ${ticks[$pid]:-0} + engine ))
-    memory[$pid]=$(( ${memory[$pid]:-0} + memory_kib ))
-    pids[$pid]=1
-  done
-
-  for pid in "${!pids[@]}"; do
-    name=""
-    [[ -r $proc_root/$pid/comm ]] && IFS= read -r name <"$proc_root/$pid/comm"
-    name=$(clean_field "$name")
-    [[ -n $name ]] || name="PID $pid"
-    printf 'counter|%s|%s|%s|%s\n' \
-      "$pid" "${ticks[$pid]:-0}" \
-      "$(( (${memory[$pid]:-0} + 1023) / 1024 ))" "$name"
-  done
 }
 
 probe_drm() {
@@ -216,7 +107,6 @@ probe_drm() {
     printf 'sysfs|%s|%s|%s|%s\n' \
       "$util" "$temp" "$used_mib" "$total_mib"
     printf 'meta|%s|%s|%s\n' "$model" "$driver" "$version"
-    [[ $details == 1 ]] && emit_drm_processes "$slot" "$driver"
     return 0
   done
   return 1

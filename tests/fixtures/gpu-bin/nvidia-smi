@@ -6,17 +6,6 @@ case ${1:-} in
   --query-gpu=*)
     printf '%s\n' 'NVIDIA GeForce RTX 2080 SUPER, 610.43.03, 28, 39, 1908, 8192'
     ;;
-  pmon)
-    printf '%s\n' \
-      '# gpu pid type sm mem enc dec jpg ofa fb ccpm command' \
-      '0 101 G 17 9 - - - - 183 0 Hyprland' \
-      '0 102 C - - - - - - 941 0 electron' \
-      '0 103 C 4 2 - - - - 256 0 renderer' \
-      '1 999 C 88 70 - - - - 4000 0 other-gpu' \
-      '0 101 G - - - - - - 183 0 Hyprland' \
-      '0 102 C - - - - - - 941 0 electron' \
-      '0 103 C 21 8 - - - - 264 0 renderer'
-    ;;
   *)
     exit 2
     ;;

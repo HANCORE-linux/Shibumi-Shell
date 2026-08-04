@@ -84,14 +84,25 @@ if rg -Fq 'visible: root.gpu && root.gpu.available' "$gpu_widget"; then
   fail "active GPU widget still collapses to 0x0 without a telemetry backend"
 fi
 for panel_contract in \
-  'gpu.acquireDetails()' \
-  'gpu.releaseDetails()' \
-  'text: "TOP GPU PROCESSES"' \
-  '"GPU process data unavailable"' \
   'const driver = String(gpu.driverName' \
-  'panel.gpu.topProcesses'; do
+  'label: "Device"' \
+  'label: "Driver"' \
+  'label: "Load"' \
+  'label: "Temperature"' \
+  'label: "VRAM"'; do
   rg -Fq "$panel_contract" "$gpu_panel" \
-    || fail "GPU panel detail contract is missing: $panel_contract"
+    || fail "GPU panel hardware contract is missing: $panel_contract"
+done
+if rg -q 'topProcesses|acquireDetails|releaseDetails|GPU PROCESSES|process data' \
+    "$gpu_panel" "$repo_root/hancore.shibumi.cpu/GpuTelemetry.qml"; then
+  fail "removed GPU process telemetry is still reachable"
+fi
+for removed_process_contract in pmon SHIBUMI_GPU_PROC_ROOT \
+    emit_drm_processes "printf 'proc|" "printf 'counter|"; do
+  if rg -Fq "$removed_process_contract" \
+      "$repo_root/shared/telemetry/shibumi-gpu-probe"; then
+    fail "GPU helper still collects per-process activity: $removed_process_contract"
+  fi
 done
 rg -Fq 'command: ["timeout", "--signal=TERM"' \
   "$repo_root/hancore.shibumi.cpu/GpuTelemetry.qml" \

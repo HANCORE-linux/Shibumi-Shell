@@ -123,13 +123,13 @@ ShellRoot {
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
       if (root.phase === 1) {
-        if (cpuService.gpu.detailsConsumers !== 1) return
+        if (!gpu.opened) return
         gpu.close()
         root.phase = 2
         return
       }
       if (root.phase === 2) {
-        if (cpuService.gpu.detailsConsumers !== 0) return
+        if (gpu.opened) return
         memoryLoader.active = false
         cpuLoader.active = false
         gpuLoader.active = false
