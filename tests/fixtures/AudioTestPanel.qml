@@ -17,7 +17,7 @@ Item {
   property bool inputMuted: false
   property var sink: sinkA
   property var source: sourceA
-  property var audioSinks: [sinkA, sinkB]
+  property var audioSinks: [sinkA, sinkC, sinkB]
   property var audioSources: [sourceA, sourceB]
   property var audioStreams: [streamA, streamB]
   property int defaultSinkChanges: 0
@@ -82,6 +82,12 @@ Item {
   }
 
   QtObject {
+    id: sinkAudioC
+    property real volume: 1.00
+    property bool muted: false
+  }
+
+  QtObject {
     id: sourceAudioA
     property real volume: 0.64
     property bool muted: false
@@ -113,6 +119,7 @@ Item {
     property string nickname: "SteelSeries Arctis 7"
     property string description: "SteelSeries Arctis 7 Chat"
     property var properties: ({
+      "device.id": "99",
       "node.nick": "SteelSeries Arctis 7",
       "device.profile.description": "Chat"
     })
@@ -125,12 +132,27 @@ Item {
     property string name: "sink-b"
     property bool ready: true
     property string nickname: "USB Audio #1"
-    property string description: "SteelSeries Arctis 7 Game"
+    property string description: "SteelSeries Arctis 7"
     property var properties: ({
+      "device.id": "99",
       "node.nick": "USB Audio #1",
       "device.profile.description": "Game"
     })
     property var audio: sinkAudioB
+  }
+
+  QtObject {
+    id: sinkC
+    property int id: 7
+    property string name: "sink-hdmi"
+    property bool ready: true
+    property string nickname: "27GL850"
+    property string description: "TU104 HD Audio Controller Digital Stereo (HDMI)"
+    property var properties: ({
+      "device.id": "80",
+      "device.profile.description": "Digital Stereo (HDMI)"
+    })
+    property var audio: sinkAudioC
   }
 
   QtObject {

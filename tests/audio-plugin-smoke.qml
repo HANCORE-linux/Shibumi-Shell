@@ -155,7 +155,7 @@ ShellRoot {
       } else if (root.phase === 3) {
         if (!audio.panelLoaded || !audio.panelItem) return
         if (fakeBar.activePopout !== audio
-            || audio.panelItem.renderedSinkCount !== 2
+            || audio.panelItem.renderedSinkCount !== 3
             || audio.panelItem.renderedSourceCount !== 2
             || audio.panelItem.renderedStreamCount !== 2)
           return root.fail("local mixer model/popout ownership")

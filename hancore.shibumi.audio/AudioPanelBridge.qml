@@ -19,7 +19,7 @@ Item {
   readonly property var sink: ready && panel.sink !== undefined ? panel.sink : null
   readonly property var source: ready && panel.source !== undefined ? panel.source : null
   readonly property var audioSinks: ready && panel.audioSinks !== undefined
-    ? panel.audioSinks : []
+    ? groupedDeviceNodes(panel.audioSinks) : []
   readonly property var audioSources: ready && panel.audioSources !== undefined
     ? panel.audioSources : []
   readonly property var audioStreams: ready && panel.audioStreams !== undefined
@@ -91,18 +91,84 @@ Item {
     return !label || label === "(null)" ? "" : label
   }
 
+  function nodeProperties(node) {
+    return node && node.ready !== false && node.properties
+      ? node.properties : ({})
+  }
+
+  function nodeDeviceKey(node) {
+    const properties = nodeProperties(node)
+    const deviceId = usableDeviceLabel(properties["device.id"])
+    if (deviceId) return "id:" + deviceId
+
+    const deviceName = usableDeviceLabel(properties["device.name"])
+    if (deviceName) return "device:" + deviceName.toLowerCase()
+
+    const nodeName = usableDeviceLabel(node && node.name)
+    const profileSeparator = nodeName.lastIndexOf(".")
+    return "node:" + (profileSeparator > 0
+      ? nodeName.slice(0, profileSeparator) : nodeName).toLowerCase()
+  }
+
+  function nodeProfileKey(node) {
+    const properties = nodeProperties(node)
+    return usableDeviceLabel(
+      properties["device.profile.description"]).toLowerCase()
+  }
+
+  function groupedDeviceNodes(values) {
+    const groups = []
+    if (!values) return []
+
+    for (let i = 0; i < values.length; i++) {
+      const node = values[i]
+      if (!node) continue
+      const key = nodeDeviceKey(node) || "index:" + i
+      let group = null
+      for (let j = 0; j < groups.length; j++) {
+        if (groups[j].key === key) {
+          group = groups[j]
+          break
+        }
+      }
+      if (!group) {
+        group = { key: key, nodes: [] }
+        groups.push(group)
+      }
+      group.nodes.push(node)
+    }
+
+    const result = []
+    for (let i = 0; i < groups.length; i++) {
+      groups[i].nodes.sort(function(left, right) {
+        const leftProfile = nodeProfileKey(left)
+        const rightProfile = nodeProfileKey(right)
+        return leftProfile < rightProfile ? -1
+          : leftProfile > rightProfile ? 1 : 0
+      })
+      for (let j = 0; j < groups[i].nodes.length; j++)
+        result.push(groups[i].nodes[j])
+    }
+    return result
+  }
+
   function descriptiveNodeLabel(node) {
     if (!node) return ""
+    const properties = nodeProperties(node)
+    const profile = usableDeviceLabel(properties["device.profile.description"])
     let label = usableDeviceLabel(node.description)
+    if (label && profile
+        && label.toLowerCase().indexOf(profile.toLowerCase()) < 0)
+      return label + " " + profile
     if (label) return label
 
-    const properties = node.ready !== false && node.properties
-      ? node.properties : ({})
     label = usableDeviceLabel(properties["node.description"])
+    if (label && profile
+        && label.toLowerCase().indexOf(profile.toLowerCase()) < 0)
+      return label + " " + profile
     if (label) return label
 
     const device = usableDeviceLabel(properties["device.description"])
-    const profile = usableDeviceLabel(properties["device.profile.description"])
     if (device && profile
         && device.toLowerCase().indexOf(profile.toLowerCase()) < 0)
       return device + " " + profile
