@@ -603,6 +603,9 @@ if rg -Fq 'text: "GPU "' hancore.shibumi.gpu/BarWidget.qml; then
 fi
 rg -Fq 'text: ""' hancore.shibumi.temperature/BarWidget.qml \
   || fail "temperature bar icon drifted from the original V2 glyph"
+rg -Fq 'if ("hostGroupId" in target) target.hostGroupId = region' \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "dynamic V1 widgets do not receive their persisted group identity"
 
 # Quattro owns the canonical foundational palette. Shibumi keeps its V1
 # semantic names internally and reads the seven terminal swatches that the

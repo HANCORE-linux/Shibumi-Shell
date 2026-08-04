@@ -190,6 +190,9 @@ for contract in \
   'readonly property int trafficHistoryLimit: 30' \
   'width: visible ? 36 : 0' \
   'height: 14' \
+  'interval: 2000' \
+  'running: root.mode === "ethernet" && !root.v2Presentation' \
+  'y: height - (Math.max(0, Number(values[index]) || 0)' \
   'text: "↓" + root.v1Rate(root.downloadRate)' \
   'text: "↑" + root.v1Rate(root.uploadRate)' \
   'font.pixelSize: 10' \

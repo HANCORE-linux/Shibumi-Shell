@@ -6,12 +6,16 @@ import "telemetry" as Telemetry
 import "memory" as Memory
 import "cpu" as Cpu
 import "gpu" as Gpu
+import "temperature" as Temperature
 
 ShellRoot {
   id: root
 
   property int attempts: 0
   property int phase: 0
+
+  Component.onCompleted:
+    telemetryService.thermal.parseDetailed("55|63|90|105|44|82|90|39")
 
   function fail(message) {
     console.error("telemetry-plugins-smoke:", message)
@@ -32,7 +36,23 @@ ShellRoot {
     function serviceFor(pluginId) {
       if (pluginId === "hancore.shibumi.telemetry") return telemetryService
       if (pluginId === "hancore.shibumi.cpu") return cpuService
+      if (pluginId === "hancore.shibumi.state") return fakeState
       return null
+    }
+  }
+
+  QtObject {
+    id: fakeState
+
+    property string lastGroup: ""
+    property string lastKey: ""
+    property string lastValue: ""
+
+    function setGroupSetting(group, key, value) {
+      lastGroup = String(group)
+      lastKey = String(key)
+      lastValue = String(value)
+      return true
     }
   }
 
@@ -110,6 +130,18 @@ ShellRoot {
     }
   }
 
+  Loader {
+    id: temperatureLoader
+    active: true
+    sourceComponent: Component {
+      Temperature.BarWidget {
+        bar: fakeBar
+        hostGroupId: "G:hancore.shibumi.temperature"
+        settings: ({ displayMode: "full", source: "cpu" })
+      }
+    }
+  }
+
   Timer {
     interval: 40
     running: true
@@ -119,7 +151,8 @@ ShellRoot {
       const memory = memoryLoader.item
       const cpu = cpuLoader.item
       const gpu = gpuLoader.item
-      if (!memory || !cpu || !gpu || root.attempts < 4) return
+      const temperature = temperatureLoader.item
+      if (!memory || !cpu || !gpu || !temperature || root.attempts < 4) return
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
       if (root.phase === 1) {
@@ -133,6 +166,7 @@ ShellRoot {
         memoryLoader.active = false
         cpuLoader.active = false
         gpuLoader.active = false
+        temperatureLoader.active = false
         releaseCheck.restart()
         stop()
         return
@@ -144,13 +178,19 @@ ShellRoot {
           || gpu.gpu !== cpuService.gpu)
         return root.fail("service resolution crossed plugin ownership")
       if (!memory.compact || cpu.compact || gpu.displayMode !== "icon"
-          || !gpu.visible || gpu.implicitWidth <= 0)
+          || !gpu.visible || gpu.implicitWidth <= 0
+          || temperature.stateGroupId !== "G:hancore.shibumi.temperature")
         return root.fail("widget settings were not retained")
       if (telemetryService.system.memoryConsumers !== 1
           || telemetryService.system.cpuConsumers !== 1)
         return root.fail("shared telemetry leases are not balanced per widget")
       if (cpuService.gpu.consumers !== 1)
         return root.fail("GPU widget did not own exactly one telemetry lease")
+      if (telemetryService.thermal.consumers !== 1
+          || !temperature.setTemperatureSource("memory")
+          || fakeState.lastGroup !== "G:hancore.shibumi.temperature"
+          || fakeState.lastKey !== "source" || fakeState.lastValue !== "memory")
+        return root.fail("dynamic V1 temperature source persistence")
       if (!memory.openSystemMonitor()
           || fakeBar.lastCommand !== "omarchy-launch-or-focus-tui btop"
           || !cpu.openSystemMonitor()
@@ -169,7 +209,8 @@ ShellRoot {
     onTriggered: {
       if (telemetryService.system.memoryConsumers !== 0
           || telemetryService.system.cpuConsumers !== 0
-          || cpuService.gpu.consumers !== 0)
+          || cpuService.gpu.consumers !== 0
+          || telemetryService.thermal.consumers !== 0)
         return root.fail("widget destruction leaked telemetry leases")
       console.log("telemetry plugins smoke passed")
       Qt.quit()

@@ -9,10 +9,6 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var storage
-  readonly property color selectionAccent: ownerWidget
-    && ownerWidget.stateService
-    && typeof ownerWidget.stateService.paletteColor === "function"
-    ? ownerWidget.stateService.paletteColor("color03") : panel.controlAccent
   readonly property color unmountedAccent: ownerWidget
     && ownerWidget.stateService
     && typeof ownerWidget.stateService.paletteColor === "function"
@@ -172,9 +168,10 @@ ShibumiPanel {
         Accessible.role: Accessible.Button
         Accessible.name: "Show root filesystem in the storage bar"
         radius: panel.controlRadius
-        color: hovered ? panel.controlHoverFillColor : panel.controlFillColor
+        color: selected ? panel.controlActiveFillColor
+          : hovered ? panel.controlHoverFillColor : panel.controlFillColor
         border.width: panel.controlBorderWidth
-        border.color: selected || activeFocus ? panel.selectionAccent
+        border.color: selected || activeFocus ? panel.controlAccent
           : hovered ? panel.controlHoverBorderColor : panel.controlBorderColor
 
         Behavior on color { ColorAnimation { duration: 120 } }
@@ -213,7 +210,7 @@ ShibumiPanel {
               - 3 * rootChoiceContent.spacing
             text: "Root filesystem"
             color: rootChoice.selected
-              ? panel.selectionAccent : panel.bar.foreground
+              ? panel.controlAccent : panel.bar.foreground
             elide: Text.ElideRight
             font.family: panel.bar.fontFamily
             font.pixelSize: Commons.Style.font.body
@@ -231,7 +228,7 @@ ShibumiPanel {
               width: parent.width
               text: panel.dataSize(panel.storage ? panel.storage.totalBytes : 0)
               color: rootChoice.selected
-                ? panel.selectionAccent : panel.bar.foreground
+                ? panel.controlAccent : panel.bar.foreground
               horizontalAlignment: Text.AlignRight
               font.family: panel.bar.fontFamily
               font.pixelSize: Commons.Style.font.body
@@ -324,11 +321,12 @@ ShibumiPanel {
               + String(driveRow.modelData.model || driveRow.modelData.name)
               + " in the storage bar"
             radius: panel.controlRadius
-            color: driveRow.hovered
-              ? panel.controlHoverFillColor : panel.controlFillColor
+            color: driveRow.selected ? panel.controlActiveFillColor
+              : driveRow.hovered
+                ? panel.controlHoverFillColor : panel.controlFillColor
             border.width: panel.controlBorderWidth
             border.color: driveRow.selected || activeFocus
-              ? panel.selectionAccent : driveRow.hovered
+              ? panel.controlAccent : driveRow.hovered
                 ? panel.controlHoverBorderColor : panel.controlBorderColor
 
             Behavior on color { ColorAnimation { duration: 120 } }
@@ -369,7 +367,7 @@ ShibumiPanel {
                 text: driveRow.modelData.model || driveRow.modelData.name
                 color: driveRow.modelData.mountedVolumes === 0
                   ? panel.unmountedAccent : driveRow.selected
-                    ? panel.selectionAccent : panel.bar.foreground
+                    ? panel.controlAccent : panel.bar.foreground
                 elide: Text.ElideRight
                 font.family: panel.bar.fontFamily
                 font.pixelSize: Commons.Style.font.body
@@ -389,7 +387,7 @@ ShibumiPanel {
                   text: panel.capacity(driveRow.modelData.sizeBytes)
                   color: driveRow.modelData.mountedVolumes === 0
                     ? panel.unmountedAccent : driveRow.selected
-                      ? panel.selectionAccent : panel.bar.foreground
+                      ? panel.controlAccent : panel.bar.foreground
                   horizontalAlignment: Text.AlignRight
                   font.family: panel.bar.fontFamily
                   font.pixelSize: Commons.Style.font.body
@@ -517,7 +515,7 @@ ShibumiPanel {
           Text {
             width: parent.width - volumeCount.width
             text: "VOLUMES"
-            color: panel.selectionAccent
+            color: panel.controlAccent
             font.family: panel.bar.fontFamily
             font.pixelSize: Commons.Style.font.caption
             font.weight: Font.DemiBold
@@ -529,7 +527,7 @@ ShibumiPanel {
             text: panel.detailDrive
               && Array.isArray(panel.detailDrive.volumes)
               ? String(panel.detailDrive.volumes.length) : "0"
-            color: panel.selectionAccent
+            color: panel.controlAccent
             font.family: panel.bar.fontFamily
             font.pixelSize: Commons.Style.font.caption
             font.weight: Font.DemiBold
@@ -596,10 +594,11 @@ ShibumiPanel {
     Accessible.role: Accessible.Button
     Accessible.name: label
     radius: panel.controlRadius
-    color: choicePointer.containsMouse
-      ? panel.controlHoverFillColor : panel.controlFillColor
+    color: selected ? panel.controlActiveFillColor
+      : choicePointer.containsMouse
+        ? panel.controlHoverFillColor : panel.controlFillColor
     border.width: panel.controlBorderWidth
-    border.color: selected || activeFocus ? panel.selectionAccent
+    border.color: selected || activeFocus ? panel.controlAccent
       : choicePointer.containsMouse ? panel.controlHoverBorderColor
         : panel.controlBorderColor
 
@@ -610,7 +609,7 @@ ShibumiPanel {
       anchors.leftMargin: Commons.Style.space(6)
       anchors.rightMargin: Commons.Style.space(6)
       text: choice.label
-      color: choice.selected ? panel.selectionAccent : panel.bar.foreground
+      color: choice.selected ? panel.controlAccent : panel.bar.foreground
       horizontalAlignment: Text.AlignHCenter
       verticalAlignment: Text.AlignVCenter
       elide: Text.ElideRight
@@ -643,7 +642,7 @@ ShibumiPanel {
     activeFocusOnTab: true
     radius: panel.controlRadius
     foreground: panel.bar.foreground
-    accent: panel.selectionAccent
+    accent: panel.controlAccent
     Accessible.role: Accessible.Button
     Accessible.name: "LSBLK INFO"
 
@@ -653,7 +652,7 @@ ShibumiPanel {
       color: infoPointer.containsMouse || infoAction.activeFocus
         ? panel.controlHoverFillColor : "transparent"
       border.width: infoAction.activeFocus ? panel.controlBorderWidth : 0
-      border.color: panel.selectionAccent
+      border.color: panel.controlAccent
 
       Behavior on color { ColorAnimation { duration: 120 } }
     }
@@ -666,7 +665,7 @@ ShibumiPanel {
       radius: 9
       color: "transparent"
       border.width: 1
-      border.color: panel.selectionAccent
+      border.color: panel.controlAccent
       antialiasing: true
 
       Rectangle {
@@ -676,7 +675,7 @@ ShibumiPanel {
         width: 2
         height: 2
         radius: 1
-        color: panel.selectionAccent
+        color: panel.controlAccent
         antialiasing: true
       }
 
@@ -687,7 +686,7 @@ ShibumiPanel {
         width: 2
         height: 6
         radius: 1
-        color: panel.selectionAccent
+        color: panel.controlAccent
         antialiasing: true
       }
     }

@@ -140,6 +140,7 @@ ShellRoot {
     id: storageWidgetComponent
     Storage.BarWidget {
       bar: fakeBar
+      hostGroupId: "G:hancore.shibumi.storage"
       settings: ({ displayMode: "full", source: "/dev/nvme0n1" })
     }
   }
@@ -175,6 +176,8 @@ ShellRoot {
     if (storagePanel.freeSummary(75, 268435456000, 1073741824000)
         !== "25% FREE · 250.0/1000.0 GiB")
       return fail("free percentage summary")
+    if (String(storagePanel.controlAccent).toLowerCase() !== "#d75f5f")
+      return fail("storage standard control accent")
     if (!storage.inventoryAvailable || storage.drives.length !== 3)
       return fail("physical drive filtering")
 
@@ -219,7 +222,8 @@ ShellRoot {
             || storageWidget.selectedLabel !== "Fast NVMe")
           return root.fail("selected bar percentage")
         if (!storageWidget.setStorageSource("/dev/sda")
-            || fakeState.lastGroup !== "G18" || fakeState.lastKey !== "source"
+            || fakeState.lastGroup !== "G:hancore.shibumi.storage"
+            || fakeState.lastKey !== "source"
             || fakeState.lastValue !== "/dev/sda")
           return root.fail("selected storage persistence")
         storagePanel.showInfo("/dev/nvme0n1")

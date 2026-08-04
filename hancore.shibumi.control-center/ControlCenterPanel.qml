@@ -522,9 +522,8 @@ ShibumiPanel {
             && ["left", "center", "right"].indexOf(
               String(manifest.barWidget.defaultSection || "")) >= 0
             ? String(manifest.barWidget.defaultSection) : "right"
-          const changed = bar
-            && typeof bar.setBarWidgetInstalled === "function"
-            ? bar.setBarWidgetInstalled(id, enabled === true, section) : false
+          const changed = setPluginBarWidgetEnabled(
+            id, enabled === true, section)
           if (!changed)
             pluginActionError = enabled === true
               ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
@@ -546,8 +545,7 @@ ShibumiPanel {
         && ["left", "center", "right"].indexOf(
           String(manifest.barWidget.defaultSection || "")) >= 0
         ? String(manifest.barWidget.defaultSection) : "center"
-      const changed = bar && typeof bar.setBarWidgetInstalled === "function"
-        ? bar.setBarWidgetInstalled(id, enabled === true, section) : false
+      const changed = setPluginBarWidgetEnabled(id, enabled === true, section)
       if (!changed)
         pluginActionError = enabled === true
           ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
@@ -561,6 +559,15 @@ ShibumiPanel {
       return false
     }
     return pluginRegistry.setEnabled(id, enabled === true)
+  }
+
+  function setPluginBarWidgetEnabled(pluginId, enabled, section) {
+    return runWithControlCenterRestore(function() {
+      return bar && typeof bar.setBarWidgetInstalled === "function"
+        ? bar.setBarWidgetInstalled(
+            String(pluginId || ""), enabled === true, String(section || ""))
+        : false
+    })
   }
 
   function restoreShibumiProvider(groupId) {

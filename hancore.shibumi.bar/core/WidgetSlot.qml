@@ -410,6 +410,7 @@ Item {
     if (!target) return
     if ("bar" in target) target.bar = bar
     if ("moduleName" in target) target.moduleName = moduleName
+    if ("hostGroupId" in target) target.hostGroupId = region
     if ("settings" in target) target.settings = moduleSettings
     if ("availableWidth" in target) target.availableWidth = availableWidth
   }

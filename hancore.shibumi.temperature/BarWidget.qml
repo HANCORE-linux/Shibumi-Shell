@@ -19,7 +19,9 @@ Ui.Panel {
     ? telemetryService.thermal : null
   readonly property var stateService: hostShell
     && typeof hostShell.serviceFor === "function"
-    ? hostShell.serviceFor("hancore.shibumi.state") : null
+      ? hostShell.serviceFor("hancore.shibumi.state") : null
+  property string hostGroupId: ""
+  readonly property string stateGroupId: hostGroupId !== "" ? hostGroupId : "G16"
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -74,7 +76,7 @@ Ui.Panel {
         || typeof telemetry.sourceAvailable !== "function"
         || !telemetry.sourceAvailable(candidate)) return false
     return stateService && typeof stateService.setGroupSetting === "function"
-      ? stateService.setGroupSetting("G16", "source", candidate) : false
+      ? stateService.setGroupSetting(stateGroupId, "source", candidate) : false
   }
 
   onTelemetryChanged: syncTelemetryOwner()

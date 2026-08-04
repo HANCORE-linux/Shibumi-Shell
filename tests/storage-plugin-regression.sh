@@ -39,7 +39,8 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'storage plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' <<<"$output"; then
+if grep -Eq 'storage-plugin-smoke:|TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$output"; then
   fail "QML runtime error detected"
 fi
 telemetry="$repo_root/hancore.shibumi.storage/StorageTelemetry.qml"
@@ -72,13 +73,12 @@ for panel_contract in \
 done
 for selection_contract in \
   'readonly property int selectedPercent:' \
-  'stateService.setGroupSetting("G18", "source", target)' \
+  'stateService.setGroupSetting(stateGroupId, "source", target)' \
   'text: String(Math.min(100, root.selectedPercent))'; do
   rg -Fq "$selection_contract" "$widget" \
     || fail "storage bar selection contract missing: $selection_contract"
 done
 for selection_contract in \
-  'ownerWidget.stateService.paletteColor("color03")' \
   'ownerWidget.stateService.paletteColor("color04")' \
   '"NOT MOUNTED"' \
   'label: "LSBLK INFO"' \
@@ -100,6 +100,19 @@ for selection_contract in \
   rg -Fq "$selection_contract" "$panel" \
     || fail "storage panel selection contract missing: $selection_contract"
 done
+for bar_accent_contract in \
+  'color: selected ? panel.controlActiveFillColor' \
+  'color: driveRow.selected ? panel.controlActiveFillColor' \
+  'border.color: selected || activeFocus ? panel.controlAccent' \
+  '? panel.controlAccent : driveRow.hovered' \
+  'accent: panel.controlAccent' \
+  'border.color: panel.controlAccent'; do
+  rg -Fq "$bar_accent_contract" "$panel" \
+    || fail "storage controls lost standard color roles: $bar_accent_contract"
+done
+if rg -Fq 'paletteColor("color03")' "$panel"; then
+  fail "storage selection still has a panel-specific color03 role"
+fi
 [[ $(rg -Fc 'spacing: panel.driveGroupSpacing' "$panel") -eq 2 ]] \
   || fail "drive group separator spacing is not symmetric"
 

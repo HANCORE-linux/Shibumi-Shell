@@ -19,7 +19,9 @@ Ui.Panel {
     ? storageService.storage : null
   readonly property var stateService: hostShell
     && typeof hostShell.serviceFor === "function"
-    ? hostShell.serviceFor("hancore.shibumi.state") : null
+      ? hostShell.serviceFor("hancore.shibumi.state") : null
+  property string hostGroupId: ""
+  readonly property string stateGroupId: hostGroupId !== "" ? hostGroupId : "G18"
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -74,7 +76,7 @@ Ui.Panel {
     const target = String(source || "")
     if (!storageSourceAvailable(target)) return false
     return stateService && typeof stateService.setGroupSetting === "function"
-      ? stateService.setGroupSetting("G18", "source", target) : false
+      ? stateService.setGroupSetting(stateGroupId, "source", target) : false
   }
 
   function syncPanelLoader() {

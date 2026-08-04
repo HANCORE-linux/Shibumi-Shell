@@ -231,7 +231,7 @@ if rg -q 'visible: activeItem' core/WidgetSlot.qml; then
   fail "widget slot visibility must not depend on child effective visibility"
 fi
 
-for injected_name in bar moduleName settings; do
+for injected_name in bar moduleName hostGroupId settings; do
   rg -q "if \(\"${injected_name}\" in target\)" core/WidgetSlot.qml \
     || fail "widget slot does not inject $injected_name"
 done

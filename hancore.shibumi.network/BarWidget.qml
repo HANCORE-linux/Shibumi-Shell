@@ -157,8 +157,6 @@ Ui.Panel {
   onOpenedChanged: syncPanelLoader()
   onNetworkReadyChanged: syncPanelLoader()
   onPopupSourceChanged: syncPanelLoader()
-  onDownloadRateChanged: trafficSample.restart()
-  onUploadRateChanged: trafficSample.restart()
   onModeChanged: if (mode !== "ethernet") resetTrafficHistory()
   Component.onDestruction: {
     close()
@@ -169,8 +167,9 @@ Ui.Panel {
 
   Timer {
     id: trafficSample
-    interval: 0
-    repeat: false
+    interval: 2000
+    repeat: true
+    running: root.mode === "ethernet" && !root.v2Presentation
     onTriggered: root.appendTrafficSample()
   }
 
@@ -271,8 +270,8 @@ Ui.Panel {
           for (let index = 0; index < values.length; index++) {
             points.push({
               x: index * width / Math.max(1, root.trafficHistoryLimit - 1),
-              y: height - 1 - Math.min(1,
-                Math.max(0, Number(values[index]) || 0) / maximum) * (height - 2)
+              y: height - (Math.max(0, Number(values[index]) || 0)
+                / maximum) * height
             })
           }
           context.beginPath()
@@ -323,6 +322,8 @@ Ui.Panel {
           function onV1SealChanged() { v1TrafficChart.requestPaint() }
           function onV1IndigoChanged() { v1TrafficChart.requestPaint() }
         }
+
+        Component.onCompleted: requestPaint()
       }
 
       Column {

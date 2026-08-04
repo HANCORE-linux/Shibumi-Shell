@@ -216,6 +216,12 @@ rg -Fq 'bar.cancelWidgetRestore(moduleName)' \
 rg -Fq 'function runWithControlCenterRestore(callback)' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "widget Appearance changes do not preserve the Control Center"
+plugin_bar_toggle=$(sed -n \
+  '/^  function setPluginBarWidgetEnabled(pluginId, enabled, section) {$/,/^  }$/p' \
+  "$control_dir/ControlCenterPanel.qml")
+grep -Fq 'return runWithControlCenterRestore(function() {' \
+    <<<"$plugin_bar_toggle" \
+  || fail "V1 plugin activation does not preserve the Control Center"
 rg -Fq 'restoreBar.scheduleWidgetRestore(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "state mutations are not enrolled in panel-owner handoff"
@@ -1370,13 +1376,13 @@ for suite_boundary in \
     'V1 has no free extension slot.' \
     'Control Center rejected suite-internal plugin toggle:' \
     '? String(manifest.barWidget.defaultSection) : "center"' \
-    'bar.setBarWidgetInstalled(id, enabled === true, section)'; do
+    'setPluginBarWidgetEnabled(id, enabled === true, section)'; do
   rg -Fq "$suite_boundary" "$control_dir/ControlCenterPanel.qml" \
     || fail "plugin-manager suite boundary drifted: $suite_boundary"
 done
 for parity_contract in \
     'bar.layoutContains(id)' \
-    'bar.setBarWidgetInstalled(id, enabled === true, section)' \
+    'setPluginBarWidgetEnabled(id, enabled === true, section)' \
     'property string pluginActionError: ""'; do
   rg -Fq "$parity_contract" "$control_dir/ControlCenterPanel.qml" \
     || fail "V1/V2 plugin management parity drifted: $parity_contract"

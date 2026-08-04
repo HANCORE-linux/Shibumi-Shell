@@ -20,6 +20,7 @@ cp -a -- "$repo_root/hancore.shibumi.telemetry" "$tmpdir/telemetry"
 cp -a -- "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 cp -a -- "$repo_root/hancore.shibumi.cpu" "$tmpdir/cpu"
 cp -a -- "$repo_root/hancore.shibumi.gpu" "$tmpdir/gpu"
+cp -a -- "$repo_root/hancore.shibumi.temperature" "$tmpdir/temperature"
 install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
   "$tmpdir/gpu/ShibumiPanel.qml"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
@@ -112,7 +113,7 @@ for source_contract in cpu core gpu nvme memory; do
     "$repo_root/hancore.shibumi.telemetry/ThermalTelemetry.qml" \
     || fail "temperature source is missing: $source_contract"
 done
-rg -q 'setGroupSetting\("G16", "source", candidate\)' \
+rg -q 'setGroupSetting\(stateGroupId, "source", candidate\)' \
   "$repo_root/hancore.shibumi.temperature/BarWidget.qml" \
   || fail "temperature source selection is not persisted"
 rg -q 'panel\.ownerWidget\.setTemperatureSource' \
