@@ -17,6 +17,29 @@ ShellRoot {
   }
 
   QtObject {
+    id: claudeProvider
+    property string providerId: "claude"
+    property string providerName: "Claude Code"
+    property bool ready: true
+    property real rateLimitPercent: 0.025
+    property string rateLimitLabel: "Session (5-hour)"
+    property string rateLimitResetAt: ""
+    property real secondaryRateLimitPercent: -1
+    property string secondaryRateLimitLabel: ""
+    property string secondaryRateLimitResetAt: ""
+    property real todayTotalTokens: 0
+    property real windowTokens: 0
+    property real hourlyTokens: 0
+    property var models: []
+    property string tierLabel: "Max 5x"
+    property string usageStatusText: ""
+    property string latestModel: ""
+    property int refreshCount: 0
+    function refresh(_force) { refreshCount++ }
+    function formatResetTime(_timestamp) { return "" }
+  }
+
+  QtObject {
     id: codexProvider
     property string providerId: "codex"
     property string providerName: "Codex"
@@ -72,7 +95,7 @@ ShellRoot {
   QtObject {
     id: fakeState
     property int revision: 0
-    property string selectedTool: "codex"
+    property string selectedTool: "claude"
     function setWidgetSetting(groupId, moduleId, key, value) {
       if (groupId !== "G7" || moduleId !== "hancore.shibumi.ai"
           || key !== "aiTool") return false
@@ -156,7 +179,7 @@ ShellRoot {
     id: aiService
     shell: fakeShell
     runtimeProbesEnabled: false
-    providerOverrides: [codexProvider, openCodeProvider]
+    providerOverrides: [claudeProvider, codexProvider, openCodeProvider]
   }
 
   Loader {
@@ -205,28 +228,38 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!first.visible || !second.visible || first.aiService !== aiService
-            || second.aiService !== aiService || first.providerId !== "codex"
-            || first.usagePercent !== 13 || aiService.providers.length !== 2
+            || second.aiService !== aiService || first.providerId !== "claude"
+            || first.usagePercent !== 3 || first.steppedPercent !== 5
+            || aiService.providers.length !== 3
             || aiService.detectionReady
             || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
             || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
             || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
             || first.tooltipText.indexOf("local-test") < 0)
+          return root.fail("Claude percentage scaling/fill threshold")
+        aiService.selectTool("codex")
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 1) {
+        if (first.providerId !== "codex" || second.providerId !== "codex"
+            || first.usagePercent !== 13 || fakeState.selectedTool !== "codex"
+            || fakeState.revision !== 1)
           return root.fail("shared provider owner/readiness")
         first.interactionTarget.triggerPress(Qt.MiddleButton)
         root.phase++
         root.ticks = 0
-      } else if (root.phase === 1) {
+      } else if (root.phase === 2) {
         if (first.providerId !== "opencode" || second.providerId !== "opencode"
-            || fakeState.selectedTool !== "opencode" || fakeState.revision !== 1)
+            || fakeState.selectedTool !== "opencode" || fakeState.revision !== 2)
           return root.fail("state-owned provider selection")
         first.interactionTarget.triggerPress(Qt.RightButton)
         first.open()
         second.open()
         root.phase++
         root.ticks = 0
-      } else if (root.phase === 2) {
-        if (codexProvider.refreshCount !== 1 || openCodeProvider.refreshCount !== 1
+      } else if (root.phase === 3) {
+        if (claudeProvider.refreshCount !== 1 || codexProvider.refreshCount !== 1
+            || openCodeProvider.refreshCount !== 1
             || !first.panelLoaded || !second.panelLoaded
             || first.panelItem === second.panelItem)
           return root.fail("refresh forwarding or screen-local panels")

@@ -127,8 +127,10 @@ Item {
   function displayPercent(provider, value) {
     const number = Number(value)
     if (!isFinite(number) || number < 0) return -1
-    if (provider && String(provider.providerId || "") === "codex"
-        && number <= 1)
+    const providerId = provider ? String(provider.providerId || "") : ""
+    // The official Claude and Codex providers expose utilization as a 0..1
+    // fraction. OpenCode is normalized to 0..100 by its local adapter.
+    if ((providerId === "claude" || providerId === "codex") && number <= 1)
       return Math.min(100, number * 100)
     return Math.min(100, number)
   }
