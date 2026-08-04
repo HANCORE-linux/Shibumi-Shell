@@ -712,8 +712,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.3")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.3")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.4")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.4")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -732,7 +732,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.3")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.4")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_update_transactionally_retires_app_menu(self) -> None:
@@ -816,9 +816,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.3")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.3")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.3")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.4")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.4")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.4")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

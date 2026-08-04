@@ -1,8 +1,8 @@
-# Is Shibumi 0.1.1-beta.3 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.4 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.3` is ready for prerelease testing. The validation system passes the
+Shibumi `0.1.1-beta.4` is ready for prerelease testing. The validation system passes the
 complete automated contract and the affected live Wayland workflows. Physical
 multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
 block a stable public release.
@@ -15,7 +15,7 @@ documentation and are not required by Shibumi users.
 
 - **Omarchy**: `4.0.0.r1508.g12af188-1`
 - **Runtime**: `/usr/share/omarchy/shell`
-- **Display**: `eDP-1`, `1920x1080`, scale `1.0`
+- **Display**: `DP-1`, `2560x1440`, scale `1.0`
 - **Candidate**: 24 plugins under `hancore.shibumi.*`
 - **Policy**: Maintainers run destructive runtime acceptance only on the
   isolated validation system
@@ -24,7 +24,7 @@ documentation and are not required by Shibumi users.
 
 ## Prerelease acceptance summary
 
-The existing audit evidence plus the 2026-08-03 beta.2 regression and live
+The existing audit evidence plus the 2026-08-04 beta.4 regression and live
 runtime verification produced these results:
 
 | Gate | Result |
@@ -35,8 +35,8 @@ runtime verification produced these results:
 | Quattro compatibility | Passed against `4.0.0.r1508.g12af188-1` |
 | Plugin validation and self-containment | Passed for all 24 plugins |
 | Complete repository contract | Passed on the validation system |
-| Suite lifecycle unit tests | Passed: 46 of 46 |
-| Control Center manager tests | Passed: 7 of 7 |
+| Suite lifecycle unit tests | Passed: 55 of 55 |
+| Control Center manager tests | Passed: 14 of 14 |
 | Transactional live update | Passed for all 24 plugins |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: 25 markerless alpha plugins adopted and marked |
@@ -57,6 +57,7 @@ The hardened center smoke fails on unavailable QML types or a missing `PanelWind
 The audit fixed these release blockers:
 
 - The **Bars** page can return from Omarchy to Shibumi
+- Suite activation excludes stock Omarchy widgets, and the continuity manager rejects mixed-layout contamination before saving a Shibumi profile
 - The continuity manager discovers the current `/usr/share/omarchy` install when `OMARCHY_PATH` is absent
 - Markerless suite-owned alpha installs can update without accepting foreign plugin directories
 - Temperature selection supports CPU package, hottest core, GPU, NVMe, and memory sources

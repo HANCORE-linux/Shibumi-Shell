@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.brightness",
   "name": "Shibumi Brightness",
-  "version": "0.1.1-beta.3",
+  "version": "0.1.1-beta.4",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi brightness and display presentation over Omarchy's monitor owner.",

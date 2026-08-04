@@ -71,4 +71,4 @@ jobs:
             --verify-tag \
             --prerelease \
             --notes-file "$notes_file" \
-            --title "Shibumi Shell $version"
+            --title "Audio, UI & Lifecycle Fixes"

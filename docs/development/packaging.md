@@ -1,6 +1,6 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.3` candidate contract
+Status: `0.1.1-beta.4` candidate contract
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi

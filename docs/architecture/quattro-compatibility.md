@@ -1,6 +1,6 @@
 # Shibumi host compatibility record
 
-Status: beta-candidate reference (updated 2026-08-02)
+Status: beta-candidate reference (updated 2026-08-04)
 
 Shibumi Shell is built exclusively for Omarchy Quattro. This record ties each
 Shibumi candidate to a measured host baseline. Versions not listed here have
@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.3` candidate is reviewed against this internal validation
+The `0.1.1-beta.4` candidate is reviewed against this internal validation
 baseline:
 
 | Component | Observed value |
@@ -17,7 +17,7 @@ baseline:
 | Omarchy source revision | `12af188` (encoded in the package version) |
 | Quickshell package | `quickshell-git 0.3.0.r18.g10b439f-3` |
 | Omarchy path | `/usr/share/omarchy` |
-| Validation date | 2026-08-02 |
+| Validation date | 2026-08-04 |
 
 The validation system uses the development package, which declares
 `provides = omarchy`.
