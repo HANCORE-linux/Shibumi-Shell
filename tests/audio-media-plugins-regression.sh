@@ -107,8 +107,20 @@ if rg -q 'Quickshell\.Services\.(Pipewire|Mpris)|MprisPlayer' \
 fi
 
 audio_widget="$repo_root/hancore.shibumi.audio/BarWidget.qml"
+embedded_audio_widget="$repo_root/widgets/AudioWidget.qml"
 audio_panel="$repo_root/hancore.shibumi.audio/AudioPanel.qml"
 audio_bridge="$repo_root/hancore.shibumi.audio/AudioPanelBridge.qml"
+for volume_widget in "$audio_widget" "$embedded_audio_widget"; do
+  compact_content=$(sed -n \
+    '/id: compactHorizontalContent/,/id: verticalContent/p' \
+    "$volume_widget")
+  grep -Fq 'horizontalAlignment: Text.AlignLeft' <<<"$compact_content" \
+    || fail "compact audio value does not keep a fixed icon gap"
+  if grep -Fq 'horizontalAlignment: Text.AlignRight' \
+      <<<"$compact_content"; then
+    fail "compact audio value still shifts inside its fixed-width field"
+  fi
+done
 rg -q 'registeredWidgetSource' "$audio_widget" \
   || fail "audio bridge does not resolve the official Omarchy source"
 rg -q 'registeredWidgetComponent' "$audio_widget" \

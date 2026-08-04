@@ -330,7 +330,7 @@ Ui.Panel {
           root.widgetInk.b, root.muted ? 0.35 : 1)
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
-        horizontalAlignment: Text.AlignRight
+        horizontalAlignment: Text.AlignLeft
         renderType: Text.NativeRendering
 
         Behavior on color { ColorAnimation { duration: 160 } }
