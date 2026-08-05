@@ -740,7 +740,9 @@ def command_update(
     confirm("Update Shibumi", args.yes)
 
     revision = suite.revision()
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=not external
+    ) as transaction:
         transaction.preflight_targets(specs, adoptable_plugin_ids)
         payload_digest, plugin_digests = transaction.stage(
             specs, revision=revision, suite_version=suite.version
@@ -762,8 +764,11 @@ def command_update(
         transaction.stage_removal_ids(retired_installed)
         runtime.rescan()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
-        runtime.reload_payload()
+        if external:
+            runtime.reload_config()
+            runtime.reload_payload()
+        else:
+            runtime.restart_shell()
         if PICKER_PLUGIN_ID in plugin_ids:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime, state

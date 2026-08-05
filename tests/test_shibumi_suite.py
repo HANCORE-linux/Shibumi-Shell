@@ -69,6 +69,7 @@ class FakeOmarchyRuntime(OmarchyRuntime):
         self.rescans = 0
         self.reloads = 0
         self.restarts = 0
+        self.fail_restart_count = 0
         self.stops = 0
         self.payload_reloads = 0
         self.fail_payload_reload = False
@@ -97,6 +98,9 @@ class FakeOmarchyRuntime(OmarchyRuntime):
 
     def restart_shell(self) -> None:
         self.restarts += 1
+        if self.fail_restart_count:
+            self.fail_restart_count -= 1
+            raise RuntimeFailure("injected shell restart failure")
 
     def stop_shell(self) -> None:
         self.stops += 1
@@ -1160,10 +1164,15 @@ class SuiteLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.suite = Suite.load(self.source)
+        reloads_before = self.runtime.reloads
+        payload_reloads_before = self.runtime.payload_reloads
+        restarts_before = self.runtime.restarts
         self.assertEqual(
             command_update(self.args(), self.suite, self.paths, self.runtime), 0
         )
-        self.assertEqual(self.runtime.payload_reloads, 1)
+        self.assertEqual(self.runtime.reloads, reloads_before)
+        self.assertEqual(self.runtime.payload_reloads, payload_reloads_before)
+        self.assertEqual(self.runtime.restarts, restarts_before + 1)
         self.assertIn("next source revision", target_file.read_text(encoding="utf-8"))
         updated_config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
         self.assertEqual(updated_config["customAfterInstall"], "keep")
@@ -1272,12 +1281,20 @@ class SuiteLifecycleTests(unittest.TestCase):
         installed["bar"]["customHostSetting"] = {"preserve": True}
         atomic_write(self.paths.config_file, encode_config(installed))
         expected_bar = copy.deepcopy(installed["bar"])
+        reloads_before = self.runtime.reloads
+        payload_reloads_before = self.runtime.payload_reloads
+        restarts_before = self.runtime.restarts
         self.assertEqual(
             command_update(
                 self.args(), self.suite, self.paths, self.runtime
             ),
             0,
         )
+        self.assertEqual(self.runtime.reloads, reloads_before + 1)
+        self.assertEqual(
+            self.runtime.payload_reloads, payload_reloads_before + 1
+        )
+        self.assertEqual(self.runtime.restarts, restarts_before)
         updated = json.loads(
             self.paths.config_file.read_text(encoding="utf-8")
         )
@@ -1621,8 +1638,10 @@ class SuiteLifecycleTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.suite = Suite.load(self.source)
-        self.runtime.fail_payload_reload = True
-        with self.assertRaises(RuntimeFailure):
+        self.runtime.fail_restart_count = 1
+        with self.assertRaisesRegex(
+            RuntimeFailure, "injected shell restart failure"
+        ):
             command_update(self.args(), self.suite, self.paths, self.runtime)
         self.assertEqual(target_file.read_bytes(), old_payload)
         self.assertEqual(self.paths.config_file.read_bytes(), old_config)
