@@ -35,7 +35,25 @@ ShellRoot {
   }
 
   QtObject {
+    id: fakeState
+    property var writes: []
+
+    function setWidgetSetting(groupId, moduleId, key, value) {
+      writes = writes.concat([{
+        groupId: String(groupId || ""),
+        moduleId: String(moduleId || ""),
+        key: String(key || ""),
+        value: JSON.parse(JSON.stringify(value))
+      }])
+      return true
+    }
+  }
+
+  QtObject {
     id: fakeShell
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.state" ? fakeState : null
+    }
     function firstPartyServiceFor(pluginId) {
       return pluginId === "omarchy.notifications" ? notificationService : null
     }
@@ -169,6 +187,16 @@ ShellRoot {
             || drawer.anchorItem === null
             || drawer.bar !== fakeBar)
           return root.fail("tray drawer injection contract")
+        status.trayWidget.togglePin("fixture-drawer")
+        if (status.trayWidget.pinToggleCount !== 1
+            || fakeState.writes.length !== 2
+            || fakeState.writes[0].groupId !== "G3"
+            || fakeState.writes[0].moduleId !== "omarchy.tray"
+            || fakeState.writes[0].key !== "pinned"
+            || fakeState.writes[0].value[0] !== "fixture-drawer"
+            || fakeState.writes[1].key !== "hidden")
+          return root.fail("embedded tray pin did not persist into G3: "
+            + JSON.stringify(fakeState.writes))
         status.closeTrayDrawer()
         status.trayWidget.pinnedItems = []
         status.trayWidget.drawerItems = []

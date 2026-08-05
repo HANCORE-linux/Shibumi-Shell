@@ -73,8 +73,15 @@ Item {
     return item ? String(item.id || "") : ""
   }
 
-  function togglePin(_id) {
+  function togglePin(id) {
     pinToggleCount++
+    if (bar && bar.shell
+        && typeof bar.shell.updateEntryInline === "function")
+      bar.shell.updateEntryInline(moduleName, {
+        id: moduleName,
+        pinned: [String(id || "")],
+        hidden: []
+      })
   }
 
   function openTrayMenu(_item, _anchor, _mouse) {

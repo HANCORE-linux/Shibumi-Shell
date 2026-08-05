@@ -117,6 +117,23 @@ Item {
       ? bar.widgetSettings("G3", id) : ({})
   }
 
+  function persistEmbeddedTraySettings(moduleId, values) {
+    const id = String(moduleId || "")
+    if (id !== "omarchy.tray" || !values || typeof values !== "object"
+        || Array.isArray(values)) return false
+    const state = bar && bar.shell
+      && typeof bar.shell.serviceFor === "function"
+      ? bar.shell.serviceFor("hancore.shibumi.state") : null
+    if (!state || typeof state.setWidgetSetting !== "function") return false
+    let changed = false
+    for (const key in values) {
+      if (key === "id"
+          || !Object.prototype.hasOwnProperty.call(values, key)) continue
+      changed = state.setWidgetSetting("G3", id, key, values[key]) || changed
+    }
+    return changed
+  }
+
   function injectChild(item, id) {
     if (!item) return
     if ("bar" in item) item.bar = hostProxy
@@ -402,6 +419,29 @@ Item {
   }
 
   QtObject {
+    id: trayShellProxy
+
+    readonly property var realShell: root.bar ? root.bar.shell : null
+
+    function updateEntryInline(moduleId, values) {
+      if (String(moduleId || "") === "omarchy.tray")
+        return root.persistEmbeddedTraySettings(moduleId, values)
+      return realShell && typeof realShell.updateEntryInline === "function"
+        ? realShell.updateEntryInline(moduleId, values) : false
+    }
+
+    function serviceFor(pluginId) {
+      return realShell && typeof realShell.serviceFor === "function"
+        ? realShell.serviceFor(pluginId) : null
+    }
+
+    function firstPartyServiceFor(pluginId) {
+      return realShell && typeof realShell.firstPartyServiceFor === "function"
+        ? realShell.firstPartyServiceFor(pluginId) : null
+    }
+  }
+
+  QtObject {
     id: hostProxy
 
     readonly property var realBar: root.bar
@@ -422,7 +462,7 @@ Item {
     readonly property var visualTokens: root.tokens
     readonly property bool foregroundAnimationEnabled: realBar
       ? realBar.foregroundAnimationEnabled !== false : false
-    readonly property var shell: realBar ? realBar.shell : null
+    readonly property var shell: trayShellProxy
     readonly property var layoutConfig: realBar ? realBar.layoutConfig : ({})
     readonly property var activePopout: realBar ? realBar.activePopout : null
     readonly property var clickTargets: realBar ? realBar.clickTargets : []
