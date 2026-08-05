@@ -37,6 +37,12 @@ Item {
   readonly property bool fullMode: displayMode === "full"
   readonly property bool iconMode: displayMode === "icon"
   readonly property bool textMode: displayMode === "text"
+  readonly property bool v2Mode: tokens && tokens.v2Shell === true
+  readonly property int statusActionSlot: Commons.Style.space(22)
+  readonly property int horizontalInset: tokens
+    && tokens.pillPaddingX !== undefined
+    ? Number(tokens.pillPaddingX) || Commons.Style.space(9)
+    : Commons.Style.space(9)
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
     ? tokens.widgetContentColor(settings,
@@ -74,21 +80,27 @@ Item {
     fullMode && (updatePresented || trayPresented || notificationPresented)
     || iconMode && notificationPresented
     || textMode && notificationService !== null
-  readonly property real childGap: Commons.Style.space(6)
+  readonly property real childGap: Commons.Style.space(4)
   readonly property int presentedCount: fullMode
     ? (updatePresented ? 1 : 0) + (trayPresented ? 1 : 0)
       + (notificationPresented ? 1 : 0)
     : hasVisibleChild ? 1 : 0
   readonly property real contentWidth:
     fullMode
-      ? (updatePresented ? updateLoader.implicitWidth : 0)
-        + (trayPresented ? trayView.implicitWidth : 0)
-        + (notificationPresented ? notificationView.implicitWidth : 0)
+      ? updateSlotWidth + traySlotWidth + notificationSlotWidth
         + Math.max(0, presentedCount - 1) * childGap
       : textMode ? textStatus.implicitWidth : notificationView.implicitWidth
+  readonly property real updateSlotWidth: updatePresented
+    ? updateSlot.implicitWidth : 0
+  readonly property real traySlotWidth: trayPresented
+    ? trayView.implicitWidth : 0
+  readonly property real notificationSlotWidth: notificationPresented
+    ? notificationView.implicitWidth : 0
+  readonly property real notificationIconOffset:
+    notificationView.iconHorizontalOffset
 
   visible: ready && hasVisibleChild
-  implicitWidth: visible ? contentWidth + Commons.Style.space(10) : 0
+  implicitWidth: visible ? contentWidth + 2 * horizontalInset : 0
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
   function registeredComponent(id) {
@@ -520,11 +532,20 @@ Item {
     spacing: root.childGap
     z: 2
 
-    Loader {
-      id: updateLoader
+    Item {
+      id: updateSlot
       anchors.verticalCenter: parent.verticalCenter
-      visible: root.fullMode && item !== null
-      onLoaded: root.injectUpdateChild(item)
+      visible: root.fullMode && updateLoader.item !== null
+      implicitWidth: visible ? root.statusActionSlot : 0
+      implicitHeight: updateLoader.implicitHeight
+      width: implicitWidth
+      height: implicitHeight
+
+      Loader {
+        id: updateLoader
+        anchors.centerIn: parent
+        onLoaded: root.injectUpdateChild(item)
+      }
     }
 
     TrayStatusView {
@@ -540,6 +561,7 @@ Item {
       visible: (root.fullMode || root.iconMode) && presented
       bar: root.bar
       contentColor: root.widgetInk
+      slotWidth: root.statusActionSlot
       notificationService: root.notificationService
       onToggleRequested: root.toggle()
       onDndRequested: root.toggleNotificationDnd()

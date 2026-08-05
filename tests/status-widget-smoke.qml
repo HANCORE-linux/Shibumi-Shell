@@ -75,6 +75,7 @@ ShellRoot {
     property var clickTargets: root.clickTargets
     property var barWidgetRegistry: null
     property var visualTokens: ({
+      v2Shell: false,
       pillHeight: 24,
       pillRadius: 12,
       pillPaddingX: 9,
@@ -166,6 +167,21 @@ ShellRoot {
             || status.pendingCount !== 3 || status.recentCount !== 0
             || status.notificationCount !== 3)
           return root.fail("V1 tray/notification facade state")
+        if (status.v2Mode
+            || status.horizontalInset !== 9
+            || status.childGap !== 4
+            || status.updateSlotWidth !== 22
+            || status.traySlotWidth !== 42
+            || status.notificationSlotWidth !== 22
+            || status.notificationIconOffset !== 1
+            || status.implicitWidth !== 112)
+          return root.fail("V1 status geometry is not symmetric: inset="
+            + Number(status.horizontalInset) + ", gap="
+            + Number(status.childGap) + ", slots="
+            + JSON.stringify([status.updateSlotWidth,
+              status.traySlotWidth, status.notificationSlotWidth])
+            + ", bellOffset=" + Number(status.notificationIconOffset)
+            + ", width=" + Number(status.implicitWidth))
         status.updateWidget.open()
         if (!status.toggleTrayDrawer() || !status.trayDrawerOpen
             || status.updateWidget.popupOpen)

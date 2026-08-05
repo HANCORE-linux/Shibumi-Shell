@@ -7,6 +7,8 @@ Item {
   id: root
 
   required property var bar
+  property real slotWidth: Commons.Style.space(26)
+  readonly property real iconHorizontalOffset: Commons.Style.space(1)
   property var notificationService: null
   readonly property int pendingCount: notificationService
     && notificationService.pendingModel
@@ -21,7 +23,7 @@ Item {
   property bool registered: false
 
   visible: presented
-  implicitWidth: presented ? Commons.Style.space(26) : 0
+  implicitWidth: presented ? slotWidth : 0
   implicitHeight: bar ? bar.barSize : Commons.Style.space(35)
   width: implicitWidth
   height: implicitHeight
@@ -44,6 +46,7 @@ Item {
   IconText {
     id: bellIcon
     anchors.centerIn: parent
+    anchors.horizontalCenterOffset: root.iconHorizontalOffset
     text: "\uE7F4"
     font.pixelSize: 15
     color: root.notificationCount > 0 && root.bar

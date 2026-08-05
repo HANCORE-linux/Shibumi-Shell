@@ -54,7 +54,7 @@ Item {
   }) : null
 
   visible: !isUpdate || updateAvailable
-  implicitWidth: isTray ? 34 : 24
+  implicitWidth: isUpdate ? 21 : isTray ? 34 : 24
   implicitHeight: 35
 
   function open() {
