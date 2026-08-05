@@ -31,6 +31,10 @@ Ui.Panel {
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property int iconSlotSize: 14
+  readonly property int iconGlyphHorizontalOffset: 1
+  readonly property int contentHorizontalOffset: bar && !bar.vertical
+    && tokens.v2Shell !== true ? -1 : 0
   readonly property string selectedSource: {
     const candidate = String(setting("source", "cpu"))
     return telemetry && typeof telemetry.sourceValid === "function"
@@ -107,13 +111,22 @@ Ui.Panel {
     Row {
       id: content
       anchors.centerIn: parent
+      anchors.horizontalCenterOffset: root.contentHorizontalOffset
       spacing: root.tokens.compactGap
 
-      Loader {
+      Item {
+        id: temperatureIconSlot
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
-        sourceComponent: root.tokens.v2Shell === true
-          ? v2TemperatureIcon : v1TemperatureIcon
+        width: root.iconSlotSize
+        height: root.iconSlotSize
+
+        Loader {
+          anchors.centerIn: parent
+          anchors.horizontalCenterOffset: root.iconGlyphHorizontalOffset
+          sourceComponent: root.tokens.v2Shell === true
+            ? v2TemperatureIcon : v1TemperatureIcon
+        }
       }
 
       Text {

@@ -24,6 +24,10 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property int iconSlotSize: tokens.v2Shell === true
+    || displayMode !== "full" ? 14 : 16
+  readonly property int contentHorizontalOffset: bar && !bar.vertical
+    && tokens.v2Shell !== true && displayMode === "full" ? 2 : 0
   readonly property var bluetoothService: bluetoothServiceOverride
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.bluetooth") : null)
@@ -131,6 +135,7 @@ Ui.Panel {
     Loader {
       id: content
       anchors.centerIn: parent
+      anchors.horizontalCenterOffset: root.contentHorizontalOffset
       sourceComponent: !root.bar || !root.tokens ? null
         : root.bar.vertical || root.displayMode === "icon" ? compactContent
         : root.tokens.v2Shell === true && root.displayMode === "full" ? compactContent
@@ -173,15 +178,21 @@ Ui.Panel {
         renderType: Text.NativeRendering
       }
 
-      IconText {
+      Item {
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
-        text: root.stateIcon
-        color: root.widgetInk
-        opacity: root.radioEnabled ? (root.connected ? 1 : 0.7) : 0.35
-        font.pixelSize: 14
-        font.weight: Font.Medium
-        fill: 1
+        width: root.iconSlotSize
+        height: root.iconSlotSize
+
+        IconText {
+          anchors.centerIn: parent
+          text: root.stateIcon
+          color: root.widgetInk
+          opacity: root.radioEnabled ? (root.connected ? 1 : 0.7) : 0.35
+          font.pixelSize: 14
+          font.weight: Font.Medium
+          fill: 1
+        }
       }
 
       Text {
@@ -202,15 +213,21 @@ Ui.Panel {
     Row {
       spacing: root.tokens.compactGap
 
-      IconText {
+      Item {
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
-        text: root.stateIcon
-        color: root.widgetInk
-        opacity: root.radioEnabled ? (root.connected ? 1 : 0.7) : 0.35
-        font.pixelSize: 14
-        font.weight: Font.Medium
-        fill: 1
+        width: root.iconSlotSize
+        height: root.iconSlotSize
+
+        IconText {
+          anchors.centerIn: parent
+          text: root.stateIcon
+          color: root.widgetInk
+          opacity: root.radioEnabled ? (root.connected ? 1 : 0.7) : 0.35
+          font.pixelSize: 14
+          font.weight: Font.Medium
+          fill: 1
+        }
       }
 
       Text {

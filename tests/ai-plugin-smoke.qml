@@ -9,6 +9,7 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
+  property real stableProviderWidth: 0
   property var clickTargets: []
   property var iconMatrix: [
     { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
@@ -64,7 +65,17 @@ ShellRoot {
     const customBaseContrast = root.contrastRatio(
       root.composite(expectedBase, fakeBar.customFill, expected.baseOpacity),
       fakeBar.customFill)
+    const glyphWidth = expected.providerId === "opencode" ? 20
+      : expected.providerId === "codex" ? 14 : 15
+    const glyphHeight = expected.providerId === "opencode" ? 12
+      : expected.providerId === "codex" ? 14 : 15
+    const glyphOffset = expected.providerId === "codex" ? -1 : 0
     return widget.providerId === expected.providerId
+      && widget.providerIconSlotWidth === 20
+      && widget.providerIconSlotHeight === 16
+      && widget.providerGlyphWidth === glyphWidth
+      && widget.providerGlyphHeight === glyphHeight
+      && widget.providerGlyphHorizontalOffset === glyphOffset
       && widget.tokens.v2Shell === expected.v2Shell
       && widget.customFillActive === customFillActive
       && Math.abs(Number(widget.baseIconOpacity) - expected.baseOpacity) < 0.001
@@ -210,6 +221,7 @@ ShellRoot {
       pillShadow: "#000000",
       shadowEnabled: false,
       compactGap: 5,
+      labelSize: 12,
       panelBackground: "#181616",
       panelBorder: "#555050",
       panelBorderWidth: 1,
@@ -317,6 +329,10 @@ ShellRoot {
               || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
               || first.tooltipText.indexOf("local-test") < 0))
           return root.fail("Claude percentage scaling/provider metadata")
+        if (root.phase === 0) root.stableProviderWidth = first.implicitWidth
+        else if (first.implicitWidth !== root.stableProviderWidth
+            || second.implicitWidth !== root.stableProviderWidth)
+          return root.fail("provider switch changed the stable icon slot width")
 
         const nextPhase = root.phase + 1
         if (nextPhase < root.iconMatrix.length) {

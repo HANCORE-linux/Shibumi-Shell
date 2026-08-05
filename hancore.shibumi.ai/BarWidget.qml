@@ -53,6 +53,14 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property int providerIconSlotWidth: 20
+  readonly property int providerIconSlotHeight: 16
+  readonly property int providerGlyphWidth: providerId === "opencode" ? 20
+    : providerId === "codex" ? 14 : 15
+  readonly property int providerGlyphHeight: providerId === "opencode" ? 12
+    : providerId === "codex" ? 14 : 15
+  readonly property int providerGlyphHorizontalOffset:
+    providerId === "codex" ? -1 : 0
   readonly property var interactionTarget: actionButton
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -135,86 +143,64 @@ Ui.Panel {
         id: providerIcon
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
-        width: root.providerId === "opencode" ? 20
-          : root.providerId === "codex" ? 14 : 15
-        height: root.providerId === "opencode" ? 12
-          : root.providerId === "codex" ? 14 : 15
+        width: root.providerIconSlotWidth
+        height: root.providerIconSlotHeight
 
         Item {
-          id: claudeIcon
+          id: providerGlyph
           anchors.centerIn: parent
-          width: 15
-          height: 15
-          visible: root.providerId === "claude"
-
-          Text {
-            id: claudeGlyphBase
-            anchors.centerIn: parent
-            text: "\udb85\ude7a"
-            color: Qt.rgba(root.baseIconColor.r,
-              root.baseIconColor.g, root.baseIconColor.b,
-              root.baseIconOpacity)
-            font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: 14
-            renderType: Text.QtRendering
-          }
+          anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset
+          width: root.providerGlyphWidth
+          height: root.providerGlyphHeight
 
           Item {
-            id: claudeUsageClip
-            width: parent.width
-            height: root.steppedPercent > 0
-              ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
-                  parent.height * 0.25)) : 0
-            anchors.bottom: parent.bottom
-            clip: true
-            Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            id: claudeIcon
+            anchors.fill: parent
+            visible: root.providerId === "claude"
 
             Text {
-              id: claudeUsageGlyph
-              x: claudeGlyphBase.x
-              y: claudeGlyphBase.y - claudeUsageClip.y
-              width: claudeGlyphBase.width
-              height: claudeGlyphBase.height
+              id: claudeGlyphBase
+              anchors.centerIn: parent
               text: "\udb85\ude7a"
-              color: root.usageIconColor
+              color: Qt.rgba(root.baseIconColor.r,
+                root.baseIconColor.g, root.baseIconColor.b,
+                root.baseIconOpacity)
               font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: 14
               renderType: Text.QtRendering
             }
-          }
-        }
 
-        Item {
-          anchors.fill: parent
-          visible: root.providerId === "codex" || root.providerId === "opencode"
+            Item {
+              id: claudeUsageClip
+              width: parent.width
+              height: root.steppedPercent > 0
+                ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
+                    parent.height * 0.25)) : 0
+              anchors.bottom: parent.bottom
+              clip: true
+              Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
 
-          TintedImage {
-            anchors.fill: parent
-            source: root.providerId === "opencode"
-              ? Qt.resolvedUrl("assets/opencode-mark.svg")
-              : Qt.resolvedUrl("assets/codex.svg")
-            sourceSize: root.providerId === "opencode"
-              ? Qt.size(20, 12) : Qt.size(56, 56)
-            smooth: root.providerId !== "opencode"
-            mipmap: root.providerId !== "opencode"
-            tint: Qt.rgba(root.baseIconColor.r,
-              root.baseIconColor.g, root.baseIconColor.b,
-              root.baseIconOpacity)
+              Text {
+                id: claudeUsageGlyph
+                x: claudeGlyphBase.x
+                y: claudeGlyphBase.y - claudeUsageClip.y
+                width: claudeGlyphBase.width
+                height: claudeGlyphBase.height
+                text: "\udb85\ude7a"
+                color: root.usageIconColor
+                font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+                font.pixelSize: 14
+                renderType: Text.QtRendering
+              }
+            }
           }
 
           Item {
-            width: parent.width
-            height: root.steppedPercent > 0
-              ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
-                  parent.height * 0.22)) : 0
-            anchors.bottom: parent.bottom
-            clip: true
-            Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            anchors.fill: parent
+            visible: root.providerId === "codex" || root.providerId === "opencode"
 
             TintedImage {
-              width: providerIcon.width
-              height: providerIcon.height
-              anchors.bottom: parent.bottom
+              anchors.fill: parent
               source: root.providerId === "opencode"
                 ? Qt.resolvedUrl("assets/opencode-mark.svg")
                 : Qt.resolvedUrl("assets/codex.svg")
@@ -222,7 +208,33 @@ Ui.Panel {
                 ? Qt.size(20, 12) : Qt.size(56, 56)
               smooth: root.providerId !== "opencode"
               mipmap: root.providerId !== "opencode"
-              tint: root.usageIconColor
+              tint: Qt.rgba(root.baseIconColor.r,
+                root.baseIconColor.g, root.baseIconColor.b,
+                root.baseIconOpacity)
+            }
+
+            Item {
+              width: parent.width
+              height: root.steppedPercent > 0
+                ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
+                    parent.height * 0.22)) : 0
+              anchors.bottom: parent.bottom
+              clip: true
+              Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+
+              TintedImage {
+                width: providerGlyph.width
+                height: providerGlyph.height
+                anchors.bottom: parent.bottom
+                source: root.providerId === "opencode"
+                  ? Qt.resolvedUrl("assets/opencode-mark.svg")
+                  : Qt.resolvedUrl("assets/codex.svg")
+                sourceSize: root.providerId === "opencode"
+                  ? Qt.size(20, 12) : Qt.size(56, 56)
+                smooth: root.providerId !== "opencode"
+                mipmap: root.providerId !== "opencode"
+                tint: root.usageIconColor
+              }
             }
           }
         }
@@ -233,10 +245,9 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         text: root.usagePercent >= 0
           ? String(root.usagePercent).padStart(2, "0") + "%" : "··"
-        color: Qt.rgba(root.widgetInk.r,
-          root.widgetInk.g, root.widgetInk.b, 0.88)
+        color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: 12
+        font.pixelSize: root.tokens.labelSize
         renderType: Text.NativeRendering
       }
     }

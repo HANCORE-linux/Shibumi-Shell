@@ -179,7 +179,10 @@ ShellRoot {
         return root.fail("service resolution crossed plugin ownership")
       if (!memory.compact || cpu.compact || gpu.displayMode !== "icon"
           || !gpu.visible || gpu.implicitWidth <= 0
-          || temperature.stateGroupId !== "G:hancore.shibumi.temperature")
+          || temperature.stateGroupId !== "G:hancore.shibumi.temperature"
+          || temperature.iconSlotSize !== 14
+          || temperature.iconGlyphHorizontalOffset !== 1
+          || temperature.contentHorizontalOffset !== -1)
         return root.fail("widget settings were not retained")
       if (telemetryService.system.memoryConsumers !== 1
           || telemetryService.system.cpuConsumers !== 1)

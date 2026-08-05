@@ -529,6 +529,12 @@ done
 
 [[ $(rg -Fc 'font.pixelSize: 14' hancore.shibumi.bluetooth/BarWidget.qml) -eq 2 ]] \
   || fail "Bluetooth icon sizing drifted from V1"
+rg -Fq 'readonly property int iconSlotSize: tokens.v2Shell === true' \
+  hancore.shibumi.bluetooth/BarWidget.qml \
+  || fail "Bluetooth icon lost its stable optical slot"
+rg -Fq '&& tokens.v2Shell !== true && displayMode === "full" ? 2 : 0' \
+  hancore.shibumi.bluetooth/BarWidget.qml \
+  || fail "Bluetooth lost its V1 optical alignment offset"
 [[ $(rg -Fc 'font.pixelSize: root.mode === "none" ? 15 : 14' \
   hancore.shibumi.network/BarWidget.qml) -eq 2 ]] \
   || fail "compact/vertical network icon sizing drifted"
@@ -551,8 +557,13 @@ rg -Fq 'font.pixelSize: root.profile === "balanced" ? 13 : 14' \
   hancore.shibumi.power-profile/BarWidget.qml \
   || fail "power-profile icon sizing drifted from V1"
 for ai_contract in \
-  'width: root.providerId === "opencode" ? 20' \
-  'height: root.providerId === "opencode" ? 12' \
+  'readonly property int providerIconSlotWidth: 20' \
+  'readonly property int providerIconSlotHeight: 16' \
+  'width: root.providerIconSlotWidth' \
+  'height: root.providerIconSlotHeight' \
+  'width: root.providerGlyphWidth' \
+  'height: root.providerGlyphHeight' \
+  'anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset' \
   '? Qt.size(20, 12) : Qt.size(56, 56)' \
   'readonly property color baseIconColor: customFillActive' \
   'readonly property color usageIconColor: widgetInk' \
@@ -567,7 +578,9 @@ for ai_contract in \
   'height: claudeGlyphBase.height' \
   'tint: Qt.rgba(root.baseIconColor.r,' \
   'root.baseIconOpacity)' \
-  'tint: root.usageIconColor'; do
+  'tint: root.usageIconColor' \
+  'color: root.widgetInk' \
+  'font.pixelSize: root.tokens.labelSize'; do
   rg -Fq "$ai_contract" hancore.shibumi.ai/BarWidget.qml \
     || fail "AI icon contract drifted from V1: $ai_contract"
 done
@@ -631,6 +644,15 @@ if rg -Fq 'text: "GPU "' hancore.shibumi.gpu/BarWidget.qml; then
 fi
 rg -Fq 'text: ""' hancore.shibumi.temperature/BarWidget.qml \
   || fail "temperature bar icon drifted from the original V2 glyph"
+rg -Fq 'readonly property int iconSlotSize: 14' \
+  hancore.shibumi.temperature/BarWidget.qml \
+  || fail "temperature icon lost its stable optical slot"
+rg -Fq 'anchors.horizontalCenterOffset: root.iconGlyphHorizontalOffset' \
+  hancore.shibumi.temperature/BarWidget.qml \
+  || fail "temperature glyph lost its optical slot offset"
+rg -Fq '&& tokens.v2Shell !== true ? -1 : 0' \
+  hancore.shibumi.temperature/BarWidget.qml \
+  || fail "temperature lost its V1 optical alignment offset"
 rg -Fq 'if ("hostGroupId" in target) target.hostGroupId = region' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "dynamic V1 widgets do not receive their persisted group identity"

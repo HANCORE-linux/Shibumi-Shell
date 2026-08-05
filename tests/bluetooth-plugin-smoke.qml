@@ -146,6 +146,8 @@ ShellRoot {
             || first.bluetoothService !== sharedBluetoothService
             || !first.adapterAvailable || !first.radioEnabled
             || first.connectedCount !== 1 || first.implicitHeight !== 35
+            || first.iconSlotSize !== 16
+            || first.contentHorizontalOffset !== 2
             || unavailableBluetooth.visible)
           return root.fail("shared backend readiness/state/geometry")
         if (backend.opacity !== 0 || backend.settings.testSetting !== "retained"
@@ -164,7 +166,9 @@ ShellRoot {
         root.phaseTicks = 0
       } else if (root.phase === 1) {
         if (root.phaseTicks < 3) return
-        if (!first.compact || first.implicitWidth >= root.fullWidth)
+        if (!first.compact || first.implicitWidth >= root.fullWidth
+            || first.iconSlotSize !== 14
+            || first.contentHorizontalOffset !== 0)
           return root.fail("compact presentation width")
         if (!first.showConnectedCount || first.connectedCount !== 1)
           return root.fail("connected count hidden in compact presentation")
