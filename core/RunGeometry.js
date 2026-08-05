@@ -30,12 +30,13 @@ function sectionCuts(cuts, section, width, padding) {
     var next = groups[i + 1]
     var index = current ? Number(current.index) : -1
     var nextIndex = next ? Number(next.index) : -1
-    // V1 splits belong to slot boundaries. If an empty, disabled, or
-    // responsive-hidden slot sits between two rendered groups, its adjacent
-    // split must stay dormant until that exact slot boundary is visible.
+    var boundaryIndex = nextIndex - 1
+    // V1 splits belong to slot boundaries. Across hidden slots, the rendered
+    // gap uses the last boundary before the next visible group; every other
+    // hidden boundary remains dormant and positionally stable.
     if (!Number.isInteger(index) || index < 0
-        || !Number.isInteger(nextIndex) || nextIndex !== index + 1
-        || splits[index] !== true)
+        || !Number.isInteger(nextIndex) || nextIndex <= index
+        || splits[boundaryIndex] !== true)
       continue
     var currentRight = origin + finiteNumber(current.right, 0)
     var nextLeft = origin + finiteNumber(next.left, currentRight)

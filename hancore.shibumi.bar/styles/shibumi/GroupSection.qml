@@ -260,6 +260,15 @@ Item {
       id: horizontalRow
 
       spacing: 0
+      property bool layoutScheduled: false
+      function scheduleLayout() {
+        if (layoutScheduled) return
+        layoutScheduled = true
+        Qt.callLater(function() {
+          layoutScheduled = false
+          horizontalRow.forceLayout()
+        })
+      }
       readonly property real layoutWidth: {
         void(root.visibilityStage)
         var total = 0
@@ -286,7 +295,7 @@ Item {
           var item = horizontalRepeater.itemAt(i)
           if (!item || !item.groupHasContent) continue
           total += item.minimumGroupWidth
-          if (root.splitAfter(item.index)) total += root.splitGrow
+          if (item.separated) total += root.splitGrow
           visibleCount++
         }
         return total + Math.max(0, visibleCount - 1) * root.groupSpacing
@@ -301,7 +310,8 @@ Item {
             if (!item || !item.budgetHasContent
                 || !root.groupVisibleAtStage(item.modelData, stage)) continue
             widths[stage] += item.naturalGroupWidth
-            if (root.splitAfter(item.index)) widths[stage] += root.splitGrow
+            if (horizontalRow.splitAfterAtStage(item.index, stage))
+              widths[stage] += root.splitGrow
             visibleCount++
           }
           widths[stage] += Math.max(0, visibleCount - 1) * root.groupSpacing
@@ -313,6 +323,13 @@ Item {
         var result = []
         for (var i = 0; i < horizontalRepeater.count; i++) {
           var item = horizontalRepeater.itemAt(i)
+          if (item) {
+            void(item.x)
+            void(item.contentLeft)
+            void(item.contentRight)
+            void(item.contentShown)
+            void(item.effectiveHasContent)
+          }
           if (!item || !(root.v2Editing
               ? item.effectiveHasContent : item.contentShown)) continue
           result.push({
@@ -329,10 +346,17 @@ Item {
         var result = []
         for (var i = 0; i < horizontalRepeater.count; i++) {
           var item = horizontalRepeater.itemAt(i)
+          if (item) {
+            void(item.x)
+            void(item.separatorAvailable)
+            void(item.separatorIndex)
+            void(item.visualRightEdge)
+            void(item.separatorCenter)
+          }
           if (!item || !item.separatorAvailable) continue
           result.push({
             groupId: item.modelData,
-            index: item.index,
+            index: item.separatorIndex,
             visualRight: item.x + item.visualRightEdge,
             markerCenter: item.x + item.separatorCenter
           })
@@ -361,6 +385,33 @@ Item {
         void(horizontalRepeater.count)
         var item = horizontalRepeater.itemAt(index + 1)
         return item && item.contentShown
+      }
+
+      function nextShownIndex(index) {
+        void(horizontalRepeater.count)
+        for (var i = index + 1; i < horizontalRepeater.count; i++) {
+          var item = horizontalRepeater.itemAt(i)
+          if (item && item.contentShown) return i
+        }
+        return -1
+      }
+
+      function nextBudgetShownIndex(index, stage) {
+        void(horizontalRepeater.count)
+        for (var i = index + 1; i < horizontalRepeater.count; i++) {
+          var item = horizontalRepeater.itemAt(i)
+          if (item && item.budgetHasContent
+              && root.groupVisibleAtStage(item.modelData, stage)) return i
+        }
+        return -1
+      }
+
+      function splitAfterAtStage(index, stage) {
+        var nextIndex = nextBudgetShownIndex(index, stage)
+        if (nextIndex <= index) return false
+        return root.v2Mode
+          ? nextIndex === index + 1 && root.splitAfter(index)
+          : root.splitAfter(nextIndex - 1)
       }
 
       Repeater {
@@ -407,6 +458,14 @@ Item {
           readonly property real contentLeft: targetVisual.x
           readonly property real contentRight: targetVisual.x + targetVisual.width
           readonly property real visualRightEdge: groupSlot.x + groupSlot.width
+          readonly property int nextShownIndex:
+            horizontalRow.nextShownIndex(index)
+          // V1 splits remain positional. When disabled or empty slots sit
+          // before the next rendered group, the visible marker belongs to the
+          // last slot boundary before that group (for example, directly left
+          // of Brightness), not to the earlier rendered group's own index.
+          readonly property int separatorIndex: root.v2Mode
+            ? index : nextShownIndex > index ? nextShownIndex - 1 : index
           readonly property bool separatorAvailable:
             splitMarker.hasFollowingGroup
           readonly property real separatorCenter:
@@ -421,7 +480,9 @@ Item {
           readonly property int leadingGap: effectiveHasContent
             && horizontalRow.hasContentBefore(index) ? root.groupSpacing : 0
           readonly property bool separated: contentShown
-            && horizontalRow.nextSlotHasContent(index) && root.splitAfter(index)
+            && (root.v2Mode ? horizontalRow.nextSlotHasContent(index)
+              : nextShownIndex > index)
+            && root.splitAfter(separatorIndex)
           implicitWidth: effectiveHasContent
             ? leadingGap + targetVisual.width + (separated ? root.splitGrow : 0)
             : 0
@@ -429,6 +490,8 @@ Item {
             ? root.v2Mode ? targetVisual.height : 32 : 0
           width: implicitWidth
           height: implicitHeight
+          onWidthChanged: horizontalRow.scheduleLayout()
+          onVisibleChanged: horizontalRow.scheduleLayout()
           // Keep the cell visible while its widget determines its initial
           // size. Basing ancestor visibility on groupHasContent would make
           // the child's effective visible state false and deadlock discovery.
@@ -668,7 +731,9 @@ Item {
             id: splitMarker
 
             readonly property bool hasFollowingGroup: horizontalCell.contentShown
-              && horizontalRow.hasContentAfter(horizontalCell.index)
+              && (root.v2Mode
+                ? horizontalRow.hasContentAfter(horizontalCell.index)
+                : horizontalCell.nextShownIndex > horizontalCell.index)
             x: groupSlot.x + groupSlot.width
               + root.separatorCenterOffset(horizontalCell.separated)
               - width / 2

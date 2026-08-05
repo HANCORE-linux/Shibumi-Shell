@@ -48,6 +48,16 @@ QtObject {
     if (!same(RunGeometry.compute(dormant), continuous))
       fail("split next to an absent slot must remain dormant")
 
+    const visibleBoundary = JSON.parse(JSON.stringify(base))
+    visibleBoundary.sections[0].splits[3] = true
+    visibleBoundary.sections[0].groups[2].left = 124
+    visibleBoundary.sections[0].groups[2].right = 154
+    const visibleBoundaryRuns = RunGeometry.compute(visibleBoundary)
+    if (!same(visibleBoundaryRuns, [
+      { x: 0, width: 110 },
+      { x: 124, width: 176 }
+    ])) return fail("boundary immediately before the next visible slot must cut")
+
     const boundaries = JSON.parse(JSON.stringify(base))
     boundaries.boundaries = [true, true]
     const boundaryRuns = RunGeometry.compute(boundaries)

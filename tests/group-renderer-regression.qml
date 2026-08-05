@@ -94,8 +94,9 @@ ShellRoot {
 
     QtObject {
       id: disabledStateService
+      property int revision: 0
       readonly property var config: ({
-        widgets: ({ G8: { enabled: false } })
+        widgets: ({ G2: { enabled: false }, G8: { enabled: false } })
       })
       readonly property color selectedColor: "#88aaff"
     }
@@ -198,6 +199,35 @@ ShellRoot {
 
       function splitEnabled(region, index) {
         return region === "left" && index === 0
+      }
+    }
+
+    QtObject {
+      id: hiddenGapController
+
+      property bool splitOn: false
+      property int toggleCount: 0
+      property int lastToggleIndex: -1
+      readonly property bool v2Mode: false
+      readonly property var order: noSplitController.order
+      readonly property var v1Slots: order
+      readonly property var splits: ({
+        left: [false, splitOn, false, false, false, false],
+        boundaries: [false, false],
+        right: [false, false, false, false, false, false]
+      })
+
+      function splitEnabled(region, index) {
+        return region === "left" && index === 1 && splitOn
+      }
+
+      function toggleSplit(region, index) {
+        toggleCount++
+        lastToggleIndex = Number(index)
+        if (region !== "left" || index !== 1) return false
+        splitOn = !splitOn
+        disabledStateService.revision++
+        return true
       }
     }
 
@@ -449,6 +479,34 @@ ShellRoot {
     }
 
     QtObject {
+      id: hiddenGapBar
+
+      readonly property bool vertical: false
+      readonly property int barSize: 26
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property var shell: disabledShell
+      readonly property var visualTokens: noSplitBar.visualTokens
+      readonly property var layoutConfig: noSplitBar.layoutConfig
+      readonly property var layoutController: hiddenGapController
+      property var activePopout: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(_region) { return [] }
+    }
+
+    QtObject {
       id: notchBar
 
       readonly property string position: "top"
@@ -517,6 +575,12 @@ ShellRoot {
       id: rightSection
       bar: noSplitBar
       region: "right"
+    }
+
+    ShibumiStyle.GroupSection {
+      id: hiddenGapSection
+      bar: hiddenGapBar
+      region: "left"
     }
 
     ShibumiStyle.GroupSection {
@@ -606,6 +670,17 @@ ShellRoot {
       return Math.abs(actual - expected) <= 0.5
     }
 
+    function uniformGapError(section, expected) {
+      const geometry = section.groupGeometry
+      for (let index = 1; index < geometry.length; index++) {
+        const gap = geometry[index].left - geometry[index - 1].right
+        if (!closeEnough(gap, expected))
+          return "visible index " + index + " got " + gap
+            + ", expected " + expected + ": " + JSON.stringify(geometry)
+      }
+      return ""
+    }
+
     function widgetSlots(item, result) {
       if (!item) return result
       if (item.activeItem) result.push(item)
@@ -626,6 +701,10 @@ ShellRoot {
           effective: child.effectiveHasContent,
           measured: child.measuredHasContent,
           natural: child.naturalGroupWidth,
+          nextShownIndex: child.nextShownIndex,
+          separatorIndex: child.separatorIndex,
+          separated: child.separated,
+          x: child.x,
           width: child.width,
           visible: child.visible
         })
@@ -639,6 +718,7 @@ ShellRoot {
       property int separatorPhase: 0
       property real separatorBaseWidth: 0
       property int shapePhase: 0
+      property int hiddenGapPhase: 0
 
       interval: 10
       running: true
@@ -650,6 +730,7 @@ ShellRoot {
             || leftWithSplit.implicitWidth <= 0
             || centerSection.implicitWidth <= 0
             || rightSection.implicitWidth <= 0
+            || hiddenGapSection.implicitWidth <= 0
             || narrowLeftSection.implicitWidth <= 0
             || narrowRightSection.implicitWidth <= 0
             || delayedGroup.implicitWidth <= 0
@@ -672,6 +753,89 @@ ShellRoot {
             + (directGroup.contentItem ? directGroup.contentItem.implicitWidth : -1)
             + ", childWidth="
             + (directGroup.contentItem ? directGroup.contentItem.childrenRect.width : -1))
+          return
+        }
+
+        if (hiddenGapPhase === 0) {
+          const spacingChecks = [
+            { name: "V1 left", section: leftWithoutSplit },
+            { name: "V1 right", section: rightSection },
+            { name: "V2 left", section: v2LeftWithSplit }
+          ]
+          for (const check of spacingChecks) {
+            const spacingError = test.uniformGapError(
+              check.section, check.section.groupSpacing)
+            if (spacingError !== "") {
+              if (attempts < 50) return
+              stop()
+              test.fail(check.name + " group spacing drifted: "
+                + spacingError)
+              return
+            }
+          }
+          const geometry = hiddenGapSection.groupGeometry
+          if (geometry.length !== 6) {
+            if (attempts < 50) return
+            stop()
+            test.fail("hidden-slot spacing geometry did not settle: "
+              + JSON.stringify(geometry))
+            return
+          }
+          for (let index = 1; index < geometry.length; index++) {
+            const gap = geometry[index].left - geometry[index - 1].right
+            if (!test.closeEnough(gap, hiddenGapSection.groupSpacing)) {
+              stop()
+              test.fail("normal group gap drifted at visible index " + index
+                + ": got " + gap + ", expected "
+                + hiddenGapSection.groupSpacing)
+              return
+            }
+          }
+          const marker = hiddenGapSection.separatorGeometry.find(
+            function(entry) { return entry.groupId === "G1" })
+          if (!marker || marker.index !== 1
+              || !test.closeEnough(hiddenGapSection.implicitWidth, 90)
+              || !hiddenGapSection.toggleSeparator(
+                marker.groupId, marker.index)
+              || hiddenGapController.toggleCount !== 1
+              || hiddenGapController.lastToggleIndex !== 1) {
+            stop()
+            test.fail("split before visible G3 targeted the wrong V1 boundary: "
+              + JSON.stringify(marker) + ", width="
+              + hiddenGapSection.implicitWidth + ", toggleIndex="
+              + hiddenGapController.lastToggleIndex)
+            return
+          }
+          hiddenGapPhase = 1
+          attempts = 0
+          return
+        }
+
+        if (hiddenGapPhase === 1) {
+          if (!test.closeEnough(hiddenGapSection.implicitWidth, 106)) {
+            if (attempts < 50) return
+            stop()
+            test.fail("split before visible G3 did not add the 16px split gap: "
+              + hiddenGapSection.implicitWidth)
+            return
+          }
+          const geometry = hiddenGapSection.groupGeometry
+          for (let index = 1; index < geometry.length; index++) {
+            const gap = geometry[index].left - geometry[index - 1].right
+            const expected = index === 1 ? 22 : 6
+            if (!test.closeEnough(gap, expected)) {
+              if (attempts < 50) return
+              stop()
+              test.fail("group spacing after hidden-slot split drifted at "
+                + index + ": got " + gap + ", expected " + expected
+                + ", state=" + JSON.stringify(
+                  test.sectionState(hiddenGapSection))
+                + ", geometry=" + JSON.stringify(geometry))
+              return
+            }
+          }
+          hiddenGapPhase = 2
+          attempts = 0
           return
         }
 
