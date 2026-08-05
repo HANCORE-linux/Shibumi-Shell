@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import "GroupRegistry.js" as GroupRegistry
 
 Item {
@@ -129,6 +130,21 @@ Item {
       && typeof root.bar.visualTokens.widgetBorderColor === "function"
       ? root.bar.visualTokens.widgetBorderColor(root.groupSettings)
       : "transparent"
+
+    RectangularShadow {
+      anchors.fill: parent
+      visible: root.dynamicV1Group && root.bar.visualTokens
+        && root.bar.visualTokens.shadowEnabled === true
+      radius: parent.radius
+      blur: 8
+      spread: 0
+      offset: Qt.vector2d(0,
+        root.bar && root.bar.position === "bottom" ? -1 : 1)
+      color: root.bar.visualTokens
+        && root.bar.visualTokens.pillShadow !== undefined
+        ? root.bar.visualTokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+      z: -1
+    }
   }
 
   Loader {

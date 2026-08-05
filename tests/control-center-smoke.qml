@@ -658,6 +658,8 @@ ShellRoot {
               || panel.settingsPage !== "bars"
               || !panel.settingsPageItem
               || panel.settingsPageItem.surfaceEffectOptionCount !== 2
+              || panel.settingsPageItem.surfaceEffectPreviewCount !== 0
+              || panel.settingsPageItem.splitActionPreviewCount !== 0
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 0
               || panel.settingsPageItem.childRouteAvailable)
             return root.fail("V2 exposed V1 Bar Surface settings"
@@ -671,6 +673,8 @@ ShellRoot {
               + " shell=" + (panel ? panel.activeShell : "missing"))
           panel.v2LayoutActive = false
           if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
+              || panel.settingsPageItem.surfaceEffectPreviewCount !== 3
+              || panel.settingsPageItem.splitActionPreviewCount !== 2
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
               || !panel.settingsPageItem.childRouteAvailable
               || panel.settingsPageItem.childRouteLabel !== "Gap Animations"
@@ -696,6 +700,8 @@ ShellRoot {
         if (panel.settingsPage !== "bars"
             || panel.settingsPageItem.motionDetailOpen
             || panel.settingsPageItem.surfaceEffectOptionCount !== 3
+            || panel.settingsPageItem.surfaceEffectPreviewCount !== 3
+            || panel.settingsPageItem.splitActionPreviewCount !== 2
             || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)
           return root.fail("Bars return navigation did not restore V1")
         panel.healthService.report = {

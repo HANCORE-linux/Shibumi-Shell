@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 
 Item {
   id: root
@@ -28,17 +29,25 @@ Item {
   readonly property bool shellPillVisible: shellStyle === "shibumi"
     && !customDecorated && !surfaceDisabled
   readonly property int renderedSurfaceCount: shellPillVisible ? 1 : 0
+  readonly property int renderedShadowCount: shellPillVisible && tokens
+    && tokens.shadowEnabled === true ? 1 : 0
 
-  Rectangle {
-    anchors.fill: parent
-    anchors.topMargin: root.tokens.shadowEnabled ? 2 : 0
-    visible: root.shellPillVisible && root.tokens.shadowEnabled
-    radius: root.tokens.pillRadius
-    color: root.tokens.pillShadow
-    opacity: 0.28
+  RectangularShadow {
+    anchors.fill: pill
+    visible: root.renderedShadowCount === 1
+    radius: pill.radius
+    blur: 8
+    spread: 0
+    offset: Qt.vector2d(0,
+      root.bar && root.bar.position === "bottom" ? -1 : 1)
+    color: root.tokens && root.tokens.pillShadow !== undefined
+      ? root.tokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+    z: -1
   }
 
   Rectangle {
+    id: pill
+
     anchors.fill: parent
     visible: root.shellPillVisible
     radius: root.tokens.pillRadius

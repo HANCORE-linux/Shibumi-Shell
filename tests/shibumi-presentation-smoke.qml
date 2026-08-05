@@ -188,18 +188,37 @@ ShellRoot {
       if (memoryFull.implicitHeight !== 35 || cpuFull.implicitHeight !== 35)
         return root.fail("widgets do not follow Shibumi bar height")
       if (pillProbe.renderedSurfaceCount !== 1
+          || pillProbe.renderedShadowCount !== 0
           || !pillProbe.shellPillVisible)
         return root.fail("V1 widget pill is missing")
       fakeStateService.config = ({
         presentation: {
           border: true,
-          shadow: false,
-          frost: false,
+          shadow: true,
+          frost: true,
+          radius: "large",
+          shellStyle: "shibumi"
+        }
+      })
+      if (pillProbe.renderedShadowCount !== 1
+          || style.visualTokens.barBackground.a < 0.67
+          || style.visualTokens.barBackground.a > 0.69
+          || style.visualTokens.pill.a < 0.17
+          || style.visualTokens.pill.a > 0.19
+          || style.visualTokens.panelBackground.a < 0.93
+          || style.visualTokens.panelBackground.a > 0.95)
+        return root.fail("V1 Shadow or reference Frost alpha did not apply")
+      fakeStateService.config = ({
+        presentation: {
+          border: true,
+          shadow: true,
+          frost: true,
           radius: "large",
           shellStyle: "full"
         }
       })
       if (pillProbe.renderedSurfaceCount !== 0
+          || pillProbe.renderedShadowCount !== 0
           || pillProbe.shellPillVisible)
         return root.fail("V1 widget pill leaked into V2 shell")
       if (style.sizeHorizontal !== 33

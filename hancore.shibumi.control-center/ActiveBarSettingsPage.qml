@@ -55,8 +55,12 @@ Column {
     ? shellStyleOptions.slice(1) : [shellStyleOptions[0]]
   readonly property int surfaceEffectOptionCount:
     barSurfaceSettings.effectOptions.length
+  readonly property int surfaceEffectPreviewCount:
+    barSurfaceSettings.previewEffectOptionCount
   readonly property int surfaceRadiusOptionCount:
     barSurfaceSettings.radiusOptions.length
+  readonly property int splitActionPreviewCount:
+    v1SplitChoiceRow.visible ? 2 : 0
   readonly property bool childRouteAvailable:
     shibumiActive && !v2Active
   readonly property string childRouteLabel: "Gap Animations"
@@ -147,6 +151,38 @@ Column {
       }
 
       Row {
+        id: v1SplitChoiceRow
+        width: parent.width
+        height: visible ? Commons.Style.space(52) : 0
+        spacing: Commons.Style.space(8)
+        visible: !root.v2Active
+
+        SplitLayoutChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Split all"
+          detail: "Create separate islands for every V1 group"
+          splitAll: true
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setAllSplits(true)
+        }
+
+        SplitLayoutChoice {
+          width: (parent.width - parent.spacing) / 2
+          controller: root.controller
+          label: "Merge all"
+          detail: "Join all V1 groups into one island"
+          splitAll: false
+          foreground: root.foreground
+          accent: root.accent
+          uiScale: root.uiScale
+          onClicked: root.controller.setAllSplits(false)
+        }
+      }
+
+      Row {
         id: positionChoiceRow
         width: parent.width
         height: Commons.Style.space(30)
@@ -174,36 +210,6 @@ Column {
           accent: root.accent
           uiScale: root.uiScale
           onClicked: root.controller.setBarPosition("bottom")
-        }
-      }
-
-      Row {
-        id: v1SplitChoiceRow
-        width: parent.width
-        height: visible ? Commons.Style.space(30) : 0
-        spacing: Commons.Style.space(8)
-        visible: !root.v2Active
-
-        CompactSettingChoice {
-          width: (parent.width - parent.spacing) / 2
-          controller: root.controller
-          label: "Split all"
-          controlHeight: v1SplitChoiceRow.height
-          foreground: root.foreground
-          accent: root.accent
-          uiScale: root.uiScale
-          onClicked: root.controller.setAllSplits(true)
-        }
-
-        CompactSettingChoice {
-          width: (parent.width - parent.spacing) / 2
-          controller: root.controller
-          label: "Merge all"
-          controlHeight: v1SplitChoiceRow.height
-          foreground: root.foreground
-          accent: root.accent
-          uiScale: root.uiScale
-          onClicked: root.controller.setAllSplits(false)
         }
       }
     }

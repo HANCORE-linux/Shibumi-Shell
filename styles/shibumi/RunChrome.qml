@@ -89,6 +89,18 @@ Item {
       color: root.bar.background
       border.width: root.bar.visualTokens.pillBorderWidth
       border.color: root.bar.visualTokens.islandBorder
+
+      RectangularShadow {
+        anchors.fill: parent
+        visible: root.bar.visualTokens.shadowEnabled === true
+        radius: parent.radius
+        blur: 8
+        spread: 0
+        offset: Qt.vector2d(0, root.atTop ? 1 : -1)
+        color: root.bar.visualTokens.pillShadow !== undefined
+          ? root.bar.visualTokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+        z: -1
+      }
     }
   }
 

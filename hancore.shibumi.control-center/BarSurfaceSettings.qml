@@ -18,18 +18,35 @@ Column {
         {
           key: "border",
           label: "Bar border",
+          detail: "Outline the V2 bar shell",
           fallback: true
         },
         {
           key: "panelBorder",
           label: "Panel + tooltip",
+          detail: "Outline connected panels and tooltips",
           fallback: true
         }
       ]
     : [
-        { key: "border", label: "Border", fallback: true },
-        { key: "frost", label: "Frost", fallback: false },
-        { key: "shadow", label: "Shadow", fallback: false }
+        {
+          key: "border",
+          label: "Border",
+          detail: "One pixel outline around V1 surfaces",
+          fallback: true
+        },
+        {
+          key: "frost",
+          label: "Frost",
+          detail: "Translucent V1 islands",
+          fallback: false
+        },
+        {
+          key: "shadow",
+          label: "Shadow",
+          detail: "Soft depth behind V1 surfaces",
+          fallback: false
+        }
       ]
   readonly property var radiusOptions: v2Active
     ? []
@@ -47,6 +64,8 @@ Column {
     { value: "color07", label: "07" },
     { value: "foreground", label: "FG" }
   ]
+  readonly property int previewEffectOptionCount:
+    showSurface && !v2Active ? effectOptions.length : 0
   readonly property bool ready:
     effectRepeater.count === (showSurface ? effectOptions.length : 0)
     && radiusRepeater.count === (showSurface ? radiusOptions.length : 0)
@@ -63,7 +82,7 @@ Column {
   Row {
     id: effectRow
     width: parent.width
-    height: Commons.Style.space(30)
+    height: Commons.Style.space(root.v2Active ? 30 : 52)
     spacing: Commons.Style.space(8)
     visible: root.showSurface
 
@@ -71,22 +90,53 @@ Column {
       id: effectRepeater
       model: root.showSurface ? root.effectOptions : []
 
-      delegate: CompactSettingChoice {
+      delegate: Loader {
+        id: effectLoader
+
         required property var modelData
         width: (parent.width
           - parent.spacing * (root.effectOptions.length - 1))
           / root.effectOptions.length
-        controller: root.controller
-        label: modelData.label
-        selected: root.controller.barPresentation[modelData.key] === undefined
-          ? modelData.fallback
-          : root.controller.barPresentation[modelData.key] === true
-        foreground: root.foreground
-        accent: root.accent
-        uiScale: root.uiScale
-        controlHeight: effectRow.height
-        onClicked: root.controller.setBarPresentation(
-          modelData.key, !selected)
+        height: effectRow.height
+        sourceComponent: root.v2Active ? compactEffect : previewEffect
+
+        readonly property bool effectSelected:
+          root.controller.barPresentation[modelData.key] === undefined
+            ? modelData.fallback
+            : root.controller.barPresentation[modelData.key] === true
+
+        Component {
+          id: compactEffect
+
+          CompactSettingChoice {
+            controller: root.controller
+            label: effectLoader.modelData.label
+            selected: effectLoader.effectSelected
+            foreground: root.foreground
+            accent: root.accent
+            uiScale: root.uiScale
+            controlHeight: effectRow.height
+            onClicked: root.controller.setBarPresentation(
+              effectLoader.modelData.key, !selected)
+          }
+        }
+
+        Component {
+          id: previewEffect
+
+          SurfaceEffectChoice {
+            controller: root.controller
+            effectKey: effectLoader.modelData.key
+            label: effectLoader.modelData.label
+            detail: effectLoader.modelData.detail
+            selected: effectLoader.effectSelected
+            foreground: root.foreground
+            accent: root.accent
+            uiScale: root.uiScale
+            onClicked: root.controller.setBarPresentation(
+              effectLoader.modelData.key, !selected)
+          }
+        }
       }
     }
   }

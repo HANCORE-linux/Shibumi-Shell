@@ -267,7 +267,10 @@ done
 for dynamic_v1_contract in \
   'readonly property bool dynamicV1Group:' \
   'visible: root.decorated || root.dynamicV1Group' \
-  'root.bar.visualTokens.pillBorderWidth'; do
+  'root.bar.visualTokens.pillBorderWidth' \
+  'RectangularShadow {' \
+  'visible: root.dynamicV1Group && root.bar.visualTokens' \
+  'root.bar.visualTokens.shadowEnabled === true'; do
   rg -Fq "$dynamic_v1_contract" core/GroupSlot.qml \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
 done
@@ -291,9 +294,28 @@ for pill_contract in \
   'readonly property bool surfaceDisabled:' \
   'readonly property bool shellPillVisible: shellStyle === "shibumi"' \
   'readonly property int renderedSurfaceCount: shellPillVisible ? 1 : 0' \
+  'readonly property int renderedShadowCount:' \
+  'RectangularShadow {' \
+  'blur: 8' \
+  'root.bar && root.bar.position === "bottom" ? -1 : 1' \
   'visible: root.shellPillVisible'; do
   rg -Fq "$pill_contract" shared/presentation/PillSurface.qml \
     || fail "V1/V2 widget surface separation drifted: $pill_contract"
+done
+for v1_shadow_contract in \
+    'visible: root.bar.visualTokens.shadowEnabled === true' \
+    'offset: Qt.vector2d(0, root.atTop ? 1 : -1)' \
+    'root.bar.visualTokens.pillShadow !== undefined' \
+    'Qt.rgba(0, 0, 0, 0.55)'; do
+  rg -Fq "$v1_shadow_contract" styles/shibumi/RunChrome.qml \
+    || fail "V1 island shadow drifted: $v1_shadow_contract"
+done
+for tooltip_shadow_contract in \
+    'visible: root.bar.visualTokens.shellStyle === "shibumi"' \
+    '&& root.bar.visualTokens.shadowEnabled === true' \
+    'anchors.fill: tooltipBubble'; do
+  rg -Fq "$tooltip_shadow_contract" styles/shibumi/TooltipSurface.qml \
+    || fail "V1 tooltip shadow drifted: $tooltip_shadow_contract"
 done
 for widget in ai audio battery bluetooth brightness center control-center cpu gpu \
     media memory network power-profile quick-access status storage temperature \

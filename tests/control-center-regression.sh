@@ -746,6 +746,8 @@ for route_contract in \
   '? shellStyleOptions.slice(1) : [shellStyleOptions[0]]' \
   'label: "Split all"' \
   'label: "Merge all"' \
+  'readonly property int splitActionPreviewCount:' \
+  'SplitLayoutChoice {' \
   'label: "Edit slots"' \
   'label: "Edit layout"' \
   'label: "Restore layout"' \
@@ -753,6 +755,29 @@ for route_contract in \
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
     || fail "active Bars drill-down drifted: $route_contract"
 done
+for split_preview_contract in \
+    'required property bool splitAll' \
+    'Accessible.role: Accessible.Button' \
+    'Accessible.description: detail' \
+    'id: splitPreview' \
+    'visible: root.splitAll' \
+    'id: mergePreview' \
+    'visible: !root.splitAll' \
+    'width: Commons.Style.space(14)' \
+    'width: Commons.Style.space(4)' \
+    'model: 3'; do
+  rg -Fq "$split_preview_contract" \
+    "$control_dir/SplitLayoutChoice.qml" \
+    || fail "V1 split-layout preview drifted: $split_preview_contract"
+done
+split_row_line="$(rg -n -m1 'id: v1SplitChoiceRow' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)"
+position_row_line="$(rg -n -m1 'id: positionChoiceRow' \
+  "$control_dir/ActiveBarSettingsPage.qml" | cut -d: -f1)"
+if [[ -z "$split_row_line" || -z "$position_row_line" \
+    || "$split_row_line" -ge "$position_row_line" ]]; then
+  fail "V1 split actions are no longer placed above bar position"
+fi
 if rg -q 'SLOT CAPACITY|V2 LAYOUT|v2SlotRepeater|controller\.(add|remove)V2Slot|Add slots and place dividers directly' \
     "$control_dir/ActiveBarSettingsPage.qml"; then
   fail "Bars reintroduced redundant V2 layout or slot-capacity copy"
@@ -1057,15 +1082,32 @@ for surface_contract in \
   'property bool showAccent: true' \
   'readonly property var effectOptions: v2Active' \
   'readonly property var radiusOptions: v2Active' \
-  'height: Commons.Style.space(30)' \
+  'readonly property int previewEffectOptionCount:' \
+  'height: Commons.Style.space(root.v2Active ? 30 : 52)' \
   'spacing: Commons.Style.space(8)' \
   'controlHeight: effectRow.height' \
+  'sourceComponent: root.v2Active ? compactEffect : previewEffect' \
+  'SurfaceEffectChoice {' \
   'uiScale: root.uiScale' \
   'effectRepeater.count === (showSurface ? effectOptions.length : 0)' \
   'radiusRepeater.count === (showSurface ? radiusOptions.length : 0)' \
   'colorRepeater.count === (showAccent ? colorOptions.length : 0)'; do
   rg -Fq "$surface_contract" "$control_dir/BarSurfaceSettings.qml" \
     || fail "version-aware bar-surface contract drifted: $surface_contract"
+done
+for effect_preview_contract in \
+    'required property string effectKey' \
+    'Accessible.role: Accessible.CheckBox' \
+    'Accessible.checked: selected' \
+    'visible: root.effectKey === "frost"' \
+    'Commons.Util.alpha(root.controller.marketPanelRaised, 0.68)' \
+    'visible: root.effectKey === "shadow"' \
+    'id: frostPattern' \
+    'root.effectKey === "border"' \
+    '|| root.effectKey === "frost" ? 1 : 0'; do
+  rg -Fq "$effect_preview_contract" \
+    "$control_dir/SurfaceEffectChoice.qml" \
+    || fail "V1 surface-effect preview drifted: $effect_preview_contract"
 done
 rg -Fq 'v2Active: root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \

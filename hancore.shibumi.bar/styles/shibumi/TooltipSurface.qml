@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 
 Item {
   id: root
@@ -12,6 +13,20 @@ Item {
 
   implicitWidth: tooltipBubble.implicitWidth
   implicitHeight: tooltipBubble.implicitHeight
+
+  RectangularShadow {
+    anchors.fill: tooltipBubble
+    visible: root.bar.visualTokens.shellStyle === "shibumi"
+      && root.bar.visualTokens.shadowEnabled === true
+    radius: tooltipBubble.radius
+    blur: 8
+    spread: 0
+    offset: Qt.vector2d(0,
+      root.bar.position === "bottom" ? -1 : 1)
+    color: root.bar.visualTokens.pillShadow !== undefined
+      ? root.bar.visualTokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+    z: -1
+  }
 
   Rectangle {
     id: tooltipBubble
