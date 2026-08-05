@@ -60,6 +60,24 @@ printf '%s\n' "$output"
 grep -F 'bluetooth backend regression passed' <<<"$output" >/dev/null \
   || fail "Bluetooth backend success marker missing"
 
+install -m 0644 "$repo_root/tests/bluetooth-audio-intent-regression.qml" \
+  "$tmpdir/shell.qml"
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" --no-color 2>&1)
+status=$?
+set -e
+printf '%s\n' "$output"
+[[ $status -eq 0 ]] || fail "Bluetooth audio intent regression exited with $status"
+grep -F 'bluetooth audio intent regression passed' <<<"$output" >/dev/null \
+  || fail "Bluetooth audio intent success marker missing"
+
 OMARCHY_PATH="$omarchy_path" \
   bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh"
 OMARCHY_PATH="$omarchy_path" \
@@ -116,9 +134,15 @@ done
 rg -q 'setsid .*quickshell|setsid .*quickshell_bin' \
   "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
   || fail "Bluetooth IPC harness does not isolate the Quickshell process group"
+rg -q 'process_group_alive.*|kill -0 -- "-\$pgid"' \
+  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+  || fail "Bluetooth IPC harness does not observe the entire process group"
 rg -q '"\$timeout_bin" --foreground "\$ipc_timeout_seconds"' \
   "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
   || fail "Bluetooth IPC harness calls are not time-bounded"
+rg -q 'restoredBluetoothState' \
+  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+  || fail "Bluetooth IPC rollback lacks a post-event-loop read"
 rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
 rg -q 'adapter\.stopDiscovery\(\)' "$service" \
@@ -129,8 +153,8 @@ rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 
 rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discovering(.|\n)*?discoveryOwned = true(.|\n)*?\n  \}' \
   "$adapter" \
   || fail "Bluetooth discovery ownership is not confirmed from observed adapter state"
-rg -q 'property var audioHandoffIntents: \(\{\}\)' "$adapter" \
-  || fail "Bluetooth audio handoff intent is not independent of UI pending state"
+rg -q 'property var audioHandoffIntent: null' "$adapter" \
+  || fail "Bluetooth audio handoff intent is not an explicit latest-only state"
 rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
   "$adapter" \
   || fail "Bluetooth audio handoff is not revalidated immediately before execution"

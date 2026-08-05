@@ -12,6 +12,7 @@ case_orders=${SHIBUMI_BT_CASES:-"service-first backend-first"}
 signal_ready_file=${SHIBUMI_BT_SIGNAL_READY_FILE:-}
 case_root=""
 case_shell_pid=""
+case_shell_pgid=""
 case_snapshot=""
 case_order=""
 failure_count=0
@@ -28,38 +29,87 @@ ipc_show() {
     "$qs_bin" ipc -p "$case_root" show
 }
 
+process_group_alive() {
+  local pgid=${1:-}
+  [[ $pgid =~ ^[0-9]+$ ]] \
+    && kill -0 -- "-$pgid" 2>/dev/null
+}
+
+leader_is_reapable() {
+  local pid=${1:-}
+  local state=""
+  [[ $pid =~ ^[0-9]+$ ]] || return 1
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -r /proc/$pid/stat ]]; then
+    state=$(awk '{ print $3 }' "/proc/$pid/stat" 2>/dev/null || true)
+    [[ $state == Z ]]
+    return
+  fi
+  return 1
+}
+
 stop_case_process_group() {
-  [[ -n $case_shell_pid ]] || return 0
-  if kill -0 "$case_shell_pid" 2>/dev/null; then
-    kill -TERM -- "-$case_shell_pid" 2>/dev/null || true
+  local pid=$case_shell_pid
+  local pgid=$case_shell_pgid
+  [[ $pgid =~ ^[0-9]+$ ]] || return 0
+
+  if process_group_alive "$pgid"; then
+    kill -TERM -- "-$pgid" 2>/dev/null || true
     for _ in {1..40}; do
-      kill -0 "$case_shell_pid" 2>/dev/null || break
+      process_group_alive "$pgid" || break
       sleep 0.05
     done
-    if kill -0 "$case_shell_pid" 2>/dev/null; then
-      kill -KILL -- "-$case_shell_pid" 2>/dev/null || true
-    fi
   fi
-  wait "$case_shell_pid" 2>/dev/null || true
+  if process_group_alive "$pgid"; then
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+    for _ in {1..40}; do
+      process_group_alive "$pgid" || break
+      sleep 0.05
+    done
+  fi
+  if process_group_alive "$pgid"; then
+    record_failure "$case_order process group $pgid survived TERM/KILL cleanup"
+  fi
+
+  # Never block on a live leader. wait is used only after exit or zombie state
+  # has already been observed, so this is a non-blocking reap of cached status.
+  if leader_is_reapable "$pid"; then
+    wait "$pid" 2>/dev/null || true
+  elif [[ $pid =~ ^[0-9]+$ ]]; then
+    record_failure "$case_order leader $pid was not reapable after group cleanup"
+  fi
 }
 
 cleanup_case() {
   local restored_state=""
+  local restore_generation=""
   if [[ -n $case_snapshot && -n $case_shell_pid && -n $case_root ]] \
       && kill -0 "$case_shell_pid" 2>/dev/null; then
-    restored_state=$(ipc_call \
+    restore_generation=$(ipc_call \
       shibumi-bluetooth-ipc-test restoreBluetooth "$case_snapshot" \
       2>/dev/null || true)
+    if [[ $restore_generation =~ ^[0-9]+$ ]]; then
+      for _ in {1..20}; do
+        restored_state=$(ipc_call \
+          shibumi-bluetooth-ipc-test restoredBluetoothState \
+          "$restore_generation" 2>/dev/null || true)
+        [[ $restored_state != pending ]] && break
+        sleep 0.05
+      done
+    fi
     if [[ $restored_state != "$case_snapshot" ]]; then
       record_failure "$case_order rollback is $restored_state, expected $case_snapshot"
     else
-      printf '%s: rollback restored bluetooth/discovery=%s\n' \
+      printf '%s: rollback settled bluetooth/discovery=%s\n' \
         "$case_order" "$restored_state"
     fi
   fi
   case_snapshot=""
   stop_case_process_group
   case_shell_pid=""
+  case_shell_pgid=""
   if [[ -n $case_root && -d $case_root ]]; then
     rm -rf -- "$case_root"
   fi
@@ -109,6 +159,12 @@ run_case() {
     setsid "$quickshell_bin" -p "$case_root" --no-color \
     >"$case_root/quickshell.log" 2>&1 &
   case_shell_pid=$!
+  case_shell_pgid=$(ps -o pgid= -p "$case_shell_pid" | tr -d ' ')
+  if [[ $case_shell_pgid != "$case_shell_pid" ]]; then
+    record_failure "$load_order shell PID $case_shell_pid does not own PGID $case_shell_pgid"
+    cleanup_case
+    return
+  fi
 
   for _ in {1..100}; do
     if ! kill -0 "$case_shell_pid" 2>/dev/null; then
@@ -193,7 +249,8 @@ run_case() {
   printf '%s: simulated abort state=%s\n' "$load_order" "$aborted_state"
 
   if [[ -n $signal_ready_file ]]; then
-    printf '%s:%s\n' "$case_shell_pid" "$case_root" >"$signal_ready_file"
+    printf '%s:%s:%s\n' \
+      "$case_shell_pid" "$case_shell_pgid" "$case_root" >"$signal_ready_file"
     while [[ -e $signal_ready_file ]]; do sleep 0.05; done
   fi
 

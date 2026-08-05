@@ -670,8 +670,8 @@ for bluetooth_adapter in \
   rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discovering(.|\n)*?discoveryOwned = true(.|\n)*?\n  \}' \
     "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not confirm discovery ownership from observed state"
-  rg -q 'property var audioHandoffIntents: \(\{\}\)' "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter couples audio intent to UI pending state"
+  rg -q 'property var audioHandoffIntent: null' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter lacks explicit latest-only audio intent state"
   rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
     "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not revalidate audio handoff state"

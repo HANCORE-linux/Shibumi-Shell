@@ -566,16 +566,18 @@ nicht gepusht.
   bei offener Shibumi-Session, vorhandenem und eingeschaltetem Adapter sowie
   fehlender Discovery erneut. Ablehnung beim Einschalten, externes Ende und
   Wechsel zwischen zwei aktiven Adaptern sind durch Fixtures abgedeckt.
-- Der Audio-Handoff-Intent besitzt einen eigenen 60-Sekunden-Lifecycle und ist
-  nicht mehr an das 20-Sekunden-UI-Pending gekoppelt. Direkt vor der Übergabe
-  werden Radio, aktueller Adapter, Live-Gerät, Verbindung und der aktuell
-  aufgelöste PipeWire-Sink erneut geprüft; Disconnect, Forget, Radio-off und
-  Adapterwechsel verwerfen den Intent.
+- Der Audio-Handoff besitzt genau einen 60-Sekunden-`latest intent`. Ein neuer
+  expliziter Connect ersetzt jeden älteren noch nicht ausgeführten Intent und
+  dessen geplanten Handoff. Direkt vor der Übergabe werden Radio, aktueller
+  Adapter, Live-Gerät, Verbindung und der aktuell aufgelöste PipeWire-Sink
+  erneut geprüft; Disconnect, Forget, Radio-off und Adapterwechsel verwerfen
+  den Intent.
 - Der IPC-Harness begrenzt jeden `qs`-Aufruf, startet Quickshell mit `setsid`
-  in einer eigenen Prozessgruppe und beendet die gesamte Gruppe mit
-  TERM/KILL-Fallback. Echte INT-, TERM- und HUP-Abbrüche stellen den dynamisch
-  erfassten Fixture-Snapshot wieder her und hinterlassen weder Prozess noch
-  Testverzeichnis.
+  in einer eigenen Prozessgruppe und prüft deren PGID bis zum vollständigen
+  Ende. Eine absichtlich TERM-resistente Kindprozess-Fixture belegt den
+  KILL-Fallback. Echte INT-, TERM- und HUP-Abbrüche lesen den dynamisch
+  erfassten Fixture-Snapshot nach einem bestätigten Event-Loop-Turn erneut und
+  hinterlassen weder Prozessgruppe noch Testverzeichnis.
 - Root- und Plugin-Kopien von `BluetoothBackendAdapter.qml` und
   `BluetoothModel.js` sind byte-identisch. Beide fokussierten und vollständigen
   Verträge enthalten jetzt einen Drift-Guard.
@@ -588,10 +590,10 @@ nicht gepusht.
   Abbauwarnung auf. Im stabilen Nachlauf folgte keine Bluetooth-Warnung und
   kein Fehler.
 - Live gelten weiterhin: PID `1597226`, genau ein `omarchy.bluetooth`-Ziel,
-  sechs Methoden, Radio an, Discovery aus, iPhone verbunden und SteelSeries
-  Arctis 7 Chat als Standard-Sink. Die drei installierten Bluetooth-Dateien
-  sind byte-identisch zum Arbeitsbaum.
-- Health meldet einen erwarteten Source-Hinweis (`ahead 2 · dirty`), acht
+  sechs Methoden, Radio an, Discovery aus und SteelSeries Arctis 7 Chat als
+  Standard-Sink. Das iPhone ist aktuell gekoppelt, aber nicht verbunden. Die
+  drei installierten Bluetooth-Dateien sind byte-identisch zum Arbeitsbaum.
+- Health meldet einen erwarteten Source-Hinweis (`ahead 3 · dirty`), acht
   erfolgreiche Prüfungen und keine Runtime-Fehler. Die physische
   Multi-Monitor-Abnahme bleibt mangels zweitem Monitor ausgenommen.
 
@@ -599,3 +601,51 @@ Der interne Follow-up-Stand besitzt damit keine bekannte offene
 Bluetooth-Invariante. Die vereinbarte unabhängige Prüfung des gesamten
 Commit-Bereichs bleibt dennoch ein eigener Gate nach dem separaten
 Folgecommit; ein Push erfolgt ausschließlich nach ausdrücklicher Freigabe.
+
+### Zweites Folgeaudit nach Gesamt-Review vom 6. August 2026
+
+Der Gesamt-Review bestätigte ein mittleres Audio-Lifecycle- und zwei niedrige
+Harness-/Nachweis-Findings. Vor der Korrektur wurden alle drei gezielt rot
+belegt:
+
+- Intent A konnte trotz eines 59 Sekunden späteren Intent B fast 119 Sekunden
+  gültig bleiben und den Standard-Sink übernehmen.
+- Eine TERM-resistente Kindprozess-Fixture überlebte den nur an der Leader-PID
+  orientierten Cleanup.
+- Der Rollback besaß keinen getrennten Read nach einem Event-Loop-Turn.
+
+Die neuen Regressionen beweisen jetzt:
+
+- Intent B ersetzt Intent A; eine spätere Verbindung von A ändert den Sink
+  nicht; nur B darf den Handoff auslösen; nach seinem eigenen Ablauf ist auch B
+  ungültig.
+- Cleanup beobachtet die vollständige PGID, eskaliert nach begrenztem TERM-
+  Polling auf KILL und ruft `wait` nur auf, nachdem Exit- oder Zombie-Zustand
+  bereits festgestellt wurde.
+- Der Rollback liefert eine Generation und gilt erst nach einem getrennten,
+  generationsgebundenen Read nach `Qt.callLater` als wiederhergestellt.
+
+Im produktiven Log existiert nach `Configuration Loaded` eine transiente
+`Resource Not Ready`-Discovery-Warnung von `00:03:48`. Health klassifiziert sie
+nicht als Runtime-Fehler. Die Fixture beweist die Reconciliation nach einer
+Ablehnung; die historische Warnung lässt sich rückwirkend aber keinem
+bestimmten späteren Retry-Erfolg zuordnen.
+
+Die kontrollierte Live-Abnahme um `00:29:40` trennt deshalb beide Nachweise
+sauber:
+
+- Die produktionsnahe Fixture lehnt den ersten Discovery-Start ab und bestätigt
+  einen späteren Versuch sowie beobachtete aktive Discovery.
+- Live wurde Discovery nach `omarchy.bluetooth open` beim ersten 250-ms-Poll
+  aktiv beobachtet und nach `close` beim zweiten Poll wieder inaktiv.
+- Im Abnahmefenster entstand keine neue Bluetooth-Warnung. Radio blieb an,
+  kein Gerät war verbunden und SteelSeries Arctis 7 Chat blieb Standard-Sink.
+
+Damit sind Ablehnung/Reconciliation deterministisch und der aktuelle reale
+Start-/Stop-Pfad separat belegt, ohne einen BlueZ-Fehler künstlich durch einen
+Radio- oder Geräte-Eingriff zu erzwingen.
+
+Der Remote wurde unmittelbar vor dem separaten Folgecommit per
+`git ls-remote` geprüft: `origin/main = 040da9b`; der geprüfte lokale
+Ausgangsstand war `ahead 3 / behind 0`. Der separate Folgecommit erhöht den
+lokalen Abstand auf `ahead 4 / behind 0`. Es wurde nichts gepusht.

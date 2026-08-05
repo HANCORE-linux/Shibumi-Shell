@@ -30,7 +30,7 @@ Item {
   property var retiredDiscoveryAdapter: null
   property bool discoveryDesired: false
   property var nativePendingActions: ({})
-  property var audioHandoffIntents: ({})
+  property var audioHandoffIntent: null
   property var pendingAudioOutputDevice: null
   property int pendingAudioOutputAttempts: 0
 
@@ -181,23 +181,23 @@ Item {
 
   function rememberAudioHandoffIntent(device) {
     if (!device || !device.address) return
-    const next = Model.cloneMap(audioHandoffIntents)
-    next[String(device.address)] = {
+    // There can only be one default sink. A newer explicit connect request
+    // therefore replaces every older, not-yet-consumed handoff intent.
+    cancelPendingAudioOutput("")
+    audioHandoffIntent = {
       address: String(device.address),
       name: device.name ? String(device.name) : "",
       deviceName: device.deviceName ? String(device.deviceName) : ""
     }
-    audioHandoffIntents = next
     audioIntentTimeout.restart()
   }
 
   function clearAudioHandoffIntent(address) {
     const key = String(address || "")
-    if (!key || !audioHandoffIntents[key]) return
-    const next = Model.cloneMap(audioHandoffIntents)
-    delete next[key]
-    audioHandoffIntents = next
-    if (Object.keys(next).length === 0) audioIntentTimeout.stop()
+    if (!audioHandoffIntent || !key
+        || String(audioHandoffIntent.address || "") !== key) return
+    audioHandoffIntent = null
+    audioIntentTimeout.stop()
   }
 
   function cancelPendingAudioOutput(address) {
@@ -216,7 +216,7 @@ Item {
   }
 
   function cancelAllAudioHandoffs() {
-    audioHandoffIntents = ({})
+    audioHandoffIntent = null
     audioIntentTimeout.stop()
     cancelPendingAudioOutput("")
   }
@@ -367,19 +367,14 @@ Item {
 
   function syncNativeAudioHandoffIntents() {
     if (backendOverride !== null) return
-    const next = Model.cloneMap(audioHandoffIntents)
-    let changed = false
-    for (const address in next) {
-      const device = nativeDeviceByAddress(address)
+    const intent = audioHandoffIntent
+    if (intent) {
+      const device = nativeDeviceByAddress(intent.address)
       if (device && device.connected && deviceUsesCurrentAdapter(device)) {
         scheduleAudioOutputSwitch(device)
-        delete next[address]
-        changed = true
+        audioHandoffIntent = null
+        audioIntentTimeout.stop()
       }
-    }
-    if (changed) {
-      audioHandoffIntents = next
-      if (Object.keys(next).length === 0) audioIntentTimeout.stop()
     }
     validatePendingAudioOutput()
   }
@@ -465,7 +460,7 @@ Item {
     id: audioIntentTimeout
     interval: root.audioIntentTimeoutInterval
     repeat: false
-    onTriggered: root.audioHandoffIntents = ({})
+    onTriggered: root.audioHandoffIntent = null
   }
 
   Timer {

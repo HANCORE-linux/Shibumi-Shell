@@ -4,7 +4,16 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmpdir=$(mktemp -d "/tmp/shibumi-bluetooth-signals.XXXXXX")
-trap 'rm -rf -- "$tmpdir"' EXIT
+real_quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
+stubborn_pgid=""
+
+cleanup() {
+  if [[ $stubborn_pgid =~ ^[0-9]+$ ]]; then
+    kill -KILL -- "-$stubborn_pgid" 2>/dev/null || true
+  fi
+  rm -rf -- "$tmpdir"
+}
+trap cleanup EXIT
 
 fail() {
   printf 'bluetooth IPC signal regression: %s\n' "$*" >&2
@@ -30,16 +39,48 @@ for signal_spec in INT:130 TERM:143 HUP:129; do
     || fail "$signal_name returned $status instead of $expected_status"
   [[ -s $marker ]] \
     || fail "$signal_name arrived before the simulated abort was ready"
-  IFS=: read -r shell_pid case_root <"$marker"
-  [[ $shell_pid =~ ^[0-9]+$ ]] \
-    || fail "$signal_name produced an invalid shell PID: $shell_pid"
+  IFS=: read -r shell_pid shell_pgid case_root <"$marker"
+  [[ $shell_pid =~ ^[0-9]+$ && $shell_pgid =~ ^[0-9]+$ ]] \
+    || fail "$signal_name produced invalid shell process identity"
   if kill -0 "$shell_pid" 2>/dev/null; then
     fail "$signal_name left Quickshell process $shell_pid alive"
   fi
+  if kill -0 -- "-$shell_pgid" 2>/dev/null; then
+    fail "$signal_name left Quickshell process group $shell_pgid alive"
+  fi
   [[ ! -e $case_root ]] \
     || fail "$signal_name left its isolated case root behind: $case_root"
-  rg -q 'rollback restored bluetooth/discovery=' "$output" \
+  rg -q 'rollback settled bluetooth/discovery=' "$output" \
     || fail "$signal_name did not restore the Bluetooth snapshot"
+done
+
+marker="$tmpdir/stubborn.ready"
+output="$tmpdir/stubborn.log"
+child_state="$tmpdir/stubborn-child.state"
+set +e
+QUICKSHELL_BIN="$repo_root/tests/fixtures/quickshell-with-stubborn-child.sh" \
+REAL_QUICKSHELL_BIN="$real_quickshell_bin" \
+SHIBUMI_BT_STUBBORN_CHILD_FILE="$child_state" \
+SHIBUMI_BT_CASES=service-first \
+SHIBUMI_BT_SIGNAL_READY_FILE="$marker" \
+  timeout --preserve-status --signal=TERM --kill-after=3 4 \
+    bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+    >"$output" 2>&1
+status=$?
+set -e
+
+[[ $status -eq 143 ]] || fail "stubborn process-group case returned $status instead of 143"
+[[ -s $child_state ]] || fail "stubborn child did not publish its PID and PGID"
+IFS=: read -r stubborn_child_pid stubborn_pgid <"$child_state"
+[[ $stubborn_child_pid =~ ^[0-9]+$ && $stubborn_pgid =~ ^[0-9]+$ ]] \
+  || fail "stubborn child produced invalid process identity"
+if kill -0 -- "-$stubborn_pgid" 2>/dev/null; then
+  fail "TERM cleanup left process group $stubborn_pgid alive"
+fi
+
+for rollback_log in "$tmpdir"/INT.log "$tmpdir"/TERM.log "$tmpdir"/HUP.log; do
+  rg -q 'rollback settled bluetooth/discovery=' "$rollback_log" \
+    || fail "$(basename "$rollback_log" .log) lacks event-loop-settled rollback proof"
 done
 
 printf 'bluetooth IPC signal regression passed\n'
