@@ -27,6 +27,14 @@ CURRENT_DOCUMENTS = (
     "docs/development/troubleshooting.md",
     "docs/development/release.md",
 )
+BLUETOOTH_OWNERSHIP_SURFACES = (
+    "ARCHITECTURE.md",
+    "docs/phase2-validation.md",
+    "docs/phase2-ownership-map.md",
+    "docs/plugin-suite-inventory.md",
+    "docs/v1-widget-parity-audit.md",
+    "tests/fixtures/ControlCenterTestPanel.qml",
+)
 LINK_PATTERN = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 
 
@@ -200,6 +208,21 @@ def main() -> None:
         fail("README landing page is missing the source uninstall command")
     if "docs/plugin-compatibility.md" not in readme:
         fail("README landing page is missing the plugin compatibility guide")
+
+    bluetooth_docs = "\n".join(
+        " ".join((REPO_ROOT / relative).read_text(encoding="utf-8").split())
+        for relative in BLUETOOTH_OWNERSHIP_SURFACES
+    ).lower()
+    for stale_claim in (
+        "one hidden registered `omarchy.bluetooth` component",
+        "complete official `omarchy.bluetooth` backend",
+        "official `omarchy.bluetooth` |",
+        "one shared official backend with local v1-style widgets",
+        "the adapter has only two bounded action timers",
+        "shibumi bluetooth presentation over omarchy's bluez and audio owner",
+    ):
+        if stale_claim in bluetooth_docs:
+            fail(f"stale Bluetooth ownership claim: {stale_claim}")
 
     print("documentation regression passed")
 

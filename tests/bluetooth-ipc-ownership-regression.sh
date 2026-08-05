@@ -93,7 +93,7 @@ cleanup_case() {
     if [[ $restore_generation =~ ^[0-9]+$ ]]; then
       for _ in {1..20}; do
         restored_state=$(ipc_call \
-          shibumi-bluetooth-ipc-test restoredBluetoothState \
+          shibumi-bluetooth-ipc-test settledBluetoothState \
           "$restore_generation" 2>/dev/null || true)
         [[ $restored_state != pending ]] && break
         sleep 0.05
@@ -238,9 +238,24 @@ run_case() {
     || record_failure "$load_order lifecycle/rollback state is $lifecycle_state, expected $expected_state"
 
   local settled_state=""
-  settled_state=$(ipc_call shibumi-bluetooth-ipc-test bluetoothState)
-  [[ $settled_state == "$case_snapshot" ]] \
-    || record_failure "$load_order success rollback is $settled_state, expected $case_snapshot"
+  local settle_generation=""
+  settle_generation=$(ipc_call \
+    shibumi-bluetooth-ipc-test settleBluetoothState 2>/dev/null || true)
+  if [[ $settle_generation =~ ^[0-9]+$ ]]; then
+    for _ in {1..20}; do
+      settled_state=$(ipc_call \
+        shibumi-bluetooth-ipc-test settledBluetoothState \
+        "$settle_generation" 2>/dev/null || true)
+      [[ $settled_state != pending ]] && break
+      sleep 0.05
+    done
+  fi
+  if [[ $settled_state == "$case_snapshot" ]]; then
+    printf '%s: success rollback settled bluetooth/discovery=%s\n' \
+      "$load_order" "$settled_state"
+  else
+    record_failure "$load_order settled success rollback is $settled_state, expected $case_snapshot"
+  fi
 
   local aborted_state=""
   aborted_state=$(ipc_call shibumi-bluetooth-ipc-test mutateBluetoothForAbort)

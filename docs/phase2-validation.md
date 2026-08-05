@@ -542,20 +542,24 @@ interaction remains a controlled Wayland acceptance gate.
 
 ## G15 Shared Bluetooth Service And Local Panel
 
-Validated offscreen and on the validation system on 2026-07-18:
+Validated offscreen and on the validation system on 2026-07-18; backend
+ownership was replaced and revalidated on 2026-08-06:
 
-- G15 creates one root `BluetoothService` and one hidden registered
-  `omarchy.bluetooth` component for the entire process;
-- the official component remains the only BlueZ, pairing, pending-action, and
-  Bluetooth-audio owner. Its stock presentation and IPC handler are disabled;
+- G15 creates one root `BluetoothService` and one native
+  `BluetoothBackendAdapter` for the entire process;
+- the Shibumi adapter is the only BlueZ, pairing, pending-action, discovery,
+  and Bluetooth-audio owner. It uses Quickshell's Bluetooth/PipeWire models
+  plus the validated Omarchy device/audio helper commands; no complete stock
+  Bluetooth component or second IPC handler is instantiated;
 - every output consumes the same service and lazily creates only its own V1
   widget and QS Rise device panel;
 - discovery starts for the first open panel and stops after the final panel
-  closes. Radio enable while closed does not leave discovery running, and
-  Quattro's deferred enable callback is not double-started;
-- one process-wide `omarchy.bluetooth` IPC handler routes
-  open/show/toggle/close/hide symmetrically to the local panel;
-- full/compact geometry, two-output session accounting, action forwarding,
+  closes. Ownership is confirmed only from observed discovery, and bounded
+  reconciliation covers rejected starts, external stops, and adapter changes;
+- one process-wide `omarchy.bluetooth` IPC handler exposes all six methods;
+  open/show/toggle/close/hide route symmetrically to the local panel and
+  `toggleBluetooth` owns the radio action;
+- full/compact geometry, two-output session accounting, native action routing,
   missing-adapter cleanup, and worker-free ownership pass the component smoke;
 - the validation system proves one IPC target, top panel mapping, real adapter/radio
   reactivity, discovery start/teardown, and a clean runtime log.

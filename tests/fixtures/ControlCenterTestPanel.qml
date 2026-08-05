@@ -179,7 +179,7 @@ Item {
     {
       id: "hancore.shibumi.bluetooth",
       name: "Shibumi Bluetooth",
-      description: "Shibumi Bluetooth presentation over Omarchy's BlueZ and audio owner",
+      description: "Shibumi Bluetooth presentation with a native BlueZ and audio backend",
       author: "HANCORE",
       category: "Connectivity",
       searchTags: ["bluetooth", "bluez", "devices"],

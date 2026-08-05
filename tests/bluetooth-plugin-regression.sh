@@ -101,6 +101,15 @@ if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|pane
     "$service" "$adapter"; then
   fail "Bluetooth still resolves or loads a foreign UI component"
 fi
+if rg -q 'official_bluetooth_panel|plugins/panels/bluetooth/Panel\.qml' \
+    "$repo_root/tests/contract-regression.sh"; then
+  fail "Bluetooth contract still depends on the retired official panel"
+fi
+jq -e '
+  .plugins[] | select(.id == "hancore.shibumi.bluetooth") |
+  (.hostContracts // []) == []
+' "$repo_root/contracts/plugin-suite-v1.json" >/dev/null \
+  || fail "Bluetooth suite metadata still declares a host backend contract"
 rg -q '^import Quickshell\.Bluetooth$' "$adapter" \
   || fail "Bluetooth adapter does not own the native BlueZ model"
 rg -q '^import Quickshell\.Services\.Pipewire$' "$adapter" \
@@ -140,9 +149,11 @@ rg -q 'process_group_alive.*|kill -0 -- "-\$pgid"' \
 rg -q '"\$timeout_bin" --foreground "\$ipc_timeout_seconds"' \
   "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
   || fail "Bluetooth IPC harness calls are not time-bounded"
-rg -q 'restoredBluetoothState' \
-  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-  || fail "Bluetooth IPC rollback lacks a post-event-loop read"
+for settle_method in settleBluetoothState settledBluetoothState; do
+  rg -q "$settle_method" \
+    "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+    || fail "Bluetooth IPC success/abort rollback lacks $settle_method"
+done
 rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
 rg -q 'adapter\.stopDiscovery\(\)' "$service" \

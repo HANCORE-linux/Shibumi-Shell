@@ -211,8 +211,7 @@
       "bundle": "default",
       "defaultSection": "right",
       "requires": [],
-      "recommends": [],
-      "hostContracts": ["omarchy.bluetooth"]
+      "recommends": []
     },
     {
       "id": "hancore.shibumi.temperature",

@@ -15,9 +15,9 @@ ShellRoot {
   readonly property bool ready: validOrder && serviceLoader.item
     && backendLoader.item && serviceLoader.item.ready
     && serviceLoader.item.backend === backendLoader.item
-  property int restoreGeneration: 0
-  property int settledRestoreGeneration: 0
-  property string settledRestoreState: ""
+  property int stateGeneration: 0
+  property int settledStateGeneration: 0
+  property string settledStateValue: ""
 
   function fixtureBluetoothState() {
     if (!ready) return "loading"
@@ -25,6 +25,16 @@ ShellRoot {
       backendLoader.item.fakeAdapter.enabled ? 1 : 0,
       backendLoader.item.fakeAdapter.discovering ? 1 : 0
     ].join(":")
+  }
+
+  function scheduleSettledBluetoothState() {
+    stateGeneration++
+    const generation = stateGeneration
+    Qt.callLater(function() {
+      root.settledStateValue = root.fixtureBluetoothState()
+      root.settledStateGeneration = generation
+    })
+    return String(generation)
   }
 
   function startOrderedOwners() {
@@ -146,23 +156,21 @@ ShellRoot {
     function bluetoothState(): string {
       return root.fixtureBluetoothState()
     }
+    function settleBluetoothState(): string {
+      if (!root.ready) return "loading"
+      return root.scheduleSettledBluetoothState()
+    }
     function restoreBluetooth(snapshot: string): string {
       if (!root.ready) return "loading"
       const values = String(snapshot || "").split(":")
       if (values.length !== 2) return "invalid"
-      root.restoreGeneration++
-      const generation = root.restoreGeneration
       backendLoader.item.fakeAdapter.enabled = values[0] === "1"
       backendLoader.item.fakeAdapter.discovering = values[1] === "1"
-      Qt.callLater(function() {
-        root.settledRestoreState = root.fixtureBluetoothState()
-        root.settledRestoreGeneration = generation
-      })
-      return String(generation)
+      return root.scheduleSettledBluetoothState()
     }
-    function restoredBluetoothState(generation: int): string {
-      if (root.settledRestoreGeneration < generation) return "pending"
-      return root.settledRestoreState
+    function settledBluetoothState(generation: int): string {
+      if (root.settledStateGeneration < generation) return "pending"
+      return root.settledStateValue
     }
     function mutateBluetoothForAbort(): string {
       if (!root.ready) return "loading"

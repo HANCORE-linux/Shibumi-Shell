@@ -1035,15 +1035,6 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
     rg -q "${monitor_contract}" "$official_monitor_panel" \
       || fail "official monitor panel contract changed: $monitor_contract"
   done
-  official_bluetooth_panel=${OMARCHY_PATH}/shell/plugins/panels/bluetooth/Panel.qml
-  [[ -s $official_bluetooth_panel ]] \
-    || fail "official Quattro bluetooth panel is missing"
-  for bluetooth_contract in adapter connectedDevices knownDevices discoveredDevices \
-    toggleBluetooth connectDevice disconnectDevice forgetDevice pendingAction \
-    deviceLabel open close; do
-    rg -q "${bluetooth_contract}" "$official_bluetooth_panel" \
-      || fail "official bluetooth panel contract changed: $bluetooth_contract"
-  done
   official_power_panel=${OMARCHY_PATH}/shell/plugins/panels/power/Panel.qml
   [[ -s $official_power_panel ]] || fail "official Quattro power panel is missing"
   for power_contract in batteryPresent profiles activeProfile setProfile; do

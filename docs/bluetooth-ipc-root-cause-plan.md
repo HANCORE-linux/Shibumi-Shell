@@ -649,3 +649,47 @@ Der Remote wurde unmittelbar vor dem separaten Folgecommit per
 `git ls-remote` geprüft: `origin/main = 040da9b`; der geprüfte lokale
 Ausgangsstand war `ahead 3 / behind 0`. Der separate Folgecommit erhöht den
 lokalen Abstand auf `ahead 4 / behind 0`. Es wurde nichts gepusht.
+
+### Unabhängiger Gesamt-Review nach dem Folgecommit
+
+Der read-only Gesamt-Review von `origin/main..f1f8cbd` fand keine High- oder
+Medium-Befunde, aber zwei niedrige Nachweislücken:
+
+- Der erfolgreiche Doppel-Toggle las den wiederhergestellten Fixture-Zustand
+  zwar nach einem kurzen Zwischenschritt, jedoch ohne explizit bestätigten
+  QML-Event-Loop-Turn.
+- `phase2-validation.md`, `phase2-ownership-map.md` und
+  `plugin-suite-inventory.md` beschrieben noch das entfernte vollständige
+  Omarchy-Bluetooth-Backend. Eine repositoryweite Suche zeigte dieselbe
+  veraltete Eigentumsaussage zusätzlich in `v1-widget-parity-audit.md` sowie
+  eine veraltete Timerzahl in `ARCHITECTURE.md`.
+
+Die Korrektur verwendet für Erfolgs- und Abbruchpfad denselben
+generationsgebundenen `Qt.callLater`-Nachweis. Ein Dokumentations-Guard lehnt
+die alten Eigentums- und Timerbehauptungen künftig ab. Alle aktiven Dokumente
+benennen nun den einen nativen Shibumi-Adapter, Quickshells BlueZ/PipeWire-
+Modelle, die begrenzten Omarchy-Hilfsbefehle und den einzelnen symmetrischen
+Sechs-Methoden-IPC-Eigentümer.
+
+Der dafür erstellte separate Audit-Korrekturcommit erhöht den lokalen Stand
+auf `ahead 5 / behind 0`. `origin/main` bleibt `040da9b`; es wurde nichts
+gepusht.
+
+Der zweite read-only Review fand anschließend noch eine niedrige semantische
+Altlast in der Control-Center-Test-Fixture: Ihre Bluetooth-Beschreibung nannte
+weiterhin Omarchy als BlueZ-/Audio-Eigentümer. Der vertiefte Root-Abgleich
+zeigte außerdem, dass der Gesamtvertrag weiterhin die Existenz und interne API
+des nicht mehr verwendeten offiziellen Bluetooth-Panels verlangte. Beides ist
+entfernt: Die Fixture beschreibt den nativen Shibumi-Adapter, der Guard umfasst
+nun auch ownership-tragende Fixtures und die Bluetooth-Suite lehnt eine neue
+Kopplung an `plugins/panels/bluetooth/Panel.qml` ausdrücklich ab. Der
+Audit-Korrekturcommit wurde vor jedem Push kohärent amendiert; der Abstand
+bleibt `ahead 5 / behind 0`.
+
+Der finale Metadaten-Review fand dieselbe Altarchitektur außerdem noch als
+`hostContracts: ["omarchy.bluetooth"]` im aktiven Suite-Vertrag. Diese Kante
+war nicht operational ausgewertet, deklarierte aber weiterhin fälschlich ein
+fremdes Host-Backend. Der Bluetooth-Eintrag besitzt nun wie sein Manifest
+keinen Host-Contract; die fokussierte Bluetooth-Suite erzwingt diese Invariante.
+Der ungepushte Audit-Korrekturcommit wurde erneut kohärent amendiert und bleibt
+der fünfte lokale Commit vor `origin/main`.

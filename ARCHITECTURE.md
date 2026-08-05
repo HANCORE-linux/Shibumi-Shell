@@ -666,7 +666,7 @@ Current Phase 2 foundation:
   panel. The root service leases discovery across open panels and owns one
   symmetric six-method `omarchy.bluetooth` IPC target. Presentation and service
   facade have no Bluetooth/PipeWire import, process, timer, or file watcher;
-  the adapter has only two bounded action timers. Top mapping, adapter/radio
+  the adapter has four bounded lifecycle timers. Top mapping, adapter/radio
   reactivity, discovery ownership/teardown, both backend load orders, and IPC
   lifecycle pass on the validation system; real device/audio, bottom, and
   physical multi-output gates remain.

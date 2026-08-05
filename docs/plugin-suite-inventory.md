@@ -58,7 +58,7 @@ created only when its complete runtime slice is ready to move.
 | `hancore.qsrise.battery` | `bar-widget` | G12 battery widget and panel | `power-state` |
 | `hancore.qsrise.brightness` | `bar-widget`, `service` | G13 monitor model, actions, widget and panel | official `omarchy.monitor` |
 | `hancore.qsrise.power-profile` | `bar-widget` | G14 profile widget and panel | `power-state` |
-| `hancore.qsrise.bluetooth` | `bar-widget`, `service` | G15 Bluetooth model, actions, widget and panel | official `omarchy.bluetooth` |
+| `hancore.qsrise.bluetooth` | `bar-widget`, `service` | G15 Bluetooth model, actions, widget and panel | Quickshell Bluetooth/PipeWire; validated Omarchy device/audio helper commands |
 
 `hancore.qsrise.notifications` and `hancore.qsrise.osd` are reserved future
 replacement IDs. They are not part of the initial profile because Quattro
