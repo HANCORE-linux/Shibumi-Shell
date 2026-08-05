@@ -12,18 +12,27 @@ Item {
   property color contentColor: bar
     ? bar.urgent : Commons.Color.urgent
 
+  readonly property var stateService: bar && "shell" in bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.state") : null
   readonly property bool hasActive: statusService
     && (statusService.stayAwake || statusService.notificationsSilenced
       || statusService.recording || statusService.voxtypeActive)
   readonly property string idleIconFamily: idleIcon.font.family
   readonly property string dndIconFamily: dndIcon.font.family
-  readonly property string recordingIconFamily: recordingIcon.font.family
+  readonly property string recordingIconFamily: recordingIcon.fontFamily
+  readonly property string recordingIconGlyph: recordingIcon.text
+  readonly property color recordingIconColor: stateService
+    && typeof stateService.paletteColor === "function"
+    ? stateService.paletteColor("color01")
+    : bar ? bar.urgent : Commons.Color.urgent
   readonly property string voxtypeIconFamily: voxtypeIcon.font.family
+  readonly property real dndOpticalCenterOffset: 1
   readonly property int activeCount: (statusService && statusService.stayAwake ? 1 : 0)
     + (statusService && statusService.notificationsSilenced ? 1 : 0)
     + (statusService && statusService.recording ? 1 : 0)
     + (statusService && statusService.voxtypeActive ? 1 : 0)
-  readonly property real recordingWidth: recordingIcon.implicitWidth
+  readonly property real recordingWidth: recordingIcon.width
     + recordingText.implicitWidth + Commons.Style.space(5) + 6
   readonly property real activeWidth:
     (statusService && statusService.stayAwake ? 20 : 0)
@@ -120,6 +129,7 @@ Item {
       IconText {
         id: dndIcon
         anchors.centerIn: parent
+        anchors.horizontalCenterOffset: root.dndOpticalCenterOffset
         text: "\ue7f6"
         color: root.contentColor
         font.pixelSize: 14
@@ -161,12 +171,15 @@ Item {
         anchors.centerIn: parent
         spacing: Commons.Style.space(5)
 
-        IconText {
+        Ui.OpticalGlyph {
           id: recordingIcon
           anchors.verticalCenter: parent.verticalCenter
-          text: "\ue061"
-          color: root.contentColor
-          font.pixelSize: 13
+          width: Commons.Style.space(16)
+          height: width
+          text: "󰻂"
+          color: root.recordingIconColor
+          fontFamily: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+          fontSize: 13
 
           SequentialAnimation on opacity {
             running: recordingIndicator.visible

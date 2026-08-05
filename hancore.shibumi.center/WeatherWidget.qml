@@ -26,6 +26,7 @@ Ui.BarWidget {
   readonly property string temperature: weatherService
     ? (useImperial ? weatherService.tempF : weatherService.tempC) : ""
   readonly property string unitSuffix: useImperial ? "°F" : "°C"
+  readonly property real iconSlotWidth: 20
   readonly property string tooltipText: {
     if (!weatherService) return "Weather unavailable"
     if (!weatherService.loaded)
@@ -36,7 +37,7 @@ Ui.BarWidget {
     return weatherService.unavailable ? "Weather stale · " + details : details
   }
 
-  implicitWidth: bar && bar.vertical ? bar.barSize : weatherIcon.implicitWidth
+  implicitWidth: bar && bar.vertical ? bar.barSize : iconSlotWidth
   implicitHeight: bar ? bar.barSize : Commons.Style.space(35)
 
   function refresh() {

@@ -16,6 +16,7 @@ Ui.BarWidget {
     ? backendWidget.updateAvailable === true : false
   readonly property string tooltipText: "Omarchy update available"
   readonly property string iconFamily: updateIcon.font.family
+  readonly property real opticalCenterOffset: 1
   readonly property var interactionTarget: updateMouse
 
   visible: updateAvailable
@@ -39,6 +40,7 @@ Ui.BarWidget {
   IconText {
     id: updateIcon
     anchors.centerIn: parent
+    anchors.horizontalCenterOffset: root.opticalCenterOffset
     text: "\ue627"
     color: root.bar ? root.bar.urgent : Commons.Color.urgent
     font.pixelSize: 15

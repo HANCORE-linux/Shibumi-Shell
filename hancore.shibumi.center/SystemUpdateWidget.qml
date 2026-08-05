@@ -29,6 +29,7 @@ Ui.BarWidget {
         ? "Update check needs attention" : "System is up to date"
     : "Omarchy update available"
   readonly property string iconFamily: updateIcon.font.family
+  readonly property real opticalCenterOffset: 1
   readonly property var interactionTarget: updateMouse
 
   visible: updateAvailable
@@ -58,6 +59,7 @@ Ui.BarWidget {
   IconText {
     id: updateIcon
     anchors.centerIn: parent
+    anchors.horizontalCenterOffset: root.opticalCenterOffset
     text: "\ue627"
     color: root.contentColor
     font.pixelSize: 15

@@ -154,10 +154,16 @@ ShellRoot {
             || !center.weatherWidget || !center.indicatorWidget || !center.updateWidget
             || center.weatherWidget.settings.unit !== "C"
             || center.weatherWidget.weatherService !== sharedWeather
+            || center.weatherWidget.implicitWidth !== 20
             || center.indicatorWidget.statusService !== sharedStatus
+            || center.indicatorWidget.dndOpticalCenterOffset !== 1
             || center.indicatorWidget.implicitWidth <= 0
             || center.updateWidget.settings.marker !== "G8-update"
-            || center.updateWidget.moduleName !== "omarchy.system-update")
+            || center.updateWidget.moduleName !== "omarchy.system-update"
+            || center.updateWidget.implicitWidth !== 20
+            || center.updateWidget.opticalCenterOffset !== 1
+            || center.weatherWidget.implicitWidth
+              !== center.updateWidget.implicitWidth)
           return root.fail("center children/settings/presentation"
             + " stage=" + center.stage
             + " date=" + center.dateText
@@ -216,7 +222,9 @@ ShellRoot {
             || center.indicatorWidget.elapsedText() !== "1:01:01"
             || center.indicatorWidget.idleIconFamily !== center.bar.fontFamily
             || center.indicatorWidget.dndIconFamily !== "Material Symbols Rounded"
-            || center.indicatorWidget.recordingIconFamily !== "Material Symbols Rounded"
+            || center.indicatorWidget.recordingIconFamily !== center.bar.fontFamily
+            || center.indicatorWidget.recordingIconGlyph !== "󰻂"
+            || center.indicatorWidget.recordingIconColor !== center.bar.urgent
             || center.indicatorWidget.voxtypeIconFamily !== "Material Symbols Rounded"
             || !center.indicatorWidget.toggleStayAwake()
             || sharedStatus.stayAwake
