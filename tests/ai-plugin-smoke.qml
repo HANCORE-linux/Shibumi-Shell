@@ -10,10 +10,69 @@ ShellRoot {
   property int phase: 0
   property int ticks: 0
   property var clickTargets: []
+  property var iconMatrix: [
+    { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
+    { providerId: "codex", v2Shell: false, customFill: false, baseOpacity: 0.65 },
+    { providerId: "opencode", v2Shell: false, customFill: false, baseOpacity: 0.5 },
+    { providerId: "claude", v2Shell: false, customFill: true, baseOpacity: 0.25 },
+    { providerId: "codex", v2Shell: false, customFill: true, baseOpacity: 0.65 },
+    { providerId: "opencode", v2Shell: false, customFill: true, baseOpacity: 0.5 },
+    { providerId: "claude", v2Shell: true, customFill: false, baseOpacity: 0.25 },
+    { providerId: "codex", v2Shell: true, customFill: false, baseOpacity: 0.65 },
+    { providerId: "opencode", v2Shell: true, customFill: false, baseOpacity: 0.5 },
+    { providerId: "claude", v2Shell: true, customFill: true, baseOpacity: 0.65 },
+    { providerId: "codex", v2Shell: true, customFill: true, baseOpacity: 0.65 },
+    { providerId: "opencode", v2Shell: true, customFill: true, baseOpacity: 0.65 }
+  ]
 
   function fail(message) {
     console.error("ai-plugin-smoke:", message)
     Qt.exit(1)
+  }
+
+  function linearChannel(value) {
+    return value <= 0.04045 ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4)
+  }
+
+  function luminance(color) {
+    return 0.2126 * linearChannel(color.r)
+      + 0.7152 * linearChannel(color.g)
+      + 0.0722 * linearChannel(color.b)
+  }
+
+  function contrastRatio(first, second) {
+    const firstLuminance = luminance(first)
+    const secondLuminance = luminance(second)
+    return (Math.max(firstLuminance, secondLuminance) + 0.05)
+      / (Math.min(firstLuminance, secondLuminance) + 0.05)
+  }
+
+  function composite(foreground, background, opacity) {
+    return Qt.rgba(
+      foreground.r * opacity + background.r * (1 - opacity),
+      foreground.g * opacity + background.g * (1 - opacity),
+      foreground.b * opacity + background.b * (1 - opacity), 1)
+  }
+
+  function iconContractMatches(widget, expected) {
+    const customFillActive = expected.v2Shell && expected.customFill
+    const expectedBase = customFillActive
+      ? fakeBar.background : fakeBar.foreground
+    const expectedUsage = customFillActive
+      ? fakeBar.background : fakeBar.urgent
+    const customBaseContrast = root.contrastRatio(
+      root.composite(expectedBase, fakeBar.customFill, expected.baseOpacity),
+      fakeBar.customFill)
+    return widget.providerId === expected.providerId
+      && widget.tokens.v2Shell === expected.v2Shell
+      && widget.customFillActive === customFillActive
+      && Math.abs(Number(widget.baseIconOpacity) - expected.baseOpacity) < 0.001
+      && Qt.colorEqual(widget.baseIconColor, expectedBase)
+      && Qt.colorEqual(widget.usageIconColor, expectedUsage)
+      && (!customFillActive || customBaseContrast >= 3)
+      && (expected.providerId !== "claude"
+        || widget.claudeLayersAligned === true)
   }
 
   QtObject {
@@ -127,10 +186,19 @@ ShellRoot {
     property color foreground: "#eeeeee"
     property color barForeground: foreground
     property color background: "#111111"
+    property color customFill: "#929292"
     property color urgent: "#dd7788"
     property bool foregroundAnimationEnabled: false
+    property bool v2ShellMode: false
+    property bool customFillEnabled: false
     property var shell: fakeShell
     property var activePopout: null
+    function widgetHasFill(_settings) {
+      return fakeBar.customFillEnabled
+    }
+    function widgetContentColor(_settings, fallback) {
+      return fakeBar.customFillEnabled ? fakeBar.background : fallback
+    }
     property var visualTokens: ({
       slotHeight: 28,
       pillHeight: 24,
@@ -153,7 +221,12 @@ ShellRoot {
       fillIdle: "#221f1f",
       fillHover: "#33282a",
       fillActive: "#443034",
-      fillPrimaryHover: "#ee8899"
+      fillPrimaryHover: "#ee8899",
+      ink: fakeBar.foreground,
+      seal: fakeBar.urgent,
+      v2Shell: fakeBar.v2ShellMode,
+      widgetHasFill: fakeBar.widgetHasFill,
+      widgetContentColor: fakeBar.widgetContentColor
     })
     function registeredWidgetSource(_id) { return "" }
     function widgetSettings(groupId, moduleId) {
@@ -220,44 +293,54 @@ ShellRoot {
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item
-      if (!first || (root.phase < 3 && !second)) {
+      if (!first || (root.phase <= root.iconMatrix.length + 1 && !second)) {
         if (root.ticks >= 10) root.fail("widget loaders did not resolve")
         return
       }
       if (root.ticks < 3) return
 
-      if (root.phase === 0) {
+      if (root.phase < root.iconMatrix.length) {
+        const expected = root.iconMatrix[root.phase]
         if (!first.visible || !second.visible || first.aiService !== aiService
-            || second.aiService !== aiService || first.providerId !== "claude"
-            || first.usagePercent !== 3 || first.steppedPercent !== 5
-            || aiService.providers.length !== 3
-            || aiService.detectionReady
-            || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
-            || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
-            || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
-            || first.tooltipText.indexOf("local-test") < 0)
-          return root.fail("Claude percentage scaling/fill threshold")
-        aiService.selectTool("codex")
+            || second.aiService !== aiService
+            || !root.iconContractMatches(first, expected)
+            || !root.iconContractMatches(second, expected)
+            || fakeState.selectedTool !== expected.providerId
+            || fakeState.revision !== root.phase)
+          return root.fail("provider/variant/custom-fill matrix phase " + root.phase)
+        if (root.phase === 0
+            && (first.usagePercent !== 3 || first.steppedPercent !== 5
+              || aiService.providers.length !== 3
+              || aiService.detectionReady
+              || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
+              || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
+              || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
+              || first.tooltipText.indexOf("local-test") < 0))
+          return root.fail("Claude percentage scaling/provider metadata")
+
+        const nextPhase = root.phase + 1
+        if (nextPhase < root.iconMatrix.length) {
+          const next = root.iconMatrix[nextPhase]
+          fakeBar.v2ShellMode = next.v2Shell
+          fakeBar.customFillEnabled = next.customFill
+          aiService.selectTool(next.providerId)
+        } else {
+          fakeBar.customFillEnabled = false
+          first.interactionTarget.triggerPress(Qt.MiddleButton)
+        }
         root.phase++
         root.ticks = 0
-      } else if (root.phase === 1) {
-        if (first.providerId !== "codex" || second.providerId !== "codex"
-            || first.usagePercent !== 13 || fakeState.selectedTool !== "codex"
-            || fakeState.revision !== 1)
-          return root.fail("shared provider owner/readiness")
-        first.interactionTarget.triggerPress(Qt.MiddleButton)
-        root.phase++
-        root.ticks = 0
-      } else if (root.phase === 2) {
-        if (first.providerId !== "opencode" || second.providerId !== "opencode"
-            || fakeState.selectedTool !== "opencode" || fakeState.revision !== 2)
-          return root.fail("state-owned provider selection")
+      } else if (root.phase === root.iconMatrix.length) {
+        if (first.providerId !== "claude" || second.providerId !== "claude"
+            || fakeState.selectedTool !== "claude"
+            || fakeState.revision !== root.iconMatrix.length)
+          return root.fail("middle-click provider cycle")
         first.interactionTarget.triggerPress(Qt.RightButton)
         first.open()
         second.open()
         root.phase++
         root.ticks = 0
-      } else if (root.phase === 3) {
+      } else if (root.phase === root.iconMatrix.length + 1) {
         if (claudeProvider.refreshCount !== 1 || codexProvider.refreshCount !== 1
             || openCodeProvider.refreshCount !== 1
             || !first.panelLoaded || !second.panelLoaded

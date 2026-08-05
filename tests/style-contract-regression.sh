@@ -544,10 +544,28 @@ for ai_contract in \
   'width: root.providerId === "opencode" ? 20' \
   'height: root.providerId === "opencode" ? 12' \
   '? Qt.size(20, 12) : Qt.size(56, 56)' \
-  'root.providerId === "codex" ? 0.65 : 0.5'; do
+  'readonly property color baseIconColor: customFillActive' \
+  'readonly property color usageIconColor: widgetInk' \
+  'readonly property bool customFillActive:' \
+  'readonly property real baseIconOpacity:' \
+  'readonly property bool claudeLayersAligned:' \
+  'color: Qt.rgba(root.baseIconColor.r,' \
+  'color: root.usageIconColor' \
+  'x: claudeGlyphBase.x' \
+  'y: claudeGlyphBase.y - claudeUsageClip.y' \
+  'width: claudeGlyphBase.width' \
+  'height: claudeGlyphBase.height' \
+  'tint: Qt.rgba(root.baseIconColor.r,' \
+  'root.baseIconOpacity)' \
+  'tint: root.usageIconColor'; do
   rg -Fq "$ai_contract" hancore.shibumi.ai/BarWidget.qml \
     || fail "AI icon contract drifted from V1: $ai_contract"
 done
+if rg -Fq 'tint: root.widgetInk' hancore.shibumi.ai/BarWidget.qml \
+    || rg -Uq 'text: "\\udb85\\ude7a"\n[[:space:]]+color: (Qt\.rgba\(root\.widgetInk|root\.widgetInk)' \
+      hancore.shibumi.ai/BarWidget.qml; then
+  fail "AI base/fill layers collapsed back to the old color source"
+fi
 rg -Fq 'font.pixelSize: 15' hancore.shibumi.status/NotificationStatusView.qml \
   || fail "notification icon sizing drifted from V1"
 rg -Fq 'font.pixelSize: 16' hancore.shibumi.status/TrayStatusView.qml \

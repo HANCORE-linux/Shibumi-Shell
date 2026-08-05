@@ -24,11 +24,32 @@ Ui.Panel {
     ? 0 : Math.round(usagePercent / 5) * 5
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
-  readonly property color widgetInk: tokens
+  // V1 keeps the source widget's ink -> seal fill. On a V2 custom fill,
+  // mirror the source's single contrast-aware contentColor for both layers.
+  readonly property bool customFillActive: !!(tokens
+    && tokens.v2Shell === true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
+  readonly property color defaultUsageIconColor: bar
+    ? bar.urgent : Commons.Color.accent
+  readonly property color widgetInk: customFillActive && tokens
     && typeof tokens.widgetContentColor === "function"
-    ? tokens.widgetContentColor(settings,
-      bar ? bar.urgent : Commons.Color.accent)
-    : (bar ? bar.urgent : Commons.Color.accent)
+    ? tokens.widgetContentColor(settings, defaultUsageIconColor)
+    : defaultUsageIconColor
+  readonly property color baseIconColor: customFillActive
+    ? widgetInk : tokens && tokens.ink !== undefined
+      ? tokens.ink : (bar ? bar.foreground : Commons.Color.foreground)
+  readonly property color usageIconColor: widgetInk
+  readonly property real baseIconOpacity: customFillActive ? 0.65
+    : providerId === "claude" ? 0.25
+      : providerId === "codex" ? 0.65 : 0.5
+  readonly property bool claudeLayersAligned:
+    Math.abs(claudeGlyphBase.x
+      - (claudeUsageClip.x + claudeUsageGlyph.x)) < 0.01
+    && Math.abs(claudeGlyphBase.y
+      - (claudeUsageClip.y + claudeUsageGlyph.y)) < 0.01
+    && claudeGlyphBase.width === claudeUsageGlyph.width
+    && claudeGlyphBase.height === claudeUsageGlyph.height
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -120,22 +141,26 @@ Ui.Panel {
           : root.providerId === "codex" ? 14 : 15
 
         Item {
+          id: claudeIcon
           anchors.centerIn: parent
           width: 15
           height: 15
           visible: root.providerId === "claude"
 
           Text {
+            id: claudeGlyphBase
             anchors.centerIn: parent
             text: "\udb85\ude7a"
-            color: Qt.rgba(root.widgetInk.r,
-              root.widgetInk.g, root.widgetInk.b, 0.25)
+            color: Qt.rgba(root.baseIconColor.r,
+              root.baseIconColor.g, root.baseIconColor.b,
+              root.baseIconOpacity)
             font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: 14
             renderType: Text.QtRendering
           }
 
           Item {
+            id: claudeUsageClip
             width: parent.width
             height: root.steppedPercent > 0
               ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
@@ -145,13 +170,13 @@ Ui.Panel {
             Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
 
             Text {
-              width: providerIcon.width
-              height: providerIcon.height
-              anchors.bottom: parent.bottom
-              horizontalAlignment: Text.AlignHCenter
-              verticalAlignment: Text.AlignVCenter
+              id: claudeUsageGlyph
+              x: claudeGlyphBase.x
+              y: claudeGlyphBase.y - claudeUsageClip.y
+              width: claudeGlyphBase.width
+              height: claudeGlyphBase.height
               text: "\udb85\ude7a"
-              color: root.widgetInk
+              color: root.usageIconColor
               font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: 14
               renderType: Text.QtRendering
@@ -172,9 +197,9 @@ Ui.Panel {
               ? Qt.size(20, 12) : Qt.size(56, 56)
             smooth: root.providerId !== "opencode"
             mipmap: root.providerId !== "opencode"
-            tint: Qt.rgba(root.widgetInk.r,
-              root.widgetInk.g, root.widgetInk.b,
-              root.providerId === "codex" ? 0.65 : 0.5)
+            tint: Qt.rgba(root.baseIconColor.r,
+              root.baseIconColor.g, root.baseIconColor.b,
+              root.baseIconOpacity)
           }
 
           Item {
@@ -197,7 +222,7 @@ Ui.Panel {
                 ? Qt.size(20, 12) : Qt.size(56, 56)
               smooth: root.providerId !== "opencode"
               mipmap: root.providerId !== "opencode"
-              tint: root.widgetInk
+              tint: root.usageIconColor
             }
           }
         }
