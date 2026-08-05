@@ -52,6 +52,23 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn('--notes-file "$notes_file"', workflow)
         self.assertNotIn("--generate-notes", workflow)
 
+    def test_release_workflow_pins_checkout_v7_without_persisted_tokens(self) -> None:
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        checkout_uses = [
+            line.strip()
+            for line in workflow.splitlines()
+            if "uses: actions/checkout@" in line
+        ]
+        expected = (
+            "uses: actions/checkout@"
+            "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
+        )
+        self.assertEqual(checkout_uses, [expected, expected])
+        self.assertEqual(workflow.count("persist-credentials: false"), 2)
+        self.assertNotIn("persist-credentials: true", workflow)
+
     def test_dependency_contract_matches_pkgbuild(self) -> None:
         contract = json.loads(
             (ROOT / "contracts/package-runtime-v1.json").read_text(encoding="utf-8")

@@ -14,9 +14,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out the exact revision
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate package contracts
         run: |
@@ -40,9 +41,10 @@ jobs:
       contents: write
     steps:
       - name: Check out the tagged revision
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Verify tag, version, and pinned archive checksum
         run: |
