@@ -96,6 +96,8 @@ Item {
     ? trayView.implicitWidth : 0
   readonly property real notificationSlotWidth: notificationPresented
     ? notificationView.implicitWidth : 0
+  readonly property real trayPinnedIconOffset:
+    trayView.pinnedIconHorizontalOffset
   readonly property real notificationIconOffset:
     notificationView.iconHorizontalOffset
 

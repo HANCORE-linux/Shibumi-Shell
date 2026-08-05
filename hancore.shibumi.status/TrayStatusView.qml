@@ -21,6 +21,7 @@ Item {
   readonly property bool presented: pinnedItems.length > 0 || drawerCount > 0
   readonly property int visibleItemCount: pinnedCount + (drawerCount > 0 ? 1 : 0)
   readonly property real itemGap: Commons.Style.space(2)
+  readonly property real pinnedIconHorizontalOffset: Commons.Style.space(1)
   signal drawerRequested()
 
   visible: presented
@@ -82,6 +83,7 @@ Item {
 
         Image {
           anchors.centerIn: parent
+          anchors.horizontalCenterOffset: root.pinnedIconHorizontalOffset
           source: String(trayDelegate.modelData.icon || "")
           sourceSize.width: Commons.Style.space(14)
           sourceSize.height: Commons.Style.space(14)

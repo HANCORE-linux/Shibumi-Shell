@@ -277,6 +277,7 @@ ShellRoot {
             || status.updateSlotWidth !== 22
             || status.traySlotWidth !== 42
             || status.notificationSlotWidth !== 22
+            || status.trayPinnedIconOffset !== 1
             || status.notificationIconOffset !== 1
             || status.implicitWidth !== 112)
           return root.fail("V2 status geometry is not symmetric: inset="
@@ -284,6 +285,7 @@ ShellRoot {
             + Number(status.childGap) + ", slots="
             + JSON.stringify([status.updateSlotWidth,
               status.traySlotWidth, status.notificationSlotWidth])
+            + ", trayOffset=" + Number(status.trayPinnedIconOffset)
             + ", bellOffset=" + Number(status.notificationIconOffset)
             + ", width=" + Number(status.implicitWidth))
         statusService.recordingPid = "42"
