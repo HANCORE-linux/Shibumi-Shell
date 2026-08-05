@@ -889,6 +889,46 @@ Item {
       let point = { x: slot.x, y: slot.y }
       try { point = slot.mapToItem(null, 0, 0) } catch (error) {}
       const window = targetWindow(slot.activeItem)
+      let groupSection = slot
+      for (let depth = 0; groupSection && depth < 16; depth++) {
+        if ("separatorGeometry" in groupSection
+            && "groupGeometry" in groupSection
+            && "separatorHitTargetCount" in groupSection) break
+        groupSection = groupSection.parent || null
+      }
+      let groupLayout = ({})
+      if (groupSection && "separatorHitTargetCount" in groupSection) {
+        let sectionPoint = { x: 0, y: 0 }
+        try { sectionPoint = groupSection.mapToItem(null, 0, 0) }
+        catch (error) {}
+        groupLayout = {
+          region: String(groupSection.region || ""),
+          x: Math.round(sectionPoint.x),
+          y: Math.round(sectionPoint.y),
+          width: Math.round(Number(groupSection.width) || 0),
+          height: Math.round(Number(groupSection.height) || 0),
+          hitTargets: Number(groupSection.separatorHitTargetCount) || 0,
+          groups: (groupSection.groupGeometry || []).map(function(entry) {
+            return {
+              groupId: String(entry.groupId || ""),
+              index: Number(entry.index),
+              left: Math.round(sectionPoint.x + Number(entry.left || 0)),
+              right: Math.round(sectionPoint.x + Number(entry.right || 0))
+            }
+          }),
+          separators: (groupSection.separatorGeometry || []).map(
+            function(entry) {
+              const center = sectionPoint.x + Number(entry.markerCenter || 0)
+              return {
+                groupId: String(entry.groupId || ""),
+                index: Number(entry.index),
+                center: Math.round(center),
+                hitLeft: Math.round(center - 7),
+                hitRight: Math.round(center + 7)
+              }
+            })
+        }
+      }
       geometry.push({
         id: slot.moduleName,
         section: slot.region,
@@ -910,7 +950,8 @@ Item {
         height: Math.round(slot.height),
         visible: slot.visible === true && slot.width > 0 && slot.height > 0,
         opened: slot.activeItem.opened === true,
-        panelLoaded: slot.activeItem.panelLoaded === true
+        panelLoaded: slot.activeItem.panelLoaded === true,
+        groupLayout: groupLayout
       })
     }
     return geometry
