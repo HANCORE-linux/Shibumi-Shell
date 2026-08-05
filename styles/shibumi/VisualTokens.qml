@@ -150,7 +150,7 @@ Item {
       ? String(settings.widgetRadius) : "auto"
     if (value === "square") return 0
     if (value === "soft") return Commons.Style.space(6)
-    if (value === "round") return pillRadius
+    if (value === "round") return pillHeight / 2
     return tileRadius
   }
 

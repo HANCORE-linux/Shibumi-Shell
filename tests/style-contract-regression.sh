@@ -301,6 +301,16 @@ for widget in ai audio battery bluetooth brightness center control-center cpu gp
   rg -Fq 'HostTokens { id: hostTokens; bar: root.bar }' \
     "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not provide standard-host visual tokens"
+  rg -Fq 'if (value === "round") return pillHeight / 2' \
+    "hancore.shibumi.$widget/HostTokens.qml" \
+    || fail "$widget host tokens do not preserve the V2 Round shape"
+done
+for shape_tokens in \
+    styles/shibumi/VisualTokens.qml \
+    hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
+    shared/presentation/HostTokens.qml; do
+  rg -Fq 'if (value === "round") return pillHeight / 2' "$shape_tokens" \
+    || fail "V2 Round shape is not half the widget surface: $shape_tokens"
 done
 for widget in ai audio battery bluetooth brightness center cpu gpu media \
     memory network power-profile quick-access status storage temperature \

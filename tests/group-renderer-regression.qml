@@ -101,6 +101,34 @@ ShellRoot {
     }
 
     QtObject {
+      id: shapeStateService
+
+      property int revision: 0
+      property var config: ({
+        presentation: ({ shellStyle: "notch", radius: "small" }),
+        widgets: ({
+          G1: ({ color: "color01", widgetRadius: "auto" })
+        })
+      })
+      readonly property color selectedColor: "#88aaff"
+
+      function groupSettingsForVariant(groupId, _variant) {
+        return config && config.widgets
+          ? config.widgets[String(groupId || "")] || ({}) : ({})
+      }
+
+      function groupEnabledForVariant(_groupId, _variant) { return true }
+      function paletteColor(_colorId) { return "#884422" }
+
+      function setShape(value) {
+        const next = JSON.parse(JSON.stringify(config))
+        next.widgets.G1.widgetRadius = String(value || "auto")
+        config = next
+        revision++
+      }
+    }
+
+    QtObject {
       id: fakeShell
       function serviceFor(pluginId) {
         return pluginId === "hancore.shibumi.state" ? fakeStateService : null
@@ -111,6 +139,14 @@ ShellRoot {
       id: disabledShell
       function serviceFor(pluginId) {
         return pluginId === "hancore.shibumi.state" ? disabledStateService : null
+      }
+    }
+
+    QtObject {
+      id: shapeShell
+
+      function serviceFor(pluginId) {
+        return pluginId === "hancore.shibumi.state" ? shapeStateService : null
       }
     }
 
@@ -313,6 +349,39 @@ ShellRoot {
     }
 
     QtObject {
+      id: shapeBar
+
+      readonly property bool vertical: false
+      readonly property int barSize: 26
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property var shell: shapeShell
+      readonly property var visualTokens: shapeTokens
+      readonly property var layoutConfig: noSplitBar.layoutConfig
+      readonly property var layoutController: v2SplitController
+      property var activePopout: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(_region) { return [] }
+    }
+
+    ShibumiStyle.VisualTokens {
+      id: shapeTokens
+      bar: shapeBar
+    }
+
+    QtObject {
       id: budgetBar
 
       readonly property bool vertical: false
@@ -504,6 +573,12 @@ ShellRoot {
     }
 
     Core.GroupSlot {
+      id: shapeGroup
+      bar: shapeBar
+      groupId: "G1"
+    }
+
+    Core.GroupSlot {
       id: budgetGroup
       bar: budgetBar
       groupId: "G8"
@@ -563,6 +638,7 @@ ShellRoot {
       property bool narrowed: false
       property int separatorPhase: 0
       property real separatorBaseWidth: 0
+      property int shapePhase: 0
 
       interval: 10
       running: true
@@ -650,6 +726,32 @@ ShellRoot {
           stop()
           test.fail("V2 separator did not clear after state revision: before="
             + separatorBaseWidth + ", after=" + v2LeftWithSplit.implicitWidth)
+          return
+        }
+
+        const shapeMatrix = [
+          { value: "auto", radius: 10 },
+          { value: "square", radius: 0 },
+          { value: "soft", radius: 6 },
+          { value: "round", radius: 12 }
+        ]
+        if (shapePhase < shapeMatrix.length) {
+          const expectedShape = shapeMatrix[shapePhase]
+          if (!shapeGroup.decorated
+              || !test.closeEnough(shapeGroup.visualSurfaceItem.height, 24)
+              || !test.closeEnough(shapeGroup.visualSurfaceItem.radius,
+                expectedShape.radius)) {
+            if (attempts < 50) return
+            stop()
+            test.fail("V2 shape radius drifted for " + expectedShape.value
+              + ": got " + shapeGroup.visualSurfaceItem.radius
+              + " on " + shapeGroup.visualSurfaceItem.height + "px surface")
+            return
+          }
+          shapePhase++
+          if (shapePhase < shapeMatrix.length)
+            shapeStateService.setShape(shapeMatrix[shapePhase].value)
+          attempts = 0
           return
         }
 
