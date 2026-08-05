@@ -79,7 +79,7 @@
     {
       "source": "panels/BluetoothPanel.qml",
       "impact": "quattro-bluetooth-controls-and-connected-panel-ownership",
-      "decision": "adapt-to-official-quattro-bluetooth-owner",
+      "decision": "replace-hidden-ui-owner-with-native-shibumi-adapter",
       "implementation": ["hancore.shibumi.bluetooth/Service.qml", "hancore.shibumi.bluetooth/BluetoothPanel.qml", "hancore.shibumi.bar/Bar.qml"],
       "evidence": ["tests/bluetooth-plugin-regression.sh", "tests/bluetooth-plugin-smoke.qml", "tests/bar-host-registry-smoke.qml"]
     },

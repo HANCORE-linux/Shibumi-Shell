@@ -22,12 +22,13 @@ cp -a -- "$repo_root/hancore.shibumi.bluetooth" "$tmpdir/bluetooth"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/bluetooth-plugin-smoke.qml" "$tmpdir/shell.qml"
-install -m 0644 "$repo_root/tests/fixtures/BluetoothTestPanel.qml" \
+install -m 0644 "$repo_root/tests/fixtures/BluetoothTestBackend.qml" \
   "$repo_root/tests/fixtures/BluetoothTestView.qml" "$tmpdir/fixtures/"
 
 set +e
 output=$(timeout 8 env \
   QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
@@ -41,9 +42,13 @@ printf '%s\n' "$output"
 grep -F 'bluetooth plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 
+OMARCHY_PATH="$omarchy_path" \
+  bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh"
+
 widget="$repo_root/hancore.shibumi.bluetooth/BarWidget.qml"
 service="$repo_root/hancore.shibumi.bluetooth/Service.qml"
-bridge="$repo_root/hancore.shibumi.bluetooth/BluetoothPanelBridge.qml"
+adapter="$repo_root/hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml"
+model="$repo_root/hancore.shibumi.bluetooth/BluetoothModel.js"
 panel="$repo_root/hancore.shibumi.bluetooth/BluetoothPanel.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.bluetooth"\)' "$widget" \
   || fail "Bluetooth widget does not resolve the shared service"
@@ -52,23 +57,45 @@ if rg -q 'bar\.bluetoothService' "$repo_root/hancore.shibumi.bluetooth"; then
 fi
 rg -q 'property var bar: shell \? shell\.bar : null' "$service" \
   || fail "Bluetooth service does not use the versioned active bar facade"
-rg -q 'registeredComponent\("omarchy\.bluetooth"\)' "$service" \
-  || fail "Bluetooth service does not retain the official Omarchy owner"
-rg -Fq '"barWidgetRegistry" in bar' "$service" \
-  || fail "Bluetooth service cannot resolve the official owner on stock Quattro"
-[[ $(rg -c '^  BluetoothPanelBridge \{' "$service") -eq 1 ]] \
-  || fail "Bluetooth service does not own exactly one official bridge"
-if rg -Fq 'panel.bar = null' "$bridge"; then
-  fail "Bluetooth bridge clears the official panel host before destruction"
+[[ $(rg -c '^  BluetoothBackendAdapter \{' "$service") -eq 1 ]] \
+  || fail "Bluetooth service does not own exactly one native adapter"
+if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|panelComponent|Loader \{' \
+    "$service" "$adapter"; then
+  fail "Bluetooth still resolves or loads a foreign UI component"
+fi
+rg -q '^import Quickshell\.Bluetooth$' "$adapter" \
+  || fail "Bluetooth adapter does not own the native BlueZ model"
+rg -q '^import Quickshell\.Services\.Pipewire$' "$adapter" \
+  || fail "Bluetooth adapter does not own Bluetooth audio routing"
+rg -Fq 'Quickshell.execDetached(deviceCommand(action, device.address))' "$adapter" \
+  || fail "Bluetooth adapter does not preserve the device helper contract"
+rg -Fq 'Model.deviceLists(nativeDevices)' "$adapter" \
+  || fail "Bluetooth adapter does not normalize the native device model"
+for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
+  rg -Fq "on${device_signal}Changed: syncNativePendingActions()" "$adapter" \
+    || fail "Bluetooth pending actions ignore ${device_signal} property transitions"
+done
+rg -Fq 'if (discovering && !discoveryOwned) return true' "$adapter" \
+  || fail "Bluetooth refresh can claim an externally owned discovery scan"
+rg -q 'property var discoveryOwnerAdapter: null' "$adapter" \
+  || fail "Bluetooth discovery ownership is not tied to its adapter instance"
+[[ -f $model ]] || fail "Bluetooth native model is missing"
+if rg -q 'IpcHandler \{' "$adapter"; then
+  fail "Bluetooth backend adapter must not register a second IPC owner"
 fi
 rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
-rg -q 'bridge\.stopDiscovery\(\)' "$service" \
+rg -q 'adapter\.stopDiscovery\(\)' "$service" \
   || fail "Bluetooth discovery lacks final-close cleanup"
 if rg -q 'Quickshell\.Bluetooth|Bluez|Process \{' \
     "$widget" "$panel"; then
   fail "screen-local Bluetooth presentation owns backend work"
 fi
+if rg -q 'Process \{|FileView \{' "$service" "$adapter"; then
+  fail "Bluetooth owner uses an unbounded worker instead of native APIs"
+fi
+[[ $(rg -c '^  Timer \{' "$adapter") -eq 2 ]] \
+  || fail "Bluetooth adapter must keep exactly the two bounded action timers"
 rg -q 'id: heroPowerToggle' "$panel" \
   || fail "Bluetooth radio toggle is not grouped with adapter status"
 if sed -n '/id: headerActions/,/^        }/p' "$panel" \

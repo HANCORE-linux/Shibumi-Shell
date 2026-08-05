@@ -352,7 +352,8 @@ The direct import of `services/PowerModel.js` is replaced with the
 Target: `hancore.qsrise.bluetooth`
 
 ```text
-adapters/BluetoothPanelBridge.qml
+adapters/BluetoothBackendAdapter.qml
+adapters/BluetoothModel.js
 services/BluetoothService.qml
 widgets/BluetoothPanel.qml
 widgets/BluetoothWidget.qml
@@ -409,7 +410,7 @@ the root. Paths in the table are relative to `tests/`.
 | Network | `network-widget-smoke.qml`, `fixtures/NetworkTestService.qml`, `fixtures/NetworkTestView.qml` |
 | Power state/Battery/Profile | `power-service-live-probe.qml`, `power-service-runtime-smoke.qml`, `power-widgets-smoke.qml`, `fixtures/PowerTestPanel.qml`, `fixtures/PowerTestService.qml`, `fixtures/power-bin/*` |
 | Brightness | `brightness-widget-smoke.qml`, `fixtures/MonitorTestPanel.qml`, `fixtures/MonitorTestView.qml` |
-| Bluetooth | `bluetooth-widget-smoke.qml`, `fixtures/BluetoothTestPanel.qml`, `fixtures/BluetoothTestView.qml` |
+| Bluetooth | `bluetooth-widget-smoke.qml`, `bluetooth-ipc-ownership-regression.sh`, `fixtures/BluetoothTestBackend.qml`, `fixtures/BluetoothTestView.qml` |
 | Shared panel primitives | `panel-surface-smoke.qml` |
 
 Missing focused CPU, picker-overlay, and multi-bar reuse tests must be added

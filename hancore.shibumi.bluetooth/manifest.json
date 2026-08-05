@@ -5,7 +5,7 @@
   "version": "0.1.1-beta.4",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Shibumi Bluetooth presentation over Omarchy's BlueZ and audio owner.",
+  "description": "Shibumi Bluetooth presentation with a native BlueZ and audio backend.",
   "kinds": ["bar-widget", "service"],
   "keepLoaded": true,
   "entryPoints": {

@@ -658,16 +658,18 @@ Current Phase 2 foundation:
   available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,
   widget, and panel state.
-- G15 has one root-owned `BluetoothService` around the registered
-  `omarchy.bluetooth` component. That hidden component remains the only BlueZ,
-  pairing, device-action, and Bluetooth-audio sink owner, with its stock button,
-  popup, and IPC handler suppressed;
+- G15 has one root-owned `BluetoothService` and one native
+  `BluetoothBackendAdapter`. The adapter owns Quickshell's BlueZ/PipeWire
+  models, pairing/device actions, pending state, and Bluetooth-audio handoff;
+  no complete Omarchy Bluetooth UI component is instantiated as a backend;
 - each output owns only its V1 Bluetooth presentation and lazy Shibumi device
   panel. The root service leases discovery across open panels and owns one
-  symmetric `omarchy.bluetooth` IPC target. The presentation/service slice has
-  no Bluetooth/PipeWire import, process, timer, or file watcher. Top mapping,
-  adapter/radio reactivity, discovery teardown, and IPC lifecycle pass on
-  the validation system; real device/audio, bottom, and physical multi-output gates remain.
+  symmetric six-method `omarchy.bluetooth` IPC target. Presentation and service
+  facade have no Bluetooth/PipeWire import, process, timer, or file watcher;
+  the adapter has only two bounded action timers. Top mapping, adapter/radio
+  reactivity, discovery ownership/teardown, both backend load orders, and IPC
+  lifecycle pass on the validation system; real device/audio, bottom, and
+  physical multi-output gates remain.
 - the interaction foundation has a pure fixed-group layout model, one
   root-owned persistent controller, and one transient drag session per output;
 - the group renderer resolves Shibumi and official Quattro widgets without

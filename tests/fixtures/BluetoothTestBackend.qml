@@ -1,18 +1,13 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import qs.Ui as Ui
 
-Item {
+QtObject {
   id: root
 
-  property var bar: null
-  property string moduleName: ""
-  property var settings: ({})
-  property bool manageIpc: true
-  property bool opened: false
   property bool adapterPresent: true
-  property var adapter: adapterPresent ? fakeAdapter : null
+  property var selectedAdapter: fakeAdapter
+  property var adapter: adapterPresent ? selectedAdapter : null
   property var pendingActions: ({})
   property int toggleCount: 0
   property int connectCount: 0
@@ -48,33 +43,20 @@ Item {
       state: 0
     }
   ]
-  readonly property var internalButton: button
 
-  implicitWidth: 27
-  implicitHeight: 35
-
-  QtObject {
-    id: fakeAdapter
+  property QtObject fakeAdapter: QtObject {
     property bool enabled: true
     property bool discovering: false
   }
+  property QtObject alternateAdapter: QtObject {
+    property bool enabled: true
+    property bool discovering: true
+  }
 
-  function open() {
-    opened = true
-    if (fakeAdapter.enabled) fakeAdapter.discovering = true
-    if (bar) bar.requestPopout(root)
-  }
-  function close() {
-    opened = false
-    if (bar) bar.releasePopout(root)
-  }
   function toggleBluetooth() {
     toggleCount++
     fakeAdapter.enabled = !fakeAdapter.enabled
     if (!fakeAdapter.enabled) fakeAdapter.discovering = false
-    else Qt.callLater(function() {
-      if (fakeAdapter.enabled) fakeAdapter.discovering = true
-    })
   }
   function deviceLabel(device) {
     return device ? String(device.name || "") : ""
@@ -99,13 +81,5 @@ Item {
   function forgetDevice(device) {
     forgetCount++
     setPending(device.address, "forgetting")
-  }
-
-  Ui.WidgetButton {
-    id: button
-    anchors.fill: parent
-    bar: root.bar
-    text: "bluetooth"
-    onPressed: function(_button) { root.opened ? root.close() : root.open() }
   }
 }

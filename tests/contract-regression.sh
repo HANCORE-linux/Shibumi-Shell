@@ -126,8 +126,9 @@ rg -q 'registeredWidgetComponent\("omarchy\.network"\)' services/NetworkService.
   || fail "root network owner bypasses the stable widget resolver"
 rg -q 'registeredWidgetComponent\("omarchy\.monitor"\)' services/MonitorService.qml \
   || fail "root monitor owner bypasses the stable widget resolver"
-rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' services/BluetoothService.qml \
-  || fail "root Bluetooth owner bypasses the stable widget resolver"
+if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' services/BluetoothService.qml; then
+  fail "root Bluetooth owner must not instantiate the complete host widget"
+fi
 if rg -U -q 'visible: root\.anchorIndex < 0\n[[:space:]]*bar: root\.bar\n[[:space:]]*region: "center"\n[[:space:]]*entries: root\.entries' core/CenterSection.qml; then
   fail "inactive center fallback must not instantiate duplicate widgets"
 fi
@@ -635,10 +636,10 @@ rg -q 'G15: \["hancore.shibumi.bluetooth"\]' core/GroupRegistry.js \
   || fail "G15 is not owned by the Shibumi bluetooth presentation"
 rg -q 'hancore\.shibumi\.bluetooth' widgets/WidgetRegistry.qml \
   || fail "Shibumi bluetooth presentation is not registered"
-[[ $(rg -c 'BluetoothPanelBridge \{' hancore.shibumi.bluetooth/Service.qml) -eq 1 ]] \
+[[ $(rg -c 'BluetoothBackendAdapter \{' hancore.shibumi.bluetooth/Service.qml) -eq 1 ]] \
   || fail "Bluetooth state must have one root owner"
-[[ $(rg -c 'Adapters\.BluetoothPanelBridge \{' services/BluetoothService.qml) -eq 1 ]] \
-  || fail "root Bluetooth service must own exactly one official backend"
+[[ $(rg -c 'Adapters\.BluetoothBackendAdapter \{' services/BluetoothService.qml) -eq 1 ]] \
+  || fail "root Bluetooth service must own exactly one native backend"
 rg -q 'bar\.bluetoothService' widgets/BluetoothWidget.qml \
   || fail "Bluetooth view does not consume the shared owner"
 rg -q 'property var sessionOwners: \[\]' services/BluetoothService.qml \
@@ -647,19 +648,48 @@ rg -q 'target: "omarchy\.bluetooth"' services/BluetoothService.qml \
   || fail "Bluetooth service does not own the single legacy IPC target"
 rg -q 'bar\.hideBarWidget\("omarchy\.bluetooth"\)' services/BluetoothService.qml \
   || fail "Bluetooth legacy close/hide is not routed to the local panel"
-rg -q 'manageIpc: false' adapters/BluetoothPanelBridge.qml \
-  || fail "hidden official Bluetooth owner still owns the legacy IPC target"
-rg -q 'bridge\.stopDiscovery\(\)' services/BluetoothService.qml \
+rg -q 'adapter\.stopDiscovery\(\)' services/BluetoothService.qml \
   || fail "Bluetooth discovery is not stopped after the final panel closes"
+for bluetooth_adapter in \
+  adapters/BluetoothBackendAdapter.qml \
+  hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml; do
+  rg -q '^import Quickshell\.Bluetooth$' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not own the native BlueZ model"
+  rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not own Bluetooth audio routing"
+  for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
+    rg -Fq "on${device_signal}Changed: syncNativePendingActions()" \
+      "$bluetooth_adapter" \
+      || fail "$bluetooth_adapter ignores ${device_signal} property transitions"
+  done
+  rg -Fq 'if (discovering && !discoveryOwned) return true' \
+    "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter can claim an external discovery scan"
+  rg -q 'property var discoveryOwnerAdapter: null' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not bind discovery ownership to an adapter"
+  [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 2 ]] \
+    || fail "$bluetooth_adapter must have exactly two bounded action timers"
+  if rg -q 'IpcHandler \{|Loader \{|panelSource|panelComponent|registeredWidget' \
+      "$bluetooth_adapter"; then
+    fail "$bluetooth_adapter still owns IPC or loads a foreign UI component"
+  fi
+done
+if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|panelComponent|Loader \{' \
+    services/BluetoothService.qml hancore.shibumi.bluetooth/Service.qml; then
+  fail "Bluetooth service still resolves or loads the complete Omarchy panel"
+fi
 if rg -q 'Quickshell\.Bluetooth|Quickshell\.Services\.Pipewire|Bluetooth\.|Pipewire\.' \
   widgets/BluetoothWidget.qml widgets/BluetoothPanel.qml \
-  services/BluetoothService.qml adapters/BluetoothPanelBridge.qml; then
-  fail "Shibumi bluetooth presentation must not create a second Bluetooth owner"
+  services/BluetoothService.qml; then
+  fail "Bluetooth presentation bypasses the process-wide native adapter"
 fi
 if rg -q 'Process \{|Timer \{|FileView \{' widgets/BluetoothWidget.qml \
-  widgets/BluetoothPanel.qml services/BluetoothService.qml \
-  adapters/BluetoothPanelBridge.qml; then
+  widgets/BluetoothPanel.qml services/BluetoothService.qml; then
   fail "Bluetooth presentation and service facade must remain worker-free"
+fi
+if rg -q 'Process \{|FileView \{' adapters/BluetoothBackendAdapter.qml \
+    hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml; then
+  fail "Bluetooth native adapter uses a worker instead of native APIs"
 fi
 rg -q 'childPanelWidget\("omarchy\.bluetooth"\)' tests/bluetooth-widget-smoke.qml \
   || fail "Bluetooth alias routing is not regression-tested"
@@ -1273,10 +1303,11 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
   [[ $(<"$smoke_root/power-state") == performance ]] \
     || fail "power service did not execute the exact validated profile action"
 
-  cp adapters/BluetoothPanelBridge.qml "$smoke_root/adapters/"
+  cp adapters/BluetoothBackendAdapter.qml adapters/BluetoothModel.js \
+    "$smoke_root/adapters/"
   cp services/BluetoothService.qml "$smoke_root/services/"
   cp widgets/BluetoothWidget.qml widgets/BluetoothPanel.qml "$smoke_root/widgets/"
-  cp tests/fixtures/BluetoothTestPanel.qml \
+  cp tests/fixtures/BluetoothTestBackend.qml \
     tests/fixtures/BluetoothTestView.qml "$smoke_root/fixtures/"
   cp tests/bluetooth-widget-smoke.qml "$smoke_root/shell.qml"
   set +e
