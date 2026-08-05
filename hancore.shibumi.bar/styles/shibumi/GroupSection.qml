@@ -379,14 +379,6 @@ Item {
         return false
       }
 
-      function nextSlotHasContent(index) {
-        // Re-evaluate once the Repeater has instantiated the following
-        // delegate; the first cell can otherwise cache a false pre-load read.
-        void(horizontalRepeater.count)
-        var item = horizontalRepeater.itemAt(index + 1)
-        return item && item.contentShown
-      }
-
       function nextShownIndex(index) {
         void(horizontalRepeater.count)
         for (var i = index + 1; i < horizontalRepeater.count; i++) {
@@ -410,7 +402,7 @@ Item {
         var nextIndex = nextBudgetShownIndex(index, stage)
         if (nextIndex <= index) return false
         return root.v2Mode
-          ? nextIndex === index + 1 && root.splitAfter(index)
+          ? root.splitAfter(index)
           : root.splitAfter(nextIndex - 1)
       }
 
@@ -480,8 +472,7 @@ Item {
           readonly property int leadingGap: effectiveHasContent
             && horizontalRow.hasContentBefore(index) ? root.groupSpacing : 0
           readonly property bool separated: contentShown
-            && (root.v2Mode ? horizontalRow.nextSlotHasContent(index)
-              : nextShownIndex > index)
+            && nextShownIndex > index
             && root.splitAfter(separatorIndex)
           implicitWidth: effectiveHasContent
             ? leadingGap + targetVisual.width + (separated ? root.splitGrow : 0)

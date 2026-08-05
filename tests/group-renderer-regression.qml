@@ -96,7 +96,11 @@ ShellRoot {
       id: disabledStateService
       property int revision: 0
       readonly property var config: ({
-        widgets: ({ G2: { enabled: false }, G8: { enabled: false } })
+        widgets: ({
+          G1: { separator: true },
+          G2: { enabled: false },
+          G8: { enabled: false }
+        })
       })
       readonly property color selectedColor: "#88aaff"
     }
@@ -406,6 +410,34 @@ ShellRoot {
       function unassignedLayoutEntries(_region) { return [] }
     }
 
+    QtObject {
+      id: v2HiddenGapBar
+
+      readonly property bool vertical: false
+      readonly property int barSize: 26
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property var shell: disabledShell
+      readonly property var visualTokens: v2SplitBar.visualTokens
+      readonly property var layoutConfig: noSplitBar.layoutConfig
+      readonly property var layoutController: v2SplitController
+      property var activePopout: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(_region) { return [] }
+    }
+
     ShibumiStyle.VisualTokens {
       id: shapeTokens
       bar: shapeBar
@@ -584,6 +616,12 @@ ShellRoot {
     }
 
     ShibumiStyle.GroupSection {
+      id: v2HiddenGapSection
+      bar: v2HiddenGapBar
+      region: "left"
+    }
+
+    ShibumiStyle.GroupSection {
       id: narrowLeftSection
       bar: noSplitBar
       region: "left"
@@ -731,6 +769,7 @@ ShellRoot {
             || centerSection.implicitWidth <= 0
             || rightSection.implicitWidth <= 0
             || hiddenGapSection.implicitWidth <= 0
+            || v2HiddenGapSection.implicitWidth <= 0
             || narrowLeftSection.implicitWidth <= 0
             || narrowRightSection.implicitWidth <= 0
             || delayedGroup.implicitWidth <= 0
@@ -788,6 +827,31 @@ ShellRoot {
               test.fail("normal group gap drifted at visible index " + index
                 + ": got " + gap + ", expected "
                 + hiddenGapSection.groupSpacing)
+              return
+            }
+          }
+          const v2Geometry = v2HiddenGapSection.groupGeometry
+          const v2Marker = v2HiddenGapSection.separatorGeometry.find(
+            function(entry) { return entry.groupId === "G1" })
+          if (v2Geometry.length !== 6 || !v2Marker
+              || v2Marker.index !== 0) {
+            if (attempts < 50) return
+            stop()
+            test.fail("V2 hidden-slot separator geometry did not settle: "
+              + JSON.stringify(v2Geometry) + ", marker="
+              + JSON.stringify(v2Marker))
+            return
+          }
+          for (let index = 1; index < v2Geometry.length; index++) {
+            const gap = v2Geometry[index].left - v2Geometry[index - 1].right
+            const expected = index === 1 ? 22 : 6
+            if (!test.closeEnough(gap, expected)) {
+              if (attempts < 50) return
+              stop()
+              test.fail("V2 separator across hidden slot drifted at "
+                + index + ": got " + gap + ", expected " + expected
+                + ", state=" + JSON.stringify(
+                  test.sectionState(v2HiddenGapSection)))
               return
             }
           }
