@@ -6,8 +6,10 @@ function deviceLabel(device) {
 function toArray(values) {
   if (!values) return []
   if (Array.isArray(values)) return values.slice()
+
   var length = Number(values.length || 0)
   if (!isFinite(length) || length <= 0) return []
+
   var list = []
   for (var i = 0; i < length; i++) list.push(values[i])
   return list
@@ -42,6 +44,7 @@ function deviceLists(devices) {
   var connected = []
   var known = []
   var discovered = []
+
   for (var i = 0; i < values.length; i++) {
     var device = values[i]
     if (!device || !hasHumanName(device)) continue
@@ -49,6 +52,7 @@ function deviceLists(devices) {
     else if (device.paired || device.bonded || device.trusted) known.push(device)
     else discovered.push(device)
   }
+
   return {
     connected: sortedByLabel(connected),
     known: sortedByLabel(known),
@@ -67,22 +71,31 @@ function nodeProperties(node) {
 function nodeText(node) {
   var properties = nodeProperties(node)
   return [
-    node ? node.name : "", node ? node.description : "",
-    node ? node.nickname : "", node ? node.nick : "",
-    properties["node.name"], properties["node.description"],
-    properties["node.nick"], properties["device.name"],
-    properties["device.description"], properties["device.product.name"],
-    properties["device.alias"], properties["device.string"],
-    properties["api.bluez5.address"], properties["bluez5.address"],
+    node ? node.name : "",
+    node ? node.description : "",
+    node ? node.nickname : "",
+    node ? node.nick : "",
+    properties["node.name"],
+    properties["node.description"],
+    properties["node.nick"],
+    properties["device.name"],
+    properties["device.description"],
+    properties["device.product.name"],
+    properties["device.alias"],
+    properties["device.string"],
+    properties["api.bluez5.address"],
+    properties["bluez5.address"],
     properties["media.name"]
   ].join(" ").toLowerCase()
 }
 
 function bluetoothSinkMatchesDevice(node, device) {
   if (!node || !node.isSink || node.isStream || !device) return false
+
   var address = normalizedAddress(device.address)
   var text = nodeText(node)
   if (address !== "" && normalizedAddress(text).indexOf(address) !== -1) return true
+
   var label = deviceLabel(device).toLowerCase()
   return label !== "" && text.indexOf(label) !== -1
 }

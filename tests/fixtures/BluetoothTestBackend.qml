@@ -14,6 +14,8 @@ QtObject {
   property int disconnectCount: 0
   property int forgetCount: 0
   property int viewLoadCount: 0
+  property int discoveryStartAttempts: 0
+  property int rejectedDiscoveryStarts: 0
   property var connectedDevices: [
     {
       address: "00:11:22:33:44:55",
@@ -47,10 +49,26 @@ QtObject {
   property QtObject fakeAdapter: QtObject {
     property bool enabled: true
     property bool discovering: false
+    function requestDiscovery() {
+      root.discoveryStartAttempts++
+      if (root.rejectedDiscoveryStarts > 0) {
+        root.rejectedDiscoveryStarts--
+        return
+      }
+      Qt.callLater(function() { root.fakeAdapter.discovering = true })
+    }
   }
   property QtObject alternateAdapter: QtObject {
     property bool enabled: true
-    property bool discovering: true
+    property bool discovering: false
+    function requestDiscovery() {
+      root.discoveryStartAttempts++
+      Qt.callLater(function() { root.alternateAdapter.discovering = true })
+    }
+  }
+
+  function requestDiscovery(target) {
+    target.requestDiscovery()
   }
 
   function toggleBluetooth() {

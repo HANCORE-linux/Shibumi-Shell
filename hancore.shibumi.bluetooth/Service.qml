@@ -14,6 +14,8 @@ Item {
   property var bar: shell ? shell.bar : null
   property var backendOverride: null
   property var sessionOwners: []
+  property int discoveryRetryInterval: 1000
+  property int discoveryRequestTimeoutInterval: 1500
 
   readonly property var backend: adapter.backend
   readonly property bool ready: adapter.ready
@@ -73,18 +75,8 @@ Item {
   function pendingAction(address) { return adapter.pendingAction(address) }
   function deviceLabel(device) { return adapter.deviceLabel(device) }
 
-  function ensureSessionDiscovery() {
-    // Adapter state can settle asynchronously after a radio change. Start a
-    // scan only while at least one Shibumi panel still owns a session.
-    Qt.callLater(function() { Qt.callLater(function() {
-      if (root.radioEnabled && root.sessionOwners.length > 0
-          && !root.discovering) adapter.startDiscovery()
-    }) })
-  }
-
   onRadioEnabledChanged: {
-    if (radioEnabled && sessionOwners.length > 0) ensureSessionDiscovery()
-    else if (!radioEnabled) adapter.stopDiscovery()
+    if (!radioEnabled) adapter.stopDiscovery()
   }
 
   Component.onDestruction: adapter.stopDiscovery()
@@ -104,5 +96,20 @@ Item {
   BluetoothBackendAdapter {
     id: adapter
     backendOverride: root.backendOverride
+    discoveryDesired: root.sessionCount > 0
+    discoveryRequestTimeoutInterval: root.discoveryRequestTimeoutInterval
+  }
+
+  // BlueZ may reject StartDiscovery while an enabled adapter is still
+  // settling, and an active scan may end independently. Retry only while a
+  // visible Shibumi panel still owns the discovery session.
+  Timer {
+    id: discoveryRetry
+    interval: root.discoveryRetryInterval
+    repeat: true
+    triggeredOnStart: true
+    running: root.sessionCount > 0 && root.adapterAvailable
+      && root.radioEnabled && !root.discovering
+    onTriggered: adapter.startDiscovery()
   }
 }

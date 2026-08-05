@@ -544,3 +544,58 @@ wenn ihr Abbruch- beziehungsweise Erfolgskriterium belegt ist.
 - Audit-Ergebnis: **0 offene Bluetooth-Findings**. Die physische
   Multi-Monitor-Abnahme bleibt wie vereinbart zurückgestellt und blockiert den
   Commit nicht.
+
+### Korrigierendes Folgeaudit nach Pi-Review vom 5. August 2026
+
+Die vorstehende Aussage „0 offene Bluetooth-Findings“ war nicht final: Ein
+anschließendes unabhängiges Review fand zwei mittlere Funktionsrisiken und ein
+niedriges Harness-Risiko. Diese Befunde wurden test-first erneut geöffnet und
+am Ursprung bearbeitet; Commit `8ddbd77` bleibt dabei unverändert und wird
+nicht gepusht.
+
+- Rote Regressionen belegten vor der Korrektur:
+  - ein abgelehnter Discovery-Start wurde nicht erneut versucht;
+  - nach Ablauf des 20-Sekunden-UI-Pending ging ein später Audio-Connect-Intent
+    verloren;
+  - INT-, TERM-, HUP-, Prozessgruppen-Timeout- und Byte-Drift-Schutz fehlten.
+- Discovery-Eigentum wird nun erst gesetzt, wenn `adapter.discovering` nach
+  einer Shibumi-Anforderung beobachtet wahr wird. Ein 1,5-Sekunden-
+  Korrelationsfenster verhindert, dass ein viel späterer externer Scan
+  fälschlich übernommen oder gestoppt wird.
+- Der Service versucht Discovery im Abstand von einer Sekunde ausschließlich
+  bei offener Shibumi-Session, vorhandenem und eingeschaltetem Adapter sowie
+  fehlender Discovery erneut. Ablehnung beim Einschalten, externes Ende und
+  Wechsel zwischen zwei aktiven Adaptern sind durch Fixtures abgedeckt.
+- Der Audio-Handoff-Intent besitzt einen eigenen 60-Sekunden-Lifecycle und ist
+  nicht mehr an das 20-Sekunden-UI-Pending gekoppelt. Direkt vor der Übergabe
+  werden Radio, aktueller Adapter, Live-Gerät, Verbindung und der aktuell
+  aufgelöste PipeWire-Sink erneut geprüft; Disconnect, Forget, Radio-off und
+  Adapterwechsel verwerfen den Intent.
+- Der IPC-Harness begrenzt jeden `qs`-Aufruf, startet Quickshell mit `setsid`
+  in einer eigenen Prozessgruppe und beendet die gesamte Gruppe mit
+  TERM/KILL-Fallback. Echte INT-, TERM- und HUP-Abbrüche stellen den dynamisch
+  erfassten Fixture-Snapshot wieder her und hinterlassen weder Prozess noch
+  Testverzeichnis.
+- Root- und Plugin-Kopien von `BluetoothBackendAdapter.qml` und
+  `BluetoothModel.js` sind byte-identisch. Beide fokussierten und vollständigen
+  Verträge enthalten jetzt einen Drift-Guard.
+- Die fokussierte Bluetooth-Suite und der abschließend erneut ausgeführte
+  vollständige Contract enden mit Exit-Code 0; der Voll-Lauf endet mit
+  `Shibumi contract regression passed`.
+- Der transaktionale Live-Repair um `23:57:58` installierte 24/24 Payloads.
+  Vor dem abschließenden `Configuration Loaded` traten zwei bestehende
+  Shibumi-DragGhost- und eine ausgeklammerte Omarchy-Notification-
+  Abbauwarnung auf. Im stabilen Nachlauf folgte keine Bluetooth-Warnung und
+  kein Fehler.
+- Live gelten weiterhin: PID `1597226`, genau ein `omarchy.bluetooth`-Ziel,
+  sechs Methoden, Radio an, Discovery aus, iPhone verbunden und SteelSeries
+  Arctis 7 Chat als Standard-Sink. Die drei installierten Bluetooth-Dateien
+  sind byte-identisch zum Arbeitsbaum.
+- Health meldet einen erwarteten Source-Hinweis (`ahead 2 · dirty`), acht
+  erfolgreiche Prüfungen und keine Runtime-Fehler. Die physische
+  Multi-Monitor-Abnahme bleibt mangels zweitem Monitor ausgenommen.
+
+Der interne Follow-up-Stand besitzt damit keine bekannte offene
+Bluetooth-Invariante. Die vereinbarte unabhängige Prüfung des gesamten
+Commit-Bereichs bleibt dennoch ein eigener Gate nach dem separaten
+Folgecommit; ein Push erfolgt ausschließlich nach ausdrücklicher Freigabe.

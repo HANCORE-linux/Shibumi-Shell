@@ -6,15 +6,31 @@ import Quickshell.Bluetooth
 import Quickshell.Services.Pipewire
 import "BluetoothModel.js" as Model
 
+// The process-wide Bluetooth state and action owner. This deliberately uses
+// Quickshell's data APIs directly; no foreign UI component is instantiated.
 Item {
   id: root
 
+  // Runtime tests inject a side-effect-free backend. Production leaves this
+  // null and therefore uses the native BlueZ/PipeWire implementation below.
   property var backendOverride: null
+  property var adapterOverride: null
+  // Lets the component smoke test drive native device property transitions
+  // without touching the host's real Bluetooth devices.
   property var nativeDevicesOverride: null
+  property var pipewireNodesOverride: null
+  property var commandRunnerOverride: null
+  property var audioOutputOverride: null
+  property int audioSwitchInterval: 500
+  property int audioIntentTimeoutInterval: 60000
+  property int discoveryRequestTimeoutInterval: 1500
   property bool discoveryOwned: false
   property var discoveryOwnerAdapter: null
-  property int discoveryGeneration: 0
+  property var discoveryRequestedAdapter: null
+  property var retiredDiscoveryAdapter: null
+  property bool discoveryDesired: false
   property var nativePendingActions: ({})
+  property var audioHandoffIntents: ({})
   property var pendingAudioOutputDevice: null
   property int pendingAudioOutputAttempts: 0
 
@@ -22,7 +38,7 @@ Item {
   readonly property bool ready: true
   readonly property var adapter: backendOverride !== null
     ? ("adapter" in backendOverride ? backendOverride.adapter : null)
-    : Bluetooth.defaultAdapter
+    : (adapterOverride !== null ? adapterOverride : Bluetooth.defaultAdapter)
   readonly property bool adapterAvailable: adapter !== null
   readonly property bool radioEnabled: adapterAvailable
     && adapter.enabled !== undefined && adapter.enabled === true
@@ -31,8 +47,9 @@ Item {
   readonly property var nativeDevices: nativeDevicesOverride !== null
     ? nativeDevicesOverride
     : (backendOverride === null && Bluetooth.devices ? Bluetooth.devices.values : [])
-  readonly property var pipewireNodes: backendOverride === null && Pipewire.nodes
-    ? Pipewire.nodes.values : []
+  readonly property var pipewireNodes: pipewireNodesOverride !== null
+    ? pipewireNodesOverride
+    : (backendOverride === null && Pipewire.nodes ? Pipewire.nodes.values : [])
   readonly property var nativeDeviceGroups: Model.deviceLists(nativeDevices)
   readonly property var connectedDevices: backendOverride !== null
     ? backendList("connectedDevices") : nativeDeviceGroups.connected
@@ -53,29 +70,78 @@ Item {
     const values = backendOverride[name]
     return Array.isArray(values) ? values : []
   }
+
   function deviceLabel(device) {
-    if (backendOverride !== null && typeof backendOverride.deviceLabel === "function")
+    if (backendOverride !== null
+        && typeof backendOverride.deviceLabel === "function")
       return String(backendOverride.deviceLabel(device) || "")
     return Model.deviceLabel(device)
   }
+
   function pendingAction(address) {
     const key = String(address || "")
-    if (backendOverride !== null && typeof backendOverride.pendingAction === "function")
+    if (backendOverride !== null
+        && typeof backendOverride.pendingAction === "function")
       return String(backendOverride.pendingAction(key) || "")
     return key && nativePendingActions[key] ? nativePendingActions[key] : ""
   }
+
+  // discoveryOwned is only set if Shibumi changed false -> true. An already
+  // active external scan is observed but never claimed or stopped by Shibumi.
   function startDiscovery() {
     if (!adapterAvailable || !radioEnabled) return false
-    discoveryGeneration++
-    if (!discovering) {
-      adapter.discovering = true
-      discoveryOwned = true
-      discoveryOwnerAdapter = adapter
-    }
+    if (discovering) return true
+    if (discoveryRequestedAdapter === adapter) return true
+    if (retiredDiscoveryAdapter === adapter) retiredDiscoveryAdapter = null
+    discoveryRequestedAdapter = adapter
+    discoveryRequestTimeout.restart()
+    requestAdapterDiscovery(adapter)
     return true
   }
+
+  function requestAdapterDiscovery(target) {
+    if (backendOverride !== null
+        && typeof backendOverride.requestDiscovery === "function")
+      backendOverride.requestDiscovery(target)
+    else target.discovering = true
+  }
+
+  function confirmRequestedDiscovery() {
+    const requested = discoveryRequestedAdapter
+    if (!requested || !requested.discovering) return
+    discoveryRequestedAdapter = null
+    if (!discoveryDesired || requested !== adapter) {
+      retiredDiscoveryAdapter = requested
+      requested.discovering = false
+      return
+    }
+    discoveryOwned = true
+    discoveryOwnerAdapter = requested
+    if (!retiredDiscoveryAdapter) discoveryRequestTimeout.stop()
+  }
+
+  function retirePendingDiscovery() {
+    const requested = discoveryRequestedAdapter
+    if (!requested) return
+    discoveryRequestedAdapter = null
+    retiredDiscoveryAdapter = requested
+    discoveryRequestTimeout.restart()
+    if (requested.discovering !== undefined && requested.discovering)
+      requested.discovering = false
+  }
+
+  function expireDiscoveryRequestWindow() {
+    confirmRequestedDiscovery()
+    if (discoveryRequestedAdapter && !discoveryRequestedAdapter.discovering)
+      discoveryRequestedAdapter = null
+    const retired = retiredDiscoveryAdapter
+    retiredDiscoveryAdapter = null
+    if (retired && retired.discovering !== undefined && retired.discovering)
+      retired.discovering = false
+  }
+
   function stopDiscovery() {
-    discoveryGeneration++
+    retirePendingDiscovery()
     const owner = discoveryOwnerAdapter
     if (discoveryOwned && owner && owner.discovering !== undefined
         && owner.discovering)
@@ -84,21 +150,16 @@ Item {
     discoveryOwnerAdapter = null
     return true
   }
+
   function restartDiscovery() {
     if (!adapterAvailable || !radioEnabled) return false
+    // A scan that was already active before Shibumi opened is externally
+    // owned. Refresh must observe it without toggling or claiming it.
     if (discovering && !discoveryOwned) return true
-    discoveryGeneration++
-    const generation = discoveryGeneration
-    if (discovering) adapter.discovering = false
-    Qt.callLater(function() {
-      if (root.discoveryGeneration !== generation || !root.adapterAvailable
-          || !root.radioEnabled) return
-      root.adapter.discovering = true
-      root.discoveryOwned = true
-      root.discoveryOwnerAdapter = root.adapter
-    })
-    return true
+    if (discovering) return stopDiscovery()
+    return startDiscovery()
   }
+
   function toggleBluetooth() {
     if (!adapterAvailable) return false
     if (backendOverride !== null) {
@@ -110,20 +171,76 @@ Item {
     adapter.enabled = !adapter.enabled
     return true
   }
+
   function setNativePendingAction(address, action) {
     if (!address) return
-    nativePendingActions = Model.withPendingAction(nativePendingActions, String(address), String(action || ""))
+    nativePendingActions = Model.withPendingAction(
+      nativePendingActions, String(address), String(action || ""))
     if (action) pendingTimeout.restart()
   }
+
+  function rememberAudioHandoffIntent(device) {
+    if (!device || !device.address) return
+    const next = Model.cloneMap(audioHandoffIntents)
+    next[String(device.address)] = {
+      address: String(device.address),
+      name: device.name ? String(device.name) : "",
+      deviceName: device.deviceName ? String(device.deviceName) : ""
+    }
+    audioHandoffIntents = next
+    audioIntentTimeout.restart()
+  }
+
+  function clearAudioHandoffIntent(address) {
+    const key = String(address || "")
+    if (!key || !audioHandoffIntents[key]) return
+    const next = Model.cloneMap(audioHandoffIntents)
+    delete next[key]
+    audioHandoffIntents = next
+    if (Object.keys(next).length === 0) audioIntentTimeout.stop()
+  }
+
+  function cancelPendingAudioOutput(address) {
+    const key = String(address || "")
+    if (pendingAudioOutputDevice && (!key
+        || String(pendingAudioOutputDevice.address || "") === key)) {
+      pendingAudioOutputDevice = null
+      pendingAudioOutputAttempts = 0
+      audioSwitchTimer.stop()
+    }
+  }
+
+  function cancelAudioHandoff(address) {
+    clearAudioHandoffIntent(address)
+    cancelPendingAudioOutput(address)
+  }
+
+  function cancelAllAudioHandoffs() {
+    audioHandoffIntents = ({})
+    audioIntentTimeout.stop()
+    cancelPendingAudioOutput("")
+  }
+
   function deviceCommand(action, address) {
     return ["omarchy-bluetooth-device", String(action), String(address)]
   }
+
+  function executeDeviceCommand(command) {
+    if (commandRunnerOverride !== null
+        && typeof commandRunnerOverride.run === "function") {
+      commandRunnerOverride.run(command)
+      return
+    }
+    Quickshell.execDetached(command)
+  }
+
   function runNativeDeviceAction(device, action, pending) {
     if (!device || !device.address) return false
     setNativePendingAction(device.address, pending)
-    Quickshell.execDetached(deviceCommand(action, device.address))
+    executeDeviceCommand(deviceCommand(action, device.address))
     return true
   }
+
   function connectDevice(device) {
     if (!device || device.connected) return false
     if (backendOverride !== null) {
@@ -131,9 +248,12 @@ Item {
       backendOverride.connectDevice(device)
       return true
     }
-    const action = device.paired || device.bonded || device.trusted ? "connect" : "pair"
+    const action = device.paired || device.bonded || device.trusted
+      ? "connect" : "pair"
+    rememberAudioHandoffIntent(device)
     return runNativeDeviceAction(device, action, "connecting")
   }
+
   function disconnectDevice(device) {
     if (!device || !device.address || !device.connected) return false
     if (backendOverride !== null) {
@@ -141,11 +261,13 @@ Item {
       backendOverride.disconnectDevice(device)
       return true
     }
+    cancelAudioHandoff(device.address)
     setNativePendingAction(device.address, "disconnecting")
     if (typeof device.disconnect === "function") device.disconnect()
-    Quickshell.execDetached(deviceCommand("disconnect", device.address))
+    executeDeviceCommand(deviceCommand("disconnect", device.address))
     return true
   }
+
   function forgetDevice(device) {
     if (!device || !device.address) return false
     if (backendOverride !== null) {
@@ -153,8 +275,10 @@ Item {
       backendOverride.forgetDevice(device)
       return true
     }
+    cancelAudioHandoff(device.address)
     return runNativeDeviceAction(device, "forget", "forgetting")
   }
+
   function audioSinks() {
     const sinks = []
     for (let i = 0; i < pipewireNodes.length; i++) {
@@ -163,19 +287,32 @@ Item {
     }
     return sinks
   }
+
   function bluetoothAudioSink(device) {
     const sinks = audioSinks()
     for (let i = 0; i < sinks.length; i++)
       if (Model.bluetoothSinkMatchesDevice(sinks[i], device)) return sinks[i]
     return null
   }
+
   function setDefaultAudioSink(sink) {
     if (!sink) return
+    if (audioOutputOverride !== null
+        && typeof audioOutputOverride.setDefaultSink === "function") {
+      audioOutputOverride.setDefaultSink(sink)
+      return
+    }
     Pipewire.preferredDefaultAudioSink = sink
     if (sink.id === undefined || !sink.name) return
-    Quickshell.execDetached(["omarchy-audio-output-set-default", String(sink.id), String(sink.name)])
+    Quickshell.execDetached([
+      "omarchy-audio-output-set-default",
+      String(sink.id),
+      String(sink.name)
+    ])
   }
+
   function scheduleAudioOutputSwitch(device) {
+    if (!device || !device.address || !device.connected) return
     pendingAudioOutputDevice = {
       address: device && device.address ? device.address : "",
       name: device && device.name ? device.name : "",
@@ -184,9 +321,36 @@ Item {
     pendingAudioOutputAttempts = 0
     audioSwitchTimer.restart()
   }
+
+  function nativeDeviceByAddress(address) {
+    const key = String(address || "")
+    for (let i = 0; i < nativeDevices.length; i++) {
+      const device = nativeDevices[i]
+      if (device && String(device.address || "") === key) return device
+    }
+    return null
+  }
+
+  function deviceUsesCurrentAdapter(device) {
+    return device && (device.adapter === undefined || device.adapter === null
+      || device.adapter === adapter)
+  }
+
+  function validatePendingAudioOutput() {
+    if (!pendingAudioOutputDevice) return false
+    const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
+    if (!radioEnabled || !device || !device.connected
+        || !deviceUsesCurrentAdapter(device)) {
+      cancelPendingAudioOutput("")
+      return false
+    }
+    return true
+  }
+
   function switchPendingAudioOutput() {
-    if (!pendingAudioOutputDevice) return
-    const sink = bluetoothAudioSink(pendingAudioOutputDevice)
+    if (!validatePendingAudioOutput()) return
+    const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
+    const sink = bluetoothAudioSink(device)
     if (sink) {
       setDefaultAudioSink(sink)
       pendingAudioOutputDevice = null
@@ -194,26 +358,53 @@ Item {
       return
     }
     pendingAudioOutputAttempts++
-    if (pendingAudioOutputAttempts >= 8) { pendingAudioOutputDevice = null; return }
+    if (pendingAudioOutputAttempts >= 8) {
+      pendingAudioOutputDevice = null
+      return
+    }
     audioSwitchTimer.restart()
   }
+
+  function syncNativeAudioHandoffIntents() {
+    if (backendOverride !== null) return
+    const next = Model.cloneMap(audioHandoffIntents)
+    let changed = false
+    for (const address in next) {
+      const device = nativeDeviceByAddress(address)
+      if (device && device.connected && deviceUsesCurrentAdapter(device)) {
+        scheduleAudioOutputSwitch(device)
+        delete next[address]
+        changed = true
+      }
+    }
+    if (changed) {
+      audioHandoffIntents = next
+      if (Object.keys(next).length === 0) audioIntentTimeout.stop()
+    }
+    validatePendingAudioOutput()
+  }
+
   function syncNativePendingActions() {
     if (backendOverride !== null) return
     const next = Model.cloneMap(nativePendingActions)
     let changed = false
+
     for (const address in next) {
       const action = next[address]
       let found = null
       for (let i = 0; i < nativeDevices.length; i++) {
         const device = nativeDevices[i]
-        if (device && device.address === address) { found = device; break }
+        if (device && device.address === address) {
+          found = device
+          break
+        }
       }
+
       const finishedConnecting = action === "connecting" && found && found.connected
       if (finishedConnecting
           || (action === "disconnecting" && found && !found.connected)
           || (action === "forgetting" && (!found
             || (!found.paired && !found.bonded && !found.trusted)))) {
-        if (finishedConnecting) scheduleAudioOutputSwitch(found)
         delete next[address]
         changed = true
       }
@@ -221,18 +412,38 @@ Item {
     if (changed) nativePendingActions = next
   }
 
-  onNativeDevicesChanged: syncNativePendingActions()
-  onConnectedDevicesChanged: syncNativePendingActions()
-  onKnownDevicesChanged: syncNativePendingActions()
-  onDiscoveredDevicesChanged: syncNativePendingActions()
+  onNativeDevicesChanged: {
+    syncNativePendingActions()
+    syncNativeAudioHandoffIntents()
+  }
+  // ScriptModel.values changes when the collection changes, while a device's
+  // connection/pairing flags have their own signals. The derived group signals
+  // cover both paths and complete pending actions as soon as state settles.
+  onConnectedDevicesChanged: {
+    syncNativePendingActions()
+    syncNativeAudioHandoffIntents()
+  }
+  onKnownDevicesChanged: {
+    syncNativePendingActions()
+    syncNativeAudioHandoffIntents()
+  }
+  onDiscoveredDevicesChanged: {
+    syncNativePendingActions()
+    syncNativeAudioHandoffIntents()
+  }
+  onDiscoveryDesiredChanged: if (!discoveryDesired) stopDiscovery()
+  onRadioEnabledChanged: if (!radioEnabled) cancelAllAudioHandoffs()
   onAdapterChanged: {
-    discoveryGeneration++
+    // Ownership is tied to the adapter instance on which Shibumi started the
+    // scan. Stop that scan before observing a replacement adapter as external.
+    retirePendingDiscovery()
     const owner = discoveryOwnerAdapter
     if (discoveryOwned && owner && owner !== adapter
         && owner.discovering !== undefined && owner.discovering)
       owner.discovering = false
     discoveryOwned = false
     discoveryOwnerAdapter = null
+    cancelAllAudioHandoffs()
   }
   Component.onDestruction: stopDiscovery()
 
@@ -242,10 +453,58 @@ Item {
     repeat: false
     onTriggered: root.nativePendingActions = ({})
   }
+
   Timer {
     id: audioSwitchTimer
-    interval: 500
+    interval: root.audioSwitchInterval
     repeat: false
     onTriggered: root.switchPendingAudioOutput()
+  }
+
+  Timer {
+    id: audioIntentTimeout
+    interval: root.audioIntentTimeoutInterval
+    repeat: false
+    onTriggered: root.audioHandoffIntents = ({})
+  }
+
+  Timer {
+    id: discoveryRequestTimeout
+    interval: root.discoveryRequestTimeoutInterval
+    repeat: false
+    onTriggered: root.expireDiscoveryRequestWindow()
+  }
+
+  Connections {
+    target: root.discoveryRequestedAdapter
+    ignoreUnknownSignals: true
+    function onDiscoveringChanged() { root.confirmRequestedDiscovery() }
+  }
+
+  Connections {
+    target: root.discoveryOwnerAdapter
+    ignoreUnknownSignals: true
+    function onDiscoveringChanged() {
+      const owner = root.discoveryOwnerAdapter
+      if (owner && !owner.discovering) {
+        root.discoveryOwned = false
+        root.discoveryOwnerAdapter = null
+      }
+    }
+  }
+
+  Connections {
+    target: root.retiredDiscoveryAdapter
+    ignoreUnknownSignals: true
+    function onDiscoveringChanged() {
+      const retired = root.retiredDiscoveryAdapter
+      if (!retired) return
+      if (retired.discovering) retired.discovering = false
+      else {
+        root.retiredDiscoveryAdapter = null
+        if (!root.discoveryRequestedAdapter)
+          discoveryRequestTimeout.stop()
+      }
+    }
   }
 }

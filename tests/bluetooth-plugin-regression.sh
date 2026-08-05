@@ -42,8 +42,28 @@ printf '%s\n' "$output"
 grep -F 'bluetooth plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 
+install -m 0644 "$repo_root/tests/bluetooth-backend-regression.qml" \
+  "$tmpdir/shell.qml"
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" --no-color 2>&1)
+status=$?
+set -e
+printf '%s\n' "$output"
+[[ $status -eq 0 ]] || fail "Bluetooth backend regression exited with $status"
+grep -F 'bluetooth backend regression passed' <<<"$output" >/dev/null \
+  || fail "Bluetooth backend success marker missing"
+
 OMARCHY_PATH="$omarchy_path" \
   bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh"
+OMARCHY_PATH="$omarchy_path" \
+  "$repo_root/tests/bluetooth-ipc-harness-signal-regression.sh"
 
 widget="$repo_root/hancore.shibumi.bluetooth/BarWidget.qml"
 service="$repo_root/hancore.shibumi.bluetooth/Service.qml"
@@ -67,12 +87,13 @@ rg -q '^import Quickshell\.Bluetooth$' "$adapter" \
   || fail "Bluetooth adapter does not own the native BlueZ model"
 rg -q '^import Quickshell\.Services\.Pipewire$' "$adapter" \
   || fail "Bluetooth adapter does not own Bluetooth audio routing"
-rg -Fq 'Quickshell.execDetached(deviceCommand(action, device.address))' "$adapter" \
+rg -Fq 'executeDeviceCommand(deviceCommand(action, device.address))' "$adapter" \
   || fail "Bluetooth adapter does not preserve the device helper contract"
 rg -Fq 'Model.deviceLists(nativeDevices)' "$adapter" \
   || fail "Bluetooth adapter does not normalize the native device model"
 for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
-  rg -Fq "on${device_signal}Changed: syncNativePendingActions()" "$adapter" \
+  rg -U -q "on${device_signal}Changed: \\{[^}]*syncNativePendingActions\\(\\)[^}]*syncNativeAudioHandoffIntents\\(\\)" \
+    "$adapter" \
     || fail "Bluetooth pending actions ignore ${device_signal} property transitions"
 done
 rg -Fq 'if (discovering && !discoveryOwned) return true' "$adapter" \
@@ -80,13 +101,39 @@ rg -Fq 'if (discovering && !discoveryOwned) return true' "$adapter" \
 rg -q 'property var discoveryOwnerAdapter: null' "$adapter" \
   || fail "Bluetooth discovery ownership is not tied to its adapter instance"
 [[ -f $model ]] || fail "Bluetooth native model is missing"
+cmp -s "$repo_root/adapters/BluetoothBackendAdapter.qml" "$adapter" \
+  || fail "root and plugin Bluetooth adapters drifted"
+cmp -s "$repo_root/adapters/BluetoothModel.js" "$model" \
+  || fail "root and plugin Bluetooth models drifted"
 if rg -q 'IpcHandler \{' "$adapter"; then
   fail "Bluetooth backend adapter must not register a second IPC owner"
 fi
+for termination_signal in INT TERM HUP; do
+  rg -q "^trap .* ${termination_signal}$" \
+    "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+    || fail "Bluetooth IPC harness does not trap $termination_signal"
+done
+rg -q 'setsid .*quickshell|setsid .*quickshell_bin' \
+  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+  || fail "Bluetooth IPC harness does not isolate the Quickshell process group"
+rg -q '"\$timeout_bin" --foreground "\$ipc_timeout_seconds"' \
+  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
+  || fail "Bluetooth IPC harness calls are not time-bounded"
 rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
 rg -q 'adapter\.stopDiscovery\(\)' "$service" \
   || fail "Bluetooth discovery lacks final-close cleanup"
+rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.radioEnabled && !root\.discovering' \
+  "$service" \
+  || fail "Bluetooth discovery retry is not bounded to an open, powered idle session"
+rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discovering(.|\n)*?discoveryOwned = true(.|\n)*?\n  \}' \
+  "$adapter" \
+  || fail "Bluetooth discovery ownership is not confirmed from observed adapter state"
+rg -q 'property var audioHandoffIntents: \(\{\}\)' "$adapter" \
+  || fail "Bluetooth audio handoff intent is not independent of UI pending state"
+rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
+  "$adapter" \
+  || fail "Bluetooth audio handoff is not revalidated immediately before execution"
 if rg -q 'Quickshell\.Bluetooth|Bluez|Process \{' \
     "$widget" "$panel"; then
   fail "screen-local Bluetooth presentation owns backend work"
@@ -94,8 +141,8 @@ fi
 if rg -q 'Process \{|FileView \{' "$service" "$adapter"; then
   fail "Bluetooth owner uses an unbounded worker instead of native APIs"
 fi
-[[ $(rg -c '^  Timer \{' "$adapter") -eq 2 ]] \
-  || fail "Bluetooth adapter must keep exactly the two bounded action timers"
+[[ $(rg -c '^  Timer \{' "$adapter") -eq 4 ]] \
+  || fail "Bluetooth adapter must keep exactly the four bounded lifecycle timers"
 rg -q 'id: heroPowerToggle' "$panel" \
   || fail "Bluetooth radio toggle is not grouped with adapter status"
 if sed -n '/id: headerActions/,/^        }/p' "$panel" \

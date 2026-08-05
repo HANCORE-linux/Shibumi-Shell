@@ -658,7 +658,7 @@ for bluetooth_adapter in \
   rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not own Bluetooth audio routing"
   for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
-    rg -Fq "on${device_signal}Changed: syncNativePendingActions()" \
+    rg -U -q "on${device_signal}Changed: \\{[^}]*syncNativePendingActions\\(\\)[^}]*syncNativeAudioHandoffIntents\\(\\)" \
       "$bluetooth_adapter" \
       || fail "$bluetooth_adapter ignores ${device_signal} property transitions"
   done
@@ -667,12 +667,32 @@ for bluetooth_adapter in \
     || fail "$bluetooth_adapter can claim an external discovery scan"
   rg -q 'property var discoveryOwnerAdapter: null' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not bind discovery ownership to an adapter"
-  [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 2 ]] \
-    || fail "$bluetooth_adapter must have exactly two bounded action timers"
+  rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discovering(.|\n)*?discoveryOwned = true(.|\n)*?\n  \}' \
+    "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not confirm discovery ownership from observed state"
+  rg -q 'property var audioHandoffIntents: \(\{\}\)' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter couples audio intent to UI pending state"
+  rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
+    "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not revalidate audio handoff state"
+  [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 4 ]] \
+    || fail "$bluetooth_adapter must have exactly four bounded lifecycle timers"
   if rg -q 'IpcHandler \{|Loader \{|panelSource|panelComponent|registeredWidget' \
       "$bluetooth_adapter"; then
     fail "$bluetooth_adapter still owns IPC or loads a foreign UI component"
   fi
+done
+cmp -s adapters/BluetoothBackendAdapter.qml \
+  hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml \
+  || fail "root and plugin Bluetooth adapters drifted"
+cmp -s adapters/BluetoothModel.js hancore.shibumi.bluetooth/BluetoothModel.js \
+  || fail "root and plugin Bluetooth models drifted"
+for bluetooth_service in \
+  services/BluetoothService.qml \
+  hancore.shibumi.bluetooth/Service.qml; do
+  rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.radioEnabled && !root\.discovering' \
+    "$bluetooth_service" \
+    || fail "$bluetooth_service does not bound discovery retries to an open session"
 done
 if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|panelComponent|Loader \{' \
     services/BluetoothService.qml hancore.shibumi.bluetooth/Service.qml; then
@@ -684,8 +704,11 @@ if rg -q 'Quickshell\.Bluetooth|Quickshell\.Services\.Pipewire|Bluetooth\.|Pipew
   fail "Bluetooth presentation bypasses the process-wide native adapter"
 fi
 if rg -q 'Process \{|Timer \{|FileView \{' widgets/BluetoothWidget.qml \
-  widgets/BluetoothPanel.qml services/BluetoothService.qml; then
-  fail "Bluetooth presentation and service facade must remain worker-free"
+    widgets/BluetoothPanel.qml; then
+  fail "Bluetooth presentation must remain worker-free"
+fi
+if rg -q 'Process \{|FileView \{' services/BluetoothService.qml; then
+  fail "Bluetooth service facade must remain process- and file-worker-free"
 fi
 if rg -q 'Process \{|FileView \{' adapters/BluetoothBackendAdapter.qml \
     hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml; then
