@@ -183,11 +183,11 @@ rg -q 'readonly property int bandCount: 24' \
 rg -q 'enabled: panel\.open && panel\.audioBackend' \
   "$audio_panel" \
   || fail "microphone metering is not panel-lifecycle bounded"
-if rg -q 'Ui\.PanelSlider' "$audio_panel"; then
-  fail "audio panel exposes stock Quattro slider presentation"
+if rg -q 'ShibumiSlider \{' "$audio_panel"; then
+  fail "audio panel still exposes the thick legacy slider presentation"
 fi
-[[ $(rg -c 'ShibumiSlider \{' "$audio_panel") -eq 3 ]] \
-  || fail "output, input, and application rows must share the interactive slider"
+[[ $(rg -c 'Ui\.PanelSlider \{' "$audio_panel") -eq 3 ]] \
+  || fail "output, input, and application rows must share the thin PanelSlider"
 rg -q 'contentWidth: fittedContentWidth\(280\)' \
   "$audio_panel" \
   || fail "audio panel does not preserve the V1 280px card width"
@@ -195,8 +195,21 @@ rg -q 'panel\.audioBackend\.setOutputVolume\(value\)' "$audio_panel" \
   || fail "output slider does not retain direct Quattro volume control"
 rg -q 'id: outputControl' "$audio_panel" \
   || fail "output heading and slider are not compactly grouped"
-rg -q 'height: Commons\.Style\.space\(8\)' "$audio_panel" \
-  || fail "audio sliders do not preserve the shared eight-pixel track"
+[[ $(rg -c 'trackColor: panel\.controlActiveFillColor' "$audio_panel") -eq 3 ]] \
+  || fail "audio sliders do not share the Text Size track color"
+rg -Fq 'function sliderKnobColor(muted, sliderEnabled)' "$audio_panel" \
+  || fail "audio panel does not centralize muted and disabled knob states"
+rg -Fq '* (sliderEnabled ? 1 : 0.5)' "$audio_panel" \
+  || fail "disabled audio sliders do not dim their knob"
+[[ $(rg -c 'knobColor: panel\.sliderKnobColor' "$audio_panel") -eq 2 ]] \
+  || fail "output and input sliders do not share the disabled knob state"
+if rg -q 'anchors\.(left|right)Margin: Commons\.Style\.space\(6\)' \
+    "$audio_panel"; then
+  fail "audio sliders do not span the full microphone-meter width"
+fi
+if rg -q 'tickCount:' "$audio_panel"; then
+  fail "volume sliders must remain continuous and unsegmented"
+fi
 rg -q 'function descriptiveNodeLabel\(node\)' "$audio_bridge" \
   || fail "audio bridge does not restore descriptive device labels"
 if rg -q 'wiremix|Open audio|openMixer' "$audio_panel"; then
@@ -211,11 +224,6 @@ if rg -q 'text: "ACTIVITY"' "$audio_panel"; then
 fi
 [[ $(rg -c 'width: Commons\.Style\.space\(30\)' "$audio_widget") -eq 2 ]] \
   || fail "audio percentage labels do not preserve a stable panel anchor width"
-grep -Fq 'property int handleSize: Commons.Style.space(14)' \
-  "$repo_root/hancore.shibumi.audio/ShibumiSlider.qml" \
-  || fail "V1 panel slider does not preserve the approved handle size"
-rg -q 'id: handle' "$repo_root/hancore.shibumi.audio/ShibumiSlider.qml" \
-  || fail "V1 panel slider end handle is missing"
 rg -q 'readonly property bool spectrumRequested: open && active && spectrumEnabled' \
   "$repo_root/hancore.shibumi.media/MediaPanel.qml" \
   || fail "media spectrum work is not panel-lifecycle bounded"

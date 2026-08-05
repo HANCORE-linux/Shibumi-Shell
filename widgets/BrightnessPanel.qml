@@ -253,19 +253,28 @@ ShibumiPanel {
               renderType: Text.NativeRendering
             }
 
-            ShibumiSlider {
+            Ui.PanelSlider {
               id: brightnessSlider
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.bottom: parent.bottom
+              anchors.leftMargin: Commons.Style.space(6)
+              anchors.rightMargin: Commons.Style.space(6)
               bar: panel.bar
               minimum: 1
               maximum: 100
               step: 1
               integer: true
+              trackColor: panel.controlActiveFillColor
+              fillColor: panel.controlAccent
+              knobColor: panel.controlAccent
               value: panel.monitorService.brightnessPercent
-              onMoved: function(value) { panel.monitorService.previewBrightness(value) }
-              onReleased: function(value) { panel.monitorService.setBrightness(value) }
+              onMoved: function(value) {
+                panel.monitorService.previewBrightness(value)
+              }
+              onReleased: function(value) {
+                panel.monitorService.setBrightness(value)
+              }
             }
 
             HoverHandler {
@@ -350,6 +359,47 @@ ShibumiPanel {
             outline: true
             onHasCursorChanged: if (hasCursor) panel.ensureVisible(textSizeRow)
 
+            Row {
+              id: v2TextSizeSegments
+              visible: panel.shellStyle !== "shibumi"
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.leftMargin: Commons.Style.space(6)
+              anchors.rightMargin: Commons.Style.space(6)
+              anchors.verticalCenter: textSizeSlider.verticalCenter
+              height: textSizeSlider.trackHeight
+              spacing: Commons.Style.space(2)
+              readonly property int segmentCount: Math.max(0,
+                panel.monitorService.textSizeStops.length - 1)
+
+              Repeater {
+                model: Math.max(0,
+                  panel.monitorService.textSizeStops.length - 1)
+
+                Rectangle {
+                  required property int index
+                  width: (v2TextSizeSegments.width
+                    - v2TextSizeSegments.spacing
+                      * Math.max(0, v2TextSizeSegments.segmentCount - 1))
+                    / Math.max(1, v2TextSizeSegments.segmentCount)
+                  height: v2TextSizeSegments.height
+                  radius: height / 2
+                  color: panel.controlActiveFillColor
+
+                  Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: parent.width * Math.max(0, Math.min(1,
+                      textSizeSlider.progress
+                        * v2TextSizeSegments.segmentCount - parent.index))
+                    radius: parent.radius
+                    color: panel.controlAccent
+                  }
+                }
+              }
+            }
+
             Ui.PanelSlider {
               id: textSizeSlider
               anchors.fill: parent
@@ -361,9 +411,12 @@ ShibumiPanel {
                 panel.monitorService.textSizeStops.length - 1)
               step: 1
               integer: true
-              tickCount: panel.monitorService.textSizeStops.length
-              trackColor: panel.controlActiveFillColor
-              fillColor: panel.controlAccent
+              tickCount: panel.shellStyle === "shibumi"
+                ? panel.monitorService.textSizeStops.length : 0
+              trackColor: panel.shellStyle === "shibumi"
+                ? panel.controlActiveFillColor : "transparent"
+              fillColor: panel.shellStyle === "shibumi"
+                ? panel.controlAccent : "transparent"
               knobColor: panel.controlAccent
               tickColor: panel.renderedSurfaceColor
               value: panel.monitorService.textSizeIndex

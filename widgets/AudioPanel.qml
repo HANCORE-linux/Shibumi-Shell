@@ -85,6 +85,12 @@ ShibumiPanel {
     if (audioBackend) audioBackend.setOutputVolume(outputVolume + delta)
   }
 
+  function sliderKnobColor(muted, sliderEnabled) {
+    const stateOpacity = (muted ? 0.55 : 1)
+      * (sliderEnabled ? 1 : 0.5)
+    return Commons.Util.alpha(controlAccent, controlAccent.a * stateOpacity)
+  }
+
   onOpenChanged: {
     if (open) {
       refreshModels()
@@ -209,15 +215,20 @@ ShibumiPanel {
               renderType: Text.NativeRendering
             }
 
-            ShibumiSlider {
+            Ui.PanelSlider {
+              id: outputSlider
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.bottom: parent.bottom
-              height: Commons.Style.space(8)
               bar: panel.bar
               maximum: 1
               value: panel.outputVolume
-              muted: panel.outputMuted
+              trackColor: panel.controlActiveFillColor
+              fillColor: panel.outputMuted
+                ? Commons.Util.alpha(panel.controlAccent, 0.4)
+                : panel.controlAccent
+              knobColor: panel.sliderKnobColor(panel.outputMuted,
+                outputSlider.enabled)
               enabled: panel.audioBackend && panel.audioBackend.sink !== null
               onMoved: function(value) {
                 panel.audioBackend.setOutputVolume(value)
@@ -303,7 +314,8 @@ ShibumiPanel {
 
             Item {
               width: parent.width
-              height: inputState.implicitHeight + Commons.Style.space(20)
+              height: inputState.implicitHeight + Commons.Style.space(4)
+                + inputSlider.implicitHeight + Commons.Style.space(8)
 
               Row {
                 id: inputState
@@ -335,17 +347,21 @@ ShibumiPanel {
                 }
               }
 
-              ShibumiSlider {
+              Ui.PanelSlider {
                 id: inputSlider
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: inputState.bottom
                 anchors.topMargin: Commons.Style.space(4)
-                height: Commons.Style.space(8)
                 bar: panel.bar
                 maximum: 1
                 value: panel.inputVolume
-                muted: panel.inputMuted
+                trackColor: panel.controlActiveFillColor
+                fillColor: panel.inputMuted
+                  ? Commons.Util.alpha(panel.controlAccent, 0.4)
+                  : panel.controlAccent
+                knobColor: panel.sliderKnobColor(panel.inputMuted,
+                  inputSlider.enabled)
                 enabled: panel.audioBackend && panel.audioBackend.source !== null
                 onMoved: function(value) {
                   panel.audioBackend.setInputVolume(value)
@@ -592,15 +608,20 @@ ShibumiPanel {
       renderType: Text.NativeRendering
     }
 
-    ShibumiSlider {
+    Ui.PanelSlider {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: parent.bottom
-      height: Commons.Style.space(8)
       bar: panel.bar
       maximum: 1
       value: streamRow.audio ? Number(streamRow.audio.volume || 0) : 0
-      muted: streamRow.audio && streamRow.audio.muted
+      trackColor: panel.controlActiveFillColor
+      fillColor: streamRow.audio && streamRow.audio.muted
+        ? Commons.Util.alpha(panel.controlAccent, 0.4)
+        : panel.controlAccent
+      knobColor: streamRow.audio && streamRow.audio.muted
+        ? Commons.Util.alpha(panel.controlAccent, 0.55)
+        : panel.controlAccent
       onMoved: function(value) {
         panel.audioBackend.setStreamVolume(streamRow.node, value)
       }

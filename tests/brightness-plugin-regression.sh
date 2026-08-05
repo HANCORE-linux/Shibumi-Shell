@@ -74,12 +74,44 @@ rg -q '^  function refreshDisplayState\(\)' "$panel" \
   || fail "display panel does not expose its explicit refresh action"
 rg -q 'onClicked: panel\.refreshDisplayState\(\)' "$panel" \
   || fail "display refresh button bypasses the tested action path"
-[[ $(rg -c '^[[:space:]]+ShibumiSlider \{' "$panel") -eq 1 ]] \
-  || fail "brightness control does not use the Shibumi slider"
-[[ $(rg -c '^[[:space:]]+Ui\.PanelSlider \{' "$panel") -eq 1 ]] \
-  || fail "Text Size does not use Omarchy's exact PanelSlider"
-rg -Fq 'tickCount: panel.monitorService.textSizeStops.length' "$panel" \
-  || fail "Text Size does not expose Omarchy's curated slider notches"
+if rg -q '^[[:space:]]+ShibumiSlider \{' "$panel"; then
+  fail "V1 brightness still uses the thick legacy slider"
+fi
+[[ $(rg -c '^[[:space:]]+Ui\.PanelSlider \{' "$panel") -eq 2 ]] \
+  || fail "V1/V2 Brightness and Text Size do not use Omarchy's PanelSlider geometry"
+rg -Fq 'id: brightnessSlider' "$panel" \
+  || fail "V1/V2 brightness does not share one thin slider"
+brightness_slider_block=$(sed -n \
+  '/^[[:space:]]*id: brightnessSlider$/,/^[[:space:]]*HoverHandler {/p' \
+  "$panel")
+[[ -n $brightness_slider_block ]] \
+  || fail "brightness slider block could not be isolated"
+if rg -q 'v1BrightnessSlider|v2BrightnessSlider' "$panel"; then
+  fail "brightness slider remains unnecessarily split by shell variant"
+fi
+if rg -q 'v2BrightnessSegments' "$panel"; then
+  fail "V2 brightness must remain a continuous, unsegmented slider"
+fi
+grep -Fq 'anchors.leftMargin: Commons.Style.space(6)' \
+  <<<"$brightness_slider_block" \
+  || fail "brightness slider does not preserve the Text Size left inset"
+grep -Fq 'anchors.rightMargin: Commons.Style.space(6)' \
+  <<<"$brightness_slider_block" \
+  || fail "brightness slider does not preserve the Text Size right inset"
+rg -Fq 'id: v2TextSizeSegments' "$panel" \
+  || fail "V2 Text Size does not own an explicit segment layer"
+rg -Fq 'visible: panel.shellStyle !== "shibumi"' "$panel" \
+  || fail "V2 Text Size segments are not restricted to V2"
+rg -Fq 'model: Math.max(0,' "$panel" \
+  || fail "V2 Text Size segments do not follow the configured stop count"
+rg -Fq 'height: textSizeSlider.trackHeight' "$panel" \
+  || fail "V2 Text Size segments drifted from the V1 track height"
+rg -Fq 'color: panel.controlActiveFillColor' "$panel" \
+  || fail "V2 Text Size segment tracks do not use the themed active fill"
+rg -Fq 'width: parent.width * Math.max(0, Math.min(1,' "$panel" \
+  || fail "V2 Text Size segment fill does not follow the live slider value"
+rg -Fq 'tickCount: panel.shellStyle === "shibumi"' "$panel" \
+  || fail "V1 Text Size notches are not isolated from V2 segmentation"
 rg -Fq 'id: textSizeRow' "$panel" \
   || fail "Text Size does not expose Omarchy's slider row"
 rg -Fq 'height: textSizeSlider.implicitHeight' "$panel" \
@@ -91,8 +123,6 @@ rg -Fq 'outline: true' "$panel" \
 rg -Fq 'accent: panel.controlAccent' "$panel" \
   || fail "Text Size row cursor does not follow the Shibumi theme"
 for colorBinding in \
-  'trackColor: panel.controlActiveFillColor' \
-  'fillColor: panel.controlAccent' \
   'knobColor: panel.controlAccent' \
   'tickColor: panel.renderedSurfaceColor'; do
   rg -Fq "$colorBinding" "$panel" \
