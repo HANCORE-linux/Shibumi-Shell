@@ -578,6 +578,19 @@ done
 rg -Fq 'font.pixelSize: root.profile === "balanced" ? 13 : 14' \
   hancore.shibumi.power-profile/BarWidget.qml \
   || fail "power-profile icon sizing drifted from V1"
+for tinted_image_contract in \
+  'readonly property color opaqueTint: Qt.rgba(' \
+  'tint.r, tint.g, tint.b, 1)' \
+  'opacity: root.tint.a' \
+  'colorization: 1' \
+  'colorizationColor: root.opaqueTint'; do
+  rg -Fq "$tinted_image_contract" hancore.shibumi.ai/TintedImage.qml \
+    || fail "AI tint opacity contract drifted: $tinted_image_contract"
+done
+if rg -Fq 'colorizationColor: root.tint' \
+    hancore.shibumi.ai/TintedImage.qml; then
+  fail "AI tint alpha is used as colorization strength instead of opacity"
+fi
 for ai_contract in \
   'readonly property int providerIconSlotWidth: 20' \
   'readonly property int providerIconSlotHeight: 16' \
