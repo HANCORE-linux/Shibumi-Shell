@@ -12,6 +12,7 @@ ShellRoot {
   property int ticks: 0
   property var clickTargets: []
   property int barsRouteStep: 0
+  property int iconsNoScrollStep: 0
   property bool panelIdempotenceStarted: false
   property var stablePanelItem: null
   property int healthLifecycleStep: 0
@@ -269,10 +270,24 @@ ShellRoot {
           return root.fail("appearance page did not instantiate")
 
         const appearance = panel.settingsPageItem
+        const v1OverviewPanelHeight = panel.compactIconsPanelHeight
+        panel.v2LayoutActive = true
+        if (Math.abs(panel.compactIconsPanelHeight
+              - v1OverviewPanelHeight) > 0.5)
+          return root.fail("Icons overview height differed between V1 and V2")
+        panel.v2LayoutActive = false
         if (appearance.widgetDetailOpen
             || !appearance.openWidgetDetails("G1", "")
             || !appearance.widgetDetailOpen)
           return root.fail("Icons did not open Launcher details")
+        const v1SelectionPanelHeight = panel.compactIconsSelectionPanelHeight
+        panel.v2LayoutActive = true
+        if (!panel.compactIconsSelection
+            || Math.abs(panel.compactIconsSelectionPanelHeight
+              - v1SelectionPanelHeight) > 0.5)
+          return root.fail(
+            "Icons selection height differed between V1 and V2")
+        panel.v2LayoutActive = false
         appearance.controller.setGroupSetting("G1", "displayMode", "text")
         if (!widget.iconMode)
           return root.fail("V1 generic presentation overrode launcher icon")
@@ -298,6 +313,13 @@ ShellRoot {
         if (!appearance.openWidgetDetails("G4", "")
             || !appearance.widgetDetailOpen)
           return root.fail("Icons overview did not drill into one widget")
+        const v1RequiredSelectionHeight = appearance.implicitHeight
+          + panel.configureDetailPanelChromeHeight
+        if (panel.compactIconsSelectionPanelHeight + 0.5
+            < v1RequiredSelectionHeight)
+          return root.fail("V1 Icons selection requires scrolling"
+            + " actual=" + panel.compactIconsSelectionPanelHeight
+            + " required=" + v1RequiredSelectionHeight)
         const modeBeforeCycle = appearance.selectedWidgetMode
         const expectedModeAfterCycle = modeBeforeCycle === "full"
           ? "icon" : "full"
@@ -363,6 +385,13 @@ ShellRoot {
         appearance.controller.setGroupSetting("G4", "widgetBorderWidth", 1.5)
         appearance.controller.setGroupSetting(
           "G4", "widgetBorderColor", "color03")
+        const v2RequiredSelectionHeight = appearance.implicitHeight
+          + panel.configureDetailPanelChromeHeight
+        if (panel.compactIconsSelectionPanelHeight + 0.5
+            < v2RequiredSelectionHeight)
+          return root.fail("V2 Icons selection requires scrolling"
+            + " actual=" + panel.compactIconsSelectionPanelHeight
+            + " required=" + v2RequiredSelectionHeight)
 
         if (stateService.groupAppearanceSettingForVariant(
               "G4", "v2", "displayMode", "") !== "text"
@@ -703,6 +732,16 @@ ShellRoot {
               || panel.settingsPageItem.attentionChecks.length !== 1)
             return root.fail("Health page did not instantiate")
           const health = panel.settingsPageItem
+          const v1HealthPanelHeight = panel.compactHealthPanelHeight
+          panel.v2LayoutActive = true
+          if (!panel.compactHealthPage
+              || Math.abs(panel.compactHealthPanelHeight
+                - health.implicitHeight
+                - panel.configureDetailPanelChromeHeight) > 0.5
+              || Math.abs(panel.compactHealthPanelHeight
+                - v1HealthPanelHeight) > 0.5)
+            return root.fail("Health did not fit its content height")
+          panel.v2LayoutActive = false
           const error = health.attentionChecks[0]
           const issueUrl = health.diagnosticIssueUrl(error)
           if (health.diagnosticCode(error)
@@ -791,8 +830,8 @@ ShellRoot {
             || Number(panel.healthReport.generatedEpoch || 0)
               <= root.lifecycleReportEpoch)
           return root.fail("reopened Health did not expose the completed report")
-        if (!panel.showSettingsPage("main"))
-          return root.fail("Health page did not return to overview")
+        if (!panel.showSettingsPage("workspaces"))
+          return root.fail("Health page did not continue to Workspaces")
         root.phase++
         root.ticks = 0
         return
@@ -801,6 +840,28 @@ ShellRoot {
       if (root.phase === 7) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
+        if (panel && panel.settingsPage === "workspaces") {
+          const workspaces = panel.settingsPageItem
+          if (!panel.settingsPageReady || !workspaces
+              || !panel.compactWorkspacesPage
+              || Math.abs(panel.compactWorkspacesPanelHeight
+                - workspaces.implicitHeight
+                - panel.configureDetailPanelChromeHeight) > 0.5)
+            return root.fail("Workspaces did not fit its content height")
+          const v1WorkspacesPageHeight = workspaces.implicitHeight
+          const v1WorkspacesPanelHeight = panel.compactWorkspacesPanelHeight
+          panel.v2LayoutActive = true
+          if (Math.abs(workspaces.implicitHeight - v1WorkspacesPageHeight) > 0.5
+              || Math.abs(panel.compactWorkspacesPanelHeight
+                - v1WorkspacesPanelHeight) > 0.5)
+            return root.fail(
+              "Workspaces height differed between V1 and V2")
+          panel.v2LayoutActive = false
+          if (!panel.showSettingsPage("main"))
+            return root.fail("Workspaces page did not return to overview")
+          root.ticks = 0
+          return
+        }
         if (!panel || !panel.settingsPageReady || panel.settingsPage !== "main"
             || !widget.iconMode || widget.launcherConfig.icon !== "hyprland")
           return root.fail("overview page or G1 presentation did not restore")
@@ -880,13 +941,57 @@ ShellRoot {
             || panel.lastQuickSystemAction !== "shutdown"
             || quick.pendingAction !== "")
           return root.fail("destructive Quick action confirmation did not execute")
-        panel.activeShell = "omarchy"
+        if (!panel.showSettingsPage("functions"))
+          return root.fail("Quick page did not continue to Icons height check")
         root.phase++
         root.ticks = 0
         return
       }
 
       if (root.phase === 9) {
+        if (!widget || root.ticks < 2) return
+        const panel = widget.panelItem
+        const appearance = panel ? panel.settingsPageItem : null
+        if (!panel || panel.settingsPage !== "functions" || !appearance
+            || !appearance.ready)
+          return root.fail("Icons no-scroll check did not instantiate")
+        if (root.iconsNoScrollStep === 0) {
+          panel.v2LayoutActive = false
+          if (!appearance.openWidgetDetails("G4", ""))
+            return root.fail("V1 Icons no-scroll detail did not open")
+          root.iconsNoScrollStep = 1
+          root.ticks = 0
+          return
+        }
+        if (root.iconsNoScrollStep === 1) {
+          const requiredV1 = appearance.implicitHeight
+            + panel.configureDetailPanelChromeHeight
+          if (panel.compactIconsSelectionPanelHeight + 0.5 < requiredV1)
+            return root.fail("V1 Icons selection requires scrolling"
+              + " actual=" + panel.compactIconsSelectionPanelHeight
+              + " required=" + requiredV1)
+          panel.v2LayoutActive = true
+          appearance.controller.setGroupSetting("G4", "colorMode", "both")
+          appearance.controller.setGroupSetting("G4", "widgetBorder", true)
+          root.iconsNoScrollStep = 2
+          root.ticks = 0
+          return
+        }
+        const requiredV2 = appearance.implicitHeight
+          + panel.configureDetailPanelChromeHeight
+        if (panel.compactIconsSelectionPanelHeight + 0.5 < requiredV2)
+          return root.fail("V2 Icons selection requires scrolling"
+            + " actual=" + panel.compactIconsSelectionPanelHeight
+            + " required=" + requiredV2)
+        appearance.controller.resetGroupAppearance("G4")
+        panel.v2LayoutActive = false
+        panel.activeShell = "omarchy"
+        root.phase++
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 10) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         const quick = panel ? panel.settingsPageItem : null
@@ -910,7 +1015,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 10) {
+      if (root.phase === 11) {
         if (!widget || root.ticks < 3) return
         if (widget.opened || widget.panelLoaded || fakeBar.activePopout !== null)
           return root.fail("panel did not release on close")
@@ -920,7 +1025,7 @@ ShellRoot {
         return
       }
 
-      if (root.phase === 11) {
+      if (root.phase === 12) {
         if (!widget || root.ticks < 2) return
         if (!widget.stockOmarchyHost || !widget.iconMode
             || widget.nativePillSurfaceVisible)

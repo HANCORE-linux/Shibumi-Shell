@@ -214,6 +214,20 @@ Item {
   readonly property bool settingsPageReady: settings.pageReady
   readonly property string settingsPage: settings.restorePage
   readonly property var settingsPageItem: settings.pageItem
+  readonly property real configureDetailPanelChromeHeight:
+    settings.configureDetailPanelChromeHeight
+  readonly property real compactIconsPanelHeight:
+    settings.compactIconsPanelHeight
+  readonly property bool compactIconsSelection:
+    settings.compactIconsSelection
+  readonly property real compactIconsSelectionPanelHeight:
+    settings.compactIconsSelectionPanelHeight
+  readonly property bool compactHealthPage: settings.compactHealthPage
+  readonly property real compactHealthPanelHeight:
+    settings.compactHealthPanelHeight
+  readonly property bool compactWorkspacesPage: settings.compactWorkspacesPage
+  readonly property real compactWorkspacesPanelHeight:
+    settings.compactWorkspacesPanelHeight
   readonly property int headerHealthErrorCount: settings.healthErrorCount
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property bool pluginInstallerOpen: settings.paletteOpen

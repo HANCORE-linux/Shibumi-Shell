@@ -1719,6 +1719,26 @@ for icons_height_contract in \
   rg -Fq "$label" "$control_dir/$file" \
     || fail "Icons compact panel-height contract drifted: $label"
 done
+for fitted_detail_height_contract in \
+    'ControlSettings.qml:readonly property real configureDetailPanelChromeHeight:' \
+    'ControlSettings.qml:readonly property bool compactIconsSelection:' \
+    'ControlSettings.qml:readonly property real compactIconsSelectionPanelHeight:' \
+    'ControlSettings.qml:pageLoader.item.widgetDetailOpen === true' \
+    'ControlCenterPanel.qml:: settings.compactIconsSelection' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactIconsSelectionPanelHeight,' \
+    'ControlSettings.qml:readonly property bool compactHealthPage:' \
+    'ControlSettings.qml:readonly property real compactHealthPanelHeight:' \
+    'ControlSettings.qml:configureDetailPage === "health"' \
+    'ControlCenterPanel.qml:: settings.compactHealthPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactHealthPanelHeight,'; do
+  file=${fitted_detail_height_contract%%:*}
+  label=${fitted_detail_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "fitted detail panel-height contract drifted: $label"
+done
+rg -Uq 'readonly property real compactIconsSelectionPanelHeight:\n(?:.*\n){0,2}    Commons\.Style\.space\(550\)' \
+  "$control_dir/ControlSettings.qml" \
+  || fail "Icons selection no-scroll panel height drifted"
 for pickers_height_contract in \
     'ControlSettings.qml:readonly property bool compactPickersPage:' \
     'ControlSettings.qml:configureDetailPage === "pickers"' \

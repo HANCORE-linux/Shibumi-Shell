@@ -129,6 +129,12 @@ Item {
     && settingsQuery.trim() === ""
   readonly property real compactConfigureLandingPanelHeight:
     Commons.Style.space(550)
+  // Header, divider, search/mode bands, Flickable tail and the same 18 px
+  // breathing room used by the fitted Icons overview.
+  readonly property real configureDetailPanelChromeHeight:
+    Commons.Style.space(28) + Commons.Style.spacing.sm * 2
+    + Commons.Style.space(1) + Commons.Style.space(42) * 2
+    + Commons.Style.space(12) + Commons.Style.space(18)
   readonly property bool compactIconsOverview:
     currentPage === "configure"
     && configureDetailPage === "functions"
@@ -140,6 +146,24 @@ Item {
     + Math.max(0, Number(pageLoader.item
       ? pageLoader.item.widgetOverviewRowCount : 5) - 5)
       * Commons.Style.space(41)
+  readonly property bool compactIconsSelection:
+    currentPage === "configure"
+    && configureDetailPage === "functions"
+    && settingsQuery.trim() === ""
+    && pageLoader.item !== null
+    && pageLoader.item.widgetDetailOpen === true
+  readonly property real compactIconsSelectionPanelHeight:
+    // One no-scroll height for V1/V2, including V2 Fill + Outline + Geometry.
+    Commons.Style.space(550)
+  readonly property bool compactHealthPage:
+    currentPage === "configure"
+    && configureDetailPage === "health"
+    && settingsQuery.trim() === ""
+    && pageLoader.item !== null
+  readonly property real compactHealthPanelHeight:
+    configureDetailPanelChromeHeight
+    + Math.max(1, Number(pageLoader.item
+      ? pageLoader.item.implicitHeight : 1))
   readonly property bool compactPickersPage:
     currentPage === "configure"
     && configureDetailPage === "pickers"
@@ -150,8 +174,11 @@ Item {
     currentPage === "configure"
     && configureDetailPage === "workspaces"
     && settingsQuery.trim() === ""
+    && pageLoader.item !== null
   readonly property real compactWorkspacesPanelHeight:
-    Commons.Style.space(470)
+    configureDetailPanelChromeHeight
+    + Math.max(1, Number(pageLoader.item
+      ? pageLoader.item.implicitHeight : 1))
   readonly property bool compactLogoPage:
     currentPage === "configure"
     && configureDetailPage === "logo"

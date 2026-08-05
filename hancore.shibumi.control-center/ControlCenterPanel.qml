@@ -236,6 +236,12 @@ ShibumiPanel {
     : settings.compactIconsOverview
       ? fittedContentHeight(settings.compactIconsPanelHeight,
           Commons.Style.space(680))
+    : settings.compactIconsSelection
+      ? fittedContentHeight(settings.compactIconsSelectionPanelHeight,
+          Commons.Style.space(680))
+    : settings.compactHealthPage
+      ? fittedContentHeight(settings.compactHealthPanelHeight,
+          Commons.Style.space(680))
     : settings.compactPickersPage
       ? fittedContentHeight(settings.compactPickersPanelHeight,
           Commons.Style.space(680))
