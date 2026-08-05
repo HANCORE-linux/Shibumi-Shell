@@ -119,6 +119,10 @@ Item {
     weatherProc.running = true
   }
 
+  function reloadLocation() {
+    locationFile.reload()
+  }
+
   function parseReport(raw) {
     const text = String(raw || "").trim()
     if (!text) {

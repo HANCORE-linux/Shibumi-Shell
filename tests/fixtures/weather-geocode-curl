@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+url=${!#}
+[[ $url == https://geocoding-api.open-meteo.com/* ]] || exit 2
+[[ $url == *language=de* ]] || exit 3
+
+printf '%s\n' '{"results":[{"name":"Berlin","admin1":"Berlin","country":"Deutschland","feature_code":"PPLC","country_code":"DE","latitude":52.52,"longitude":13.405},{"name":"Bernau bei Berlin","admin1":"Brandenburg","country":"Deutschland","feature_code":"PPL","country_code":"DE","latitude":52.6798,"longitude":13.5871}]}'

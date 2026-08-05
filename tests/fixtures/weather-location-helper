@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+[[ -n ${WEATHER_LOCATION_LOG:-} ]] || exit 2
+{
+  printf '%s' "${1:-}"
+  shift || true
+  for argument in "$@"; do
+    printf '|%s' "$argument"
+  done
+  printf '\n'
+} >>"$WEATHER_LOCATION_LOG"

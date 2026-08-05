@@ -67,8 +67,50 @@ printf '%s\n' "$weather_output"
 grep -F 'weather service start smoke passed' <<<"$weather_output" >/dev/null \
   || fail "weather service did not load before interaction"
 
+mkdir -p "$tmpdir/location-runtime"
+chmod 700 "$tmpdir/location-runtime"
+install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+  "$tmpdir/center/ShibumiPanel.qml"
+install -m 0755 "$repo_root/tests/fixtures/weather-geocode-curl" \
+  "$tmpdir/bin/curl"
+install -m 0755 "$repo_root/tests/fixtures/weather-location-helper" \
+  "$tmpdir/bin/omarchy-weather-location"
+install -m 0644 "$repo_root/tests/weather-panel-location-smoke.qml" \
+  "$tmpdir/shell.qml"
+
+set +e
+location_output=$(timeout 8 env \
+  HOME="$tmpdir/weather-home" \
+  PATH="$tmpdir/bin:$PATH" \
+  WEATHER_LOCATION_LOG="$tmpdir/location.log" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/location-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+location_rc=$?
+set -e
+
+printf '%s\n' "$location_output"
+[[ $location_rc -eq 0 ]] || fail "weather location smoke exited $location_rc"
+grep -F 'weather panel location smoke passed' <<<"$location_output" >/dev/null \
+  || fail "weather location success marker missing"
+if grep -Eq 'weather-panel-location-smoke:|TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$location_output"; then
+  fail "weather location QML runtime error detected"
+fi
+[[ -f $tmpdir/location.log ]] || fail "weather location helper was not called"
+grep -Fx -- '--set|Berlin|52.52,13.405' "$tmpdir/location.log" >/dev/null \
+  || fail "manual weather coordinates were not persisted"
+grep -Fx -- '--clear' "$tmpdir/location.log" >/dev/null \
+  || fail "automatic weather location was not restored"
+[[ $(wc -l <"$tmpdir/location.log") -eq 2 ]] \
+  || fail "unexpected weather location helper calls"
+
 center_widget="$repo_root/hancore.shibumi.center/BarWidget.qml"
 center_service="$repo_root/hancore.shibumi.center/Service.qml"
+weather_panel="$repo_root/hancore.shibumi.center/WeatherPanel.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.center"\)' "$center_widget" \
   || fail "center view does not resolve its shared service"
 rg -q 'serviceFor\("hancore\.shibumi\.status"\)' "$center_widget" \
@@ -98,6 +140,22 @@ rg -q 'forecastDays' "$repo_root/hancore.shibumi.center/WeatherService.qml" \
 rg -q '\.local/state/omarchy/settings/weather\.json' \
   "$repo_root/hancore.shibumi.center/WeatherService.qml" \
   || fail "weather service ignores the Quattro location contract"
+for location_contract in \
+  'WeatherLocationModel.parseGeocodingResults' \
+  'geocoding-api.open-meteo.com/v1/search' \
+  '["omarchy-weather-location", "--set"' \
+  '["omarchy-weather-location", "--clear"]' \
+  'blocked: panel.editingLocation' \
+  'enabled: panel.locationCanCommit' \
+  'locationError = "No matching location"' \
+  'readonly property string geocodeLanguage: "de"' \
+  'id: locationHoverSurface' \
+  'width: parent.width + 8' \
+  'background: Rectangle {' \
+  'radius: panel.controlRadius'; do
+  rg -Fq "$location_contract" "$weather_panel" \
+    || fail "weather location contract missing: $location_contract"
+done
 rg -q 'registered(Source|Component)\("omarchy\.system-update"\)' "$center_widget" \
   || fail "center does not retain the official update action owner"
 if rg -U -q 'onLoaded: \{[^}]*root\.scheduleOfficialSync' "$center_widget"; then
