@@ -7,6 +7,7 @@ import json
 import io
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -306,6 +307,35 @@ class RuntimeProcessTests(unittest.TestCase):
             QUICKSHELL_EMPTY_REGISTRY
         ))
         self.assertEqual(self.runtime.quickshell_instances(), [])
+
+    def test_empty_registry_sentinel_with_nonzero_exit_fails_closed(self) -> None:
+        command = ["quickshell", "list", "--all", "--json"]
+        completed = subprocess.CompletedProcess(
+            command,
+            23,
+            stdout=QUICKSHELL_EMPTY_REGISTRY,
+            stderr="registry unavailable",
+        )
+        globals_map = OmarchyRuntime.run.__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", return_value=completed
+        ):
+            with self.assertRaisesRegex(RuntimeFailure, r"failed \(23\)"):
+                self.runtime.quickshell_instances()
+
+    def test_empty_registry_sentinel_timeout_fails_closed(self) -> None:
+        command = ["quickshell", "list", "--all", "--json"]
+        timeout = subprocess.TimeoutExpired(
+            command,
+            0.01,
+            output=QUICKSHELL_EMPTY_REGISTRY,
+        )
+        globals_map = OmarchyRuntime.run.__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", side_effect=timeout
+        ):
+            with self.assertRaisesRegex(RuntimeFailure, "cannot run quickshell list"):
+                self.runtime.quickshell_instances(timeout=0.01)
 
     def test_quickshell_registry_json_arrays_remain_supported(self) -> None:
         instance = {"config_path": "/tmp/shell.qml", "pid": 4242}

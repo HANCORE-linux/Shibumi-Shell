@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import json
 import runpy
+import subprocess
 import tempfile
 import time
 import unittest
@@ -530,6 +531,39 @@ class ContinuityManagerTests(unittest.TestCase):
         ):
             instances = self.module["matching_shell_instances"](runtime_paths)
         self.assertEqual(instances, [])
+
+    def test_empty_registry_sentinel_with_nonzero_exit_fails_closed(self) -> None:
+        runtime_paths = {"omarchy_root": self.root / "omarchy"}
+        completed = Mock(
+            returncode=23,
+            stdout=QUICKSHELL_EMPTY_REGISTRY,
+            stderr="registry unavailable",
+        )
+        globals_map = self.module["matching_shell_instances"].__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", return_value=completed
+        ):
+            with self.assertRaisesRegex(
+                self.module["ManagerError"], "registry unavailable"
+            ):
+                self.module["matching_shell_instances"](runtime_paths)
+
+    def test_empty_registry_sentinel_timeout_fails_closed(self) -> None:
+        runtime_paths = {"omarchy_root": self.root / "omarchy"}
+        command = ["quickshell", "list", "--all", "--json"]
+        timeout = subprocess.TimeoutExpired(
+            command,
+            0.01,
+            output=QUICKSHELL_EMPTY_REGISTRY,
+        )
+        globals_map = self.module["matching_shell_instances"].__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", side_effect=timeout
+        ):
+            with self.assertRaisesRegex(
+                self.module["ManagerError"], "cannot inspect Quickshell registry"
+            ):
+                self.module["matching_shell_instances"](runtime_paths, timeout=0.01)
 
     def test_quickshell_registry_json_arrays_remain_supported(self) -> None:
         omarchy_root = self.root / "omarchy"

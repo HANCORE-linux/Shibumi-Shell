@@ -270,19 +270,30 @@ class HealthDiagnosticsTests(unittest.TestCase):
     def by_id(self, payload: dict[str, object]) -> dict[str, dict[str, object]]:
         return {item["id"]: item for item in payload["checks"]}
 
-    def process_probe_from_stdout(self, stdout: str):
+    def process_probe_from_result(
+        self,
+        *,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+        side_effect: BaseException | None = None,
+    ):
         environment = dict(self.environment)
         environment.pop("SHIBUMI_HEALTH_PROCESS_FILE", None)
         environment.pop("SHIBUMI_HEALTH_PROCESS_LIVE", None)
-        completed = Mock(returncode=0, stdout=stdout, stderr="")
+        completed = Mock(returncode=returncode, stdout=stdout, stderr=stderr)
+        runner = Mock(return_value=completed, side_effect=side_effect)
         probe_class = self.module["Probe"]
         globals_map = probe_class.load_processes.__globals__
         with patch.dict(os.environ, environment, clear=True):
             probe = probe_class(fetch=False)
-            with patch.dict(globals_map, {"run": Mock(return_value=completed)}):
+            with patch.dict(globals_map, {"run": runner}):
                 probe.load_processes()
         probe.check_processes()
         return probe
+
+    def process_probe_from_stdout(self, stdout: str):
+        return self.process_probe_from_result(stdout=stdout)
 
     def test_healthy_runtime_is_structured_and_read_only(self) -> None:
         payload = self.run_health()
@@ -549,6 +560,33 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(probe.production_pids, [])
         self.assertEqual(len(checks), 1)
         self.assertEqual(checks[0].value, "0 production processes")
+
+    def test_empty_registry_sentinel_with_nonzero_exit_fails_closed(self) -> None:
+        probe = self.process_probe_from_result(
+            stdout=QUICKSHELL_EMPTY_REGISTRY,
+            stderr="registry unavailable",
+            returncode=23,
+        )
+        checks = [check for check in probe.checks if check.id == "quickshell-process"]
+        self.assertTrue(probe.process_probe_failed)
+        self.assertEqual(probe.processes, [])
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0].value, "Check failed")
+        self.assertIn("registry unavailable", checks[0].detail)
+
+    def test_empty_registry_sentinel_timeout_fails_closed(self) -> None:
+        timeout = subprocess.TimeoutExpired(
+            ["qs", "list", "--all", "--json"],
+            0.01,
+            output=QUICKSHELL_EMPTY_REGISTRY,
+        )
+        probe = self.process_probe_from_result(side_effect=timeout)
+        checks = [check for check in probe.checks if check.id == "quickshell-process"]
+        self.assertTrue(probe.process_probe_failed)
+        self.assertEqual(probe.processes, [])
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0].value, "Check failed")
+        self.assertIn("timed out", checks[0].detail)
 
     def test_quickshell_registry_json_arrays_remain_supported(self) -> None:
         probe = self.process_probe_from_stdout("[]")
