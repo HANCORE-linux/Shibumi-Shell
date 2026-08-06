@@ -1,0 +1,188 @@
+{
+  "disposition": "open-root-cause-unconfirmed; negative bounded evidence is not closure",
+  "durationSeconds": 6.551,
+  "finishedAt": "2026-08-06T18:47:05.973274+00:00",
+  "harnessSha256": {
+    "README.md": "227951dcf207438a699a683755ae84c85a4b4077db8ae93e71051977a69a5e9e",
+    "SectionHost.qml": "dded0b99512ed333f851de36377c3042bf846972a8681e52af79bf9d09f01fba",
+    "async-shell.qml": "bd9f4011d1244e102c6c93d8112c743eab6c8038e8ea8131a966eb1444f20e87",
+    "direct-shell.qml": "c606ea983e10c7899ea8f706a512a8d1225a3f5b5b9fb25abca7fc2bbb046e7c",
+    "reproduce.py": "b0d68d7fdddc69396ab3f11aeb605a7b87722ab8711b39e1243c3def24800523"
+  },
+  "host": {
+    "commonsTreeSha256": "f77ee1235b4c4d63a145d5a17a4ed979a2f0a328e2fc3097ea7901d8d40002a0",
+    "omarchyPath": "/usr/share/omarchy",
+    "platform": "QT_QPA_PLATFORM=offscreen",
+    "productionWaylandInherited": false,
+    "quickshell": "/usr/bin/quickshell",
+    "quickshellVersion": "Quickshell 0.3.0 (revision 10b439fc6e3fd65c15fe1c486271b31da05ed023, distributed by AUR (package: quickshell-git))"
+  },
+  "incident": "INC-012",
+  "logBounds": {
+    "columnsPerLine": 600,
+    "linesPerRun": 120,
+    "signatureLinesPerRun": 20
+  },
+  "repositoryHead": "0e2ffaad1476c6f3304ff0368c71abcaa63a27f1",
+  "revisions": [
+    {
+      "commit": "c8d0b263c01aff3112f5204cc3bbe3097926e429",
+      "groupSectionSha256": "e709a66de9091c242afbec1096898fc4a7ffef9d8cb33356df859220cf617442",
+      "label": "beta3",
+      "ref": "v0.1.1-beta.3",
+      "sourceTreeSha256": "cd0525e0fb67d86384308e7b9aba3b01ec02191f2b9fe6ec1a05992cea0523d5"
+    },
+    {
+      "commit": "91dd5ff98ea339826c2164204f42b95b08e787d5",
+      "groupSectionSha256": "e4d98d7d098d5f5c8da70402c63a9f04dae59bee7c5ce25b2e32aadf693c6092",
+      "label": "current",
+      "ref": "91dd5ff98ea339826c2164204f42b95b08e787d5",
+      "sourceTreeSha256": "b8a7c638fce502652d7540fbb7fceaf599e17a1209d8a120733423f38e854c2c"
+    }
+  ],
+  "runs": [
+    {
+      "boundedLog": {
+        "columnLimit": 600,
+        "lineLimit": 120,
+        "lines": [
+          "  INFO: Configuration Loaded",
+          " DEBUG qml: INC012_EVENT direct-initial targets=8",
+          " DEBUG qml: INC012_EVENT session-replaced targets=8",
+          " DEBUG qml: INC012_EVENT session-restored targets=8",
+          " DEBUG qml: INC012_EVENT model-removed targets=0",
+          " DEBUG qml: INC012_EVENT model-restored targets=8",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=false editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=false editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=true editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=true editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT direct-complete cycles=80",
+          " DEBUG qml: INC012_COMPLETE direct"
+        ],
+        "truncated": false
+      },
+      "command": [
+        "/usr/bin/quickshell",
+        "-p",
+        "<private-fixture-shell>",
+        "--no-color"
+      ],
+      "commit": "c8d0b263c01aff3112f5204cc3bbe3097926e429",
+      "completionMarker": "INC012_COMPLETE direct",
+      "completionObserved": true,
+      "exitCode": 0,
+      "historicalSignatureLines": [],
+      "historicalSignatureObserved": false,
+      "mode": "direct",
+      "outcome": "not-reproduced-in-harness",
+      "revision": "beta3",
+      "timedOut": false,
+      "timeoutSeconds": 40
+    },
+    {
+      "boundedLog": {
+        "columnLimit": 600,
+        "lineLimit": 120,
+        "lines": [
+          "  INFO: Configuration Loaded",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=false editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=false editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=true editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=true editing=true cycles=20",
+          " DEBUG qml: INC012_COMPLETE async cycles=80"
+        ],
+        "truncated": false
+      },
+      "command": [
+        "/usr/bin/quickshell",
+        "-p",
+        "<private-fixture-shell>",
+        "--no-color"
+      ],
+      "commit": "c8d0b263c01aff3112f5204cc3bbe3097926e429",
+      "completionMarker": "INC012_COMPLETE async",
+      "completionObserved": true,
+      "exitCode": 0,
+      "historicalSignatureLines": [],
+      "historicalSignatureObserved": false,
+      "mode": "async",
+      "outcome": "not-reproduced-in-harness",
+      "revision": "beta3",
+      "timedOut": false,
+      "timeoutSeconds": 40
+    },
+    {
+      "boundedLog": {
+        "columnLimit": 600,
+        "lineLimit": 120,
+        "lines": [
+          "  INFO: Configuration Loaded",
+          " DEBUG qml: INC012_EVENT direct-initial targets=8",
+          " DEBUG qml: INC012_EVENT session-replaced targets=8",
+          " DEBUG qml: INC012_EVENT session-restored targets=8",
+          " DEBUG qml: INC012_EVENT model-removed targets=0",
+          " DEBUG qml: INC012_EVENT model-restored targets=8",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=false editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=false editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=true editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT direct-cycle-mode v2=true editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT direct-complete cycles=80",
+          " DEBUG qml: INC012_COMPLETE direct"
+        ],
+        "truncated": false
+      },
+      "command": [
+        "/usr/bin/quickshell",
+        "-p",
+        "<private-fixture-shell>",
+        "--no-color"
+      ],
+      "commit": "91dd5ff98ea339826c2164204f42b95b08e787d5",
+      "completionMarker": "INC012_COMPLETE direct",
+      "completionObserved": true,
+      "exitCode": 0,
+      "historicalSignatureLines": [],
+      "historicalSignatureObserved": false,
+      "mode": "direct",
+      "outcome": "not-reproduced-in-harness",
+      "revision": "current",
+      "timedOut": false,
+      "timeoutSeconds": 40
+    },
+    {
+      "boundedLog": {
+        "columnLimit": 600,
+        "lineLimit": 120,
+        "lines": [
+          "  INFO: Configuration Loaded",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=false editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=false editing=true cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=true editing=false cycles=20",
+          " DEBUG qml: INC012_EVENT async-cycle-mode v2=true editing=true cycles=20",
+          " DEBUG qml: INC012_COMPLETE async cycles=80"
+        ],
+        "truncated": false
+      },
+      "command": [
+        "/usr/bin/quickshell",
+        "-p",
+        "<private-fixture-shell>",
+        "--no-color"
+      ],
+      "commit": "91dd5ff98ea339826c2164204f42b95b08e787d5",
+      "completionMarker": "INC012_COMPLETE async",
+      "completionObserved": true,
+      "exitCode": 0,
+      "historicalSignatureLines": [],
+      "historicalSignatureObserved": false,
+      "mode": "async",
+      "outcome": "not-reproduced-in-harness",
+      "revision": "current",
+      "timedOut": false,
+      "timeoutSeconds": 40
+    }
+  ],
+  "schemaVersion": 1,
+  "scope": "reproduction evidence only; no fix or closure",
+  "startedAt": "2026-08-06T18:46:59.421891+00:00"
+}
