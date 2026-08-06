@@ -10,6 +10,8 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
+  property bool raceOwnedImmediately: false
+  property bool guardAdapterDestroyed: false
 
   function fail(message) {
     console.error("bluetooth-backend-regression:", message)
@@ -80,6 +82,105 @@ ShellRoot {
     property int count: 0
     property var lastSink: null
     function setDefaultSink(sink) { count++; lastSink = sink }
+  }
+
+  QtObject {
+    id: destructionAdapter
+    property bool enabled: true
+    property bool discovering: false
+    property int rejectedStops: 0
+    property int stopAttempts: 0
+    property bool startReplacementOnNextDiscovery: false
+    onDiscoveringChanged: {
+      if (discovering) {
+        if (startReplacementOnNextDiscovery) {
+          startReplacementOnNextDiscovery = false
+          const replacement = destructibleBackendLoader.item
+          if (!replacement)
+            return root.fail("old discovery completed before replacement loaded")
+          replacement.discoveryDesired = true
+          if (!replacement.startDiscovery())
+            return root.fail("replacement rejected inherited discovery")
+          root.raceOwnedImmediately = replacement.discoveryOwned
+        }
+        return
+      }
+      stopAttempts++
+      if (rejectedStops > 0) {
+        rejectedStops--
+        Qt.callLater(function() { destructionAdapter.discovering = true })
+      }
+    }
+  }
+
+  QtObject {
+    id: destructionFixture
+    property var adapter: destructionAdapter
+    property var connectedDevices: []
+    property var knownDevices: []
+    property var discoveredDevices: []
+    property var pendingActions: ({})
+    property int delayedTick: 0
+    property var delayedRequests: []
+    property int delayedStartCount: 0
+    function requestDiscovery(target) {
+      delayedRequests = delayedRequests.concat([{
+        "target": target,
+        "dueTick": delayedTick + 6
+      }])
+      delayedDiscoveryStart.start()
+    }
+  }
+
+  Timer {
+    id: delayedDiscoveryStart
+    interval: 20
+    repeat: true
+    onTriggered: {
+      destructionFixture.delayedTick++
+      const remaining = []
+      const requests = destructionFixture.delayedRequests
+      for (let index = 0; index < requests.length; index++) {
+        const request = requests[index]
+        if (request.dueTick <= destructionFixture.delayedTick) {
+          destructionFixture.delayedStartCount++
+          if (request.target) request.target.discovering = true
+        } else {
+          remaining.push(request)
+        }
+      }
+      destructionFixture.delayedRequests = remaining
+      if (remaining.length === 0) stop()
+    }
+  }
+
+  Component {
+    id: destructibleBackendComponent
+    Bluetooth.BluetoothBackendAdapter {
+      backendOverride: destructionFixture
+      discoveryDesired: false
+      discoveryRequestTimeoutInterval: 200
+    }
+  }
+
+  Loader {
+    id: destructibleBackendLoader
+    active: false
+    sourceComponent: destructibleBackendComponent
+  }
+
+  Component {
+    id: destructibleGuardAdapterComponent
+    QtObject {
+      property bool discovering: false
+      Component.onDestruction: root.guardAdapterDestroyed = true
+    }
+  }
+
+  Loader {
+    id: destructibleGuardAdapterLoader
+    active: false
+    sourceComponent: destructibleGuardAdapterComponent
   }
 
   Bluetooth.BluetoothBackendAdapter {
@@ -177,11 +278,145 @@ ShellRoot {
         discoveryFixture.alternateAdapter.discovering = true
         root.phase++
         root.ticks = 0
-      } else {
+      } else if (root.phase === 5) {
         if (root.ticks < 2) return
         if (!discoveryService.discovering)
           return root.fail("expired discovery request claimed an external scan")
         discoveryFixture.alternateAdapter.discovering = false
+
+        destructionAdapter.rejectedStops = 2
+        destructionAdapter.stopAttempts = 0
+        destructibleBackendLoader.active = true
+        if (!destructibleBackendLoader.item)
+          return root.fail("could not instantiate destructible backend")
+        destructibleBackendLoader.item.discoveryDesired = true
+        if (!destructibleBackendLoader.item.startDiscovery())
+          return root.fail("could not start destructible discovery request")
+        destructibleBackendLoader.active = false
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 6) {
+        if (root.ticks < 12) return
+        if (destructionFixture.delayedStartCount !== 1)
+          return root.fail("delayed discovery start did not complete")
+        if (destructionAdapter.discovering)
+          return root.fail("destroyed backend left delayed discovery running")
+        if (destructionAdapter.stopAttempts !== 3)
+          return root.fail("teardown guard did not retry rejected stops: "
+                           + destructionAdapter.stopAttempts)
+
+        // Arm a second teardown guard, then replace the backend before that
+        // delayed start settles. The replacement must disarm the old guard.
+        destructibleBackendLoader.active = true
+        if (!destructibleBackendLoader.item)
+          return root.fail("could not instantiate second destructible backend")
+        destructibleBackendLoader.item.discoveryDesired = true
+        if (!destructibleBackendLoader.item.startDiscovery())
+          return root.fail("could not start second destructible request")
+        destructibleBackendLoader.active = false
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 7) {
+        if (root.ticks < 1) return
+        destructibleBackendLoader.active = true
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 8) {
+        if (root.ticks < 1) return
+        if (!destructibleBackendLoader.item)
+          return root.fail("could not instantiate replacement backend")
+        destructibleBackendLoader.item.discoveryDesired = true
+        if (!destructibleBackendLoader.item.startDiscovery())
+          return root.fail("replacement backend could not take discovery ownership")
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 9) {
+        if (root.ticks < 5) return
+        if (destructionFixture.delayedStartCount !== 3
+            || !destructionAdapter.discovering
+            || !destructibleBackendLoader.item.discoveryOwned)
+          return root.fail("replacement backend did not own delayed discovery: starts="
+                           + destructionFixture.delayedStartCount
+                           + " discovering=" + destructionAdapter.discovering
+                           + " owned=" + destructibleBackendLoader.item.discoveryOwned
+                           + " desired=" + destructibleBackendLoader.item.discoveryDesired
+                           + " sameAdapter="
+                           + (destructibleBackendLoader.item.adapter === destructionAdapter)
+                           + " requested="
+                           + (destructibleBackendLoader.item.discoveryRequestedAdapter !== null))
+        destructibleBackendLoader.item.stopDiscovery()
+        destructibleBackendLoader.active = false
+        if (destructionAdapter.discovering)
+          return root.fail("replacement backend did not release discovery")
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 10) {
+        if (root.ticks < 1) return
+
+        // Complete a third old request immediately before replacement
+        // startDiscovery(). Its adapter signal runs before the teardown
+        // guard's dynamically connected handler and exposes the exact race.
+        destructibleBackendLoader.active = true
+        if (!destructibleBackendLoader.item)
+          return root.fail("could not instantiate race backend")
+        destructibleBackendLoader.item.discoveryDesired = true
+        if (!destructibleBackendLoader.item.startDiscovery())
+          return root.fail("could not start race discovery request")
+        destructibleBackendLoader.active = false
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 11) {
+        if (root.ticks < 1) return
+        destructibleBackendLoader.active = true
+        if (!destructibleBackendLoader.item)
+          return root.fail("could not instantiate race replacement")
+        if (!Bluetooth.BluetoothDiscoveryGuard.isArmed(destructionAdapter))
+          return root.fail("teardown guard disappeared before race completion")
+        destructionAdapter.startReplacementOnNextDiscovery = true
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 12) {
+        if (root.ticks < 5) return
+        if (destructionFixture.delayedStartCount !== 4
+            || destructionAdapter.startReplacementOnNextDiscovery
+            || !root.raceOwnedImmediately
+            || !destructionAdapter.discovering
+            || !destructibleBackendLoader.item.discoveryOwned)
+          return root.fail("replacement did not inherit completed old discovery: starts="
+                           + destructionFixture.delayedStartCount
+                           + " discovering=" + destructionAdapter.discovering
+                           + " owned=" + destructibleBackendLoader.item.discoveryOwned
+                           + " triggerPending="
+                           + destructionAdapter.startReplacementOnNextDiscovery
+                           + " immediateOwned=" + root.raceOwnedImmediately
+                           + " stopAttempts=" + destructionAdapter.stopAttempts)
+        destructibleBackendLoader.item.stopDiscovery()
+        destructibleBackendLoader.active = false
+        if (destructionAdapter.discovering)
+          return root.fail("inherited discovery was not released")
+        destructibleGuardAdapterLoader.active = true
+        const doomedAdapter = destructibleGuardAdapterLoader.item
+        if (!doomedAdapter
+            || !Bluetooth.BluetoothDiscoveryGuard.arm(doomedAdapter, 1000))
+          return root.fail("could not arm destructible adapter guard")
+        if (Bluetooth.BluetoothDiscoveryGuard.guardCount() !== 1)
+          return root.fail("destructible adapter guard was not registered")
+        root.phase++
+        root.ticks = 0
+      } else if (root.phase === 13) {
+        if (root.ticks < 1) return
+        if (!destructibleGuardAdapterLoader.item
+            || Bluetooth.BluetoothDiscoveryGuard.guardCount() !== 1)
+          return root.fail("destructible adapter guard did not enter retry")
+        destructibleGuardAdapterLoader.active = false
+        root.phase++
+        root.ticks = 0
+      } else {
+        if (root.ticks < 4) return
+        if (!root.guardAdapterDestroyed)
+          return root.fail("guard adapter fixture was not destroyed")
+        if (Bluetooth.BluetoothDiscoveryGuard.guardCount() !== 0)
+          return root.fail("destroyed adapter left its guard registered")
         console.log("bluetooth backend regression passed")
         Qt.quit()
         stop()

@@ -70,6 +70,10 @@ status=$?
 set -e
 
 [[ $status -eq 143 ]] || fail "stubborn process-group case returned $status instead of 143"
+[[ -s $marker ]] || fail "stubborn case did not publish its shell process identity"
+IFS=: read -r stubborn_shell_pid stubborn_shell_pgid stubborn_case_root <"$marker"
+[[ $stubborn_shell_pid =~ ^[0-9]+$ && $stubborn_shell_pgid =~ ^[0-9]+$ ]] \
+  || fail "stubborn case produced invalid shell process identity"
 [[ -s $child_state ]] || fail "stubborn child did not publish its PID and PGID"
 IFS=: read -r stubborn_child_pid stubborn_pgid <"$child_state"
 [[ $stubborn_child_pid =~ ^[0-9]+$ && $stubborn_pgid =~ ^[0-9]+$ ]] \
@@ -77,6 +81,20 @@ IFS=: read -r stubborn_child_pid stubborn_pgid <"$child_state"
 if kill -0 -- "-$stubborn_pgid" 2>/dev/null; then
   fail "TERM cleanup left process group $stubborn_pgid alive"
 fi
+if kill -0 "$stubborn_shell_pid" 2>/dev/null; then
+  fail "TERM cleanup left Quickshell process $stubborn_shell_pid alive"
+fi
+if kill -0 -- "-$stubborn_shell_pgid" 2>/dev/null; then
+  fail "TERM cleanup left Quickshell process group $stubborn_shell_pgid alive"
+fi
+[[ ! -e $stubborn_case_root ]] \
+  || fail "stubborn case left its isolated case root behind: $stubborn_case_root"
+snapshot_state=$(sed -n 's/^service-first: bluetooth\/discovery snapshot=//p' "$output" | tail -n 1)
+rollback_state=$(sed -n 's/^service-first: rollback settled bluetooth\/discovery=//p' "$output" | tail -n 1)
+[[ $snapshot_state =~ ^[01]:[01]$ ]] \
+  || fail "stubborn case lacks a valid Bluetooth snapshot"
+[[ $rollback_state == "$snapshot_state" ]] \
+  || fail "stubborn case restored $rollback_state instead of $snapshot_state"
 
 for rollback_log in "$tmpdir"/INT.log "$tmpdir"/TERM.log "$tmpdir"/HUP.log; do
   rg -q 'rollback settled bluetooth/discovery=' "$rollback_log" \

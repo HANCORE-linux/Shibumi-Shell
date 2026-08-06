@@ -664,9 +664,12 @@ Current Phase 2 foundation:
   no complete Omarchy Bluetooth UI component is instantiated as a backend;
 - each output owns only its V1 Bluetooth presentation and lazy Shibumi device
   panel. The root service leases discovery across open panels and owns one
-  symmetric six-method `omarchy.bluetooth` IPC target. Presentation and service
-  facade have no Bluetooth/PipeWire import, process, timer, or file watcher;
-  the adapter has four bounded lifecycle timers. Top mapping, adapter/radio
+  symmetric six-method `omarchy.bluetooth` IPC target. Presentation has no
+  Bluetooth/PipeWire import, process, timer, or file watcher; the service facade
+  owns one bounded discovery-reconciliation timer and the adapter owns four
+  bounded lifecycle timers. While a requested Discovery start is still pending
+  during teardown, at most one temporary 30-second retry/expiry timer per
+  native adapter survives the facade. Top mapping, adapter/radio
   reactivity, discovery ownership/teardown, both backend load orders, and IPC
   lifecycle pass on the validation system; real device/audio, bottom, and
   physical multi-output gates remain.

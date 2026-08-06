@@ -1,0 +1,7 @@
+singleton BluetoothDiscoveryGuard 1.0 BluetoothDiscoveryGuard.qml
+AudioPanelBridge 1.0 AudioPanelBridge.qml
+BluetoothBackendAdapter 1.0 BluetoothBackendAdapter.qml
+MonitorPanelBridge 1.0 MonitorPanelBridge.qml
+NetworkPanelBridge 1.0 NetworkPanelBridge.qml
+SystemActions 1.0 SystemActions.qml
+WorkspaceActions 1.0 WorkspaceActions.qml

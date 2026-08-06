@@ -1,0 +1,10 @@
+singleton BluetoothDiscoveryGuard 1.0 BluetoothDiscoveryGuard.qml
+BarWidget 1.0 BarWidget.qml
+BluetoothBackendAdapter 1.0 BluetoothBackendAdapter.qml
+BluetoothPanel 1.0 BluetoothPanel.qml
+HostTokens 1.0 HostTokens.qml
+IconText 1.0 IconText.qml
+PillSurface 1.0 PillSurface.qml
+Service 1.0 Service.qml
+ShibumiPanel 1.0 ShibumiPanel.qml
+ShibumiPanelToolTip 1.0 ShibumiPanelToolTip.qml

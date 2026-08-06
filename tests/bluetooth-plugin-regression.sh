@@ -87,6 +87,7 @@ widget="$repo_root/hancore.shibumi.bluetooth/BarWidget.qml"
 service="$repo_root/hancore.shibumi.bluetooth/Service.qml"
 adapter="$repo_root/hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml"
 model="$repo_root/hancore.shibumi.bluetooth/BluetoothModel.js"
+discovery_guard="$repo_root/hancore.shibumi.bluetooth/BluetoothDiscoveryGuard.qml"
 panel="$repo_root/hancore.shibumi.bluetooth/BluetoothPanel.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.bluetooth"\)' "$widget" \
   || fail "Bluetooth widget does not resolve the shared service"
@@ -132,6 +133,8 @@ cmp -s "$repo_root/adapters/BluetoothBackendAdapter.qml" "$adapter" \
   || fail "root and plugin Bluetooth adapters drifted"
 cmp -s "$repo_root/adapters/BluetoothModel.js" "$model" \
   || fail "root and plugin Bluetooth models drifted"
+cmp -s "$repo_root/adapters/BluetoothDiscoveryGuard.qml" "$discovery_guard" \
+  || fail "root and plugin Bluetooth discovery guards drifted"
 if rg -q 'IpcHandler \{' "$adapter"; then
   fail "Bluetooth backend adapter must not register a second IPC owner"
 fi

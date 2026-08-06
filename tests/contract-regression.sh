@@ -687,6 +687,9 @@ cmp -s adapters/BluetoothBackendAdapter.qml \
   || fail "root and plugin Bluetooth adapters drifted"
 cmp -s adapters/BluetoothModel.js hancore.shibumi.bluetooth/BluetoothModel.js \
   || fail "root and plugin Bluetooth models drifted"
+cmp -s adapters/BluetoothDiscoveryGuard.qml \
+  hancore.shibumi.bluetooth/BluetoothDiscoveryGuard.qml \
+  || fail "root and plugin Bluetooth discovery guards drifted"
 for bluetooth_service in \
   services/BluetoothService.qml \
   hancore.shibumi.bluetooth/Service.qml; do
@@ -1318,6 +1321,7 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
     || fail "power service did not execute the exact validated profile action"
 
   cp adapters/BluetoothBackendAdapter.qml adapters/BluetoothModel.js \
+    adapters/BluetoothDiscoveryGuard.qml adapters/qmldir \
     "$smoke_root/adapters/"
   cp services/BluetoothService.qml "$smoke_root/services/"
   cp widgets/BluetoothWidget.qml widgets/BluetoothPanel.qml "$smoke_root/widgets/"

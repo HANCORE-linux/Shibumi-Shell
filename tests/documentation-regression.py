@@ -220,9 +220,16 @@ def main() -> None:
         "one shared official backend with local v1-style widgets",
         "the adapter has only two bounded action timers",
         "shibumi bluetooth presentation over omarchy's bluez and audio owner",
+        "presentation and service facade have no bluetooth/pipewire import, "
+        "process, timer, or file watcher",
     ):
         if stale_claim in bluetooth_docs:
             fail(f"stale Bluetooth ownership claim: {stale_claim}")
+    guard_timer_claim = (
+        "at most one temporary 30-second retry/expiry timer per native adapter"
+    )
+    if guard_timer_claim not in bluetooth_docs:
+        fail("Bluetooth teardown guard timer is missing from the timer inventory")
 
     print("documentation regression passed")
 

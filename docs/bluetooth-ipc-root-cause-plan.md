@@ -693,3 +693,68 @@ fremdes Host-Backend. Der Bluetooth-Eintrag besitzt nun wie sein Manifest
 keinen Host-Contract; die fokussierte Bluetooth-Suite erzwingt diese Invariante.
 Der ungepushte Audit-Korrekturcommit wurde erneut kohärent amendiert und bleibt
 der fünfte lokale Commit vor `origin/main`.
+
+### Drittes Folgeaudit: Discovery-Abbau und vollständiger Abbruchnachweis
+
+Der Endreview vom 6. August 2026 öffnete ein mittleres und zwei niedrige
+Findings erneut. Alle drei Aussagen waren korrekt:
+
+- Ein noch ausstehendes BlueZ-`StartDiscovery` konnte den Abbau des
+  `BluetoothBackendAdapter` überleben. Quickshells native
+  `BluetoothAdapter::setDiscovering(false)` ruft bei intern noch falschem
+  Discovery-Zustand kein `StopDiscovery` auf; der spätere D-Bus-Abschluss
+  benötigte deshalb weiterhin eine lebende Überwachung.
+- Der Stubborn-Child-Test bewies die PGID-Terminierung, aber weder den
+  wiederhergestellten Bluetooth-/Discovery-Snapshot noch die Entfernung des
+  isolierten Case-Roots für genau diesen Abbruchpfad.
+- `ARCHITECTURE.md` behauptete fälschlich, die Service-Fassade besitze keinen
+  Timer, obwohl sie den begrenzten `discoveryRetry`-Timer enthält.
+
+Die rote Regression zerstört nun ein Backend unmittelbar nach einer
+Discovery-Anforderung und lässt den verzögerten Start erst danach abschließen.
+Vor der Korrektur blieb der Adapter auf Discovery `true`. Der Fix legt einen
+engineweiten, aber zeitlich auf 30 Sekunden begrenzten QML-Singleton-Guard an
+die native Adapterinstanz. `qmldir` stellt sicher, dass alte und neue Backend-
+Komponenten dieselbe Registry verwenden; die erste JS-Library-Zwischenlösung
+garantierte dies über dynamische Loader-Grenzen nicht. Signalverbindung und
+Retry-/Ablauf-Timer überleben die einzelne Service-Komponente. Ein abgelehnter
+Stop wird mit begrenztem exponentiellem Backoff erneut versucht; erst ein über
+einen späteren Event-Loop-Turn stabil beobachteter Stop oder die harte Deadline
+löst den Guard auf.
+
+Ein neuer legitimer Shibumi-Start entwaffnet den alten Guard vor jedem
+`discovering`-Frühreturn. Hat der alte Shibumi-Request bereits abgeschlossen,
+übernimmt der Ersatzservice dessen Ownership kontrolliert. Innerhalb des
+`discoveringChanged`-Turns wird dazu direkt der native Adapterzustand gelesen,
+weil die abgeleitete QML-Binding-Property noch den vorherigen Wert tragen kann.
+Die Regression widersteht zwei Stop-Versuchen, hält zwei Pending-Completions
+getrennt und trifft den Abschluss unmittelbar vor der Ersatzanforderung. Der
+Ersatzservice übernimmt Discovery noch im selben Signal-Turn und gibt sie
+danach wieder frei.
+
+Ein adaptergeparenteter Lifecycle-Watcher schließt außerdem den Hot-Unplug-
+Pfad: Entfernt BlueZ die native Adapterinstanz während eines wartenden Guards,
+wird der Watcher mit ihr zerstört und entfernt Guard-Eintrag und Singleton-
+Timer sofort. Jeder Retry prüft die Adapterreferenz zusätzlich vor Lesen und
+Schreiben und fällt bei einem ungültigen QObject in denselben Cleanup. Die
+Regression zerstört einen Fixture-Adapter bei laufendem Deadline-Timer und
+verlangt anschließend eine leere Guard-Registry.
+
+Root- und Plugin-Kopie des Adapters sowie des neuen
+`BluetoothDiscoveryGuard.qml` sind byte-identisch und durch fokussierten sowie
+vollständigen Drift-Test geschützt. Der Stubborn-Child-Fall verlangt nun
+zusammenhängend den ursprünglichen Snapshot, denselben nach Event-Loop-
+Settlement gelesenen Rollback-Zustand, verschwundene Leader-PID und PGID sowie
+das entfernte Case-Root. Die Architektur beschreibt getrennt den einen
+Service-Retry-Timer, die vier Adapter-Lifecycle-Timer und maximal einen
+temporären 30-Sekunden-Teardown-Guard-Timer je nativer Adapterinstanz; ein
+Dokumentations-Guard sperrt die alte und eine künftig erneut unvollständige
+Behauptung.
+
+Der neue dauerhafte Kandidatennachweis steht in
+`docs/audits/evidence/bluetooth-final-2026-08-06.md`. Die fokussierte Suite und
+der danach ausgeführte vollständige Contract enden beide mit Exit-Code 0; der
+Voll-Lauf endet mit `Shibumi contract regression passed`. Qt-6-`qmllint` endet
+mit Exit-Code 0 und den drei bekannten Quickshell-Typmetadaten-Hinweisen.
+Physische Multi-Monitor-Abnahme und reale Geräte-/Radio-Mutationen bleiben wie
+vereinbart ausgenommen. Es wurde nichts gepusht.

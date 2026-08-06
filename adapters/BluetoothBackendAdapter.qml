@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Bluetooth
 import Quickshell.Services.Pipewire
+import "." as Local
 import "BluetoothModel.js" as Model
 
 // The process-wide Bluetooth state and action owner. This deliberately uses
@@ -24,6 +25,7 @@ Item {
   property int audioSwitchInterval: 500
   property int audioIntentTimeoutInterval: 60000
   property int discoveryRequestTimeoutInterval: 1500
+  property int discoveryDestructionGuardInterval: 30000
   property bool discoveryOwned: false
   property var discoveryOwnerAdapter: null
   property var discoveryRequestedAdapter: null
@@ -90,12 +92,30 @@ Item {
   // active external scan is observed but never claimed or stopped by Shibumi.
   function startDiscovery() {
     if (!adapterAvailable || !radioEnabled) return false
-    if (discovering) return true
-    if (discoveryRequestedAdapter === adapter) return true
-    if (retiredDiscoveryAdapter === adapter) retiredDiscoveryAdapter = null
-    discoveryRequestedAdapter = adapter
+    // A replacement service must first retire a teardown guard from its own
+    // predecessor. If that pending start has already completed, inherit the
+    // proven Shibumi request instead of misclassifying it as external and
+    // letting the old guard stop it.
+    const target = adapter
+    const inheritedRequest = Local.BluetoothDiscoveryGuard.disarm(target)
+    // Read the native property directly: the derived QML binding may still
+    // hold the previous value inside the adapter's discoveringChanged turn.
+    if (target && !!target.discovering) {
+      if (inheritedRequest) {
+        discoveryRequestedAdapter = null
+        if (retiredDiscoveryAdapter === target)
+          retiredDiscoveryAdapter = null
+        discoveryOwned = true
+        discoveryOwnerAdapter = target
+        if (!retiredDiscoveryAdapter) discoveryRequestTimeout.stop()
+      }
+      return true
+    }
+    if (discoveryRequestedAdapter === target) return true
+    if (retiredDiscoveryAdapter === target) retiredDiscoveryAdapter = null
+    discoveryRequestedAdapter = target
     discoveryRequestTimeout.restart()
-    requestAdapterDiscovery(adapter)
+    requestAdapterDiscovery(target)
     return true
   }
 
@@ -149,6 +169,16 @@ Item {
     discoveryOwned = false
     discoveryOwnerAdapter = null
     return true
+  }
+
+  function destroyDiscovery() {
+    const requested = discoveryRequestedAdapter
+    const retired = retiredDiscoveryAdapter
+    if (requested)
+      Local.BluetoothDiscoveryGuard.arm(requested, discoveryDestructionGuardInterval)
+    if (retired && retired !== requested)
+      Local.BluetoothDiscoveryGuard.arm(retired, discoveryDestructionGuardInterval)
+    stopDiscovery()
   }
 
   function restartDiscovery() {
@@ -440,7 +470,7 @@ Item {
     discoveryOwnerAdapter = null
     cancelAllAudioHandoffs()
   }
-  Component.onDestruction: stopDiscovery()
+  Component.onDestruction: destroyDiscovery()
 
   Timer {
     id: pendingTimeout
