@@ -82,6 +82,14 @@ cd Shibumi-Shell
 ./scripts/shibumi-suite install --yes
 ```
 
+Update the transitional source installation with:
+
+```sh
+cd Shibumi-Shell
+git pull --ff-only
+./scripts/shibumi-suite update --yes
+```
+
 This transitional source command asks for root privileges only while Pacman
 installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
 as the desktop user and writes only user-scoped plugin state.
