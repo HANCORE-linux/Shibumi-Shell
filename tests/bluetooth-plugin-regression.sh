@@ -60,6 +60,24 @@ printf '%s\n' "$output"
 grep -F 'bluetooth backend regression passed' <<<"$output" >/dev/null \
   || fail "Bluetooth backend success marker missing"
 
+install -m 0644 "$repo_root/tests/bluetooth-adapter-hotplug-regression.qml" \
+  "$tmpdir/shell.qml"
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" --no-color 2>&1)
+status=$?
+set -e
+printf '%s\n' "$output"
+[[ $status -eq 0 ]] || fail "Bluetooth adapter hotplug regression exited with $status"
+grep -F 'bluetooth adapter hotplug regression passed' <<<"$output" >/dev/null \
+  || fail "Bluetooth adapter hotplug success marker missing"
+
 install -m 0644 "$repo_root/tests/bluetooth-audio-intent-regression.qml" \
   "$tmpdir/shell.qml"
 set +e

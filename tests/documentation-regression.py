@@ -231,6 +231,18 @@ def main() -> None:
     if guard_timer_claim not in bluetooth_docs:
         fail("Bluetooth teardown guard timer is missing from the timer inventory")
 
+    bluetooth_evidence = (
+        REPO_ROOT / "docs/audits/evidence/bluetooth-final-2026-08-06.md"
+    ).read_text(encoding="utf-8")
+    for host_bound_command in (
+        "Command: `OMARCHY_PATH=/usr/share/omarchy "
+        "./tests/bluetooth-plugin-regression.sh`",
+        "Command: `OMARCHY_PATH=/usr/share/omarchy "
+        "./tests/contract-regression.sh`",
+    ):
+        if host_bound_command not in bluetooth_evidence:
+            fail(f"Bluetooth evidence lacks installed-host binding: {host_bound_command}")
+
     print("documentation regression passed")
 
 

@@ -758,3 +758,40 @@ Voll-Lauf endet mit `Shibumi contract regression passed`. Qt-6-`qmllint` endet
 mit Exit-Code 0 und den drei bekannten Quickshell-Typmetadaten-Hinweisen.
 Physische Multi-Monitor-Abnahme und reale Geräte-/Radio-Mutationen bleiben wie
 vereinbart ausgenommen. Es wurde nichts gepusht.
+
+### Viertes Folgeaudit: Adapter-Hotplug und installierter Hostnachweis
+
+Der nächste unabhängige Review bestätigte den Funktionsfix, öffnete aber zwei
+niedrige Nachweislücken. Beide Aussagen waren korrekt:
+
+- Der bisherige Lifecycle-Test zerstörte einen direkt bewaffneten Adapter,
+  führte aber keinen ausstehenden Discovery-Start über die produktive
+  Backend-/Service-Kette durch und bewies weder `onAdapterChanged` noch einen
+  anschließenden Replug.
+- Die im Auditprotokoll genannten dynamischen Befehle setzten
+  `OMARCHY_PATH=/usr/share/omarchy` nicht ausdrücklich. Dadurch war aus dem
+  Protokoll allein nicht beweisbar, dass der installierte Omarchy-Host statt
+  eines privaten Checkouts verwendet und der bedingte Runtime-Block der
+  Vollsuite tatsächlich ausgeführt wurde.
+
+Eine eigene Hotplug-Regression hält genau eine Discovery-Session offen, startet
+über den realen `BluetoothBackendAdapter` asynchron auf Adapterinstanz A und
+zerstört A vor dem Abschluss. Der alte Abschluss wird verworfen; anschließend
+wird eine neue Adapterinstanz B geladen. Ein dem produktiven Service-Prädikat
+entsprechender begrenzter Test-Retry muss für B genau einen frischen Start
+auslösen; der Backend-Adapter muss beobachtete Discovery übernehmen und sie
+beim Session-Ende wieder freigeben. Der Test verlangt zusätzlich eine leere
+Guard-Registry und keine ausstehende Completion. Die finale kontrollierte
+Mutation entfernte exakt `retirePendingDiscovery()` aus `onAdapterChanged`.
+Die ältere Backend-Regression blieb grün; der neue Test scheiterte gezielt mit
+`onAdapterChanged did not retire pending Discovery`. Nach bytegenauer
+Wiederherstellung des Produktionscodes ist der Test grün.
+
+Das Beweisprotokoll nennt nun für Fokus- und Vollsuite exakt
+`OMARCHY_PATH=/usr/share/omarchy`; ein Dokumentations-Guard erzwingt beide
+Befehle dauerhaft. Die installierte Hostbindung meldet
+`omarchy-dev 4.0.0.r1508.g12af188-1`. Beide explizit hostgebundenen Läufe enden
+mit Exit-Code 0, der Fokuslauf enthält
+`bluetooth adapter hotplug regression passed`, und der vollständige Lauf endet
+mit `Shibumi contract regression passed`. Reale Bluetooth-, Radio- und
+Audiozustände wurden nicht verändert; es wurde nichts gepusht.
