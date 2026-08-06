@@ -470,23 +470,38 @@ class ContinuityManagerTests(unittest.TestCase):
             "omarchy_root": omarchy_root,
             "shell": omarchy_root / "bin/omarchy-shell",
         }
-        running = Mock(returncode=0, stdout="", stderr="")
-        drained = Mock(returncode=1, stdout="", stderr="")
+        registered = Mock(
+            returncode=0,
+            stdout=json.dumps([
+                {
+                    "id": "target-1",
+                    "config_path": str(omarchy_root / "shell/shell.qml"),
+                    "pid": 41001,
+                }
+            ]),
+            stderr="",
+        )
+        killed = Mock(returncode=0, stdout="", stderr="")
+        drained = Mock(returncode=0, stdout="[]", stderr="")
         globals_map = self.module["stop_shell"].__globals__
         with patch.object(
-            globals_map["subprocess"], "run", side_effect=[running, drained]
+            globals_map["subprocess"],
+            "run",
+            side_effect=[registered, killed, drained],
         ) as run:
-            self.module["stop_shell"](runtime_paths)
-        command = [
+            self.module["stop_shell"](runtime_paths, quiet_period=0)
+        kill = [
             "quickshell",
             "kill",
             "-p",
             str(omarchy_root / "shell"),
             "--any-display",
         ]
-        self.assertEqual(run.call_count, 2)
-        for call in run.call_args_list:
-            self.assertEqual(call.args[0], command)
+        registry = ["quickshell", "list", "--all", "--json"]
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [registry, kill, registry],
+        )
 
     def test_reload_falls_back_for_older_omarchy(self) -> None:
         runtime_paths = {

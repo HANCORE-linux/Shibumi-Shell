@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import math
 import runpy
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -55,9 +56,11 @@ class SyntheticClock:
     reads: int = 0
     sleeps: list[float] = field(default_factory=list)
     command_delays: list[float] = field(default_factory=list)
+    read_advances: dict[int, float] = field(default_factory=dict)
 
     def monotonic(self) -> float:
         self.reads += 1
+        self.now += max(0.0, self.read_advances.get(self.reads, 0.0))
         return self.now
 
     def sleep(self, seconds: float) -> None:
@@ -85,6 +88,8 @@ class DrainScenario:
     registry_latency: float = 0.0
     kill_latency: float = 0.0
     registry_malformed: bool = False
+    registry_latencies: list[float] = field(default_factory=list)
+    registry_malformed_reads: set[int] = field(default_factory=set)
     matching: list[dict[str, object]] = field(init=False, default_factory=list)
     foreign: list[dict[str, object]] = field(init=False, default_factory=list)
     commands: list[tuple[str, ...]] = field(init=False, default_factory=list)
@@ -116,21 +121,42 @@ class DrainScenario:
     def remaining_ids(self) -> list[str]:
         return [str(instance["id"]) for instance in self.matching]
 
-    def run(self, command, **_kwargs):
+    def run(self, command, **kwargs):
         argv = tuple(str(part) for part in command)
         self.commands.append(argv)
         if len(self.commands) > 5000:
-            raise AssertionError("INC-013 candidate did not terminate")
+            now = self.clock.now if self.clock is not None else "unbound"
+            raise AssertionError(
+                "INC-013 candidate did not terminate: "
+                f"clock={now} reads={self.registry_reads} "
+                f"kills={self.kill_calls} remaining={self.remaining_ids}"
+            )
 
         if argv[:3] == ("quickshell", "kill", "-p"):
-            if self.clock is not None:
-                self.clock.advance_command(self.kill_latency)
+            self._advance_command(argv, self.kill_latency, kwargs.get("timeout"))
             return self._kill(argv)
         if argv == ("quickshell", "list", "--all", "--json"):
-            if self.clock is not None:
-                self.clock.advance_command(self.registry_latency)
+            latency = (
+                self.registry_latencies[self.registry_reads]
+                if self.registry_reads < len(self.registry_latencies)
+                else self.registry_latency
+            )
+            self._advance_command(argv, latency, kwargs.get("timeout"))
             return self._list()
         raise AssertionError(f"unexpected command in INC-013 contract: {argv!r}")
+
+    def _advance_command(
+        self,
+        argv: tuple[str, ...],
+        latency: float,
+        timeout: float | None,
+    ) -> None:
+        if self.clock is None:
+            return
+        if timeout is not None and latency > timeout:
+            self.clock.advance_command(timeout)
+            raise subprocess.TimeoutExpired(argv, timeout)
+        self.clock.advance_command(latency)
 
     def _kill(self, argv: tuple[str, ...]):
         expected = (
@@ -162,7 +188,10 @@ class DrainScenario:
 
     def _list(self):
         self.registry_reads += 1
-        if self.registry_malformed:
+        if (
+            self.registry_malformed
+            or self.registry_reads in self.registry_malformed_reads
+        ):
             return SimpleNamespace(returncode=0, stdout="{not-json", stderr="")
 
         now = self.clock.now if self.clock is not None else 0.0
@@ -204,6 +233,8 @@ class ManagerAdapter:
         timeout: float | None = None,
         quiet_period: float | None = None,
     ) -> None:
+        if scenario.clock is None:
+            scenario.clock = clock
         paths = {
             "omarchy_root": scenario.root,
             "shell": scenario.root / "bin" / "omarchy-shell",
@@ -246,9 +277,20 @@ class RuntimeAdapter:
         timeout: float | None = None,
         quiet_period: float | None = None,
     ) -> None:
+        if scenario.clock is None:
+            scenario.clock = clock
         runtime = runtime_module.OmarchyRuntime(scenario.root)
+
+        def runtime_run(command, **kwargs):
+            try:
+                return scenario.run(command, **kwargs)
+            except (OSError, subprocess.SubprocessError) as error:
+                raise runtime_module.RuntimeFailure(
+                    f"cannot run {' '.join(str(part) for part in command)}: {error}"
+                ) from error
+
         with (
-            mock.patch.object(runtime, "run", side_effect=scenario.run),
+            mock.patch.object(runtime, "run", side_effect=runtime_run),
             mock.patch.object(
                 runtime_module.time,
                 "monotonic",
@@ -583,6 +625,135 @@ class Incident013DrainContractTests(unittest.TestCase):
                         clock,
                         SHORT_DEADLINE_SECONDS,
                     )
+
+    def test_slow_final_snapshot_stays_inside_total_evidence_budget(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    behavior="permanent-respawn",
+                    clock=clock,
+                    registry_latencies=[0.18, 0.19],
+                    kill_latency=0.015,
+                )
+                last_good_id = scenario.remaining_ids[0]
+
+                with self.assertRaises(adapter.error_type) as raised:
+                    adapter.run(
+                        scenario,
+                        clock,
+                        timeout=SHORT_DEADLINE_SECONDS,
+                        quiet_period=CONTRACT_QUIET_SECONDS,
+                    )
+
+                self.assertLessEqual(
+                    clock.now,
+                    SHORT_DEADLINE_SECONDS + DEADLINE_OVERRUN_SECONDS,
+                    "the final evidence read escaped the total deadline budget",
+                )
+                message = str(raised.exception)
+                self.assertIn(last_good_id, message)
+                self.assertIn("snapshots=", message)
+                self.assertIn("final_snapshot_error=", message)
+                self.assertRegex(message.lower(), r"timed out|timeout")
+
+    def test_registry_read_reaching_deadline_never_starts_a_kill(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    clock=clock,
+                    registry_latency=SHORT_DEADLINE_SECONDS,
+                    kill_latency=0.0005,
+                )
+
+                with self.assertRaises(adapter.error_type) as raised:
+                    adapter.run(
+                        scenario,
+                        clock,
+                        timeout=SHORT_DEADLINE_SECONDS,
+                        quiet_period=CONTRACT_QUIET_SECONDS,
+                    )
+
+                self.assertEqual(
+                    0,
+                    scenario.kill_calls,
+                    "a mutating kill started after the drain deadline",
+                )
+                self.assertIn(scenario.remaining_ids[0], str(raised.exception))
+                self.assertLessEqual(
+                    clock.now,
+                    SHORT_DEADLINE_SECONDS + DEADLINE_OVERRUN_SECONDS,
+                )
+
+    def test_expired_fresh_kill_budget_never_uses_a_positive_floor(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock(read_advances={5: 0.0002})
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    clock=clock,
+                    registry_latency=SHORT_DEADLINE_SECONDS - 0.0001,
+                    kill_latency=0.0001,
+                )
+
+                with self.assertRaises(adapter.error_type):
+                    adapter.run(
+                        scenario,
+                        clock,
+                        timeout=SHORT_DEADLINE_SECONDS,
+                        quiet_period=CONTRACT_QUIET_SECONDS,
+                    )
+
+                self.assertEqual(
+                    0,
+                    scenario.kill_calls,
+                    "expired kill budget was rounded up into a mutating command",
+                )
+                self.assertGreaterEqual(clock.now, SHORT_DEADLINE_SECONDS)
+                self.assertLessEqual(
+                    clock.now,
+                    SHORT_DEADLINE_SECONDS + DEADLINE_OVERRUN_SECONDS,
+                )
+
+    def test_malformed_final_snapshot_retains_last_good_evidence(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    behavior="permanent-respawn",
+                    clock=clock,
+                    registry_latencies=[0.18, 0.01],
+                    registry_malformed_reads={2},
+                    kill_latency=0.015,
+                )
+                last_good_id = scenario.remaining_ids[0]
+
+                with self.assertRaises(adapter.error_type) as raised:
+                    adapter.run(
+                        scenario,
+                        clock,
+                        timeout=SHORT_DEADLINE_SECONDS,
+                        quiet_period=CONTRACT_QUIET_SECONDS,
+                    )
+
+                message = str(raised.exception)
+                self.assertLessEqual(
+                    clock.now,
+                    SHORT_DEADLINE_SECONDS + DEADLINE_OVERRUN_SECONDS,
+                )
+                self.assertIn(last_good_id, message)
+                self.assertIn("remaining=", message)
+                self.assertIn("snapshots=", message)
+                self.assertIn("final_snapshot_error=", message)
+                self.assertRegex(message.lower(), r"json|malformed")
 
     def test_foreign_only_registry_is_success_without_cross_targeting(self):
         for adapter in ADAPTERS:

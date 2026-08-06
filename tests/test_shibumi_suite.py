@@ -268,13 +268,12 @@ class RuntimeProcessTests(unittest.TestCase):
         config = self.omarchy_root / "shell/shell.qml"
         foreign = Path(self.temporary.name) / "foreign/shell.qml"
         self.runtime.run = Mock(side_effect=[
-            self.result(),
             self.result(self.instance_json(config, foreign)),
             self.result(),
             self.result(self.instance_json(foreign)),
         ])
 
-        self.runtime.stop_shell()
+        self.runtime.stop_shell(quiet_period=0)
 
         commands = [call.args[0] for call in self.runtime.run.call_args_list]
         kill = [
@@ -284,7 +283,8 @@ class RuntimeProcessTests(unittest.TestCase):
             str(self.omarchy_root / "shell"),
             "--any-display",
         ]
-        self.assertEqual(commands.count(kill), 2)
+        registry = ["quickshell", "list", "--all", "--json"]
+        self.assertEqual(commands, [registry, kill, registry])
 
     def test_layer_guard_rejects_stock_and_shibumi_bars_together(self) -> None:
         layers = {

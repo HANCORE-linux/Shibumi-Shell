@@ -426,7 +426,57 @@ def reload_shell(runtime_paths: dict[str, Path], timeout: float = 30) -> None:
     raise ManagerError(f"reload did not settle: {detail}")
 
 
-def stop_shell(runtime_paths: dict[str, Path], max_instances: int = 8) -> None:
+def matching_shell_instances(
+    runtime_paths: dict[str, Path], *, timeout: float = 6
+) -> list[dict[str, Any]]:
+    try:
+        result = subprocess.run(
+            ["quickshell", "list", "--all", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=runtime_environment(runtime_paths),
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ManagerError(f"cannot inspect Quickshell registry: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ManagerError(
+            "cannot inspect Quickshell registry"
+            + (f": {detail}" if detail else f" (exit {result.returncode})")
+        )
+    try:
+        values = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ManagerError("Quickshell registry returned malformed JSON") from error
+    if not isinstance(values, list):
+        raise ManagerError("Quickshell registry response is not an array")
+
+    expected = (
+        runtime_paths["omarchy_root"] / "shell" / "shell.qml"
+    ).resolve(strict=False)
+    matches: list[dict[str, Any]] = []
+    for value in values:
+        if not isinstance(value, dict):
+            continue
+        config_path = value.get("config_path")
+        if not isinstance(config_path, str) or not config_path:
+            continue
+        if Path(config_path).resolve(strict=False) == expected:
+            matches.append(value)
+    return matches
+
+
+def stop_shell(
+    runtime_paths: dict[str, Path],
+    timeout: float = 6,
+    quiet_period: float = 0.1,
+) -> None:
+    if timeout <= 0:
+        raise ManagerError("shell drain timeout must be positive")
+    if quiet_period < 0:
+        raise ManagerError("shell drain quiet period cannot be negative")
     shell_path = runtime_paths["omarchy_root"] / "shell"
     command = [
         "quickshell",
@@ -435,21 +485,112 @@ def stop_shell(runtime_paths: dict[str, Path], max_instances: int = 8) -> None:
         str(shell_path),
         "--any-display",
     ]
-    for _attempt in range(max_instances):
+    poll_interval = 0.05
+    deadline = time.monotonic() + timeout
+    evidence_deadline = deadline + 0.15
+    final_snapshot_limit = 0.1
+    empty_since: float | None = None
+    snapshots: list[list[dict[str, Any]]] = []
+    instances: list[dict[str, Any]] = []
+    deadline_operation_error: str | None = None
+
+    def evidence(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": str(value.get("id") or ""),
+                "pid": value.get("pid"),
+                "config_path": str(value.get("config_path") or ""),
+            }
+            for value in values
+        ]
+
+    def record(values: list[dict[str, Any]]) -> None:
+        snapshots.append(evidence(values))
+        del snapshots[:-6]
+
+    while time.monotonic() < deadline:
+        registry_budget = deadline - time.monotonic()
+        if registry_budget <= 0:
+            break
         try:
-            result = subprocess.run(
+            instances = matching_shell_instances(
+                runtime_paths,
+                timeout=min(6, registry_budget),
+            )
+        except ManagerError as error:
+            if time.monotonic() < deadline:
+                raise
+            deadline_operation_error = str(error)
+            break
+        record(instances)
+        now = time.monotonic()
+
+        if not instances:
+            if empty_since is None:
+                empty_since = now
+            if now - empty_since >= max(0.0, quiet_period - 1e-9):
+                return
+            sleep_for = min(
+                poll_interval,
+                max(0.0, deadline - now),
+                max(0.0, quiet_period - (now - empty_since)),
+            )
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+            continue
+
+        kill_budget = deadline - time.monotonic()
+        if kill_budget <= 0:
+            break
+        empty_since = None
+        try:
+            subprocess.run(
                 command,
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=6,
+                timeout=min(6, kill_budget),
                 env=runtime_environment(runtime_paths),
             )
         except (OSError, subprocess.SubprocessError) as error:
-            raise ManagerError(f"cannot stop Omarchy shell: {error}") from error
-        if result.returncode != 0:
-            return
-    raise ManagerError("too many Quickshell instances matched the Omarchy shell")
+            if time.monotonic() < deadline:
+                raise ManagerError(f"cannot stop Omarchy shell: {error}") from error
+            deadline_operation_error = f"cannot stop Omarchy shell: {error}"
+            break
+        now = time.monotonic()
+        if now < deadline:
+            time.sleep(min(poll_interval, deadline - now))
+
+    # The last in-flight command may have replaced the selected registration.
+    # Spend at most the explicit evidence grace on one final snapshot, and
+    # retain the last good evidence if that diagnostic read itself fails.
+    final_snapshot_error: str | None = None
+    evidence_budget = evidence_deadline - time.monotonic()
+    if evidence_budget > 0:
+        try:
+            instances = matching_shell_instances(
+                runtime_paths,
+                timeout=min(final_snapshot_limit, evidence_budget),
+            )
+        except ManagerError as error:
+            final_snapshot_error = str(error)
+        else:
+            record(instances)
+    else:
+        final_snapshot_error = "evidence deadline exhausted before final registry snapshot"
+    remaining = evidence(instances)
+    detail = (
+        "Quickshell registry did not converge before the drain deadline; "
+        f"remaining={json.dumps(remaining, sort_keys=True)}; "
+        f"snapshots={json.dumps(snapshots, sort_keys=True)}"
+    )
+    if deadline_operation_error is not None:
+        detail += "; deadline_operation_error=" + json.dumps(
+            deadline_operation_error
+        )
+    if final_snapshot_error is not None:
+        detail += "; final_snapshot_error=" + json.dumps(final_snapshot_error)
+    raise ManagerError(detail)
 
 
 def runtime_environment(runtime_paths: dict[str, Path]) -> dict[str, str]:
