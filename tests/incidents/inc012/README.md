@@ -8,7 +8,7 @@ guard.
 The two immutable source contracts are:
 
 - `beta3`: `c8d0b263c01aff3112f5204cc3bbe3097926e429`
-- `current`: `91dd5ff98ea339826c2164204f42b95b08e787d5`
+- `current`: `47c85d155a8ffeaeedb7f675a650347e40b70659`
 
 The runner verifies those commits and their exact `GroupSection.qml` digests,
 extracts only `core/` and `styles/` with `git archive`, copies the selected

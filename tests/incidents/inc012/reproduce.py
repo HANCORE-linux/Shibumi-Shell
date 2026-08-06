@@ -36,8 +36,8 @@ REVISION_CONTRACT = {
         ),
     },
     "current": {
-        "ref": "91dd5ff98ea339826c2164204f42b95b08e787d5",
-        "commit": "91dd5ff98ea339826c2164204f42b95b08e787d5",
+        "ref": "47c85d155a8ffeaeedb7f675a650347e40b70659",
+        "commit": "47c85d155a8ffeaeedb7f675a650347e40b70659",
         "groupSectionSha256": (
             "e4d98d7d098d5f5c8da70402c63a9f04dae59bee7c5ce25b2e32aadf693c6092"
         ),
