@@ -3,8 +3,10 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$repo_root/tests/lib/baselines.sh"
+shibumi_load_omarchy_baseline
 bar_root="$repo_root/hancore.shibumi.bar"
-omarchy_path=${OMARCHY_PATH:-}
+omarchy_path=$OMARCHY_PATH
 
 fail() {
   printf 'bar host registry regression failed: %s\n' "$*" >&2

@@ -5,7 +5,7 @@ Status: maintainer reference
 Work from a clean Shibumi checkout on the development machine:
 
 ```bash
-cd /home/hancore/Projects/shibumi
+cd /path/to/shibumi
 git status --short
 rg --files
 ```

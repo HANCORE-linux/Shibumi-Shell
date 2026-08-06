@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "referenceRoot": "../Quickshell-Dots/versions/V1",
+  "referenceBaseline": "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
+  "referenceRootId": "v1",
   "sourceGlobs": [
     "*.qml",
     "*.js",

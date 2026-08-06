@@ -3,7 +3,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
+source "$repo_root/tests/lib/baselines.sh"
+shibumi_load_omarchy_baseline
+omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
 qs_bin=${QS_BIN:-/usr/bin/qs}
 timeout_bin=${TIMEOUT_BIN:-/usr/bin/timeout}

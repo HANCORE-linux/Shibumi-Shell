@@ -20,7 +20,10 @@ documentation and are not required by Shibumi users.
 - **Policy**: Maintainers run destructive runtime acceptance only on the
   isolated validation system
 
-`/home/hancore/Projects/Quickshell-Dots` remains a read-only V1 and V2 reference.
+The read-only V1 and V2 reference is pinned by repository revision and content
+digests in
+[`quickshell-dots-d0896fc-v2-deec8103.json`](../contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json);
+no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 

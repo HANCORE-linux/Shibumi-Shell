@@ -22,10 +22,66 @@ For a Bluetooth change:
 OMARCHY_PATH=/usr/share/omarchy ./tests/bluetooth-plugin-regression.sh
 ```
 
-Before handing off or releasing any source change, run the complete contract:
+Before handing off or releasing any source change, run all three complete
+baseline jobs. The installed-package job defaults to the package-managed host:
 
 ```bash
-OMARCHY_PATH=/usr/share/omarchy ./tests/contract-regression.sh
+./tests/omarchy-installed-package-contract-regression.sh
+```
+
+The installed-source-parity job requires an explicit Git checkout of the same
+`12af188` revision as the installed package:
+
+```bash
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-12af188 \
+  ./tests/omarchy-installed-source-parity-contract-regression.sh
+```
+
+The forward-compat job separately requires the immutable upstream snapshot used
+by the engineering audit:
+
+```bash
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
+  ./tests/omarchy-forward-compat-contract-regression.sh
+```
+
+Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
+loader. The jobs select three repository-owned manifests with non-overlapping
+claims:
+
+- `contracts/baselines/omarchy-installed-package-12af188.json` validates the
+  package-managed layout;
+- `contracts/baselines/omarchy-installed-source-parity-12af188.json` proves that
+  the source form of the installed revision satisfies the same complete suite;
+- `contracts/baselines/omarchy-forward-compat-fd1034f.json` proves forward
+  compatibility with the audit's pinned upstream snapshot.
+
+All three manifests bind the complete consumed `shell`, `bin`, and `config`
+subtrees by entry count, path inventory, entry type, executable state, symlink
+target where packaging requires one, and file-content digest. Directory nodes,
+including empty directories, participate in the inventory and structure
+digest; FIFOs, sockets, devices, and other unsupported node types are rejected.
+`shell` and `config` payload entries must be regular files; the installed `bin`
+payload entries must retain their exact absolute package symlinks. Both
+Git-checkout jobs additionally require their exact declared revision. A caller
+may relocate a matching tree through the documented path input, but cannot
+select an arbitrary manifest, escape the validated tree through a consumed
+source symlink, or add or omit any subtree entry.
+
+The aggregate is complete only when it reaches a marker beginning with
+`Shibumi complete contract regression passed`. The marker names the selected
+installed-package, installed-source-parity, or forward-compat baseline and its
+full source revision. Missing or drifted host files, a missing Quickshell
+runtime, or any skipped host matrix fail the run before that marker.
+
+The V1/V2 predecessor inventory is pinned portably in
+`contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json`. To additionally
+verify a local checkout byte-for-byte, pass its absolute path without encoding
+that machine-specific path in a contract:
+
+```bash
+SHIBUMI_PREDECESSOR_PATH=/path/to/quickshell-dots \
+  ./tests/reference-baseline-regression.sh
 ```
 
 The full contract covers:

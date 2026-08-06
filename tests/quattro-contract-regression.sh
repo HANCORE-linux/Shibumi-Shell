@@ -3,7 +3,9 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
+source "$repo_root/tests/lib/baselines.sh"
+shibumi_load_omarchy_baseline
+omarchy_path=$OMARCHY_PATH
 suite="$repo_root/contracts/plugin-suite-v1.json"
 registry="$omarchy_path/shell/services/PluginRegistry.qml"
 shell_root="$omarchy_path/shell/shell.qml"

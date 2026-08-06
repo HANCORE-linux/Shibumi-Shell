@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "referenceRepository": "https://github.com/HANCORE-linux/quickshell-dots",
   "referenceRevision": "d0896fc532a216b281951157563ff34092b91a0a",
-  "embeddedRoot": "../Quickshell-Dots/versions/V1/variants/V2",
-  "standaloneRoot": "../Quickshell-Dots/versions/V2",
+  "referenceBaseline": "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
+  "referenceRootId": "v1EmbeddedV2",
+  "standaloneRootId": "v2",
   "standaloneOnly": [
     {
       "source": "shell.qml",

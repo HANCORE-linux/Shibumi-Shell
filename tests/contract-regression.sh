@@ -3,6 +3,8 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$repo_root/tests/lib/baselines.sh"
+shibumi_load_omarchy_baseline
 cd "$repo_root"
 
 fail() {
@@ -13,7 +15,9 @@ fail() {
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 command -v rg >/dev/null 2>&1 || fail "rg is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
+[[ -x /usr/bin/quickshell ]] || fail "quickshell is required for the complete contract"
 
+"$repo_root/tests/baseline-contract-regression.sh"
 "$repo_root/tests/documentation-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
@@ -910,15 +914,13 @@ if find . -path ./.git -prune -o -type l -print -quit | grep -q .; then
   fail "plugin payload contains a symlink"
 fi
 
-if [[ -n ${OMARCHY_PATH:-} && -x ${OMARCHY_PATH}/bin/omarchy-plugin-validate ]]; then
-  if "${OMARCHY_PATH}/bin/omarchy-plugin-validate" "$repo_root" >/dev/null 2>&1; then
-    fail "repository root unexpectedly passes the single-plugin validator"
-  fi
-  while IFS= read -r plugin_id; do
-    [[ -d $repo_root/$plugin_id ]] || continue
-    "${OMARCHY_PATH}/bin/omarchy-plugin-validate" "$repo_root/$plugin_id"
-  done < <(jq -r '.plugins[].id' contracts/plugin-suite-v1.json)
+if "${OMARCHY_PATH}/bin/omarchy-plugin-validate" "$repo_root" >/dev/null 2>&1; then
+  fail "repository root unexpectedly passes the single-plugin validator"
 fi
+while IFS= read -r plugin_id; do
+  [[ -d $repo_root/$plugin_id ]] || continue
+  "${OMARCHY_PATH}/bin/omarchy-plugin-validate" "$repo_root/$plugin_id"
+done < <(jq -r '.plugins[].id' contracts/plugin-suite-v1.json)
 
 "$repo_root/tests/style-contract-regression.sh"
 "$repo_root/tests/picker-helper-regression.sh"
@@ -962,32 +964,29 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
 "$repo_root/tests/health-diagnostics-regression.sh"
 "$repo_root/tests/plugin-update-selector-regression.sh"
 
-if [[ -x /usr/bin/quickshell ]]; then
-  quote_smoke_root=$(mktemp -d)
-  mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \
-    "$quote_smoke_root/home"
-  chmod 700 "$quote_smoke_root/runtime"
-  cp services/QuoteDefaults.js services/ReactorModel.js \
-    services/QuoteService.qml "$quote_smoke_root/services/"
-  cp tests/quote-service-smoke.qml "$quote_smoke_root/shell.qml"
-  set +e
-  quote_service_output=$(timeout 4 env \
-    HOME="$quote_smoke_root/home" \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$quote_smoke_root/runtime" \
-    /usr/bin/quickshell -p "$quote_smoke_root" 2>&1)
-  quote_service_rc=$?
-  set -e
-  rm -rf -- "$quote_smoke_root"
-  printf '%s\n' "$quote_service_output"
-  [[ $quote_service_rc -eq 0 ]] \
-    || fail "quote service smoke exited $quote_service_rc"
-  grep -q 'quote service smoke passed' <<<"$quote_service_output" \
-    || fail "quote service smoke did not emit its first quote"
-fi
+quote_smoke_root=$(mktemp -d)
+mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \
+  "$quote_smoke_root/home"
+chmod 700 "$quote_smoke_root/runtime"
+cp services/QuoteDefaults.js services/ReactorModel.js \
+  services/QuoteService.qml "$quote_smoke_root/services/"
+cp tests/quote-service-smoke.qml "$quote_smoke_root/shell.qml"
+set +e
+quote_service_output=$(timeout 4 env \
+  HOME="$quote_smoke_root/home" \
+  QT_QPA_PLATFORM=offscreen \
+  XDG_RUNTIME_DIR="$quote_smoke_root/runtime" \
+  /usr/bin/quickshell -p "$quote_smoke_root" 2>&1)
+quote_service_rc=$?
+set -e
+rm -rf -- "$quote_smoke_root"
+printf '%s\n' "$quote_service_output"
+[[ $quote_service_rc -eq 0 ]] \
+  || fail "quote service smoke exited $quote_service_rc"
+grep -q 'quote service smoke passed' <<<"$quote_service_output" \
+  || fail "quote service smoke did not emit its first quote"
 
-if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell ]]; then
-  OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
+OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/theme-palette-runtime-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/control-center-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/telemetry-plugins-regression.sh"
@@ -1474,6 +1473,5 @@ if [[ -n ${OMARCHY_PATH:-} && -d ${OMARCHY_PATH}/shell && -x /usr/bin/quickshell
     fail "workspace panel smoke has an undefined control appearance token"
   fi
 
-fi
-
-printf 'Shibumi contract regression passed\n'
+printf 'Shibumi complete contract regression passed (Omarchy baseline %s; source %s)\n' \
+  "$SHIBUMI_OMARCHY_BASELINE_ID" "$SHIBUMI_OMARCHY_SOURCE_REVISION"

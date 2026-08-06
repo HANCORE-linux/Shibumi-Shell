@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 contract="$repo_root/contracts/v2-source-evidence.json"
+baseline="$repo_root/$(jq -r '.referenceBaseline' "$contract")"
 
 fail() {
   printf 'V2 source evidence regression failed: %s\n' "$*" >&2
@@ -11,10 +12,12 @@ fail() {
 }
 
 command -v jq >/dev/null 2>&1 || fail "jq is required"
-command -v realpath >/dev/null 2>&1 || fail "realpath is required"
+command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required"
 
 jq -e '
   .schemaVersion == 1
+  and .referenceRootId == "v2"
+  and (.referenceBaseline | type == "string" and length > 0)
   and (.features | type == "array" and length > 0)
   and all(.features[];
     (.id | type == "string" and length > 0)
@@ -24,31 +27,21 @@ jq -e '
     and (.evidence | type == "array" and length > 0))
 ' "$contract" >/dev/null || fail "contract shape is invalid"
 
-reference_root=$(realpath -e "$repo_root/$(jq -r '.referenceRoot' "$contract")") \
-  || fail "V2 reference root is missing"
-
-actual=$(mktemp)
 declared=$(mktemp)
 duplicates=$(mktemp)
-trap 'rm -f -- "$actual" "$declared" "$duplicates"' EXIT
-
-find "$reference_root" -maxdepth 2 -type f \
-  \( -name '*.qml' -o -name '*.js' \) -printf '%P\n' \
-  | sort >"$actual"
+trap 'rm -f -- "$declared" "$duplicates"' EXIT
+[[ -r $baseline ]] || fail "pinned V2 baseline is missing"
 
 jq -r '.features[].sources[]' "$contract" | sort >"$declared"
 jq -r '.features[].sources[]' "$contract" | sort | uniq -d >"$duplicates"
 [[ ! -s $duplicates ]] \
   || fail "V2 sources are covered more than once: $(tr '\n' ' ' <"$duplicates")"
-cmp -s "$actual" "$declared" || {
-  diff -u "$actual" "$declared" >&2 || true
-  fail "V2 root/module/panel inventory is not covered exactly"
-}
-
-while IFS= read -r path; do
-  [[ -s "$reference_root/$path" ]] \
-    || fail "declared V2 source is missing: $path"
-done < <(jq -r '.features[].sources[]' "$contract")
+expected_count=$(jq -r '.roots.v2.sourceCount' "$baseline")
+expected_inventory=$(jq -r '.roots.v2.inventorySha256' "$baseline")
+[[ $(wc -l <"$declared") == "$expected_count" ]] \
+  || fail "V2 source count is not bound to the pinned fixture"
+[[ $(sha256sum "$declared" | awk '{print $1}') == "$expected_inventory" ]] \
+  || fail "V2 source inventory is not bound to the pinned fixture"
 
 while IFS= read -r path; do
   [[ -s "$repo_root/$path" ]] \
@@ -61,4 +54,4 @@ while IFS= read -r path; do
 done < <(jq -r '.features[].evidence[]' "$contract")
 
 printf 'V2 source evidence regression passed (%s source surfaces)\n' \
-  "$(wc -l <"$actual")"
+  "$(wc -l <"$declared")"

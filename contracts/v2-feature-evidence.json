@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "referenceRoot": "/home/hancore/Projects/Quickshell-Dots/versions/V2",
+  "referenceBaseline": "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
+  "referenceRootId": "v2",
   "features": [
     {"id":"bar-shell.full","implementation":["styles/shibumi/RunChrome.qml","styles/shibumi/BarSurface.qml"],"tests":["tests/shibumi-presentation-smoke.qml","tests/style-contract-regression.sh"]},
     {"id":"bar-shell.fit","implementation":["styles/shibumi/RunChrome.qml","styles/shibumi/BarSurface.qml"],"tests":["tests/shibumi-presentation-smoke.qml","tests/style-contract-regression.sh"]},

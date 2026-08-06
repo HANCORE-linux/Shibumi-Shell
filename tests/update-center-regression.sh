@@ -3,9 +3,11 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$repo_root/tests/lib/baselines.sh"
+shibumi_load_omarchy_baseline
 plugin="$repo_root/hancore.shibumi.update-center"
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
-omarchy_path=${OMARCHY_PATH:-}
+omarchy_path=$OMARCHY_PATH
 tmpdir=$(mktemp -d /tmp/shibumi-update-center.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
 
@@ -14,14 +16,6 @@ fail() {
   exit 1
 }
 
-if [[ -z $omarchy_path ]]; then
-  for candidate in /usr/share/omarchy "$HOME/.local/share/omarchy"; do
-    if [[ -d $candidate/shell ]]; then
-      omarchy_path=$candidate
-      break
-    fi
-  done
-fi
 [[ -d $omarchy_path/shell ]] \
   || fail 'Omarchy shell is required for the update-center UI smoke'
 

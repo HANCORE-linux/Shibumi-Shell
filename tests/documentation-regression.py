@@ -133,19 +133,44 @@ def verify_source_install_block(block: str) -> None:
 
 
 def main() -> None:
+    current_content: dict[str, str] = {}
     for relative in CURRENT_DOCUMENTS:
         source = REPO_ROOT / relative
         if not source.is_file():
             fail(f"missing current document: {relative}")
         content = source.read_text(encoding="utf-8")
+        current_content[relative] = content
         for raw_target in LINK_PATTERN.findall(content):
             target = local_target(source, raw_target)
             if target is not None and not target.exists():
                 fail(f"broken local link in {relative}: {raw_target}")
 
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    if "/home/hancore/Projects/Quickshell-Dots" in readme:
+    private_project_root = "/home/" + "hancore/Projects/"
+    if private_project_root + "Quickshell-Dots" in readme:
         fail("README exposes the internal QS Rise worktree path")
+
+    private_baseline_paths = (
+        private_project_root + "Quickshell-Dots",
+        private_project_root + "omarchy-updates-pr",
+    )
+    for relative, content in current_content.items():
+        if any(path in content for path in private_baseline_paths):
+            fail(f"current documentation exposes a private baseline path: {relative}")
+
+    testing_guide = current_content["docs/development/testing.md"]
+    for marker in (
+        "contracts/baselines/omarchy-installed-package-12af188.json",
+        "contracts/baselines/omarchy-installed-source-parity-12af188.json",
+        "contracts/baselines/omarchy-forward-compat-fd1034f.json",
+        "./tests/omarchy-installed-package-contract-regression.sh",
+        "./tests/omarchy-installed-source-parity-contract-regression.sh",
+        "./tests/omarchy-forward-compat-contract-regression.sh",
+        "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
+        "Shibumi complete contract regression passed",
+    ):
+        if marker not in testing_guide:
+            fail(f"testing guide does not explain the baseline contract: {marker}")
 
     readme_images = [
         match.group(1) or match.group(2)

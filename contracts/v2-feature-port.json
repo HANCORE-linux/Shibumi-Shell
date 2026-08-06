@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
-  "referenceRoot": "/home/hancore/Projects/Quickshell-Dots/versions/V2",
+  "referenceBaseline": "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
+  "referenceRootId": "v2",
   "policy": {
     "decision": "port-all-user-visible-outcomes",
     "copyLegacyBackends": false,

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "quickshell-dots-d0896fc-v2-deec8103",
+  "repository": "https://github.com/HANCORE-linux/quickshell-dots",
+  "roots": {
+    "v1": {
+      "subtree": "versions/V1",
+      "provenance": "git",
+      "revision": "d0896fc532a216b281951157563ff34092b91a0a",
+      "sourceCount": 72,
+      "inventorySha256": "f0fd22f35047916a2b401a73bc083d5593994c24bd9ff3efa3ea3cd5f606c7c2",
+      "contentSha256": "87c6f2ab8a5e4165b269dcbd56e217415a1fa6c5f900c0da5212ccfa325099b6"
+    },
+    "v1EmbeddedV2": {
+      "subtree": "versions/V1/variants/V2",
+      "provenance": "git",
+      "revision": "d0896fc532a216b281951157563ff34092b91a0a",
+      "sourceCount": 79,
+      "inventorySha256": "51c65d065e25e97c8a9435c5f51f296f662004f2b46fc2d09b459f43d3542380",
+      "contentSha256": "34b51c00c946e8ac6a06c59f7fcec7e43c951e2890d28bfb186f2755260185e9"
+    },
+    "v2": {
+      "subtree": "versions/V2",
+      "provenance": "content-snapshot",
+      "sourceCount": 80,
+      "inventorySha256": "a07c8b781acd1a176c34cec9917abc07e1167814984705d1e9efd76612873894",
+      "contentSha256": "deec810392f44e8cf9d8f232593a834a35902c52e862200d686ce625d0c234ec"
+    }
+  },
+  "comparisons": {
+    "embeddedToStandaloneV2": {
+      "embeddedRootId": "v1EmbeddedV2",
+      "standaloneRootId": "v2",
+      "standaloneOnlyCount": 1,
+      "standaloneOnlySha256": "999dcb6d811e32807ba475697f3d60bec37bfca943b33cd1ce165fe4faef28d3",
+      "changedCount": 26,
+      "changedSha256": "c0f27e90d50bf5da650416dd86ac79ee415f622ec9061c7aed5f8d7b2659acd2"
+    }
+  }
+}
