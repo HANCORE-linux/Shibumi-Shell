@@ -12,6 +12,7 @@ either implementation.  Time is synthetic: no test sleeps on wall-clock time.
 from __future__ import annotations
 
 import json
+import math
 import runpy
 import sys
 import tempfile
@@ -40,6 +41,10 @@ CONTRACT_QUIET_SECONDS = 0.1
 SHORT_DEADLINE_SECONDS = 0.2
 LONG_DEADLINE_SECONDS = 0.6
 DEADLINE_OVERRUN_SECONDS = CONTRACT_QUIET_SECONDS + 0.05
+COMMAND_LATENCY_PROFILES = {
+    "fast": (0.005, 0.008),
+    "slow": (0.04, 0.06),
+}
 
 
 @dataclass
@@ -49,6 +54,7 @@ class SyntheticClock:
     now: float = 0.0
     reads: int = 0
     sleeps: list[float] = field(default_factory=list)
+    command_delays: list[float] = field(default_factory=list)
 
     def monotonic(self) -> float:
         self.reads += 1
@@ -57,6 +63,11 @@ class SyntheticClock:
     def sleep(self, seconds: float) -> None:
         duration = max(0.0, seconds)
         self.sleeps.append(duration)
+        self.now += duration
+
+    def advance_command(self, seconds: float) -> None:
+        duration = max(0.0, seconds)
+        self.command_delays.append(duration)
         self.now += duration
 
 
@@ -71,6 +82,8 @@ class DrainScenario:
     temporary_respawns: int = 0
     clock: SyntheticClock | None = None
     timed_empty_respawn_delay: float | None = None
+    registry_latency: float = 0.0
+    kill_latency: float = 0.0
     registry_malformed: bool = False
     matching: list[dict[str, object]] = field(init=False, default_factory=list)
     foreign: list[dict[str, object]] = field(init=False, default_factory=list)
@@ -110,8 +123,12 @@ class DrainScenario:
             raise AssertionError("INC-013 candidate did not terminate")
 
         if argv[:3] == ("quickshell", "kill", "-p"):
+            if self.clock is not None:
+                self.clock.advance_command(self.kill_latency)
             return self._kill(argv)
         if argv == ("quickshell", "list", "--all", "--json"):
+            if self.clock is not None:
+                self.clock.advance_command(self.registry_latency)
             return self._list()
         raise AssertionError(f"unexpected command in INC-013 contract: {argv!r}")
 
@@ -283,6 +300,10 @@ def assert_deadline_failure(
         "nonconvergence followed an attempt cap instead of the requested deadline",
     )
     testcase.assertTrue(clock.sleeps, "deadline polling must not busy-spin")
+    testcase.assertTrue(
+        clock.command_delays,
+        "deadline profile did not include command execution time",
+    )
 
     message = str(raised.exception)
     testcase.assertRegex(message.lower(), r"progress|drain|converg|deadline")
@@ -379,6 +400,65 @@ class FixedCapImmediateEmptyMutation:
         )
 
 
+class TimeoutDerivedAttemptBudgetMutation:
+    """Wrong candidate deriving counts from timeout while ignoring command time."""
+
+    name = "timeout-derived-attempt-budget"
+    error_type = MutationCandidateError
+
+    @staticmethod
+    def run(
+        scenario: DrainScenario,
+        clock: SyntheticClock,
+        *,
+        timeout: float | None = None,
+        quiet_period: float | None = None,
+    ) -> None:
+        poll = 0.05
+        effective_timeout = 5.0 if timeout is None else timeout
+        effective_quiet = 0.1 if quiet_period is None else quiet_period
+        attempts = math.ceil(effective_timeout / poll)
+        empty_attempts_needed = math.ceil(effective_quiet / poll)
+        clock.monotonic()  # Pro-forma only: command latency is never observed.
+        empty_attempts = 0
+        for _attempt in range(attempts):
+            result = scenario.run(["quickshell", "list", "--all", "--json"])
+            try:
+                values = json.loads(result.stdout)
+            except (TypeError, json.JSONDecodeError) as error:
+                raise MutationCandidateError("registry malformed JSON") from error
+            expected = str(scenario.config_path.resolve(strict=False))
+            matching = [
+                value
+                for value in values
+                if isinstance(value, dict)
+                and isinstance(value.get("config_path"), str)
+                and str(Path(value["config_path"]).resolve(strict=False))
+                == expected
+            ]
+            if matching:
+                empty_attempts = 0
+                scenario.run(
+                    [
+                        "quickshell",
+                        "kill",
+                        "-p",
+                        str(scenario.shell_path),
+                        "--any-display",
+                    ]
+                )
+            else:
+                empty_attempts += 1
+                if empty_attempts > empty_attempts_needed:
+                    clock.sleep(poll)
+                    return
+            clock.sleep(poll)
+        remaining = ",".join(scenario.remaining_ids)
+        raise MutationCandidateError(
+            f"drain deadline reached without progress; remaining={remaining}"
+        )
+
+
 class Incident013DrainContractTests(unittest.TestCase):
     """Behavioral contract: drain to stable registry emptiness, not a count cap."""
 
@@ -425,66 +505,84 @@ class Incident013DrainContractTests(unittest.TestCase):
 
     def test_respawn_during_empty_quiet_window_is_not_missed(self):
         for adapter in ADAPTERS:
-            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
-                clock = SyntheticClock()
-                scenario = self.make_scenario(
-                    tmp,
-                    matching_count=1,
-                    clock=clock,
-                    timed_empty_respawn_delay=CONTRACT_QUIET_SECONDS / 2,
-                )
-
-                assert_quiet_window_convergence(self, adapter, scenario, clock)
-
-    def test_permanent_respawn_fails_on_monotonic_deadline_with_registry_evidence(self):
-        for adapter in ADAPTERS:
-            kill_counts = []
-            for timeout in (SHORT_DEADLINE_SECONDS, LONG_DEADLINE_SECONDS):
-                with self.subTest(path=adapter.name, timeout=timeout), tempfile.TemporaryDirectory() as tmp:
+            for profile, latencies in COMMAND_LATENCY_PROFILES.items():
+                with self.subTest(path=adapter.name, latency=profile), tempfile.TemporaryDirectory() as tmp:
                     clock = SyntheticClock()
                     scenario = self.make_scenario(
                         tmp,
                         matching_count=1,
-                        behavior="permanent-respawn",
                         clock=clock,
+                        timed_empty_respawn_delay=CONTRACT_QUIET_SECONDS / 2,
+                        registry_latency=latencies[0],
+                        kill_latency=latencies[1],
                     )
-                    kill_counts.append(
-                        assert_deadline_failure(
-                            self,
-                            adapter,
-                            scenario,
-                            clock,
-                            timeout,
+
+                    assert_quiet_window_convergence(
+                        self,
+                        adapter,
+                        scenario,
+                        clock,
+                    )
+
+    def test_permanent_respawn_fails_on_monotonic_deadline_with_registry_evidence(self):
+        for adapter in ADAPTERS:
+            for profile, latencies in COMMAND_LATENCY_PROFILES.items():
+                kill_counts = []
+                for timeout in (SHORT_DEADLINE_SECONDS, LONG_DEADLINE_SECONDS):
+                    with self.subTest(
+                        path=adapter.name,
+                        latency=profile,
+                        timeout=timeout,
+                    ), tempfile.TemporaryDirectory() as tmp:
+                        clock = SyntheticClock()
+                        scenario = self.make_scenario(
+                            tmp,
+                            matching_count=1,
+                            behavior="permanent-respawn",
+                            clock=clock,
+                            registry_latency=latencies[0],
+                            kill_latency=latencies[1],
                         )
-                    )
-            self.assertEqual(
-                2,
-                len(kill_counts),
-                "both requested deadline profiles must complete",
-            )
-            self.assertGreater(
-                kill_counts[1],
-                kill_counts[0],
-                "work remained tied to a fixed attempt count instead of elapsed time",
-            )
+                        kill_counts.append(
+                            assert_deadline_failure(
+                                self,
+                                adapter,
+                                scenario,
+                                clock,
+                                timeout,
+                            )
+                        )
+                self.assertEqual(
+                    2,
+                    len(kill_counts),
+                    "both requested deadline profiles must complete",
+                )
+                self.assertGreater(
+                    kill_counts[1],
+                    kill_counts[0],
+                    "work remained tied to a fixed attempt count instead of elapsed time",
+                )
 
     def test_no_progress_fails_on_monotonic_deadline_with_registry_evidence(self):
         for adapter in ADAPTERS:
-            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
-                clock = SyntheticClock()
-                scenario = self.make_scenario(
-                    tmp,
-                    matching_count=2,
-                    behavior="no-progress",
-                    clock=clock,
-                )
-                assert_deadline_failure(
-                    self,
-                    adapter,
-                    scenario,
-                    clock,
-                    SHORT_DEADLINE_SECONDS,
-                )
+            for profile, latencies in COMMAND_LATENCY_PROFILES.items():
+                with self.subTest(path=adapter.name, latency=profile), tempfile.TemporaryDirectory() as tmp:
+                    clock = SyntheticClock()
+                    scenario = self.make_scenario(
+                        tmp,
+                        matching_count=2,
+                        behavior="no-progress",
+                        clock=clock,
+                        registry_latency=latencies[0],
+                        kill_latency=latencies[1],
+                    )
+                    assert_deadline_failure(
+                        self,
+                        adapter,
+                        scenario,
+                        clock,
+                        SHORT_DEADLINE_SECONDS,
+                    )
 
     def test_foreign_only_registry_is_success_without_cross_targeting(self):
         for adapter in ADAPTERS:
@@ -562,6 +660,27 @@ class Incident013ContractMutationTests(unittest.TestCase):
                     FixedCapImmediateEmptyMutation,
                     scenario,
                     clock,
+                )
+
+    def test_timeout_derived_attempt_budget_ignoring_command_time_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = SyntheticClock()
+            latencies = COMMAND_LATENCY_PROFILES["slow"]
+            scenario = DrainScenario(
+                root=Path(tmp) / "omarchy",
+                matching_count=1,
+                behavior="permanent-respawn",
+                clock=clock,
+                registry_latency=latencies[0],
+                kill_latency=latencies[1],
+            )
+            with self.assertRaises(AssertionError):
+                assert_deadline_failure(
+                    self,
+                    TimeoutDerivedAttemptBudgetMutation,
+                    scenario,
+                    clock,
+                    SHORT_DEADLINE_SECONDS,
                 )
 
 
