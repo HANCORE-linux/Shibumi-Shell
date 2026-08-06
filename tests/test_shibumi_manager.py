@@ -20,6 +20,20 @@ MANAGER = (
     / "shibumi-manager"
 )
 
+QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
+INVALID_EMPTY_REGISTRY_OUTPUTS = (
+    "",
+    "No running instances.",
+    " No running instances.\n",
+    "No running instances. \n",
+    "No running instances.\r\n",
+    "No running instances.\nextra",
+    "prefix No running instances.\n",
+    "{}",
+    "null",
+    "not-json\n",
+)
+
 
 class ContinuityManagerTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -502,6 +516,58 @@ class ContinuityManagerTests(unittest.TestCase):
             [call.args[0] for call in run.call_args_list],
             [registry, kill, registry],
         )
+
+    def test_empty_quickshell_registry_sentinel_is_an_empty_array(self) -> None:
+        runtime_paths = {"omarchy_root": self.root / "omarchy"}
+        completed = Mock(
+            returncode=0,
+            stdout=QUICKSHELL_EMPTY_REGISTRY,
+            stderr="",
+        )
+        globals_map = self.module["matching_shell_instances"].__globals__
+        with patch.object(
+            globals_map["subprocess"], "run", return_value=completed
+        ):
+            instances = self.module["matching_shell_instances"](runtime_paths)
+        self.assertEqual(instances, [])
+
+    def test_quickshell_registry_json_arrays_remain_supported(self) -> None:
+        omarchy_root = self.root / "omarchy"
+        runtime_paths = {"omarchy_root": omarchy_root}
+        matching = {
+            "id": "target-1",
+            "config_path": str(omarchy_root / "shell/shell.qml"),
+            "pid": 41001,
+        }
+        globals_map = self.module["matching_shell_instances"].__globals__
+        for stdout, expected in (
+            ("[]", []),
+            (json.dumps([matching]), [matching]),
+        ):
+            with self.subTest(stdout=stdout):
+                completed = Mock(returncode=0, stdout=stdout, stderr="")
+                with patch.object(
+                    globals_map["subprocess"], "run", return_value=completed
+                ):
+                    self.assertEqual(
+                        self.module["matching_shell_instances"](runtime_paths),
+                        expected,
+                    )
+
+    def test_empty_registry_sentinel_variants_fail_closed(self) -> None:
+        runtime_paths = {"omarchy_root": self.root / "omarchy"}
+        globals_map = self.module["matching_shell_instances"].__globals__
+        for stdout in INVALID_EMPTY_REGISTRY_OUTPUTS:
+            with self.subTest(stdout=stdout):
+                completed = Mock(returncode=0, stdout=stdout, stderr="")
+                with patch.object(
+                    globals_map["subprocess"], "run", return_value=completed
+                ):
+                    with self.assertRaisesRegex(
+                        self.module["ManagerError"],
+                        "malformed JSON|not an array",
+                    ):
+                        self.module["matching_shell_instances"](runtime_paths)
 
     def test_reload_falls_back_for_older_omarchy(self) -> None:
         runtime_paths = {

@@ -237,12 +237,15 @@ class OmarchyRuntime:
             ["quickshell", "list", "--all", "--json"],
             timeout=timeout,
         )
-        try:
-            values = json.loads(result.stdout)
-        except json.JSONDecodeError as error:
-            raise RuntimeFailure(
-                "Quickshell returned malformed instance JSON"
-            ) from error
+        if result.stdout == "No running instances.\n":
+            values = []
+        else:
+            try:
+                values = json.loads(result.stdout)
+            except json.JSONDecodeError as error:
+                raise RuntimeFailure(
+                    "Quickshell returned malformed instance JSON"
+                ) from error
         if not isinstance(values, list):
             raise RuntimeFailure("Quickshell instance response is not an array")
         return [value for value in values if isinstance(value, dict)]

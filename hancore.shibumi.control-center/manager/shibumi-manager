@@ -446,10 +446,15 @@ def matching_shell_instances(
             "cannot inspect Quickshell registry"
             + (f": {detail}" if detail else f" (exit {result.returncode})")
         )
-    try:
-        values = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
-        raise ManagerError("Quickshell registry returned malformed JSON") from error
+    if result.stdout == "No running instances.\n":
+        values = []
+    else:
+        try:
+            values = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise ManagerError(
+                "Quickshell registry returned malformed JSON"
+            ) from error
     if not isinstance(values, list):
         raise ManagerError("Quickshell registry response is not an array")
 

@@ -313,7 +313,10 @@ class Probe:
                     raise RuntimeError(
                         result.stderr or result.stdout or "instance query failed"
                     )
-                values = json.loads(result.stdout)
+                if result.stdout == "No running instances.\n":
+                    values = []
+                else:
+                    values = json.loads(result.stdout)
                 if not isinstance(values, list):
                     raise ValueError("instance result is not an array")
 

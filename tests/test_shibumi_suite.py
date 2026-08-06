@@ -59,6 +59,21 @@ from shibumi_suite.transaction import (  # noqa: E402
 )
 
 
+QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
+INVALID_EMPTY_REGISTRY_OUTPUTS = (
+    "",
+    "No running instances.",
+    " No running instances.\n",
+    "No running instances. \n",
+    "No running instances.\r\n",
+    "No running instances.\nextra",
+    "prefix No running instances.\n",
+    "{}",
+    "null",
+    "not-json\n",
+)
+
+
 class FakeOmarchyRuntime(OmarchyRuntime):
     def __init__(self, paths: RuntimePaths) -> None:
         super().__init__()
@@ -285,6 +300,32 @@ class RuntimeProcessTests(unittest.TestCase):
         ]
         registry = ["quickshell", "list", "--all", "--json"]
         self.assertEqual(commands, [registry, kill, registry])
+
+    def test_empty_quickshell_registry_sentinel_is_an_empty_array(self) -> None:
+        self.runtime.run = Mock(return_value=self.result(
+            QUICKSHELL_EMPTY_REGISTRY
+        ))
+        self.assertEqual(self.runtime.quickshell_instances(), [])
+
+    def test_quickshell_registry_json_arrays_remain_supported(self) -> None:
+        instance = {"config_path": "/tmp/shell.qml", "pid": 4242}
+        for stdout, expected in (
+            ("[]", []),
+            (json.dumps([instance]), [instance]),
+        ):
+            with self.subTest(stdout=stdout):
+                self.runtime.run = Mock(return_value=self.result(stdout))
+                self.assertEqual(self.runtime.quickshell_instances(), expected)
+
+    def test_empty_registry_sentinel_variants_fail_closed(self) -> None:
+        for stdout in INVALID_EMPTY_REGISTRY_OUTPUTS:
+            with self.subTest(stdout=stdout):
+                self.runtime.run = Mock(return_value=self.result(stdout))
+                with self.assertRaisesRegex(
+                    RuntimeFailure,
+                    "malformed instance JSON|not an array",
+                ):
+                    self.runtime.quickshell_instances()
 
     def test_layer_guard_rejects_stock_and_shibumi_bars_together(self) -> None:
         layers = {
