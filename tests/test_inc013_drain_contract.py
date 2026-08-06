@@ -36,22 +36,28 @@ MANAGER_PATH = (
 )
 MANAGER = runpy.run_path(str(MANAGER_PATH))
 
+CONTRACT_QUIET_SECONDS = 0.1
+SHORT_DEADLINE_SECONDS = 0.2
+LONG_DEADLINE_SECONDS = 0.6
+DEADLINE_OVERRUN_SECONDS = CONTRACT_QUIET_SECONDS + 0.05
+
 
 @dataclass
 class SyntheticClock:
-    """Monotonic clock advanced only by observations or synthetic sleeps."""
+    """Monotonic clock advanced only by synthetic sleeps."""
 
     now: float = 0.0
     reads: int = 0
+    sleeps: list[float] = field(default_factory=list)
 
     def monotonic(self) -> float:
-        value = self.now
-        self.now += 0.01
         self.reads += 1
-        return value
+        return self.now
 
     def sleep(self, seconds: float) -> None:
-        self.now += max(0.0, seconds)
+        duration = max(0.0, seconds)
+        self.sleeps.append(duration)
+        self.now += duration
 
 
 @dataclass
@@ -63,7 +69,8 @@ class DrainScenario:
     foreign_count: int = 2
     behavior: str = "finite"
     temporary_respawns: int = 0
-    post_empty_respawns: int = 0
+    clock: SyntheticClock | None = None
+    timed_empty_respawn_delay: float | None = None
     registry_malformed: bool = False
     matching: list[dict[str, object]] = field(init=False, default_factory=list)
     foreign: list[dict[str, object]] = field(init=False, default_factory=list)
@@ -71,6 +78,9 @@ class DrainScenario:
     kill_calls: int = field(init=False, default=0)
     registry_reads: int = field(init=False, default=0)
     next_pid: int = field(init=False, default=41000)
+    empty_started_at: float | None = field(init=False, default=None)
+    timed_respawn_injected_at: float | None = field(init=False, default=None)
+    empty_snapshot_times: list[float] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         self.shell_path = self.root / "shell"
@@ -96,6 +106,8 @@ class DrainScenario:
     def run(self, command, **_kwargs):
         argv = tuple(str(part) for part in command)
         self.commands.append(argv)
+        if len(self.commands) > 5000:
+            raise AssertionError("INC-013 candidate did not terminate")
 
         if argv[:3] == ("quickshell", "kill", "-p"):
             return self._kill(argv)
@@ -120,6 +132,8 @@ class DrainScenario:
 
         if self.behavior != "no-progress":
             self.matching.pop(0)
+            if not self.matching:
+                self.empty_started_at = None
 
         if self.behavior == "permanent-respawn":
             self.matching.append(self._new_instance(self.config_path, "respawn"))
@@ -133,12 +147,31 @@ class DrainScenario:
         self.registry_reads += 1
         if self.registry_malformed:
             return SimpleNamespace(returncode=0, stdout="{not-json", stderr="")
+
+        now = self.clock.now if self.clock is not None else 0.0
+        if not self.matching:
+            if self.empty_started_at is None:
+                self.empty_started_at = now
+            self.empty_snapshot_times.append(now)
+            due_at = (
+                self.empty_started_at + self.timed_empty_respawn_delay
+                if self.timed_empty_respawn_delay is not None
+                else None
+            )
+            if (
+                due_at is not None
+                and self.timed_respawn_injected_at is None
+                and now >= due_at
+            ):
+                self.matching.append(
+                    self._new_instance(self.config_path, "late-respawn")
+                )
+                self.timed_respawn_injected_at = now
+                self.empty_started_at = None
+        else:
+            self.empty_started_at = None
+
         payload = json.dumps([*self.matching, *self.foreign])
-        # Model a process that appears only after an empty registry snapshot was
-        # returned.  A single empty read is therefore not a stable drain proof.
-        if not self.matching and self.post_empty_respawns > 0:
-            self.post_empty_respawns -= 1
-            self.matching.append(self._new_instance(self.config_path, "late-respawn"))
         return SimpleNamespace(returncode=0, stdout=payload, stderr="")
 
 
@@ -147,7 +180,13 @@ class ManagerAdapter:
     error_type = MANAGER["ManagerError"]
 
     @staticmethod
-    def run(scenario: DrainScenario, clock: SyntheticClock) -> None:
+    def run(
+        scenario: DrainScenario,
+        clock: SyntheticClock,
+        *,
+        timeout: float | None = None,
+        quiet_period: float | None = None,
+    ) -> None:
         paths = {
             "omarchy_root": scenario.root,
             "shell": scenario.root / "bin" / "omarchy-shell",
@@ -170,7 +209,12 @@ class ManagerAdapter:
                 side_effect=clock.sleep,
             ),
         ):
-            MANAGER["stop_shell"](paths)
+            timing = {}
+            if timeout is not None:
+                timing["timeout"] = timeout
+            if quiet_period is not None:
+                timing["quiet_period"] = quiet_period
+            MANAGER["stop_shell"](paths, **timing)
 
 
 class RuntimeAdapter:
@@ -178,7 +222,13 @@ class RuntimeAdapter:
     error_type = runtime_module.RuntimeFailure
 
     @staticmethod
-    def run(scenario: DrainScenario, clock: SyntheticClock) -> None:
+    def run(
+        scenario: DrainScenario,
+        clock: SyntheticClock,
+        *,
+        timeout: float | None = None,
+        quiet_period: float | None = None,
+    ) -> None:
         runtime = runtime_module.OmarchyRuntime(scenario.root)
         with (
             mock.patch.object(runtime, "run", side_effect=scenario.run),
@@ -193,10 +243,140 @@ class RuntimeAdapter:
                 side_effect=clock.sleep,
             ),
         ):
-            runtime.stop_shell()
+            timing = {}
+            if timeout is not None:
+                timing["timeout"] = timeout
+            if quiet_period is not None:
+                timing["quiet_period"] = quiet_period
+            runtime.stop_shell(**timing)
 
 
 ADAPTERS = (ManagerAdapter, RuntimeAdapter)
+
+
+def assert_deadline_failure(
+    testcase: unittest.TestCase,
+    adapter,
+    scenario: DrainScenario,
+    clock: SyntheticClock,
+    timeout: float,
+) -> int:
+    """Require time-bounded nonconvergence, never an attempt-count failure."""
+
+    with testcase.assertRaises(adapter.error_type) as raised:
+        adapter.run(
+            scenario,
+            clock,
+            timeout=timeout,
+            quiet_period=CONTRACT_QUIET_SECONDS,
+        )
+
+    elapsed = clock.now
+    testcase.assertGreaterEqual(
+        elapsed,
+        timeout,
+        "nonconvergence failed before the requested monotonic deadline",
+    )
+    testcase.assertLessEqual(
+        elapsed,
+        timeout + DEADLINE_OVERRUN_SECONDS,
+        "nonconvergence followed an attempt cap instead of the requested deadline",
+    )
+    testcase.assertTrue(clock.sleeps, "deadline polling must not busy-spin")
+
+    message = str(raised.exception)
+    testcase.assertRegex(message.lower(), r"progress|drain|converg|deadline")
+    testcase.assertTrue(
+        any(instance_id in message for instance_id in scenario.remaining_ids),
+        f"failure lacks remaining registry evidence: {message}",
+    )
+    return scenario.kill_calls
+
+
+def assert_quiet_window_convergence(
+    testcase: unittest.TestCase,
+    adapter,
+    scenario: DrainScenario,
+    clock: SyntheticClock,
+) -> None:
+    """Require elapsed stable-empty time and catch a respawn inside that time."""
+
+    adapter.run(
+        scenario,
+        clock,
+        timeout=LONG_DEADLINE_SECONDS,
+        quiet_period=CONTRACT_QUIET_SECONDS,
+    )
+
+    testcase.assertEqual([], scenario.matching)
+    testcase.assertIsNotNone(
+        scenario.timed_respawn_injected_at,
+        "the candidate returned before the within-window respawn became observable",
+    )
+    testcase.assertIsNotNone(scenario.empty_started_at)
+    testcase.assertGreaterEqual(
+        clock.now - scenario.empty_started_at,
+        CONTRACT_QUIET_SECONDS,
+        "success preceded the required elapsed stable-empty quiet period",
+    )
+    testcase.assertTrue(clock.sleeps, "quiet-window polling must not busy-spin")
+
+
+class MutationCandidateError(RuntimeError):
+    pass
+
+
+class FixedCapImmediateEmptyMutation:
+    """Deliberately wrong candidate used to prove the temporal contract is live."""
+
+    name = "fixed-100-immediate-double-empty"
+    error_type = MutationCandidateError
+
+    @staticmethod
+    def run(
+        scenario: DrainScenario,
+        clock: SyntheticClock,
+        *,
+        timeout: float | None = None,
+        quiet_period: float | None = None,
+    ) -> None:
+        del timeout, quiet_period
+        clock.monotonic()  # Pro-forma only: never compared with a deadline.
+        empty_snapshots = 0
+        for _attempt in range(100):
+            result = scenario.run(["quickshell", "list", "--all", "--json"])
+            try:
+                values = json.loads(result.stdout)
+            except (TypeError, json.JSONDecodeError) as error:
+                raise MutationCandidateError("registry malformed JSON") from error
+            expected = str(scenario.config_path.resolve(strict=False))
+            matching = [
+                value
+                for value in values
+                if isinstance(value, dict)
+                and isinstance(value.get("config_path"), str)
+                and str(Path(value["config_path"]).resolve(strict=False))
+                == expected
+            ]
+            if not matching:
+                empty_snapshots += 1
+                if empty_snapshots >= 2:
+                    return
+                continue
+            empty_snapshots = 0
+            scenario.run(
+                [
+                    "quickshell",
+                    "kill",
+                    "-p",
+                    str(scenario.shell_path),
+                    "--any-display",
+                ]
+            )
+        remaining = ",".join(scenario.remaining_ids)
+        raise MutationCandidateError(
+            f"drain deadline reached without progress; remaining={remaining}"
+        )
 
 
 class Incident013DrainContractTests(unittest.TestCase):
@@ -221,6 +401,12 @@ class Incident013DrainContractTests(unittest.TestCase):
                         0,
                         "success must be proved by the authoritative registry",
                     )
+                    if count == 0:
+                        self.assertEqual(
+                            0,
+                            scenario.kill_calls,
+                            "an empty matching registry must not issue a kill",
+                        )
 
     def test_temporary_respawn_still_converges(self):
         for adapter in ADAPTERS:
@@ -240,61 +426,64 @@ class Incident013DrainContractTests(unittest.TestCase):
     def test_respawn_during_empty_quiet_window_is_not_missed(self):
         for adapter in ADAPTERS:
             with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
                 scenario = self.make_scenario(
                     tmp,
                     matching_count=1,
-                    post_empty_respawns=1,
+                    clock=clock,
+                    timed_empty_respawn_delay=CONTRACT_QUIET_SECONDS / 2,
                 )
 
-                adapter.run(scenario, SyntheticClock())
-
-                self.assertEqual([], scenario.matching)
-                self.assertGreaterEqual(
-                    scenario.registry_reads,
-                    2,
-                    "success requires an empty-registry quiet window",
-                )
+                assert_quiet_window_convergence(self, adapter, scenario, clock)
 
     def test_permanent_respawn_fails_on_monotonic_deadline_with_registry_evidence(self):
         for adapter in ADAPTERS:
-            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
-                scenario = self.make_scenario(
-                    tmp,
-                    matching_count=1,
-                    behavior="permanent-respawn",
-                )
-                clock = SyntheticClock()
-
-                with self.assertRaises(adapter.error_type) as raised:
-                    adapter.run(scenario, clock)
-
-                message = str(raised.exception)
-                self.assertGreater(clock.reads, 0, "failure must use a monotonic deadline")
-                self.assertRegex(message.lower(), r"drain|converg|deadline")
-                self.assertTrue(
-                    any(instance_id in message for instance_id in scenario.remaining_ids),
-                    f"failure lacks remaining registry evidence: {message}",
-                )
+            kill_counts = []
+            for timeout in (SHORT_DEADLINE_SECONDS, LONG_DEADLINE_SECONDS):
+                with self.subTest(path=adapter.name, timeout=timeout), tempfile.TemporaryDirectory() as tmp:
+                    clock = SyntheticClock()
+                    scenario = self.make_scenario(
+                        tmp,
+                        matching_count=1,
+                        behavior="permanent-respawn",
+                        clock=clock,
+                    )
+                    kill_counts.append(
+                        assert_deadline_failure(
+                            self,
+                            adapter,
+                            scenario,
+                            clock,
+                            timeout,
+                        )
+                    )
+            self.assertEqual(
+                2,
+                len(kill_counts),
+                "both requested deadline profiles must complete",
+            )
+            self.assertGreater(
+                kill_counts[1],
+                kill_counts[0],
+                "work remained tied to a fixed attempt count instead of elapsed time",
+            )
 
     def test_no_progress_fails_on_monotonic_deadline_with_registry_evidence(self):
         for adapter in ADAPTERS:
             with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
                 scenario = self.make_scenario(
                     tmp,
                     matching_count=2,
                     behavior="no-progress",
+                    clock=clock,
                 )
-                clock = SyntheticClock()
-
-                with self.assertRaises(adapter.error_type) as raised:
-                    adapter.run(scenario, clock)
-
-                message = str(raised.exception)
-                self.assertGreater(clock.reads, 0, "failure must use a monotonic deadline")
-                self.assertRegex(message.lower(), r"progress|drain|converg|deadline")
-                self.assertTrue(
-                    any(instance_id in message for instance_id in scenario.remaining_ids),
-                    f"failure lacks remaining registry evidence: {message}",
+                assert_deadline_failure(
+                    self,
+                    adapter,
+                    scenario,
+                    clock,
+                    SHORT_DEADLINE_SECONDS,
                 )
 
     def test_foreign_only_registry_is_success_without_cross_targeting(self):
@@ -306,6 +495,7 @@ class Incident013DrainContractTests(unittest.TestCase):
                 adapter.run(scenario, SyntheticClock())
 
                 self.assertEqual(foreign_before, tuple(scenario.foreign))
+                self.assertEqual(0, scenario.kill_calls)
                 self.assertGreater(
                     scenario.registry_reads,
                     0,
@@ -325,9 +515,53 @@ class Incident013DrainContractTests(unittest.TestCase):
                     adapter.run(scenario, SyntheticClock())
 
                 self.assertGreater(scenario.registry_reads, 0)
+                self.assertEqual(
+                    0,
+                    scenario.kill_calls,
+                    "a broken registry must fail before any kill",
+                )
                 self.assertRegex(
                     str(raised.exception).lower(),
                     r"registry|json|malformed|inspect",
+                )
+
+
+class Incident013ContractMutationTests(unittest.TestCase):
+    """Prove the contract kills the two reviewer-supplied false fixes."""
+
+    def test_fixed_high_attempt_cap_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = SyntheticClock()
+            scenario = DrainScenario(
+                root=Path(tmp) / "omarchy",
+                matching_count=1,
+                behavior="permanent-respawn",
+                clock=clock,
+            )
+            with self.assertRaises(AssertionError):
+                assert_deadline_failure(
+                    self,
+                    FixedCapImmediateEmptyMutation,
+                    scenario,
+                    clock,
+                    SHORT_DEADLINE_SECONDS,
+                )
+
+    def test_immediate_double_empty_snapshot_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = SyntheticClock()
+            scenario = DrainScenario(
+                root=Path(tmp) / "omarchy",
+                matching_count=1,
+                clock=clock,
+                timed_empty_respawn_delay=CONTRACT_QUIET_SECONDS / 2,
+            )
+            with self.assertRaises(AssertionError):
+                assert_quiet_window_convergence(
+                    self,
+                    FixedCapImmediateEmptyMutation,
+                    scenario,
+                    clock,
                 )
 
 
