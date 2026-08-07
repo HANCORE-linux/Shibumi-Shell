@@ -19,6 +19,7 @@ These instructions apply to the entire Shibumi Shell repository.
 - Read the relevant architecture, development, and release documentation before changing lifecycle, packaging, IPC, or host integration.
 - Keep canonical and vendored QML/JavaScript copies synchronized. Run the repository sync/check scripts rather than editing generated copies independently.
 - Preserve transactional install, update, repair, rollback, recovery, activation, deactivation, and uninstall behavior.
+- Keep runtime fixtures isolated from production. They must use exact temporary paths and dedicated service ownership, must never stop, restart, mutate, or signal the production shell, and must prove complete cleanup.
 - Reject malformed, incomplete, symlinked, or ambiguous recovery state before mutating live files or stopping the shell.
 - Do not commit runtime state, local captures, temporary wrappers, credentials, generated caches, or reports stored outside this repository.
 - Keep version metadata aligned across `VERSION`, package metadata, plugin manifests, contracts, release notes, changelog, PKGBUILD, and `.SRCINFO`.
@@ -49,11 +50,12 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-upstream-engineering-audit-2026
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed.
+Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.
 
 ## Release safety
 
 - Do not push, tag, publish a release, update Omarchy, log out, or reboot unless explicitly authorized.
 - Never move an already published tag. If a published candidate needs code changes, advance the version and create a new immutable release.
 - Build release archives from a clean accepted commit and verify archive, inventory, package checksum, PKGBUILD, and `.SRCINFO` agreement before publication.
+- Require clean-commit release evidence and an independent review with zero actionable findings before release approval.
 - Keep prerelease and stable release classification consistent with validated SemVer.
