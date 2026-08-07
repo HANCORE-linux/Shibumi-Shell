@@ -1,8 +1,8 @@
-# Is Shibumi 0.1.1-beta.5 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.6 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.5` is an automated prerelease candidate. Its complete
+Shibumi `0.1.1-beta.6` is an automated prerelease candidate. Its complete
 contract is revision-bound across the installed-package, installed-source-parity,
 and forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
@@ -30,9 +30,9 @@ no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 
-The beta.5 automated candidate plus explicitly retained historical live
+The beta.6 automated candidate plus explicitly retained beta.5 live
 acceptance currently provide these results. Rows marked historical do not become
-beta.5 evidence until the revision-bound release collector reruns them:
+beta.6 evidence until the revision-bound release collector reruns them:
 
 | Gate | Result |
 | --- | --- |
@@ -42,12 +42,12 @@ beta.5 evidence until the revision-bound release collector reruns them:
 | Quattro compatibility | Passed against `4.0.0.r1508.g12af188-1` |
 | Plugin validation and self-containment | Passed for all 24 plugins |
 | Complete repository contract | Passed against the installed package baseline; source-parity and forward-compatibility are separate required jobs |
-| Suite lifecycle unit tests | Passed: 70 of 70 |
-| Control Center manager tests | Passed: 20 of 20 |
-| Health tests | Passed: 29 of 29 |
+| Suite lifecycle unit tests | Passed: 77 of 77 |
+| Control Center manager tests | Passed: 29 of 29 |
+| Health tests | Passed: 31 of 31 |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Historical pass for all 24 plugins; rerun required for tagged evidence |
+| Transactional live update | Historical beta.5 pass for all 24 plugins; beta.6 rerun required for tagged evidence |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
@@ -94,7 +94,9 @@ The lifecycle adapter enforces these controls:
 - It validates all 24 manifests with the official Omarchy validator
 - It rejects symlinks, special files, unsafe entry points, foreign markers, and unknown replacement directories
 - It hashes each plugin and the complete suite before activation
-- It snapshots installed plugins, `shell.json`, install state, and generated menu state
+- It prepares and publishes recovery transactions atomically before live mutation
+- It durably orders installed plugins, `shell.json`, install state, generated menu state, journals, archive copies, and cleanup
+- It validates complete recovery state before changing files or stopping the shell
 - It retains the recovery journal and snapshots if rollback itself fails
 - It restarts for bar-owner/provider handoff and reserves hot reload for unchanged ownership
 - It verifies the exact running payload after reconciliation

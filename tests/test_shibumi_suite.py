@@ -31,6 +31,7 @@ from shibumi_suite.cli import (  # noqa: E402
     command_uninstall,
     command_update,
     load_install_state,
+    version_key,
 )
 from shibumi_suite.config import (  # noqa: E402
     ConfigError,
@@ -804,8 +805,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.5")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.5")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.6")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.6")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -824,7 +825,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.5")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.6")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_update_transactionally_retires_app_menu(self) -> None:
@@ -865,6 +866,42 @@ class SuiteLifecycleTests(unittest.TestCase):
             (self.paths.state_dir / "install.json").read_bytes(), state_before
         )
         self.assertEqual(self.paths.config_file.read_bytes(), config_before)
+
+    def test_update_and_repair_accept_semver_build_metadata(self) -> None:
+        self.install()
+        state_path = self.paths.state_dir / "install.json"
+        for operation in (command_update, command_repair):
+            with self.subTest(operation=operation.__name__):
+                state = json.loads(state_path.read_text(encoding="utf-8"))
+                state["suiteVersion"] = "0.1.1-beta.6+installed.7"
+                state_path.write_text(
+                    json.dumps(state, indent=2) + "\n", encoding="utf-8"
+                )
+                self.assertEqual(
+                    operation(self.args(), self.suite, self.paths, self.runtime),
+                    0,
+                )
+                updated = json.loads(state_path.read_text(encoding="utf-8"))
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.6")
+
+        self.assertEqual(
+            version_key("1.0.0+build.7"),
+            version_key("1.0.0+build.8"),
+        )
+        self.assertLess(
+            version_key("1.0.0-rc.1+build.9"),
+            version_key("1.0.0"),
+        )
+        for invalid in (
+            "1.2",
+            "01.2.3",
+            "1.2.3-alpha..1",
+            "1.2.3-01",
+            "1.2.3+",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(CliError, "unsupported Shibumi version"):
+                    version_key(invalid)
 
     def test_update_refuses_package_downgrade_without_mutation(self) -> None:
         suite = self.packaged_suite()
@@ -908,9 +945,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.5")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.5")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.5")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.6")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.6")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.6")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()
@@ -2006,6 +2043,407 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(config["bar"]["id"], "hancore.shibumi.bar")
         self.assertFalse(self.hidden_transaction_paths())
 
+    def test_first_transaction_durably_creates_recovery_namespace(self) -> None:
+        plugin_id = "hancore.shibumi.memory"
+        target = self.paths.plugin_dir / plugin_id
+        target.mkdir(parents=True)
+        (target / ".shibumi-managed.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "suiteId": "hancore.shibumi",
+                    "pluginId": plugin_id,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        transaction_root = self.paths.state_dir / "transactions"
+        events: list[tuple[str, Path]] = []
+        original_fsync_directory = transaction_module._fsync_directory
+        original_replace = transaction_module.os.replace
+        original_write_journal = PluginTransaction._write_journal
+
+        def recording_fsync_directory(path: Path) -> None:
+            original_fsync_directory(path)
+            events.append(("fsync", path))
+
+        def recording_replace(source: object, destination: object) -> None:
+            original_replace(source, destination)
+            source_path = Path(source)
+            destination_path = Path(destination)
+            if (
+                source_path.name.startswith(transaction_module.PREPARATION_PREFIX)
+                and destination_path.parent == transaction_root
+            ):
+                events.append(("publish", destination_path))
+            elif destination_path.name.startswith(".shibumi-backup."):
+                events.append(("mutation", destination_path))
+
+        def recording_write_journal(
+            transaction: PluginTransaction, *args: object, **kwargs: object
+        ) -> None:
+            original_write_journal(transaction, *args, **kwargs)
+            phase = str(args[0] if args else kwargs.get("phase") or "")
+            events.append((f"journal:{phase}", transaction.journal_file))
+
+        with (
+            patch.object(
+                transaction_module,
+                "_fsync_directory",
+                side_effect=recording_fsync_directory,
+            ),
+            patch.object(
+                transaction_module.os,
+                "replace",
+                side_effect=recording_replace,
+            ),
+            patch.object(
+                PluginTransaction,
+                "_write_journal",
+                recording_write_journal,
+            ),
+        ):
+            transaction = PluginTransaction(self.paths, self.runtime)
+            transaction.stage_removal_ids((plugin_id,))
+
+        first_journal = next(
+            index
+            for index, event in enumerate(events)
+            if event[0] == "journal:prepared"
+        )
+        for required in (
+            self.paths.state_dir.parent,
+            self.paths.state_dir,
+            transaction_root,
+        ):
+            sync_index = events.index(("fsync", required))
+            self.assertLess(sync_index, first_journal)
+        publish_index = next(
+            index for index, event in enumerate(events) if event[0] == "publish"
+        )
+        self.assertGreater(publish_index, first_journal)
+        durable_publication = next(
+            index
+            for index, event in enumerate(events)
+            if index > publish_index and event == ("fsync", transaction_root)
+        )
+        record_journal = next(
+            index
+            for index, event in enumerate(events)
+            if event[0] == "journal:prepared-removal"
+        )
+        durable_record = max(
+            index
+            for index, event in enumerate(events)
+            if index < record_journal
+            and event == ("fsync", transaction.transaction_dir)
+        )
+        mutation_index = next(
+            index for index, event in enumerate(events) if event[0] == "mutation"
+        )
+        self.assertGreater(record_journal, durable_record)
+        self.assertGreater(mutation_index, record_journal)
+        self.assertGreater(mutation_index, durable_publication)
+        self.assertTrue(transaction.journal_file.is_file())
+        transaction.rollback()
+
+    def test_staged_payload_is_durable_before_live_exposure(self) -> None:
+        plugin_id = "hancore.shibumi.memory"
+        spec = self.suite.plugins[plugin_id]
+        events: list[tuple[str, Path]] = []
+        original_fsync_tree = transaction_module._fsync_tree
+        original_fsync_directory = transaction_module._fsync_directory
+        original_replace = transaction_module.os.replace
+        original_write_journal = PluginTransaction._write_journal
+
+        def recording_fsync_tree(path: Path) -> None:
+            original_fsync_tree(path)
+            events.append(("tree", path))
+
+        def recording_fsync_directory(path: Path) -> None:
+            original_fsync_directory(path)
+            events.append(("fsync", path))
+
+        def recording_replace(source: object, destination: object) -> None:
+            original_replace(source, destination)
+            source_path = Path(source)
+            destination_path = Path(destination)
+            if source_path.name.startswith(".shibumi-stage.") \
+                    and destination_path == self.paths.plugin_dir / plugin_id:
+                events.append(("exposure", destination_path))
+
+        def recording_write_journal(
+            transaction: PluginTransaction, *args: object, **kwargs: object
+        ) -> None:
+            original_write_journal(transaction, *args, **kwargs)
+            phase = str(args[0] if args else kwargs.get("phase") or "")
+            events.append((f"journal:{phase}", transaction.journal_file))
+
+        with (
+            patch.object(
+                transaction_module, "_fsync_tree", side_effect=recording_fsync_tree
+            ),
+            patch.object(
+                transaction_module,
+                "_fsync_directory",
+                side_effect=recording_fsync_directory,
+            ),
+            patch.object(
+                transaction_module.os, "replace", side_effect=recording_replace
+            ),
+            patch.object(
+                PluginTransaction, "_write_journal", recording_write_journal
+            ),
+        ):
+            transaction = PluginTransaction(self.paths, self.runtime)
+            transaction.stage(
+                (spec,), revision="durability", suite_version=self.suite.version
+            )
+            transaction.expose()
+
+        tree_index = next(
+            index for index, event in enumerate(events) if event[0] == "tree"
+        )
+        durable_plugin_directory = next(
+            index
+            for index, event in enumerate(events)
+            if event == ("fsync", self.paths.plugin_dir.parent)
+        )
+        durable_stage_entry = next(
+            index
+            for index, event in enumerate(events)
+            if index > tree_index and event == ("fsync", self.paths.plugin_dir)
+        )
+        staged_journal = next(
+            index
+            for index, event in enumerate(events)
+            if event[0] == "journal:staged"
+        )
+        exposure_index = next(
+            index for index, event in enumerate(events) if event[0] == "exposure"
+        )
+        durable_exposure = next(
+            index
+            for index, event in enumerate(events)
+            if index > exposure_index
+            and event == ("fsync", self.paths.plugin_dir)
+        )
+        exposed_journal = next(
+            index
+            for index, event in enumerate(events)
+            if event[0] == "journal:exposed"
+        )
+        self.assertLess(durable_plugin_directory, tree_index)
+        self.assertLess(tree_index, durable_stage_entry)
+        self.assertLess(durable_stage_entry, staged_journal)
+        self.assertLess(staged_journal, exposure_index)
+        self.assertLess(exposure_index, durable_exposure)
+        self.assertLess(durable_exposure, exposed_journal)
+        transaction.rollback()
+
+    def test_transaction_preparation_is_private_until_complete(self) -> None:
+        self.paths.config_file.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.config_file.write_text('{"version":1}\n', encoding="utf-8")
+        self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
+        self.paths.menu_extension_file.write_text("{}\n", encoding="utf-8")
+        original_atomic_write = transaction_module.atomic_write
+
+        for boundary, fail_after_write in (
+            ("directory", 0),
+            ("config snapshot", 1),
+            ("menu snapshot", 2),
+            ("journal", 3),
+        ):
+            with self.subTest(boundary=boundary):
+                calls = 0
+
+                def faulting_atomic_write(
+                    path: Path, payload: bytes, mode: int = 0o600
+                ) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if fail_after_write == 0 and calls == 1:
+                        raise OSError("injected preparation failure")
+                    original_atomic_write(path, payload, mode)
+                    if calls == fail_after_write:
+                        raise OSError("injected preparation failure")
+
+                with patch.object(
+                    transaction_module,
+                    "atomic_write",
+                    side_effect=faulting_atomic_write,
+                ):
+                    with self.assertRaisesRegex(
+                        OSError, "injected preparation failure"
+                    ):
+                        PluginTransaction(self.paths, self.runtime)
+
+                transaction_root = self.paths.state_dir / "transactions"
+                self.assertFalse(
+                    transaction_root.is_dir() and any(transaction_root.iterdir())
+                )
+                self.assertEqual(
+                    self.paths.config_file.read_text(encoding="utf-8"),
+                    '{"version":1}\n',
+                )
+                self.assertEqual(
+                    self.paths.menu_extension_file.read_text(encoding="utf-8"),
+                    "{}\n",
+                )
+
+        transaction = PluginTransaction(self.paths, self.runtime)
+        self.assertTrue(transaction.transaction_dir.is_dir())
+        self.assertTrue(transaction.journal_file.is_file())
+        self.assertTrue(transaction.snapshot_file.is_file())
+        self.assertTrue(transaction.menu_extension_snapshot_file.is_file())
+        self.assertFalse(
+            any(
+                path.name.startswith(transaction_module.PREPARATION_PREFIX)
+                for path in transaction.transaction_dir.parent.iterdir()
+            )
+        )
+        transaction.rollback()
+
+    def test_recovery_discards_crash_interrupted_private_preparations(self) -> None:
+        transaction_root = self.paths.state_dir / "transactions"
+        transaction_root.mkdir(parents=True)
+        for prefix in (
+            transaction_module.PREPARATION_PREFIX,
+            transaction_module.CLEANUP_PREFIX,
+        ):
+            for boundary in range(4):
+                with self.subTest(prefix=prefix, boundary=boundary):
+                    transaction_root.mkdir(parents=True, exist_ok=True)
+                    private = transaction_root / f"{prefix}crash-{boundary}"
+                    private.mkdir()
+                    names = (
+                        "shell.json.before",
+                        "omarchy-menu.jsonc.before",
+                        "journal.json",
+                    )
+                    for name in names[:boundary]:
+                        (private / name).write_text(
+                            "partial\n", encoding="utf-8"
+                        )
+
+                    events_before = list(self.runtime.events)
+                    self.assertEqual(
+                        recover_transactions(self.paths, self.runtime), 0
+                    )
+                    self.assertFalse(private.exists())
+                    self.assertEqual(self.runtime.events, events_before)
+
+    def test_recovery_rejects_symlinked_transaction_root_without_traversal(self) -> None:
+        external = self.root / "external-transactions"
+        private = external / f"{transaction_module.CLEANUP_PREFIX}foreign"
+        private.mkdir(parents=True)
+        marker = private / "journal.json"
+        marker.write_text("do not remove\n", encoding="utf-8")
+        transaction_root = self.paths.state_dir / "transactions"
+        transaction_root.parent.mkdir(parents=True)
+        transaction_root.symlink_to(external, target_is_directory=True)
+
+        with self.assertRaisesRegex(TransactionError, "symlinked transaction root"):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual(marker.read_text(encoding="utf-8"), "do not remove\n")
+
+    def test_recovery_validates_complete_journal_before_any_mutation(self) -> None:
+        self.install()
+        config_before = self.paths.config_file.read_bytes()
+        state_path = self.paths.state_dir / "install.json"
+        state_before = state_path.read_bytes()
+        plugin_ids = ("hancore.shibumi.memory", "hancore.shibumi.cpu")
+        payloads_before = {
+            plugin_id: (
+                self.paths.plugin_dir / plugin_id / "BarWidget.qml"
+            ).read_bytes()
+            for plugin_id in plugin_ids
+        }
+
+        for scenario in (
+            "missing snapshot",
+            "malformed second record",
+            "invalid late boolean",
+            "boolean schema",
+            "float schema",
+            "array journal",
+        ):
+            with self.subTest(scenario=scenario):
+                transaction_root = self.paths.state_dir / "transactions"
+                transaction_root.mkdir(parents=True, exist_ok=True)
+                token = f"validation-{scenario.replace(' ', '-')}"
+                directory = transaction_root / token
+                directory.mkdir()
+                records = []
+                for plugin_id in plugin_ids:
+                    records.append(
+                        {
+                            "action": "replace",
+                            "pluginId": plugin_id,
+                            "target": str(self.paths.plugin_dir / plugin_id),
+                            "stage": str(
+                                self.paths.plugin_dir
+                                / f".shibumi-stage.{token}.{plugin_id}"
+                            ),
+                            "backup": str(
+                                self.paths.plugin_dir
+                                / f".shibumi-backup.{token}.{plugin_id}"
+                            ),
+                            "hadTarget": True,
+                        }
+                    )
+                journal: object = {
+                    "schemaVersion": 1,
+                    "suiteId": "hancore.shibumi",
+                    "token": token,
+                    "phase": "prepared",
+                    "pluginRoot": str(self.paths.plugin_dir.resolve()),
+                    "configPath": str(self.paths.config_file.resolve()),
+                    "configExisted": True,
+                    "restartOnReconcile": False,
+                    "shellStopped": False,
+                    "payloadReloadExpected": False,
+                    "records": records,
+                }
+                if scenario == "malformed second record":
+                    records[1]["target"] = str(self.root / "outside")
+                elif scenario == "invalid late boolean":
+                    assert isinstance(journal, dict)
+                    journal["payloadReloadExpected"] = "false"
+                elif scenario == "boolean schema":
+                    assert isinstance(journal, dict)
+                    journal["schemaVersion"] = True
+                elif scenario == "float schema":
+                    assert isinstance(journal, dict)
+                    journal["schemaVersion"] = 1.0
+                elif scenario == "array journal":
+                    journal = []
+                (directory / "journal.json").write_text(
+                    json.dumps(journal) + "\n", encoding="utf-8"
+                )
+                if scenario != "missing snapshot":
+                    (directory / "shell.json.before").write_bytes(config_before)
+
+                events_before = list(self.runtime.events)
+                with self.assertRaises(TransactionError):
+                    recover_transactions(self.paths, self.runtime)
+
+                self.assertEqual(self.paths.config_file.read_bytes(), config_before)
+                self.assertEqual(state_path.read_bytes(), state_before)
+                for plugin_id in plugin_ids:
+                    self.assertEqual(
+                        (
+                            self.paths.plugin_dir
+                            / plugin_id
+                            / "BarWidget.qml"
+                        ).read_bytes(),
+                        payloads_before[plugin_id],
+                    )
+                self.assertEqual(self.runtime.events, events_before)
+                shutil.rmtree(transaction_root)
+
     def test_post_state_commit_failures_roll_forward_without_payload_rollback(self) -> None:
         self.install()
         plugin_ids = ("hancore.shibumi.memory", "hancore.shibumi.cpu")
@@ -2014,6 +2452,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             "committed journal",
             "backup archival",
             "partial backup archival",
+            "archive data flush",
             "partial archive copy",
         ):
             with self.subTest(boundary=boundary):
@@ -2088,6 +2527,20 @@ class SuiteLifecycleTests(unittest.TestCase):
                         transaction,
                         "_archive_backups",
                         side_effect=fail_after_first_archive,
+                    )
+                    expected_phase = "committed"
+                elif boundary == "archive data flush":
+                    original_fsync_tree = transaction_module._fsync_tree
+
+                    def fail_archive_data_flush(path: Path) -> None:
+                        if path.name.startswith(".") and path.name.endswith(".partial"):
+                            raise OSError("injected archive data flush failure")
+                        original_fsync_tree(path)
+
+                    fault = patch.object(
+                        transaction_module,
+                        "_fsync_tree",
+                        side_effect=fail_archive_data_flush,
                     )
                     expected_phase = "committed"
                 else:

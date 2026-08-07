@@ -220,19 +220,19 @@ class HealthDiagnosticsTests(unittest.TestCase):
     def use_package_install(
         self,
         *,
-        installed_version: str | None = "0.1.1beta.5-1",
+        installed_version: str | None = "0.1.1beta.6-1",
         available_version: str | None = None,
         fetch_error: str = "",
     ) -> Path:
         self.state.pop("sourceRoot", None)
         self.state.update(
             {
-                "suiteVersion": "0.1.1-beta.5",
+                "suiteVersion": "0.1.1-beta.6",
                 "installOrigin": "package",
                 "payloadRoot": "/usr/share/shibumi-shell",
-                "sourceRevision": "package:0.1.1-beta.5",
+                "sourceRevision": "package:0.1.1-beta.6",
                 "packageName": "shibumi-shell",
-                "packageVersion": "0.1.1-beta.5",
+                "packageVersion": "0.1.1-beta.6",
             }
         )
         self.write_state(self.state)
@@ -318,9 +318,9 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["overall"], "healthy")
         self.assertEqual(payload["installOrigin"], "package")
         self.assertEqual(payload["packageName"], "shibumi-shell")
-        self.assertEqual(payload["packageVersion"], "0.1.1-beta.5")
+        self.assertEqual(payload["packageVersion"], "0.1.1-beta.6")
         self.assertEqual(checks["package-status"]["status"], "ok")
-        self.assertEqual(checks["package-status"]["value"], "0.1.1beta.5-1")
+        self.assertEqual(checks["package-status"]["value"], "0.1.1beta.6-1")
         self.assertEqual(checks["package-update"]["value"], "Not checked")
         self.assertNotIn("source-status", checks)
         self.assertNotIn("source-update", checks)
@@ -659,6 +659,53 @@ class HealthDiagnosticsTests(unittest.TestCase):
         check = self.by_id(payload)["runtime-errors"]
         self.assertEqual(check["status"], "ok")
         self.assertEqual(check["value"], "None detected")
+
+    def test_failed_runtime_log_query_never_reports_clean(self) -> None:
+        environment = dict(self.environment)
+        environment.pop("SHIBUMI_HEALTH_LOG_FILE", None)
+        probe_class = self.module["Probe"]
+        globals_map = probe_class.check_logs.__globals__
+        failed = Mock(
+            returncode=23,
+            stdout="",
+            stderr=f"registry unavailable at {self.home}/private.log",
+        )
+        with patch.dict(os.environ, environment, clear=True):
+            probe = probe_class(fetch=False)
+            probe.production_pids = [4242]
+            with patch.dict(globals_map, {"run": Mock(return_value=failed)}):
+                probe.check_logs()
+        checks = [
+            check for check in probe.checks if check.id == "runtime-errors"
+        ]
+        self.assertEqual(len(checks), 1)
+        self.assertEqual(checks[0].status, "warning")
+        self.assertEqual(checks[0].value, "Log unavailable")
+        self.assertIn("registry unavailable", checks[0].detail)
+        self.assertNotIn(str(self.home), checks[0].detail)
+        self.assertNotEqual(checks[0].value, "None detected")
+
+    def test_failed_runtime_log_query_redacts_sensitive_output(self) -> None:
+        environment = dict(self.environment)
+        environment.pop("SHIBUMI_HEALTH_LOG_FILE", None)
+        probe_class = self.module["Probe"]
+        globals_map = probe_class.check_logs.__globals__
+        failed = Mock(
+            returncode=9,
+            stdout="",
+            stderr="password token private-value",
+        )
+        with patch.dict(os.environ, environment, clear=True):
+            probe = probe_class(fetch=False)
+            probe.production_pids = [4242]
+            with patch.dict(globals_map, {"run": Mock(return_value=failed)}):
+                probe.check_logs()
+        check = next(
+            check for check in probe.checks if check.id == "runtime-errors"
+        )
+        self.assertEqual(check.status, "warning")
+        self.assertEqual(check.detail, "qs log exited with 9")
+        self.assertNotIn("private-value", check.detail)
 
     def test_manual_fetch_refreshes_only_remote_refs(self) -> None:
         before = subprocess.run(

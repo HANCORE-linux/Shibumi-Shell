@@ -518,6 +518,584 @@ class ContinuityManagerTests(unittest.TestCase):
                 self.assertEqual(config.read_bytes(), original_config)
                 self.assertEqual(state_path.read_bytes(), original_state)
 
+    def test_switch_transaction_preparation_is_private_until_complete(self) -> None:
+        state_dir = self.root / "state/shibumi"
+        config = self.root / "config/omarchy/shell.json"
+        state_path = state_dir / "install.json"
+        config.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        config.write_text(json.dumps(self.active) + "\n", encoding="utf-8")
+        state_path.write_text(json.dumps(self.state) + "\n", encoding="utf-8")
+        runtime_paths = {"state": state_dir}
+        prepare = self.module["prepare_switch_transaction"]
+        globals_map = prepare.__globals__
+        original_atomic_write = globals_map["atomic_write"]
+
+        for boundary, fail_after_write in (
+            ("directory", 0),
+            ("config snapshot", 1),
+            ("state snapshot", 2),
+            ("journal", 3),
+        ):
+            with self.subTest(boundary=boundary):
+                calls = 0
+
+                def faulting_atomic_write(path: Path, payload: bytes) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if fail_after_write == 0 and calls == 1:
+                        raise OSError("injected preparation failure")
+                    original_atomic_write(path, payload)
+                    if calls == fail_after_write:
+                        raise OSError("injected preparation failure")
+
+                globals_map["atomic_write"] = faulting_atomic_write
+                try:
+                    with self.assertRaisesRegex(
+                        OSError, "injected preparation failure"
+                    ):
+                        prepare(
+                            runtime_paths,
+                            "omarchy",
+                            config,
+                            state_path,
+                            True,
+                        )
+                finally:
+                    globals_map["atomic_write"] = original_atomic_write
+
+                self.assertFalse((state_dir / "switch-transaction").exists())
+                self.assertFalse(
+                    (state_dir / ".switch-transaction.preparing").exists()
+                )
+                self.assertEqual(
+                    json.loads(config.read_text(encoding="utf-8")), self.active
+                )
+                self.assertEqual(
+                    json.loads(state_path.read_text(encoding="utf-8")), self.state
+                )
+
+        transaction, snapshot, state_snapshot, _journal, journal_path = prepare(
+            runtime_paths,
+            "omarchy",
+            config,
+            state_path,
+            True,
+        )
+        self.assertTrue(transaction.is_dir())
+        self.assertTrue(snapshot.is_file())
+        self.assertTrue(state_snapshot.is_file())
+        self.assertTrue(journal_path.is_file())
+        self.assertFalse(
+            (state_dir / ".switch-transaction.preparing").exists()
+        )
+
+    def test_recovery_discards_interrupted_private_switch_directories(self) -> None:
+        state_dir = self.root / "state/shibumi"
+        runtime = self.root / "runtime"
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        environment = {
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["recover"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        stop = Mock()
+        reload_shell = Mock()
+        globals_map["stop_shell"] = stop
+        globals_map["reload_shell"] = reload_shell
+        try:
+            for private_name in (
+                ".switch-transaction.preparing",
+                ".switch-transaction.cleanup",
+            ):
+                for boundary in range(4):
+                    with self.subTest(
+                        private_name=private_name, boundary=boundary
+                    ):
+                        private = state_dir / private_name
+                        private.mkdir()
+                        for name in (
+                            "shell.json.before",
+                            "install.json.before",
+                            "journal.json",
+                        )[:boundary]:
+                            (private / name).write_text(
+                                "partial\n", encoding="utf-8"
+                            )
+                        with patch.dict("os.environ", environment, clear=False):
+                            self.assertEqual(self.module["recover"](), 0)
+                        self.assertFalse(private.exists())
+        finally:
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+        stop.assert_not_called()
+        reload_shell.assert_not_called()
+
+    def test_recovery_refuses_while_lifecycle_lock_is_held(self) -> None:
+        state_dir = self.root / "state/shibumi"
+        runtime = self.root / "runtime"
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        preparation = state_dir / ".switch-transaction.preparing"
+        preparation.mkdir()
+        marker = preparation / "shell.json.before"
+        marker.write_text("do not mutate\n", encoding="utf-8")
+        lock_path = runtime / "switch.lock"
+        environment = {
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(lock_path),
+        }
+
+        with lock_path.open("a+") as held:
+            self.module["fcntl"].flock(
+                held.fileno(),
+                self.module["fcntl"].LOCK_EX
+                | self.module["fcntl"].LOCK_NB,
+            )
+            with patch.dict("os.environ", environment, clear=False):
+                with self.assertRaisesRegex(
+                    self.module["ManagerError"],
+                    "another Shibumi lifecycle operation",
+                ):
+                    self.module["recover"]()
+
+        self.assertEqual(marker.read_text(encoding="utf-8"), "do not mutate\n")
+        with patch.dict("os.environ", environment, clear=False):
+            self.assertEqual(self.module["recover"](), 0)
+        self.assertFalse(preparation.exists())
+
+    def test_recovery_validates_complete_transaction_before_shell_stop(self) -> None:
+        scenarios = (
+            "symlink transaction",
+            "unknown schema",
+            "boolean schema",
+            "float schema",
+            "invalid target",
+            "unhashable target",
+            "unhashable phase",
+            "invalid config flag",
+            "missing config snapshot",
+            "missing state snapshot",
+            "foreign state snapshot",
+            "incomplete state snapshot",
+        )
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                case_root = self.root / scenario.replace(" ", "-")
+                state_dir = case_root / "state/shibumi"
+                config = case_root / "config/omarchy/shell.json"
+                runtime = case_root / "runtime"
+                config.parent.mkdir(parents=True)
+                state_dir.mkdir(parents=True)
+                runtime.mkdir(parents=True)
+                config.write_text(
+                    json.dumps(self.active) + "\n", encoding="utf-8"
+                )
+                state_path = state_dir / "install.json"
+                state_path.write_text(
+                    json.dumps(self.state) + "\n", encoding="utf-8"
+                )
+                expected_config = config.read_bytes()
+                expected_state = state_path.read_bytes()
+                transaction = state_dir / "switch-transaction"
+                if scenario == "symlink transaction":
+                    external = case_root / "external"
+                    external.mkdir()
+                    transaction.symlink_to(external, target_is_directory=True)
+                else:
+                    transaction.mkdir()
+                    journal = {
+                        "schemaVersion": 1,
+                        "target": "omarchy",
+                        "configExisted": True,
+                        "phase": "prepared",
+                    }
+                    if scenario == "unknown schema":
+                        journal["schemaVersion"] = 2
+                    elif scenario == "boolean schema":
+                        journal["schemaVersion"] = True
+                    elif scenario == "float schema":
+                        journal["schemaVersion"] = 1.0
+                    elif scenario == "invalid target":
+                        journal["target"] = "external"
+                    elif scenario == "unhashable target":
+                        journal["target"] = ["omarchy"]
+                    elif scenario == "unhashable phase":
+                        journal["phase"] = {"name": "prepared"}
+                    elif scenario == "invalid config flag":
+                        journal["configExisted"] = "yes"
+                    (transaction / "journal.json").write_text(
+                        json.dumps(journal) + "\n", encoding="utf-8"
+                    )
+                    if scenario != "missing config snapshot":
+                        (transaction / "shell.json.before").write_bytes(
+                            expected_config
+                        )
+                    if scenario != "missing state snapshot":
+                        if scenario == "foreign state snapshot":
+                            saved_state = {"suiteId": "foreign"}
+                        elif scenario == "incomplete state snapshot":
+                            saved_state = {"suiteId": "hancore.shibumi"}
+                        else:
+                            saved_state = self.state
+                        (transaction / "install.json.before").write_text(
+                            json.dumps(saved_state) + "\n", encoding="utf-8"
+                        )
+
+                environment = {
+                    "SHIBUMI_CONFIG_FILE": str(config),
+                    "SHIBUMI_STATE_DIR": str(state_dir),
+                    "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+                }
+                globals_map = self.module["recover"].__globals__
+                original_reload = globals_map["reload_shell"]
+                original_stop = globals_map["stop_shell"]
+                stop = Mock()
+                reload_shell = Mock()
+                globals_map["stop_shell"] = stop
+                globals_map["reload_shell"] = reload_shell
+                try:
+                    with patch.dict("os.environ", environment, clear=False):
+                        with self.assertRaises(self.module["ManagerError"]):
+                            self.module["recover"]()
+                finally:
+                    globals_map["reload_shell"] = original_reload
+                    globals_map["stop_shell"] = original_stop
+
+                stop.assert_not_called()
+                reload_shell.assert_not_called()
+                self.assertEqual(config.read_bytes(), expected_config)
+                self.assertEqual(state_path.read_bytes(), expected_state)
+
+    def test_recovery_restores_supported_zero_byte_config(self) -> None:
+        state_dir = self.root / "zero-config/state/shibumi"
+        config = self.root / "zero-config/config/omarchy/shell.json"
+        runtime = self.root / "zero-config/runtime"
+        config.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        config.write_bytes(b"live config changed\n")
+        state_path = state_dir / "install.json"
+        state_path.write_text(json.dumps(self.state) + "\n", encoding="utf-8")
+        transaction = state_dir / "switch-transaction"
+        transaction.mkdir()
+        (transaction / "journal.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "target": "omarchy",
+                    "configExisted": True,
+                    "phase": "prepared",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (transaction / "shell.json.before").write_bytes(b"")
+        (transaction / "install.json.before").write_text(
+            json.dumps(self.state) + "\n", encoding="utf-8"
+        )
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["recover"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        original_retire = globals_map["retire_switch_transaction"]
+        stop = Mock()
+        reload_shell = Mock()
+        globals_map["stop_shell"] = stop
+        globals_map["reload_shell"] = reload_shell
+        globals_map["retire_switch_transaction"] = Mock(
+            side_effect=OSError("injected recovery retirement interruption")
+        )
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                with self.assertRaisesRegex(
+                    OSError, "injected recovery retirement interruption"
+                ):
+                    self.module["recover"]()
+            self.assertTrue(transaction.is_dir())
+            interrupted_status = json.loads(
+                (state_dir / "switch-status.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(interrupted_status["phase"], "recovered")
+
+            globals_map["retire_switch_transaction"] = original_retire
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["recover"](), 0)
+        finally:
+            globals_map["retire_switch_transaction"] = original_retire
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+
+        self.assertEqual(config.read_bytes(), b"")
+        self.assertEqual(
+            json.loads(state_path.read_text(encoding="utf-8")), self.state
+        )
+        self.assertFalse(transaction.exists())
+        self.assertEqual(stop.call_count, 2)
+        self.assertEqual(reload_shell.call_count, 2)
+
+    def test_recovery_restores_prevalidated_snapshot_buffers(self) -> None:
+        state_dir = self.root / "snapshot-race/state/shibumi"
+        config = self.root / "snapshot-race/config/omarchy/shell.json"
+        runtime = self.root / "snapshot-race/runtime"
+        config.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        config.write_text('{"version":1,"live":"changed"}\n', encoding="utf-8")
+        state_path = state_dir / "install.json"
+        state_path.write_text(json.dumps(self.state) + "\n", encoding="utf-8")
+        transaction = state_dir / "switch-transaction"
+        transaction.mkdir()
+        snapshot_payload = (json.dumps(self.active) + "\n").encode()
+        state_payload = (json.dumps(self.state) + "\n").encode()
+        snapshot = transaction / "shell.json.before"
+        state_snapshot = transaction / "install.json.before"
+        snapshot.write_bytes(snapshot_payload)
+        state_snapshot.write_bytes(state_payload)
+        (transaction / "journal.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "target": "omarchy",
+                    "configExisted": True,
+                    "phase": "prepared",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["recover"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+
+        def mutate_snapshots_after_validation(*_args: object, **_kwargs: object) -> None:
+            snapshot.write_text('{"version":999}\n', encoding="utf-8")
+            state_snapshot.write_text(
+                '{"suiteId":"foreign"}\n', encoding="utf-8"
+            )
+
+        globals_map["stop_shell"] = mutate_snapshots_after_validation
+        globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["recover"](), 0)
+        finally:
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+
+        self.assertEqual(config.read_bytes(), snapshot_payload)
+        self.assertEqual(state_path.read_bytes(), state_payload)
+        self.assertFalse(transaction.exists())
+
+    def test_first_omarchy_return_uses_preinstall_layout_with_options(self) -> None:
+        config = self.root / "config/omarchy/shell.json"
+        defaults = self.root / "omarchy/config/omarchy/shell.json"
+        state_dir = self.root / "state/shibumi"
+        runtime = self.root / "runtime"
+        config.parent.mkdir(parents=True)
+        defaults.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        config.write_text(json.dumps(self.active) + "\n", encoding="utf-8")
+        defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
+        state = copy.deepcopy(self.state)
+        previous_layout = {
+            "left": [{"id": "omarchy.menu", "compact": False}],
+            "center": [{"id": "user.clock", "timezone": "UTC"}],
+            "right": [{"id": "user.stock-widget", "interval": 17}],
+        }
+        state["previousBar"] = {
+            "centerAnchor": "user.clock",
+            "layout": previous_layout,
+        }
+        (state_dir / "install.json").write_text(
+            json.dumps(state) + "\n", encoding="utf-8"
+        )
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["perform"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        original_verify = globals_map["verify"]
+        globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+        globals_map["stop_shell"] = lambda *_args, **_kwargs: None
+        globals_map["verify"] = lambda *_args, **_kwargs: None
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["perform"]("omarchy"), 0)
+        finally:
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+            globals_map["verify"] = original_verify
+
+        profiles = json.loads(
+            (state_dir / "shell-layout-profiles.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(profiles["layouts"]["omarchy"], previous_layout)
+        self.assertEqual(profiles["centerAnchors"]["omarchy"], "user.clock")
+        switched = json.loads(config.read_text(encoding="utf-8"))
+        self.assertEqual(switched["bar"]["centerAnchor"], "user.clock")
+        self.assertEqual(switched["bar"]["layout"]["left"], previous_layout["left"])
+        self.assertEqual(
+            switched["bar"]["layout"]["center"], previous_layout["center"]
+        )
+        self.assertEqual(
+            switched["bar"]["layout"]["right"][:-1], previous_layout["right"]
+        )
+        self.assertEqual(
+            switched["bar"]["layout"]["right"][-1],
+            {"id": "hancore.shibumi.control-center"},
+        )
+
+    def test_absent_omarchy_center_anchor_overwrites_stale_profile(self) -> None:
+        config = self.root / "anchorless/config/omarchy/shell.json"
+        defaults = self.root / "anchorless/omarchy/config/omarchy/shell.json"
+        state_dir = self.root / "anchorless/state/shibumi"
+        runtime = self.root / "anchorless/runtime"
+        config.parent.mkdir(parents=True)
+        defaults.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        stock = copy.deepcopy(self.defaults)
+        stock["bar"].pop("centerAnchor", None)
+        config.write_text(json.dumps(stock) + "\n", encoding="utf-8")
+        defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
+        state = copy.deepcopy(self.state)
+        state["previousBar"] = {"layout": stock["bar"]["layout"]}
+        (state_dir / "install.json").write_text(
+            json.dumps(state) + "\n", encoding="utf-8"
+        )
+        profile = state_dir / "shell-layout-profiles.json"
+        profile.write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "layouts": {"omarchy": stock["bar"]["layout"]},
+                    "centerAnchors": {"omarchy": "stale.clock"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(
+            self.module["initial_center_anchor"](
+                "omarchy", self.defaults, state
+            ),
+            "",
+        )
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["perform"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        original_verify = globals_map["verify"]
+        globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+        globals_map["stop_shell"] = lambda *_args, **_kwargs: None
+        globals_map["verify"] = lambda *_args, **_kwargs: None
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["perform"]("shibumi"), 0)
+                self.assertEqual(self.module["perform"]("omarchy"), 0)
+        finally:
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+            globals_map["verify"] = original_verify
+
+        switched = json.loads(config.read_text(encoding="utf-8"))
+        profiles = json.loads(profile.read_text(encoding="utf-8"))
+        self.assertNotIn("centerAnchor", switched["bar"])
+        self.assertEqual(profiles["centerAnchors"]["omarchy"], "")
+
+    def test_terminal_switch_status_precedes_transaction_retirement(self) -> None:
+        config = self.root / "terminal/config/omarchy/shell.json"
+        defaults = self.root / "terminal/omarchy/config/omarchy/shell.json"
+        state_dir = self.root / "terminal/state/shibumi"
+        runtime = self.root / "terminal/runtime"
+        config.parent.mkdir(parents=True)
+        defaults.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+        config.write_text(json.dumps(self.active) + "\n", encoding="utf-8")
+        defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
+        (state_dir / "install.json").write_text(
+            json.dumps(self.state) + "\n", encoding="utf-8"
+        )
+        environment = {
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+        globals_map = self.module["perform"].__globals__
+        original_reload = globals_map["reload_shell"]
+        original_stop = globals_map["stop_shell"]
+        original_verify = globals_map["verify"]
+        original_retire = globals_map["retire_switch_transaction"]
+        stop = Mock()
+        reload_shell = Mock()
+        globals_map["stop_shell"] = stop
+        globals_map["reload_shell"] = reload_shell
+        globals_map["verify"] = lambda *_args, **_kwargs: None
+        globals_map["retire_switch_transaction"] = Mock(
+            side_effect=OSError("injected retirement interruption")
+        )
+        try:
+            with patch.dict("os.environ", environment, clear=False):
+                with self.assertRaisesRegex(
+                    OSError, "injected retirement interruption"
+                ):
+                    self.module["perform"]("omarchy")
+            transaction = state_dir / "switch-transaction"
+            journal = json.loads(
+                (transaction / "journal.json").read_text(encoding="utf-8")
+            )
+            status = json.loads(
+                (state_dir / "switch-status.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(journal["phase"], "committed")
+            self.assertEqual(status["phase"], "complete")
+
+            stop.reset_mock()
+            reload_shell.reset_mock()
+            globals_map["retire_switch_transaction"] = original_retire
+            with patch.dict("os.environ", environment, clear=False):
+                self.assertEqual(self.module["recover"](), 0)
+            stop.assert_not_called()
+            reload_shell.assert_not_called()
+            self.assertFalse(transaction.exists())
+            recovered_status = json.loads(
+                (state_dir / "switch-status.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(recovered_status["phase"], "complete")
+        finally:
+            globals_map["retire_switch_transaction"] = original_retire
+            globals_map["reload_shell"] = original_reload
+            globals_map["stop_shell"] = original_stop
+            globals_map["verify"] = original_verify
+
     def test_request_rejects_overlapping_switch_without_spawning(self) -> None:
         state_dir = self.root / "state/shibumi"
         state_dir.mkdir(parents=True)

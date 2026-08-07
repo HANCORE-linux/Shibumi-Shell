@@ -191,8 +191,11 @@ class Probe:
         """Hide user names in both the active and foreign home paths."""
         text = str(value or "")
         home = str(self.home)
-        if home and (text == home or text.startswith(home + "/")):
-            text = "~" + text[len(home) :]
+        if home:
+            if text == home:
+                text = "~"
+            else:
+                text = text.replace(home + "/", "~/")
         return re.sub(r"(?<![A-Za-z0-9._-])/home/[^/\s]+", "~", text)
 
     def load_state_and_config(self) -> None:
@@ -692,6 +695,24 @@ class Probe:
                     ],
                     timeout=5,
                 )
+                if result.returncode != 0:
+                    raw_detail = (result.stderr or result.stdout).strip()
+                    if raw_detail and not SENSITIVE_PATTERNS.search(raw_detail):
+                        detail = self.redact_home_paths(
+                            safe_text(raw_detail, 280)
+                        )
+                    else:
+                        detail = f"qs log exited with {result.returncode}"
+                    self.add(
+                        "runtime-errors",
+                        "Runtime",
+                        "Recent runtime errors",
+                        "warning",
+                        "Log unavailable",
+                        detail,
+                        "current Quickshell configuration",
+                    )
+                    return
                 raw = result.stdout
             else:
                 raw = ""

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import json
 import re
 import shutil
 import subprocess
@@ -26,6 +27,12 @@ CURRENT_DOCUMENTS = (
     "docs/development/testing.md",
     "docs/development/troubleshooting.md",
     "docs/development/release.md",
+)
+PLUGIN_COUNT_DOCUMENTS = (
+    "ARCHITECTURE.md",
+    "docs/install.md",
+    "docs/architecture/overview.md",
+    "docs/development/setup.md",
 )
 BLUETOOTH_OWNERSHIP_SURFACES = (
     "ARCHITECTURE.md",
@@ -213,6 +220,29 @@ def main() -> None:
         fail("README landing page is missing the source install command")
     verify_source_install_block(source_install_blocks[0])
     install_guide = (REPO_ROOT / "docs/install.md").read_text(encoding="utf-8")
+    suite_contract = json.loads(
+        (REPO_ROOT / "contracts/plugin-suite-v1.json").read_text(encoding="utf-8")
+    )
+    plugin_count = len(suite_contract["plugins"])
+    count_pattern = re.compile(
+        rf"(?:\b{plugin_count}\b[^\n]{{0,80}}\b(?:plugins?|roots?)\b|"
+        rf"\b(?:plugins?|roots?)\b[^\n]{{0,80}}\b{plugin_count}\b)",
+        flags=re.IGNORECASE,
+    )
+    stale_pattern = re.compile(
+        r"(?:\b25\b[^\n]{0,80}\b(?:plugins?|roots?)\b|"
+        r"\b(?:plugins?|roots?)\b[^\n]{0,80}\b25\b)",
+        flags=re.IGNORECASE,
+    )
+    for relative in PLUGIN_COUNT_DOCUMENTS:
+        content = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        if stale_pattern.search(content):
+            fail(f"current documentation reports the retired root count: {relative}")
+        if not count_pattern.search(content):
+            fail(
+                "current documentation does not report the authoritative "
+                f"{plugin_count}-root count: {relative}"
+            )
     guide_blocks = re.findall(
         r"```bash\n.*?\n```", install_guide, flags=re.DOTALL
     )

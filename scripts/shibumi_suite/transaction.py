@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 import shutil
+import stat
 import time
 import uuid
 from pathlib import Path
@@ -26,6 +27,24 @@ class TransactionError(RuntimeError):
 
 LEGACY_SUITE_ID = "hancore.qsrise"
 LEGACY_MANAGED_MARKER = ".qsrise-managed.json"
+PREPARATION_PREFIX = ".shibumi-preparing."
+CLEANUP_PREFIX = ".shibumi-cleanup."
+COMMIT_PHASES = {"committing", "committed"}
+ROLLBACK_PHASES = {
+    "prepared",
+    "shell-stopped",
+    "shell-started",
+    "staging",
+    "staged",
+    "exposed",
+    "prepared-removal",
+    "removed",
+    "prepared-legacy-removal",
+    "legacy-removed",
+    "configured",
+    "menu-configured",
+    "recovery-required",
+}
 
 
 class SuiteLock:
@@ -54,6 +73,102 @@ def _remove_path(path: Path) -> None:
         path.unlink(missing_ok=True)
     elif path.is_dir():
         shutil.rmtree(path)
+
+
+def _durable_unlink(path: Path) -> None:
+    existed = path.exists() or path.is_symlink()
+    path.unlink(missing_ok=True)
+    if existed and path.parent.is_dir():
+        _fsync_directory(path.parent)
+
+
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_regular_file(path: Path) -> None:
+    mode = path.lstat().st_mode
+    if not stat.S_ISREG(mode):
+        raise TransactionError(f"cannot durably flush regular file: {path}")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_tree(root: Path) -> None:
+    if root.is_symlink() or not root.is_dir():
+        raise TransactionError(f"cannot durably flush staged payload: {root}")
+    for directory_name, _directory_names, file_names in os.walk(
+        root, topdown=False, followlinks=False
+    ):
+        directory = Path(directory_name)
+        for file_name in file_names:
+            path = directory / file_name
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                continue
+            if not stat.S_ISREG(mode):
+                raise TransactionError(
+                    f"unsupported staged payload entry while flushing: {path}"
+                )
+            _fsync_regular_file(path)
+        _fsync_directory(directory)
+
+
+def _durable_mkdir(path: Path) -> None:
+    if path.is_symlink():
+        raise TransactionError(f"refusing symlinked transaction directory: {path}")
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            raise TransactionError(f"cannot create transaction directory: {path}")
+        current = current.parent
+    if not current.is_dir():
+        raise TransactionError(f"transaction parent is not a directory: {current}")
+    for directory in reversed(missing):
+        directory.mkdir()
+        # Persist both the new directory metadata and its entry in the parent
+        # before any transaction can mutate live lifecycle state.
+        _fsync_directory(directory)
+        _fsync_directory(directory.parent)
+
+
+def _discard_private_transactions(root: Path) -> int:
+    if root.is_symlink():
+        raise TransactionError(f"refusing symlinked transaction root: {root}")
+    if not root.is_dir():
+        return 0
+    removed = 0
+    for path in root.iterdir():
+        if not path.name.startswith((PREPARATION_PREFIX, CLEANUP_PREFIX)):
+            continue
+        if path.is_symlink() or not path.is_dir():
+            raise TransactionError(
+                f"refusing malformed private transaction directory: {path}"
+            )
+        shutil.rmtree(path)
+        removed += 1
+    if removed:
+        _fsync_directory(root)
+    return removed
+
+
+def _retire_transaction_directory(root: Path, directory: Path, token: str) -> None:
+    cleanup = root / f"{CLEANUP_PREFIX}{token}"
+    if cleanup.exists() or cleanup.is_symlink():
+        raise TransactionError(f"transaction cleanup path already exists: {cleanup}")
+    os.replace(directory, cleanup)
+    _fsync_directory(root)
+    shutil.rmtree(cleanup)
+    _fsync_directory(root)
 
 
 def _marker(path: Path) -> dict[str, Any] | None:
@@ -220,11 +335,13 @@ class PluginTransaction:
         self.runtime = runtime
         self.restart_on_reconcile = restart_on_reconcile
         self.token = f"{int(time.time())}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-        self.transaction_dir = paths.state_dir / "transactions" / self.token
-        self.journal_file = self.transaction_dir / "journal.json"
-        self.snapshot_file = self.transaction_dir / "shell.json.before"
+        transaction_root = paths.state_dir / "transactions"
+        self.transaction_dir = transaction_root / self.token
+        preparation_dir = transaction_root / f"{PREPARATION_PREFIX}{self.token}"
+        self.journal_file = preparation_dir / "journal.json"
+        self.snapshot_file = preparation_dir / "shell.json.before"
         self.menu_extension_snapshot_file = (
-            self.transaction_dir / "omarchy-menu.jsonc.before"
+            preparation_dir / "omarchy-menu.jsonc.before"
         )
         self.records: list[dict[str, Any]] = []
         self.finished = False
@@ -238,14 +355,36 @@ class PluginTransaction:
         self.config_existed = paths.config_file.is_file()
         self.menu_extension_existed = paths.menu_extension_file.is_file()
 
-        self.transaction_dir.mkdir(parents=True, exist_ok=False)
-        if self.config_existed:
-            self.snapshot_file.write_bytes(paths.config_file.read_bytes())
-        if self.menu_extension_existed:
-            self.menu_extension_snapshot_file.write_bytes(
-                paths.menu_extension_file.read_bytes()
-            )
-        self._write_journal("prepared")
+        _durable_mkdir(transaction_root)
+        preparation_dir.mkdir(exist_ok=False)
+        try:
+            if self.config_existed:
+                atomic_write(
+                    self.snapshot_file,
+                    paths.config_file.read_bytes(),
+                )
+            if self.menu_extension_existed:
+                atomic_write(
+                    self.menu_extension_snapshot_file,
+                    paths.menu_extension_file.read_bytes(),
+                )
+            self._write_journal("prepared")
+            _fsync_directory(preparation_dir)
+            os.replace(preparation_dir, self.transaction_dir)
+            _fsync_directory(transaction_root)
+        except Exception:
+            # Before the directory rename no lifecycle mutation has happened,
+            # so an in-process preparation failure can be discarded. If the
+            # rename already succeeded, keep the complete public transaction
+            # as the durable recovery path.
+            if preparation_dir.exists() and not preparation_dir.is_symlink():
+                shutil.rmtree(preparation_dir)
+            raise
+        self.journal_file = self.transaction_dir / "journal.json"
+        self.snapshot_file = self.transaction_dir / "shell.json.before"
+        self.menu_extension_snapshot_file = (
+            self.transaction_dir / "omarchy-menu.jsonc.before"
+        )
 
     def _journal(
         self,
@@ -288,6 +427,9 @@ class PluginTransaction:
             sort_keys=True,
         ).encode("utf-8") + b"\n"
         atomic_write(self.journal_file, payload)
+        # The next operation may rename live plugin targets. Persist the
+        # record-bearing journal replacement before crossing that boundary.
+        _fsync_directory(self.journal_file.parent)
 
     def mark_shell_stopped(self) -> None:
         self.shell_stopped = True
@@ -313,7 +455,7 @@ class PluginTransaction:
         revision: str,
         suite_version: str,
     ) -> tuple[str, dict[str, str]]:
-        self.paths.plugin_dir.mkdir(parents=True, exist_ok=True)
+        _durable_mkdir(self.paths.plugin_dir)
         selected = list(specs)
         plugin_digests: dict[str, str] = {}
         records_by_id: dict[str, dict[str, Any]] = {}
@@ -382,6 +524,8 @@ class PluginTransaction:
                 raise TransactionError(
                     f"validator changed staged plugin payload: {spec.id}"
                 )
+            _fsync_tree(stage)
+            _fsync_directory(self.paths.plugin_dir)
         self._write_journal("staged")
         return payload_digest, plugin_digests
 
@@ -394,14 +538,16 @@ class PluginTransaction:
             backup = Path(record["backup"])
             if record["hadTarget"]:
                 os.replace(target, backup)
+                _fsync_directory(self.paths.plugin_dir)
             os.replace(stage, target)
+            _fsync_directory(self.paths.plugin_dir)
             self._write_journal("exposed")
 
     def stage_removal(self, specs: Iterable[PluginSpec]) -> None:
         self.stage_removal_ids(spec.id for spec in specs)
 
     def stage_removal_ids(self, plugin_ids: Iterable[str]) -> None:
-        self.paths.plugin_dir.mkdir(parents=True, exist_ok=True)
+        _durable_mkdir(self.paths.plugin_dir)
         for plugin_id in plugin_ids:
             target = self.paths.plugin_dir / plugin_id
             if not (target.exists() or target.is_symlink()):
@@ -422,10 +568,11 @@ class PluginTransaction:
             self.records.append(record)
             self._write_journal("prepared-removal")
             os.replace(target, backup)
+            _fsync_directory(self.paths.plugin_dir)
             self._write_journal("removed")
 
     def stage_legacy_removal(self, plugin_ids: Iterable[str]) -> None:
-        self.paths.plugin_dir.mkdir(parents=True, exist_ok=True)
+        _durable_mkdir(self.paths.plugin_dir)
         for plugin_id in plugin_ids:
             target = self.paths.plugin_dir / plugin_id
             if not target.is_dir() or not is_legacy_managed_target(target, plugin_id):
@@ -446,6 +593,7 @@ class PluginTransaction:
             self.records.append(record)
             self._write_journal("prepared-legacy-removal")
             os.replace(target, backup)
+            _fsync_directory(self.paths.plugin_dir)
             self._write_journal("legacy-removed")
 
     def write_config(self, payload: bytes) -> None:
@@ -457,9 +605,8 @@ class PluginTransaction:
         if path.is_symlink() or path.parent.is_symlink():
             raise TransactionError(f"refusing symlinked Omarchy menu extension: {path}")
         if payload is None:
-            path.unlink(missing_ok=True)
+            _durable_unlink(path)
         else:
-            path.parent.mkdir(parents=True, exist_ok=True)
             atomic_write(path, payload)
         self._write_journal("menu-configured")
 
@@ -468,9 +615,12 @@ class PluginTransaction:
         if self.menu_extension_existed:
             atomic_write(path, self.menu_extension_snapshot_file.read_bytes())
         else:
-            path.unlink(missing_ok=True)
+            _durable_unlink(path)
             if path.parent.is_dir() and not any(path.parent.iterdir()):
+                parent = path.parent.parent
                 path.parent.rmdir()
+                if parent.is_dir():
+                    _fsync_directory(parent)
 
     def rollback(self) -> None:
         if self.finished or self.commit_point_reached:
@@ -486,7 +636,7 @@ class PluginTransaction:
             if self.config_existed:
                 atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
             else:
-                self.paths.config_file.unlink(missing_ok=True)
+                _durable_unlink(self.paths.config_file)
             self._restore_menu_extension()
             self.runtime.reconcile_rollback(
                 restart_required=self.restart_on_reconcile,
@@ -517,7 +667,7 @@ class PluginTransaction:
         self._write_journal("committing", desired_state, archive_previous)
         state_file = self.paths.state_dir / "install.json"
         if desired_state is None:
-            state_file.unlink(missing_ok=True)
+            _durable_unlink(state_file)
         else:
             atomic_write(
                 state_file,
@@ -535,10 +685,14 @@ class PluginTransaction:
         if archive_previous:
             self._archive_backups()
         else:
+            removed_backup = False
             for record in self.records:
                 backup = Path(record["backup"])
                 if backup.exists() or backup.is_symlink():
                     _remove_path(backup)
+                    removed_backup = True
+            if removed_backup:
+                _fsync_directory(self.paths.plugin_dir)
         self._cleanup_transaction()
         self.finished = True
 
@@ -548,17 +702,28 @@ class PluginTransaction:
         )
 
     def _cleanup_transaction(self) -> None:
+        removed_stage = False
         for record in self.records:
             stage = Path(record["stage"]) if record.get("stage") else None
             if stage and (stage.exists() or stage.is_symlink()):
                 _remove_path(stage)
-        if self.transaction_dir.exists():
-            shutil.rmtree(self.transaction_dir)
+                removed_stage = True
+        if removed_stage:
+            _fsync_directory(self.paths.plugin_dir)
         transactions = self.paths.state_dir / "transactions"
+        if self.transaction_dir.exists():
+            _retire_transaction_directory(
+                transactions, self.transaction_dir, self.token
+            )
         if transactions.is_dir() and not any(transactions.iterdir()):
             transactions.rmdir()
+            if self.paths.state_dir.is_dir():
+                _fsync_directory(self.paths.state_dir)
         if self.paths.state_dir.is_dir() and not any(self.paths.state_dir.iterdir()):
+            state_parent = self.paths.state_dir.parent
             self.paths.state_dir.rmdir()
+            if state_parent.is_dir():
+                _fsync_directory(state_parent)
 
     def __enter__(self) -> "PluginTransaction":
         return self
@@ -612,6 +777,8 @@ def _restore_records(
                 _remove_path(target)
         if stage and (stage.exists() or stage.is_symlink()):
             _remove_path(stage)
+    if plugin_root.is_dir():
+        _fsync_directory(plugin_root)
 
 
 def _archive_transaction_backups(
@@ -632,25 +799,33 @@ def _archive_transaction_backups(
             # after it but before source removal legitimately leaves both.
             if backup.exists() or backup.is_symlink():
                 _remove_path(backup)
+                _fsync_directory(paths.plugin_dir)
             continue
         if not (backup.exists() or backup.is_symlink()):
             continue
-        destination.mkdir(parents=True, exist_ok=True)
+        _durable_mkdir(destination)
         try:
             if backup.is_symlink():
                 partial.symlink_to(os.readlink(backup))
             elif backup.is_dir():
                 shutil.copytree(backup, partial, symlinks=True)
+                _fsync_tree(partial)
             else:
                 shutil.copy2(backup, partial, follow_symlinks=False)
+                _fsync_regular_file(partial)
             os.replace(partial, archived)
+            _fsync_directory(destination)
             _remove_path(backup)
+            _fsync_directory(paths.plugin_dir)
         except Exception:
             # A partial copy is never authoritative and is safe to retry. Keep
             # the source backup until the archive-side atomic rename succeeds.
             if partial.exists() or partial.is_symlink():
                 _remove_path(partial)
             raise
+
+    if paths.plugin_dir.is_dir():
+        _fsync_directory(paths.plugin_dir)
 
     backup_root = paths.state_dir / "backups"
     if backup_root.is_dir():
@@ -659,22 +834,66 @@ def _archive_transaction_backups(
             key=lambda path: path.stat().st_mtime,
             reverse=True,
         )
+        removed_stale = False
         for stale in retained[2:]:
             _remove_path(stale)
+            removed_stale = True
+        if removed_stale:
+            _fsync_directory(backup_root)
+
+
+def _snapshot_bytes(path: Path, label: str, directory: Path) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise TransactionError(
+            f"transaction {label} snapshot is missing or unsafe: {directory}"
+        )
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise TransactionError(
+            f"cannot read transaction {label} snapshot {directory}: {error}"
+        ) from error
 
 
 def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
     root = paths.state_dir / "transactions"
-    if not root.is_dir():
+    if root.is_symlink():
+        raise TransactionError(f"refusing symlinked transaction root: {root}")
+    if not root.exists():
         return 0
+    if not root.is_dir():
+        raise TransactionError(f"transaction root is not a directory: {root}")
+    # Preparation and cleanup directories are never authoritative. Public
+    # journals appear only after preparation and disappear atomically before
+    # recursive cleanup.
+    _discard_private_transactions(root)
+    entries = sorted(root.iterdir())
+    for entry in entries:
+        if entry.is_symlink() or not entry.is_dir():
+            raise TransactionError(
+                f"refusing malformed transaction namespace entry: {entry}"
+            )
     recovered = 0
-    for directory in sorted(path for path in root.iterdir() if path.is_dir()):
+    for directory in entries:
         journal_file = directory / "journal.json"
+        if journal_file.is_symlink() or not journal_file.is_file():
+            raise TransactionError(
+                f"transaction journal is missing or unsafe: {directory}"
+            )
         try:
             journal = json.loads(journal_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise TransactionError(f"cannot recover transaction {directory}: {error}") from error
-        if journal.get("suiteId") != SUITE_ID or journal.get("schemaVersion") != 1:
+        if not isinstance(journal, dict):
+            raise TransactionError(
+                f"transaction journal is not an object: {directory}"
+            )
+        schema = journal.get("schemaVersion")
+        if (
+            journal.get("suiteId") != SUITE_ID
+            or type(schema) is not int
+            or schema != 1
+        ):
             raise TransactionError(f"refusing unknown transaction journal: {directory}")
         token = str(journal.get("token") or "")
         if directory.name != token:
@@ -696,16 +915,85 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
             )
         ):
             raise TransactionError(f"transaction path mismatch: {directory}")
-        records = journal.get("records")
-        if not isinstance(records, list):
+        records_value = journal.get("records")
+        if not isinstance(records_value, list):
             raise TransactionError(f"transaction records are malformed: {directory}")
+        records: list[dict[str, Any]] = []
+        for record in records_value:
+            if not isinstance(record, dict):
+                raise TransactionError(
+                    f"transaction record is malformed: {directory}"
+                )
+            _safe_record_paths(plugin_root, token, record)
+            records.append(record)
 
-        phase = str(journal.get("phase") or "")
-        if phase in ("committing", "committed"):
+        phase_value = journal.get("phase")
+        if not isinstance(phase_value, str) or phase_value not in (
+            COMMIT_PHASES | ROLLBACK_PHASES
+        ):
+            raise TransactionError(f"transaction phase is malformed: {directory}")
+        phase = phase_value
+        config_existed_value = journal.get("configExisted")
+        if not isinstance(config_existed_value, bool):
+            raise TransactionError(
+                f"transaction configExisted is malformed: {directory}"
+            )
+        restart_value = journal.get("restartOnReconcile", False)
+        if not isinstance(restart_value, bool):
+            raise TransactionError(
+                f"transaction restartOnReconcile is malformed: {directory}"
+            )
+        if menu_extension_value and not isinstance(
+            journal.get("menuExtensionExisted"), bool
+        ):
+            raise TransactionError(
+                f"transaction menuExtensionExisted is malformed: {directory}"
+            )
+
+        config_snapshot_payload: bytes | None = None
+        menu_snapshot_payload: bytes | None = None
+        shell_stopped_value = True
+        payload_reload_value: bool | None = None
+        if phase in ROLLBACK_PHASES:
+            if config_existed_value:
+                config_snapshot_payload = _snapshot_bytes(
+                    directory / "shell.json.before", "config", directory
+                )
+            if menu_extension_value and journal["menuExtensionExisted"]:
+                menu_snapshot_payload = _snapshot_bytes(
+                    directory / "omarchy-menu.jsonc.before", "menu", directory
+                )
+            shell_stopped_value = journal.get("shellStopped", True)
+            if not isinstance(shell_stopped_value, bool):
+                raise TransactionError(
+                    f"transaction shellStopped is malformed: {directory}"
+                )
+            if "payloadReloadExpected" in journal:
+                payload_reload_value = journal["payloadReloadExpected"]
+                if not isinstance(payload_reload_value, bool):
+                    raise TransactionError(
+                        "transaction payloadReloadExpected is malformed: "
+                        f"{directory}"
+                    )
+
+        if phase in COMMIT_PHASES:
+            if "desiredState" not in journal:
+                raise TransactionError(
+                    f"transaction desired state is missing: {directory}"
+                )
             desired = journal.get("desiredState")
+            if desired is not None and not isinstance(desired, dict):
+                raise TransactionError(
+                    f"transaction desired state is malformed: {directory}"
+                )
+            archive_value = journal.get("archivePrevious")
+            if not isinstance(archive_value, bool):
+                raise TransactionError(
+                    f"transaction archive intent is malformed: {directory}"
+                )
             state_file = paths.state_dir / "install.json"
             if desired is None:
-                state_file.unlink(missing_ok=True)
+                _durable_unlink(state_file)
             elif isinstance(desired, dict):
                 atomic_write(
                     state_file,
@@ -713,49 +1001,49 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                         "utf-8"
                     ),
                 )
+            removed_stage = False
             for record in records:
                 _, stage, _ = _safe_record_paths(plugin_root, token, record)
                 if stage and (stage.exists() or stage.is_symlink()):
                     _remove_path(stage)
-            if journal.get("archivePrevious") is True:
+                    removed_stage = True
+            if removed_stage:
+                _fsync_directory(plugin_root)
+            if archive_value:
                 _archive_transaction_backups(paths, token, records)
             else:
+                removed_backup = False
                 for record in records:
                     _, _, backup = _safe_record_paths(plugin_root, token, record)
                     if backup.exists() or backup.is_symlink():
                         _remove_path(backup)
+                        removed_backup = True
+                if removed_backup:
+                    _fsync_directory(plugin_root)
         else:
-            restart_on_reconcile = bool(journal.get("restartOnReconcile"))
+            restart_on_reconcile = restart_value
             _restore_records(plugin_root, token, records)
-            snapshot = directory / "shell.json.before"
-            if journal.get("configExisted") is True:
-                atomic_write(config_path, snapshot.read_bytes())
+            if config_existed_value:
+                atomic_write(config_path, config_snapshot_payload)
             else:
-                config_path.unlink(missing_ok=True)
+                _durable_unlink(config_path)
             if menu_extension_value:
-                menu_snapshot = directory / "omarchy-menu.jsonc.before"
-                if journal.get("menuExtensionExisted") is True:
-                    atomic_write(menu_extension_path, menu_snapshot.read_bytes())
+                if journal["menuExtensionExisted"]:
+                    atomic_write(menu_extension_path, menu_snapshot_payload)
                 else:
-                    menu_extension_path.unlink(missing_ok=True)
+                    _durable_unlink(menu_extension_path)
                     if menu_extension_path.parent.is_dir() \
                             and not any(menu_extension_path.parent.iterdir()):
+                        parent = menu_extension_path.parent.parent
                         menu_extension_path.parent.rmdir()
-            shell_stopped_value = journal.get("shellStopped", True)
-            if not isinstance(shell_stopped_value, bool):
-                raise TransactionError(
-                    f"transaction shellStopped is malformed: {directory}"
-                )
-            payload_reload_value = journal.get(
-                "payloadReloadExpected",
-                (paths.plugin_dir / "hancore.shibumi.state").is_dir()
-                and _config_enables_plugin(
-                    paths.config_file, "hancore.shibumi.state"
-                ),
-            )
-            if not isinstance(payload_reload_value, bool):
-                raise TransactionError(
-                    f"transaction payloadReloadExpected is malformed: {directory}"
+                        if parent.is_dir():
+                            _fsync_directory(parent)
+            if payload_reload_value is None:
+                payload_reload_value = (
+                    (paths.plugin_dir / "hancore.shibumi.state").is_dir()
+                    and _config_enables_plugin(
+                        paths.config_file, "hancore.shibumi.state"
+                    )
                 )
             runtime.reconcile_rollback(
                 restart_required=restart_on_reconcile,
@@ -764,8 +1052,10 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 shell_was_stopped=shell_stopped_value,
                 payload_reload_expected=payload_reload_value,
             )
-        shutil.rmtree(directory)
+        _retire_transaction_directory(root, directory, token)
         recovered += 1
     if root.is_dir() and not any(root.iterdir()):
         root.rmdir()
+        if paths.state_dir.is_dir():
+            _fsync_directory(paths.state_dir)
     return recovered

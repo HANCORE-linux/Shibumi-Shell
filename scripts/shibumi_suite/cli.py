@@ -170,18 +170,26 @@ def load_install_state(paths: RuntimePaths, suite: Suite) -> dict[str, Any]:
 
 
 def version_key(value: str) -> tuple[int, int, int, int, tuple[tuple[int, Any], ...]]:
+    identifier = r"[0-9A-Za-z-]+"
     match = re.fullmatch(
         r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
-        r"(?:-([0-9A-Za-z.-]+))?",
+        rf"(?:-({identifier}(?:\.{identifier})*))?"
+        rf"(?:\+{identifier}(?:\.{identifier})*)?",
         value,
     )
     if not match:
         raise CliError(f"unsupported Shibumi version: {value}")
     prerelease = match.group(4)
+    prerelease_parts = prerelease.split(".") if prerelease else []
+    if any(
+        item.isdigit() and len(item) > 1 and item.startswith("0")
+        for item in prerelease_parts
+    ):
+        raise CliError(f"unsupported Shibumi version: {value}")
     identifiers: tuple[tuple[int, Any], ...] = tuple(
         (0, int(item)) if item.isdigit() else (1, item)
-        for item in prerelease.split(".")
-    ) if prerelease else ()
+        for item in prerelease_parts
+    )
     return (
         int(match.group(1)),
         int(match.group(2)),

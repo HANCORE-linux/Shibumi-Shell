@@ -81,6 +81,7 @@ jobs:
           set -euo pipefail
           version=$(<VERSION)
           notes_file=".github/release-notes/v$version.md"
+          release_channel=$(scripts/release-channel-flag "$version")
           gh release create "v$version" \
             "dist/shibumi-shell-$version.tar.gz" \
             "dist/shibumi-shell-$version.tar.gz.sha256" \
@@ -88,6 +89,6 @@ jobs:
             "dist/shibumi-shell-$version.release-evidence.json" \
             "dist/shibumi-shell-$version.release-evidence.logs.tar.gz" \
             --verify-tag \
-            --prerelease \
+            "$release_channel" \
             --notes-file "$notes_file" \
             --title "Shibumi Shell $version"

@@ -324,8 +324,32 @@ def encode_config(config: dict[str, Any]) -> bytes:
     return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
+def _fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _durable_mkdir(path: Path) -> None:
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            raise ConfigError(f"cannot create configuration directory: {path}")
+        current = current.parent
+    if not current.is_dir():
+        raise ConfigError(f"configuration parent is not a directory: {current}")
+    for directory in reversed(missing):
+        directory.mkdir()
+        _fsync_directory(directory)
+        _fsync_directory(directory.parent)
+
+
 def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    _durable_mkdir(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
@@ -335,5 +359,6 @@ def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         os.replace(temporary, path)
+        _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)

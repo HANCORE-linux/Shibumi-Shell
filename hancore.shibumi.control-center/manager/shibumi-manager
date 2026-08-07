@@ -8,6 +8,7 @@ import copy
 import fcntl
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -73,18 +74,26 @@ def paths() -> dict[str, Path]:
     }
 
 
-def read_json(path: Path, label: str) -> dict[str, Any]:
+def decode_json(payload: bytes, label: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ManagerError(f"cannot read {label}: {error}") from error
     if not isinstance(value, dict):
         raise ManagerError(f"{label} must be a JSON object")
     return value
 
 
+def read_json(path: Path, label: str) -> dict[str, Any]:
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise ManagerError(f"cannot read {label}: {error}") from error
+    return decode_json(payload, label)
+
+
 def atomic_write(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    durable_mkdir(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
     )
@@ -96,12 +105,134 @@ def atomic_write(path: Path, payload: bytes) -> None:
             os.fsync(handle.fileno())
         os.chmod(temporary, 0o600)
         os.replace(temporary, path)
+        fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 
 
 def encode(value: dict[str, Any]) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def fsync_directory(path: Path) -> None:
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def durable_mkdir(path: Path) -> None:
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            raise ManagerError(f"cannot create manager directory: {path}")
+        current = current.parent
+    if not current.is_dir():
+        raise ManagerError(f"manager parent is not a directory: {current}")
+    for directory in reversed(missing):
+        directory.mkdir()
+        fsync_directory(directory)
+        fsync_directory(directory.parent)
+
+
+def durable_unlink(path: Path) -> None:
+    existed = path.exists() or path.is_symlink()
+    path.unlink(missing_ok=True)
+    if existed and path.parent.is_dir():
+        fsync_directory(path.parent)
+
+
+def switch_preparation_path(runtime_paths: dict[str, Path]) -> Path:
+    return runtime_paths["state"] / ".switch-transaction.preparing"
+
+
+def switch_cleanup_path(runtime_paths: dict[str, Path]) -> Path:
+    return runtime_paths["state"] / ".switch-transaction.cleanup"
+
+
+def discard_private_switch_transactions(runtime_paths: dict[str, Path]) -> bool:
+    removed = False
+    for private in (
+        switch_preparation_path(runtime_paths),
+        switch_cleanup_path(runtime_paths),
+    ):
+        if not (private.exists() or private.is_symlink()):
+            continue
+        if private.is_symlink() or not private.is_dir():
+            raise ManagerError(
+                f"refusing malformed private switch transaction: {private}"
+            )
+        shutil.rmtree(private)
+        removed = True
+    if removed:
+        fsync_directory(runtime_paths["state"])
+    return removed
+
+
+def retire_switch_transaction(
+    runtime_paths: dict[str, Path], transaction: Path
+) -> None:
+    cleanup = switch_cleanup_path(runtime_paths)
+    if cleanup.exists() or cleanup.is_symlink():
+        raise ManagerError(f"switch cleanup path already exists: {cleanup}")
+    os.replace(transaction, cleanup)
+    fsync_directory(transaction.parent)
+    shutil.rmtree(cleanup)
+    fsync_directory(transaction.parent)
+
+
+def prepare_switch_transaction(
+    runtime_paths: dict[str, Path],
+    target: str,
+    config_path: Path,
+    state_path: Path,
+    config_existed: bool,
+) -> tuple[Path, Path, Path, dict[str, Any], Path]:
+    transaction = runtime_paths["state"] / "switch-transaction"
+    preparation = switch_preparation_path(runtime_paths)
+    if transaction.exists() or transaction.is_symlink():
+        raise ManagerError(
+            "an unfinished shell switch exists; run recover before retrying"
+        )
+    if preparation.exists() or preparation.is_symlink():
+        raise ManagerError(
+            "an unfinished switch preparation exists; run recover before retrying"
+        )
+    preparation.mkdir(parents=True, exist_ok=False)
+    snapshot = preparation / "shell.json.before"
+    state_snapshot = preparation / "install.json.before"
+    journal = {
+        "schemaVersion": 1,
+        "target": target,
+        "configExisted": config_existed,
+        "phase": "prepared",
+    }
+    journal_path = preparation / "journal.json"
+    try:
+        if config_existed:
+            atomic_write(snapshot, config_path.read_bytes())
+        atomic_write(state_snapshot, state_path.read_bytes())
+        atomic_write(journal_path, encode(journal))
+        fsync_directory(preparation)
+        os.replace(preparation, transaction)
+        fsync_directory(transaction.parent)
+    except Exception:
+        # No live state changes precede publication. A complete directory that
+        # crossed the atomic rename is retained for recovery; an unpublished
+        # preparation is disposable and will also be removed after a crash.
+        if preparation.exists() and not preparation.is_symlink():
+            shutil.rmtree(preparation)
+        raise
+    return (
+        transaction,
+        transaction / snapshot.name,
+        transaction / state_snapshot.name,
+        journal,
+        transaction / journal_path.name,
+    )
 
 
 def entry_id(value: Any) -> str:
@@ -145,15 +276,25 @@ def profile_path(runtime_paths: dict[str, Path]) -> Path:
 def load_layout_profiles(runtime_paths: dict[str, Path]) -> dict[str, Any]:
     path = profile_path(runtime_paths)
     if not path.is_file():
-        return {"schemaVersion": 1, "layouts": {}}
+        return {"schemaVersion": 1, "layouts": {}, "centerAnchors": {}}
     value = read_json(path, "shell layout profiles")
     layouts = value.get("layouts")
     if value.get("schemaVersion") != 1 or not isinstance(layouts, dict):
         raise ManagerError("shell layout profiles are malformed")
-    result: dict[str, Any] = {"schemaVersion": 1, "layouts": {}}
+    result: dict[str, Any] = {
+        "schemaVersion": 1,
+        "layouts": {},
+        "centerAnchors": {},
+    }
+    center_anchors = value.get("centerAnchors", {})
+    if not isinstance(center_anchors, dict):
+        raise ManagerError("shell layout profile center anchors are malformed")
     for shell_id in ("shibumi", "omarchy"):
         if shell_id in layouts:
             result["layouts"][shell_id] = copy_layout(layouts[shell_id])
+        anchor = center_anchors.get(shell_id)
+        if isinstance(anchor, str):
+            result["centerAnchors"][shell_id] = anchor
     return result
 
 
@@ -168,7 +309,31 @@ def initial_layout(
             ]
             for region in REGIONS
         }
+    previous_bar = state.get("previousBar")
+    if isinstance(previous_bar, dict):
+        previous_layout = previous_bar.get("layout")
+        if isinstance(previous_layout, dict) and all(
+            isinstance(previous_layout.get(region), list) for region in REGIONS
+        ):
+            return copy_layout(previous_layout)
     return copy_layout(defaults.get("bar", {}).get("layout", {}))
+
+
+def initial_center_anchor(
+    target: str, defaults: dict[str, Any], state: dict[str, Any]
+) -> str:
+    if target == "shibumi":
+        return "hancore.shibumi.center"
+    previous_bar = state.get("previousBar")
+    if isinstance(previous_bar, dict):
+        previous_anchor = previous_bar.get("centerAnchor")
+        return previous_anchor if isinstance(previous_anchor, str) else ""
+    default_bar = defaults.get("bar")
+    return (
+        str(default_bar.get("centerAnchor") or "")
+        if isinstance(default_bar, dict)
+        else ""
+    )
 
 
 def snapshot_layout(
@@ -209,8 +374,9 @@ def snapshot_layout(
     return snapshot
 
 
-def load_state(runtime_paths: dict[str, Path]) -> dict[str, Any]:
-    state = read_json(runtime_paths["state"] / "install.json", "install state")
+def validate_state(
+    state: dict[str, Any], label: str = "install state"
+) -> dict[str, Any]:
     activation = state.get("activation")
     if (
         state.get("suiteId") != SUITE_ID
@@ -220,12 +386,17 @@ def load_state(runtime_paths: dict[str, Path]) -> dict[str, Any]:
         or not isinstance(activation.get("enableServices"), list)
     ):
         raise ManagerError(
-            "installed suite predates the continuity contract; update Shibumi first"
+            f"{label} predates or violates the continuity contract"
         )
     for region in REGIONS:
         if not isinstance(activation["layout"].get(region), list):
-            raise ManagerError("activation layout is malformed")
+            raise ManagerError(f"{label} activation layout is malformed")
     return state
+
+
+def load_state(runtime_paths: dict[str, Path]) -> dict[str, Any]:
+    state = read_json(runtime_paths["state"] / "install.json", "install state")
+    return validate_state(state)
 
 
 def current_config(runtime_paths: dict[str, Path]) -> dict[str, Any]:
@@ -280,6 +451,7 @@ def deactivate_config(
     defaults: dict[str, Any],
     state: dict[str, Any],
     target_layout: dict[str, list[Any]] | None = None,
+    target_center_anchor: str | None = None,
 ) -> dict[str, Any]:
     result = normalize(config)
     managed_ids = set(state["plugins"])
@@ -323,9 +495,13 @@ def deactivate_config(
     if result["bar"].get("centerAnchor") == "hancore.shibumi.center":
         default_bar = defaults.get("bar")
         anchor = (
-            str(default_bar.get("centerAnchor") or "")
-            if isinstance(default_bar, dict)
-            else ""
+            target_center_anchor
+            if target_center_anchor is not None
+            else (
+                str(default_bar.get("centerAnchor") or "")
+                if isinstance(default_bar, dict)
+                else ""
+            )
         )
         if anchor:
             result["bar"]["centerAnchor"] = anchor
@@ -746,11 +922,16 @@ def perform(target: str) -> int:
         except BlockingIOError as error:
             raise ManagerError("another Shibumi lifecycle operation is running") from error
 
+        # A killed worker may leave only the unpublished preparation. It is
+        # safe to discard under the lifecycle lock because no live mutation
+        # occurs before the atomic publication rename.
+        discard_private_switch_transactions(runtime_paths)
         state = load_state(runtime_paths)
         current = current_config(runtime_paths)
         defaults = normalize(read_json(runtime_paths["defaults"], "shell defaults"))
         profiles = load_layout_profiles(runtime_paths)
         layouts = profiles["layouts"]
+        center_anchors = profiles["centerAnchors"]
         current_shell = (
             "shibumi"
             if str(current["bar"].get("id") or "omarchy.bar")
@@ -758,6 +939,10 @@ def perform(target: str) -> int:
             else "omarchy"
         )
         trusted_layout = layouts.get(current_shell)
+        current_anchor = current["bar"].get("centerAnchor")
+        center_anchors[current_shell] = (
+            current_anchor if isinstance(current_anchor, str) else ""
+        )
         layouts[current_shell] = snapshot_layout(
             current,
             current_shell,
@@ -769,10 +954,22 @@ def perform(target: str) -> int:
         if target_layout is None:
             target_layout = initial_layout(runtime_target, defaults, state)
             layouts[runtime_target] = copy_layout(target_layout)
+        target_center_anchor = center_anchors.get(runtime_target)
+        if target_center_anchor is None:
+            target_center_anchor = initial_center_anchor(
+                runtime_target, defaults, state
+            )
+            center_anchors[runtime_target] = target_center_anchor
         desired = (
             activate_config(current, state, target_layout)
             if runtime_target == "shibumi"
-            else deactivate_config(current, defaults, state, target_layout)
+            else deactivate_config(
+                current,
+                defaults,
+                state,
+                target_layout,
+                target_center_anchor,
+            )
         )
         desired = apply_shibumi_variant(desired, target)
         desired_state = copy.deepcopy(state)
@@ -787,33 +984,25 @@ def perform(target: str) -> int:
             desired["bar"].get("id") or "omarchy.bar"
         )
         desired_state["updatedEpoch"] = int(time.time())
-        transaction = runtime_paths["state"] / "switch-transaction"
-        if transaction.exists():
-            raise ManagerError(
-                "an unfinished shell switch exists; run recover before retrying"
-            )
-        transaction.mkdir(parents=True)
-        snapshot = transaction / "shell.json.before"
-        state_snapshot = transaction / "install.json.before"
         state_path = runtime_paths["state"] / "install.json"
         config_path = runtime_paths["config"]
         existed = config_path.is_file()
-        if existed:
-            snapshot.write_bytes(config_path.read_bytes())
-        state_snapshot.write_bytes(state_path.read_bytes())
-        journal = {
-            "schemaVersion": 1,
-            "target": target,
-            "configExisted": existed,
-            "phase": "prepared",
-        }
-        journal_path = transaction / "journal.json"
-        atomic_write(journal_path, encode(journal))
+        (
+            transaction,
+            snapshot,
+            state_snapshot,
+            journal,
+            journal_path,
+        ) = prepare_switch_transaction(
+            runtime_paths,
+            target,
+            config_path,
+            state_path,
+            existed,
+        )
 
         def cleanup_transaction() -> None:
-            for child in transaction.iterdir():
-                child.unlink(missing_ok=True)
-            transaction.rmdir()
+            retire_switch_transaction(runtime_paths, transaction)
 
         try:
             write_status(runtime_paths, target, "snapshot")
@@ -834,7 +1023,7 @@ def perform(target: str) -> int:
                 if existed:
                     atomic_write(config_path, snapshot.read_bytes())
                 else:
-                    config_path.unlink(missing_ok=True)
+                    durable_unlink(config_path)
                 atomic_write(state_path, state_snapshot.read_bytes())
                 reload_shell(runtime_paths)
             except Exception as rollback_error:
@@ -861,40 +1050,113 @@ def perform(target: str) -> int:
                     f"{transaction}"
                 ) from rollback_error
             else:
+                journal["phase"] = "rolled-back"
+                journal["detail"] = str(operation_error)
+                atomic_write(journal_path, encode(journal))
+                write_status(
+                    runtime_paths, target, "error", str(operation_error)
+                )
                 cleanup_transaction()
             raise
         else:
+            journal["phase"] = "committed"
+            atomic_write(journal_path, encode(journal))
+            write_status(runtime_paths, target, "complete")
             cleanup_transaction()
-        write_status(runtime_paths, target, "complete")
+    return 0
+
+
+def recover_locked(runtime_paths: dict[str, Path]) -> int:
+    discard_private_switch_transactions(runtime_paths)
+    transaction = runtime_paths["state"] / "switch-transaction"
+    if transaction.is_symlink():
+        raise ManagerError(f"refusing symlinked switch transaction: {transaction}")
+    if not transaction.exists():
+        return 0
+    if not transaction.is_dir():
+        raise ManagerError(f"switch transaction is not a directory: {transaction}")
+
+    journal_path = transaction / "journal.json"
+    if journal_path.is_symlink() or not journal_path.is_file():
+        raise ManagerError("switch journal is missing or unsafe")
+    journal = read_json(journal_path, "switch journal")
+    schema = journal.get("schemaVersion")
+    target = journal.get("target")
+    config_existed = journal.get("configExisted")
+    phase = journal.get("phase")
+    if type(schema) is not int or schema != 1:
+        raise ManagerError("switch journal schema is unsupported")
+    if not isinstance(target, str) or target not in {
+        "omarchy", "shibumi", "v1", "v2"
+    }:
+        raise ManagerError("switch journal target is malformed")
+    if not isinstance(config_existed, bool):
+        raise ManagerError("switch journal configExisted is malformed")
+    if not isinstance(phase, str) or phase not in {
+        "prepared", "recovery-required", "committed", "rolled-back"
+    }:
+        raise ManagerError("switch journal phase is malformed")
+
+    if phase in {"committed", "rolled-back"}:
+        detail = journal.get("detail", "")
+        if not isinstance(detail, str):
+            raise ManagerError("switch terminal journal detail is malformed")
+        write_status(
+            runtime_paths,
+            target,
+            "complete" if phase == "committed" else "error",
+            detail,
+        )
+        retire_switch_transaction(runtime_paths, transaction)
+        return 0
+
+    snapshot = transaction / "shell.json.before"
+    state_snapshot = transaction / "install.json.before"
+    if config_existed and (snapshot.is_symlink() or not snapshot.is_file()):
+        raise ManagerError("switch snapshot is missing or unsafe")
+    if state_snapshot.is_symlink() or not state_snapshot.is_file():
+        raise ManagerError("switch state snapshot is missing or unsafe")
+    # Read each restoration payload exactly once before stopping the shell.
+    # Validation and restoration use the same immutable byte buffers so an
+    # external change cannot cross the destructive boundary unnoticed.
+    try:
+        config_payload = snapshot.read_bytes() if config_existed else None
+        state_payload = state_snapshot.read_bytes()
+    except OSError as error:
+        raise ManagerError(f"cannot read switch snapshot: {error}") from error
+    if config_payload:
+        # A zero-byte user config is intentionally supported by current_config
+        # as "use defaults" and must still be restored byte-for-byte.
+        decode_json(config_payload, "switch snapshot")
+    saved_state = decode_json(state_payload, "switch state snapshot")
+    validate_state(saved_state, "switch state snapshot")
+
+    stop_shell(runtime_paths)
+    if config_existed:
+        atomic_write(runtime_paths["config"], config_payload)
+    else:
+        durable_unlink(runtime_paths["config"])
+    atomic_write(
+        runtime_paths["state"] / "install.json",
+        state_payload,
+    )
+    reload_shell(runtime_paths)
+    write_status(runtime_paths, str(target), "recovered")
+    retire_switch_transaction(runtime_paths, transaction)
     return 0
 
 
 def recover() -> int:
     runtime_paths = paths()
-    transaction = runtime_paths["state"] / "switch-transaction"
-    if not transaction.is_dir():
-        return 0
-    journal = read_json(transaction / "journal.json", "switch journal")
-    stop_shell(runtime_paths)
-    snapshot = transaction / "shell.json.before"
-    state_snapshot = transaction / "install.json.before"
-    if journal.get("configExisted") is True:
-        if not snapshot.is_file():
-            raise ManagerError("switch snapshot is missing")
-        atomic_write(runtime_paths["config"], snapshot.read_bytes())
-    else:
-        runtime_paths["config"].unlink(missing_ok=True)
-    if state_snapshot.is_file():
-        atomic_write(
-            runtime_paths["state"] / "install.json",
-            state_snapshot.read_bytes(),
-        )
-    reload_shell(runtime_paths)
-    for child in transaction.iterdir():
-        child.unlink(missing_ok=True)
-    transaction.rmdir()
-    write_status(runtime_paths, str(journal.get("target") or ""), "recovered")
-    return 0
+    runtime_paths["lock"].parent.mkdir(parents=True, exist_ok=True)
+    with runtime_paths["lock"].open("a+") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ManagerError(
+                "another Shibumi lifecycle operation is running"
+            ) from error
+        return recover_locked(runtime_paths)
 
 
 def request(target: str) -> int:

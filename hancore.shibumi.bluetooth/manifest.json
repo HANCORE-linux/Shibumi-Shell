@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.bluetooth",
   "name": "Shibumi Bluetooth",
-  "version": "0.1.1-beta.5",
+  "version": "0.1.1-beta.6",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi Bluetooth presentation with a native BlueZ and audio backend.",

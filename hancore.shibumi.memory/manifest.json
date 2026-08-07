@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.memory",
   "name": "Shibumi Memory",
-  "version": "0.1.1-beta.5",
+  "version": "0.1.1-beta.6",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi memory widget and detailed memory panel.",

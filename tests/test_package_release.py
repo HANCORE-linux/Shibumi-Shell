@@ -26,7 +26,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.5")
+        self.assertEqual(version, "0.1.1-beta.6")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -34,6 +34,20 @@ class PackageReleaseTests(unittest.TestCase):
                 (ROOT / plugin["id"] / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertEqual(manifest["version"], version, plugin["id"])
+
+    def test_user_visible_plugin_count_matches_suite_contract(self) -> None:
+        suite = json.loads(
+            (ROOT / "contracts/plugin-suite-v1.json").read_text(encoding="utf-8")
+        )
+        preview = (
+            ROOT
+            / "hancore.shibumi.control-center"
+            / "SemanticPreviewImage.qml"
+        ).read_text(encoding="utf-8")
+        count = len(suite["plugins"])
+        self.assertEqual(count, 24)
+        self.assertIn(f'value: "{count} / {count}"', preview)
+        self.assertNotIn('value: "25 / 25"', preview)
 
     def test_package_boundary_has_no_user_mutation_hook(self) -> None:
         pkgbuild = (ROOT / "packaging/aur/PKGBUILD").read_text(encoding="utf-8")
@@ -54,6 +68,53 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertTrue(notes.is_file())
         self.assertIn('--notes-file "$notes_file"', workflow)
         self.assertNotIn("--generate-notes", workflow)
+
+    def test_release_channel_distinguishes_prerelease_and_stable_versions(self) -> None:
+        selector = ROOT / "scripts/release-channel-flag"
+        for version, expected in (
+            ("0.1.1-beta.6", "--prerelease"),
+            ("0.1.1-rc.1+build.7", "--prerelease"),
+            ("0.1.1", "--latest"),
+            ("1.0.0+build.7", "--latest"),
+        ):
+            with self.subTest(version=version):
+                result = subprocess.run(
+                    [str(selector), version],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.stdout.strip(), expected)
+
+        for version in (
+            "",
+            "stable",
+            "1.2",
+            "01.2.3",
+            "1.2.3-",
+            "1.2.3-alpha..1",
+            "1.2.3-01",
+            "1.2.3+",
+        ):
+            with self.subTest(invalid_version=version):
+                result = subprocess.run(
+                    [str(selector), version],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertEqual(result.stdout, "")
+
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'release_channel=$(scripts/release-channel-flag "$version")',
+            workflow,
+        )
+        self.assertIn('            "$release_channel" \\', workflow)
+        self.assertNotIn("            --prerelease \\", workflow)
 
     def test_release_workflow_pins_checkout_v7_without_persisted_tokens(self) -> None:
         workflow = (ROOT / ".github/workflows/package-release.yml").read_text(

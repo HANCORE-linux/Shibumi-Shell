@@ -8,7 +8,7 @@ map; it does not redefine that contract.
 
 ## Runtime shape
 
-Shibumi is a suite of 25 native Omarchy plugins loaded into the existing
+Shibumi is a suite of 24 native Omarchy plugins loaded into the existing
 Omarchy Shell process.
 
 - `hancore.shibumi.bar` is the selectable full-bar host.

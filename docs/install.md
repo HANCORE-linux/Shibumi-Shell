@@ -20,7 +20,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> AUR registration is currently unavailable, so `0.1.1-beta.5` is not
+> AUR registration is currently unavailable, so `0.1.1-beta.6` is not
 > published there yet. This is the supported flow once AUR access returns and
 > the package is released.
 
@@ -189,7 +189,7 @@ exit indicates a state that needs attention.
 
 ## Repair a partial suite
 
-Omarchy's generic plugin manager sees the 25 Shibumi roots as individual
+Omarchy's generic plugin manager sees the 24 Shibumi roots as individual
 third-party plugins. Do not remove or disable Shibumi internals individually.
 If one was removed, disabled, or modified, restore the complete payload and
 managed profile with:

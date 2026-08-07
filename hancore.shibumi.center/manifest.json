@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.center",
   "name": "Shibumi Center",
-  "version": "0.1.1-beta.5",
+  "version": "0.1.1-beta.6",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi clock, calendar, weather, status, and update center.",

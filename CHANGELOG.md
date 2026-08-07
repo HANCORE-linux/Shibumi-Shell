@@ -2,6 +2,30 @@
 
 This changelog records user-visible Shibumi changes.
 
+## 0.1.1-beta.6: Stable-readiness lifecycle hardening
+
+Release candidate for 2026-08-07.
+
+### Changed
+
+- Classified stable GitHub releases independently from prereleases with validated SemVer handling
+- Restored the exact saved Omarchy layout when first returning from Shibumi
+- Made unavailable Quickshell logs an explicit Health warning instead of a false clean result
+- Corrected current installation and architecture documentation to the 24-plugin contract
+
+### Fixed
+
+- Published suite and continuity-manager recovery transactions only after complete durable preparation
+- Serialized continuity recovery with active bar-switch workers
+- Persisted journals, staged payloads, namespace renames, configuration, install state, backup archives, and cleanup in crash-safe order
+- Rejected malformed, incomplete, or symlinked recovery state before changing live files or stopping the shell
+- Made interrupted transaction preparation, archive copying, and cleanup automatically resumable
+
+### Known limits
+
+- Physical mixed-scale multi-monitor, enterprise Wi-Fi, remaining device-backed Bluetooth, clean-chroot packaging, and safe nested-compositor lifecycle acceptance remain external stable gates
+- AUR publication remains unavailable until the package name can be registered
+
 ## 0.1.1-beta.5: Contract and recovery hardening
 
 Release candidate for 2026-08-07.

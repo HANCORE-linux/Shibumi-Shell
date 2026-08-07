@@ -40,7 +40,7 @@ These premises apply to every implementation, review, and release decision.
   product, an official Omarchy bar, or a Basecamp-maintained plugin.
 - Shibumi may port approved host-neutral behavior from QS Rise V1. The products
   do not share deployment paths, update state, or platform ownership code.
-- This repository contains 25 independently registered runtime plugins. A
+- This repository contains 24 independently registered runtime plugins. A
   transactional suite adapter bridges Quattro's current one-repository to
   one-plugin installation limit.
 - Future Shibumi bars use separate `bar` plugin IDs and reuse the same feature
@@ -780,7 +780,7 @@ cleaner Shibumi architecture alone is not sufficient justification.
 
 ### Lifecycle
 
-- The official `omarchy plugin validate` command passes for every one of the 25
+- The official `omarchy plugin validate` command passes for every one of the 24
   child plugin roots.
 - The repository root has no `manifest.json`; native
   `omarchy plugin add <repository>` must fail instead of installing a partial

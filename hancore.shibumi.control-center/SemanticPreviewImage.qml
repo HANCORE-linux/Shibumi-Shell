@@ -68,7 +68,7 @@ Item {
     if (checks.length > 0) return checks.slice(0, 4)
     return [
       { label: "Shell runtime", value: "Responsive", status: "ok" },
-      { label: "Manifests", value: "25 / 25", status: "ok" },
+      { label: "Manifests", value: "24 / 24", status: "ok" },
       { label: "Host contract", value: "Compatible", status: "ok" },
       { label: "Configuration", value: "No errors", status: "ok" }
     ]

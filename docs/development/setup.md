@@ -17,7 +17,7 @@ payloads into a primary desktop's Omarchy plugin directory.
 
 ## Repository shape
 
-- `hancore.shibumi.*/` contains the 25 self-contained plugin roots.
+- `hancore.shibumi.*/` contains the 24 self-contained plugin roots.
 - `Bar.qml`, `core/`, `styles/`, and selected shared sources are canonical
   development copies with checked vendored mirrors.
 - `contracts/` contains executable product and evidence contracts.
