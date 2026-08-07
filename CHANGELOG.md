@@ -20,6 +20,7 @@ Release candidate for 2026-08-07.
 - Persisted journals, staged payloads, namespace renames, configuration, install state, backup archives, and cleanup in crash-safe order
 - Rejected malformed, incomplete, or symlinked recovery state before changing live files or stopping the shell
 - Made interrupted transaction preparation, archive copying, and cleanup automatically resumable
+- Waited for an authoritative stock-shell ping and isolated lifecycle-evidence restarts and compositor probes from the production session
 - Prevented hidden official Audio and Network keyboard panels from flashing stock Omarchy UI before Shibumi compatibility redirects settle
 
 ### Known limits

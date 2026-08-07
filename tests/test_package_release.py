@@ -162,6 +162,48 @@ class PackageReleaseTests(unittest.TestCase):
             "runs-on: [self-hosted, linux, shibumi-validation]", workflow
         )
 
+    def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        readiness = runtime.split("shell_ready=0", 1)[1].split(
+            "suite_cli install --yes", 1
+        )[0]
+        self.assertNotIn("shell_ipc -q", readiness)
+        self.assertIn("shell_ipc shell ping", readiness)
+        self.assertIn("[[ $shell_ready -eq 1 ]]", readiness)
+        self.assertIn('cp -a "$omarchy_path/bin" "$fixture_omarchy/bin"', runtime)
+        self.assertNotIn('ln -s "$omarchy_path/bin"', runtime)
+        self.assertIn('rm -f "$fixture_omarchy/bin/omarchy-restart-shell"', runtime)
+        self.assertIn('"$fixture_omarchy/bin/omarchy-update-available"', runtime)
+        self.assertIn("command -v omarchy-update-available", runtime)
+        self.assertIn("systemd-run --user --quiet --collect", runtime)
+        self.assertEqual(runtime.count("systemd-run --user"), 2)
+        self.assertEqual(
+            runtime.count("timeout --kill-after=1s 8s systemd-run --user"), 2
+        )
+        self.assertNotIn("$(systemctl --user show", runtime)
+        self.assertIn("--property=KillMode=control-group", runtime)
+        self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
+        self.assertIn("--kill-whom=all --signal=TERM", runtime)
+        self.assertIn("--kill-whom=all --signal=KILL", runtime)
+        self.assertIn("timeout --kill-after=1s 8s", runtime)
+        self.assertNotIn("while timeout", runtime)
+        self.assertNotIn("/proc/[0-9]*", runtime)
+        self.assertNotIn("fixture_process_ids", runtime)
+        self.assertIn('>>"$SHIBUMI_TEST_SHELL_LOG"', runtime)
+        self.assertIn('"$tmpdir/quickshell.log"', runtime)
+        final_drain = runtime.index("final fixture shell service drain failed")
+        log_scan = runtime.index("runtime log contains a QML or plugin-load failure")
+        self.assertLess(final_drain, log_scan)
+        self.assertIn("TERM-resistant cleanup probe", runtime)
+        self.assertIn("cleanup_probe_armed=1", runtime)
+        self.assertIn("(( cleanup_probe_armed == 1 ))", runtime)
+        self.assertIn('printf \'KILL %s\\n\'', runtime)
+        self.assertIn("did not exercise the cleanup KILL fallback", runtime)
+        self.assertIn("cleanup exceeded its wall-clock budget", runtime)
+        self.assertIn('>"$stub_bin/hyprctl"', runtime)
+
     def test_release_evidence_collector_declares_unique_complete_gates(self) -> None:
         result = subprocess.run(
             [str(ROOT / "scripts/collect-release-evidence"), "--output", "unused", "--list"],
