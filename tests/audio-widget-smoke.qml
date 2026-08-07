@@ -109,6 +109,8 @@ ShellRoot {
             || audio.audioPanel.settings.testSetting !== "retained"
             || audio.audioPanel.manageIpc
             || audio.audioPanel.opened || audio.audioPanel.openCount !== 0
+            || audio.audioPanel.backendKeyboardPanelOpen
+            || audio.audioPanel.backendKeyboardPanelVisible
             || audio.childPanelWidget("omarchy.audio") !== audio
             || !audio.ownsPanelWidget(audio)
             || !audio.ownsPanelWidget(audio.audioPanel))
@@ -116,6 +118,12 @@ ShellRoot {
         if (root.clickTargets.length !== 1
             || audio.audioPanel.internalButton.registeredBar === fakeBar)
           return root.fail("duplicate official click target")
+        audio.audioPanel.open()
+        if (!audio.audioPanel.opened
+            || audio.audioPanel.backendKeyboardPanelOpen
+            || audio.audioPanel.backendKeyboardPanelVisible)
+          return root.fail("hidden official KeyboardPanel became visible")
+        audio.audioPanel.close()
 
         root.fullWidth = audio.implicitWidth
         audio.settings = ({ compact: true })
@@ -148,7 +156,7 @@ ShellRoot {
           return root.fail("wheel burst was not coalesced into one final write")
         audio.interactionTarget.triggerPress(Qt.LeftButton)
         if (!audio.opened || audio.audioPanel.opened
-            || audio.audioPanel.openCount !== 0)
+            || audio.audioPanel.openCount !== 1)
           return root.fail("local mixer lifecycle/official panel isolation")
         root.phase++
         root.phaseTicks = 0

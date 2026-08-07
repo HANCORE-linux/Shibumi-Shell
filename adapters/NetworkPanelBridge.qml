@@ -84,8 +84,25 @@ Item {
     return open(false)
   }
 
+  function suppressBackendKeyboardPanel() {
+    if (!panel || !panel.data || panel.data.length === undefined) return false
+    let suppressed = false
+    for (let index = 0; index < panel.data.length; index++) {
+      const candidate = panel.data[index]
+      if (!candidate || typeof candidate.beginFocusPrime !== "function"
+          || !("anchorItem" in candidate) || !("open" in candidate)
+          || !("visible" in candidate) || !("owner" in candidate)
+          || candidate.owner !== panel) continue
+      candidate.open = false
+      candidate.visible = false
+      suppressed = true
+    }
+    return suppressed
+  }
+
   function injectPanel() {
     if (!panel) return
+    suppressBackendKeyboardPanel()
     if ("bar" in panel) panel.bar = hostProxy
     if ("moduleName" in panel) panel.moduleName = "omarchy.network"
     if ("settings" in panel) panel.settings = panelSettings

@@ -88,6 +88,26 @@ ShellRoot {
         speedPanel.speedDetailsVisible ? "details-open" : "details-closed"
       ].join(":")
     }
+    function backendWindowState(): string {
+      if (!bridge.panel) return "loading"
+      return [
+        bridge.panel.backendKeyboardPanelOpen ? "open" : "closed",
+        bridge.panel.backendKeyboardPanelVisible ? "visible" : "hidden"
+      ].join(":")
+    }
+    function overlayWindowState(): string {
+      if (!bridge.panel) return "loading"
+      return [
+        bridge.panel.qrWindowVisible ? "qr-visible" : "qr-hidden",
+        bridge.panel.speedWindowVisible ? "speed-visible" : "speed-hidden"
+      ].join(":")
+    }
+    function probeSpeedWindow(): void {
+      if (bridge.panel) bridge.panel.speedWindowProbe = true
+    }
+    function clearSpeedWindowProbe(): void {
+      if (bridge.panel) bridge.panel.speedWindowProbe = false
+    }
     function focusA(): void { fakeBar.focusedOutput = "A" }
     function focusB(): void { fakeBar.focusedOutput = "B" }
     function openA(): void { networkWidgetA.open() }

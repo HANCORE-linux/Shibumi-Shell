@@ -12,6 +12,7 @@ Item {
   property bool qrVisible: false
   property bool speedTestModalOpen: false
   property bool speedTestRunning: false
+  property bool speedWindowProbe: false
   property bool networkManagerAvailable: true
   property string kind: "wifi"
   property string label: "Fixture"
@@ -29,6 +30,35 @@ Item {
   }
 
   readonly property bool overlayVisible: qrVisible || speedTestModalOpen
+  readonly property bool backendKeyboardPanelOpen:
+    backendKeyboardPanel.open
+  readonly property bool backendKeyboardPanelVisible:
+    backendKeyboardPanel.visible
+  readonly property bool qrWindowVisible: qrWindow.visible
+  readonly property bool speedWindowVisible: speedWindow.visible
+
+  QtObject {
+    id: backendKeyboardPanel
+    property Item anchorItem: root
+    property var owner: root
+    property bool open: root.opened
+    property bool visible: root.opened
+    function beginFocusPrime() {}
+  }
+
+  QtObject {
+    id: qrWindow
+    property Item anchorItem: root
+    property bool open: root.qrVisible
+    property bool visible: root.qrVisible
+  }
+
+  QtObject {
+    id: speedWindow
+    property Item anchorItem: root
+    property bool open: root.speedTestModalOpen
+    property bool visible: root.speedTestModalOpen || root.speedWindowProbe
+  }
 
   function open() {
     if (overlayVisible) {

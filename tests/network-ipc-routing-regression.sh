@@ -37,6 +37,22 @@ ipc() {
     /usr/bin/qs ipc -p "$tmpdir" call "$@"
 }
 state() { ipc network-ipc-routing-test state 2>/dev/null || true; }
+backend_window_state() {
+  ipc network-ipc-routing-test backendWindowState 2>/dev/null || true
+}
+overlay_window_state() {
+  ipc network-ipc-routing-test overlayWindowState 2>/dev/null || true
+}
+wait_backend_hidden() {
+  local actual=""
+  for _ in {1..80}; do
+    kill -0 "$shell_pid" 2>/dev/null || fail 'runtime exited unexpectedly'
+    actual=$(backend_window_state)
+    [[ $actual == closed:hidden ]] && return 0
+    sleep 0.025
+  done
+  fail "hidden official KeyboardPanel became visible: $actual"
+}
 wait_state() {
   local expected=$1 actual=""
   for _ in {1..80}; do
@@ -50,8 +66,18 @@ wait_state() {
 
 base='backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
 wait_state "$base"
+wait_backend_hidden
+[[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
+  || fail 'authoritative overlay windows are visible while closed'
+ipc network-ipc-routing-test probeSpeedWindow >/dev/null
+[[ $(overlay_window_state) == qr-hidden:speed-visible ]] \
+  || fail 'non-KeyboardPanel speed window binding was suppressed'
+ipc network-ipc-routing-test clearSpeedWindowProbe >/dev/null
+[[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
+  || fail 'speed window probe did not close'
 ipc omarchy.network open >/dev/null
 wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_backend_hidden
 ipc network-ipc-routing-test focusB >/dev/null
 ipc network-ipc-routing-test closeA >/dev/null
 wait_state "$base"
@@ -70,10 +96,16 @@ wait_state "$base"
 ipc network-ipc-routing-test focusA >/dev/null
 ipc omarchy.network showQr >/dev/null
 wait_state 'backend-closed:a-closed:b-closed:qr-open:speed-modal-closed:speed-idle:details-closed'
+[[ $(overlay_window_state) == qr-visible:speed-hidden ]] \
+  || fail 'authoritative QR overlay was suppressed with KeyboardPanel'
 ipc network-ipc-routing-test closeQr >/dev/null
 wait_state "$base"
+[[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
+  || fail 'authoritative QR overlay did not close'
 ipc omarchy.network speedTest >/dev/null
 wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-running:details-open'
+[[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
+  || fail 'redirected speed overlay did not hand off to Shibumi details'
 ipc omarchy.network close >/dev/null
 wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
 ipc omarchy.network toggle >/dev/null
@@ -84,6 +116,7 @@ ipc omarchy.network open >/dev/null
 wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
 ipc network-ipc-routing-test closeA >/dev/null
 wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
+wait_backend_hidden
 
 ipc_show=$(env WAYLAND_DISPLAY= XDG_RUNTIME_DIR="$tmpdir/runtime" \
   /usr/bin/qs ipc -p "$tmpdir" show)

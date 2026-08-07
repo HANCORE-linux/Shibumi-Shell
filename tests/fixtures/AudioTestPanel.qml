@@ -26,6 +26,19 @@ Item {
   property int inputVolumeChanges: 0
   property int openCount: 0
   readonly property var internalButton: button
+  readonly property bool backendKeyboardPanelOpen:
+    backendKeyboardPanel.open
+  readonly property bool backendKeyboardPanelVisible:
+    backendKeyboardPanel.visible
+
+  QtObject {
+    id: backendKeyboardPanel
+    property Item anchorItem: root
+    property var owner: root
+    property bool open: root.opened
+    property bool visible: root.opened
+    function beginFocusPrime() {}
+  }
 
   implicitWidth: 27
   implicitHeight: 35

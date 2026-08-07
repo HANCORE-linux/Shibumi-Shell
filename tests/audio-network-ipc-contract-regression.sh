@@ -17,6 +17,8 @@ audio_bridge="$repo_root/hancore.shibumi.audio/AudioPanelBridge.qml"
 network_service="$repo_root/hancore.shibumi.network/Service.qml"
 network_widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 network_bridge="$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml"
+embedded_audio_bridge="$repo_root/adapters/AudioPanelBridge.qml"
+embedded_network_bridge="$repo_root/adapters/NetworkPanelBridge.qml"
 host_network="$OMARCHY_PATH/shell/plugins/panels/network/Panel.qml"
 
 [[ $(rg -l 'target: "omarchy\.audio"' \
@@ -32,6 +34,19 @@ rg -Fq 'manageIpc: false' "$audio_widget" \
   || fail 'visible Audio widget can duplicate direct IPC ownership'
 rg -Fq 'manageIpc = false' "$audio_bridge" \
   || fail 'hidden official Audio backend can duplicate direct IPC ownership'
+for bridge in "$audio_bridge" "$network_bridge" \
+    "$embedded_audio_bridge" "$embedded_network_bridge"; do
+  rg -Fq 'function suppressBackendKeyboardPanel()' "$bridge" \
+    || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
+  rg -Fq 'typeof candidate.beginFocusPrime !== "function"' "$bridge" \
+    || fail "hidden backend suppression is not limited to KeyboardPanel: $bridge"
+  rg -Fq 'candidate.owner !== panel' "$bridge" \
+    || fail "hidden backend suppression can match a foreign window: $bridge"
+  rg -Fq 'candidate.open = false' "$bridge" \
+    || fail "hidden official KeyboardPanel can retain dismissal surfaces: $bridge"
+  rg -Fq 'candidate.visible = false' "$bridge" \
+    || fail "hidden official KeyboardPanel can flash before redirect: $bridge"
+done
 
 [[ $(rg -l 'target: "omarchy\.network"' \
   "$network_service" "$network_widget" "$network_bridge" "$host_network" \
