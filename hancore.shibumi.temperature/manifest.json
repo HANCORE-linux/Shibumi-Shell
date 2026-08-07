@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.temperature",
   "name": "Shibumi Temperature",
-  "version": "0.1.1-beta.6",
+  "version": "0.1.1-beta.7",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Demand-driven hardware temperature widget and sensor panel.",

@@ -220,19 +220,19 @@ class HealthDiagnosticsTests(unittest.TestCase):
     def use_package_install(
         self,
         *,
-        installed_version: str | None = "0.1.1beta.6-1",
+        installed_version: str | None = "0.1.1beta.7-1",
         available_version: str | None = None,
         fetch_error: str = "",
     ) -> Path:
         self.state.pop("sourceRoot", None)
         self.state.update(
             {
-                "suiteVersion": "0.1.1-beta.6",
+                "suiteVersion": "0.1.1-beta.7",
                 "installOrigin": "package",
                 "payloadRoot": "/usr/share/shibumi-shell",
-                "sourceRevision": "package:0.1.1-beta.6",
+                "sourceRevision": "package:0.1.1-beta.7",
                 "packageName": "shibumi-shell",
-                "packageVersion": "0.1.1-beta.6",
+                "packageVersion": "0.1.1-beta.7",
             }
         )
         self.write_state(self.state)
@@ -318,9 +318,9 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(payload["overall"], "healthy")
         self.assertEqual(payload["installOrigin"], "package")
         self.assertEqual(payload["packageName"], "shibumi-shell")
-        self.assertEqual(payload["packageVersion"], "0.1.1-beta.6")
+        self.assertEqual(payload["packageVersion"], "0.1.1-beta.7")
         self.assertEqual(checks["package-status"]["status"], "ok")
-        self.assertEqual(checks["package-status"]["value"], "0.1.1beta.6-1")
+        self.assertEqual(checks["package-status"]["value"], "0.1.1beta.7-1")
         self.assertEqual(checks["package-update"]["value"], "Not checked")
         self.assertNotIn("source-status", checks)
         self.assertNotIn("source-update", checks)

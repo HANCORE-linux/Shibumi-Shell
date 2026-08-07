@@ -43,9 +43,22 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'network plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -F 'Binding loop detected' <<<"$output" >/dev/null; then
+  fail "V1/V2 network presentation produced a binding loop"
+fi
 
 widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 service="$repo_root/hancore.shibumi.network/Service.qml"
+[[ $(rg -c 'BoundedLabel \{' "$widget") -eq 2 ]] \
+  || fail "V1/V2 bounded labels do not share the independent metrics path"
+rg -Fq 'component BoundedLabel: Text' "$widget" \
+  || fail "bounded network labels lack a reusable text component"
+rg -Fq 'TextMetrics {' "$widget" \
+  || fail "bounded network labels do not use independent text metrics"
+if rg -Fq 'width: visible ? Math.min(88, implicitWidth) : 0' "$widget" \
+    || rg -Fq 'width: Math.min(implicitWidth, Commons.Style.space(128))' "$widget"; then
+  fail "network labels still derive width from their own implicit width"
+fi
 rg -q 'serviceFor\("hancore\.shibumi\.network"\)' "$widget" \
   || fail "network widget does not resolve the shared service"
 rg -Fq 'property url popupSource: Qt.resolvedUrl("NetworkPanel.qml")' "$widget" \

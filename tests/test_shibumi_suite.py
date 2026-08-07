@@ -805,8 +805,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.6")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.6")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.7")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.7")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -825,7 +825,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.6")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.7")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_update_transactionally_retires_app_menu(self) -> None:
@@ -873,7 +873,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.6+installed.7"
+                state["suiteVersion"] = "0.1.1-beta.7+installed.7"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -882,7 +882,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.6")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.7")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -945,9 +945,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.6")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.6")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.6")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.7")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.7")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.7")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

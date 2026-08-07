@@ -402,10 +402,10 @@ Ui.Panel {
         Behavior on color { ColorAnimation { duration: 160 } }
       }
 
-      Text {
+      BoundedLabel {
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
-        width: visible ? Math.min(88, implicitWidth) : 0
+        maximumWidth: 88
         text: root.label !== "" ? root.label : "Wi-Fi"
         color: root.widgetInk
         font.family: root.v2MonoFont
@@ -432,6 +432,20 @@ Ui.Panel {
           ink: root.widgetInk
         }
       }
+    }
+  }
+
+  component BoundedLabel: Text {
+    id: boundedLabel
+
+    required property real maximumWidth
+
+    width: visible ? Math.min(maximumWidth, labelMetrics.advanceWidth) : 0
+
+    TextMetrics {
+      id: labelMetrics
+      font: boundedLabel.font
+      text: boundedLabel.text
     }
   }
 
@@ -531,7 +545,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    BoundedLabel {
+      maximumWidth: Commons.Style.space(128)
       text: root.displayLabel
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -539,7 +554,6 @@ Ui.Panel {
       font.letterSpacing: root.mode === "wifi" ? 1 : 0
       elide: Text.ElideRight
       maximumLineCount: 1
-      width: Math.min(implicitWidth, Commons.Style.space(128))
       renderType: Text.NativeRendering
     }
   }

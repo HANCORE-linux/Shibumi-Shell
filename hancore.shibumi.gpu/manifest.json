@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.gpu",
   "name": "Shibumi GPU",
-  "version": "0.1.1-beta.6",
+  "version": "0.1.1-beta.7",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Lazy GPU load, hardware, driver, temperature, and VRAM widget.",

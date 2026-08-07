@@ -1,8 +1,8 @@
-# Is Shibumi 0.1.1-beta.6 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.7 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.6` is an automated prerelease candidate. Its complete
+Shibumi `0.1.1-beta.7` is an automated prerelease candidate. Its complete
 contract is revision-bound across the installed-package, installed-source-parity,
 and forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
@@ -30,9 +30,9 @@ no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 
-The beta.6 automated candidate plus explicitly retained beta.5 live
+The beta.7 working-tree candidate plus explicitly retained beta.5 and beta.6
 acceptance currently provide these results. Rows marked historical do not become
-beta.6 evidence until the revision-bound release collector reruns them:
+beta.7 evidence until the revision-bound release collector reruns them:
 
 | Gate | Result |
 | --- | --- |
@@ -47,12 +47,13 @@ beta.6 evidence until the revision-bound release collector reruns them:
 | Health tests | Passed: 31 of 31 |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Historical beta.5 pass for all 24 plugins; beta.6 rerun required for tagged evidence |
+| Transactional live update | Working-tree beta.7 pass for all 24 plugins on two physical systems; clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
-| Configuration continuity | Passed: `shell.json` returned byte-identically |
+| Configuration continuity | Passed: `shell.json` returned semantically unchanged after repeated transitions |
 | Runtime process count | Passed: one Quickshell process after each switch |
+| Network label runtime | Passed on Ethernet and Wi-Fi across repeated V1, V2, Omarchy, and V2-return transitions |
 | Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error |
 | Control Center **Bars** view | Passed on the physical Wayland session |
 | Bluetooth connection and panel | Passed with a live connected phone |
@@ -66,6 +67,7 @@ The hardened center smoke fails on unavailable QML types or a missing `PanelWind
 
 The audit fixed these release blockers:
 
+- Bounded V1/V2 Network labels use independent text metrics instead of a cyclic `width`/`implicitWidth` binding
 - The **Bars** page can return from Omarchy to Shibumi
 - Suite activation excludes stock Omarchy widgets, and the continuity manager rejects mixed-layout contamination before saving a Shibumi profile
 - The continuity manager discovers the current `/usr/share/omarchy` install when `OMARCHY_PATH` is absent

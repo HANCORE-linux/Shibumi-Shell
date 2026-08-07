@@ -164,19 +164,53 @@ ShellRoot {
         extractedService.backend.speedTestRunning = false
 
         root.fullWidth = first.implicitWidth
-        first.settings = ({ compact: true })
+        sharedNetworkService.label = "Fixture Wi-Fi network with a deliberately long SSID"
+        first.settings = ({ displayMode: "text" })
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 1) {
         if (root.phaseTicks < 3) return
-        if (!first.compact || first.implicitWidth >= root.fullWidth)
-          return root.fail("compact presentation width")
+        if (first.v2Presentation || first.displayMode !== "text"
+            || first.implicitWidth <= 0 || first.implicitWidth > 160)
+          return root.fail("V1 Wi-Fi bounded text presentation")
+        const textV2Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          textV2Tokens[key] = fakeBar.visualTokens[key]
+        textV2Tokens.v2Shell = true
+        fakeBar.visualTokens = textV2Tokens
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 2) {
+        if (root.phaseTicks < 3) return
+        if (!first.v2Presentation || first.displayMode !== "text"
+            || first.implicitWidth <= 0 || first.implicitWidth > 160)
+          return root.fail("V2 Wi-Fi bounded text presentation")
+        first.settings = ({ displayMode: "icon" })
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 3) {
+        if (root.phaseTicks < 3) return
+        if (!first.v2Presentation || !first.compact
+            || first.implicitWidth >= root.fullWidth)
+          return root.fail("V2 compact presentation width")
+        const compactV1Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          compactV1Tokens[key] = fakeBar.visualTokens[key]
+        compactV1Tokens.v2Shell = false
+        fakeBar.visualTokens = compactV1Tokens
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 4) {
+        if (root.phaseTicks < 3) return
+        if (first.v2Presentation || !first.compact
+            || first.implicitWidth >= root.fullWidth)
+          return root.fail("V1 compact presentation width")
 
         first.interactionTarget.triggerPress(Qt.LeftButton)
         second.open()
         root.phase++
         root.phaseTicks = 0
-      } else if (root.phase === 2) {
+      } else if (root.phase === 5) {
         if (root.phaseTicks < 3) return
         if (!first.opened || !second.opened || !first.panelLoaded
             || !second.panelLoaded || sharedNetworkService.sessionCount !== 2
@@ -189,13 +223,32 @@ ShellRoot {
             || sharedNetworkService.refreshCount !== 1)
           return root.fail("right-click scan forwarding")
 
+        first.settings = ({ displayMode: "full" })
+        const wifiV2Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          wifiV2Tokens[key] = fakeBar.visualTokens[key]
+        wifiV2Tokens.v2Shell = true
+        fakeBar.visualTokens = wifiV2Tokens
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 6) {
+        if (root.phaseTicks < 3) return
+        if (!first.v2Presentation || first.mode !== "wifi"
+            || first.displayMode !== "full"
+            || first.implicitWidth <= 0 || first.implicitWidth > 140)
+          return root.fail("V2 Wi-Fi bounded full presentation")
+        const ethernetV1Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          ethernetV1Tokens[key] = fakeBar.visualTokens[key]
+        ethernetV1Tokens.v2Shell = false
+        fakeBar.visualTokens = ethernetV1Tokens
         sharedNetworkService.kind = "ethernet"
         sharedNetworkService.label = "enp1s0"
         sharedNetworkService.downloadRate = 1536
         sharedNetworkService.uploadRate = 2 * 1024 * 1024
         root.phase++
         root.phaseTicks = 0
-      } else if (root.phase === 3) {
+      } else if (root.phase === 7) {
         if (root.phaseTicks < 2) return
         if (first.mode !== "ethernet" || second.label !== "enp1s0"
             || second.displayLabel !== "Ethernet"
@@ -204,14 +257,14 @@ ShellRoot {
             || second.compactRate(second.uploadRate) !== "2.0M"
             || first.tooltipText.indexOf("Ethernet") !== 0)
           return root.fail("shared reactive ethernet state")
-        const v2Tokens = ({})
+        const ethernetV2Tokens = ({})
         for (const key in fakeBar.visualTokens)
-          v2Tokens[key] = fakeBar.visualTokens[key]
-        v2Tokens.v2Shell = true
-        fakeBar.visualTokens = v2Tokens
+          ethernetV2Tokens[key] = fakeBar.visualTokens[key]
+        ethernetV2Tokens.v2Shell = true
+        fakeBar.visualTokens = ethernetV2Tokens
         root.phase++
         root.phaseTicks = 0
-      } else if (root.phase === 4) {
+      } else if (root.phase === 8) {
         if (root.phaseTicks < 2) return
         if (second.v1TrafficPresentation || !second.v2TrafficPresentation)
           return root.fail("V2 ethernet traffic presentation")

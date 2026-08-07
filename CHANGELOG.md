@@ -2,6 +2,20 @@
 
 This changelog records user-visible Shibumi changes.
 
+## 0.1.1-beta.7: Network label stability
+
+Release candidate for 2026-08-07.
+
+### Fixed
+
+- Measured bounded Network labels independently from their rendered width, preventing V2 Wi-Fi and shared text-mode binding loops
+- Covered Wi-Fi transitions across V1 and V2 full, icon, and text modes, including long bounded labels
+
+### Known limits
+
+- Physical mixed-scale multi-monitor, enterprise Wi-Fi, remaining device-backed Bluetooth, clean-chroot packaging, and safe nested-compositor lifecycle acceptance remain external stable gates
+- AUR publication remains unavailable until the package name can be registered
+
 ## 0.1.1-beta.6: Stable-readiness lifecycle hardening
 
 Release candidate for 2026-08-07.

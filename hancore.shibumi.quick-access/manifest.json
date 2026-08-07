@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.quick-access",
   "name": "Shibumi Quick Access",
-  "version": "0.1.1-beta.6",
+  "version": "0.1.1-beta.7",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi idle inhibitor and theme, wallpaper, screenshot, and video pickers.",

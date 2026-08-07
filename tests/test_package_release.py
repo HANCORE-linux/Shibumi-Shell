@@ -26,7 +26,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.6")
+        self.assertEqual(version, "0.1.1-beta.7")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -72,7 +72,7 @@ class PackageReleaseTests(unittest.TestCase):
     def test_release_channel_distinguishes_prerelease_and_stable_versions(self) -> None:
         selector = ROOT / "scripts/release-channel-flag"
         for version, expected in (
-            ("0.1.1-beta.6", "--prerelease"),
+            ("0.1.1-beta.7", "--prerelease"),
             ("0.1.1-rc.1+build.7", "--prerelease"),
             ("0.1.1", "--latest"),
             ("1.0.0+build.7", "--latest"),
