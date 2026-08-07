@@ -14,6 +14,7 @@ from .config import atomic_write
 from .model import (
     ContractError,
     PluginSpec,
+    payload_copy_ignore,
     suite_payload_digest,
 )
 from .runtime import OmarchyRuntime, RuntimeFailure, RuntimePaths
@@ -163,6 +164,41 @@ def preflight_removal_ids(plugin_dir: Path, plugin_ids: Iterable[str]) -> None:
             )
 
 
+def _config_enables_plugin(config_file: Path, plugin_id: str) -> bool:
+    try:
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(config, dict):
+        return False
+
+    def entry_id(value: Any) -> str:
+        if isinstance(value, dict):
+            return str(value.get("id") or "")
+        return str(value or "")
+
+    plugins = config.get("plugins")
+    if isinstance(plugins, list) and any(
+        entry_id(entry) == plugin_id for entry in plugins
+    ):
+        return True
+    bar = config.get("bar")
+    if not isinstance(bar, dict):
+        return False
+    if entry_id(bar.get("id")) == plugin_id:
+        return True
+    layout = bar.get("layout")
+    if not isinstance(layout, dict):
+        return False
+    return any(
+        entry_id(entry) == plugin_id
+        for section in ("left", "center", "right")
+        for entry in (
+            layout.get(section) if isinstance(layout.get(section), list) else []
+        )
+    )
+
+
 def preflight_legacy_removals(plugin_dir: Path, plugin_ids: Iterable[str]) -> None:
     for plugin_id in plugin_ids:
         target = plugin_dir / plugin_id
@@ -192,6 +228,13 @@ class PluginTransaction:
         )
         self.records: list[dict[str, Any]] = []
         self.finished = False
+        self.commit_point_reached = False
+        self.shell_stopped = False
+        self.payload_reload_expected = (
+            paths.plugin_dir / "hancore.shibumi.state"
+        ).is_dir() and _config_enables_plugin(
+            paths.config_file, "hancore.shibumi.state"
+        )
         self.config_existed = paths.config_file.is_file()
         self.menu_extension_existed = paths.menu_extension_file.is_file()
 
@@ -204,7 +247,12 @@ class PluginTransaction:
             )
         self._write_journal("prepared")
 
-    def _journal(self, phase: str, desired_state: Any = "unchanged") -> dict[str, Any]:
+    def _journal(
+        self,
+        phase: str,
+        desired_state: Any = "unchanged",
+        archive_previous: Any = "unchanged",
+    ) -> dict[str, Any]:
         value: dict[str, Any] = {
             "schemaVersion": 1,
             "suiteId": SUITE_ID,
@@ -218,17 +266,36 @@ class PluginTransaction:
             ),
             "menuExtensionExisted": self.menu_extension_existed,
             "restartOnReconcile": self.restart_on_reconcile,
+            "shellStopped": self.shell_stopped,
+            "payloadReloadExpected": self.payload_reload_expected,
             "records": self.records,
         }
         if desired_state != "unchanged":
             value["desiredState"] = desired_state
+        if archive_previous != "unchanged":
+            value["archivePrevious"] = archive_previous is True
         return value
 
-    def _write_journal(self, phase: str, desired_state: Any = "unchanged") -> None:
+    def _write_journal(
+        self,
+        phase: str,
+        desired_state: Any = "unchanged",
+        archive_previous: Any = "unchanged",
+    ) -> None:
         payload = json.dumps(
-            self._journal(phase, desired_state), indent=2, sort_keys=True
+            self._journal(phase, desired_state, archive_previous),
+            indent=2,
+            sort_keys=True,
         ).encode("utf-8") + b"\n"
         atomic_write(self.journal_file, payload)
+
+    def mark_shell_stopped(self) -> None:
+        self.shell_stopped = True
+        self._write_journal("shell-stopped")
+
+    def mark_shell_started(self) -> None:
+        self.shell_stopped = False
+        self._write_journal("shell-started")
 
     def preflight_targets(
         self,
@@ -269,7 +336,12 @@ class PluginTransaction:
             self._write_journal("staging")
             try:
                 source_digest = spec.payload_digest()
-                shutil.copytree(spec.source, stage, symlinks=True)
+                shutil.copytree(
+                    spec.source,
+                    stage,
+                    symlinks=True,
+                    ignore=payload_copy_ignore,
+                )
                 stage_digest = spec.payload_digest(stage)
             except (ContractError, OSError, shutil.Error) as error:
                 raise TransactionError(
@@ -401,24 +473,38 @@ class PluginTransaction:
                 path.parent.rmdir()
 
     def rollback(self) -> None:
-        if self.finished:
+        if self.finished or self.commit_point_reached:
             return
         try:
-            if self.restart_on_reconcile:
-                try:
-                    self.runtime.stop_shell()
-                except RuntimeFailure:
-                    pass
+            # Do not unconditionally drain a still-running shell here. A host
+            # restart can fail its own preflight (for example a lock guard)
+            # before killing anything; stopping during rollback would then
+            # turn a recoverable update failure into a dead desktop. Restore
+            # atomically and let reconcile_rollback attempt the guarded
+            # restart first, followed by its in-process reload fallbacks.
             _restore_records(self.paths.plugin_dir, self.token, self.records)
             if self.config_existed:
                 atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
             else:
                 self.paths.config_file.unlink(missing_ok=True)
             self._restore_menu_extension()
-            self.runtime.reconcile_best_effort(
-                restart_shell=self.restart_on_reconcile
+            self.runtime.reconcile_rollback(
+                restart_required=self.restart_on_reconcile,
+                shell_was_stopped=self.shell_stopped,
+                payload_reload_expected=self.payload_reload_expected,
             )
-        finally:
+        except Exception:
+            # The transaction directory is the only durable recovery path. A
+            # failed restoration must retain its snapshots and journal so a
+            # later `recover` can safely complete the same idempotent steps.
+            try:
+                self._write_journal("recovery-required")
+            except Exception:
+                # Keep the last durable journal when even the phase update
+                # fails; never trade recovery data for a secondary error.
+                pass
+            raise
+        else:
             self._cleanup_transaction()
             self.finished = True
 
@@ -428,7 +514,7 @@ class PluginTransaction:
         *,
         archive_previous: bool,
     ) -> None:
-        self._write_journal("committing", desired_state)
+        self._write_journal("committing", desired_state, archive_previous)
         state_file = self.paths.state_dir / "install.json"
         if desired_state is None:
             state_file.unlink(missing_ok=True)
@@ -439,7 +525,12 @@ class PluginTransaction:
                     "utf-8"
                 ),
             )
-        self._write_journal("committed", desired_state)
+        # install.json is the roll-forward commit point. Once it has changed,
+        # rolling payloads back would make durable state describe the wrong
+        # bytes. Any later failure retains the committing/committed journal so
+        # recover_transactions() can idempotently finish the new state.
+        self.commit_point_reached = True
+        self._write_journal("committed", desired_state, archive_previous)
 
         if archive_previous:
             self._archive_backups()
@@ -452,25 +543,9 @@ class PluginTransaction:
         self.finished = True
 
     def _archive_backups(self) -> None:
-        backups = [
-            (str(record["pluginId"]), Path(record["backup"]))
-            for record in self.records
-            if Path(record["backup"]).exists() or Path(record["backup"]).is_symlink()
-        ]
-        if backups:
-            destination = self.paths.state_dir / "backups" / self.token
-            destination.mkdir(parents=True, exist_ok=False)
-            for plugin_id, backup in backups:
-                shutil.move(str(backup), destination / plugin_id)
-        backup_root = self.paths.state_dir / "backups"
-        if backup_root.is_dir():
-            retained = sorted(
-                (path for path in backup_root.iterdir() if path.is_dir()),
-                key=lambda path: path.stat().st_mtime,
-                reverse=True,
-            )
-            for stale in retained[2:]:
-                _remove_path(stale)
+        _archive_transaction_backups(
+            self.paths, self.token, self.records
+        )
 
     def _cleanup_transaction(self) -> None:
         for record in self.records:
@@ -489,7 +564,11 @@ class PluginTransaction:
         return self
 
     def __exit__(self, exception_type: Any, *_: object) -> None:
-        if exception_type is not None and not self.finished:
+        if (
+            exception_type is not None
+            and not self.finished
+            and not self.commit_point_reached
+        ):
             self.rollback()
 
 
@@ -533,6 +612,55 @@ def _restore_records(
                 _remove_path(target)
         if stage and (stage.exists() or stage.is_symlink()):
             _remove_path(stage)
+
+
+def _archive_transaction_backups(
+    paths: RuntimePaths,
+    token: str,
+    records: Iterable[dict[str, Any]],
+) -> None:
+    destination = paths.state_dir / "backups" / token
+    for record in records:
+        _, _, backup = _safe_record_paths(paths.plugin_dir, token, record)
+        plugin_id = str(record["pluginId"])
+        archived = destination / plugin_id
+        partial = destination / f".{plugin_id}.partial"
+        if partial.exists() or partial.is_symlink():
+            _remove_path(partial)
+        if archived.exists() or archived.is_symlink():
+            # The archive-side rename is the per-record commit point. A crash
+            # after it but before source removal legitimately leaves both.
+            if backup.exists() or backup.is_symlink():
+                _remove_path(backup)
+            continue
+        if not (backup.exists() or backup.is_symlink()):
+            continue
+        destination.mkdir(parents=True, exist_ok=True)
+        try:
+            if backup.is_symlink():
+                partial.symlink_to(os.readlink(backup))
+            elif backup.is_dir():
+                shutil.copytree(backup, partial, symlinks=True)
+            else:
+                shutil.copy2(backup, partial, follow_symlinks=False)
+            os.replace(partial, archived)
+            _remove_path(backup)
+        except Exception:
+            # A partial copy is never authoritative and is safe to retry. Keep
+            # the source backup until the archive-side atomic rename succeeds.
+            if partial.exists() or partial.is_symlink():
+                _remove_path(partial)
+            raise
+
+    backup_root = paths.state_dir / "backups"
+    if backup_root.is_dir():
+        retained = sorted(
+            (path for path in backup_root.iterdir() if path.is_dir()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for stale in retained[2:]:
+            _remove_path(stale)
 
 
 def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
@@ -586,18 +714,18 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                     ),
                 )
             for record in records:
-                _, stage, backup = _safe_record_paths(plugin_root, token, record)
+                _, stage, _ = _safe_record_paths(plugin_root, token, record)
                 if stage and (stage.exists() or stage.is_symlink()):
                     _remove_path(stage)
-                if backup.exists() or backup.is_symlink():
-                    _remove_path(backup)
+            if journal.get("archivePrevious") is True:
+                _archive_transaction_backups(paths, token, records)
+            else:
+                for record in records:
+                    _, _, backup = _safe_record_paths(plugin_root, token, record)
+                    if backup.exists() or backup.is_symlink():
+                        _remove_path(backup)
         else:
             restart_on_reconcile = bool(journal.get("restartOnReconcile"))
-            if restart_on_reconcile:
-                try:
-                    runtime.stop_shell()
-                except RuntimeFailure:
-                    pass
             _restore_records(plugin_root, token, records)
             snapshot = directory / "shell.json.before"
             if journal.get("configExisted") is True:
@@ -613,8 +741,28 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                     if menu_extension_path.parent.is_dir() \
                             and not any(menu_extension_path.parent.iterdir()):
                         menu_extension_path.parent.rmdir()
-            runtime.reconcile_best_effort(
-                restart_shell=restart_on_reconcile
+            shell_stopped_value = journal.get("shellStopped", True)
+            if not isinstance(shell_stopped_value, bool):
+                raise TransactionError(
+                    f"transaction shellStopped is malformed: {directory}"
+                )
+            payload_reload_value = journal.get(
+                "payloadReloadExpected",
+                (paths.plugin_dir / "hancore.shibumi.state").is_dir()
+                and _config_enables_plugin(
+                    paths.config_file, "hancore.shibumi.state"
+                ),
+            )
+            if not isinstance(payload_reload_value, bool):
+                raise TransactionError(
+                    f"transaction payloadReloadExpected is malformed: {directory}"
+                )
+            runtime.reconcile_rollback(
+                restart_required=restart_on_reconcile,
+                # Schema-v1 journals predating this field are conservative:
+                # they may have crossed an ownership-changing stop boundary.
+                shell_was_stopped=shell_stopped_value,
+                payload_reload_expected=payload_reload_value,
             )
         shutil.rmtree(directory)
         recovered += 1

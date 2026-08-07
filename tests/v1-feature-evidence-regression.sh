@@ -32,8 +32,9 @@ duplicates=$(mktemp)
 trap 'rm -f -- "$declared" "$duplicates"' EXIT
 [[ -r $baseline ]] || fail "pinned V1 baseline is missing"
 
-jq -r '.features[].sources[]' "$contract" | sort >"$declared"
-jq -r '.features[].sources[]' "$contract" | sort | uniq -d >"$duplicates"
+jq -r '.features[].sources[]' "$contract" | LC_ALL=C sort >"$declared"
+jq -r '.features[].sources[]' "$contract" \
+  | LC_ALL=C sort | uniq -d >"$duplicates"
 [[ ! -s $duplicates ]] \
   || fail "V1 sources are covered more than once: $(tr '\n' ' ' <"$duplicates")"
 expected_count=$(jq -r '.roots.v1.sourceCount' "$baseline")

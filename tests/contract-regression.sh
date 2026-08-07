@@ -116,6 +116,9 @@ rg -q 'function onResourcesLost\(\)' core/WindowRecovery.qml \
   || fail "window recovery does not handle resourcesLost"
 rg -q 'function onClosed\(\)' core/WindowRecovery.qml \
   || fail "window recovery does not handle closed"
+if rg -q 'targetWindow\.visible[[:space:]]*=' core/WindowRecovery.qml; then
+  fail "window recovery imperatively destroys the bar visibility binding"
+fi
 rg -q 'visible: bar\.hostReady && bar\.styleReady && validScreen && !bar\.barHidden' core/BarPanel.qml \
   || fail "output must wait for host and style readiness and honor bar-off"
 rg -q 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady' core/BarPanel.qml \
@@ -966,6 +969,9 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
 
 "$repo_root/tests/health-diagnostics-regression.sh"
 "$repo_root/tests/plugin-update-selector-regression.sh"
+"$repo_root/tests/audio-network-ipc-contract-regression.sh"
+"$repo_root/tests/network-ipc-routing-regression.sh"
+"$repo_root/tests/third-party-integration-regression.sh"
 
 quote_smoke_root=$(mktemp -d)
 mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \
@@ -1008,6 +1014,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/quick-access-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/reactor-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/bar-host-registry-regression.sh"
+  "$repo_root/tests/window-recovery-regression.sh"
 
   official_audio_panel=${OMARCHY_PATH}/shell/plugins/panels/audio/Panel.qml
   [[ -s $official_audio_panel ]] || fail "official Quattro audio panel is missing"

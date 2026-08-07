@@ -1,0 +1,351 @@
+#!/usr/bin/env python3
+"""Fail closed on process-global resources reserved by Shibumi.
+
+This is an integration/release gate, not a sandbox. Omarchy's validator remains
+authoritative for manifest safety. Candidate resource bindings that are not
+statically decidable are rejected for separate isolated runtime review.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any, NamedTuple
+
+
+class Token(NamedTuple):
+    kind: str
+    value: str
+
+
+def string_token(text: str, index: int, quote: str) -> tuple[Token, int]:
+    """Read a QML/ECMAScript string or constant template literal."""
+    value: list[str] = []
+    valid = True
+    closed = False
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == quote:
+            index += 1
+            closed = True
+            break
+        if quote == "`" and text.startswith("${", index):
+            # Dynamic template expressions are deliberately not evaluated.
+            valid = False
+            value.append("${")
+            index += 2
+            continue
+        if char != "\\":
+            value.append(char)
+            index += 1
+            continue
+        if index + 1 >= length:
+            valid = False
+            index += 1
+            break
+        escape = text[index + 1]
+        if escape == "\n":
+            index += 2
+            continue
+        if escape == "\r":
+            index += 2
+            if index < length and text[index] == "\n":
+                index += 1
+            continue
+        simple = {
+            "b": "\b", "f": "\f", "n": "\n", "r": "\r",
+            "t": "\t", "v": "\v", "0": "\0",
+            "\\": "\\", "'": "'", '"': '"', "`": "`",
+        }
+        if escape in simple:
+            value.append(simple[escape])
+            index += 2
+            continue
+        digits = {"x": 2, "u": 4, "U": 8}.get(escape)
+        if digits is not None:
+            encoded = text[index + 2:index + 2 + digits]
+            if len(encoded) == digits and all(
+                character in "0123456789abcdefABCDEF"
+                for character in encoded
+            ):
+                codepoint = int(encoded, 16)
+                if codepoint <= 0x10FFFF:
+                    value.append(chr(codepoint))
+                    index += 2 + digits
+                    continue
+        valid = False
+        value.extend(("\\", escape))
+        index += 2
+    kind = "string" if valid and closed else "unsupported-string"
+    return Token(kind, "".join(value)), index
+
+
+def qml_tokens(text: str) -> list[Token]:
+    """Tokenize resource declarations while keeping comments lexically inert."""
+    tokens: list[Token] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char.isspace():
+            if char in "\r\n":
+                if not tokens or tokens[-1].value != "\n":
+                    tokens.append(Token("symbol", "\n"))
+            index += 1
+            continue
+        if text.startswith("//", index):
+            newline = text.find("\n", index + 2)
+            if newline < 0:
+                index = length
+            else:
+                tokens.append(Token("symbol", "\n"))
+                index = newline + 1
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            index = length if end < 0 else end + 2
+            continue
+        if char == "/":
+            previous = tokens[-1].value if tokens else ""
+            regex_context = (
+                not tokens
+                or previous in ("\n", "(", "[", "{", ":", ";", ",",
+                                "=", "!", "?", "+", "-", "*", "%", "&",
+                                "|", "^", "~", "=>", "return", "case", "throw",
+                                "yield", "await", "else", "do", "typeof", "void",
+                                "delete", "new")
+            )
+            if regex_context:
+                cursor = index + 1
+                escaped = False
+                character_class = False
+                closed = False
+                while cursor < length:
+                    current = text[cursor]
+                    if escaped:
+                        escaped = False
+                    elif current == "\\":
+                        escaped = True
+                    elif current == "[":
+                        character_class = True
+                    elif current == "]":
+                        character_class = False
+                    elif current == "/" and not character_class:
+                        cursor += 1
+                        while cursor < length and text[cursor].isalpha():
+                            cursor += 1
+                        closed = True
+                        break
+                    cursor += 1
+                if closed:
+                    tokens.append(Token("regex", text[index:cursor]))
+                    index = cursor
+                    continue
+        if char in "'\"`":
+            token, index = string_token(text, index + 1, char)
+            tokens.append(token)
+            continue
+        if text.startswith("=>", index):
+            tokens.append(Token("symbol", "=>"))
+            index += 2
+            continue
+        if char.isalpha() or char in "_$":
+            start = index
+            index += 1
+            while index < length and (
+                text[index].isalnum() or text[index] in "_.$"
+            ):
+                index += 1
+            tokens.append(Token("identifier", text[start:index]))
+            continue
+        tokens.append(Token("symbol", char))
+        index += 1
+    return tokens
+
+
+def literal_resources(path: Path) -> dict[str, set[str]]:
+    tokens = qml_tokens(path.read_text(encoding="utf-8"))
+    resources: dict[str, set[str]] = {
+        "ipc": set(), "layer": set(), "unsupported": set()
+    }
+
+    def colon_after(index: int) -> int | None:
+        index += 1
+        while index < len(tokens) and tokens[index].value == "\n":
+            index += 1
+        return index if index < len(tokens) and tokens[index].value == ":" else None
+
+    def literal_binding(index: int) -> str | None:
+        while index < len(tokens) and tokens[index].value == "\n":
+            index += 1
+        if index >= len(tokens) or tokens[index].kind != "string":
+            return None
+        value = tokens[index].value
+        index += 1
+        if index >= len(tokens) or tokens[index].value in (";", "}"):
+            return value
+        if tokens[index].value == "\n":
+            while index < len(tokens) and tokens[index].value == "\n":
+                index += 1
+            continuation = {
+                "+", "-", "*", "/", "%", "?", ".", "[", "(",
+                "|", "&", "^", "<", ">", "=",
+            }
+            if index >= len(tokens) or tokens[index].value not in continuation:
+                return value
+        # Operators, calls, indexing, and adjacent tokens make this a dynamic
+        # expression even when its first token happens to be a string.
+        return None
+
+    def record_layer_binding(colon: int) -> None:
+        value = literal_binding(colon + 1)
+        if value is not None:
+            resources["layer"].add(value)
+        else:
+            resources["unsupported"].add("layer namespace")
+
+    for index, token in enumerate(tokens):
+        namespace_colon = colon_after(index)
+        if token.value.endswith("WlrLayershell.namespace") \
+            and namespace_colon is not None:
+            record_layer_binding(namespace_colon)
+        elif token.value.split(".")[-1] == "WlrLayershell":
+            cursor = index + 1
+            while cursor < len(tokens) and tokens[cursor].value == "\n":
+                cursor += 1
+            if cursor + 1 < len(tokens) and tokens[cursor].value == ".":
+                cursor += 1
+                while cursor < len(tokens) and tokens[cursor].value == "\n":
+                    cursor += 1
+                if cursor < len(tokens) and tokens[cursor].value == "namespace":
+                    spaced_colon = colon_after(cursor)
+                    if spaced_colon is not None:
+                        record_layer_binding(spaced_colon)
+            elif cursor < len(tokens) and tokens[cursor].value == "{":
+                depth = 1
+                cursor += 1
+                while cursor < len(tokens) and depth > 0:
+                    current = tokens[cursor]
+                    if current.value == "{":
+                        depth += 1
+                    elif current.value == "}":
+                        depth -= 1
+                    elif depth == 1 and current.value == "namespace":
+                        grouped_colon = colon_after(cursor)
+                        if grouped_colon is not None:
+                            record_layer_binding(grouped_colon)
+                    cursor += 1
+        if token.value.split(".")[-1] != "IpcHandler":
+            continue
+        brace = index + 1
+        while brace < len(tokens) and tokens[brace].value == "\n":
+            brace += 1
+        if brace >= len(tokens) or tokens[brace].value != "{":
+            continue
+        depth = 1
+        cursor = brace + 1
+        while cursor < len(tokens) and depth > 0:
+            current = tokens[cursor]
+            if current.value == "{":
+                depth += 1
+            elif current.value == "}":
+                depth -= 1
+            elif depth == 1 and current.value == "target" \
+                and colon_after(cursor) is not None:
+                value = literal_binding(colon_after(cursor) + 1)
+                if value is not None:
+                    resources["ipc"].add(value)
+                else:
+                    resources["unsupported"].add("IPC target")
+            cursor += 1
+    return resources
+
+
+def plugin_roots(root: Path) -> list[Path]:
+    return sorted(
+        path for path in root.glob("hancore.shibumi.*")
+        if path.is_dir() and (path / "manifest.json").is_file()
+    )
+
+
+def qml_resources(paths: list[Path]) -> dict[str, dict[str, list[str]]]:
+    resources: dict[str, dict[str, list[str]]] = {
+        "ipc": {}, "layer": {}, "unsupported": {}
+    }
+    for base in paths:
+        for path in sorted(base.rglob("*.qml")):
+            for kind, values in literal_resources(path).items():
+                for value in sorted(values):
+                    resources[kind].setdefault(value, []).append(str(path))
+    return resources
+
+
+def inspect_candidate(reserved_root: Path, candidate: Path) -> dict[str, Any]:
+    reserved_paths = plugin_roots(reserved_root)
+    reserved_paths.extend(
+        path for path in (reserved_root / "core",) if path.is_dir()
+    )
+    reserved = qml_resources(reserved_paths)
+    contract_path = reserved_root / "contracts/plugin-integration-resources.json"
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    if contract.get("schemaVersion") != 1:
+        raise ValueError("unsupported plugin integration resource contract")
+    for entry in contract.get("dynamicResources", []):
+        kind = entry.get("kind")
+        resource = entry.get("resource")
+        owner = entry.get("owner")
+        if kind not in ("ipc", "layer") or not all(
+            isinstance(value, str) and value for value in (resource, owner)
+        ):
+            raise ValueError("invalid dynamic plugin integration resource")
+        reserved[kind].setdefault(resource, []).append(owner)
+
+    requested = qml_resources([candidate])
+    conflicts: list[dict[str, Any]] = []
+    for binding, sources in requested["unsupported"].items():
+        conflicts.append({
+            "kind": "unsupported",
+            "resource": binding,
+            "candidateSources": sources,
+            "reservedOwners": ["isolated runtime review required"],
+        })
+    for kind in ("ipc", "layer"):
+        for value, sources in requested[kind].items():
+            owners = reserved[kind].get(value, [])
+            if owners:
+                conflicts.append({
+                    "kind": kind,
+                    "resource": value,
+                    "candidateSources": sources,
+                    "reservedOwners": owners,
+                })
+    return {
+        "schemaVersion": 1,
+        "candidate": str(candidate),
+        "passed": not conflicts,
+        "conflicts": conflicts,
+        "limitations": [
+            "Omarchy validation is required separately",
+            "dynamic resource bindings fail closed for isolated runtime review",
+            "this gate is not a QML sandbox",
+        ],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reserved-root", type=Path, required=True)
+    parser.add_argument("candidate", type=Path)
+    arguments = parser.parse_args()
+    result = inspect_candidate(
+        arguments.reserved_root.resolve(), arguments.candidate.resolve()
+    )
+    print(json.dumps(result, sort_keys=True))
+    return 0 if result["passed"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

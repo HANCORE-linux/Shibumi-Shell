@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.shibumi-test.template-comment-ipc",
+  "name": "Shibumi template comment-marker IPC fixture",
+  "version": "1.0.0",
+  "kinds": ["service"],
+  "entryPoints": {"service": "Service.qml"}
+}

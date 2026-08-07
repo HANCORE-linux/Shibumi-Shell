@@ -17,7 +17,7 @@ command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required'
 inventory_digest() {
   local root=$1
   (cd "$root" && find . -maxdepth 2 -type f \
-    \( -name '*.qml' -o -name '*.js' \) -printf '%P\n' | sort | sha256sum \
+    \( -name '*.qml' -o -name '*.js' \) -printf '%P\n' | LC_ALL=C sort | sha256sum \
     | awk '{print $1}')
 }
 
@@ -33,7 +33,7 @@ content_digest() {
     local_hash=$(sha256sum -- "$path" | awk '{print $1}')
     printf '%s  %s\n' "$local_hash" "$path"
   done < <(find . -maxdepth 2 -type f \
-    \( -name '*.qml' -o -name '*.js' \) -printf '%P\n' | sort) \
+    \( -name '*.qml' -o -name '*.js' \) -printf '%P\n' | LC_ALL=C sort) \
     | sha256sum | awk '{print $1}')
 }
 
@@ -43,7 +43,7 @@ assert_declared_inventory() {
   local actual_count actual_digest expected_count expected_digest
   actual_count=$(jq '[.features[].sources[]] | length' "$contract")
   actual_digest=$(jq -r '.features[].sources[]' "$contract" \
-    | sort | sha256sum | awk '{print $1}')
+    | LC_ALL=C sort | sha256sum | awk '{print $1}')
   expected_count=$(jq -r --arg id "$root_id" '.roots[$id].sourceCount' "$baseline")
   expected_digest=$(jq -r --arg id "$root_id" \
     '.roots[$id].inventorySha256' "$baseline")
@@ -59,10 +59,10 @@ assert_declared_inventory "$repo_root/contracts/v2-source-evidence.json" v2
 differences="$repo_root/contracts/v1-embedded-v2-differences.json"
 standalone_count=$(jq '.standaloneOnly | length' "$differences")
 standalone_digest=$(jq -r '.standaloneOnly[].source' "$differences" \
-  | sort | sha256sum | awk '{print $1}')
+  | LC_ALL=C sort | sha256sum | awk '{print $1}')
 changed_count=$(jq '.differences | length' "$differences")
 changed_digest=$(jq -r '.differences[].source' "$differences" \
-  | sort | sha256sum | awk '{print $1}')
+  | LC_ALL=C sort | sha256sum | awk '{print $1}')
 expected_standalone_count=$(jq -r \
   '.comparisons.embeddedToStandaloneV2.standaloneOnlyCount' "$baseline")
 expected_standalone_digest=$(jq -r \

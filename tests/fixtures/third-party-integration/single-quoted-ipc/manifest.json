@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.shibumi-test.single-quoted-ipc",
+  "name": "Shibumi single-quoted IPC integration fixture",
+  "version": "1.0.0",
+  "kinds": ["service"],
+  "entryPoints": {"service": "Service.qml"}
+}

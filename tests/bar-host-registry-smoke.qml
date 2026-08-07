@@ -129,6 +129,31 @@ ShellRoot {
   QtObject { id: secondConnectedPanelOwner }
 
   QtObject {
+    id: outputAFirst
+    property int closeCount: 0
+    function close() {
+      closeCount++
+      hostBar.releasePopout(outputAFirst, "DP-1")
+    }
+  }
+  QtObject {
+    id: outputASecond
+    property int closeCount: 0
+    function close() {
+      closeCount++
+      hostBar.releasePopout(outputASecond, "DP-1")
+    }
+  }
+  QtObject {
+    id: outputBFirst
+    property int closeCount: 0
+    function close() {
+      closeCount++
+      hostBar.releasePopout(outputBFirst, "HDMI-A-1")
+    }
+  }
+
+  QtObject {
     id: fakeShell
 
     property var bar: null
@@ -452,12 +477,57 @@ ShellRoot {
         return root.fail("shared appearance IPC compatibility")
       }
 
-      hostBar.activePopout = firstConnectedPanelOwner
+      hostBar.requestPopout(outputAFirst, "DP-1")
+      hostBar.requestPopout(outputBFirst, "HDMI-A-1")
+      if (outputAFirst.closeCount !== 0
+          || outputBFirst.closeCount !== 0
+          || hostBar.activePopoutForScreen("DP-1") !== outputAFirst
+          || hostBar.activePopoutForScreen("HDMI-A-1") !== outputBFirst) {
+        return root.fail("opening another output closed an unrelated popout")
+      }
+      hostBar.requestPopout(outputASecond, "DP-1")
+      if (outputAFirst.closeCount !== 1
+          || outputBFirst.closeCount !== 0
+          || hostBar.activePopoutForScreen("DP-1") !== outputASecond
+          || hostBar.activePopoutForScreen("HDMI-A-1") !== outputBFirst) {
+        return root.fail("same-output sibling replacement was not isolated")
+      }
+      hostBar.releasePopoutsForScreen("DP-1")
+      if (outputASecond.closeCount !== 1
+          || hostBar.activePopoutForScreen("DP-1") !== null
+          || hostBar.activePopoutForScreen("HDMI-A-1") !== outputBFirst) {
+        return root.fail("output removal retained or cross-closed popout owners")
+      }
+      hostBar.releasePopoutsForScreen("HDMI-A-1")
+
+      hostBar.requestPopout(firstConnectedPanelOwner, "DP-1")
+      if (!hostBar.publishConnectedPanel(
+            firstConnectedPanelOwner, "DP-1", 240, 1)) {
+        return root.fail("first output connection was not published")
+      }
+      hostBar.requestPopout(secondConnectedPanelOwner, "HDMI-A-1")
+      if (!hostBar.publishConnectedPanel(
+            secondConnectedPanelOwner, "HDMI-A-1", 620, 1)
+          || hostBar.connectedPanelForScreen("DP-1").owner
+            !== firstConnectedPanelOwner
+          || hostBar.connectedPanelForScreen("HDMI-A-1").owner
+            !== secondConnectedPanelOwner
+          || !hostBar.clearConnectedPanel(firstConnectedPanelOwner)
+          || hostBar.connectedPanelForScreen("DP-1").owner !== null
+          || hostBar.connectedPanelForScreen("HDMI-A-1").owner
+            !== secondConnectedPanelOwner
+          || !hostBar.clearConnectedPanel(secondConnectedPanelOwner)) {
+        return root.fail("connected panel geometry was not output-local")
+      }
+      hostBar.releasePopoutsForScreen("DP-1")
+      hostBar.releasePopoutsForScreen("HDMI-A-1")
+
+      hostBar.requestPopout(firstConnectedPanelOwner, "DP-1")
       if (!hostBar.publishConnectedPanel(
             firstConnectedPanelOwner, "DP-1", 240, 1)) {
         return root.fail("first connected panel owner was not published")
       }
-      hostBar.activePopout = secondConnectedPanelOwner
+      hostBar.requestPopout(secondConnectedPanelOwner, "DP-1")
       if (!hostBar.publishConnectedPanel(
             secondConnectedPanelOwner, "DP-1", 620, 1)
           || hostBar.publishConnectedPanel(

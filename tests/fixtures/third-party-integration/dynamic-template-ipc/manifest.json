@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.shibumi-test.dynamic-template-ipc",
+  "name": "Shibumi dynamic template IPC fixture",
+  "version": "1.0.0",
+  "kinds": ["service"],
+  "entryPoints": {"service": "Service.qml"}
+}

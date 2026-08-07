@@ -23,6 +23,7 @@ PanelWindow {
       ? barSurfaceLoader.item.responsiveProbe : ({})
 
   visible: bar.hostReady && bar.styleReady && validScreen && !bar.barHidden
+    && windowRecovery.recoveryVisible
   // Match the original V1 input model: keep one stable screen-sized surface
   // and change only its input region. This avoids compositor resize flashes
   // while allowing bar drag, Escape, and outside-click dismissal to share one
@@ -59,6 +60,7 @@ PanelWindow {
   }
 
   WindowRecovery {
+    id: windowRecovery
     targetWindow: barWindow
     targetScreen: barWindow.screen
     recoveryAllowed: barWindow.bar.hostReady
@@ -73,7 +75,11 @@ PanelWindow {
   }
 
   Component.onCompleted: bar.registerLayoutSession(dragSession)
-  Component.onDestruction: bar.unregisterLayoutSession(dragSession)
+  Component.onDestruction: {
+    if (typeof bar.releasePopoutsForScreen === "function")
+      bar.releasePopoutsForScreen(dragSession.screenName)
+    bar.unregisterLayoutSession(dragSession)
+  }
 
   DragGhostPanel {
     bar: barWindow.bar

@@ -81,10 +81,14 @@ Item {
   readonly property int barExclusiveSize: styleReady && !vertical
     ? activeStyle.exclusiveSizeHorizontal : barSize
 
+  // Popout ownership is output-local. `activePopout` remains a compatibility
+  // view of the most recently touched owner for host panels that do not yet
+  // pass an output identity explicitly.
+  property var activePopouts: ({})
   property var activePopout: null
-  // V2 panels and the active bar edge share one animated connection contract.
-  // Only one popout can be active, so a single owner-scoped geometry record is
-  // sufficient and avoids stale per-screen anchors after hotplug/reload.
+  // V2 panels publish their connector geometry per output. The scalar fields
+  // remain a compatibility view of the most recently updated record.
+  property var connectedPanels: ({})
   property var connectedPanelOwner: null
   property string connectedPanelScreenName: ""
   property real connectedPanelX: 0
@@ -521,25 +525,102 @@ Item {
     else Quickshell.execDetached(["bash", "-lc", text])
   }
 
-  function requestPopout(owner) {
-    if (!owner || activePopout === owner) return
-    const previous = activePopout
+  function resolvedPopoutScreenName(owner, screenName) {
+    const explicitName = String(screenName || "").trim()
+    if (explicitName) return explicitName
+    if (owner && "popoutScreenName" in owner) {
+      const ownerName = String(owner.popoutScreenName || "").trim()
+      if (ownerName) return ownerName
+    }
+    const ownerWindow = owner && owner.QsWindow
+      ? owner.QsWindow.window : null
+    const ownerScreen = ownerWindow ? ownerWindow.screen : null
+    return ownerScreen ? String(ownerScreen.name || "").trim() : ""
+  }
+
+  function popoutScreenKey(screenName) {
+    const value = String(screenName || "").trim()
+    return value || "__global__"
+  }
+
+  function activePopoutForScreen(screenName) {
+    return activePopouts[popoutScreenKey(screenName)] || null
+  }
+
+  function remainingPopout(next) {
+    let result = null
+    for (const key in next) result = next[key]
+    return result
+  }
+
+  function requestPopout(owner, screenName) {
+    if (!owner) return
+    const key = popoutScreenKey(resolvedPopoutScreenName(owner, screenName))
+    const previous = activePopouts[key] || null
+    if (previous === owner) {
+      activePopout = owner
+      return
+    }
+    const next = ({})
+    for (const existingKey in activePopouts)
+      next[existingKey] = activePopouts[existingKey]
+    next[key] = owner
+    activePopouts = next
     activePopout = owner
     if (!previous) return
-    if (typeof previous.closeForPopoutSwitch === "function") previous.closeForPopoutSwitch()
+    if (typeof previous.closeForPopoutSwitch === "function")
+      previous.closeForPopoutSwitch()
     else if (typeof previous.close === "function") previous.close()
   }
 
-  function releasePopout(owner) {
-    if (activePopout === owner) activePopout = null
+  function releasePopout(owner, screenName) {
+    if (!owner) return
+    const resolvedScreenName = resolvedPopoutScreenName(owner, screenName)
+    const constrained = resolvedScreenName !== ""
+    const requestedKey = popoutScreenKey(resolvedScreenName)
+    const next = ({})
+    let removed = false
+    for (const key in activePopouts) {
+      if (activePopouts[key] === owner && (!constrained || key === requestedKey))
+        removed = true
+      else
+        next[key] = activePopouts[key]
+    }
+    if (!removed) return
+    activePopouts = next
+    if (activePopout === owner) activePopout = remainingPopout(next)
   }
 
-  function dismissActivePopout() {
-    const owner = activePopout
+  function releasePopoutsForScreen(screenName) {
+    const key = popoutScreenKey(screenName)
+    const owner = activePopouts[key] || null
     if (!owner) return false
-    activePopout = null
+    const next = ({})
+    for (const existingKey in activePopouts) {
+      if (existingKey !== key) next[existingKey] = activePopouts[existingKey]
+    }
+    activePopouts = next
+    if (activePopout === owner) activePopout = remainingPopout(next)
     clearConnectedPanel(owner)
     if (typeof owner.close === "function") owner.close()
+    return true
+  }
+
+  function dismissActivePopout(screenName) {
+    const constrained = String(screenName || "").trim() !== ""
+    if (constrained) return releasePopoutsForScreen(screenName)
+    const owners = []
+    for (const key in activePopouts) {
+      const owner = activePopouts[key]
+      if (owner && owners.indexOf(owner) < 0) owners.push(owner)
+    }
+    if (owners.length === 0) return false
+    activePopouts = ({})
+    activePopout = null
+    for (const owner of owners) {
+      clearConnectedPanel(owner)
+      if (typeof owner.close === "function") owner.close()
+    }
     return true
   }
 
@@ -547,53 +628,97 @@ Item {
     if (barHidden) dismissActivePopout()
   }
 
+  function emptyConnectedPanel() {
+    return ({
+      owner: null,
+      screenName: "",
+      x: 0,
+      reveal: 0,
+      hostCaret: false,
+      cardX: 0,
+      cardY: 0,
+      cardWidth: 0,
+      cardHeight: 0
+    })
+  }
+
+  function connectedPanelForScreen(screenName) {
+    return connectedPanels[popoutScreenKey(screenName)] || emptyConnectedPanel()
+  }
+
+  function syncConnectedPanelCompatibility(record) {
+    const value = record || emptyConnectedPanel()
+    connectedPanelOwner = value.owner || null
+    connectedPanelScreenName = String(value.screenName || "")
+    connectedPanelX = Number(value.x) || 0
+    connectedPanelReveal = Number(value.reveal) || 0
+    connectedPanelHostCaret = value.hostCaret === true
+    connectedPanelCardX = Number(value.cardX) || 0
+    connectedPanelCardY = Number(value.cardY) || 0
+    connectedPanelCardWidth = Math.max(0, Number(value.cardWidth) || 0)
+    connectedPanelCardHeight = Math.max(0, Number(value.cardHeight) || 0)
+  }
+
+  function remainingConnectedPanel(next) {
+    let result = null
+    for (const key in next) result = next[key]
+    return result
+  }
+
   function publishConnectedPanel(owner, screenName, resolvedX, reveal,
       options) {
     if (!owner) return false
+    const name = String(screenName || "").trim()
     const progress = Math.max(0, Math.min(1, Number(reveal) || 0))
     const x = Number(resolvedX) || 0
-    if (progress <= 0.001) {
-      if (connectedPanelOwner !== owner) return false
-      connectedPanelOwner = null
-      connectedPanelScreenName = ""
-      connectedPanelX = 0
-      connectedPanelReveal = 0
-      connectedPanelHostCaret = false
-      connectedPanelCardX = 0
-      connectedPanelCardY = 0
-      connectedPanelCardWidth = 0
-      connectedPanelCardHeight = 0
-      return true
-    }
-    if (x <= 0 || String(screenName || "") === "") return false
-    if (connectedPanelOwner && connectedPanelOwner !== owner
-        && activePopout !== owner) return false
-    connectedPanelOwner = owner
-    connectedPanelScreenName = String(screenName)
-    connectedPanelX = x
-    connectedPanelReveal = progress
+    if (progress <= 0.001)
+      return clearConnectedPanel(owner, name)
+    if (x <= 0 || !name) return false
+    const key = popoutScreenKey(name)
+    const current = connectedPanels[key] || null
+    if (current && current.owner !== owner
+        && activePopoutForScreen(name) !== owner) return false
     const geometry = options && typeof options === "object" ? options : null
-    connectedPanelHostCaret = !!(geometry && geometry.hostCaret === true)
-    connectedPanelCardX = geometry ? Number(geometry.cardX) || 0 : 0
-    connectedPanelCardY = geometry ? Number(geometry.cardY) || 0 : 0
-    connectedPanelCardWidth = geometry
-      ? Math.max(0, Number(geometry.cardWidth) || 0) : 0
-    connectedPanelCardHeight = geometry
-      ? Math.max(0, Number(geometry.cardHeight) || 0) : 0
+    const record = {
+      owner: owner,
+      screenName: name,
+      x: x,
+      reveal: progress,
+      hostCaret: !!(geometry && geometry.hostCaret === true),
+      cardX: geometry ? Number(geometry.cardX) || 0 : 0,
+      cardY: geometry ? Number(geometry.cardY) || 0 : 0,
+      cardWidth: geometry
+        ? Math.max(0, Number(geometry.cardWidth) || 0) : 0,
+      cardHeight: geometry
+        ? Math.max(0, Number(geometry.cardHeight) || 0) : 0
+    }
+    const next = ({})
+    for (const existingKey in connectedPanels)
+      next[existingKey] = connectedPanels[existingKey]
+    next[key] = record
+    connectedPanels = next
+    syncConnectedPanelCompatibility(record)
     return true
   }
 
-  function clearConnectedPanel(owner) {
-    if (owner && connectedPanelOwner !== owner) return false
-    connectedPanelOwner = null
-    connectedPanelScreenName = ""
-    connectedPanelX = 0
-    connectedPanelReveal = 0
-    connectedPanelHostCaret = false
-    connectedPanelCardX = 0
-    connectedPanelCardY = 0
-    connectedPanelCardWidth = 0
-    connectedPanelCardHeight = 0
+  function clearConnectedPanel(owner, screenName) {
+    const constrained = String(screenName || "").trim() !== ""
+    const requestedKey = popoutScreenKey(screenName)
+    const next = ({})
+    let removed = false
+    for (const key in connectedPanels) {
+      const record = connectedPanels[key]
+      if ((!owner || record.owner === owner)
+          && (!constrained || key === requestedKey))
+        removed = true
+      else
+        next[key] = record
+    }
+    if (!removed) return false
+    connectedPanels = next
+    if (!connectedPanelOwner || !owner || connectedPanelOwner === owner
+        || constrained && connectedPanelScreenName === String(screenName))
+      syncConnectedPanelCompatibility(remainingConnectedPanel(next))
     return true
   }
 

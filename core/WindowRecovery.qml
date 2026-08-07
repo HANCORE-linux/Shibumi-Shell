@@ -10,6 +10,10 @@ Scope {
   property bool pending: false
   property int attempt: 0
   property string pendingReason: ""
+  property bool recoveryVisible: true
+  property int retryInterval: 750
+  property int verifyInterval: 1200
+  property int maxAttempts: 3
 
   function screenReady() {
     return targetScreen !== null
@@ -23,6 +27,7 @@ Scope {
     pending = true
     attempt = 0
     pendingReason = String(reason || "recovery")
+    recoveryVisible = false
     retryTimer.restart()
   }
 
@@ -39,45 +44,52 @@ Scope {
       pending = false
       attempt = 0
       pendingReason = ""
+      recoveryVisible = true
     }
   }
 
   Timer {
     id: retryTimer
-    interval: 750
+    interval: root.retryInterval
     onTriggered: {
       if (!root.recoveryAllowed || !root.screenReady()) {
         root.pending = false
         root.pendingReason = ""
+        root.recoveryVisible = true
         return
       }
       if (root.attempt === 0)
         console.warn("[Shibumi WindowRecovery] " + root.targetScreen.name
           + ": " + root.pendingReason)
       root.attempt++
-      root.targetWindow.visible = true
+      root.recoveryVisible = true
       verifyTimer.restart()
     }
   }
 
   Timer {
     id: verifyTimer
-    interval: 1200
+    interval: root.verifyInterval
     onTriggered: {
       if (!root.recoveryAllowed) {
         root.pending = false
+        root.recoveryVisible = true
         return
       }
       if (root.targetWindow.backingWindowVisible) {
         root.pending = false
         root.attempt = 0
         root.pendingReason = ""
-      } else if (root.attempt < 3 && root.screenReady()) {
+      } else if (root.attempt < root.maxAttempts && root.screenReady()) {
+        root.recoveryVisible = false
         retryTimer.restart()
       } else {
-        console.warn("[Shibumi WindowRecovery] targeted recovery failed for " + root.targetScreen.name)
+        const screenName = root.targetScreen
+          ? String(root.targetScreen.name || "unknown") : "removed output"
+        console.warn("[Shibumi WindowRecovery] targeted recovery failed for " + screenName)
         root.pending = false
         root.pendingReason = ""
+        root.recoveryVisible = true
       }
     }
   }

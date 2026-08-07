@@ -141,7 +141,9 @@ Ui.Panel {
   }
 
   function childPanelWidget(pluginId) {
-    if (String(pluginId || "") === "omarchy.weather") return weatherView
+    const id = String(pluginId || "")
+    if (id === "omarchy.clock") return root
+    if (id === "omarchy.weather") return weatherView
     return null
   }
 

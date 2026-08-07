@@ -9,7 +9,7 @@ Date: 2026-07-30
 
 ## Audit basis
 
-- Read-only reference: `/home/hancore/Projects/Quickshell-Dots`
+- Read-only reference: `<predecessor-checkout>`
 - Reference branch: `main`
 - Reference commit: `0ab6477d0533e6de2981a65d518b8efa0bb6f284`
 - Reference description at inspection: `v2.8.0`

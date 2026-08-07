@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Io
 
 // Process-wide observable audio snapshot. The official Quattro audio widget
 // remains the PipeWire and action owner; screen-local Shibumi widgets only
@@ -34,6 +35,40 @@ Item {
     reports = next
     syncSnapshot()
     return true
+  }
+
+  function activeBar() {
+    return shell && shell.bar ? shell.bar : null
+  }
+
+  function openPanel() {
+    const bar = activeBar()
+    return bar && typeof bar.summonBarWidget === "function"
+      ? bar.summonBarWidget("omarchy.audio") : false
+  }
+
+  function closePanel() {
+    const bar = activeBar()
+    return bar && typeof bar.hideBarWidget === "function"
+      ? bar.hideBarWidget("omarchy.audio") : false
+  }
+
+  function togglePanel() {
+    const bar = activeBar()
+    if (!bar) return false
+    return typeof bar.isBarWidgetOpen === "function"
+        && bar.isBarWidgetOpen("omarchy.audio")
+      ? closePanel() : openPanel()
+  }
+
+  IpcHandler {
+    target: "omarchy.audio"
+
+    function open(): void { root.openPanel() }
+    function close(): void { root.closePanel() }
+    function show(): void { root.openPanel() }
+    function hide(): void { root.closePanel() }
+    function toggle(): void { root.togglePanel() }
   }
 
   function syncSnapshot() {

@@ -675,24 +675,43 @@ class OmarchyRuntime:
             time.sleep(0.1)
         raise RuntimeFailure(f"Shibumi uninstall verification failed: {detail}")
 
-    def reconcile_best_effort(self, *, restart_shell: bool = False) -> None:
-        actions = (
-            (
-                self.restart_shell,
-                self.rescan,
-                self.reload_payload,
-                self.refresh_menu,
-            )
-            if restart_shell
-            else (
-                self.rescan,
-                self.reload_config,
-                self.reload_payload,
-                self.refresh_menu,
-            )
-        )
+    def reconcile_rollback(
+        self,
+        *,
+        restart_required: bool,
+        shell_was_stopped: bool,
+        payload_reload_expected: bool,
+    ) -> None:
+        """Reconcile restored bytes without hiding a dead or stale shell."""
+        if restart_required:
+            try:
+                self.restart_shell()
+                return
+            except RuntimeFailure as restart_error:
+                if shell_was_stopped:
+                    raise
+                # A restart command may reject its own preflight before killing
+                # the current process. Only that still-running case may use
+                # ownership-preserving in-process rollback reconciliation.
+                try:
+                    self.verify_single_shell_instance()
+                    self.ping()
+                except RuntimeFailure:
+                    raise restart_error
+
+        actions = [self.rescan, self.reload_config]
+        if payload_reload_expected:
+            actions.append(self.reload_payload)
+        actions.append(self.refresh_menu)
+        failures: list[str] = []
         for action in actions:
             try:
                 action()
-            except RuntimeFailure:
-                pass
+            except RuntimeFailure as error:
+                failures.append(f"{action.__name__}: {error}")
+        if failures:
+            raise RuntimeFailure(
+                "rollback reconciliation failed: " + "; ".join(failures)
+            )
+        self.verify_single_shell_instance()
+        self.ping()

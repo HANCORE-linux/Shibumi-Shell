@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.shibumi-test.duplicate-service",
+  "name": "Shibumi duplicate service integration fixture",
+  "version": "1.0.0",
+  "kinds": ["service"],
+  "entryPoints": {"service": "Service.qml"}
+}

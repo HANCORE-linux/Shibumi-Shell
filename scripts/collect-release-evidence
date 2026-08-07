@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Run the revision-bound release gate and retain checksummed command evidence."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+
+ROOT = Path(__file__).resolve().parents[1]
+HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    ("omarchyPackage", ("pacman", "-Q", "omarchy-dev"), "omarchy-dev "),
+    ("quickshellPackage", ("pacman", "-Q", "quickshell-git"), "quickshell-git "),
+    ("quickshellVersion", ("quickshell", "--version"), "Quickshell "),
+)
+
+GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("package-tests", ("python3", "tests/test_package_release.py")),
+    ("manager-tests", ("python3", "tests/test_shibumi_manager.py")),
+    ("suite-tests", ("python3", "tests/test_shibumi_suite.py")),
+    ("health-tests", ("python3", "tests/test_shibumi_health.py")),
+    ("inc013-tests", ("python3", "tests/test_inc013_drain_contract.py")),
+    ("registry-mutations", ("python3", "tests/quickshell-empty-registry-mutation.py")),
+    ("quattro-dry-run", ("tests/shibumi-suite-quattro-dry-run.sh",)),
+    (
+        "installed-package-contract",
+        ("tests/omarchy-installed-package-contract-regression.sh",),
+    ),
+    (
+        "installed-source-parity-contract",
+        ("tests/omarchy-installed-source-parity-contract-regression.sh",),
+    ),
+    (
+        "forward-compat-contract",
+        ("tests/omarchy-forward-compat-contract-regression.sh",),
+    ),
+    ("quattro-runtime", ("tests/shibumi-suite-quattro-runtime.sh",)),
+)
+
+
+def git(*arguments: str, text: bool = True) -> str | bytes:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=text,
+    )
+    return result.stdout
+
+
+def candidate_inventory() -> tuple[str, int]:
+    paths = git(
+        "ls-files", "-co", "--exclude-standard", "-z", text=False
+    ).split(b"\0")
+    digest = hashlib.sha256()
+    count = 0
+    for encoded in sorted(path for path in paths if path):
+        relative = encoded.decode("utf-8", errors="surrogateescape")
+        path = ROOT / relative
+        if not path.is_file() or path.is_symlink():
+            continue
+        metadata = path.stat()
+        digest.update(relative.encode("utf-8", errors="surrogateescape"))
+        digest.update(b"\0")
+        digest.update(str(stat.S_IMODE(metadata.st_mode)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(b"\0")
+        count += 1
+    return digest.hexdigest(), count
+
+
+def command_identity(command: tuple[str, ...]) -> str:
+    return " ".join(command)
+
+
+def probe_host_identity(
+    name: str, command: tuple[str, ...], expected_prefix: str
+) -> dict[str, Any]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        return {
+            "name": name,
+            "command": list(command),
+            "exitCode": None,
+            "output": "",
+            "valid": False,
+            "error": str(error),
+        }
+    output = (result.stdout or result.stderr).strip()
+    valid = result.returncode == 0 and output.startswith(expected_prefix)
+    return {
+        "name": name,
+        "command": list(command),
+        "exitCode": result.returncode,
+        "output": output,
+        "valid": valid,
+    }
+
+
+def redact_log(payload: bytes, baseline_paths: list[str]) -> bytes:
+    replacements = [
+        (str(ROOT), "<repository>"),
+        (str(Path.home()), "<home>"),
+    ]
+    replacements.extend(
+        (path, f"<baseline:{index + 1}>")
+        for index, path in enumerate(baseline_paths)
+        if path
+    )
+    result = payload
+    for value, replacement in replacements:
+        result = result.replace(value.encode(), replacement.encode())
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="record an uncommitted working-tree candidate for pre-commit review",
+    )
+    parser.add_argument(
+        "--list", action="store_true", help="print gate commands without running them"
+    )
+    args = parser.parse_args()
+
+    if args.list:
+        for gate_id, command in GATES:
+            print(f"{gate_id}\t{command_identity(command)}")
+        return 0
+
+    status = str(git("status", "--porcelain=v1", "--untracked-files=all"))
+    if status.strip() and not args.allow_dirty:
+        print("release evidence requires a clean candidate", file=sys.stderr)
+        return 2
+
+    required_environment = (
+        "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
+        "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
+    )
+    missing_environment = [
+        name for name in required_environment if not os.environ.get(name)
+    ]
+    if missing_environment:
+        print(
+            "release evidence is missing required baseline paths: "
+            + ", ".join(missing_environment),
+            file=sys.stderr,
+        )
+        return 2
+
+    output = args.output if args.output.is_absolute() else ROOT / args.output
+    log_dir = output.with_suffix("").with_name(output.stem + ".logs")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    commit = str(git("rev-parse", "HEAD")).strip()
+    git_tree = str(git("rev-parse", "HEAD^{tree}")).strip()
+    candidate_digest, candidate_file_count = candidate_inventory()
+    started = int(time.time())
+    results: list[dict[str, Any]] = []
+    host_probes = [
+        probe_host_identity(name, command, prefix)
+        for name, command, prefix in HOST_PROBES
+    ]
+    all_passed = all(probe["valid"] for probe in host_probes)
+    baseline_paths = [os.environ[name] for name in required_environment]
+
+    for gate_id, command in GATES:
+        gate_started = time.time()
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=os.environ.copy(),
+        )
+        payload = redact_log(result.stdout, baseline_paths)
+        log_path = log_dir / f"{gate_id}.log"
+        log_path.write_bytes(payload)
+        results.append(
+            {
+                "id": gate_id,
+                "command": list(command),
+                "exitCode": result.returncode,
+                "durationMs": round((time.time() - gate_started) * 1000),
+                "log": str(log_path.relative_to(output.parent)),
+                "logSha256": hashlib.sha256(payload).hexdigest(),
+            }
+        )
+        if result.returncode != 0:
+            all_passed = False
+
+    manifests = []
+    for path in sorted((ROOT / "contracts/baselines").glob("omarchy-*.json")):
+        value = json.loads(path.read_text(encoding="utf-8"))
+        manifests.append(
+            {
+                "id": value.get("id"),
+                "profile": value.get("profile"),
+                "sourceRevision": value.get("sourceRevision"),
+                "path": str(path.relative_to(ROOT)),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+
+    evidence = {
+        "schemaVersion": 1,
+        "candidate": {
+            "version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
+            "baseCommit": commit,
+            "baseGitTree": git_tree,
+            "kind": "working-tree" if status.strip() else "clean-commit",
+            "workingTreeSha256": candidate_digest,
+            "fileCount": candidate_file_count,
+            "status": status.splitlines(),
+        },
+        "environment": {
+            "hostProbes": host_probes,
+        },
+        "baselines": manifests,
+        "startedEpoch": started,
+        "completedEpoch": int(time.time()),
+        "passed": all_passed,
+        "commands": results,
+        "deferredPhysicalGates": [
+            "physical mixed-scale multi-monitor",
+            "enterprise Wi-Fi",
+            "remaining device-backed Bluetooth workflows",
+        ],
+    }
+    output.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"release evidence: {output}")
+    return 0 if all_passed else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -427,6 +427,97 @@ class ContinuityManagerTests(unittest.TestCase):
         )
         self.assertFalse((state_dir / "switch-transaction").exists())
 
+    def test_failed_switch_rollback_retains_journal_for_later_recovery(self) -> None:
+        for boundary in ("config", "state", "reload"):
+            with self.subTest(boundary=boundary):
+                case_root = self.root / boundary
+                config = case_root / "config/omarchy/shell.json"
+                defaults = case_root / "omarchy/config/omarchy/shell.json"
+                state_dir = case_root / "state/shibumi"
+                runtime = case_root / "runtime"
+                config.parent.mkdir(parents=True)
+                defaults.parent.mkdir(parents=True)
+                state_dir.mkdir(parents=True)
+                runtime.mkdir(parents=True)
+                config.write_text(json.dumps(self.active) + "\n", encoding="utf-8")
+                defaults.write_text(
+                    json.dumps(self.defaults) + "\n", encoding="utf-8"
+                )
+                state_path = state_dir / "install.json"
+                state_path.write_text(
+                    json.dumps(self.state) + "\n", encoding="utf-8"
+                )
+                original_config = config.read_bytes()
+                original_state = state_path.read_bytes()
+
+                environment = {
+                    "SHIBUMI_CONFIG_FILE": str(config),
+                    "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+                    "SHIBUMI_STATE_DIR": str(state_dir),
+                    "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+                }
+                globals_map = self.module["perform"].__globals__
+                original_atomic_write = globals_map["atomic_write"]
+                original_reload = globals_map["reload_shell"]
+                original_stop = globals_map["stop_shell"]
+                original_verify = globals_map["verify"]
+                rollback_started = False
+
+                def reject(*_args: object, **_kwargs: object) -> None:
+                    nonlocal rollback_started
+                    rollback_started = True
+                    raise self.module["ManagerError"](
+                        "injected verification failure"
+                    )
+
+                def faulting_atomic_write(path: Path, payload: bytes) -> None:
+                    if rollback_started and (
+                        (boundary == "config" and path == config)
+                        or (boundary == "state" and path == state_path)
+                    ):
+                        raise OSError(f"injected {boundary} restore failure")
+                    original_atomic_write(path, payload)
+
+                def faulting_reload(*_args: object, **_kwargs: object) -> None:
+                    if rollback_started and boundary == "reload":
+                        raise self.module["ManagerError"](
+                            "injected reload restore failure"
+                        )
+
+                globals_map["atomic_write"] = faulting_atomic_write
+                globals_map["reload_shell"] = faulting_reload
+                globals_map["stop_shell"] = lambda *_args, **_kwargs: None
+                globals_map["verify"] = reject
+                try:
+                    with patch.dict("os.environ", environment, clear=False):
+                        with self.assertRaises(Exception):
+                            self.module["perform"]("omarchy")
+                finally:
+                    globals_map["atomic_write"] = original_atomic_write
+                    globals_map["reload_shell"] = original_reload
+                    globals_map["stop_shell"] = original_stop
+                    globals_map["verify"] = original_verify
+
+                transaction = state_dir / "switch-transaction"
+                self.assertTrue(transaction.is_dir())
+                journal = json.loads(
+                    (transaction / "journal.json").read_text(encoding="utf-8")
+                )
+                self.assertEqual(journal["phase"], "recovery-required")
+
+                globals_map["reload_shell"] = lambda *_args, **_kwargs: None
+                globals_map["stop_shell"] = lambda *_args, **_kwargs: None
+                try:
+                    with patch.dict("os.environ", environment, clear=False):
+                        self.assertEqual(self.module["recover"](), 0)
+                finally:
+                    globals_map["reload_shell"] = original_reload
+                    globals_map["stop_shell"] = original_stop
+
+                self.assertFalse(transaction.exists())
+                self.assertEqual(config.read_bytes(), original_config)
+                self.assertEqual(state_path.read_bytes(), original_state)
+
     def test_request_rejects_overlapping_switch_without_spawning(self) -> None:
         state_dir = self.root / "state/shibumi"
         state_dir.mkdir(parents=True)

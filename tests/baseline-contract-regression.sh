@@ -171,6 +171,33 @@ selected_manifest=$SHIBUMI_OMARCHY_BASELINE
 selected_profile=$SHIBUMI_OMARCHY_BASELINE_PROFILE
 selected_id=$SHIBUMI_OMARCHY_BASELINE_ID
 
+mapfile -t available_locales < <(locale -a)
+resolve_required_locale() {
+  local label=$1
+  shift
+  local candidate available
+  for candidate in "$@"; do
+    for available in "${available_locales[@]}"; do
+      if [[ ${available,,} == "${candidate,,}" ]]; then
+        printf '%s\n' "$available"
+        return 0
+      fi
+    done
+  done
+  fail "required EA-010 locale is unavailable: $label"
+}
+
+locale_matrix=(
+  "$(resolve_required_locale C C POSIX)"
+  "$(resolve_required_locale C.UTF-8 C.UTF-8 C.utf8)"
+  "$(resolve_required_locale en_US.UTF-8 en_US.UTF-8 en_US.utf8)"
+)
+for validation_locale in "${locale_matrix[@]}"; do
+  LC_ALL=$validation_locale shibumi_validate_omarchy_tree \
+    "$selected_host_path" "$selected_manifest" \
+    || fail "central helper rejected exact baseline bytes under $validation_locale"
+done
+
 fixture=$(mktemp -d /tmp/shibumi-baseline-contract.XXXXXX)
 trap 'rm -rf -- "$fixture"' EXIT
 while IFS= read -r subtree; do

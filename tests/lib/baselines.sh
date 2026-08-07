@@ -196,12 +196,12 @@ shibumi_validate_omarchy_tree() {
 
     entries=()
     mapfile -d '' entries < <(
-      find "$subtree_root" -mindepth 1 -printf '%P\0' | sort -z
+      find "$subtree_root" -mindepth 1 -printf '%P\0' | LC_ALL=C sort -z
     )
     content_entries=()
     mapfile -d '' content_entries < <(
       find "$subtree_root" -mindepth 1 \( -type f -o -type l \) \
-        -printf '%P\0' | sort -z
+        -printf '%P\0' | LC_ALL=C sort -z
     )
     actual_count=${#entries[@]}
     [[ $actual_count == "$expected_count" ]] \

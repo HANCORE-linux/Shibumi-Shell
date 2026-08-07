@@ -13,25 +13,39 @@ PanelWindow {
 
   readonly property string targetScreenName: targetScreen
     ? String(targetScreen.name || "") : ""
+  readonly property var connectedPanelRecord: bar
+    && typeof bar.connectedPanelForScreen === "function"
+      ? bar.connectedPanelForScreen(targetScreenName) : ({
+          owner: bar ? bar.connectedPanelOwner : null,
+          screenName: bar ? bar.connectedPanelScreenName : "",
+          reveal: bar ? bar.connectedPanelReveal : 0,
+          hostCaret: bar ? bar.connectedPanelHostCaret : false,
+          x: bar ? bar.connectedPanelX : 0,
+          cardX: bar ? bar.connectedPanelCardX : 0,
+          cardY: bar ? bar.connectedPanelCardY : 0,
+          cardWidth: bar ? bar.connectedPanelCardWidth : 0,
+          cardHeight: bar ? bar.connectedPanelCardHeight : 0
+        })
   readonly property bool active: bar
-    && bar.connectedPanelHostCaret === true
-    && bar.connectedPanelScreenName === targetScreenName
-    && Number(bar.connectedPanelReveal || 0) > 0.001
-    && Number(bar.connectedPanelCardWidth || 0) > 0
-    && Number(bar.connectedPanelCardHeight || 0) > 0
+    && connectedPanelRecord.hostCaret === true
+    && connectedPanelRecord.screenName === targetScreenName
+    && Number(connectedPanelRecord.reveal || 0) > 0.001
+    && Number(connectedPanelRecord.cardWidth || 0) > 0
+    && Number(connectedPanelRecord.cardHeight || 0) > 0
     && (bar.position === "top" || bar.position === "bottom")
   readonly property bool pointsUp: bar.position !== "bottom"
   readonly property real progress:
-    Math.max(0, Math.min(1, Number(bar.connectedPanelReveal) || 0))
-  readonly property real cardX: Number(bar.connectedPanelCardX) || 0
-  readonly property real cardY: Number(bar.connectedPanelCardY) || 0
+    Math.max(0, Math.min(1,
+      Number(connectedPanelRecord.reveal) || 0))
+  readonly property real cardX: Number(connectedPanelRecord.cardX) || 0
+  readonly property real cardY: Number(connectedPanelRecord.cardY) || 0
   readonly property real cardWidth:
-    Math.max(0, Number(bar.connectedPanelCardWidth) || 0)
+    Math.max(0, Number(connectedPanelRecord.cardWidth) || 0)
   readonly property real cardHeight:
-    Math.max(0, Number(bar.connectedPanelCardHeight) || 0)
+    Math.max(0, Number(connectedPanelRecord.cardHeight) || 0)
   readonly property real centerX: Math.max(cardX + 10,
     Math.min(cardX + cardWidth - 10,
-      Number(bar.connectedPanelX) || 0))
+      Number(connectedPanelRecord.x) || 0))
   readonly property real maxDepth: 5
   readonly property real halfWidth: 6 * progress
   readonly property real depth: maxDepth * progress

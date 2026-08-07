@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": "example.shibumi-test.concatenated-ipc",
+  "name": "Shibumi concatenated IPC fixture",
+  "version": "1.0.0",
+  "kinds": ["service"],
+  "entryPoints": {"service": "Service.qml"}
+}

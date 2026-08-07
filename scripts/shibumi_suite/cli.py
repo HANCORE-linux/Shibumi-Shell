@@ -29,6 +29,7 @@ from .model import (
     ContractError,
     PluginSpec,
     Suite,
+    plugin_payload_digest,
     suite_payload_digest,
 )
 from .menu_extension import (
@@ -546,11 +547,13 @@ def command_install(
         runtime.rescan()
         if not external:
             runtime.stop_shell()
+            transaction.mark_shell_stopped()
         transaction.write_config(encode_config(desired))
         if external:
             runtime.reload_config()
         else:
             runtime.restart_shell()
+            transaction.mark_shell_started()
         if PICKER_PLUGIN_ID in profile.install:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime
@@ -645,8 +648,10 @@ def command_migrate(
         transaction.expose()
         runtime.rescan()
         runtime.stop_shell()
+        transaction.mark_shell_stopped()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
+        transaction.mark_shell_started()
         if PICKER_PLUGIN_ID in profile.install:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime
@@ -769,6 +774,7 @@ def command_update(
             runtime.reload_payload()
         else:
             runtime.restart_shell()
+            transaction.mark_shell_started()
         if PICKER_PLUGIN_ID in plugin_ids:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime, state
@@ -838,7 +844,9 @@ def command_repair(
     )
 
     revision = suite.revision()
-    with PluginTransaction(paths, runtime) as transaction:
+    with PluginTransaction(
+        paths, runtime, restart_on_reconcile=not external
+    ) as transaction:
         transaction.preflight_targets(specs, adoptable_plugin_ids)
         payload_digest, plugin_digests = transaction.stage(
             specs, revision=revision, suite_version=suite.version
@@ -856,12 +864,19 @@ def command_repair(
             configured_bar=configured_bar_id(desired),
             previous_bar=previous_bar_for_state(state, defaults),
         )
+        if not external:
+            runtime.stop_shell()
+            transaction.mark_shell_stopped()
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
-        runtime.rescan()
         transaction.write_config(encode_config(desired))
-        runtime.reload_config()
-        runtime.reload_payload()
+        if external:
+            runtime.rescan()
+            runtime.reload_config()
+            runtime.reload_payload()
+        else:
+            runtime.restart_shell()
+            transaction.mark_shell_started()
         if PICKER_PLUGIN_ID in plugin_ids:
             desired_state["menuExtension"] = install_picker_menu_extension(
                 transaction, runtime, state
@@ -925,8 +940,10 @@ def command_activate(
         paths, runtime, restart_on_reconcile=True
     ) as transaction:
         runtime.stop_shell()
+        transaction.mark_shell_stopped()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
+        transaction.mark_shell_started()
         runtime.verify_install(
             set(profile.install),
             str(state.get("activeBar") or profile.active_bar),
@@ -1013,8 +1030,10 @@ def command_deactivate(
         paths, runtime, restart_on_reconcile=True
     ) as transaction:
         runtime.stop_shell()
+        transaction.mark_shell_stopped()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
+        transaction.mark_shell_started()
         if args.keep_layout:
             runtime.verify_update(
                 set(state["plugins"]),
@@ -1087,8 +1106,10 @@ def command_uninstall(
     ) as transaction:
         remove_picker_menu_extension(transaction, runtime, state)
         runtime.stop_shell()
+        transaction.mark_shell_stopped()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
+        transaction.mark_shell_started()
         transaction.stage_removal(specs)
         transaction.stage_removal_ids(retired_plugin_ids)
         runtime.rescan()
@@ -1139,8 +1160,22 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
     missing: list[str] = []
     unmanaged: list[str] = []
     modified: list[str] = []
+    pending_retirement: list[str] = []
     for plugin_id in state["plugins"]:
         target = paths.plugin_dir / plugin_id
+        if plugin_id in suite.retired_plugins:
+            pending_retirement.append(plugin_id)
+            if target.exists() and not is_managed_target(target, plugin_id):
+                unmanaged.append(plugin_id)
+            elif target.exists():
+                try:
+                    actual_digest = plugin_payload_digest(target)
+                except ContractError:
+                    modified.append(plugin_id)
+                else:
+                    if actual_digest != state["pluginDigests"][plugin_id]:
+                        modified.append(plugin_id)
+            continue
         if not target.exists():
             missing.append(plugin_id)
         elif not is_managed_target(target, plugin_id):
@@ -1160,6 +1195,8 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         print(f"Ownership mismatch: {', '.join(unmanaged)}")
     if modified:
         print(f"Locally modified: {', '.join(modified)}")
+    if pending_retirement:
+        print(f"Pending retirement: {', '.join(pending_retirement)}")
     try:
         config, _ = read_config(paths.config_file, paths.defaults_file)
         bar = config.get("bar") if isinstance(config.get("bar"), dict) else {}
@@ -1181,7 +1218,9 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         print(f"Config: invalid ({error})")
         print("Repair with: shibumi-suite repair")
         return 1
-    unhealthy = bool(missing or unmanaged or modified or drift)
+    unhealthy = bool(
+        missing or unmanaged or modified or pending_retirement or drift
+    )
     if unhealthy:
         print("Repair with: shibumi-suite repair")
     return 1 if unhealthy else 0

@@ -132,7 +132,7 @@ done <<< "$selected"
 echo
 update_failed=0
 for plugin_id in "${selected_ids[@]}"; do
-  if ! omarchy-plugin-update "$plugin_id" --yes; then
+  if ! omarchy-plugin-update "$plugin_id"; then
     update_failed=1
   fi
 done

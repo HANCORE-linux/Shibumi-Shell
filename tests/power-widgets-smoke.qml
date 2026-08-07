@@ -156,6 +156,11 @@ ShellRoot {
         if (batA.powerService !== power || batB.powerService !== power
             || pwrA.powerService !== power || pwrB.powerService !== power)
           return root.fail("multi-output views do not share one service owner")
+        if (typeof pwrA.childPanelWidget !== "function"
+            || pwrA.childPanelWidget("omarchy.power") !== pwrA
+            || typeof batA.childPanelWidget === "function"
+              && batA.childPanelWidget("omarchy.power") !== null)
+          return root.fail("canonical omarchy.power routing owner")
         batA.activate()
         root.phase++
         root.ticks = 0

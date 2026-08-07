@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "dynamicResources": [
+    {
+      "kind": "ipc",
+      "resource": "omarchy.network",
+      "owner": "hancore.shibumi.network/NetworkPanelBridge.qml -> authoritative Quattro network Panel"
+    }
+  ]
+}

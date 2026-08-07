@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import SUITE_ID
+from . import MANAGED_MARKER, SUITE_ID
 
 
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -28,6 +28,35 @@ class ContractError(RuntimeError):
     pass
 
 
+PAYLOAD_EXCLUDED_DIRECTORY_NAMES = {"__pycache__"}
+PAYLOAD_EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
+
+
+def payload_path_excluded(
+    relative: str | Path, *, excluded_paths: tuple[str, ...] = ()
+) -> bool:
+    """Return whether a source path is outside the reproducible payload."""
+    path = Path(relative)
+    normalized = path.as_posix()
+    return (
+        normalized == MANAGED_MARKER
+        or normalized in excluded_paths
+        or any(part in PAYLOAD_EXCLUDED_DIRECTORY_NAMES for part in path.parts)
+        or path.suffix in PAYLOAD_EXCLUDED_SUFFIXES
+    )
+
+
+def payload_copy_ignore(_directory: str, names: list[str]) -> set[str]:
+    """Apply the same generated-file policy while staging plugin sources."""
+    return {
+        name
+        for name in names
+        if name == MANAGED_MARKER
+        or name in PAYLOAD_EXCLUDED_DIRECTORY_NAMES
+        or Path(name).suffix in PAYLOAD_EXCLUDED_SUFFIXES
+    }
+
+
 def plugin_payload_digest(
     directory: Path, *, excluded_paths: tuple[str, ...] = ()
 ) -> str:
@@ -39,7 +68,7 @@ def plugin_payload_digest(
     digest.update(b"shibumi-plugin-payload-v1\0")
     for path in sorted(directory.rglob("*"), key=lambda item: item.relative_to(directory).as_posix()):
         relative = path.relative_to(directory).as_posix()
-        if relative == ".shibumi-managed.json" or relative in excluded_paths:
+        if payload_path_excluded(relative, excluded_paths=excluded_paths):
             continue
         metadata = path.lstat()
         if path.is_symlink():
@@ -360,16 +389,38 @@ class Suite:
                     str(self.root),
                     "status",
                     "--porcelain=v1",
-                    "--untracked-files=normal",
+                    "-z",
+                    "--no-renames",
+                    "--untracked-files=all",
+                    "--ignored=matching",
                     "--",
                     "contracts/plugin-suite-v1.json",
                     *(sorted(self.plugins)),
                 ],
                 check=True,
                 capture_output=True,
-                text=True,
                 timeout=5,
             )
         except (OSError, subprocess.SubprocessError):
             return "archive"
-        return f"{revision}-dirty" if status.stdout.strip() else revision
+
+        dirty = False
+        for record in status.stdout.split(b"\0"):
+            if not record:
+                continue
+            try:
+                relative = Path(record[3:].decode("utf-8", errors="surrogateescape"))
+            except (IndexError, ValueError):
+                dirty = True
+                break
+            if relative.as_posix() == "contracts/plugin-suite-v1.json":
+                dirty = True
+                break
+            if not relative.parts or relative.parts[0] not in self.plugins:
+                dirty = True
+                break
+            payload_relative = Path(*relative.parts[1:])
+            if not payload_path_excluded(payload_relative):
+                dirty = True
+                break
+        return f"{revision}-dirty" if dirty else revision

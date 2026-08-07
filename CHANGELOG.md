@@ -2,6 +2,32 @@
 
 This changelog records user-visible Shibumi changes.
 
+## 0.1.1-beta.5: Contract and recovery hardening
+
+Release candidate for 2026-08-07.
+
+### Changed
+
+- Made Omarchy and predecessor baseline identity checks deterministic across C and UTF-8 locales
+- Bound release promotion to revision-specific lifecycle, host, and checksummed command evidence
+- Kept third-party plugin updates behind Omarchy's authoritative changed-code review prompt
+
+### Fixed
+
+- Retained transaction journals and snapshots when rollback itself fails, allowing later recovery
+- Excluded generated Python caches consistently from source staging, payload hashing, and provenance
+- Reported retired plugin state without crashing `shibumi-shell status`
+- Restarted the shell at the managed repair ownership boundary instead of hot-reloading a replaced bar provider
+- Kept popout and connected-panel ownership independent across physical outputs
+- Preserved declarative bar visibility after layer-window recovery
+- Restored Calendar and Power compatibility routing for the installed Omarchy shortcuts
+- Restored the process-wide Audio IPC owner and deliberate Network IPC presentation redirects
+
+### Known limits
+
+- Physical mixed-scale multi-monitor, enterprise Wi-Fi, and remaining device-backed Bluetooth acceptance stay explicit external gates
+- AUR publication remains unavailable until the package name can be registered
+
 ## 0.1.1-beta.4: Shell and lifecycle stabilization
 
 Release candidate for 2026-08-04.

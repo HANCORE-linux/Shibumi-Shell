@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 import subprocess
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +26,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.4")
+        self.assertEqual(version, "0.1.1-beta.5")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -69,6 +72,108 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertEqual(workflow.count("persist-credentials: false"), 2)
         self.assertNotIn("persist-credentials: true", workflow)
 
+    def test_release_workflow_requires_revision_bound_lifecycle_evidence(self) -> None:
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        collector = (ROOT / "scripts/collect-release-evidence").read_text(
+            encoding="utf-8"
+        )
+        for contract in (
+            "python3 tests/test_shibumi_manager.py",
+            "python3 tests/test_inc013_drain_contract.py",
+            "scripts/collect-release-evidence",
+            '"dist/shibumi-shell-$version.release-evidence.json"',
+        ):
+            self.assertIn(contract, workflow)
+        for gate in (
+            "tests/shibumi-suite-quattro-dry-run.sh",
+            "tests/shibumi-suite-quattro-runtime.sh",
+            "omarchy-installed-package-contract-regression.sh",
+            "omarchy-installed-source-parity-contract-regression.sh",
+            "omarchy-forward-compat-contract-regression.sh",
+        ):
+            self.assertIn(gate, collector)
+        self.assertIn(
+            "needs: package-contract", workflow
+        )
+        self.assertIn(
+            "runs-on: [self-hosted, linux, shibumi-validation]", workflow
+        )
+
+    def test_release_evidence_collector_declares_unique_complete_gates(self) -> None:
+        result = subprocess.run(
+            [str(ROOT / "scripts/collect-release-evidence"), "--output", "unused", "--list"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        rows = [line.split("\t", 1) for line in result.stdout.splitlines()]
+        ids = [row[0] for row in rows]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(
+            set(ids),
+            {
+                "package-tests",
+                "manager-tests",
+                "suite-tests",
+                "health-tests",
+                "inc013-tests",
+                "registry-mutations",
+                "quattro-dry-run",
+                "installed-package-contract",
+                "installed-source-parity-contract",
+                "forward-compat-contract",
+                "quattro-runtime",
+            },
+        )
+
+    def test_release_evidence_host_probes_fail_closed_and_logs_are_redacted(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader("release_evidence", str(path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        for name, command, prefix in module.HOST_PROBES:
+            with self.subTest(probe=name, failure="missing"):
+                with patch.object(
+                    module.subprocess, "run", side_effect=FileNotFoundError("missing")
+                ):
+                    self.assertFalse(
+                        module.probe_host_identity(name, command, prefix)["valid"]
+                    )
+            with self.subTest(probe=name, failure="nonzero"):
+                result = subprocess.CompletedProcess(command, 1, "", "failed")
+                with patch.object(module.subprocess, "run", return_value=result):
+                    self.assertFalse(
+                        module.probe_host_identity(name, command, prefix)["valid"]
+                    )
+            with self.subTest(probe=name, failure="unparsable"):
+                result = subprocess.CompletedProcess(command, 0, "unexpected\n", "")
+                with patch.object(module.subprocess, "run", return_value=result):
+                    self.assertFalse(
+                        module.probe_host_identity(name, command, prefix)["valid"]
+                    )
+            with self.subTest(probe=name, result="valid"):
+                result = subprocess.CompletedProcess(
+                    command, 0, prefix + "test-version\n", ""
+                )
+                with patch.object(module.subprocess, "run", return_value=result):
+                    self.assertTrue(
+                        module.probe_host_identity(name, command, prefix)["valid"]
+                    )
+
+        private_root = "/srv/private/omarchy-source"
+        redacted = module.redact_log(
+            f"{ROOT} {Path.home()} {private_root}".encode(), [private_root]
+        ).decode()
+        self.assertNotIn(str(ROOT), redacted)
+        self.assertNotIn(str(Path.home()), redacted)
+        self.assertNotIn(private_root, redacted)
+
     def test_dependency_contract_matches_pkgbuild(self) -> None:
         contract = json.loads(
             (ROOT / "contracts/package-runtime-v1.json").read_text(encoding="utf-8")
@@ -111,6 +216,17 @@ class PackageReleaseTests(unittest.TestCase):
             )
             with tarfile.open(archive, "r:gz") as payload:
                 names = payload.getnames()
+                private_home = b"/home/" + b"hancore/"
+                for member in payload.getmembers():
+                    if not member.isfile():
+                        continue
+                    stream = payload.extractfile(member)
+                    self.assertIsNotNone(stream)
+                    self.assertNotIn(
+                        private_home,
+                        stream.read(),
+                        f"release payload exposes a private path: {member.name}",
+                    )
             roots = {name.split("/", 1)[0] for name in names}
             self.assertEqual(roots, {f"shibumi-shell-{inventory['version']}"})
             self.assertFalse(

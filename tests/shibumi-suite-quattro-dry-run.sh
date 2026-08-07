@@ -30,7 +30,7 @@ output=$(env \
   "$repo_root/scripts/shibumi-suite" install --dry-run)
 
 printf '%s\n' "$output"
-grep -q 'plugins:[[:space:]]*25' <<<"$output" \
+grep -q 'plugins:[[:space:]]*24' <<<"$output" \
   || fail 'dry-run did not validate the complete suite'
 grep -q 'Dry run complete; no files changed.' <<<"$output" \
   || fail 'dry-run completion marker is missing'

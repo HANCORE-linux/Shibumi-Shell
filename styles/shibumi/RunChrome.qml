@@ -35,15 +35,25 @@ Item {
   readonly property color shellBorder:
     bar.visualTokens.shellBorder !== undefined
       ? bar.visualTokens.shellBorder : bar.visualTokens.islandBorder
+  readonly property var connectedPanelRecord:
+    typeof bar.connectedPanelForScreen === "function"
+      ? bar.connectedPanelForScreen(screenName) : ({
+          owner: bar.connectedPanelOwner,
+          screenName: bar.connectedPanelScreenName,
+          reveal: bar.connectedPanelReveal,
+          x: bar.connectedPanelX
+        })
   readonly property bool connectedPanelActive:
     shellStyle !== "shibumi"
     && screenName !== ""
-    && bar.connectedPanelScreenName === screenName
-    && Number(bar.connectedPanelReveal || 0) > 0.001
+    && connectedPanelRecord.screenName === screenName
+    && Number(connectedPanelRecord.reveal || 0) > 0.001
   readonly property real connectedReveal: connectedPanelActive
-    ? Math.max(0, Math.min(1, Number(bar.connectedPanelReveal) || 0)) : 0
+    ? Math.max(0, Math.min(1,
+        Number(connectedPanelRecord.reveal) || 0)) : 0
   readonly property real connectedCenterX: Math.max(13,
-    Math.min(width - 13, Number(bar.connectedPanelX || 0) - screenX))
+    Math.min(width - 13,
+      Number(connectedPanelRecord.x || 0) - screenX))
   readonly property real connectedCurveHalfWidth: 7 * connectedReveal
   readonly property real connectedTangentControl: 4.25 * connectedReveal
   readonly property real connectedTipControl: 2 * connectedReveal

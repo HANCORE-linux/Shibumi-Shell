@@ -40,8 +40,9 @@ declared_differences=$(mktemp)
 trap 'rm -f -- "$declared_standalone_only" "$declared_differences"' EXIT
 
 jq -r '.standaloneOnly[].source' "$contract" \
-  | sort >"$declared_standalone_only"
-jq -r '.differences[].source' "$contract" | sort >"$declared_differences"
+  | LC_ALL=C sort >"$declared_standalone_only"
+jq -r '.differences[].source' "$contract" \
+  | LC_ALL=C sort >"$declared_differences"
 expected_standalone_count=$(jq -r \
   '.comparisons.embeddedToStandaloneV2.standaloneOnlyCount' "$baseline")
 expected_standalone_digest=$(jq -r \

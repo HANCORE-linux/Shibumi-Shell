@@ -801,10 +801,20 @@ def perform(target: str) -> int:
         if existed:
             snapshot.write_bytes(config_path.read_bytes())
         state_snapshot.write_bytes(state_path.read_bytes())
-        atomic_write(
-            transaction / "journal.json",
-            encode({"schemaVersion": 1, "target": target, "configExisted": existed}),
-        )
+        journal = {
+            "schemaVersion": 1,
+            "target": target,
+            "configExisted": existed,
+            "phase": "prepared",
+        }
+        journal_path = transaction / "journal.json"
+        atomic_write(journal_path, encode(journal))
+
+        def cleanup_transaction() -> None:
+            for child in transaction.iterdir():
+                child.unlink(missing_ok=True)
+            transaction.rmdir()
+
         try:
             write_status(runtime_paths, target, "snapshot")
             stop_shell(runtime_paths)
@@ -815,25 +825,46 @@ def perform(target: str) -> int:
             write_status(runtime_paths, target, "verify")
             verify(runtime_paths, state, runtime_target)
             atomic_write(profile_path(runtime_paths), encode(profiles))
-        except Exception:
+        except Exception as operation_error:
             try:
-                stop_shell(runtime_paths)
-            except ManagerError:
-                pass
-            if existed:
-                atomic_write(config_path, snapshot.read_bytes())
-            else:
-                config_path.unlink(missing_ok=True)
-            atomic_write(state_path, state_snapshot.read_bytes())
-            try:
+                try:
+                    stop_shell(runtime_paths)
+                except ManagerError:
+                    pass
+                if existed:
+                    atomic_write(config_path, snapshot.read_bytes())
+                else:
+                    config_path.unlink(missing_ok=True)
+                atomic_write(state_path, state_snapshot.read_bytes())
                 reload_shell(runtime_paths)
-            except ManagerError:
-                pass
+            except Exception as rollback_error:
+                journal["phase"] = "recovery-required"
+                journal["detail"] = (
+                    f"switch failed: {operation_error}; "
+                    f"rollback failed: {rollback_error}"
+                )
+                try:
+                    atomic_write(journal_path, encode(journal))
+                except Exception:
+                    pass
+                try:
+                    write_status(
+                        runtime_paths,
+                        target,
+                        "recovery-required",
+                        f"recovery journal retained at {transaction}",
+                    )
+                except Exception:
+                    pass
+                raise ManagerError(
+                    "shell switch rollback failed; recovery journal retained at "
+                    f"{transaction}"
+                ) from rollback_error
+            else:
+                cleanup_transaction()
             raise
-        finally:
-            for child in transaction.iterdir():
-                child.unlink(missing_ok=True)
-            transaction.rmdir()
+        else:
+            cleanup_transaction()
         write_status(runtime_paths, target, "complete")
     return 0
 

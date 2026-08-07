@@ -25,8 +25,11 @@ jobs:
           bash -n packaging/aur/PKGBUILD
           bash -n packaging/shibumi-shell
           python3 tests/test_package_release.py
+          python3 tests/test_shibumi_manager.py
           python3 tests/test_shibumi_suite.py
           python3 tests/test_shibumi_health.py
+          python3 tests/test_inc013_drain_contract.py
+          python3 tests/quickshell-empty-registry-mutation.py
 
       - name: Build the reproducible release asset
         run: |
@@ -36,7 +39,7 @@ jobs:
   github-release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package-contract
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, shibumi-validation]
     permissions:
       contents: write
     steps:
@@ -45,6 +48,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Run the revision-bound lifecycle and host gate
+        env:
+          SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH: ${{ vars.SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH }}
+          SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH: ${{ vars.SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH }}
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          scripts/collect-release-evidence \
+            --output "dist/shibumi-shell-$version.release-evidence.json"
+          tar -czf "dist/shibumi-shell-$version.release-evidence.logs.tar.gz" \
+            -C dist "shibumi-shell-$version.release-evidence.logs"
 
       - name: Verify tag, version, and pinned archive checksum
         run: |
@@ -70,6 +85,8 @@ jobs:
             "dist/shibumi-shell-$version.tar.gz" \
             "dist/shibumi-shell-$version.tar.gz.sha256" \
             "dist/shibumi-shell-$version.tar.gz.inventory.json" \
+            "dist/shibumi-shell-$version.release-evidence.json" \
+            "dist/shibumi-shell-$version.release-evidence.logs.tar.gz" \
             --verify-tag \
             --prerelease \
             --notes-file "$notes_file" \

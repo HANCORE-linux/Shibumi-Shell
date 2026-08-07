@@ -190,6 +190,7 @@ ShellRoot {
             || center.updateBackend.runCount !== 1)
           return root.fail("update facade/backend contract")
         if (center.childPanelWidget("omarchy.weather") !== center.weatherWidget
+            || center.childPanelWidget("omarchy.clock") !== center
             || center.childPanelWidget("omarchy.indicators") !== null)
           return root.fail("nested panel routing contract")
         center.weatherWidget.panelSource = Qt.resolvedUrl(

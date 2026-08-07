@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.battery",
   "name": "Shibumi Battery",
-  "version": "0.1.1-beta.4",
+  "version": "0.1.1-beta.5",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi battery status and detailed battery panel.",

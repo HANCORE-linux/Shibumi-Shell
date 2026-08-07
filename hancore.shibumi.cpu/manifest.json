@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.cpu",
   "name": "Shibumi CPU",
-  "version": "0.1.1-beta.4",
+  "version": "0.1.1-beta.5",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi CPU widget, GPU sampler, and detailed usage panel.",

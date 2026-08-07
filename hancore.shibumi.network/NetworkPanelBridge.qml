@@ -39,6 +39,75 @@ Item {
     ? panel.scanning === true : false
   readonly property bool busy: ready && panel.busy !== undefined
     ? panel.busy === true : false
+  property string pendingPresentationMode: ""
+  property int presentationAttempts: 0
+  property bool synchronizingPanelState: false
+  property var presentationOwner: null
+
+  function focusedPresentationWidget() {
+    return bar && typeof bar.findPanelWidget === "function"
+      ? bar.findPanelWidget("omarchy.network") : null
+  }
+
+  function presentationWidget() {
+    return presentationOwner
+  }
+
+  function summonNetworkPresentation(mode) {
+    const requestedMode = String(mode || "panel")
+    if (requestedMode === "qr") {
+      // Quattro's QR card is the authoritative presentation for this feature;
+      // Shibumi has no second QR surface. Deliberately keep only that card.
+      hideNetworkPresentation()
+      return true
+    }
+    const owner = focusedPresentationWidget()
+    if (!owner || typeof owner.open !== "function") return false
+    presentationOwner = owner
+    pendingPresentationMode = requestedMode
+    presentationAttempts = 0
+    if (owner.opened !== true) owner.open()
+    presentationRedirect.restart()
+    return true
+  }
+
+  function hideNetworkPresentation() {
+    pendingPresentationMode = ""
+    presentationRedirect.stop()
+    const owner = presentationOwner
+    presentationOwner = null
+    if (!owner) return false
+    if (owner.opened === true && typeof owner.close === "function")
+      owner.close()
+    return true
+  }
+
+  function applyPresentationMode() {
+    const widget = presentationWidget()
+    if (!widget) return false
+    if (widget.opened !== true && typeof widget.open === "function")
+      widget.open()
+    if (pendingPresentationMode === "speed") {
+      if (widget.panelLoaded === true && widget.panelItem) {
+        if ("speedDetailsVisible" in widget.panelItem)
+          widget.panelItem.speedDetailsVisible = true
+        // Keep the authoritative speed-test process and data owner. Preserve
+        // its compatibility open/close/toggle state before hiding the stock
+        // modal so subsequent direct IPC remains synchronized with Shibumi.
+        if (panel && panel.controller
+            && typeof panel.controller.show === "function"
+            && panel.opened !== true)
+          panel.controller.show()
+        if (panel && "speedTestModalOpen" in panel)
+          panel.speedTestModalOpen = false
+        pendingPresentationMode = ""
+        return true
+      }
+      return false
+    }
+    pendingPresentationMode = ""
+    return true
+  }
 
   function connectedWifiLabel() {
     if (!ready || kind !== "wifi") return ""
@@ -110,14 +179,75 @@ Item {
     }
   }
 
+  Connections {
+    target: root.panel
+    ignoreUnknownSignals: true
+
+    function onOpenedChanged() {
+      if (!root.panel || root.synchronizingPanelState) return
+      if (root.panel.opened === true)
+        root.summonNetworkPresentation("panel")
+      else if (!root.panel.qrVisible && !root.panel.speedTestModalOpen)
+        root.hideNetworkPresentation()
+    }
+
+    function onQrVisibleChanged() {
+      if (root.panel && root.panel.qrVisible === true)
+        root.summonNetworkPresentation("qr")
+    }
+
+    function onSpeedTestModalOpenChanged() {
+      if (root.panel && root.panel.speedTestModalOpen === true)
+        root.summonNetworkPresentation("speed")
+    }
+  }
+
+  Connections {
+    target: root.presentationOwner
+    ignoreUnknownSignals: true
+
+    function onOpenedChanged() {
+      const widget = root.presentationWidget()
+      if (!widget || !root.panel || root.synchronizingPanelState
+          || root.panel.qrVisible || root.panel.speedTestModalOpen) return
+      root.synchronizingPanelState = true
+      if (widget.opened === true && root.panel.opened !== true
+          && typeof root.panel.open === "function")
+        root.panel.open()
+      else if (widget.opened !== true && root.panel.opened === true
+          && typeof root.panel.close === "function")
+        root.panel.close()
+      const observedOwner = widget
+      Qt.callLater(function() {
+        if (root.presentationOwner === observedOwner
+            && observedOwner.opened !== true)
+          root.presentationOwner = null
+        root.synchronizingPanelState = false
+      })
+    }
+  }
+
+  Timer {
+    id: presentationRedirect
+    interval: 25
+    onTriggered: {
+      root.presentationAttempts++
+      if (!root.applyPresentationMode() && root.presentationAttempts < 20)
+        restart()
+      else if (root.presentationAttempts >= 20)
+        root.pendingPresentationMode = ""
+    }
+  }
+
   onPanelSettingsChanged: injectPanel()
   onBarChanged: injectPanel()
   onPanelComponentChanged: Qt.callLater(syncPanelSource)
   onPanelSourceChanged: Qt.callLater(syncPanelSource)
   Component.onCompleted: Qt.callLater(syncPanelSource)
   Component.onDestruction: {
-    if (!panel || !bar) return
-    if (panel.opened === true && typeof panel.close === "function") panel.close()
+    hideNetworkPresentation()
+    if (panel && panel.opened === true && typeof panel.close === "function")
+      panel.close()
   }
 
   QtObject {

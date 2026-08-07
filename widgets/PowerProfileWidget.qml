@@ -31,6 +31,10 @@ Ui.Panel {
   implicitHeight: visible
     ? (bar && bar.vertical ? surface.implicitHeight : bar ? bar.barSize : 28) : 0
 
+  function childPanelWidget(pluginId) {
+    return String(pluginId || "") === "omarchy.power" ? root : null
+  }
+
   function syncProfileLease() {
     if (powerService === profileOwner) return
     if (profileOwner) profileOwner.releaseProfiles()

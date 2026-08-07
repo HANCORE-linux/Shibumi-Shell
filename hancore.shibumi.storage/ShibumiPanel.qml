@@ -48,6 +48,8 @@ PanelWindow {
   readonly property var anchorWindow: anchorItem
     ? anchorItem.QsWindow.window : null
   readonly property string barPos: bar ? bar.position : "top"
+  readonly property string popoutScreenName: screen
+    ? String(screen.name || "") : ""
   readonly property var shibumiTokens: bar && "visualTokens" in bar
     ? bar.visualTokens : null
   readonly property string shellStyle: shibumiTokens
@@ -264,22 +266,25 @@ PanelWindow {
       if (root.open && root.focusTarget) root.focusTarget.forceActiveFocus()
     })
     if (!bar) return
+    const activeOwner = typeof bar.activePopoutForScreen === "function"
+      ? bar.activePopoutForScreen(popoutScreenName) : bar.activePopout
     if (open) {
       popoutSwitchClosing = false
-      popoutSwitching = bar.activePopout
-        && bar.activePopout !== coordinatorKey
-      bar.requestPopout(coordinatorKey)
+      popoutSwitching = activeOwner && activeOwner !== coordinatorKey
+      bar.requestPopout(coordinatorKey, popoutScreenName)
       if (popoutSwitching) popoutSwitchTimer.restart()
     } else {
       popoutSwitchClosing = !!(owner && owner.popoutSwitchClosing)
       popoutSwitching = false
-      if (bar.activePopout === coordinatorKey)
-        bar.releasePopout(coordinatorKey)
+      if (activeOwner === coordinatorKey)
+        bar.releasePopout(coordinatorKey, popoutScreenName)
       if (popoutSwitchClosing) closeSwitchTimer.restart()
     }
   }
 
   Component.onDestruction: {
+    if (bar && typeof bar.releasePopout === "function")
+      bar.releasePopout(coordinatorKey, popoutScreenName)
     if (bar && typeof bar.clearConnectedPanel === "function")
       bar.clearConnectedPanel(coordinatorKey)
   }
