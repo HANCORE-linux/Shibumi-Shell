@@ -66,6 +66,8 @@ ShellRoot {
     property bool lastSplitValue: false
     property var clickTargets: root.clickTargets
     property var visualTokens: ({
+      shellStyle: "shibumi",
+      v2Shell: false,
       pillHeight: 24,
       pillRadius: 12,
       pill: "#332f2f",
@@ -76,7 +78,22 @@ ShellRoot {
       panelBackground: "#202020",
       panelBorder: "#404040",
       panelBorderWidth: 1,
-      panelRadius: 12
+      panelRadius: 12,
+      widgetHasFill: function(settings) {
+        return settings && settings.color === "color05"
+      },
+      widgetFillColor: function(settings) {
+        return settings && settings.color === "color05"
+          ? "#cc8844" : "transparent"
+      },
+      widgetSurfaceOpacity: function(settings) {
+        return settings && settings.surfaceOpacity !== undefined
+          ? Number(settings.surfaceOpacity) : 1
+      },
+      widgetContentColor: function(settings, fallback) {
+        return settings && settings.color === "color05"
+          && settings.tone === "background" ? "#111111" : fallback
+      }
     })
 
     function registerClickTarget(target) {
@@ -288,6 +305,27 @@ ShellRoot {
           return root.fail(
             "Icons selection height differed between V1 and V2")
         panel.v2LayoutActive = false
+        if (!panel.setLauncherSelection("icon", "shibumi"))
+          return root.fail("V1 Launcher tint fixture was rejected")
+        if (!appearance.controller.setGroupSetting("G1", "color", "color05")
+            || !appearance.controller.setGroupSetting(
+              "G1", "tone", "background")
+            || !appearance.controller.setGroupSetting(
+              "G1", "surfaceOpacity", 0.4))
+          return root.fail("V1 Launcher appearance settings were rejected")
+        widget.settings = stateService.groupSettingsForVariant("G1", "v1")
+        if (!widget.nativePillSurfaceVisible
+            || !widget.v1CustomFill
+            || !widget.v1TintedLauncherIconVisible
+            || Math.abs(widget.renderedPillFillColor.a - 0.4) > 0.001
+            || stateService.groupAppearanceSettingForVariant(
+              "G1", "v2", "color", "inherit") !== "inherit")
+          return root.fail("V1 Launcher appearance was not isolated")
+        if (!appearance.controller.resetGroupAppearance("G1"))
+          return root.fail("V1 Launcher appearance reset was rejected")
+        widget.settings = stateService.groupSettingsForVariant("G1", "v1")
+        if (widget.v1CustomFill || widget.v1TintedLauncherIconVisible)
+          return root.fail("V1 Launcher appearance reset drifted")
         appearance.controller.setGroupSetting("G1", "displayMode", "text")
         if (!widget.iconMode)
           return root.fail("V1 generic presentation overrode launcher icon")
@@ -330,6 +368,65 @@ ShellRoot {
               "G4", "v2", "displayMode", "") !== "full")
           return root.fail("V1 mode change leaked into V2")
         appearance.showWidgetOverview()
+        if (!appearance.openWidgetDetails("G5", "")
+            || !appearance.selectedV1Appearance
+            || appearance.selectedV1CpuCompact
+            || appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions[0].value !== "full"
+            || appearance.selectedWidgetModeOptions[0].label !== "Default"
+            || appearance.selectedWidgetModeOptions[1].value !== "icon"
+            || appearance.selectedWidgetModeOptions[1].label !== "Compact")
+          return root.fail("CPU V1 did not expose Default/Compact controls")
+        if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "icon"
+            || !appearance.selectedV1CpuCompact
+            || !appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "full"
+            || appearance.selectedV1CpuCompact)
+          return root.fail("CPU preview did not separate Default and Compact")
+        const v1AppearanceGroups = [
+          "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9",
+          "G10", "G11", "G12", "G13", "G14", "G15", "G16", "G17", "G18"
+        ]
+        for (let index = 0; index < v1AppearanceGroups.length; index++) {
+          if (!appearance.openWidgetDetails(v1AppearanceGroups[index], "")
+              || !appearance.selectedV1Appearance)
+            return root.fail("V1 appearance rollout missed "
+              + v1AppearanceGroups[index])
+        }
+        if (!appearance.openWidgetDetails("G5", "")
+            || !appearance.controller.setGroupSetting(
+              "G5", "color", "color05")
+            || !appearance.controller.setGroupSetting(
+              "G5", "tone", "background")
+            || !appearance.controller.setGroupSetting(
+              "G5", "surfaceOpacity", 0.6)
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "color", "") !== "color05"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "tone", "") !== "background"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "surfaceOpacity", 0) !== 0.6
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v2", "color", "inherit") !== "inherit"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v2", "tone", "auto") !== "auto"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v2", "surfaceOpacity", 1) !== 1
+            || appearance.selectedWidgetTone !== "background"
+            || appearance.selectedWidgetOpacity !== 0.6
+            || !appearance.widgetUsesCustomAppearance("G5"))
+          return root.fail("CPU V1 fill/tone/opacity did not persist")
+        if (!appearance.controller.resetGroupAppearance("G5")
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "color", "") !== "inherit"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "tone", "") !== "auto"
+            || stateService.groupAppearanceSettingForVariant(
+              "G5", "v1", "surfaceOpacity", 0) !== 1
+            || appearance.widgetUsesCustomAppearance("G5"))
+          return root.fail("CPU V1 appearance reset did not restore defaults")
+        appearance.showWidgetOverview()
         if (!appearance.openWidgetDetails("G9", "")
             || appearance.selectedWidgetMode !== "default"
             || !appearance.cycleSelectedWidgetMode()
@@ -340,6 +437,29 @@ ShellRoot {
         if (!appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "default")
           return root.fail("V1 Now Playing style did not restore")
+        if (!appearance.controller.setGroupSetting("G9", "color", "color05")
+            || !appearance.controller.setGroupSetting(
+              "G9", "tone", "foreground")
+            || !appearance.controller.setGroupSetting(
+              "G9", "surfaceOpacity", 0.4)
+            || appearance.selectedWidgetMode !== "default"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "mediaStyle", "") !== "default"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "color", "") !== "color05"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "tone", "") !== "foreground"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "surfaceOpacity", 0) !== 0.4
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v2", "color", "inherit") !== "inherit"
+            || !appearance.widgetUsesCustomAppearance("G9"))
+          return root.fail(
+            "V1 Now Playing appearance changed its existing style contract")
+        if (!appearance.controller.resetGroupAppearance("G9")
+            || appearance.selectedWidgetMode !== "default"
+            || appearance.widgetUsesCustomAppearance("G9"))
+          return root.fail("V1 Now Playing appearance reset drifted")
         panel.v2LayoutActive = true
         if (!appearance.openWidgetDetails("G9", "")
             || appearance.selectedWidgetMode !== "default"
@@ -476,16 +596,27 @@ ShellRoot {
         appearance.showWidgetOverview()
         if (!appearance.openWidgetDetails(
               "G18", "hancore.shibumi.storage")
-            || appearance.selectedWidgetActive)
-          return root.fail("V1 Icons did not expose inactive Storage")
+            || appearance.selectedWidgetActive
+            || !appearance.selectedV1Appearance)
+          return root.fail("V1 Icons did not expose inactive Storage appearance")
         const inactiveModeBeforeCycle = appearance.selectedWidgetMode
-        const expectedInactiveModeAfterCycle = "full"
-        if (!appearance.cycleSelectedWidgetMode()
+        const expectedInactiveModeAfterCycle = inactiveModeBeforeCycle === "full"
+          ? "icon" : "full"
+        if (appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions[0].label !== "Default"
+            || appearance.selectedWidgetModeOptions[1].label !== "Compact"
+            || !appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== expectedInactiveModeAfterCycle
             || stateService.groupAppearanceSettingForVariant(
               "G:hancore.shibumi.storage", "v1", "displayMode", "")
                 !== expectedInactiveModeAfterCycle)
-          return root.fail("V1 exposed Compact for an unsupported widget")
+          return root.fail("V1 Storage did not expose Default/Compact"
+            + " before=" + inactiveModeBeforeCycle
+            + " after=" + appearance.selectedWidgetMode
+            + " expected=" + expectedInactiveModeAfterCycle
+            + " options=" + JSON.stringify(appearance.selectedWidgetModeOptions)
+            + " stored=" + stateService.groupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", ""))
         panel.v2LayoutActive = true
         if (appearance.activeWidgetCount !== 15
             || appearance.inactiveWidgetCount !== 3

@@ -9,7 +9,9 @@ ShellRoot {
 
   property int ticks: 0
   property bool selectionChecked: false
+  property bool compactChecked: false
   property bool infoGeometryChecked: false
+  property real storageDefaultWidth: 0
   property var fixture: ({
     blockdevices: [
       {
@@ -219,20 +221,41 @@ ShellRoot {
       if (!root.selectionChecked) {
         if (storageWidget.selectedSource !== "/dev/nvme0n1"
             || storageWidget.selectedPercent !== 75
-            || storageWidget.selectedLabel !== "Fast NVMe")
+            || storageWidget.selectedLabel !== "Fast NVMe"
+            || storageWidget.compactIconOpticalOffset !== 0)
           return root.fail("selected bar percentage")
         if (!storageWidget.setStorageSource("/dev/sda")
             || fakeState.lastGroup !== "G:hancore.shibumi.storage"
             || fakeState.lastKey !== "source"
             || fakeState.lastValue !== "/dev/sda")
           return root.fail("selected storage persistence")
+        root.storageDefaultWidth = storageWidget.implicitWidth
+        storageWidget.settings = ({
+          displayMode: "icon", source: "/dev/nvme0n1"
+        })
+        root.selectionChecked = true
+        return
+      }
+      if (!root.compactChecked) {
+        if (!storageWidget.compact || storageWidget.valueVisible
+            || storageWidget.compactIconOpticalOffset >= 0
+            || storageWidget.implicitWidth >= root.storageDefaultWidth)
+          return root.fail("V1 Storage compact is not icon-only"
+            + " mode=" + storageWidget.displayMode
+            + " compact=" + storageWidget.compact
+            + " value=" + storageWidget.valueVisible
+            + " width=" + storageWidget.implicitWidth
+            + " defaultWidth=" + root.storageDefaultWidth)
+        storageWidget.settings = ({
+          displayMode: "full", source: "/dev/nvme0n1"
+        })
         storagePanel.showInfo("/dev/nvme0n1")
         if (storagePanel.activeView !== "info"
             || !storagePanel.detailDrive
             || storagePanel.detailDrive.path !== "/dev/nvme0n1"
             || storagePanel.detailRows().length < 7)
           return root.fail("lsblk info view")
-        root.selectionChecked = true
+        root.compactChecked = true
         return
       }
       if (!root.infoGeometryChecked) {

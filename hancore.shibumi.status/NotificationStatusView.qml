@@ -9,6 +9,7 @@ Item {
   required property var bar
   property color contentColor: bar
     ? bar.urgent : Commons.Color.accent
+  property bool customToneActive: false
   property real slotWidth: Commons.Style.space(26)
   readonly property real iconHorizontalOffset: Commons.Style.space(1)
   property var notificationService: null
@@ -20,6 +21,8 @@ Item {
     ? Math.max(0, Number(notificationService.pastModel.count) || 0) : 0
   readonly property int notificationCount: pendingCount + recentCount
   readonly property bool presented: notificationService !== null
+  readonly property color badgeFillColor: notificationBadge.color
+  readonly property color badgeTextColor: badgeText.color
   signal toggleRequested()
   signal dndRequested()
   property bool registered: false
@@ -60,11 +63,18 @@ Item {
   }
 
   Rectangle {
+    id: notificationBadge
     visible: root.notificationCount > 0
     width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
     height: Commons.Style.space(12)
     radius: height / 2
-    color: root.contentColor
+    color: root.customToneActive
+      ? Qt.rgba(root.contentColor.r, root.contentColor.g,
+          root.contentColor.b, root.contentColor.a * 0.18)
+      : root.contentColor
+    border.width: root.customToneActive ? 1 : 0
+    border.color: root.customToneActive
+      ? root.contentColor : "transparent"
     anchors.verticalCenter: bellIcon.verticalCenter
     anchors.verticalCenterOffset: -6
     anchors.horizontalCenter: bellIcon.horizontalCenter
@@ -75,7 +85,9 @@ Item {
       anchors.centerIn: parent
       text: root.notificationCount > 99 ? "99"
         : String(root.notificationCount)
-      color: root.bar ? root.bar.background : Commons.Color.background
+      color: root.customToneActive
+        ? root.contentColor
+        : root.bar ? root.bar.background : Commons.Color.background
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: 7
       font.weight: Font.Bold

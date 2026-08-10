@@ -48,6 +48,10 @@ Item {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
+  readonly property bool v1CustomToneActive: !!(tokens
+    && tokens.v2Shell !== true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
   readonly property var updateWidget: updateLoader.item
   readonly property var trayWidget: trayLoader.item
   readonly property var notificationService: bar && bar.shell
@@ -98,6 +102,14 @@ Item {
     ? notificationView.implicitWidth : 0
   readonly property real trayPinnedIconOffset:
     trayView.pinnedIconHorizontalOffset
+  readonly property color trayDrawerIconColor: trayView.drawerIconColor
+  readonly property color trayDrawerBadgeColor: trayView.drawerBadgeColor
+  readonly property color trayDrawerBadgeTextColor:
+    trayView.drawerBadgeTextColor
+  readonly property color notificationBadgeColor:
+    notificationView.badgeFillColor
+  readonly property color notificationBadgeTextColor:
+    notificationView.badgeTextColor
   readonly property real notificationIconOffset:
     notificationView.iconHorizontalOffset
 
@@ -163,11 +175,16 @@ Item {
     if ("settings" in item)
       item.settings = childSettings("hancore.shibumi.update-center")
     if ("contentColor" in item) item.contentColor = root.widgetInk
+    if ("customToneActive" in item)
+      item.customToneActive = root.v1CustomToneActive
   }
 
   function syncUpdateInk() {
-    if (updateWidget && "contentColor" in updateWidget)
+    if (!updateWidget) return
+    if ("contentColor" in updateWidget)
       updateWidget.contentColor = root.widgetInk
+    if ("customToneActive" in updateWidget)
+      updateWidget.customToneActive = root.v1CustomToneActive
   }
 
   function injectChildren() {
@@ -422,6 +439,7 @@ Item {
   }
 
   onWidgetInkChanged: syncUpdateInk()
+  onV1CustomToneActiveChanged: syncUpdateInk()
 
   Component.onCompleted: {
     scheduleChildSync()
@@ -520,6 +538,7 @@ Item {
   PillSurface {
     tokenSource: root.tokens
     settings: root.settings
+    v1AppearanceEnabled: true
     anchors.fill: parent
     anchors.topMargin: root.tokens
       ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
@@ -555,6 +574,9 @@ Item {
       visible: root.fullMode && presented
       bar: root.bar
       trayBackend: root.trayWidget
+      customToneActive: root.v1CustomToneActive
+      contentColor: root.v1CustomToneActive
+        ? root.widgetInk : root.bar ? root.bar.foreground : root.widgetInk
       onDrawerRequested: root.toggleTrayDrawer()
     }
 
@@ -563,6 +585,7 @@ Item {
       visible: (root.fullMode || root.iconMode) && presented
       bar: root.bar
       contentColor: root.widgetInk
+      customToneActive: root.v1CustomToneActive
       slotWidth: root.statusActionSlot
       notificationService: root.notificationService
       onToggleRequested: root.toggle()

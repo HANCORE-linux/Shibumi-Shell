@@ -22,15 +22,31 @@ Ui.Panel {
     ? telemetryService.system : null
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
+  // V1 exposes fill-only appearance controls. Ignore any stale hidden V2
+  // surface mode so the selected color owns the native CPU pill interior.
+  readonly property var effectiveAppearanceSettings: {
+    const source = settings || ({})
+    if (tokens && tokens.v2Shell === true) return source
+    const effective = {}
+    for (const key in source) effective[key] = source[key]
+    effective.colorMode = "fill"
+    effective.widgetBorder = false
+    return effective
+  }
   readonly property color widgetInk: tokens
     && typeof tokens.widgetContentColor === "function"
-    ? tokens.widgetContentColor(settings,
+    ? tokens.widgetContentColor(effectiveAppearanceSettings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property var gpuTelemetry: cpuService ? cpuService.gpu : null
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property bool percentageVisible: displayMode !== "icon"
+    || tokens.v2Shell !== true
+  readonly property bool v1CustomFillActive: cpuPill.v1CustomFill
+  readonly property color renderedPillFillColor: cpuPill.renderedFillColor
+  readonly property real renderedPillFillOpacity: cpuPill.v1FillOpacity
   readonly property int percent: telemetry ? telemetry.cpuPercent : 0
   readonly property var history: telemetry ? telemetry.cpuHistory : []
   property url panelSource: Qt.resolvedUrl("CpuPanel.qml")
@@ -85,9 +101,11 @@ Ui.Panel {
     height: implicitHeight
 
   PillSurface {
+    id: cpuPill
     tokenSource: root.tokens
     bar: root.bar
     settings: root.settings
+    v1AppearanceEnabled: true
     anchors.fill: parent
       anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
       anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
@@ -155,7 +173,9 @@ Ui.Panel {
       }
 
       Text {
-        visible: root.displayMode !== "icon"
+        // V1 Compact is the reference CPU glyph plus its live percentage,
+        // not a generic icon-only mode. V2 retains its independent icon mode.
+        visible: root.percentageVisible
         anchors.verticalCenter: parent.verticalCenter
         text: String(root.percent).padStart(2, "0") + "%"
         color: root.widgetInk

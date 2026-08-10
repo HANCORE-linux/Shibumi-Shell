@@ -62,6 +62,7 @@ ShellRoot {
     property string position: "top"
     property color foreground: "#eeeeee"
     property color barForeground: foreground
+    property color background: "#111111"
     property color urgent: "#d75f5f"
     property string fontFamily: "monospace"
     property bool foregroundAnimationEnabled: false
@@ -88,6 +89,8 @@ ShellRoot {
     width: implicitWidth
     height: implicitHeight
     bar: fakeBar
+    contentColor: fakeBar.background
+    customToneActive: true
   }
 
   Timer {
@@ -96,6 +99,9 @@ ShellRoot {
     running: true
     onTriggered: {
       if (root.phase === 0) {
+        if (Math.abs(widget.badgeFillColor.a - 0.18) > 0.001
+            || !Qt.colorEqual(widget.badgeTextColor, fakeBar.background))
+          return root.fail("custom content tone badge")
         widget.open()
       } else if (root.phase === 1
           && (!widget.opened || !widget.panelLoaded)) {

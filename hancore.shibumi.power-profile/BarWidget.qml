@@ -99,6 +99,7 @@ Ui.Panel {
     PillSurface {
       tokenSource: root.tokens
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: root.tokens
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0

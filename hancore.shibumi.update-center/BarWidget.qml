@@ -43,6 +43,9 @@ Ui.Panel {
   readonly property color activeColor: bar
     ? bar.urgent : Commons.Color.bar.active
   property color contentColor: activeColor
+  property bool customToneActive: false
+  readonly property color badgeFillColor: updateBadge.color
+  readonly property color badgeTextColor: badgeText.color
   readonly property string fontFamily: bar
     ? String(bar.fontFamily || Commons.Style.font.family)
     : Commons.Style.font.family
@@ -166,6 +169,7 @@ Ui.Panel {
       }
 
       Rectangle {
+        id: updateBadge
         visible: root.updateCount > 0
         anchors.verticalCenter: updateIcon.verticalCenter
         anchors.verticalCenterOffset: -Commons.Style.space(6)
@@ -175,13 +179,20 @@ Ui.Panel {
           badgeText.implicitWidth + Commons.Style.space(6))
         height: Commons.Style.space(12)
         radius: height / 2
-        color: root.contentColor
+        color: root.customToneActive
+          ? Qt.rgba(root.contentColor.r, root.contentColor.g,
+              root.contentColor.b, root.contentColor.a * 0.18)
+          : root.contentColor
+        border.width: root.customToneActive ? 1 : 0
+        border.color: root.customToneActive
+          ? root.contentColor : "transparent"
 
         Text {
           id: badgeText
           anchors.centerIn: parent
           text: root.updateCount > 99 ? "99+" : String(root.updateCount)
-          color: Commons.Color.background
+          color: root.customToneActive
+            ? root.contentColor : Commons.Color.background
           font.family: root.fontFamily
           font.pixelSize: Math.max(Commons.Style.space(7),
             Commons.Style.font.caption - 3)

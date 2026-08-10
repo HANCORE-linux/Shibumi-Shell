@@ -107,6 +107,21 @@ ShellRoot {
     width: 100
     height: 24
     bar: fakeBar
+    settings: ({ color: "color05", colorMode: "fill" })
+  }
+
+  Widgets.PillSurface {
+    id: v1FillProbe
+    width: 100
+    height: 24
+    bar: fakeBar
+    v1AppearanceEnabled: true
+    settings: ({
+      color: "color05",
+      colorMode: "fill",
+      tone: "background",
+      surfaceOpacity: 0.4
+    })
   }
 
   Widgets.CpuWidget {
@@ -189,8 +204,30 @@ ShellRoot {
         return root.fail("widgets do not follow Shibumi bar height")
       if (pillProbe.renderedSurfaceCount !== 1
           || pillProbe.renderedShadowCount !== 0
-          || !pillProbe.shellPillVisible)
-        return root.fail("V1 widget pill is missing")
+          || !pillProbe.shellPillVisible
+          || pillProbe.v1CustomFill
+          || pillProbe.renderedFillColor !== style.visualTokens.pill)
+        return root.fail("non-opted V1 pill did not retain its surface")
+      if (!v1FillProbe.v1CustomFill
+          || v1FillProbe.renderedSurfaceCount !== 1
+          || Math.abs(v1FillProbe.v1FillOpacity - 0.4) > 0.001
+          || Math.abs(v1FillProbe.renderedFillColor.r
+            - fakeStateService.selectedColor.r) > 0.001
+          || Math.abs(v1FillProbe.renderedFillColor.g
+            - fakeStateService.selectedColor.g) > 0.001
+          || Math.abs(v1FillProbe.renderedFillColor.b
+            - fakeStateService.selectedColor.b) > 0.001
+          || Math.abs(v1FillProbe.renderedFillColor.a - 0.4) > 0.001)
+        return root.fail("V1 fill did not reach the native pill surface")
+      const staleV2SurfaceSettings = {
+        color: "color05",
+        colorMode: "border",
+        tone: "background"
+      }
+      if (!style.visualTokens.widgetHasFill(staleV2SurfaceSettings)
+          || style.visualTokens.widgetContentColor(
+            staleV2SurfaceSettings, "#ffffff") !== style.visualTokens.paper)
+        return root.fail("hidden V2 surface state disabled V1 appearance")
       fakeStateService.config = ({
         presentation: {
           border: true,
@@ -219,8 +256,10 @@ ShellRoot {
       })
       if (pillProbe.renderedSurfaceCount !== 0
           || pillProbe.renderedShadowCount !== 0
-          || pillProbe.shellPillVisible)
-        return root.fail("V1 widget pill leaked into V2 shell")
+          || pillProbe.shellPillVisible
+          || v1FillProbe.v1CustomFill
+          || style.visualTokens.widgetHasFill(staleV2SurfaceSettings))
+        return root.fail("V1 widget appearance leaked into V2 shell")
       if (style.sizeHorizontal !== 33
           || style.exclusiveSizeHorizontal !== 36
           || style.visualTokens.panelRadius !== 6

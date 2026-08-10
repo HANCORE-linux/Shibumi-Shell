@@ -95,7 +95,15 @@ ShellRoot {
             || state.groupAppearanceSettingForVariant(
               "G4", "v1", "displayMode", "") !== "full"
             || state.groupAppearanceSettingForVariant(
-              "G4", "v2", "displayMode", "") !== "text")
+              "G4", "v2", "displayMode", "") !== "text"
+            || !state.setGroupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", "icon")
+            || state.groupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", "")
+                !== "icon"
+            || state.groupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v2", "displayMode", "full")
+                !== "full")
           return root.fail("V1/V2 appearance isolation")
         root.stage = 1
         return

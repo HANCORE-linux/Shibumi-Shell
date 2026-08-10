@@ -1093,7 +1093,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   chmod 700 "$smoke_root/runtime"
   cp -a "${OMARCHY_PATH}/shell/Commons" "$smoke_root/"
   cp -a "${OMARCHY_PATH}/shell/Ui" "$smoke_root/"
-  cp widgets/ShibumiPanel.qml "$smoke_root/widgets/"
+  cp widgets/ShibumiPanel.qml widgets/PillSurface.qml "$smoke_root/widgets/"
   cp core/BarSection.qml core/GroupRegistry.js core/GroupSlot.qml \
     core/LayoutController.qml core/LayoutModel.js core/V2LayoutModel.js \
     core/PanelRouting.js \

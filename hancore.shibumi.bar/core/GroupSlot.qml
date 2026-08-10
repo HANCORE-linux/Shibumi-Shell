@@ -38,8 +38,22 @@ Item {
             groupId, v2Shell ? "v2" : "v1")
         : groupSettings.enabled !== false
   }
-  readonly property bool dynamicV1Group: !v2Shell
-    && GroupRegistry.dynamicModuleIdForGroup(groupId) !== ""
+  readonly property string dynamicModuleId:
+    GroupRegistry.dynamicModuleIdForGroup(groupId)
+  readonly property bool dynamicV1Group: !v2Shell && dynamicModuleId !== ""
+  // These optional suite widgets already own a native PillSurface. Keep the
+  // compatibility wrapper only for external dynamic widgets so inherited and
+  // custom fills both composite exactly once.
+  readonly property bool dynamicV1WidgetOwnsSurface: dynamicV1Group
+    && [
+      "hancore.shibumi.temperature",
+      "hancore.shibumi.gpu",
+      "hancore.shibumi.storage"
+    ].indexOf(dynamicModuleId) >= 0
+  readonly property bool dynamicV1CustomFill: dynamicV1WidgetOwnsSurface
+    && !!(bar.visualTokens
+      && typeof bar.visualTokens.widgetHasFill === "function"
+      && bar.visualTokens.widgetHasFill(groupSettings))
   // Per-group fill, border, radius, and padding belong to V2. V1 preserves
   // the original widget-owned pill recipe independently of these settings.
   readonly property bool appearanceFill: v2Shell && !!(bar.visualTokens
@@ -99,7 +113,8 @@ Item {
     width: parent.width
     height: root.v2Shell || root.dynamicV1Group
       ? Math.min(parent.height, root.v2SurfaceHeight) : parent.height
-    visible: root.decorated || root.dynamicV1Group
+    visible: root.decorated
+      || (root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface)
     radius: root.dynamicV1Group && root.bar.visualTokens
       && root.bar.visualTokens.pillRadius !== undefined
       ? root.bar.visualTokens.pillRadius : root.bar.visualTokens
@@ -133,7 +148,8 @@ Item {
 
     RectangularShadow {
       anchors.fill: parent
-      visible: root.dynamicV1Group && root.bar.visualTokens
+      visible: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface
+        && root.bar.visualTokens
         && root.bar.visualTokens.shadowEnabled === true
       radius: parent.radius
       blur: 8

@@ -78,9 +78,12 @@ rg -q 'root\.toggle\(\)' "$control_dir/BarWidget.qml" \
 rg -Fq 'readonly property bool animationActive: pointer.containsMouse' \
   "$control_dir/BarWidget.qml" \
   || fail "G1 background motion is not hover-only"
-rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost && !!(tokens' \
+rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost' \
   "$control_dir/BarWidget.qml" \
   || fail "stock Omarchy return icon inherits a Shibumi pill surface"
+rg -Fq 'readonly property color renderedPillFillColor:' \
+  "$control_dir/BarWidget.qml" \
+  || fail "G1 does not expose its V1 fill on the native pill surface"
 if rg -Fq 'pointer.containsMouse || opened' "$control_dir/BarWidget.qml"; then
   fail "G1 background motion still runs for the full panel lifetime"
 fi
@@ -101,10 +104,14 @@ rg -Fq 'source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
 rg -Fq 'width: root.stockOmarchyHost ? 18 : 16' \
   "$control_dir/BarWidget.qml" \
   || fail "stock Omarchy host icon is not pixel-centered in its even slot"
-if rg -A8 -F 'source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
-    "$control_dir/BarWidget.qml" | rg -Fq 'tint:'; then
-  fail "multicolor Hikiryō icon is flattened by a tint"
-fi
+for hikiryo_tone_contract in \
+  'root.launcherConfig.icon === "shibumi" && !root.v1CustomFill' \
+  'id: v1TintedLauncherIcon' \
+  '&& root.v1CustomFill' \
+  'tint: root.widgetInk'; do
+  rg -Fq "$hikiryo_tone_contract" "$control_dir/BarWidget.qml" \
+    || fail "Hikiryō V1 tone contract drifted: $hikiryo_tone_contract"
+done
 rg -Fq 'HostIdentity.shellName(bar)' "$control_dir/ControlCenterPanel.qml" \
   || fail "Bars page does not resolve the active host through Quattro shell state"
 rg -Fq 'readonly property real returnOnlyQuickPanelHeight:' \
@@ -1607,8 +1614,7 @@ if rg -Fq 'text: "FINISH"' "$workbench"; then
 fi
 for compact_surface_row_contract in \
     'width: (parent.width - parent.spacing * 2) / 3' \
-    ': (parent.width - parent.spacing * 2) / 3 * 2' \
-    '+ parent.spacing' \
+    'width: root.v1LayoutActive ? parent.width' \
     'height: root.choiceRowHeight * 4' \
     'readonly property real surfaceChoiceHeight: choiceRowHeight * 4'; do
   rg -Fq "$compact_surface_row_contract" "$workbench" \
@@ -1646,7 +1652,10 @@ for profile_icon_contract in \
     'WidgetAppearanceWorkbench.qml:readonly property var v1CompactGroupIds:' \
     'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G9") return mediaStyleOptions' \
     'WidgetAppearanceWorkbench.qml:if (controller.v2LayoutActive === true) return displayModeOptions' \
-    'WidgetAppearanceWorkbench.qml:{ value: "text", label: "Text", enabled: false }' \
+    'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Default", enabled: true }' \
+    'WidgetAppearanceWorkbench.qml:{ value: "icon", label: "Compact", enabled: true }' \
+    'WidgetAppearanceWorkbench.qml:readonly property bool selectedV1Appearance:' \
+    'WidgetAppearanceWorkbench.qml:id: mediaContentToneChoices' \
     'WidgetAppearanceWorkbench.qml:enabled: radioList.enabled && radioRow.available' \
     'WidgetAppearanceWorkbench.qml:function isShibumiWidgetOption(source)' \
     'WidgetAppearanceWorkbench.qml:|| !isShibumiWidgetOption(source)' \

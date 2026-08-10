@@ -9,6 +9,9 @@ Item {
   required property var bar
   property var settings: ({})
   property var tokenSource: null
+  // Each visible V1 widget opts in explicitly. V2 continues to render its
+  // independent decoration in GroupSlot.
+  property bool v1AppearanceEnabled: false
   readonly property var tokens: tokenSource
     || (bar && "visualTokens" in bar ? bar.visualTokens : null)
   readonly property string shellStyle: tokens
@@ -21,6 +24,29 @@ Item {
   readonly property bool surfaceDisabled: shellStyle !== "shibumi" && !!(tokens
     && typeof tokens.widgetColorMode === "function"
     && tokens.widgetColorMode(settings) === "none")
+  readonly property var v1FillSettings: {
+    if (!v1AppearanceEnabled) return settings
+    const source = settings || ({})
+    const effective = {}
+    for (const key in source) effective[key] = source[key]
+    effective.colorMode = "fill"
+    effective.widgetBorder = false
+    return effective
+  }
+  readonly property bool v1CustomFill: v1AppearanceEnabled
+    && shellStyle === "shibumi" && !!(tokens
+      && typeof tokens.widgetHasFill === "function"
+      && tokens.widgetHasFill(v1FillSettings))
+  readonly property color v1FillColor: v1CustomFill
+    && typeof tokens.widgetFillColor === "function"
+    ? tokens.widgetFillColor(v1FillSettings) : "transparent"
+  readonly property real v1FillOpacity: v1CustomFill
+    && typeof tokens.widgetSurfaceOpacity === "function"
+    ? tokens.widgetSurfaceOpacity(v1FillSettings) : 1
+  readonly property color renderedFillColor: v1CustomFill
+    ? Qt.rgba(v1FillColor.r, v1FillColor.g, v1FillColor.b,
+        v1FillColor.a * v1FillOpacity)
+    : tokens && tokens.pill !== undefined ? tokens.pill : "transparent"
   // V1 owns the individual rounded widget pills. V2 Full/Fit/Dock/Notch
   // instead use one shared shell surface; optional per-widget fill/border
   // decoration is rendered by GroupSlot. Suppress the opaque native pill
@@ -48,10 +74,13 @@ Item {
   Rectangle {
     id: pill
 
+    // The fill and border share the exact pill bounds. Qt draws the border
+    // inside those bounds, so the selected fill reaches its inner edge with
+    // no inset or transparent seam.
     anchors.fill: parent
     visible: root.shellPillVisible
     radius: root.tokens.pillRadius
-    color: root.tokens.pill
+    color: root.renderedFillColor
     border.color: root.tokens.pillBorder
     border.width: root.tokens.pillBorderWidth
   }

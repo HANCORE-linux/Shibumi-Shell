@@ -11,6 +11,7 @@ Item {
   required property var statusService
   property color contentColor: bar
     ? bar.urgent : Commons.Color.urgent
+  property bool customToneActive: false
 
   readonly property var stateService: bar && "shell" in bar && bar.shell
     && typeof bar.shell.serviceFor === "function"
@@ -22,10 +23,11 @@ Item {
   readonly property string dndIconFamily: dndIcon.font.family
   readonly property string recordingIconFamily: recordingIcon.fontFamily
   readonly property string recordingIconGlyph: recordingIcon.text
-  readonly property color recordingIconColor: stateService
-    && typeof stateService.paletteColor === "function"
-    ? stateService.paletteColor("color01")
-    : bar ? bar.urgent : Commons.Color.urgent
+  readonly property color recordingIconColor: customToneActive
+    ? contentColor
+    : stateService && typeof stateService.paletteColor === "function"
+      ? stateService.paletteColor("color01")
+      : bar ? bar.urgent : Commons.Color.urgent
   readonly property string voxtypeIconFamily: voxtypeIcon.font.family
   readonly property real dndOpticalCenterOffset: 1
   readonly property int activeCount: (statusService && statusService.stayAwake ? 1 : 0)

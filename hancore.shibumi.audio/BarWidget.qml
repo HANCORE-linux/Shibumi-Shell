@@ -28,6 +28,8 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property bool horizontalValueVisible: displayMode !== "icon"
+    || tokens.v2Shell !== true
   readonly property var audioPanel: audioBridge.panel
   readonly property var panelItem: popupLoader.item
   readonly property bool panelLoaded: panelItem !== null
@@ -188,6 +190,7 @@ Ui.Panel {
         PillSurface {
           tokenSource: root.tokens
           settings: root.settings
+          v1AppearanceEnabled: true
           anchors.fill: parent
           bar: root.bar
         }
@@ -322,7 +325,7 @@ Ui.Panel {
       }
 
       Text {
-        visible: root.displayMode !== "icon"
+        visible: root.horizontalValueVisible
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(30)
         text: String(root.volume).padStart(2, "0") + "%"

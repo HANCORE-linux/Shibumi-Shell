@@ -28,6 +28,12 @@ Column {
     appearanceWorkbench.selectedActive
   readonly property string selectedWidgetMode:
     appearanceWorkbench.selectedDisplayMode
+  readonly property var selectedWidgetModeOptions:
+    appearanceWorkbench.selectedModeOptions
+  readonly property bool selectedV1Appearance:
+    appearanceWorkbench.selectedV1Appearance
+  readonly property bool selectedV1CpuCompact:
+    appearanceWorkbench.selectedV1CpuCompact
   readonly property string selectedWidgetSurface:
     appearanceWorkbench.selectedSurfaceMode
   readonly property string selectedWidgetTone:

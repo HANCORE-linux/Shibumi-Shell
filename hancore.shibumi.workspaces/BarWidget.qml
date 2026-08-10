@@ -75,8 +75,12 @@ Ui.Panel {
   }
   readonly property int focusedWorkspaceId: focusedDisplayIndex >= 0
     ? Number(displayedWorkspaceIds[focusedDisplayIndex]) || -1 : -1
-  readonly property color pacmanActiveColor:
-    paletteColor("color03", tokens && tokens.seal !== undefined
+  readonly property bool v1CustomToneActive: !!(tokens
+    && tokens.v2Shell !== true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
+  readonly property color pacmanActiveColor: v1CustomToneActive ? widgetInk
+    : paletteColor("color03", tokens && tokens.seal !== undefined
       ? tokens.seal : widgetInk)
   readonly property color pacmanOccupiedColor: widgetInk
   readonly property color pacmanEmptyColor: widgetInk
@@ -261,6 +265,7 @@ Ui.Panel {
       tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
       anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)

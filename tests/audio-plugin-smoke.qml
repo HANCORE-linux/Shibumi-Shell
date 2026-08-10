@@ -131,8 +131,8 @@ ShellRoot {
         root.phaseTicks = 0
       } else if (root.phase === 1) {
         if (root.phaseTicks < 3) return
-        if (!audio.compact)
-          return root.fail("compact setting did not update")
+        if (!audio.compact || !audio.horizontalValueVisible)
+          return root.fail("V1 compact icon/value setting did not update")
         if (audio.implicitWidth >= root.fullWidth)
           return root.fail("compact presentation did not reduce width: "
             + audio.implicitWidth + " >= " + root.fullWidth)

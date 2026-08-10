@@ -24,6 +24,8 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property bool compactValueVisible: !!bar && !bar.vertical
+    && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property var monitorService: monitorServiceOverride
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.brightness") : null)
@@ -119,6 +121,7 @@ Ui.Panel {
           anchors.fill: parent
           bar: root.bar
           settings: root.settings
+          v1AppearanceEnabled: true
         }
       }
     }
@@ -208,7 +211,7 @@ Ui.Panel {
 
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        visible: !root.bar.vertical && root.displayMode !== "icon"
+        visible: root.compactValueVisible
         text: root.percent + "%"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family

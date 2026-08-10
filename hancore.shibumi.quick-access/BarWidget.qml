@@ -97,6 +97,7 @@ Item {
   PillSurface {
     tokenSource: root.tokens
     settings: root.settings
+    v1AppearanceEnabled: true
     anchors.fill: parent
     anchors.topMargin: root.bar && !root.bar.vertical
       ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0

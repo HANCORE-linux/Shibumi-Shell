@@ -49,6 +49,8 @@ ShellRoot {
     property int runCalls: 0
     property string lastCommand: ""
     property var visualTokens: ({
+      shellStyle: "shibumi",
+      v2Shell: false,
       pillHeight: 24,
       pillRadius: 12,
       pillPaddingX: 9,
@@ -61,7 +63,27 @@ ShellRoot {
       contentGap: 5,
       compactGap: 4,
       labelSize: 12,
-      iconSize: 15
+      iconSize: 15,
+      widgetHasFill: function(settings) {
+        if (!settings || settings.color !== "color05") return false
+        return this.v2Shell !== true
+          || settings.colorMode === "fill" || settings.colorMode === "both"
+      },
+      widgetFillColor: function(settings) {
+        return settings && settings.color === "color05"
+          ? "#cc8844" : "transparent"
+      },
+      widgetSurfaceOpacity: function(settings) {
+        return settings && settings.surfaceOpacity !== undefined
+          ? Number(settings.surfaceOpacity) : 1
+      },
+      widgetContentColor: function(settings, fallback) {
+        if (!settings || settings.color !== "color05") return fallback
+        const active = this.v2Shell !== true
+          || settings.colorMode === "fill" || settings.colorMode === "both"
+        return active && settings.tone === "background"
+          ? fakeBar.background : fallback
+      }
     })
 
     function registeredWidgetSource(_id) { return "" }
@@ -94,7 +116,13 @@ ShellRoot {
     sourceComponent: Component {
       Battery.BarWidget {
         bar: fakeBar
-        settings: ({ compact: false })
+        settings: ({
+          displayMode: "full",
+          color: "color05",
+          colorMode: "border",
+          tone: "background",
+          surfaceOpacity: 0.6
+        })
         panelSource: Qt.resolvedUrl("fixtures/PowerTestPanel.qml")
       }
     }
@@ -153,6 +181,19 @@ ShellRoot {
         if (batA.powerService !== power || batB.powerService !== power
             || pwrA.powerService !== power || pwrB.powerService !== power)
           return root.fail("widgets did not resolve the shared power-state service")
+        if (!batA.v1CustomToneActive || batB.v1CustomToneActive
+            || !Qt.colorEqual(batA.widgetInk, fakeBar.background)
+            || !Qt.colorEqual(batA.chargingDetailColor, "#cc8844")
+            || Math.abs(batA.chargingShimmerColor.r - 204 / 255) > 0.001
+            || Math.abs(batA.chargingShimmerColor.g - 136 / 255) > 0.001
+            || Math.abs(batA.chargingShimmerColor.b - 68 / 255) > 0.001
+            || Math.abs(batA.chargingShimmerColor.a - 0.18) > 0.001
+            || !Qt.colorEqual(batB.chargingDetailColor, fakeBar.background)
+            || Math.abs(batB.chargingShimmerColor.r - 1) > 0.001
+            || Math.abs(batB.chargingShimmerColor.g - 1) > 0.001
+            || Math.abs(batB.chargingShimmerColor.b - 1) > 0.001
+            || Math.abs(batB.chargingShimmerColor.a - 0.18) > 0.001)
+          return root.fail("V1 battery charging content tone")
         root.profileFullWidth = pwrA.implicitWidth
         if (pwrB.implicitWidth >= root.profileFullWidth)
           return root.fail("power-profile compact width")
@@ -164,12 +205,19 @@ ShellRoot {
         if (!batA.visible || batA.implicitWidth <= 0 || batA.percent !== 20)
           return root.fail("laptop battery visibility/state")
         root.batteryFullWidth = batA.implicitWidth
-        if (batB.implicitWidth >= root.batteryFullWidth)
-          return root.fail("battery compact width")
+        if (!batB.compact || !batB.compactValueVisible
+            || batB.implicitWidth >= root.batteryFullWidth)
+          return root.fail("V1 battery compact gauge/value presentation")
         if (!batA.openSystemMonitor() || fakeBar.runCalls !== 1
             || fakeBar.lastCommand !== "omarchy-launch-or-focus-tui btop")
           return root.fail("battery system-monitor action did not use the host facade")
         batA.activate()
+        const v2Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          v2Tokens[key] = fakeBar.visualTokens[key]
+        v2Tokens.shellStyle = "full"
+        v2Tokens.v2Shell = true
+        fakeBar.visualTokens = v2Tokens
         root.phase++
         root.ticks = 0
       } else if (root.phase === 2) {
@@ -177,6 +225,12 @@ ShellRoot {
         if (!batA.opened || !batA.panelItem || power.detailConsumers !== 1
             || fakeBar.activePopout !== batA)
           return root.fail("battery panel/detail lifecycle")
+        if (batA.v1CustomToneActive
+            || !Qt.colorEqual(batA.widgetInk, fakeBar.urgent)
+            || !Qt.colorEqual(batA.chargingDetailColor, fakeBar.background)
+            || Math.abs(batA.chargingShimmerColor.r - 1) > 0.001
+            || Math.abs(batA.chargingShimmerColor.a - 0.18) > 0.001)
+          return root.fail("V1 battery tone leaked into V2")
         pwrA.activate(Qt.LeftButton)
         root.phase++
         root.ticks = 0

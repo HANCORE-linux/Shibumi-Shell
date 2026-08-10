@@ -266,10 +266,15 @@ for v1_host_contract in \
 done
 for dynamic_v1_contract in \
   'readonly property bool dynamicV1Group:' \
-  'visible: root.decorated || root.dynamicV1Group' \
+  'readonly property bool dynamicV1WidgetOwnsSurface:' \
+  'readonly property bool dynamicV1CustomFill:' \
+  '"hancore.shibumi.temperature"' \
+  '"hancore.shibumi.gpu"' \
+  '"hancore.shibumi.storage"' \
+  '|| (root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface)' \
   'root.bar.visualTokens.pillBorderWidth' \
   'RectangularShadow {' \
-  'visible: root.dynamicV1Group && root.bar.visualTokens' \
+  'visible: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface' \
   'root.bar.visualTokens.shadowEnabled === true'; do
   rg -Fq "$dynamic_v1_contract" core/GroupSlot.qml \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
@@ -290,6 +295,8 @@ rg -Fq '? tokenNumber("slotHeight", 28) : tokenNumber("pillHeight", 24)' \
 for pill_contract in \
   'property var settings: ({})' \
   'property var tokenSource: null' \
+  'property bool v1AppearanceEnabled: false' \
+  'readonly property bool v1CustomFill:' \
   'readonly property bool customDecorated:' \
   'readonly property bool surfaceDisabled:' \
   'readonly property bool shellPillVisible: shellStyle === "shibumi"' \
@@ -333,6 +340,9 @@ for shape_tokens in \
     shared/presentation/HostTokens.qml; do
   rg -Fq 'if (value === "round") return pillHeight / 2' "$shape_tokens" \
     || fail "V2 Round shape is not half the widget surface: $shape_tokens"
+  rg -Fq 'if (!v2Shell) return widgetColorId(settings) !== "inherit"' \
+    "$shape_tokens" \
+    || fail "V1 fill can still be disabled by hidden V2 state: $shape_tokens"
 done
 for widget in ai audio battery bluetooth brightness center cpu gpu media \
     memory network power-profile quick-access status storage temperature \
@@ -343,11 +353,16 @@ for widget in ai audio battery bluetooth brightness center cpu gpu media \
   rg -Fq 'tokenSource: root.tokens' \
     "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not pass its resolved host tokens to its pill"
+  rg -Fq 'v1AppearanceEnabled: true' \
+    "hancore.shibumi.$widget/BarWidget.qml" \
+    || fail "$widget does not opt into V1 fill appearance"
 done
 for launcher_contract in \
   'readonly property bool customDecorated:' \
   'readonly property bool surfaceDisabled:' \
-  'readonly property bool nativePillSurfaceVisible:'; do
+  'readonly property bool nativePillSurfaceVisible:' \
+  'readonly property bool v1CustomFill:' \
+  'readonly property color renderedPillFillColor:'; do
   rg -Fq "$launcher_contract" \
     hancore.shibumi.control-center/BarWidget.qml \
     || fail "Control Center appearance surface drifted: $launcher_contract"
@@ -634,9 +649,9 @@ rg -Fq 'font.pixelSize: 14' hancore.shibumi.quick-access/BarWidget.qml \
   || fail "picker icon sizing drifted from V1"
 rg -Fq 'font.pixelSize: 13' hancore.shibumi.media/BarWidget.qml \
   || fail "media control icon sizing drifted from V1"
-rg -Fq 'Commons.Util.alpha(root.tokens.ink, 0.5)' \
+rg -Fq 'Commons.Util.alpha(root.widgetInk, 0.5)' \
   hancore.shibumi.center/BarWidget.qml \
-  || fail "center date color drifted from the V1 half-opacity foreground"
+  || fail "center date no longer follows the half-opacity content tone"
 
 # The four V2 shells use the original V2 module language: symbol plus value,
 # without the V1 acronym prefixes. Shibumi itself keeps those V1 labels.

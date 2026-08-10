@@ -27,6 +27,8 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property bool horizontalValueVisible: displayMode !== "icon"
+    || tokens.v2Shell !== true
   readonly property int percent: telemetry ? telemetry.memPercent : 0
   readonly property real usedGiB: telemetry ? telemetry.memUsedGiB : 0
   readonly property real totalGiB: telemetry ? telemetry.memTotalGiB : 0
@@ -86,6 +88,7 @@ Ui.Panel {
       tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
       anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
@@ -143,7 +146,7 @@ Ui.Panel {
       }
 
       Text {
-        visible: root.displayMode !== "icon"
+        visible: root.horizontalValueVisible
         anchors.verticalCenter: parent.verticalCenter
         text: root.usedLabel
         color: root.widgetInk

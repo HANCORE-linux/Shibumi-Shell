@@ -23,9 +23,23 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
+  readonly property bool v1CustomToneActive: !!(tokens
+    && tokens.v2Shell !== true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
+  readonly property color chargingDetailColor: v1CustomToneActive && tokens
+    && typeof tokens.widgetFillColor === "function"
+    ? tokens.widgetFillColor(settings)
+    : bar ? bar.background : Commons.Color.background
+  readonly property color chargingShimmerColor: v1CustomToneActive
+    ? Qt.rgba(chargingDetailColor.r, chargingDetailColor.g,
+        chargingDetailColor.b, chargingDetailColor.a * 0.18)
+    : Qt.rgba(1, 1, 1, 0.18)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
+  readonly property bool compactValueVisible: !!bar && !bar.vertical
+    && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property bool hasBattery: !!(powerService && powerService.hasBattery)
   readonly property int percent: powerService ? powerService.percent : 0
   readonly property bool charging: !!(powerService && powerService.charging)
@@ -102,6 +116,7 @@ Ui.Panel {
     PillSurface {
       tokenSource: root.tokens
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: root.tokens
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
@@ -159,7 +174,8 @@ Ui.Panel {
         full: root.full
         low: root.low
         color: root.widgetInk
-        paper: root.bar ? root.bar.background : Commons.Color.background
+        detailColor: root.chargingDetailColor
+        shimmerColor: root.chargingShimmerColor
       }
       Text {
         visible: root.displayMode !== "icon"
@@ -185,11 +201,12 @@ Ui.Panel {
         full: root.full
         low: root.low
         color: root.widgetInk
-        paper: root.bar ? root.bar.background : Commons.Color.background
+        detailColor: root.chargingDetailColor
+        shimmerColor: root.chargingShimmerColor
       }
       Text {
         anchors.verticalCenter: parent.verticalCenter
-        visible: !root.bar.vertical && root.displayMode !== "icon"
+        visible: root.compactValueVisible
         text: root.percent + "%"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -218,7 +235,8 @@ Ui.Panel {
     required property bool full
     required property bool low
     required property color color
-    required property color paper
+    required property color detailColor
+    required property color shimmerColor
 
     width: Commons.Style.space(19)
     height: Commons.Style.space(10)
@@ -276,7 +294,7 @@ Ui.Panel {
             anchors.bottom: parent.bottom
             width: Commons.Style.space(6)
             radius: parent.radius
-            color: Qt.rgba(1, 1, 1, 0.18)
+            color: gauge.shimmerColor
             property real pos: 0
             x: (parent.width + width) * pos - width
 
@@ -308,14 +326,14 @@ Ui.Panel {
             ctx.lineTo(width * 0.88, height * 0.45)
             ctx.lineTo(width * 0.55, height * 0.45)
             ctx.closePath()
-            ctx.fillStyle = gauge.paper
+            ctx.fillStyle = gauge.detailColor
             ctx.fill()
           }
 
           Component.onCompleted: requestPaint()
           Connections {
             target: gauge
-            function onPaperChanged() { chargingBolt.requestPaint() }
+            function onDetailColorChanged() { chargingBolt.requestPaint() }
           }
         }
       }

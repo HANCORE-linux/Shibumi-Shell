@@ -144,6 +144,7 @@ ShellRoot {
     property var clickTargets: root.clickTargets
     property var barWidgetRegistry: null
     property var visualTokens: ({
+      shellStyle: "full",
       v2Shell: true,
       pillHeight: 24,
       pillRadius: 12,
@@ -152,7 +153,22 @@ ShellRoot {
       pillBorder: "#555050",
       pillBorderWidth: 1,
       pillShadow: "#000000",
-      shadowEnabled: false
+      shadowEnabled: false,
+      widgetHasFill: function(settings) {
+        return settings && settings.color === "color05"
+      },
+      widgetFillColor: function(settings) {
+        return settings && settings.color === "color05"
+          ? "#cc8844" : "transparent"
+      },
+      widgetSurfaceOpacity: function(settings) {
+        return settings && settings.surfaceOpacity !== undefined
+          ? Number(settings.surfaceOpacity) : 1
+      },
+      widgetContentColor: function(settings, fallback) {
+        return settings && settings.color === "color05"
+          && settings.tone === "background" ? fakeBar.background : fallback
+      }
     })
 
     function widgetSettings(group, module) {
@@ -432,6 +448,45 @@ ShellRoot {
         if (!status.fullMode || status.iconMode || status.textMode
             || status.presentedCount < 2)
           return root.fail("full display mode restoration")
+        const v1Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          v1Tokens[key] = fakeBar.visualTokens[key]
+        v1Tokens.shellStyle = "shibumi"
+        v1Tokens.v2Shell = false
+        fakeBar.visualTokens = v1Tokens
+        root.statusSettings = ({
+          displayMode: "full",
+          color: "color05",
+          colorMode: "border",
+          tone: "background",
+          surfaceOpacity: 0.6
+        })
+        root.phase++
+        root.phaseTicks = 0
+      } else if (root.phase === 8) {
+        if (root.phaseTicks < 3) return
+        if (status.v2Mode || !status.v1CustomToneActive
+            || !status.updateWidget.customToneActive
+            || Math.abs(status.trayDrawerIconColor.r
+              - fakeBar.background.r) > 0.001
+            || Math.abs(status.trayDrawerIconColor.g
+              - fakeBar.background.g) > 0.001
+            || Math.abs(status.trayDrawerIconColor.b
+              - fakeBar.background.b) > 0.001
+            || Math.abs(status.trayDrawerIconColor.a - 0.7) > 0.003
+            || Math.abs(status.trayDrawerBadgeColor.a - 0.18) > 0.001
+            || !Qt.colorEqual(
+              status.trayDrawerBadgeTextColor, fakeBar.background)
+            || Math.abs(status.notificationBadgeColor.a - 0.18) > 0.001
+            || !Qt.colorEqual(
+              status.notificationBadgeTextColor, fakeBar.background))
+          return root.fail("V1 tray drawer content tone"
+            + " v2=" + status.v2Mode
+            + " custom=" + status.v1CustomToneActive
+            + " icon=" + status.trayDrawerIconColor
+            + " badge=" + status.trayDrawerBadgeColor
+            + " text=" + status.trayDrawerBadgeTextColor
+            + " background=" + fakeBar.background)
         statusLoader.active = false
         root.phase++
         root.phaseTicks = 0

@@ -8,6 +8,12 @@ Item {
 
   required property var bar
   property var trayBackend: null
+  property bool customToneActive: false
+  property color contentColor: bar
+    ? bar.foreground : Commons.Color.foreground
+  readonly property color drawerIconColor: moreIcon.color
+  readonly property color drawerBadgeColor: drawerBadge.color
+  readonly property color drawerBadgeTextColor: badgeText.color
   readonly property var pinnedItems: trayBackend
     && Array.isArray(trayBackend.pinnedItems) ? trayBackend.pinnedItems : []
   readonly property int drawerCount: trayBackend
@@ -154,20 +160,27 @@ Item {
         anchors.centerIn: parent
         text: "\uE5D3"
         font.pixelSize: 16
-        color: drawerMouse.containsMouse && root.bar
-          ? root.bar.foreground
-          : root.bar ? Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
-            root.bar.foreground.b, 0.7) : Commons.Color.foreground
+        color: drawerMouse.containsMouse
+          ? root.contentColor
+          : Qt.rgba(root.contentColor.r, root.contentColor.g,
+            root.contentColor.b, root.contentColor.a * 0.7)
 
         Behavior on color { ColorAnimation { duration: 150 } }
       }
 
       Rectangle {
+        id: drawerBadge
         visible: root.drawerCount > 0
         width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
         height: Commons.Style.space(12)
         radius: height / 2
-        color: root.bar ? root.bar.urgent : Commons.Color.accent
+        color: root.customToneActive
+          ? Qt.rgba(root.contentColor.r, root.contentColor.g,
+              root.contentColor.b, root.contentColor.a * 0.18)
+          : root.bar ? root.bar.urgent : Commons.Color.accent
+        border.width: root.customToneActive ? 1 : 0
+        border.color: root.customToneActive
+          ? root.contentColor : "transparent"
         anchors.verticalCenter: moreIcon.verticalCenter
         anchors.verticalCenterOffset: -6
         anchors.horizontalCenter: moreIcon.horizontalCenter
@@ -177,7 +190,9 @@ Item {
           id: badgeText
           anchors.centerIn: parent
           text: root.drawerCount > 99 ? "99" : String(root.drawerCount)
-          color: root.bar ? root.bar.background : Commons.Color.background
+          color: root.customToneActive
+            ? root.contentColor
+            : root.bar ? root.bar.background : Commons.Color.background
           font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 7
           font.weight: Font.Bold

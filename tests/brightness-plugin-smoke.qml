@@ -167,8 +167,9 @@ ShellRoot {
         root.phaseTicks = 0
       } else if (root.phase === 1) {
         if (root.phaseTicks < 3) return
-        if (!first.compact || first.implicitWidth >= root.fullWidth)
-          return root.fail("compact presentation width")
+        if (!first.compact || !first.compactValueVisible
+            || first.implicitWidth >= root.fullWidth)
+          return root.fail("V1 compact icon/value presentation")
 
         backend.open()
         if (root.summonCount !== 1)

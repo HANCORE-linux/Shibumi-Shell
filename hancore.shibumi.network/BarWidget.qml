@@ -21,14 +21,19 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property color v1Ink: tokens && "ink" in tokens
-    ? tokens.ink : widgetInk
-  readonly property color v1Seal: tokens && "seal" in tokens
-    ? tokens.seal : widgetInk
-  readonly property color v1Indigo: tokens && tokens.stateService
-    && typeof tokens.stateService.paletteColor === "function"
-    ? tokens.stateService.paletteColor("color04")
-    : Qt.rgba(v1Ink.r, v1Ink.g, v1Ink.b, 0.58)
+  readonly property bool v1CustomToneActive: !!(tokens
+    && tokens.v2Shell !== true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
+  readonly property color v1Ink: v1CustomToneActive ? widgetInk
+    : tokens && "ink" in tokens ? tokens.ink : widgetInk
+  readonly property color v1Seal: v1CustomToneActive ? widgetInk
+    : tokens && "seal" in tokens ? tokens.seal : widgetInk
+  readonly property color v1Indigo: v1CustomToneActive ? widgetInk
+    : tokens && tokens.stateService
+      && typeof tokens.stateService.paletteColor === "function"
+      ? tokens.stateService.paletteColor("color04")
+      : Qt.rgba(v1Ink.r, v1Ink.g, v1Ink.b, 0.58)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -198,6 +203,7 @@ Ui.Panel {
           anchors.fill: parent
           bar: root.bar
           settings: root.settings
+          v1AppearanceEnabled: true
         }
       }
     }

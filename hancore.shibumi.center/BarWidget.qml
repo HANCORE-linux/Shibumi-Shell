@@ -27,6 +27,10 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.foreground : Commons.Color.foreground)
     : (bar ? bar.foreground : Commons.Color.foreground)
+  readonly property bool v1CustomToneActive: !!(tokens
+    && tokens.v2Shell !== true
+    && typeof tokens.widgetHasFill === "function"
+    && tokens.widgetHasFill(settings))
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -64,6 +68,7 @@ Ui.Panel {
   readonly property var indicatorWidget: statusIndicators
   readonly property var updateWidget: updateView
   readonly property var updateBackend: updateLoader.item
+  readonly property color dateContentColor: dateButton.foreground
   readonly property bool calendarLoaded: calendarLoader.item !== null
   readonly property bool calendarLoaderReady: calendarLoader.item
     ? calendarLoader.item.ready === true : false
@@ -197,6 +202,7 @@ Ui.Panel {
     tokenSource: root.tokens
     bar: root.bar
     settings: root.settings
+    v1AppearanceEnabled: true
     anchors.fill: parent
     anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
     anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
@@ -273,9 +279,7 @@ Ui.Panel {
         text: root.dateText
         fontFamily: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         fontSize: root.tokens ? root.tokens.captionSize : 10
-        foreground: root.tokens
-          ? Commons.Util.alpha(root.tokens.ink, 0.5)
-          : Commons.Util.alpha(Commons.Color.foreground, 0.5)
+        foreground: Commons.Util.alpha(root.widgetInk, 0.5)
         horizontalMargin: 0
         verticalPadding: 0
         fixedHeight: root.implicitHeight
@@ -313,6 +317,7 @@ Ui.Panel {
           bar: root.bar
           statusService: root.statusService
           contentColor: root.widgetInk
+          customToneActive: root.v1CustomToneActive
         }
 
         SystemUpdateWidget {

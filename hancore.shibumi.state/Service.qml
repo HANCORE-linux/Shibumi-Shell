@@ -120,7 +120,8 @@ Item {
     if (variant === "v2")
       return ["full", "icon", "text"].indexOf(mode) >= 0 ? mode : "full"
     const compactGroups = [
-      "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15"
+      "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15", "G18",
+      "G:hancore.shibumi.storage"
     ]
     return compactGroups.indexOf(group) >= 0 && mode === "icon"
       ? "icon" : "full"

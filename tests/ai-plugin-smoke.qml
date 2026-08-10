@@ -15,9 +15,9 @@ ShellRoot {
     { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
     { providerId: "codex", v2Shell: false, customFill: false, baseOpacity: 0.65 },
     { providerId: "opencode", v2Shell: false, customFill: false, baseOpacity: 0.5 },
-    { providerId: "claude", v2Shell: false, customFill: true, baseOpacity: 0.25 },
+    { providerId: "claude", v2Shell: false, customFill: true, baseOpacity: 0.65 },
     { providerId: "codex", v2Shell: false, customFill: true, baseOpacity: 0.65 },
-    { providerId: "opencode", v2Shell: false, customFill: true, baseOpacity: 0.5 },
+    { providerId: "opencode", v2Shell: false, customFill: true, baseOpacity: 0.65 },
     { providerId: "claude", v2Shell: true, customFill: false, baseOpacity: 0.25 },
     { providerId: "codex", v2Shell: true, customFill: false, baseOpacity: 0.65 },
     { providerId: "opencode", v2Shell: true, customFill: false, baseOpacity: 0.5 },
@@ -57,7 +57,7 @@ ShellRoot {
   }
 
   function iconContractMatches(widget, expected) {
-    const customFillActive = expected.v2Shell && expected.customFill
+    const customFillActive = expected.customFill
     const expectedBase = customFillActive
       ? fakeBar.background : fakeBar.foreground
     const expectedUsage = customFillActive

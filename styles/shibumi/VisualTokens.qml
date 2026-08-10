@@ -128,6 +128,7 @@ Item {
   }
 
   function widgetHasFill(settings) {
+    if (!v2Shell) return widgetColorId(settings) !== "inherit"
     const mode = widgetColorMode(settings)
     return widgetColorId(settings) !== "inherit"
       && (mode === "fill" || mode === "both")

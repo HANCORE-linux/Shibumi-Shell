@@ -128,6 +128,7 @@ Ui.Panel {
           anchors.fill: parent
           bar: root.bar
           settings: root.settings
+          v1AppearanceEnabled: true
         }
       }
     }

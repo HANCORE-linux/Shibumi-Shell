@@ -16,6 +16,16 @@ ShellRoot {
     Qt.exit(1)
   }
 
+  function appearanceSettings(mode) {
+    return ({
+      displayMode: String(mode),
+      color: "color05",
+      colorMode: "border",
+      tone: "background",
+      surfaceOpacity: 0.6
+    })
+  }
+
   Fixtures.NetworkTestService { id: sharedNetworkService }
   Fixtures.NetworkTestService { id: unavailableService; ready: false }
 
@@ -36,6 +46,7 @@ ShellRoot {
     property string fontFamily: "monospace"
     property color foreground: "#eeeeee"
     property color barForeground: foreground
+    property color background: "#111111"
     property color urgent: "#88bbee"
     property bool foregroundAnimationEnabled: false
     property var activePopout: null
@@ -43,6 +54,8 @@ ShellRoot {
     property var shell: null
     property var networkService: sharedNetworkService
     property var visualTokens: ({
+      shellStyle: "shibumi",
+      v2Shell: false,
       pillHeight: 24,
       pillRadius: 12,
       pillPaddingX: 9,
@@ -55,7 +68,25 @@ ShellRoot {
       contentGap: 5,
       compactGap: 4,
       labelSize: 12,
-      iconSize: 15
+      iconSize: 15,
+      ink: fakeBar.foreground,
+      seal: fakeBar.urgent,
+      paper: fakeBar.background,
+      widgetHasFill: function(settings) {
+        return settings && settings.color === "color05"
+      },
+      widgetFillColor: function(settings) {
+        return settings && settings.color === "color05"
+          ? "#cc8844" : "transparent"
+      },
+      widgetSurfaceOpacity: function(settings) {
+        return settings && settings.surfaceOpacity !== undefined
+          ? Number(settings.surfaceOpacity) : 1
+      },
+      widgetContentColor: function(settings, fallback) {
+        return settings && settings.color === "color05"
+          && settings.tone === "background" ? fakeBar.background : fallback
+      }
     })
 
     function registeredWidgetSource(_id) { return "" }
@@ -88,7 +119,7 @@ ShellRoot {
     sourceComponent: Component {
       Network.BarWidget {
         bar: fakeBar
-        settings: ({ compact: false })
+        settings: root.appearanceSettings("full")
         networkServiceOverride: sharedNetworkService
         popupSource: Qt.resolvedUrl("fixtures/NetworkTestView.qml")
       }
@@ -132,6 +163,10 @@ ShellRoot {
             || extractedService.label !== "Fixture Network"
             || first.mode !== "wifi" || first.label !== "Test Network"
             || first.signal !== 73 || first.implicitHeight !== 35
+            || !first.v1CustomToneActive || second.v1CustomToneActive
+            || !Qt.colorEqual(first.v1Ink, fakeBar.background)
+            || !Qt.colorEqual(first.v1Seal, fakeBar.background)
+            || !Qt.colorEqual(first.v1Indigo, fakeBar.background)
             || unavailableNetwork.visible)
           return root.fail("shared backend readiness/state/geometry")
         if (first.childPanelWidget("omarchy.network") !== first
@@ -165,7 +200,7 @@ ShellRoot {
 
         root.fullWidth = first.implicitWidth
         sharedNetworkService.label = "Fixture Wi-Fi network with a deliberately long SSID"
-        first.settings = ({ displayMode: "text" })
+        first.settings = root.appearanceSettings("text")
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 1) {
@@ -177,6 +212,7 @@ ShellRoot {
         for (const key in fakeBar.visualTokens)
           textV2Tokens[key] = fakeBar.visualTokens[key]
         textV2Tokens.v2Shell = true
+        textV2Tokens.shellStyle = "full"
         fakeBar.visualTokens = textV2Tokens
         root.phase++
         root.phaseTicks = 0
@@ -185,7 +221,7 @@ ShellRoot {
         if (!first.v2Presentation || first.displayMode !== "text"
             || first.implicitWidth <= 0 || first.implicitWidth > 160)
           return root.fail("V2 Wi-Fi bounded text presentation")
-        first.settings = ({ displayMode: "icon" })
+        first.settings = root.appearanceSettings("icon")
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 3) {
@@ -197,14 +233,17 @@ ShellRoot {
         for (const key in fakeBar.visualTokens)
           compactV1Tokens[key] = fakeBar.visualTokens[key]
         compactV1Tokens.v2Shell = false
+        compactV1Tokens.shellStyle = "shibumi"
         fakeBar.visualTokens = compactV1Tokens
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 4) {
         if (root.phaseTicks < 3) return
         if (first.v2Presentation || !first.compact
-            || first.implicitWidth >= root.fullWidth)
-          return root.fail("V1 compact presentation width")
+            || first.implicitWidth >= root.fullWidth
+            || !first.v1CustomToneActive
+            || !Qt.colorEqual(first.v1Seal, fakeBar.background))
+          return root.fail("V1 compact presentation width/tone")
 
         first.interactionTarget.triggerPress(Qt.LeftButton)
         second.open()
@@ -223,11 +262,12 @@ ShellRoot {
             || sharedNetworkService.refreshCount !== 1)
           return root.fail("right-click scan forwarding")
 
-        first.settings = ({ displayMode: "full" })
+        first.settings = root.appearanceSettings("full")
         const wifiV2Tokens = ({})
         for (const key in fakeBar.visualTokens)
           wifiV2Tokens[key] = fakeBar.visualTokens[key]
         wifiV2Tokens.v2Shell = true
+        wifiV2Tokens.shellStyle = "full"
         fakeBar.visualTokens = wifiV2Tokens
         root.phase++
         root.phaseTicks = 0
@@ -241,6 +281,7 @@ ShellRoot {
         for (const key in fakeBar.visualTokens)
           ethernetV1Tokens[key] = fakeBar.visualTokens[key]
         ethernetV1Tokens.v2Shell = false
+        ethernetV1Tokens.shellStyle = "shibumi"
         fakeBar.visualTokens = ethernetV1Tokens
         sharedNetworkService.kind = "ethernet"
         sharedNetworkService.label = "enp1s0"
@@ -261,6 +302,7 @@ ShellRoot {
         for (const key in fakeBar.visualTokens)
           ethernetV2Tokens[key] = fakeBar.visualTokens[key]
         ethernetV2Tokens.v2Shell = true
+        ethernetV2Tokens.shellStyle = "full"
         fakeBar.visualTokens = ethernetV2Tokens
         root.phase++
         root.phaseTicks = 0

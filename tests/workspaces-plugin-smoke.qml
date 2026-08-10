@@ -66,6 +66,8 @@ ShellRoot {
     property color background: "#181818"
     property color urgent: "#88bbee"
     property var visualTokens: ({
+      shellStyle: "full",
+      v2Shell: true,
       pillHeight: 24,
       pillRadius: 12,
       pill: "#332f2f",
@@ -75,8 +77,26 @@ ShellRoot {
       shadowEnabled: false,
       contentGap: 5,
       labelSize: 12,
+      ink: fakeBar.foreground,
+      seal: fakeBar.urgent,
+      paper: fakeBar.background,
       presentation: ({ radius: "large" }),
-      workspacePillPadding: function(style) { return style === "numbers" ? 2 : 4 }
+      workspacePillPadding: function(style) { return style === "numbers" ? 2 : 4 },
+      widgetHasFill: function(settings) {
+        return settings && settings.color === "color01"
+      },
+      widgetFillColor: function(settings) {
+        return settings && settings.color === "color01"
+          ? paletteState.paletteColor("color01") : "transparent"
+      },
+      widgetSurfaceOpacity: function(settings) {
+        return settings && settings.surfaceOpacity !== undefined
+          ? Number(settings.surfaceOpacity) : 1
+      },
+      widgetContentColor: function(settings, fallback) {
+        return settings && settings.color === "color01"
+          && settings.tone === "background" ? fakeBar.background : fallback
+      }
     })
     property bool foregroundAnimationEnabled: false
     property var activePopout: null
@@ -268,10 +288,23 @@ ShellRoot {
             || widget.pacmanEatProgress !== 0)
           return root.fail("Pacman animation retained completed state")
         root.animationWaits = 0
+        const v1Tokens = Object.assign({}, fakeBar.visualTokens)
+        v1Tokens.shellStyle = "shibumi"
+        v1Tokens.v2Shell = false
+        fakeBar.visualTokens = v1Tokens
+        widget.settings = ({
+          color: "color01",
+          colorMode: "border",
+          tone: "background",
+          surfaceOpacity: 0.6
+        })
         fakeBar.layoutController = ({ v2Mode: false })
       } else if (root.phase === 8) {
         if (widget.workspaceStyle !== "pacman"
             || widget.renderStyle !== "pacman"
+            || !widget.v1CustomToneActive
+            || !Qt.colorEqual(widget.pacmanActiveColor, fakeBar.background)
+            || !Qt.colorEqual(widget.pacmanOccupiedColor, fakeBar.background)
             || Math.round(widget.implicitWidth) !== 54) {
           root.geometryWaits++
           if (root.geometryWaits < 10) return
@@ -323,6 +356,7 @@ ShellRoot {
             || widget.numberMarkerRadius !== 10
             || widget.frameMarkerRadius !== 9)
           return root.fail("V1 Radius 12 marker contract")
+        widget.settings = ({})
         if (!workspaceState.setPreference("style", "default")
             || !workspaceState.setPreference("mode", "10"))
           return root.fail("workspace presentation reset")

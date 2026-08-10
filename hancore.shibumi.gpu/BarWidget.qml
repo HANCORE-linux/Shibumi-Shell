@@ -74,6 +74,7 @@ Ui.Panel {
       tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: Math.round(
         (parent.height - root.tokens.pillHeight) / 2)

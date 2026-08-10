@@ -24,10 +24,9 @@ Ui.Panel {
     ? 0 : Math.round(usagePercent / 5) * 5
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
-  // V1 keeps the source widget's ink -> seal fill. On a V2 custom fill,
-  // mirror the source's single contrast-aware contentColor for both layers.
+  // Preserve the source ink -> seal treatment while appearance is inherited.
+  // Any explicit V1 or V2 fill uses one contrast-aware tone for both layers.
   readonly property bool customFillActive: !!(tokens
-    && tokens.v2Shell === true
     && typeof tokens.widgetHasFill === "function"
     && tokens.widgetHasFill(settings))
   readonly property color defaultUsageIconColor: bar
@@ -104,6 +103,7 @@ Ui.Panel {
     PillSurface {
       tokenSource: root.tokens
       settings: root.settings
+      v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: root.tokens
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0

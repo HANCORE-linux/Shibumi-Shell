@@ -29,7 +29,10 @@ Column {
     { value: "full", label: "Full" }
   ]
   readonly property var v1CompactGroupIds: [
-    "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15"
+    "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15", "G18"
+  ]
+  readonly property var v1CompactValueGroupIds: [
+    "G4", "G5", "G6", "G12", "G13"
   ]
   readonly property var colorOptions: [
     { value: "inherit", label: "Auto" },
@@ -63,6 +66,10 @@ Column {
   readonly property bool selectedLauncher: selectedCatalogGroup === "G1"
   readonly property bool selectedMedia: selectedCatalogGroup === "G9"
   readonly property bool v1LayoutActive: controller.v2LayoutActive !== true
+  readonly property bool selectedV1Appearance: v1LayoutActive
+    && selectedSupported
+  readonly property bool selectedV1CpuCompact: selectedV1Appearance
+    && selectedCatalogGroup === "G5" && selectedDisplayMode === "icon"
   readonly property var selectedModeOptions: modeOptionsForGroup(
     selectedWidget ? selectedWidget.group : "", selectedCatalogGroup)
   readonly property bool selectedActive:
@@ -74,6 +81,11 @@ Column {
       ? String(controller.launcherConfig.mode || "text")
       : widgetMode(selectedWidget.group, selectedCatalogGroup)
     : "full"
+  readonly property bool selectedV1CompactShowsValue: selectedV1Appearance
+    && selectedDisplayMode === "icon"
+    && v1CompactValueGroupIds.indexOf(selectedCatalogGroup) >= 0
+  readonly property string selectedV1CompactValue:
+    selectedCatalogGroup === "G4" ? "12G" : "42%"
   readonly property string selectedSurfaceMode: selectedSupported
     ? String(widgetSetting(selectedWidget.group, "colorMode", "fill")) : "none"
   readonly property string selectedColor: selectedSupported
@@ -90,8 +102,9 @@ Column {
           "widgetBorderUsesSurfaceColor", false) === true
             ? selectedColor : "inherit"))
     : "inherit"
-  readonly property bool selectedHasFill:
-    !v1LayoutActive
+  readonly property bool selectedHasFill: selectedV1Appearance
+    ? selectedColor !== "inherit"
+    : !v1LayoutActive
       && (selectedSurfaceMode === "fill" || selectedSurfaceMode === "both")
   readonly property bool selectedHasBorder:
     !v1LayoutActive
@@ -99,6 +112,18 @@ Column {
   readonly property color selectedFillColor: selectedColor === "inherit"
     ? controller.controlHoverFillColor
     : controller.accentColor(selectedColor)
+  readonly property color selectedPreviewFillColor: selectedHasFill
+    ? Qt.rgba(selectedFillColor.r, selectedFillColor.g, selectedFillColor.b,
+        selectedFillColor.a * selectedSurfaceOpacity)
+    : "transparent"
+  readonly property color selectedPreviewContentColor: {
+    if (!selectedHasFill || selectedColor === "inherit") return foreground
+    if (selectedContentTone === "background")
+      return "renderedSurfaceColor" in controller
+        ? controller.renderedSurfaceColor : controller.controlFillColor
+    if (selectedContentTone === "foreground") return foreground
+    return controller.contrastColor(selectedColor)
+  }
   readonly property color selectedBorderColor:
     selectedOutlineColor !== "inherit"
       ? controller.accentColor(selectedOutlineColor)
@@ -119,6 +144,7 @@ Column {
     && inactiveWidgetRepeater.count === inactiveOptions.length
     && contentModeChoices.ready
     && profileModeChoices.ready
+    && mediaContentToneChoices.ready
     && contentToneChoices.ready
     && surfaceModeChoices.ready
     && outlineChoices.ready
@@ -381,10 +407,15 @@ Column {
     const group = String(groupValue || "")
     const catalogGroup = catalogGroupForSettingsGroup(group)
     if (controller.v2LayoutActive !== true) {
+      const fillChanged =
+        String(widgetSetting(group, "color", "inherit")) !== "inherit"
+        || String(widgetSetting(group, "tone", "auto")) !== "auto"
+        || Number(widgetSetting(group, "surfaceOpacity", 1)) !== 1
       if (catalogGroup === "G9")
-        return widgetMode(group, catalogGroup) !== "default"
-      return v1CompactGroupIds.indexOf(catalogGroup) >= 0
+        return widgetMode(group, catalogGroup) !== "default" || fillChanged
+      const compactChanged = v1CompactGroupIds.indexOf(catalogGroup) >= 0
         && widgetMode(group, catalogGroup) !== "full"
+      return compactChanged || fillChanged
     }
     const color = String(widgetSetting(group, "color", "inherit"))
     const usesSurfaceColor = widgetSetting(
@@ -427,10 +458,11 @@ Column {
     if (catalogGroup === "G9") return mediaStyleOptions
     if (controller.v2LayoutActive === true) return displayModeOptions
     const compactAvailable = v1CompactGroupIds.indexOf(catalogGroup) >= 0
-    return [
-      { value: "icon", label: "Icon", enabled: compactAvailable },
-      { value: "full", label: "Icon + text", enabled: true },
-      { value: "text", label: "Text", enabled: false }
+    return compactAvailable ? [
+      { value: "full", label: "Default", enabled: true },
+      { value: "icon", label: "Compact", enabled: true }
+    ] : [
+      { value: "full", label: "Default", enabled: true }
     ]
   }
 
@@ -795,10 +827,8 @@ Column {
                 height: Commons.Style.space(20)
                 radius: root.selectedHasFill
                   ? Commons.Style.space(10) : root.controller.controlRadius
-                color: root.selectedHasFill
-                  ? root.selectedFillColor : "transparent"
-                opacity: Number(root.widgetSetting(
-                  root.selectedWidget.group, "surfaceOpacity", 1))
+                color: root.selectedPreviewFillColor
+                opacity: 1
                 border.width: root.selectedHasBorder
                   ? Number(root.widgetSetting(root.selectedWidget.group,
                       "widgetBorderWidth", 1)) : 0
@@ -821,11 +851,9 @@ Column {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.selectedDisplayMode !== "text"
-                    text: root.selectedWidget.glyph
-                    color: root.selectedHasFill
-                        && root.selectedColor !== "inherit"
-                      ? root.controller.contrastColor(root.selectedColor)
-                      : root.foreground
+                    text: root.selectedV1CpuCompact
+                      ? "planner_review" : root.selectedWidget.glyph
+                    color: root.selectedPreviewContentColor
                     font.pixelSize:
                       Commons.Style.font.iconLarge * root.uiScale * 0.76
                   }
@@ -838,13 +866,13 @@ Column {
                       ? Commons.Style.space(5) : 0
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.selectedDisplayMode !== "icon"
-                    text: root.selectedLauncher
-                      ? root.controller.launcherChoiceLabel("text")
-                      : root.selectedWidget.label
-                    color: root.selectedHasFill
-                        && root.selectedColor !== "inherit"
-                      ? root.controller.contrastColor(root.selectedColor)
-                      : root.foreground
+                      || root.selectedV1CompactShowsValue
+                    text: root.selectedV1CompactShowsValue
+                      ? root.selectedV1CompactValue
+                      : root.selectedLauncher
+                        ? root.controller.launcherChoiceLabel("text")
+                        : root.selectedWidget.label
+                    color: root.selectedPreviewContentColor
                     elide: Text.ElideRight
                     font.family: root.controller.marketFont
                     font.pixelSize:
@@ -890,11 +918,13 @@ Column {
           }
 
           Row {
-            visible: root.selectedSupported && !root.v1LayoutActive
+            visible: root.selectedSupported
+              && (!root.v1LayoutActive || root.selectedV1Appearance)
             width: parent.width
             spacing: Commons.Style.space(8)
 
             Column {
+              visible: !root.v1LayoutActive
               width: (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
@@ -909,6 +939,7 @@ Column {
             }
 
             Column {
+              visible: !root.v1LayoutActive
               width: (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
@@ -934,7 +965,8 @@ Column {
             }
 
             Column {
-              width: (parent.width - parent.spacing * 2) / 3
+              width: root.v1LayoutActive ? parent.width
+                : (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
               FieldLabel { text: "OPACITY" }
@@ -951,8 +983,8 @@ Column {
 
           Column {
             visible: root.selectedSupported
-              && !root.v1LayoutActive
-              && root.selectedHasFill
+              && (root.selectedV1Appearance
+                || (!root.v1LayoutActive && root.selectedHasFill))
             width: parent.width
             spacing: Commons.Style.space(4)
 
@@ -988,36 +1020,58 @@ Column {
             }
           }
 
-          Column {
-            visible: root.selectedSupported
-              && root.selectedMedia
+          Row {
+            visible: root.selectedSupported && root.selectedMedia
             width: parent.width
-            spacing: Commons.Style.space(4)
+            spacing: Commons.Style.space(8)
 
-            FieldLabel {
-              text: root.selectedMedia
-                ? "NOW PLAYING STYLE" : "PRESENTATION"
+            Column {
+              width: root.v1LayoutActive
+                ? (parent.width - parent.spacing) * 2 / 3 : parent.width
+              spacing: Commons.Style.space(4)
+
+              FieldLabel { text: "NOW PLAYING STYLE" }
+
+              RadioChoiceList {
+                id: profileModeChoices
+                height: root.choiceListHeight
+                options: root.selectedModeOptions
+                currentValue: root.selectedDisplayMode
+                onChosen: value => root.setWidgetMode(value)
+              }
             }
 
-            RadioChoiceList {
-              id: profileModeChoices
-              height: root.choiceListHeight
-              options: root.selectedModeOptions
-              currentValue: root.selectedDisplayMode
-              onChosen: value => root.setWidgetMode(value)
+            Column {
+              visible: root.v1LayoutActive
+              width: (parent.width - parent.spacing) / 3
+              spacing: Commons.Style.space(4)
+
+              FieldLabel { text: "CONTENT TONE" }
+
+              RadioChoiceList {
+                id: mediaContentToneChoices
+                height: root.choiceListHeight
+                options: [
+                  { value: "auto", label: "Auto" },
+                  { value: "background", label: "BG" },
+                  { value: "foreground", label: "FG" }
+                ]
+                currentValue: root.selectedContentTone
+                onChosen: value => root.controller.setGroupSetting(
+                  root.selectedWidget.group, "tone", value)
+              }
             }
           }
 
           Row {
-            visible: root.selectedSupported
-              && !root.selectedMedia
-              && (!root.selectedLauncher || !root.v1LayoutActive)
+            visible: root.selectedSupported && !root.selectedMedia
             width: parent.width
             spacing: Commons.Style.space(8)
 
             Column {
               visible: !root.selectedLauncher
-              width: root.v1LayoutActive ? parent.width
+              width: root.v1LayoutActive
+                ? (parent.width - parent.spacing) * 2 / 3
                 : (parent.width - parent.spacing * 2) / 3 * 2
                   + parent.spacing
               spacing: Commons.Style.space(4)
@@ -1034,9 +1088,11 @@ Column {
             }
 
             Column {
-              visible: !root.v1LayoutActive
+              visible: !root.v1LayoutActive || root.selectedV1Appearance
               width: root.selectedLauncher ? parent.width
-                : (parent.width - parent.spacing * 2) / 3
+                : root.v1LayoutActive
+                  ? (parent.width - parent.spacing) / 3
+                  : (parent.width - parent.spacing * 2) / 3
               spacing: Commons.Style.space(4)
 
               FieldLabel { text: "CONTENT TONE" }

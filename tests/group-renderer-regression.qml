@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import "core" as Core
 import "styles/shibumi" as ShibumiStyle
+import "widgets" as Widgets
 
 ShellRoot {
   Item {
@@ -15,15 +16,39 @@ ShellRoot {
       id: markerWidget
 
       Item {
+        id: marker
+
         property var bar: null
         property string moduleName: ""
         property var settings: ({})
         property real availableWidth: -1
+        readonly property bool suiteNativePill:
+          [
+            "hancore.shibumi.temperature",
+            "hancore.shibumi.gpu",
+            "hancore.shibumi.storage"
+          ].indexOf(moduleName) >= 0
+        readonly property int nativeSurfaceCount: nativePillLoader.item
+          ? nativePillLoader.item.renderedSurfaceCount : 0
 
         visible: true
         implicitWidth: moduleName === "hancore.shibumi.center" ? 100
           : moduleName === "omarchy.active-window" ? 30 : 10
-        implicitHeight: 12
+        implicitHeight: suiteNativePill ? 24 : 12
+
+        Loader {
+          id: nativePillLoader
+          active: marker.suiteNativePill
+          anchors.fill: parent
+          sourceComponent: Component {
+            Widgets.PillSurface {
+              bar: marker.bar
+              tokenSource: marker.bar ? marker.bar.visualTokens : null
+              settings: marker.settings
+              v1AppearanceEnabled: true
+            }
+          }
+        }
       }
     }
 
@@ -71,7 +96,14 @@ ShellRoot {
       id: fakeStateService
       property int revision: 0
       property var config: ({
-        widgets: ({ G1: { widgetPadding: "compact" } })
+        widgets: ({
+          G1: { widgetPadding: "compact" },
+          "G:hancore.shibumi.temperature": {
+            color: "color01",
+            colorMode: "border",
+            surfaceOpacity: 0.4
+          }
+        })
       })
       readonly property color selectedColor: "#88aaff"
 
@@ -274,7 +306,19 @@ ShellRoot {
         pillBorder: "#606060",
         sumi: "#aaaaaa",
         pillBorderWidth: 1,
-        islandBorder: "#505050"
+        islandBorder: "#505050",
+        v2Shell: false,
+        widgetHasFill: function(settings) {
+          return settings && settings.color === "color01"
+        },
+        widgetFillColor: function(settings) {
+          return settings && settings.color === "color01"
+            ? "#884422" : "transparent"
+        },
+        widgetSurfaceOpacity: function(settings) {
+          return settings && settings.surfaceOpacity !== undefined
+            ? Number(settings.surfaceOpacity) : 1
+        }
       })
       readonly property var layoutConfig: ({ left: [], center: [], right: [] })
       readonly property var layoutController: noSplitController
@@ -452,7 +496,11 @@ ShellRoot {
       readonly property var visualTokens: noSplitBar.visualTokens
       readonly property var layoutConfig: ({
         left: [], center: [],
-        right: [{ id: "omarchy.active-window" }]
+        right: [
+          { id: "omarchy.active-window" },
+          { id: "hancore.shibumi.temperature" },
+          { id: "hancore.shibumi.gpu" }
+        ]
       })
       property var activePopout: null
 
@@ -666,6 +714,18 @@ ShellRoot {
       id: dynamicV1Group
       bar: budgetBar
       groupId: "G:omarchy.active-window"
+    }
+
+    Core.GroupSlot {
+      id: dynamicSuiteV1FillGroup
+      bar: budgetBar
+      groupId: "G:hancore.shibumi.temperature"
+    }
+
+    Core.GroupSlot {
+      id: dynamicSuiteV1InheritedGroup
+      bar: budgetBar
+      groupId: "G:hancore.shibumi.gpu"
     }
 
     Core.GroupSlot {
@@ -1005,7 +1065,14 @@ ShellRoot {
         const separatorBeforeFill = v2LeftWithSplit.separatorGeometry.find(
           function(entry) { return entry.groupId === "G1" })
         fakeStateService.config = ({
-          widgets: ({ G1: { color: "color01" } })
+          widgets: ({
+            G1: { color: "color01" },
+            "G:hancore.shibumi.temperature": {
+              color: "color01",
+              colorMode: "border",
+              surfaceOpacity: 0.4
+            }
+          })
         })
         const separatorAfterFill = v2LeftWithSplit.separatorGeometry.find(
           function(entry) { return entry.groupId === "G1" })
@@ -1097,6 +1164,7 @@ ShellRoot {
           return
         }
         if (!dynamicV1Group.dynamicV1Group
+            || dynamicV1Group.dynamicV1CustomFill
             || !dynamicV1Group.visualSurfaceItem.visible
             || !test.closeEnough(dynamicV1Group.visualSurfaceItem.height, 24)
             || !test.closeEnough(dynamicV1Group.visualSurfaceItem.radius, 12)
@@ -1105,6 +1173,43 @@ ShellRoot {
             + dynamicV1Group.visualSurfaceItem.height + ", radius="
             + dynamicV1Group.visualSurfaceItem.radius + ", border="
             + dynamicV1Group.visualSurfaceItem.border.width)
+          return
+        }
+        const dynamicFillSlots = test.widgetSlots(
+          dynamicSuiteV1FillGroup.contentItem, [])
+        const dynamicInheritedSlots = test.widgetSlots(
+          dynamicSuiteV1InheritedGroup.contentItem, [])
+        if (!dynamicSuiteV1FillGroup.dynamicV1Group
+            || !dynamicSuiteV1FillGroup.dynamicV1WidgetOwnsSurface
+            || !dynamicSuiteV1FillGroup.dynamicV1CustomFill
+            || dynamicSuiteV1FillGroup.visualSurfaceItem.visible
+            || dynamicFillSlots.length !== 1
+            || !dynamicFillSlots[0].activeItem
+            || dynamicFillSlots[0].activeItem.nativeSurfaceCount !== 1
+            || !dynamicSuiteV1InheritedGroup.dynamicV1Group
+            || !dynamicSuiteV1InheritedGroup.dynamicV1WidgetOwnsSurface
+            || dynamicSuiteV1InheritedGroup.dynamicV1CustomFill
+            || dynamicSuiteV1InheritedGroup.visualSurfaceItem.visible
+            || dynamicInheritedSlots.length !== 1
+            || !dynamicInheritedSlots[0].activeItem
+            || dynamicInheritedSlots[0].activeItem.nativeSurfaceCount !== 1) {
+          test.fail("suite-native dynamic V1 surface ownership drifted: custom="
+            + JSON.stringify({
+              owns: dynamicSuiteV1FillGroup.dynamicV1WidgetOwnsSurface,
+              fill: dynamicSuiteV1FillGroup.dynamicV1CustomFill,
+              wrapper: dynamicSuiteV1FillGroup.visualSurfaceItem.visible,
+              slots: dynamicFillSlots.length,
+              native: dynamicFillSlots[0] && dynamicFillSlots[0].activeItem
+                ? dynamicFillSlots[0].activeItem.nativeSurfaceCount : -1
+            }) + ", inherited=" + JSON.stringify({
+              owns: dynamicSuiteV1InheritedGroup.dynamicV1WidgetOwnsSurface,
+              fill: dynamicSuiteV1InheritedGroup.dynamicV1CustomFill,
+              wrapper: dynamicSuiteV1InheritedGroup.visualSurfaceItem.visible,
+              slots: dynamicInheritedSlots.length,
+              native: dynamicInheritedSlots[0]
+                  && dynamicInheritedSlots[0].activeItem
+                ? dynamicInheritedSlots[0].activeItem.nativeSurfaceCount : -1
+            }))
           return
         }
         if (!test.closeEnough(delayedGroup.implicitWidth, 42)
