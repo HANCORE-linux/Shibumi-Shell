@@ -1342,7 +1342,7 @@ Column {
     Row {
       anchors.fill: parent
       anchors.leftMargin: Commons.Style.space(7)
-      anchors.rightMargin: Commons.Style.space(22)
+      anchors.rightMargin: Commons.Style.space(27)
       spacing: Commons.Style.space(6)
 
       IconText {
@@ -1439,9 +1439,12 @@ Column {
     required property bool locked
     required property string label
     readonly property bool hovered: movePointer.containsMouse
+    readonly property color actionAccent:
+      root.controller.accentColor("color03")
     signal requested()
 
-    width: Commons.Style.space(17)
+    width: Commons.Style.space(22)
+    clip: true
     activeFocusOnTab: !locked
     Accessible.role: Accessible.Button
     Accessible.name: locked ? label + " stays active"
@@ -1451,25 +1454,13 @@ Column {
     Keys.onReturnPressed: if (!locked) requested()
 
     Rectangle {
+      id: moveActionStrip
       anchors.fill: parent
-      anchors.leftMargin: Commons.Style.space(2)
-      anchors.rightMargin: 1
-      anchors.topMargin: Commons.Style.space(5)
-      anchors.bottomMargin: Commons.Style.space(5)
+      anchors.leftMargin: -root.controller.controlRadius
       radius: root.controller.controlRadius
       color: moveActionControl.hovered || moveActionControl.activeFocus
-        ? Commons.Util.alpha(root.accent, 0.13) : "transparent"
-    }
-
-    Rectangle {
-      anchors.left: parent.left
-      anchors.top: parent.top
-      anchors.bottom: parent.bottom
-      anchors.topMargin: Commons.Style.space(5)
-      anchors.bottomMargin: Commons.Style.space(5)
-      width: 1
-      color: root.controller.dividerColor
-      opacity: moveActionControl.hovered ? 1 : 0.72
+        ? Commons.Util.alpha(moveActionControl.actionAccent, 0.18)
+        : Commons.Util.alpha(root.foreground, 0.06)
     }
 
     IconText {
@@ -1477,7 +1468,7 @@ Column {
       text: moveActionControl.locked ? "lock"
         : moveActionControl.active ? "arrow_forward" : "arrow_back"
       color: moveActionControl.hovered || moveActionControl.activeFocus
-        ? root.accent : root.foreground
+        ? moveActionControl.actionAccent : root.foreground
       opacity: moveActionControl.hovered
         || moveActionControl.activeFocus ? 1 : 0.72
       font.pixelSize: Commons.Style.font.iconSmall * root.uiScale

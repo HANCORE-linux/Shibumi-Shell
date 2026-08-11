@@ -1859,6 +1859,42 @@ reset_repeat_guards=$(rg -c '!event\.isAutoRepeat' "$workbench")
   || fail "all three Icons reset keyboard paths must reject auto-repeat"
 rg -Fq 'height: Commons.Style.space(25)' "$workbench" \
   || fail "Icons reset header target is smaller than 24 px"
+widget_tile_block=$(awk '
+  /component WidgetOptionTile: Rectangle/ { capture=1 }
+  /component WidgetMoveAction: FocusScope/ { capture=0 }
+  capture { print }
+' "$workbench")
+for tile_move_contract in \
+    'anchors.rightMargin: Commons.Style.space(27)' \
+    'id: moveAction' \
+    'anchors.right: parent.right' \
+    'anchors.top: parent.top' \
+    'anchors.bottom: parent.bottom'; do
+  grep -Fq "$tile_move_contract" <<<"$widget_tile_block" \
+    || fail "Icons tile move-action geometry drifted: $tile_move_contract"
+done
+move_action_block=$(awk '
+  /component WidgetMoveAction: FocusScope/ { capture=1 }
+  /component ContentCycleChoice: Rectangle/ { capture=0 }
+  capture { print }
+' "$workbench")
+for move_action_contract in \
+    'width: Commons.Style.space(22)' \
+    'clip: true' \
+    'root.controller.accentColor("color03")' \
+    'id: moveActionStrip' \
+    'anchors.fill: parent' \
+    'anchors.leftMargin: -root.controller.controlRadius' \
+    '? Commons.Util.alpha(moveActionControl.actionAccent, 0.18)' \
+    'Commons.Util.alpha(root.foreground, 0.06)' \
+    '? moveActionControl.actionAccent : root.foreground'; do
+  grep -Fq "$move_action_contract" <<<"$move_action_block" \
+    || fail "Icons move-action strip contract drifted: $move_action_contract"
+done
+if grep -Eq 'root\.controller\.dividerColor|border\.(width|color)' \
+    <<<"$move_action_block"; then
+  fail "Icons move-action strip restored a retired divider or hover border"
+fi
 if rg -q 'providerFilter|providerOptions|providerRepeater|chooseProvider' \
     "$workbench"; then
   fail "Icons editor still exposes provider filtering"
