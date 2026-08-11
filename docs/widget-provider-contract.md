@@ -39,7 +39,21 @@ replacement and is placed in that group's preferred region. Complementary
 capabilities without a conflict remain independently installable.
 
 Known Quattro plugin IDs are mapped to capabilities for backward compatibility
-because their current manifests predate this extension.
+because their current manifests predate this extension. A provider declaring
+multiple conflicting capabilities replaces every matching Shibumi group. For
+example, `omarchy.power` replaces both G12 Battery and G14 Power Profile.
+
+The host layout is shared by V1 and V2. Activating an alternative therefore
+disables all of its replacement groups in both presentations, and startup
+reconciliation repairs provider state written by older single-presentation
+versions. Immediate Undo restores the exact prior V1/V2 activation state;
+deleting an active provider plugin restores its Shibumi replacement groups.
+
+The five Quattro compatibility siblings assigned by `OptionalGroups` have one
+owner at a time. Plain legacy entries remain children of their fixed group,
+while entries explicitly added by the plugin catalog with
+`shibumiModule: true` render only through the dynamic V1 slot or V2 unassigned
+deck. The catalog recognizes either form as installed.
 
 Only manifests with a resolvable `entryPoints.barWidget` are accepted by the
 bar host. Service-only plugins remain available to widgets through Quattro's

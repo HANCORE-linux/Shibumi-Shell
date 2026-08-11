@@ -63,6 +63,37 @@ ShellRoot {
             || state.setGroupEnabledForVariant("G4", "v3", false))
           return root.fail("V1/V2 group activation isolation")
         fakeShell.writes = 0
+        if (!state.setGroupsEnabledForAllVariants(["G6", "G8"], false)
+            || fakeShell.writes !== 1
+            || state.groupEnabledForVariant("G6", "v1")
+            || state.groupEnabledForVariant("G6", "v2")
+            || state.groupEnabledForVariant("G8", "v1")
+            || state.groupEnabledForVariant("G8", "v2")
+            || state.setGroupsEnabledForAllVariants(["G6", "G8"], false)
+            || fakeShell.writes !== 1
+            || state.setGroupsEnabledForAllVariants(["BAD"], true)
+            || fakeShell.writes !== 1
+            || !state.setGroupsEnabledForAllVariants(["G6", "G8"], true)
+            || fakeShell.writes !== 2
+            || !state.groupEnabledForVariant("G6", "v1")
+            || !state.groupEnabledForVariant("G6", "v2")
+            || !state.groupEnabledForVariant("G8", "v1")
+            || !state.groupEnabledForVariant("G8", "v2")
+            || !state.setGroupVariantStates({
+              G6: { v1: true, v2: false },
+              G8: { v1: false, v2: true }
+            })
+            || fakeShell.writes !== 3
+            || !state.groupEnabledForVariant("G6", "v1")
+            || state.groupEnabledForVariant("G6", "v2")
+            || state.groupEnabledForVariant("G8", "v1")
+            || !state.groupEnabledForVariant("G8", "v2")
+            || state.setGroupVariantStates({ G6: { v1: true } })
+            || fakeShell.writes !== 3
+            || !state.setGroupsEnabledForAllVariants(["G6", "G8"], true)
+            || fakeShell.writes !== 4)
+          return root.fail("atomic cross-variant group activation")
+        fakeShell.writes = 0
         if (!state.config.v2Layout
             || state.config.v2Layout.left.length !== 10
             || state.config.v2Layout.center.length !== 1

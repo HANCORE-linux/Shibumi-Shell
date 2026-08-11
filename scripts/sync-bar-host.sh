@@ -28,6 +28,7 @@ files=(
   core/LayoutModel.js
   core/V2LayoutModel.js
   core/PanelRouting.js
+  core/WidgetFamilies.js
   core/ResponsiveLayout.js
   core/RunGeometry.js
   core/HostedPanelConnector.qml

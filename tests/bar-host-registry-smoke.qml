@@ -30,6 +30,7 @@ ShellRoot {
       reactor: { mode: 0 }
     })
     readonly property color selectedColor: "#55aa77"
+    property bool rejectGroupVariantStates: false
     readonly property var appearanceKeys: [
       "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth", "widgetBorderColor",
@@ -74,6 +75,49 @@ ShellRoot {
       next.widgets[groupId][key] = enabled
       publishConfig(next)
       return true
+    }
+
+    function setGroupVariantStates(stateValues) {
+      if (rejectGroupVariantStates || !stateValues
+          || Object.keys(stateValues).length === 0) return false
+      const next = JSON.parse(JSON.stringify(config))
+      if (!next.widgets) next.widgets = ({})
+      let changed = false
+      const groups = Object.keys(stateValues)
+      for (let index = 0; index < groups.length; index++) {
+        const group = groups[index]
+        const states = stateValues[group]
+        if (!states || typeof states.v1 !== "boolean"
+            || typeof states.v2 !== "boolean") return false
+        if (!next.widgets[group]) next.widgets[group] = ({})
+        if (next.widgets[group].enabledV1 !== states.v1
+            || next.widgets[group].enabledV2 !== states.v2) changed = true
+        next.widgets[group].enabledV1 = states.v1
+        next.widgets[group].enabledV2 = states.v2
+      }
+      if (!changed) return false
+      publishConfig(next)
+      return true
+    }
+
+    function setGroupsEnabledForAllVariants(groupValues, enabled) {
+      if (!Array.isArray(groupValues) || groupValues.length === 0
+          || typeof enabled !== "boolean") return false
+      const states = ({})
+      for (let index = 0; index < groupValues.length; index++) {
+        const group = String(groupValues[index] || "")
+        if (group === "") return false
+        states[group] = { v1: enabled, v2: enabled }
+      }
+      return setGroupVariantStates(states)
+    }
+
+    function groupEnabledForVariant(groupId, variant) {
+      const settings = config.widgets && config.widgets[groupId]
+        ? config.widgets[groupId] : ({})
+      const key = variant === "v2" ? "enabledV2" : "enabledV1"
+      return Object.prototype.hasOwnProperty.call(settings, key)
+        ? settings[key] !== false : settings.enabled !== false
     }
 
     function setGroupAppearanceSettingForVariant(
@@ -210,10 +254,38 @@ ShellRoot {
         kinds: ["bar-widget"],
         entryPoints: { barWidget: "Clock.qml" }
       },
+      "omarchy.active-window": {
+        id: "omarchy.active-window",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "ActiveWindow.qml" }
+      },
+      "omarchy.power": {
+        id: "omarchy.power",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Power.qml" }
+      },
+      "omarchy.spacer": {
+        id: "omarchy.spacer",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Spacer.qml" },
+        barWidget: { allowMultiple: true }
+      },
+      "omarchy.weather": {
+        id: "omarchy.weather",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Weather.qml" }
+      },
       "example.future-clock": {
         id: "example.future-clock",
         barWidget: {
           semanticCapabilities: ["clock"],
+          allowMultiple: false
+        }
+      },
+      "example.battery": {
+        id: "example.battery",
+        barWidget: {
+          semanticCapabilities: ["battery"],
           allowMultiple: false
         }
       }
@@ -403,15 +475,92 @@ ShellRoot {
       if (hostBar.visualTokens.seal !== stateService.selectedColor)
         return root.fail("style did not consume the shared state service")
 
+      for (const optionalId of [
+        "omarchy.dropbox", "omarchy.microphone", "omarchy.active-window",
+        "omarchy.keyboard-layout", "omarchy.tailscale"
+      ]) {
+        hostBar.layoutConfig = {
+          left: [{ id: optionalId }], center: [], right: []
+        }
+        if (!hostBar.layoutContains(optionalId))
+          return root.fail("plain optional widget was not reported as installed: "
+            + optionalId)
+      }
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+
       const v1Config = JSON.parse(JSON.stringify(stateService.config))
       if (!v1Config.presentation) v1Config.presentation = {}
       v1Config.presentation.shellStyle = "shibumi"
       stateService.config = v1Config
-      if (!hostBar.setBarWidgetInstalled(
-            "omarchy.clock", true, "right")
-          || !hostBar.removeWidgetFamilyAlternatives("G8")) {
-        return root.fail("Add plugin did not work with the active V1 layout")
+      hostBar.layoutConfig = {
+        left: [
+          { id: "example.future-clock" },
+          { id: "example.future-clock" }
+        ],
+        center: [],
+        right: [
+          { id: "omarchy.spacer", shibumiModule: true },
+          { id: "omarchy.spacer", shibumiModule: true }
+        ]
       }
+      if (hostBar.unassignedLayoutEntries("left").length !== 1
+          || hostBar.unassignedLayoutEntries("right").length !== 2)
+        return root.fail("V1 allowMultiple ownership deduplication")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+      if (!stateService.setGroupVariantStates({
+            G8: { v1: false, v2: true }
+          }))
+        return root.fail("provider migration setup")
+      const migrationBarConfig = JSON.parse(JSON.stringify(hostBar.barConfig))
+      migrationBarConfig.layout = {
+        left: [],
+        center: [
+          { id: "example.future-clock" },
+          { id: "omarchy.clock", shibumiModule: true }
+        ],
+        right: []
+      }
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(migrationBarConfig.layout))
+      hostBar.barConfig = migrationBarConfig
+      hostBar.applyBarConfig()
+      if (!hostBar.reconcileV1PluginGroups()
+          || stateService.groupEnabledForVariant("G8", "v1")
+          || stateService.groupEnabledForVariant("G8", "v2")
+          || (fakeShell.shellConfig.bar.layout.center || []).length !== 1
+          || String(fakeShell.shellConfig.bar.layout.center[0].id || "")
+            !== "example.future-clock")
+        return root.fail("persisted provider was not reconciled across variants")
+      migrationBarConfig.layout = { left: [], center: [], right: [] }
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(migrationBarConfig.layout))
+      hostBar.barConfig = migrationBarConfig
+      hostBar.applyBarConfig()
+      if (!hostBar.reconcileV1PluginGroups()
+          || !hostBar.setWidgetGroupsEnabledForAllVariants(["G8"], true))
+        return root.fail("provider migration cleanup")
+
+      stateService.rejectGroupVariantStates = true
+      if (hostBar.setBarWidgetInstalled("omarchy.clock", true, "right"))
+        return root.fail("provider state rejection was reported as success")
+      stateService.rejectGroupVariantStates = false
+      const rejectedLayout = fakeShell.shellConfig.bar.layout || ({})
+      if ((rejectedLayout.left || []).length !== 0
+          || (rejectedLayout.center || []).length !== 0
+          || (rejectedLayout.right || []).length !== 0
+          || !stateService.groupEnabledForVariant("G8", "v1")
+          || !stateService.groupEnabledForVariant("G8", "v2"))
+        return root.fail("rejected provider install did not roll back")
+
+      if (!hostBar.setBarWidgetInstalled(
+            "omarchy.clock", true, "right"))
+        return root.fail("Add plugin did not work with the active V1 layout")
+      if (!stateService.config.widgets.G8
+          || stateService.config.widgets.G8.enabledV1 !== false
+          || stateService.config.widgets.G8.enabledV2 !== false)
+        return root.fail("V1 provider replacement did not cover V2")
+      if (!hostBar.removeWidgetFamilyAlternatives("G8"))
+        return root.fail("V1 family alternative removal")
       const clockGroup = hostBar.layoutController.groupLocation(
         "G:omarchy.clock")
       if (!clockGroup || clockGroup.region === "center"
@@ -422,8 +571,25 @@ ShellRoot {
       const v2Config = JSON.parse(JSON.stringify(stateService.config))
       v2Config.presentation.shellStyle = "full"
       stateService.config = v2Config
+      hostBar.layoutConfig = {
+        left: [],
+        center: [
+          { id: "omarchy.clock", shibumiModule: true },
+          { id: "omarchy.clock", shibumiModule: true }
+        ],
+        right: [
+          { id: "omarchy.spacer", shibumiModule: true },
+          { id: "omarchy.spacer", shibumiModule: true }
+        ]
+      }
+      if (hostBar.unassignedLayoutEntries("center").length !== 1
+          || hostBar.unassignedLayoutEntries("right").length !== 2)
+        return root.fail("V2 allowMultiple ownership deduplication")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
       if (hostBar.widgetReplacementLabel("omarchy.clock")
             !== "Replaces Shibumi Center"
+          || JSON.stringify(hostBar.widgetReplacementGroups("omarchy.clock"))
+            !== JSON.stringify(["G8"])
           || hostBar.widgetReplacementGroup("omarchy.clock") !== "G8"
           || hostBar.widgetReplacementTarget("omarchy.clock")
             !== "Shibumi Center"
@@ -441,6 +607,7 @@ ShellRoot {
       if (!replacedConfig.shibumi
           || !replacedConfig.shibumi.widgets
           || !replacedConfig.shibumi.widgets.G8
+          || replacedConfig.shibumi.widgets.G8.enabledV1 !== false
           || replacedConfig.shibumi.widgets.G8.enabledV2 !== false
           || centerEntries.length !== 1
           || String(centerEntries[0].id || centerEntries[0])
@@ -452,6 +619,157 @@ ShellRoot {
           || (fakeShell.shellConfig.bar.layout.center || []).length !== 0) {
         return root.fail("Shibumi Center did not remove its alternatives")
       }
+
+      const complementaryLayout = {
+        left: [],
+        center: [
+          { id: "omarchy.clock", shibumiModule: true },
+          { id: "omarchy.weather", shibumiModule: true }
+        ],
+        right: []
+      }
+      hostBar.layoutConfig = complementaryLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(complementaryLayout))
+      if (JSON.stringify(hostBar.conflictingLayoutProviderIds(
+            "example.future-clock"))
+            !== JSON.stringify(["example.future-clock", "omarchy.clock"])
+          || !hostBar.setBarWidgetInstalled(
+            "example.future-clock", true, "center"))
+        return root.fail("same-capability provider replacement")
+      const complementaryEntries = fakeShell.shellConfig.bar.layout.center
+      if (complementaryEntries.length !== 2
+          || String(complementaryEntries[0].id || complementaryEntries[0])
+            !== "omarchy.weather"
+          || String(complementaryEntries[1].id || complementaryEntries[1])
+            !== "example.future-clock")
+        return root.fail("complementary provider was removed with clock")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.removeBarWidgetAndRestoreFamilies(
+            "omarchy.weather", ["G8"])
+          || (fakeShell.shellConfig.bar.layout.center || []).length !== 1
+          || String(fakeShell.shellConfig.bar.layout.center[0].id || "")
+            !== "example.future-clock"
+          || stateService.groupEnabledForVariant("G8", "v1")
+          || stateService.groupEnabledForVariant("G8", "v2"))
+        return root.fail("remaining provider lost family ownership")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      stateService.rejectGroupVariantStates = true
+      if (hostBar.restoreWidgetFamilyProviderStates({
+            G8: { v1: true, v2: false }
+          }))
+        return root.fail("rejected provider restore was reported as success")
+      stateService.rejectGroupVariantStates = false
+      if ((fakeShell.shellConfig.bar.layout.center || []).length !== 1
+          || stateService.groupEnabledForVariant("G8", "v1")
+          || stateService.groupEnabledForVariant("G8", "v2"))
+        return root.fail("rejected provider restore did not roll back")
+      if (!hostBar.restoreWidgetFamilyProviderStates({
+            G8: { v1: true, v2: false }
+          })
+          || (fakeShell.shellConfig.bar.layout.center || []).length !== 0
+          || !stateService.groupEnabledForVariant("G8", "v1")
+          || stateService.groupEnabledForVariant("G8", "v2"))
+        return root.fail("exact cross-variant provider restore")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+
+      if (JSON.stringify(hostBar.widgetReplacementGroups("omarchy.power"))
+            !== JSON.stringify(["G12", "G14"])
+          || hostBar.widgetReplacementTarget("omarchy.power")
+            !== "Shibumi Battery and Shibumi Power Profile"
+          || hostBar.widgetReplacementLabel("omarchy.power")
+            !== "Replaces Shibumi Battery and Shibumi Power Profile"
+          || !hostBar.setBarWidgetInstalled("omarchy.power", true, "right"))
+        return root.fail("Power multi-provider replacement contract")
+      const powerWidgets = stateService.config.widgets
+      if (!powerWidgets.G12 || !powerWidgets.G14
+          || powerWidgets.G12.enabledV1 !== false
+          || powerWidgets.G12.enabledV2 !== false
+          || powerWidgets.G14.enabledV1 !== false
+          || powerWidgets.G14.enabledV2 !== false)
+        return root.fail("Power did not replace both groups in V1 and V2")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.restoreWidgetFamilyProviders(["G12"])
+          || (fakeShell.shellConfig.bar.layout.right || []).length !== 0
+          || !stateService.groupEnabledForVariant("G12", "v1")
+          || !stateService.groupEnabledForVariant("G12", "v2")
+          || !stateService.groupEnabledForVariant("G14", "v1")
+          || !stateService.groupEnabledForVariant("G14", "v2"))
+        return root.fail("native G12 selection orphaned G14")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+      if (!hostBar.setBarWidgetInstalled("omarchy.power", true, "right"))
+        return root.fail("Power reinstall before G14 restore")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.restoreWidgetFamilyProviders(["G14"])
+          || (fakeShell.shellConfig.bar.layout.right || []).length !== 0
+          || !stateService.groupEnabledForVariant("G12", "v1")
+          || !stateService.groupEnabledForVariant("G12", "v2")
+          || !stateService.groupEnabledForVariant("G14", "v1")
+          || !stateService.groupEnabledForVariant("G14", "v2"))
+        return root.fail("native G14 selection orphaned G12")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+      if (!hostBar.setBarWidgetInstalled("omarchy.power", true, "right"))
+        return root.fail("Power reinstall before partial replacement")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.setBarWidgetInstalled(
+            "example.battery", true, "right"))
+        return root.fail("Battery provider did not replace Power")
+      const batteryEntries = fakeShell.shellConfig.bar.layout.right || []
+      if (batteryEntries.length !== 1
+          || String(batteryEntries[0].id || batteryEntries[0])
+            !== "example.battery"
+          || stateService.groupEnabledForVariant("G12", "v1")
+          || stateService.groupEnabledForVariant("G12", "v2")
+          || !stateService.groupEnabledForVariant("G14", "v1")
+          || !stateService.groupEnabledForVariant("G14", "v2"))
+        return root.fail("displaced Power left G14 without a provider")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.removeBarWidgetAndRestoreFamilies(
+            "example.battery", ["G12"])
+          || (fakeShell.shellConfig.bar.layout.right || []).length !== 0
+          || !stateService.groupEnabledForVariant("G12", "v1")
+          || !stateService.groupEnabledForVariant("G12", "v2")
+          || !stateService.groupEnabledForVariant("G14", "v1")
+          || !stateService.groupEnabledForVariant("G14", "v2"))
+        return root.fail("Battery removal did not restore unowned providers")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+      if (!stateService.setGroupVariantStates({
+            G14: { v1: false, v2: false }
+          })
+          || !hostBar.setBarWidgetInstalled(
+            "example.battery", true, "right"))
+        return root.fail("provider snapshot setup")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const providerSnapshot = hostBar.providerLayoutSnapshot(["G12", "G14"])
+      if (!providerSnapshot
+          || !hostBar.setBarWidgetInstalled("omarchy.power", true, "right"))
+        return root.fail("multi-capability provider snapshot activation")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.restoreProviderLayoutSnapshot(providerSnapshot)
+          || (fakeShell.shellConfig.bar.layout.right || []).length !== 1
+          || String(fakeShell.shellConfig.bar.layout.right[0].id || "")
+            !== "example.battery"
+          || stateService.groupEnabledForVariant("G12", "v1")
+          || stateService.groupEnabledForVariant("G12", "v2")
+          || stateService.groupEnabledForVariant("G14", "v1")
+          || stateService.groupEnabledForVariant("G14", "v2"))
+        return root.fail("provider snapshot did not restore exact state")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.removeBarWidgetAndRestoreFamilies(
+            "example.battery", ["G12"])
+          || !hostBar.setWidgetGroupsEnabledForAllVariants(
+            ["G12", "G14"], true))
+        return root.fail("provider snapshot cleanup")
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
 
       if (hostBar.setWidgetAppearance(
             "G1", "widgetPadding", '"roomy"') !== "variant-required"

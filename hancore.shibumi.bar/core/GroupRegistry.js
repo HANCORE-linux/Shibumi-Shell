@@ -163,9 +163,16 @@ function moduleIdsFor(groupValue, layout) {
   if (GroupIds.indexOf(groupId) < 0) return []
   var result = (BaseEntries[groupId] || []).slice()
   var configured = configuredEntries(layout)
+  var explicitlyInstalled = {}
   for (var i = 0; i < configured.length; i++) {
-    var optionalId = configured[i].id
+    if (isObject(configured[i].entry)
+        && configured[i].entry.shibumiModule === true)
+      explicitlyInstalled[configured[i].id] = true
+  }
+  for (var j = 0; j < configured.length; j++) {
+    var optionalId = configured[j].id
     if (OptionalGroups[optionalId] === groupId
+        && explicitlyInstalled[optionalId] !== true
         && result.indexOf(optionalId) < 0) result.push(optionalId)
   }
   return result
@@ -200,6 +207,11 @@ function assignedModuleIds() {
     if (result.indexOf(optionalId) < 0) result.push(optionalId)
   }
   return result
+}
+
+function isOptionalModule(moduleValue) {
+  return Object.prototype.hasOwnProperty.call(
+    OptionalGroups, String(moduleValue || ""))
 }
 
 function isAssignedModule(moduleValue) {

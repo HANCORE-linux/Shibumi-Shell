@@ -583,7 +583,9 @@ for favorite_contract in \
     'ControlSettings.qml:onFavoritesRequested: root.showPluginFavorites()' \
     'PluginCatalogPage.qml:property bool favoritesOnly: false' \
     'PluginCatalogPage.qml:function toggleFavoriteById(pluginId)' \
-    'WidgetModuleTile.qml:text: root.favorite ? "star" : "star_border"' \
+    'WidgetModuleTile.qml:controller.accentColor("color03")' \
+    'WidgetModuleTile.qml:favorite ? "󰓎" : "star_border"' \
+    'WidgetModuleTile.qml:font.family: "JetBrainsMono Nerd Font"' \
     'ControlCenterPanel.qml:function setPluginFavorite(pluginId, favorite)' \
     'Service.qml:function setPluginFavorite(pluginId, favorite)' \
     'ShibumiConfig.js:plugins: defaultPluginConfig()'; do
@@ -1310,7 +1312,12 @@ for plugin_contract in \
     'text: "REMOVE"' \
     'interval: 7000' \
     'function undoLastChange()' \
-    'controller.restoreShibumiProvider(undoGroup)' \
+    'undoMode === "provider-snapshot"' \
+    'controller.restoreProviderUndoSnapshot(undoProviderSnapshot)' \
+    'displacedProviderIds.length > 0' \
+    'controller.setProviderGroupStates(undoGroupStates)' \
+    'controller.restoreShibumiProviderStates(undoGroupStates)' \
+    'controller.restoreShibumiProviders(undoGroups)' \
     'actionLabel: "Add plugin"' \
     'onActionRequested: root.controller.openPluginInstaller()' \
     'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"' \
@@ -1378,7 +1385,11 @@ done
   "$control_dir/PageHeaderHero.qml") -eq 2 ]] \
   || fail "stacked header action icons must share one fixed column"
 for provider_model in \
-    'const replacementGroup = group === "" && bar' \
+    'const replacementGroups = group === "" && bar' \
+    'replacementGroups: replacementGroups' \
+    'replacementTargetStates: replacementTargetStates' \
+    'conflictingProviderIds: conflictingProviderIds' \
+    'conflictingProviderStates: conflictingProviderStates' \
     'replacementLabel: group === "" && bar' \
     'replacementTargetEnabled:' \
     'replacementInEffect: false' \
@@ -1388,6 +1399,14 @@ for provider_model in \
     '["omarchy", "plugin", "remove", id, "--yes"]' \
     'id: pluginRemoval' \
     'Control Center rejected non-removable plugin:' \
+    'function restoreShibumiProviders(groupValues)' \
+    'function restoreShibumiProviderStates(stateValues)' \
+    'function providerUndoSnapshot(pluginId)' \
+    'function restoreProviderUndoSnapshot(snapshotValue)' \
+    'function setProviderGroupStates(stateValues)' \
+    'removalPluginWasInBar = entry.barWidget === true' \
+    'panel.bar.removeBarWidgetAndRestoreFamilies(' \
+    'Plugin removed, but bar provider cleanup failed.' \
     'function restoreShibumiProvider(groupId)'; do
   rg -Fq "$provider_model" "$control_dir/ControlCenterPanel.qml" \
     || fail "plugin provider model drifted: $provider_model"

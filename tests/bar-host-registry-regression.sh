@@ -35,6 +35,16 @@ rg -Fq '!GroupRegistry.isAssignedModule(id)' \
 rg -Fq 'else if (isV1AdditionalSuiteWidget(id))' \
   "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail "V1 suite removal does not preserve the neutral host entry"
+for provider_lifecycle_contract in \
+    'function onPluginsChanged()' \
+    'v1PluginReconcileTimer.restart()' \
+    'function restoreWidgetFamilyProviderStates(stateValues)' \
+    'function removeBarWidgetAndRestoreFamilies(widgetId, groupValues)' \
+    'function conflictingLayoutProviderIds(widgetId)'; do
+  rg -Fq "$provider_lifecycle_contract" \
+    "$repo_root/hancore.shibumi.bar/Bar.qml" \
+    || fail "provider lifecycle contract drifted: $provider_lifecycle_contract"
+done
 
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'

@@ -59,10 +59,24 @@ var Families = [
     region: "right"
   },
   {
+    capabilities: ["battery"],
+    group: "G12",
+    shibumi: "Shibumi Battery",
+    alternatives: ["omarchy.power"],
+    region: "right"
+  },
+  {
     capabilities: ["display"],
     group: "G13",
     shibumi: "Shibumi Display",
     alternatives: ["omarchy.monitor"],
+    region: "right"
+  },
+  {
+    capabilities: ["power-profile"],
+    group: "G14",
+    shibumi: "Shibumi Power Profile",
+    alternatives: ["omarchy.power"],
     region: "right"
   },
   {
@@ -85,6 +99,7 @@ var KnownCapabilities = {
   "omarchy.system-update": ["system-update"],
   "omarchy.media": ["media"],
   "omarchy.network": ["network"],
+  "omarchy.power": ["battery", "power-profile"],
   "omarchy.monitor": ["display"],
   "omarchy.bluetooth": ["bluetooth"]
 }
@@ -130,13 +145,23 @@ function familyForCapability(capabilityValue) {
   return null
 }
 
-function familyForPlugin(pluginValue, registry) {
+function familiesForPlugin(pluginValue, registry) {
   var capabilities = capabilitiesForPlugin(pluginValue, registry)
+  var result = []
   for (var i = 0; i < capabilities.length; i++) {
     var family = familyForCapability(capabilities[i])
-    if (family) return family
+    if (!family) continue
+    var duplicate = result.some(function(candidate) {
+      return candidate.group === family.group
+    })
+    if (!duplicate) result.push(family)
   }
-  return null
+  return result
+}
+
+function familyForPlugin(pluginValue, registry) {
+  var families = familiesForPlugin(pluginValue, registry)
+  return families.length > 0 ? families[0] : null
 }
 
 function alternativesForFamily(family, registry) {
@@ -185,7 +210,19 @@ function targetRegion(pluginValue, fallbackValue, registry) {
     ? fallback : "right"
 }
 
+function replacementTargets(pluginValue, registry) {
+  return familiesForPlugin(pluginValue, registry).map(function(family) {
+    return family.shibumi
+  })
+}
+
+function joinedLabels(values) {
+  if (values.length < 2) return values.join("")
+  if (values.length === 2) return values[0] + " and " + values[1]
+  return values.slice(0, -1).join(", ") + ", and " + values[values.length - 1]
+}
+
 function replacementLabel(pluginValue, registry) {
-  var family = familyForPlugin(pluginValue, registry)
-  return family ? "Replaces " + family.shibumi : ""
+  var targets = replacementTargets(pluginValue, registry)
+  return targets.length > 0 ? "Replaces " + joinedLabels(targets) : ""
 }

@@ -26,6 +26,13 @@ Rectangle {
   readonly property color replacedStatusColor:
     typeof controller.accentColor === "function"
       ? controller.accentColor("color01") : accent
+  readonly property color favoriteStatusColor:
+    typeof controller.accentColor === "function"
+      ? controller.accentColor("color03") : accent
+  readonly property color favoriteGlyphColor:
+    favorite ? favoriteStatusColor : foreground
+  readonly property string favoriteGlyphText:
+    favorite ? "󰓎" : "star_border"
   signal toggled()
   signal favoriteToggled()
   signal removeRequested()
@@ -134,14 +141,32 @@ Rectangle {
           ? root.controller.controlHoverFillColor : "transparent"
         border.width: 0
 
-        IconText {
+        Item {
           anchors.centerIn: parent
-          text: root.favorite ? "star" : "star_border"
-          color: root.favorite ? root.accent : root.foreground
+          width: Commons.Style.space(16) * root.uiScale
+          height: width
           opacity: root.favorite || favoritePointer.containsMouse ? 1 : 0.46
-          font.pixelSize: Commons.Style.space(16) * root.uiScale
-          font.weight: Font.Medium
-          fill: root.favorite ? 1 : 0
+
+          Text {
+            anchors.centerIn: parent
+            visible: root.favorite
+            text: root.favoriteGlyphText
+            color: root.favoriteGlyphColor
+            font.family: "JetBrainsMono Nerd Font"
+            font.pixelSize: parent.width
+            font.weight: Font.Medium
+            renderType: Text.NativeRendering
+          }
+
+          IconText {
+            anchors.centerIn: parent
+            visible: !root.favorite
+            text: root.favoriteGlyphText
+            color: root.favoriteGlyphColor
+            font.pixelSize: parent.width
+            iconWeight: 500
+            fill: 0
+          }
         }
 
         MouseArea {

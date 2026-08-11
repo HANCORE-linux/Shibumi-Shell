@@ -24,6 +24,9 @@ Column {
   property string undoPluginId: ""
   property bool undoPluginValue: false
   property string undoGroup: ""
+  property var undoGroups: []
+  property var undoGroupStates: ({})
+  property var undoProviderSnapshot: null
   property var undoPluginIds: []
   property real feedbackProgress: 0
   property bool removalConfirmationVisible: false
@@ -176,7 +179,8 @@ Column {
       && local.y <= pluginSearch.height + pluginSearch.reservedPopupHeight
   }
 
-  function showFeedback(title, detail, mode, pluginId, value, group, ids) {
+  function showFeedback(title, detail, mode, pluginId, value, group, ids,
+      groupValues, groupStates, providerSnapshot) {
     feedbackTimer.stop()
     feedbackCountdown.stop()
     removalConfirmationVisible = false
@@ -186,6 +190,13 @@ Column {
     undoPluginId = String(pluginId || "")
     undoPluginValue = value === true
     undoGroup = String(group || "")
+    undoGroups = Array.isArray(groupValues) ? groupValues.slice()
+      : undoGroup !== "" ? [undoGroup] : []
+    undoGroupStates = groupStates && typeof groupStates === "object"
+      ? JSON.parse(JSON.stringify(groupStates)) : ({})
+    undoProviderSnapshot = providerSnapshot
+      && typeof providerSnapshot === "object"
+      ? JSON.parse(JSON.stringify(providerSnapshot)) : null
     undoPluginIds = Array.isArray(ids) ? ids.slice() : []
     feedbackVisible = true
     feedbackProgress = 1
@@ -198,6 +209,9 @@ Column {
     undoPluginId = ""
     undoPluginValue = false
     undoGroup = ""
+    undoGroups = []
+    undoGroupStates = ({})
+    undoProviderSnapshot = null
     undoPluginIds = []
     feedbackProgress = 0
   }
@@ -259,6 +273,8 @@ Column {
     if (!entry) return false
     const id = String(entry.id || "")
     const name = String(entry.name || id)
+    const providerSnapshot = typeof controller.providerUndoSnapshot
+      === "function" ? controller.providerUndoSnapshot(id) : null
 
     if (entry.replaced === true) {
       const alternatives = Array.isArray(entry.replacedByIds)
@@ -275,15 +291,23 @@ Column {
       showFeedback(
         name + " restored",
         replacementName + " was removed to avoid duplicates.",
-        "plugins", "", false, "", alternatives)
+        providerSnapshot ? "provider-snapshot" : "plugins",
+        "", false, "", alternatives, [], ({}), providerSnapshot)
       return true
     }
 
     const wasEnabled = entry.installedInBar === true
     const enable = !wasEnabled
     const group = String(entry.replacementGroup || "")
+    const groups = Array.isArray(entry.replacementGroups)
+      ? entry.replacementGroups.slice()
+      : group !== "" ? [group] : []
     const target = String(entry.replacementTarget || "Shibumi widget")
+    const targetStates = entry.replacementTargetStates || ({})
     const targetWasEnabled = entry.replacementTargetEnabled === true
+    const displacedProviderIds = Array.isArray(entry.conflictingProviderIds)
+      ? entry.conflictingProviderIds.slice() : []
+    const displacedProviderStates = entry.conflictingProviderStates || ({})
     if (!controller.setPluginEnabled(id, enable)) {
       showFeedback(
         name + (enable ? " could not be activated"
@@ -294,11 +318,22 @@ Column {
       return false
     }
 
-    if (enable && group !== "" && targetWasEnabled) {
+    if (enable && displacedProviderIds.length > 0) {
+      showFeedback(
+        name + " activated",
+        displacedProviderIds.length === 1
+          ? displacedProviderIds[0] + " was replaced to avoid duplicates."
+          : displacedProviderIds.length
+            + " conflicting providers were replaced to avoid duplicates.",
+        providerSnapshot ? "provider-snapshot" : "plugins",
+        "", false, "", displacedProviderIds, [],
+        displacedProviderStates, providerSnapshot)
+    } else if (enable && group !== "" && targetWasEnabled) {
       showFeedback(
         name + " activated",
         target + " was hidden to avoid duplicates.",
-        "restore-group", "", false, group, [])
+        providerSnapshot ? "provider-snapshot" : "restore-group",
+        "", false, group, [], groups, targetStates, providerSnapshot)
     } else {
       showFeedback(
         name + (enable ? " activated" : " deactivated"),
@@ -328,20 +363,37 @@ Column {
     feedbackTimer.stop()
     feedbackCountdown.stop()
     let restored = false
-    if (undoMode === "restore-group") {
-      restored = controller.restoreShibumiProvider(undoGroup)
+    if (undoMode === "provider-snapshot") {
+      restored = typeof controller.restoreProviderUndoSnapshot === "function"
+        && controller.restoreProviderUndoSnapshot(undoProviderSnapshot)
+    } else if (undoMode === "restore-group") {
+      restored = Object.keys(undoGroupStates).length > 0
+        && typeof controller.restoreShibumiProviderStates === "function"
+        ? controller.restoreShibumiProviderStates(undoGroupStates)
+        : typeof controller.restoreShibumiProviders === "function"
+          ? controller.restoreShibumiProviders(undoGroups)
+          : controller.restoreShibumiProvider(undoGroup)
     } else if (undoMode === "plugins") {
       restored = true
       for (let index = 0; index < undoPluginIds.length; index++)
         restored = controller.setPluginEnabled(undoPluginIds[index], true)
           && restored
+      if (restored && Object.keys(undoGroupStates).length > 0)
+        restored = typeof controller.setProviderGroupStates === "function"
+          && controller.setProviderGroupStates(undoGroupStates)
     } else if (undoMode === "plugin-value") {
       restored = controller.setPluginEnabled(
         undoPluginId, undoPluginValue)
     }
+    if (!restored) {
+      feedbackVisible = true
+      feedbackProgress = 1
+      feedbackCountdown.start()
+      return false
+    }
     feedbackVisible = false
     clearUndoState()
-    return restored
+    return true
   }
 
   Connections {

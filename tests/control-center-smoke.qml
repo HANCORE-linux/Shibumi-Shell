@@ -60,6 +60,7 @@ ShellRoot {
     property int splitWrites: 0
     property int resetWrites: 0
     property int restoreWrites: 0
+    property int restoreCancelWrites: 0
     property string restoredWidgetId: ""
     property string restoredPage: ""
     property bool restoreNeedsReplacement: false
@@ -122,6 +123,12 @@ ShellRoot {
       return true
     }
 
+    function cancelWidgetRestore(pluginId) {
+      if (String(pluginId || "") !== restoredWidgetId) return false
+      restoreCancelWrites++
+      return true
+    }
+
     function setBarPosition(value) {
       const next = String(value || "")
       if (next !== "top" && next !== "bottom") return false
@@ -141,6 +148,31 @@ ShellRoot {
       resetWrites++
       return true
     }
+  }
+
+  QtObject {
+    id: tileController
+
+    property real controlRadius: 4
+    property color controlHoverFillColor: "#222222"
+    property color controlFillColor: "#111111"
+    property real controlBorderWidth: 1
+    property color controlBorderColor: "#444444"
+    property string marketFont: "sans"
+    property color marketBackground: "#000000"
+
+    function accentColor(name) {
+      return String(name || "") === "color03" ? "#336699" : "#ffffff"
+    }
+  }
+
+  Control.WidgetModuleTile {
+    id: favoriteTileProbe
+    visible: false
+    controller: tileController
+    glyph: "extension"
+    label: "Favorite probe"
+    favorite: true
   }
 
   State.Service {
@@ -169,6 +201,10 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!stateService.ready || !widget || root.ticks < 3) return
+        if (String(favoriteTileProbe.favoriteStatusColor) !== "#336699"
+            || String(favoriteTileProbe.favoriteGlyphColor) !== "#336699"
+            || favoriteTileProbe.favoriteGlyphText !== "󰓎")
+          return root.fail("favorite star does not use the color03 Nerd Font glyph")
         if (widget.moduleName !== "hancore.shibumi.control-center"
             || widget.panelLoaded || widget.iconMode
             || !widget.shibumiWordmark
@@ -775,13 +811,35 @@ ShellRoot {
             || plugins.feedbackProgress <= 0
             || plugins.feedbackTitle !== "Omarchy Audio activated"
             || plugins.feedbackDetail.indexOf("hidden") < 0
+            || !plugins.undoGroupStates.G6
+            || plugins.undoGroupStates.G6.v1 !== true
+            || plugins.undoGroupStates.G6.v2 !== false
+            || !plugins.undoProviderSnapshot
+            || plugins.undoProviderSnapshot.token
+              !== "audio-provider-snapshot"
             || panel.pluginEntries[0].installedInBar
             || !panel.pluginEntries[0].replaced
             || !panel.pluginEntries[1].installedInBar
             || !panel.pluginEntries[1].replacementInEffect)
           return root.fail(
             "provider switch did not expose replacement feedback")
+        const providerRestoreWrites = fakeBar.restoreWrites
+        const providerRestoreCancelWrites = fakeBar.restoreCancelWrites
+        panel.rejectProviderRestore = true
+        if (plugins.undoLastChange()
+            || fakeBar.restoreWrites !== providerRestoreWrites + 1
+            || fakeBar.restoreCancelWrites
+              !== providerRestoreCancelWrites + 1
+            || !plugins.feedbackVisible
+            || !plugins.feedbackCountdownRunning
+            || plugins.feedbackProgress <= 0
+            || !plugins.undoGroupStates.G6)
+          return root.fail("failed provider restore discarded Undo")
+        panel.rejectProviderRestore = false
         if (!plugins.undoLastChange()
+            || fakeBar.restoreWrites !== providerRestoreWrites + 2
+            || fakeBar.restoreCancelWrites
+              !== providerRestoreCancelWrites + 1
             || plugins.feedbackVisible
             || plugins.feedbackCountdownRunning
             || plugins.feedbackProgress !== 0

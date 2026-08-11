@@ -1,6 +1,7 @@
 import QtQuick
 import "../core/GroupRegistry.js" as GroupRegistry
 import "../core/ShibumiConfig.js" as ShibumiConfig
+import "../core/WidgetFamilies.js" as WidgetFamilies
 
 QtObject {
   function fail(message) {
@@ -56,6 +57,70 @@ QtObject {
     const localClockSettings = GroupRegistry.childSettingsFor({
       "omarchy.clock": { format: "local" }
     }, layout, "omarchy.clock")
+    const optionalOwners = {
+      "omarchy.dropbox": "G3",
+      "omarchy.microphone": "G6",
+      "omarchy.active-window": "G8",
+      "omarchy.keyboard-layout": "G8",
+      "omarchy.tailscale": "G11"
+    }
+    const optionalIds = Object.keys(optionalOwners)
+    for (let index = 0; index < optionalIds.length; index++) {
+      const id = optionalIds[index]
+      const owner = optionalOwners[id]
+      const plainLayout = {
+        left: [{ id: id }], center: [], right: []
+      }
+      const explicitLayout = {
+        left: [{ id: id, shibumiModule: true }], center: [], right: []
+      }
+      const mixedLayout = {
+        left: [{ id: id }, { id: id, shibumiModule: true }],
+        center: [], right: []
+      }
+      const dynamicGroup = GroupRegistry.dynamicGroupIdForModule(id)
+      if (!GroupRegistry.isOptionalModule(id)
+          || GroupRegistry.moduleIdsFor(owner, plainLayout).indexOf(id) < 0
+          || GroupRegistry.unassignedEntries(plainLayout, "left").length !== 0
+          || GroupRegistry.moduleIdsFor(owner, explicitLayout).indexOf(id) >= 0
+          || GroupRegistry.unassignedEntries(
+            explicitLayout, "left").length !== 1
+          || GroupRegistry.moduleIdsFor(
+            dynamicGroup, explicitLayout).indexOf(id) < 0
+          || GroupRegistry.moduleIdsFor(owner, mixedLayout).indexOf(id) >= 0)
+        fail("optional/dynamic ownership exclusivity for " + id)
+    }
+    if (GroupRegistry.isOptionalModule("omarchy.clock"))
+      fail("consumed alias classified as optional")
+
+    const familyOwners = {
+      "omarchy.workspaces": ["G2"],
+      "omarchy.indicators": ["G3"],
+      "omarchy.tray": ["G3"],
+      "omarchy.audio": ["G6"],
+      "omarchy.model-usage": ["G7"],
+      "omarchy.clock": ["G8"],
+      "omarchy.weather": ["G8"],
+      "omarchy.system-update": ["G8"],
+      "omarchy.media": ["G9"],
+      "omarchy.network": ["G11"],
+      "omarchy.power": ["G12", "G14"],
+      "omarchy.monitor": ["G13"],
+      "omarchy.bluetooth": ["G15"]
+    }
+    const familyIds = Object.keys(familyOwners)
+    for (let index = 0; index < familyIds.length; index++) {
+      const id = familyIds[index]
+      const groups = WidgetFamilies.familiesForPlugin(id, null).map(
+        function(family) { return family.group })
+      if (JSON.stringify(groups) !== JSON.stringify(familyOwners[id]))
+        fail("provider family ownership for " + id)
+    }
+    if (WidgetFamilies.familiesForPlugin("custom.left", null).length !== 0
+        || WidgetFamilies.replacementLabel("omarchy.power", null)
+          !== "Replaces Shibumi Battery and Shibumi Power Profile")
+      fail("provider family fallback/multi-group label")
+
     if (g3.length !== 1 || g3[0].id !== "hancore.shibumi.status")
       fail("status presentation ownership")
     if (g4.length !== 1 || g4[0].id !== "hancore.shibumi.memory"

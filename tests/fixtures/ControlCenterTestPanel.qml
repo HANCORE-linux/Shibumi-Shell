@@ -100,6 +100,7 @@ Item {
   readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
   property bool pluginRemovalRunning: false
+  property bool rejectProviderRestore: false
   readonly property string pluginRemovalId: ""
   signal pluginRemovalFinished(
     string pluginId, bool success, string detail)
@@ -144,7 +145,11 @@ Item {
       installedInBar: false,
       group: "",
       replacementGroup: "G6",
+      replacementGroups: ["G6"],
       replacementTarget: "Shibumi Audio",
+      replacementTargetStates: ({
+        G6: { v1: true, v2: false }
+      }),
       replacementTargetEnabled: true,
       replacementInEffect: false,
       replacementLabel: "Replaces Shibumi Audio",
@@ -590,9 +595,49 @@ Item {
     return true
   }
 
-  function restoreShibumiProvider(groupId) {
-    return String(groupId || "") === "G6"
+  function restoreShibumiProviders(groupValues) {
+    return !rejectProviderRestore
+      && Array.isArray(groupValues)
+      && groupValues.length === 1
+      && String(groupValues[0] || "") === "G6"
       && setPluginEnabled("hancore.shibumi.audio", true)
+  }
+
+  function restoreShibumiProviderStates(stateValues) {
+    return !rejectProviderRestore
+      && stateValues && stateValues.G6
+      && stateValues.G6.v1 === true
+      && stateValues.G6.v2 === false
+      && setPluginEnabled("hancore.shibumi.audio", true)
+  }
+
+  function providerUndoSnapshot(pluginId) {
+    return String(pluginId || "") === "omarchy.audio"
+      ? { token: "audio-provider-snapshot" } : null
+  }
+
+  function restoreProviderUndoSnapshot(snapshotValue) {
+    const restoreBar = bar
+    if (restoreBar
+        && typeof restoreBar.scheduleWidgetRestore === "function")
+      restoreBar.scheduleWidgetRestore(
+        "hancore.shibumi.control-center", settings.restorePage, true)
+    const restored = !rejectProviderRestore && snapshotValue
+      && snapshotValue.token === "audio-provider-snapshot"
+      && setPluginEnabled("hancore.shibumi.audio", true)
+    if (!restored && restoreBar
+        && typeof restoreBar.cancelWidgetRestore === "function")
+      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    return restored
+  }
+
+  function setProviderGroupStates(stateValues) {
+    return !rejectProviderRestore && stateValues
+      && typeof stateValues === "object"
+  }
+
+  function restoreShibumiProvider(groupId) {
+    return restoreShibumiProviders([String(groupId || "")])
   }
 
   function removePlugin(pluginId) {

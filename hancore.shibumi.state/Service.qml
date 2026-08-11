@@ -234,6 +234,43 @@ Item {
     })
   }
 
+  function setGroupVariantStates(stateValues) {
+    if (!ShibumiConfig.isPlainObject(stateValues)) return false
+    const groups = Object.keys(stateValues)
+    if (groups.length === 0) return false
+    for (let index = 0; index < groups.length; index++) {
+      const group = groups[index]
+      const states = stateValues[group]
+      if (!ShibumiConfig.isGroupId(group)
+          || !ShibumiConfig.isPlainObject(states)
+          || typeof states.v1 !== "boolean"
+          || typeof states.v2 !== "boolean") return false
+    }
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+      for (let index = 0; index < groups.length; index++) {
+        const group = groups[index]
+        const settings = ShibumiConfig.isPlainObject(next.widgets[group])
+          ? next.widgets[group] : {}
+        settings.enabledV1 = stateValues[group].v1
+        settings.enabledV2 = stateValues[group].v2
+        next.widgets[group] = settings
+      }
+    })
+  }
+
+  function setGroupsEnabledForAllVariants(groupValues, enabled) {
+    if (!Array.isArray(groupValues) || typeof enabled !== "boolean")
+      return false
+    const states = {}
+    for (let index = 0; index < groupValues.length; index++) {
+      const group = String(groupValues[index] || "")
+      if (!ShibumiConfig.isGroupId(group)) return false
+      states[group] = { v1: enabled, v2: enabled }
+    }
+    return setGroupVariantStates(states)
+  }
+
   function setGroupSetting(groupId, key, value) {
     const group = String(groupId || "")
     const name = String(key || "")
