@@ -108,8 +108,41 @@ if sed -n '/text: root\.updateService\.themeRefreshing ? "Checking…" : "Check 
 fi
 if sed -n '/text: root\.updateService\.currentThemeNeedsReapply/,/onClicked: root\.updateService\.reapplyCurrentTheme()/p' \
     "$themes" | rg -q 'iconText:'; then
-  fail 'reapply text action still includes an icon'
+  fail 'Re-Apply text action still includes an icon'
 fi
+for theme_footer_contract in \
+    'return "re-applying"' \
+    '? "Re-Apply the active theme below"' \
+    'objectName: "themeFooterActions"' \
+    'objectName: "themeFooterReapply"' \
+    'objectName: "themeFooterCheck"' \
+    'objectName: "themeFooterUpdate"' \
+    '? "Re-Apply current" : "Re-Apply"' \
+    'tooltipText: "Re-Apply the active user theme"' \
+    'onClicked: root.updateService.reapplyCurrentTheme()' \
+    'onClicked: root.updateService.refreshThemes()' \
+    'onClicked: root.updateService.updateAllThemes()'; do
+  rg -Fq "$theme_footer_contract" "$themes" \
+    || fail "theme footer action drifted: $theme_footer_contract"
+done
+reapply_action_line=$(rg -n -m1 -F \
+  'onClicked: root.updateService.reapplyCurrentTheme()' "$themes" \
+  | cut -d: -f1)
+check_action_line=$(rg -n -m1 -F \
+  'onClicked: root.updateService.refreshThemes()' "$themes" \
+  | cut -d: -f1)
+update_action_line=$(rg -n -m1 -F \
+  'onClicked: root.updateService.updateAllThemes()' "$themes" \
+  | cut -d: -f1)
+(( reapply_action_line < check_action_line
+    && check_action_line < update_action_line )) \
+  || fail 'theme footer order must be Re-Apply, Check themes, Update clean'
+for reapply_status_contract in \
+    'actionStatus = "Re-Applying " + name + "…"' \
+    'actionStatus = "Re-Applied " + completedName'; do
+  rg -Fq "$reapply_status_contract" "$service" \
+    || fail "Re-Apply status label drifted: $reapply_status_contract"
+done
 [[ -x $review ]] || fail 'theme review helper is not executable'
 if rg -n '(font\.family|fontFamily): root\.bar\.fontFamily' \
     --glob '*.qml' "$plugin" >/dev/null; then

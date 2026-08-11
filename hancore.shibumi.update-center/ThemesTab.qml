@@ -58,7 +58,7 @@ Item {
     if (updateService.actionName === theme.name) {
       if (updateService.actionKind === "remove") return "removing"
       if (updateService.actionKind === "reinstall") return "reinstalling"
-      if (updateService.actionKind === "reapply") return "reapplying"
+      if (updateService.actionKind === "reapply") return "re-applying"
       return "updating"
     }
     if (theme.state === "update") return "ready"
@@ -286,7 +286,7 @@ Item {
                 horizontalPadding: 0
                 enabled: root.canReinstall(modelData) && root.actionIdle
                 tooltipText: modelData.current
-                  ? "Reapply the active theme below"
+                  ? "Re-Apply the active theme below"
                   : enabled ? "Reinstall from recorded origin"
                     : "Theme origin cannot be verified"
                 onClicked: root.armAction("reinstall", modelData)
@@ -501,11 +501,39 @@ Item {
     }
 
     Row {
+      objectName: "themeFooterActions"
       Layout.fillWidth: true
       Layout.preferredHeight: Commons.Style.space(28)
       spacing: Commons.Style.space(6)
 
       PanelButton {
+        objectName: "themeFooterReapply"
+        width: (parent.width - parent.spacing * 2) / 3
+        visible: root.currentTheme !== null
+        panel: root.panel
+        text: root.updateService.currentThemeNeedsReapply
+          ? "Re-Apply current" : "Re-Apply"
+        selected: root.updateService.currentThemeNeedsReapply
+        enabled: root.actionIdle
+        controlHeight: Commons.Style.space(28)
+        tooltipText: "Re-Apply the active user theme"
+        onClicked: root.updateService.reapplyCurrentTheme()
+      }
+
+      PanelButton {
+        objectName: "themeFooterCheck"
+        width: root.currentTheme !== null
+          ? (parent.width - parent.spacing * 2) / 3
+          : (parent.width - parent.spacing) / 2
+        panel: root.panel
+        text: root.updateService.themeRefreshing ? "Checking…" : "Check themes"
+        enabled: root.actionIdle
+        controlHeight: Commons.Style.space(28)
+        onClicked: root.updateService.refreshThemes()
+      }
+
+      PanelButton {
+        objectName: "themeFooterUpdate"
         width: root.currentTheme !== null
           ? (parent.width - parent.spacing * 2) / 3
           : (parent.width - parent.spacing) / 2
@@ -523,30 +551,6 @@ Item {
           && Number(root.themeStatus.actionable || 0) > 0
         controlHeight: Commons.Style.space(28)
         onClicked: root.updateService.updateAllThemes()
-      }
-
-      PanelButton {
-        width: root.currentTheme !== null
-          ? (parent.width - parent.spacing * 2) / 3
-          : (parent.width - parent.spacing) / 2
-        panel: root.panel
-        text: root.updateService.themeRefreshing ? "Checking…" : "Check themes"
-        enabled: root.actionIdle
-        controlHeight: Commons.Style.space(28)
-        onClicked: root.updateService.refreshThemes()
-      }
-
-      PanelButton {
-        width: (parent.width - parent.spacing * 2) / 3
-        visible: root.currentTheme !== null
-        panel: root.panel
-        text: root.updateService.currentThemeNeedsReapply
-          ? "Reapply current" : "Reapply"
-        selected: root.updateService.currentThemeNeedsReapply
-        enabled: root.actionIdle
-        controlHeight: Commons.Style.space(28)
-        tooltipText: "Reapply the active user theme"
-        onClicked: root.updateService.reapplyCurrentTheme()
       }
     }
 

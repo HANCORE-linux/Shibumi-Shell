@@ -211,7 +211,7 @@ Item {
     actionName = name
     actionKind = "reapply"
     _actionTouchedCurrent = false
-    actionStatus = "Reapplying " + name + "…"
+    actionStatus = "Re-Applying " + name + "…"
     actionError = ""
     actionStatusTimer.stop()
     _actionTimedOut = false
@@ -430,7 +430,7 @@ Item {
         else if (completedKind === "reinstall")
           root.actionStatus = "Reinstalled " + completedName
         else if (completedKind === "reapply")
-          root.actionStatus = "Reapplied " + completedName
+          root.actionStatus = "Re-Applied " + completedName
         else if (completedKind === "update-all")
           root.actionStatus = "Updated reviewed themes"
         else
