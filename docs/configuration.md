@@ -25,6 +25,7 @@ and normalizes this branch before using it. It includes:
 - workspace mode and presentation;
 - G1 launcher identity;
 - image and media picker styles;
+- the selected thermal sensor and its persisted Celsius or Fahrenheit display;
 - V1 Reactor mode, selected through **Bars → Gap Animations** from nine direct
   preview tiles.
 

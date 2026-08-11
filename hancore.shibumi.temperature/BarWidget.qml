@@ -31,8 +31,13 @@ Ui.Panel {
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property string temperatureUnit:
+    normalizedTemperatureUnit(setting("unit", "metric"))
+  readonly property bool imperial: temperatureUnit === "imperial"
+  readonly property string unitSuffix: imperial ? "°F" : "°C"
   readonly property int iconSlotSize: 14
-  readonly property int iconGlyphHorizontalOffset: 1
+  readonly property int iconGlyphHorizontalOffset: displayMode === "icon"
+    ? 1 : tokens.v2Shell === true ? 2 : 3
   readonly property int contentHorizontalOffset: bar && !bar.vertical
     && tokens.v2Shell !== true ? -1 : 0
   readonly property string selectedSource: {
@@ -46,12 +51,35 @@ Ui.Panel {
   readonly property int temperatureC: telemetry
     && typeof telemetry.temperatureFor === "function"
     ? telemetry.temperatureFor(selectedSource) : 0
+  readonly property bool panelLoaded: panelLoader.item !== null
+  readonly property var panelItem: panelLoader.item
   property var acquiredTelemetry: null
 
   implicitWidth: bar && bar.vertical ? bar.barSize : surface.implicitWidth
   implicitHeight: bar && bar.vertical ? surface.implicitHeight
     : bar ? bar.barSize : 28
   visible: root.temperatureC > 0
+
+  function normalizedTemperatureUnit(value) {
+    return String(value || "").toLowerCase() === "imperial"
+      ? "imperial" : "metric"
+  }
+
+  function temperatureValue(celsius) {
+    const metricValue = Number(celsius || 0)
+    return imperial ? Math.round(metricValue * 9 / 5 + 32)
+      : Math.round(metricValue)
+  }
+
+  function temperatureText(celsius) {
+    return temperatureValue(celsius) + unitSuffix
+  }
+
+  function setTemperatureUnit(value) {
+    const candidate = normalizedTemperatureUnit(value)
+    return stateService && typeof stateService.setGroupSetting === "function"
+      ? stateService.setGroupSetting(stateGroupId, "unit", candidate) : false
+  }
 
   function syncTelemetryOwner() {
     if (acquiredTelemetry === telemetry) return
@@ -133,7 +161,7 @@ Ui.Panel {
       Text {
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
-        text: root.temperatureC + (root.tokens.v2Shell === true ? "°" : "°C")
+        text: root.temperatureText(root.temperatureC)
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
@@ -147,7 +175,7 @@ Ui.Panel {
       cursorShape: Qt.PointingHandCursor
       onEntered: if (root.bar)
         root.bar.showTooltip(surface,
-          root.sourceLabel + " · " + root.temperatureC + "°C")
+          root.sourceLabel + " · " + root.temperatureText(root.temperatureC))
       onExited: if (root.bar) root.bar.hideTooltip(surface)
       onClicked: root.toggle()
     }

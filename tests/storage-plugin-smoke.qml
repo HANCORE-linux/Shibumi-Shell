@@ -222,6 +222,7 @@ ShellRoot {
         if (storageWidget.selectedSource !== "/dev/nvme0n1"
             || storageWidget.selectedPercent !== 75
             || storageWidget.selectedLabel !== "Fast NVMe"
+            || storageWidget.iconSlotSize !== 14
             || storageWidget.compactIconOpticalOffset !== 0)
           return root.fail("selected bar percentage")
         if (!storageWidget.setStorageSource("/dev/sda")

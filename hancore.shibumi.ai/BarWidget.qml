@@ -54,10 +54,11 @@ Ui.Panel {
   readonly property bool compact: displayMode === "icon"
   readonly property int providerIconSlotWidth: 20
   readonly property int providerIconSlotHeight: 16
+  readonly property int claudeGlyphPixelSize: 15
   readonly property int providerGlyphWidth: providerId === "opencode" ? 20
-    : providerId === "codex" ? 14 : 15
+    : 15
   readonly property int providerGlyphHeight: providerId === "opencode" ? 12
-    : providerId === "codex" ? 14 : 15
+    : 15
   readonly property int providerGlyphHorizontalOffset:
     providerId === "codex" ? -1 : 0
   readonly property var interactionTarget: actionButton
@@ -166,7 +167,7 @@ Ui.Panel {
                 root.baseIconColor.g, root.baseIconColor.b,
                 root.baseIconOpacity)
               font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: 14
+              font.pixelSize: root.claudeGlyphPixelSize
               renderType: Text.QtRendering
             }
 
@@ -189,7 +190,7 @@ Ui.Panel {
                 text: "\udb85\ude7a"
                 color: root.usageIconColor
                 font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-                font.pixelSize: 14
+                font.pixelSize: root.claudeGlyphPixelSize
                 renderType: Text.QtRendering
               }
             }

@@ -113,9 +113,14 @@ embedded_audio_widget="$repo_root/widgets/AudioWidget.qml"
 audio_panel="$repo_root/hancore.shibumi.audio/AudioPanel.qml"
 audio_bridge="$repo_root/hancore.shibumi.audio/AudioPanelBridge.qml"
 for volume_widget in "$audio_widget" "$embedded_audio_widget"; do
+  full_content=$(sed -n \
+    '/id: fullHorizontalContent/,/id: compactHorizontalContent/p' \
+    "$volume_widget")
   compact_content=$(sed -n \
     '/id: compactHorizontalContent/,/id: verticalContent/p' \
     "$volume_widget")
+  grep -Fq 'horizontalAlignment: Text.AlignRight' <<<"$full_content" \
+    || fail "full audio value does not preserve its fixed right edge"
   grep -Fq 'horizontalAlignment: Text.AlignLeft' <<<"$compact_content" \
     || fail "compact audio value does not keep a fixed icon gap"
   if grep -Fq 'horizontalAlignment: Text.AlignRight' \

@@ -23,8 +23,10 @@ cp -a -- "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 cp -a -- "$repo_root/hancore.shibumi.cpu" "$tmpdir/cpu"
 cp -a -- "$repo_root/hancore.shibumi.gpu" "$tmpdir/gpu"
 cp -a -- "$repo_root/hancore.shibumi.temperature" "$tmpdir/temperature"
-install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
-  "$tmpdir/gpu/ShibumiPanel.qml"
+for plugin in gpu temperature; do
+  install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+    "$tmpdir/$plugin/ShibumiPanel.qml"
+done
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -Dm0644 "$repo_root/tests/telemetry-plugins-smoke.qml" "$tmpdir/shell.qml"
@@ -118,8 +120,35 @@ done
 rg -q 'setGroupSetting\(stateGroupId, "source", candidate\)' \
   "$repo_root/hancore.shibumi.temperature/BarWidget.qml" \
   || fail "temperature source selection is not persisted"
+rg -q 'setGroupSetting\(stateGroupId, "unit", candidate\)' \
+  "$repo_root/hancore.shibumi.temperature/BarWidget.qml" \
+  || fail "temperature unit selection is not persisted"
+for temperature_contract in \
+  'text: root.temperatureText(root.temperatureC)' \
+  'root.sourceLabel + " · " + root.temperatureText(root.temperatureC)'; do
+  rg -Fq "$temperature_contract" \
+    "$repo_root/hancore.shibumi.temperature/BarWidget.qml" \
+    || fail "temperature rendering contract missing: $temperature_contract"
+done
+if rg -Fq 'temperatureValueSlotWidth' \
+    "$repo_root/hancore.shibumi.temperature/BarWidget.qml"; then
+  fail "temperature value still reserves trailing maximum-width space"
+fi
 rg -q 'panel\.ownerWidget\.setTemperatureSource' \
   "$repo_root/hancore.shibumi.temperature/TemperaturePanel.qml" \
   || fail "thermals panel does not expose source selection"
+for panel_contract in \
+  'label: "°C"' \
+  'label: "°F"' \
+  'panel.ownerWidget.setTemperatureUnit(unit)' \
+  'panel.ownerWidget.temperatureText(modelData.temperatureC)' \
+  'onMoveRequested: function(dx, _dy)' \
+  'onActivateRequested: panel.activateUnitCursor()' \
+  'Accessible.checked: selected' \
+  'Accessible.onPressAction: unitChoice.triggered()'; do
+  rg -Fq "$panel_contract" \
+    "$repo_root/hancore.shibumi.temperature/TemperaturePanel.qml" \
+    || fail "thermals panel unit contract missing: $panel_contract"
+done
 
 printf 'telemetry plugin regression passed\n'

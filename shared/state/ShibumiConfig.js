@@ -22,6 +22,7 @@ var GroupIds = [
 var V1GroupIds = GroupIds.slice(0, 15)
 var V1DynamicGroupPrefix = "G:"
 var TemperatureSourceIds = ["cpu", "core", "gpu", "nvme", "memory"]
+var TemperatureUnitIds = ["metric", "imperial"]
 
 function defaultOrder() {
   return {
@@ -92,7 +93,7 @@ function defaultWidgetConfig() {
     G7: { enabled: false },
     G14: { enabled: false },
     G15: { enabled: false },
-    G16: { source: "cpu" }
+    G16: { source: "cpu", unit: "metric" }
   }
 }
 
@@ -316,6 +317,8 @@ function mergeWidgetConfig(value) {
   if (!isPlainObject(result.G16)) result.G16 = {}
   if (TemperatureSourceIds.indexOf(String(result.G16.source || "")) < 0)
     result.G16.source = "cpu"
+  if (TemperatureUnitIds.indexOf(String(result.G16.unit || "")) < 0)
+    result.G16.unit = "metric"
   return result
 }
 

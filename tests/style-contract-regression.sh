@@ -609,6 +609,7 @@ fi
 for ai_contract in \
   'readonly property int providerIconSlotWidth: 20' \
   'readonly property int providerIconSlotHeight: 16' \
+  'readonly property int claudeGlyphPixelSize: 15' \
   'width: root.providerIconSlotWidth' \
   'height: root.providerIconSlotHeight' \
   'width: root.providerGlyphWidth' \
@@ -622,6 +623,7 @@ for ai_contract in \
   'readonly property bool claudeLayersAligned:' \
   'color: Qt.rgba(root.baseIconColor.r,' \
   'color: root.usageIconColor' \
+  'font.pixelSize: root.claudeGlyphPixelSize' \
   'x: claudeGlyphBase.x' \
   'y: claudeGlyphBase.y - claudeUsageClip.y' \
   'width: claudeGlyphBase.width' \
@@ -634,6 +636,9 @@ for ai_contract in \
   rg -Fq "$ai_contract" hancore.shibumi.ai/BarWidget.qml \
     || fail "AI icon contract drifted from V1: $ai_contract"
 done
+[[ $(rg -Fc 'font.pixelSize: root.claudeGlyphPixelSize' \
+  hancore.shibumi.ai/BarWidget.qml) -eq 2 ]] \
+  || fail "Claude base/fill layers do not share the 15px glyph size"
 if rg -Fq 'tint: root.widgetInk' hancore.shibumi.ai/BarWidget.qml \
     || rg -Uq 'text: "\\udb85\\ude7a"\n[[:space:]]+color: (Qt\.rgba\(root\.widgetInk|root\.widgetInk)' \
       hancore.shibumi.ai/BarWidget.qml; then
@@ -667,6 +672,9 @@ for widget in audio battery brightness power-profile bluetooth; do
 done
 rg -Fq 'text: "󰋊"' hancore.shibumi.storage/BarWidget.qml \
   || fail "storage bar icon drifted from the original V2 glyph"
+rg -Fq 'readonly property int iconSlotSize: 14' \
+  hancore.shibumi.storage/BarWidget.qml \
+  || fail "storage icon lost its stable optical slot"
 if rg -Fq 'text: "HDD "' hancore.shibumi.storage/BarWidget.qml; then
   fail "storage bar restored the obsolete HDD prefix"
 fi
@@ -700,6 +708,9 @@ rg -Fq 'readonly property int iconSlotSize: 14' \
 rg -Fq 'anchors.horizontalCenterOffset: root.iconGlyphHorizontalOffset' \
   hancore.shibumi.temperature/BarWidget.qml \
   || fail "temperature glyph lost its optical slot offset"
+rg -Fq 'tokens.v2Shell === true ? 2 : 3' \
+  hancore.shibumi.temperature/BarWidget.qml \
+  || fail "temperature glyph lost its V1/V2 trailing-edge alignment"
 rg -Fq '&& tokens.v2Shell !== true ? -1 : 0' \
   hancore.shibumi.temperature/BarWidget.qml \
   || fail "temperature lost its V1 optical alignment offset"

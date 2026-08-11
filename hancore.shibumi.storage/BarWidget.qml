@@ -33,6 +33,7 @@ Ui.Panel {
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
   readonly property bool valueVisible: displayMode !== "icon"
+  readonly property int iconSlotSize: 14
   // The Nerd Font storage glyph overhangs its advance box on the right.
   readonly property int compactIconOpticalOffset: compact
     && tokens.v2Shell !== true
@@ -129,24 +130,30 @@ Ui.Panel {
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.compactIconOpticalOffset
       readonly property real visibleContentWidth:
-        (storageIcon.visible ? storageIcon.implicitWidth : 0)
+        (storageIconSlot.visible ? storageIconSlot.width : 0)
         + (storageValue.visible ? storageValue.implicitWidth : 0)
         + spacing
       width: visibleContentWidth
-      spacing: storageIcon.visible && storageValue.visible
+      spacing: storageIconSlot.visible && storageValue.visible
         ? root.tokens.compactGap : 0
 
-      Text {
-        id: storageIcon
+      Item {
+        id: storageIconSlot
         visible: root.displayMode !== "text"
-        width: visible ? implicitWidth : 0
+        width: visible ? root.iconSlotSize : 0
+        height: root.iconSlotSize
         anchors.verticalCenter: parent.verticalCenter
-        text: "󰋊"
-        color: root.widgetInk
-        font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: root.tokens.iconSize
-        horizontalAlignment: Text.AlignHCenter
-        renderType: Text.NativeRendering
+
+        Text {
+          id: storageIcon
+          anchors.centerIn: parent
+          text: "󰋊"
+          color: root.widgetInk
+          font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+          font.pixelSize: root.tokens.iconSize
+          horizontalAlignment: Text.AlignHCenter
+          renderType: Text.NativeRendering
+        }
       }
 
       Text {

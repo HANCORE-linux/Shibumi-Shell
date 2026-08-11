@@ -173,7 +173,7 @@ ShellRoot {
       Temperature.BarWidget {
         bar: fakeBar
         hostGroupId: "G:hancore.shibumi.temperature"
-        settings: ({ displayMode: "full", source: "cpu" })
+        settings: ({ displayMode: "full", source: "cpu", unit: "metric" })
       }
     }
   }
@@ -194,13 +194,41 @@ ShellRoot {
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
       if (root.phase === 1) {
-        if (!gpu.opened) return
+        if (!gpu.opened || !temperature.opened
+            || !temperature.panelLoaded || !temperature.panelItem) return
+        if (temperature.temperatureUnit !== "imperial"
+            || temperature.temperatureText(55) !== "131°F")
+          return root.fail("imperial temperature rendering")
+        if (!temperature.panelItem.moveUnitCursor(1)
+            || temperature.panelItem.unitCursor !== 0
+            || !temperature.panelItem.activateUnitCursor()
+            || fakeState.lastKey !== "unit"
+            || fakeState.lastValue !== "metric"
+            || !temperature.panelItem.moveUnitCursor(1)
+            || temperature.panelItem.unitCursor !== 1
+            || !temperature.panelItem.activateUnitCursor()
+            || fakeState.lastValue !== "imperial")
+          return root.fail("temperature unit keyboard navigation")
         gpu.close()
+        temperature.close()
         root.phase = 2
         return
       }
       if (root.phase === 2) {
-        if (gpu.opened) return
+        if (gpu.opened || temperature.opened || temperature.panelLoaded) return
+        temperature.settings = ({
+          displayMode: "icon", source: "cpu", unit: "imperial"
+        })
+        if (temperature.iconGlyphHorizontalOffset !== 1)
+          return root.fail("V1 temperature icon-only alignment")
+        const v2Tokens = {}
+        for (const key in fakeBar.visualTokens)
+          v2Tokens[key] = fakeBar.visualTokens[key]
+        v2Tokens.shellStyle = "full"
+        v2Tokens.v2Shell = true
+        fakeBar.visualTokens = v2Tokens
+        if (temperature.iconGlyphHorizontalOffset !== 1)
+          return root.fail("V2 temperature icon-only alignment")
         memoryLoader.active = false
         cpuLoader.active = false
         cpuCompactLoader.active = false
@@ -236,8 +264,10 @@ ShellRoot {
           || gpu.displayMode !== "icon"
           || !gpu.visible || gpu.implicitWidth <= 0
           || temperature.stateGroupId !== "G:hancore.shibumi.temperature"
+          || temperature.temperatureUnit !== "metric"
+          || temperature.temperatureText(55) !== "55°C"
           || temperature.iconSlotSize !== 14
-          || temperature.iconGlyphHorizontalOffset !== 1
+          || temperature.iconGlyphHorizontalOffset !== 3
           || temperature.contentHorizontalOffset !== -1)
         return root.fail("widget settings were not retained"
           + " cpuCompact=" + cpuCompact.compact
@@ -259,6 +289,14 @@ ShellRoot {
           || fakeState.lastGroup !== "G:hancore.shibumi.temperature"
           || fakeState.lastKey !== "source" || fakeState.lastValue !== "memory")
         return root.fail("dynamic V1 temperature source persistence")
+      if (!temperature.setTemperatureUnit("imperial")
+          || fakeState.lastGroup !== "G:hancore.shibumi.temperature"
+          || fakeState.lastKey !== "unit"
+          || fakeState.lastValue !== "imperial")
+        return root.fail("dynamic V1 temperature unit persistence")
+      temperature.settings = ({
+        displayMode: "full", source: "cpu", unit: "imperial"
+      })
       if (!memory.openSystemMonitor()
           || fakeBar.lastCommand !== "omarchy-launch-or-focus-tui btop"
           || !cpu.openSystemMonitor()
@@ -267,6 +305,7 @@ ShellRoot {
         return root.fail("system monitor action did not use the Quattro TUI launcher")
 
       gpu.toggle()
+      temperature.open()
       root.phase = 1
     }
   }

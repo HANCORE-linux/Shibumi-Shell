@@ -143,8 +143,9 @@ ShellRoot {
             || aiWidget.usagePercent !== 13 || aiWidget.implicitWidth <= 0
             || aiWidget.providerIconSlotWidth !== 20
             || aiWidget.providerIconSlotHeight !== 16
-            || aiWidget.providerGlyphWidth !== 14
-            || aiWidget.providerGlyphHeight !== 14
+            || aiWidget.claudeGlyphPixelSize !== 15
+            || aiWidget.providerGlyphWidth !== 15
+            || aiWidget.providerGlyphHeight !== 15
             || aiWidget.providerGlyphHorizontalOffset !== -1
             || aiWidget.childPanelWidget("omarchy.model-usage") !== aiWidget)
           return root.fail("single-provider facade")

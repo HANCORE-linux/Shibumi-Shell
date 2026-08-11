@@ -16,6 +16,21 @@ ShibumiPanel {
     { id: "nvme", label: "NVME" },
     { id: "memory", label: "RAM" }
   ]
+  property int unitCursor: -1
+
+  function moveUnitCursor(direction) {
+    const step = Number(direction || 0)
+    if (step === 0) return false
+    if (unitCursor < 0) unitCursor = step > 0 ? 0 : 1
+    else unitCursor = Math.max(0, Math.min(1, unitCursor + step))
+    return true
+  }
+
+  function activateUnitCursor() {
+    if (unitCursor < 0) return false
+    return ownerWidget.setTemperatureUnit(
+      unitCursor === 0 ? "metric" : "imperial")
+  }
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -27,7 +42,17 @@ ShibumiPanel {
     id: keyCatcher
     anchors.fill: parent
     onCloseRequested: panel.ownerWidget.close()
+    onMoveRequested: function(dx, _dy) {
+      if (dx !== 0) panel.moveUnitCursor(dx)
+    }
+    onActivateRequested: panel.activateUnitCursor()
+    onTextKey: function(text) {
+      const key = String(text || "").toLowerCase()
+      if (key === "c") panel.ownerWidget.setTemperatureUnit("metric")
+      else if (key === "f") panel.ownerWidget.setTemperatureUnit("imperial")
+    }
     onTabRequested: function(direction) {
+      panel.unitCursor = -1
       panel.ownerWidget.switchPanel(direction)
     }
 
@@ -38,9 +63,13 @@ ShibumiPanel {
 
       Row {
         width: parent.width
+        spacing: Commons.Style.space(5)
 
         Text {
-          width: parent.width - close.width
+          id: headerTitle
+          width: parent.width - unitChoices.width - close.width
+            - parent.spacing * 2
+          anchors.verticalCenter: parent.verticalCenter
           text: "THERMALS"
           color: panel.bar.foreground
           font.family: panel.bar.fontFamily
@@ -48,8 +77,27 @@ ShibumiPanel {
           font.weight: Font.Medium
         }
 
+        Row {
+          id: unitChoices
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: Commons.Style.space(2)
+
+          UnitChoice {
+            label: "°C"
+            unit: "metric"
+            unitIndex: 0
+          }
+
+          UnitChoice {
+            label: "°F"
+            unit: "imperial"
+            unitIndex: 1
+          }
+        }
+
         Text {
           id: close
+          anchors.verticalCenter: parent.verticalCenter
           text: "×"
           color: panel.bar.foreground
           font.pixelSize: Commons.Style.font.heading
@@ -170,7 +218,7 @@ ShibumiPanel {
           Text {
             width: parent.width * 0.3
             horizontalAlignment: Text.AlignRight
-            text: modelData.temperatureC + "°C"
+            text: panel.ownerWidget.temperatureText(modelData.temperatureC)
             color: panel.bar.urgent
             font.family: panel.bar.fontFamily
             font.pixelSize: Commons.Style.font.body
@@ -189,6 +237,63 @@ ShibumiPanel {
         font.family: panel.bar.fontFamily
         font.pixelSize: Commons.Style.font.body
       }
+    }
+  }
+
+  component UnitChoice: Rectangle {
+    id: unitChoice
+
+    required property string label
+    required property string unit
+    required property int unitIndex
+    readonly property bool selected:
+      panel.ownerWidget.temperatureUnit === unit
+    readonly property bool hovered: unitPointer.containsMouse
+    readonly property bool keyboardFocused: panel.unitCursor === unitIndex
+    readonly property bool highlighted: hovered || keyboardFocused
+    signal triggered()
+
+    width: Commons.Style.space(27)
+    height: headerTitle.implicitHeight
+    radius: panel.controlRadius
+    color: selected ? panel.controlActiveFillColor
+      : highlighted ? panel.controlHoverFillColor : "transparent"
+    border.width: keyboardFocused
+      ? Math.max(1, panel.controlBorderWidth) : 0
+    border.color: panel.controlAccent
+    Accessible.role: Accessible.RadioButton
+    Accessible.name: label
+    Accessible.description: unit === "metric"
+      ? "Show temperatures in Celsius"
+      : "Show temperatures in Fahrenheit"
+    Accessible.checkable: true
+    Accessible.checked: selected
+    Accessible.focusable: true
+    Accessible.focused: keyboardFocused
+    Accessible.onPressAction: unitChoice.triggered()
+
+    Behavior on color { ColorAnimation { duration: 100 } }
+
+    onTriggered: panel.ownerWidget.setTemperatureUnit(unit)
+
+    Text {
+      anchors.centerIn: parent
+      text: unitChoice.label
+      color: unitChoice.selected || unitChoice.highlighted
+        ? panel.controlAccent : panel.controlForeground
+      opacity: unitChoice.selected || unitChoice.highlighted ? 1 : 0.62
+      font.family: panel.bar.fontFamily
+      font.pixelSize: Commons.Style.font.caption
+      font.weight: unitChoice.selected ? Font.DemiBold : Font.Normal
+      renderType: Text.NativeRendering
+    }
+
+    MouseArea {
+      id: unitPointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: unitChoice.triggered()
     }
   }
 }
