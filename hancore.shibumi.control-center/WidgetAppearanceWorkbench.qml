@@ -14,10 +14,14 @@ Column {
   property string selectedWidgetGroup: "G4"
   property string selectedWidgetId: ""
   property bool detailOpen: false
+  property bool resetActionVisible: false
+  property string resetActionLabel: ""
+  property color resetActionColor: accent
   property string toggleErrorGroup: ""
   property string toggleErrorMessage: ""
   signal widgetRequested(string groupId, string pluginId)
   signal overviewRequested()
+  signal resetActionRequested()
 
   readonly property var displayModeOptions: [
     { value: "icon", label: "Icon" },
@@ -677,6 +681,10 @@ Column {
           WidgetSectionHeader {
             title: "ACTIVE WIDGETS"
             count: root.activeOptions.length
+            actionLabel: root.resetActionVisible
+              ? root.resetActionLabel : ""
+            actionColor: root.resetActionColor
+            onActionRequested: root.resetActionRequested()
           }
 
           Grid {
@@ -1176,30 +1184,101 @@ Column {
   }
 
   component WidgetSectionHeader: Item {
+    id: sectionHeader
+
     required property string title
     required property int count
+    property string actionLabel: ""
+    property color actionColor: root.accent
+    signal actionRequested()
 
     width: parent ? parent.width : 0
     height: Commons.Style.space(25)
 
-    Text {
+    Row {
       anchors.left: parent.left
       anchors.leftMargin: Commons.Style.space(5)
-      anchors.verticalCenter: parent.verticalCenter
-      text: parent.title
-      color: root.foreground
-      opacity: 0.54
-      font.family: root.controller.marketFont
-      font.pixelSize: Commons.Style.font.caption * root.uiScale
-      font.weight: Font.DemiBold
-      font.letterSpacing: 1
+      anchors.right: sectionCount.left
+      anchors.rightMargin: Commons.Style.space(5)
+      height: parent.height
+      spacing: Commons.Style.space(6)
+      clip: true
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        text: sectionHeader.title
+        color: root.foreground
+        opacity: 0.54
+        font.family: root.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+        font.weight: Font.DemiBold
+        font.letterSpacing: 1
+      }
+
+      Text {
+        visible: sectionHeader.actionLabel !== ""
+        anchors.verticalCenter: parent.verticalCenter
+        text: "|"
+        color: root.foreground
+        opacity: 0.28
+        font.family: root.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+        font.weight: Font.DemiBold
+        font.letterSpacing: 1
+      }
+
+      FocusScope {
+        id: sectionAction
+        visible: sectionHeader.actionLabel !== ""
+        width: visible ? sectionActionText.implicitWidth : 0
+        height: parent.height
+        activeFocusOnTab: visible
+        Accessible.role: Accessible.Button
+        Accessible.name: sectionHeader.actionLabel
+        Accessible.onPressAction: sectionHeader.actionRequested()
+
+        Text {
+          id: sectionActionText
+          anchors.centerIn: parent
+          text: sectionHeader.actionLabel
+          color: sectionHeader.actionColor
+          opacity: sectionActionPointer.containsMouse
+            || sectionAction.activeFocus ? 1 : 0.86
+          font.family: root.controller.marketFont
+          font.pixelSize: Commons.Style.font.caption * root.uiScale
+          font.weight: Font.DemiBold
+          font.letterSpacing: 1
+        }
+
+        MouseArea {
+          id: sectionActionPointer
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: sectionHeader.actionRequested()
+        }
+
+        Keys.onReturnPressed: function(event) {
+          if (!event.isAutoRepeat) sectionHeader.actionRequested()
+          event.accepted = true
+        }
+        Keys.onEnterPressed: function(event) {
+          if (!event.isAutoRepeat) sectionHeader.actionRequested()
+          event.accepted = true
+        }
+        Keys.onSpacePressed: function(event) {
+          if (!event.isAutoRepeat) sectionHeader.actionRequested()
+          event.accepted = true
+        }
+      }
     }
 
     Text {
+      id: sectionCount
       anchors.right: parent.right
       anchors.rightMargin: Commons.Style.space(5)
       anchors.verticalCenter: parent.verticalCenter
-      text: String(parent.count)
+      text: String(sectionHeader.count)
       color: root.accent
       opacity: 0.82
       font.family: root.controller.marketFont

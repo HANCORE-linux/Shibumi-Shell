@@ -681,6 +681,17 @@ ShibumiPanel {
     })
   }
 
+  function resetAllGroupAppearances(variantValue) {
+    const variant = String(variantValue || "").toLowerCase()
+    if (["v1", "v2"].indexOf(variant) < 0) return false
+    return runWithControlCenterRestore(function() {
+      return stateService
+        && typeof stateService.resetAllGroupAppearancesForVariant
+          === "function"
+        ? stateService.resetAllGroupAppearancesForVariant(variant) : false
+    })
+  }
+
   function runWithControlCenterRestore(callback) {
     if (typeof callback !== "function") return false
     const restoreBar = bar

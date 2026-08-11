@@ -100,9 +100,35 @@ Item {
     "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
     "widgetRadius", "surfaceOpacity"
   ]
+  readonly property var v1ExtensionAppearanceGroupIds: [
+    "G:hancore.shibumi.temperature",
+    "G:hancore.shibumi.gpu",
+    "G:hancore.shibumi.storage"
+  ]
 
   function normalizedVariant(value) {
     return String(value || "").toLowerCase() === "v2" ? "v2" : "v1"
+  }
+
+  function defaultAppearanceProfileForVariant(variantValue) {
+    // V1 and V2 expose different labels and capabilities, while their current
+    // canonical persisted defaults intentionally share these neutral values.
+    void(variantValue)
+    return {
+      displayMode: "full", compact: false, mediaStyle: "default",
+      color: "inherit", colorMode: "fill", tone: "auto",
+      widgetBorder: false, widgetBorderWidth: 1,
+      widgetBorderColor: "inherit", widgetBorderUsesSurfaceColor: false,
+      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1
+    }
+  }
+
+  function appearanceGroupSupportedForVariant(groupId, variantValue) {
+    const group = String(groupId || "")
+    const variant = normalizedVariant(variantValue)
+    return ShibumiConfig.GroupIds.indexOf(group) >= 0
+      || variant === "v1"
+        && v1ExtensionAppearanceGroupIds.indexOf(group) >= 0
   }
 
   function appearanceProfile(settings, variantValue) {
@@ -281,13 +307,7 @@ Item {
     const group = String(groupId || "")
     const variant = normalizedVariant(variantValue)
     if (!ShibumiConfig.isGroupId(group)) return false
-    const defaults = {
-      displayMode: "full", compact: false, mediaStyle: "default",
-      color: "inherit", colorMode: "fill", tone: "auto",
-      widgetBorder: false, widgetBorderWidth: 1,
-      widgetBorderColor: "inherit", widgetBorderUsesSurfaceColor: false,
-      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1
-    }
+    const defaults = defaultAppearanceProfileForVariant(variant)
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
       const settings = ShibumiConfig.isPlainObject(next.widgets[group])
@@ -297,6 +317,38 @@ Item {
       appearance[variant] = JSON.parse(JSON.stringify(defaults))
       settings.appearance = appearance
       next.widgets[group] = settings
+    })
+  }
+
+  function resetAllGroupAppearancesForVariant(variantValue) {
+    const variant = String(variantValue || "").toLowerCase()
+    if (["v1", "v2"].indexOf(variant) < 0) return false
+    const defaults = defaultAppearanceProfileForVariant(variant)
+    return commit(function(next) {
+      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+      const groups = Object.keys(next.widgets)
+      for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        const group = groups[groupIndex]
+        if (!appearanceGroupSupportedForVariant(group, variant)) continue
+        const settings = ShibumiConfig.isPlainObject(next.widgets[group])
+          ? next.widgets[group] : {}
+        const appearance = ShibumiConfig.isPlainObject(settings.appearance)
+          ? settings.appearance : {}
+        const hasVariantProfile = ShibumiConfig.isPlainObject(
+          appearance[variant])
+        let hasLegacyAppearance = false
+        for (let keyIndex = 0; keyIndex < appearanceKeys.length; keyIndex++) {
+          if (Object.prototype.hasOwnProperty.call(
+                settings, appearanceKeys[keyIndex])) {
+            hasLegacyAppearance = true
+            break
+          }
+        }
+        if (!hasVariantProfile && !hasLegacyAppearance) continue
+        appearance[variant] = JSON.parse(JSON.stringify(defaults))
+        settings.appearance = appearance
+        next.widgets[group] = settings
+      }
     })
   }
 

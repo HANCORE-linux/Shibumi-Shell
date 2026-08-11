@@ -293,9 +293,114 @@ ShellRoot {
               - v1OverviewPanelHeight) > 0.5)
           return root.fail("Icons overview height differed between V1 and V2")
         panel.v2LayoutActive = false
+        if (!appearance.resetActionVisible
+            || appearance.resetConfirmationPending
+            || appearance.activeResetVariant !== "v1"
+            || appearance.resetActionLabel !== "RESET V1 DEFAULTS"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color03"))
+            || !appearance.controller.setGroupSetting(
+              "G4", "color", "color05")
+            || !appearance.controller.setGroupSetting(
+              "G9", "mediaStyle", "full")
+            || !stateService.setGroupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", "icon")
+            || !stateService.setGroupAppearanceSettingForVariant(
+              "G2", "v2", "color", "color05"))
+          return root.fail("V1 global reset fixture was rejected")
+        const launcherBeforeV1Reset = JSON.stringify(
+          stateService.config.launcher)
+        if (!appearance.requestAppearanceReset()
+            || !appearance.resetConfirmationPending
+            || appearance.resetActionLabel !== "CONFIRM V1 RESET"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color01"))
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "color", "") !== "color05")
+          return root.fail("V1 global reset did not require confirmation")
+        appearance.motionActive = false
+        if (appearance.resetActionVisible
+            || appearance.resetConfirmationPending
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "color", "") !== "color05")
+          return root.fail("hidden V1 global reset remained armed")
+        appearance.motionActive = true
+        if (!appearance.resetActionVisible
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color03"))
+            || !appearance.requestAppearanceReset()
+            || !appearance.resetConfirmationPending
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color01")))
+          return root.fail("V1 global reset could not be re-armed")
+        if (!appearance.requestAppearanceReset()
+            || appearance.resetConfirmationPending
+            || appearance.resetActionLabel !== "RESET V1 DEFAULTS"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color03"))
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v1", "color", "") !== "inherit"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "mediaStyle", "") !== "default"
+            || stateService.groupAppearanceSettingForVariant(
+              "G:hancore.shibumi.storage", "v1", "displayMode", "")
+                !== "full"
+            || stateService.groupAppearanceSettingForVariant(
+              "G2", "v2", "color", "") !== "color05"
+            || JSON.stringify(stateService.config.launcher)
+              !== launcherBeforeV1Reset)
+          return root.fail("V1 global reset did not restore isolated defaults")
+        if (!stateService.resetGroupAppearanceForVariant("G2", "v2"))
+          return root.fail("V1 global reset fixture cleanup failed")
+
+        panel.v2LayoutActive = true
+        if (!appearance.resetActionVisible
+            || appearance.resetConfirmationPending
+            || appearance.activeResetVariant !== "v2"
+            || appearance.resetActionLabel !== "RESET V2 DEFAULTS"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color03"))
+            || !appearance.controller.setGroupSetting(
+              "G4", "displayMode", "text")
+            || !appearance.controller.setGroupSetting(
+              "G9", "mediaStyle", "full")
+            || !appearance.controller.setGroupSetting(
+              "G18", "widgetRadius", "round")
+            || !stateService.setGroupAppearanceSettingForVariant(
+              "G2", "v1", "color", "color04"))
+          return root.fail("V2 global reset fixture was rejected")
+        const launcherBeforeV2Reset = JSON.stringify(
+          stateService.config.launcher)
+        if (!appearance.requestAppearanceReset()
+            || !appearance.resetConfirmationPending
+            || appearance.resetActionLabel !== "CONFIRM V2 RESET"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color01")))
+          return root.fail("V2 global reset did not require confirmation")
+        if (!appearance.requestAppearanceReset()
+            || appearance.resetConfirmationPending
+            || appearance.resetActionLabel !== "RESET V2 DEFAULTS"
+            || !Qt.colorEqual(appearance.resetActionColor,
+              panel.accentColor("color03"))
+            || stateService.groupAppearanceSettingForVariant(
+              "G4", "v2", "displayMode", "") !== "full"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v2", "mediaStyle", "") !== "default"
+            || stateService.groupAppearanceSettingForVariant(
+              "G18", "v2", "widgetRadius", "") !== "auto"
+            || stateService.groupAppearanceSettingForVariant(
+              "G2", "v1", "color", "") !== "color04"
+            || JSON.stringify(stateService.config.launcher)
+              !== launcherBeforeV2Reset)
+          return root.fail("V2 global reset did not restore isolated defaults")
+        if (!stateService.resetGroupAppearanceForVariant("G2", "v1"))
+          return root.fail("V2 global reset fixture cleanup failed")
+
+        panel.v2LayoutActive = false
         if (appearance.widgetDetailOpen
             || !appearance.openWidgetDetails("G1", "")
-            || !appearance.widgetDetailOpen)
+            || !appearance.widgetDetailOpen
+            || appearance.resetActionVisible)
           return root.fail("Icons did not open Launcher details")
         const v1SelectionPanelHeight = panel.compactIconsSelectionPanelHeight
         panel.v2LayoutActive = true

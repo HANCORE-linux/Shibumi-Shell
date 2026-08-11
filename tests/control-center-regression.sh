@@ -1662,7 +1662,8 @@ for profile_icon_contract in \
     'WidgetAppearanceWorkbench.qml:&& !root.v1LayoutActive' \
     'ControlCenterPanel.qml:stateService.groupAppearanceSettingForVariant' \
     'ControlCenterPanel.qml:stateService.setGroupAppearanceSettingForVariant' \
-    'ControlCenterPanel.qml:stateService.resetGroupAppearanceForVariant'; do
+    'ControlCenterPanel.qml:stateService.resetGroupAppearanceForVariant' \
+    'ControlCenterPanel.qml:stateService.resetAllGroupAppearancesForVariant'; do
   file=${profile_icon_contract%%:*}
   label=${profile_icon_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
@@ -1829,13 +1830,35 @@ done
 for icons_hero_contract in \
     'PageHeaderHero.qml:property real preferredHeight:' \
     'PageHeaderHero.qml:property real previewWidth:' \
+    'PageMotionStage.qml:anchors.centerIn: parent' \
+    'BarFunctionsPage.qml:motionActive && !widgetDetailOpen' \
     'BarFunctionsPage.qml:preferredHeight: Commons.Style.space(80)' \
-    'BarFunctionsPage.qml:previewWidth: Commons.Style.space(150)'; do
+    'BarFunctionsPage.qml:previewWidth: Commons.Style.space(150)' \
+    'BarFunctionsPage.qml:resetActionVisible: root.resetActionVisible' \
+    'BarFunctionsPage.qml:resetActionColor: root.resetActionColor' \
+    'BarFunctionsPage.qml:controller.v2LayoutActive === true ? "v2" : "v1"' \
+    'BarFunctionsPage.qml:resetConfirmationPending ? "color01" : "color03"' \
+    'BarFunctionsPage.qml:function requestAppearanceReset()' \
+    'WidgetAppearanceWorkbench.qml:actionLabel: root.resetActionVisible' \
+    'WidgetAppearanceWorkbench.qml:text: "|"' \
+    'WidgetAppearanceWorkbench.qml:font.weight: Font.DemiBold' \
+    'WidgetAppearanceWorkbench.qml:font.letterSpacing: 1' \
+    'WidgetAppearanceWorkbench.qml:Accessible.onPressAction:' \
+    'WidgetAppearanceWorkbench.qml:!event.isAutoRepeat'; do
   file=${icons_hero_contract%%:*}
   label=${icons_hero_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
-    || fail "Icons compact hero contract drifted: $label"
+    || fail "Icons reset/header contract drifted: $label"
 done
+if rg -q 'utilityAction|previewVerticalOffset' \
+    "$control_dir/PageHeaderHero.qml" "$control_dir/PageMotionStage.qml"; then
+  fail "Icons reset still displaces or overlays the schematic preview"
+fi
+reset_repeat_guards=$(rg -c '!event\.isAutoRepeat' "$workbench")
+[[ $reset_repeat_guards -eq 3 ]] \
+  || fail "all three Icons reset keyboard paths must reject auto-repeat"
+rg -Fq 'height: Commons.Style.space(25)' "$workbench" \
+  || fail "Icons reset header target is smaller than 24 px"
 if rg -q 'providerFilter|providerOptions|providerRepeater|chooseProvider' \
     "$workbench"; then
   fail "Icons editor still exposes provider filtering"
@@ -1872,6 +1895,9 @@ rg -Fq 'function resetGroupAppearance(groupId)' \
 rg -Fq 'function resetGroupAppearanceForVariant(groupId, variantValue)' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "profile-specific widget Appearance reset is missing"
+rg -Fq 'function resetAllGroupAppearancesForVariant(variantValue)' \
+  "$repo_root/hancore.shibumi.state/Service.qml" \
+  || fail "global profile-specific widget Appearance reset is missing"
 rg -Fq '"widgetBorderColor"' \
   "$repo_root/hancore.shibumi.state/Service.qml" \
   || fail "widget outline-color choice is not covered by appearance reset"

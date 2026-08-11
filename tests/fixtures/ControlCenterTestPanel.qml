@@ -341,6 +341,14 @@ Item {
         ? stateService.resetGroupAppearance(groupId) : false
   }
 
+  function resetAllGroupAppearances(variantValue) {
+    const variant = String(variantValue || "").toLowerCase()
+    return ["v1", "v2"].indexOf(variant) >= 0
+      && stateService
+      && typeof stateService.resetAllGroupAppearancesForVariant === "function"
+      ? stateService.resetAllGroupAppearancesForVariant(variant) : false
+  }
+
   function setBarPresentation(name, value) {
     const presentationName = String(name || "")
     const preservePanel = [

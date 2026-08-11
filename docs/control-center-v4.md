@@ -437,7 +437,14 @@ not secondary sections inside Icons:
   capability context; the Launcher omits the generic Presentation control
   because Logo owns its identity. Split, gap, slot, and bar-divider ownership
   remains in Bars and is not duplicated here. Icons alone uses a shorter semantic page
-  preview, which disappears during focused editing.
+  preview, which remains centered and disappears during focused editing. In
+  each overview, `RESET V1 DEFAULTS` or `RESET V2 DEFAULTS` follows
+  `ACTIVE WIDGETS |` in the same header typography. It uses semantic
+  `color03`; its confirmation changes to `color01`. It requires a second
+  confirmation click, resets every official widget appearance for the active
+  generation in one transaction, and preserves the other generation's
+  appearance, launcher identity, activation, placement, splits, dividers, and
+  nonvisual settings.
 
 The Workspaces and Pickers controls are not repeated on another page. Quick
 may still expose whether the Workspaces widget is shown; that is widget
