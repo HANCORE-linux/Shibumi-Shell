@@ -30,13 +30,25 @@ LEGACY_MANAGED_MARKER = ".qsrise-managed.json"
 PREPARATION_PREFIX = ".shibumi-preparing."
 CLEANUP_PREFIX = ".shibumi-cleanup."
 COMMIT_PHASES = {"committing", "committed"}
+PRE_EXPOSURE_PHASES = {
+    "prepared",
+    "stopping-shell",
+    "shell-stopped",
+    "staging",
+    "staged",
+    "recovery-required",
+}
 ROLLBACK_PHASES = {
     "prepared",
+    "stopping-shell",
     "shell-stopped",
     "shell-started",
     "staging",
     "staged",
+    "exposing",
     "exposed",
+    "configuring",
+    "menu-configuring",
     "prepared-removal",
     "removed",
     "prepared-legacy-removal",
@@ -347,6 +359,7 @@ class PluginTransaction:
         self.finished = False
         self.commit_point_reached = False
         self.shell_stopped = False
+        self.live_mutation_started = False
         self.payload_reload_expected = (
             paths.plugin_dir / "hancore.shibumi.state"
         ).is_dir() and _config_enables_plugin(
@@ -406,6 +419,7 @@ class PluginTransaction:
             "menuExtensionExisted": self.menu_extension_existed,
             "restartOnReconcile": self.restart_on_reconcile,
             "shellStopped": self.shell_stopped,
+            "liveMutationStarted": self.live_mutation_started,
             "payloadReloadExpected": self.payload_reload_expected,
             "records": self.records,
         }
@@ -431,8 +445,23 @@ class PluginTransaction:
         # record-bearing journal replacement before crossing that boundary.
         _fsync_directory(self.journal_file.parent)
 
-    def mark_shell_stopped(self) -> None:
+    def _begin_live_mutation(self, phase: str) -> None:
+        if self.live_mutation_started:
+            return
+        # Persist this boundary before touching a live path. Recovery can then
+        # discard a crash-interrupted preflight transaction without reloading
+        # the shell, while any transaction that may have crossed this point is
+        # reconciled conservatively.
+        self.live_mutation_started = True
+        self._write_journal(phase)
+
+    def stop_shell(self) -> None:
+        # A drain can kill the shell before the caller regains control. Record
+        # that uncertainty first so an interruption can never be recovered as
+        # a no-op while leaving the production shell stopped.
         self.shell_stopped = True
+        self._write_journal("stopping-shell")
+        self.runtime.stop_shell()
         self._write_journal("shell-stopped")
 
     def mark_shell_started(self) -> None:
@@ -530,9 +559,12 @@ class PluginTransaction:
         return payload_digest, plugin_digests
 
     def expose(self) -> None:
-        for record in self.records:
-            if record["action"] != "replace":
-                continue
+        replacements = [
+            record for record in self.records if record["action"] == "replace"
+        ]
+        if replacements:
+            self._begin_live_mutation("exposing")
+        for record in replacements:
             target = Path(record["target"])
             stage = Path(record["stage"])
             backup = Path(record["backup"])
@@ -566,6 +598,7 @@ class PluginTransaction:
                 "hadTarget": True,
             }
             self.records.append(record)
+            self.live_mutation_started = True
             self._write_journal("prepared-removal")
             os.replace(target, backup)
             _fsync_directory(self.paths.plugin_dir)
@@ -591,12 +624,14 @@ class PluginTransaction:
                 "hadTarget": True,
             }
             self.records.append(record)
+            self.live_mutation_started = True
             self._write_journal("prepared-legacy-removal")
             os.replace(target, backup)
             _fsync_directory(self.paths.plugin_dir)
             self._write_journal("legacy-removed")
 
     def write_config(self, payload: bytes) -> None:
+        self._begin_live_mutation("configuring")
         atomic_write(self.paths.config_file, payload)
         self._write_journal("configured")
 
@@ -604,6 +639,7 @@ class PluginTransaction:
         path = self.paths.menu_extension_file
         if path.is_symlink() or path.parent.is_symlink():
             raise TransactionError(f"refusing symlinked Omarchy menu extension: {path}")
+        self._begin_live_mutation("menu-configuring")
         if payload is None:
             _durable_unlink(path)
         else:
@@ -626,6 +662,14 @@ class PluginTransaction:
         if self.finished or self.commit_point_reached:
             return
         try:
+            if not self.live_mutation_started and not self.shell_stopped:
+                # Validation and lifecycle preflights may fail after the full
+                # payload has been staged but before any live path changed.
+                # Discard those hidden stages without causing a needless
+                # rescan, reload, restart, or rewrite of unchanged config.
+                self._cleanup_transaction()
+                self.finished = True
+                return
             # Do not unconditionally drain a still-running shell here. A host
             # restart can fail its own preflight (for example a lock guard)
             # before killing anything; stopping during rollback would then
@@ -756,6 +800,31 @@ def _safe_record_paths(
     ):
         raise TransactionError("unsafe path in Shibumi transaction journal")
     return target, stage, backup
+
+
+def _discard_pre_exposure_records(
+    plugin_root: Path, token: str, records: Iterable[dict[str, Any]]
+) -> None:
+    stages: list[Path] = []
+    for record in records:
+        target, stage, backup = _safe_record_paths(plugin_root, token, record)
+        target_marker = _marker(target) if target.is_dir() else None
+        unexpected_target = not bool(record.get("hadTarget")) and (
+            target.exists() or target.is_symlink()
+        )
+        if backup.exists() or backup.is_symlink() or unexpected_target or (
+            target_marker and target_marker.get("transaction") == token
+        ):
+            raise TransactionError(
+                "pre-exposure transaction contains live mutation artifacts"
+            )
+        if stage and (stage.exists() or stage.is_symlink()):
+            stages.append(stage)
+    for stage in stages:
+        _remove_path(stage)
+    removed_stage = bool(stages)
+    if removed_stage and plugin_root.is_dir():
+        _fsync_directory(plugin_root)
 
 
 def _restore_records(
@@ -953,6 +1022,7 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
         config_snapshot_payload: bytes | None = None
         menu_snapshot_payload: bytes | None = None
         shell_stopped_value = True
+        live_mutation_value: bool | None = None
         payload_reload_value: bool | None = None
         if phase in ROLLBACK_PHASES:
             if config_existed_value:
@@ -967,6 +1037,18 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
             if not isinstance(shell_stopped_value, bool):
                 raise TransactionError(
                     f"transaction shellStopped is malformed: {directory}"
+                )
+            if "liveMutationStarted" in journal:
+                live_mutation_value = journal["liveMutationStarted"]
+                if not isinstance(live_mutation_value, bool):
+                    raise TransactionError(
+                        "transaction liveMutationStarted is malformed: "
+                        f"{directory}"
+                    )
+            if live_mutation_value is False and phase not in PRE_EXPOSURE_PHASES:
+                raise TransactionError(
+                    "transaction pre-exposure phase is inconsistent: "
+                    f"{directory}"
                 )
             if "payloadReloadExpected" in journal:
                 payload_reload_value = journal["payloadReloadExpected"]
@@ -1022,36 +1104,40 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                     _fsync_directory(plugin_root)
         else:
             restart_on_reconcile = restart_value
-            _restore_records(plugin_root, token, records)
-            if config_existed_value:
-                atomic_write(config_path, config_snapshot_payload)
+            if live_mutation_value is False and not shell_stopped_value:
+                _discard_pre_exposure_records(plugin_root, token, records)
             else:
-                _durable_unlink(config_path)
-            if menu_extension_value:
-                if journal["menuExtensionExisted"]:
-                    atomic_write(menu_extension_path, menu_snapshot_payload)
+                _restore_records(plugin_root, token, records)
+                if config_existed_value:
+                    atomic_write(config_path, config_snapshot_payload)
                 else:
-                    _durable_unlink(menu_extension_path)
-                    if menu_extension_path.parent.is_dir() \
-                            and not any(menu_extension_path.parent.iterdir()):
-                        parent = menu_extension_path.parent.parent
-                        menu_extension_path.parent.rmdir()
-                        if parent.is_dir():
-                            _fsync_directory(parent)
-            if payload_reload_value is None:
-                payload_reload_value = (
-                    (paths.plugin_dir / "hancore.shibumi.state").is_dir()
-                    and _config_enables_plugin(
-                        paths.config_file, "hancore.shibumi.state"
+                    _durable_unlink(config_path)
+                if menu_extension_value:
+                    if journal["menuExtensionExisted"]:
+                        atomic_write(menu_extension_path, menu_snapshot_payload)
+                    else:
+                        _durable_unlink(menu_extension_path)
+                        if menu_extension_path.parent.is_dir() \
+                                and not any(menu_extension_path.parent.iterdir()):
+                            parent = menu_extension_path.parent.parent
+                            menu_extension_path.parent.rmdir()
+                            if parent.is_dir():
+                                _fsync_directory(parent)
+                if payload_reload_value is None:
+                    payload_reload_value = (
+                        (paths.plugin_dir / "hancore.shibumi.state").is_dir()
+                        and _config_enables_plugin(
+                            paths.config_file, "hancore.shibumi.state"
+                        )
                     )
+                runtime.reconcile_rollback(
+                    restart_required=restart_on_reconcile,
+                    # Schema-v1 journals predating the live-mutation field are
+                    # conservative because they may have crossed an exposure
+                    # or ownership-changing stop boundary.
+                    shell_was_stopped=shell_stopped_value,
+                    payload_reload_expected=payload_reload_value,
                 )
-            runtime.reconcile_rollback(
-                restart_required=restart_on_reconcile,
-                # Schema-v1 journals predating this field are conservative:
-                # they may have crossed an ownership-changing stop boundary.
-                shell_was_stopped=shell_stopped_value,
-                payload_reload_expected=payload_reload_value,
-            )
         _retire_transaction_directory(root, directory, token)
         recovered += 1
     if root.is_dir() and not any(root.iterdir()):

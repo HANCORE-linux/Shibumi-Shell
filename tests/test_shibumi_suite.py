@@ -63,6 +63,19 @@ from shibumi_suite.transaction import (  # noqa: E402
 
 
 QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
+SESSION_LOCK_FIELDS = (
+    "locked",
+    "requested",
+    "pending",
+    "sessionLocked",
+    "secure",
+)
+
+
+def unlocked_session_status() -> dict[str, bool]:
+    return dict.fromkeys(SESSION_LOCK_FIELDS, False)
+
+
 INVALID_EMPTY_REGISTRY_OUTPUTS = (
     "",
     "No running instances.",
@@ -95,6 +108,9 @@ class FakeOmarchyRuntime(OmarchyRuntime):
         self.menu_refreshes = 0
         self.shell_running = True
         self.restart_failure_stops_shell = False
+        self.session_lock_status = unlocked_session_status()
+        self.session_lock_failure = ""
+        self.session_lock_preflights = 0
         self.events: list[str] = []
 
     def validate_plugin(self, directory: Path) -> None:
@@ -105,6 +121,19 @@ class FakeOmarchyRuntime(OmarchyRuntime):
             "." + str(manifest.get("id"))
         ):
             raise RuntimeFailure(f"invalid staged plugin {directory}")
+
+    def require_session_unlocked(self, operation: str) -> None:
+        self.session_lock_preflights += 1
+        if self.session_lock_failure:
+            raise RuntimeFailure(self.session_lock_failure)
+        active = [
+            name for name, value in self.session_lock_status.items() if value is True
+        ]
+        if active:
+            raise RuntimeFailure(
+                f"refusing {operation} while the Omarchy session lock is active "
+                f"({', '.join(active)}); unlock the session and retry"
+            )
 
     def rescan(self) -> None:
         self.events.append("rescan")
@@ -241,9 +270,8 @@ class RuntimeProcessTests(unittest.TestCase):
         self.omarchy_root = Path(self.temporary.name) / "omarchy"
         bin_dir = self.omarchy_root / "bin"
         bin_dir.mkdir(parents=True)
-        (bin_dir / "omarchy-restart-shell").write_text(
-            "#!/bin/sh\n", encoding="utf-8"
-        )
+        for command in ("omarchy-restart-shell", "omarchy-shell"):
+            (bin_dir / command).write_text("#!/bin/sh\n", encoding="utf-8")
         self.runtime = OmarchyRuntime(self.omarchy_root)
 
     def tearDown(self) -> None:
@@ -281,6 +309,76 @@ class RuntimeProcessTests(unittest.TestCase):
         self.assertNotIn([str(
             self.omarchy_root / "bin/omarchy-shell"
         ), "shell", "ping"], calls)
+
+    def test_session_lock_preflight_accepts_only_explicitly_unlocked_status(
+        self,
+    ) -> None:
+        status = unlocked_session_status()
+        self.runtime.run = Mock(return_value=self.result(json.dumps(status)))
+
+        self.runtime.require_session_unlocked("Shibumi update")
+
+        self.runtime.run.assert_called_once_with(
+            [str(self.omarchy_root / "bin/omarchy-shell"), "lock", "status"],
+            timeout=4,
+            check=False,
+        )
+
+    def test_session_lock_preflight_rejects_every_active_phase(self) -> None:
+        idle = unlocked_session_status()
+        for field in SESSION_LOCK_FIELDS:
+            with self.subTest(field=field):
+                status = dict(idle)
+                status[field] = True
+                self.runtime.run = Mock(
+                    return_value=self.result(json.dumps(status))
+                )
+
+                with self.assertRaisesRegex(
+                    RuntimeFailure,
+                    rf"session lock is active \({field}\)",
+                ):
+                    self.runtime.require_session_unlocked("Shibumi update")
+
+    def test_session_lock_preflight_fails_closed_for_unknown_status(self) -> None:
+        idle = unlocked_session_status()
+        cases = (
+            self.result("not-json"),
+            self.result("[]"),
+            self.result(json.dumps({"locked": False})),
+            self.result(json.dumps({**idle, "secure": 0})),
+            self.result(
+                '{"locked":true,"locked":false,"requested":false,'
+                '"pending":false,"sessionLocked":false,"secure":false}'
+            ),
+            *(
+                self.result(
+                    '{"locked":false,"requested":false,"pending":false,'
+                    '"sessionLocked":false,"secure":false,"extra":'
+                    + constant
+                    + "}"
+                )
+                for constant in ("NaN", "Infinity", "-Infinity")
+            ),
+            self.result(stderr="IPC unavailable", returncode=1),
+        )
+        for result in cases:
+            with self.subTest(stdout=result.stdout, returncode=result.returncode):
+                self.runtime.run = Mock(return_value=result)
+                with self.assertRaisesRegex(
+                    RuntimeFailure,
+                    "cannot verify that the session is unlocked",
+                ):
+                    self.runtime.require_session_unlocked("Shibumi update")
+
+        self.runtime.run = Mock(
+            side_effect=RuntimeFailure("injected IPC timeout")
+        )
+        with self.assertRaisesRegex(
+            RuntimeFailure,
+            "cannot verify that the session is unlocked.*injected IPC timeout",
+        ):
+            self.runtime.require_session_unlocked("Shibumi update")
 
     def test_instance_guard_ignores_foreign_config_but_rejects_duplicates(self) -> None:
         config = self.omarchy_root / "shell/shell.qml"
@@ -725,6 +823,49 @@ class SuiteLifecycleTests(unittest.TestCase):
             return []
         return sorted(self.paths.plugin_dir.glob(".shibumi-*"))
 
+    @staticmethod
+    def tree_snapshot(
+        root: Path,
+    ) -> tuple[tuple[str, str, bytes | str | None], ...]:
+        entries: list[tuple[str, str, bytes | str | None]] = []
+
+        def visit(path: Path, relative: str) -> None:
+            if path.is_symlink():
+                entries.append((relative, "symlink", str(path.readlink())))
+            elif path.is_dir():
+                entries.append((relative, "directory", None))
+                for child in sorted(path.iterdir(), key=lambda item: item.name):
+                    visit(child, str(child.relative_to(root)))
+            elif path.is_file():
+                entries.append((relative, "file", path.read_bytes()))
+            elif path.exists():
+                entries.append((relative, "other", None))
+
+        visit(root, ".")
+        return tuple(entries)
+
+    def managed_state_snapshot(self) -> dict[str, object]:
+        return {
+            "plugins": self.tree_snapshot(self.paths.plugin_dir),
+            "config": self.tree_snapshot(self.paths.config_file),
+            "state": self.tree_snapshot(self.paths.state_dir),
+            "menuExtension": self.tree_snapshot(
+                self.paths.menu_extension_file
+            ),
+        }
+
+    def runtime_activity_snapshot(self) -> dict[str, object]:
+        return {
+            "events": tuple(self.runtime.events),
+            "rescans": self.runtime.rescans,
+            "reloads": self.runtime.reloads,
+            "restarts": self.runtime.restarts,
+            "stops": self.runtime.stops,
+            "payloadReloads": self.runtime.payload_reloads,
+            "menuRefreshes": self.runtime.menu_refreshes,
+            "shellRunning": self.runtime.shell_running,
+        }
+
     def test_menu_extension_merge_is_idempotent_and_reversible(self) -> None:
         original = (
             "{\n"
@@ -827,6 +968,132 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(package_state["packageName"], "shibumi-shell")
         self.assertEqual(package_state["packageVersion"], "0.1.1-beta.7")
         self.assertNotIn("sourceRoot", package_state)
+
+    def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
+        self.install()
+        source_file = self.source / "hancore.shibumi.center" / "BarWidget.qml"
+        source_file.write_text(
+            source_file.read_text(encoding="utf-8")
+            + "\n// update blocked by active lock\n",
+            encoding="utf-8",
+        )
+        self.suite = Suite.load(self.source)
+        state_before = self.managed_state_snapshot()
+        activity_before = self.runtime_activity_snapshot()
+        preflights_before = self.runtime.session_lock_preflights
+        self.runtime.session_lock_status["pending"] = True
+        original_preflight = self.runtime.require_session_unlocked
+        staged_plugin_ids: set[str] = set()
+
+        def reject_locked_update(operation: str) -> None:
+            nonlocal staged_plugin_ids
+            staged_plugin_ids = {
+                str(json.loads(
+                    (path / "manifest.json").read_text(encoding="utf-8")
+                )["id"])
+                for path in self.paths.plugin_dir.glob(".shibumi-stage.*")
+                if path.is_dir()
+            }
+            original_preflight(operation)
+
+        with patch.object(
+            self.runtime,
+            "require_session_unlocked",
+            side_effect=reject_locked_update,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure,
+                r"session lock is active \(pending\)",
+            ):
+                command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(staged_plugin_ids, set(self.suite.plugins))
+        self.assertEqual(self.managed_state_snapshot(), state_before)
+        self.assertEqual(self.runtime_activity_snapshot(), activity_before)
+        self.assertEqual(
+            self.runtime.session_lock_preflights, preflights_before + 1
+        )
+
+    def test_interrupted_locked_update_recovers_without_live_reconciliation(
+        self,
+    ) -> None:
+        self.install()
+        state_before = self.managed_state_snapshot()
+        activity_before = self.runtime_activity_snapshot()
+        self.runtime.session_lock_status["secure"] = True
+
+        with patch.object(
+            PluginTransaction,
+            "_cleanup_transaction",
+            side_effect=OSError("injected interrupted pre-exposure cleanup"),
+        ):
+            with self.assertRaisesRegex(
+                OSError,
+                "injected interrupted pre-exposure cleanup",
+            ):
+                command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        journals = list(
+            (self.paths.state_dir / "transactions").glob("*/journal.json")
+        )
+        self.assertEqual(len(journals), 1)
+        journal = json.loads(journals[0].read_text(encoding="utf-8"))
+        self.assertEqual(journal["phase"], "recovery-required")
+        self.assertIs(journal["liveMutationStarted"], False)
+        self.assertTrue(self.hidden_transaction_paths())
+
+        self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
+
+        self.assertEqual(self.managed_state_snapshot(), state_before)
+        self.assertEqual(self.runtime_activity_snapshot(), activity_before)
+
+    def test_shell_stop_intent_is_durable_before_runtime_drain(self) -> None:
+        self.install()
+        state_before = self.managed_state_snapshot()
+        activity_before = self.runtime_activity_snapshot()
+        transaction = PluginTransaction(
+            self.paths,
+            self.runtime,
+            restart_on_reconcile=True,
+        )
+        observed_journal: dict[str, object] = {}
+
+        def interrupted_stop() -> None:
+            nonlocal observed_journal
+            observed_journal = json.loads(
+                transaction.journal_file.read_text(encoding="utf-8")
+            )
+            self.runtime.events.append("stop")
+            self.runtime.stops += 1
+            self.runtime.shell_running = False
+            raise RuntimeFailure("injected interruption after shell drain")
+
+        with patch.object(
+            self.runtime,
+            "stop_shell",
+            side_effect=interrupted_stop,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure,
+                "injected interruption after shell drain",
+            ):
+                transaction.stop_shell()
+
+        self.assertEqual(observed_journal["phase"], "stopping-shell")
+        self.assertIs(observed_journal["shellStopped"], True)
+        self.assertIs(observed_journal["liveMutationStarted"], False)
+        self.assertFalse(self.runtime.shell_running)
+
+        self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
+
+        expected_activity = dict(activity_before)
+        expected_activity.update(
+            events=(*activity_before["events"], "stop", "restart"),
+            restarts=activity_before["restarts"] + 1,
+            stops=activity_before["stops"] + 1,
+        )
+        self.assertEqual(self.managed_state_snapshot(), state_before)
+        self.assertEqual(self.runtime_activity_snapshot(), expected_activity)
 
     def test_update_transactionally_retires_app_menu(self) -> None:
         self.install()
@@ -2220,6 +2487,11 @@ class SuiteLifecycleTests(unittest.TestCase):
             for index, event in enumerate(events)
             if event[0] == "journal:staged"
         )
+        exposing_journal = next(
+            index
+            for index, event in enumerate(events)
+            if event[0] == "journal:exposing"
+        )
         exposure_index = next(
             index for index, event in enumerate(events) if event[0] == "exposure"
         )
@@ -2237,7 +2509,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertLess(durable_plugin_directory, tree_index)
         self.assertLess(tree_index, durable_stage_entry)
         self.assertLess(durable_stage_entry, staged_journal)
-        self.assertLess(staged_journal, exposure_index)
+        self.assertLess(staged_journal, exposing_journal)
+        self.assertLess(exposing_journal, exposure_index)
         self.assertLess(exposure_index, durable_exposure)
         self.assertLess(durable_exposure, exposed_journal)
         transaction.rollback()
@@ -2366,6 +2639,8 @@ class SuiteLifecycleTests(unittest.TestCase):
             "missing snapshot",
             "malformed second record",
             "invalid late boolean",
+            "invalid live mutation boolean",
+            "inconsistent pre-exposure phase",
             "boolean schema",
             "float schema",
             "array journal",
@@ -2412,6 +2687,13 @@ class SuiteLifecycleTests(unittest.TestCase):
                 elif scenario == "invalid late boolean":
                     assert isinstance(journal, dict)
                     journal["payloadReloadExpected"] = "false"
+                elif scenario == "invalid live mutation boolean":
+                    assert isinstance(journal, dict)
+                    journal["liveMutationStarted"] = "false"
+                elif scenario == "inconsistent pre-exposure phase":
+                    assert isinstance(journal, dict)
+                    journal["phase"] = "exposed"
+                    journal["liveMutationStarted"] = False
                 elif scenario == "boolean schema":
                     assert isinstance(journal, dict)
                     journal["schemaVersion"] = True

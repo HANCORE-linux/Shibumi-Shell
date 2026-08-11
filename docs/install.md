@@ -143,8 +143,14 @@ git pull --ff-only
 
 An update requires a suite-managed Shibumi installation. It stages all 24
 current plugin roots as one transaction and verifies that the shell executes
-the accepted payload rather than a stale QML cache. For an external-bar
-installation, update preserves the active bar and layout.
+the accepted payload rather than a stale QML cache. Hidden staging directories
+do not trigger Quattro's live plugin watcher. Immediately before replacing the
+live roots, the updater requires an authoritative lock status with `locked`,
+`requested`, `pending`, `sessionLocked`, and `secure` all explicitly false. An
+active, incomplete, malformed, or unavailable lock status aborts the update,
+discards staging, and leaves the live plugins unchanged; unlock the active
+session and retry. For an external-bar installation, update preserves the
+active bar and layout.
 
 ### Move from a checkout to the package
 

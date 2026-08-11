@@ -201,6 +201,67 @@ class OmarchyRuntime:
     def validate_plugin(self, directory: Path) -> None:
         self.run([self.command("omarchy"), "plugin", "validate", str(directory)])
 
+    def require_session_unlocked(self, operation: str) -> None:
+        """Fail closed unless Omarchy reports an explicitly idle lock service."""
+        action = operation.strip() or "Shibumi lifecycle mutation"
+        command = [self.command("omarchy-shell"), "lock", "status"]
+        try:
+            result = self.run(command, timeout=4, check=False)
+        except RuntimeFailure as error:
+            raise RuntimeFailure(
+                f"cannot verify that the session is unlocked before {action}: {error}"
+            ) from error
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip() or (
+                f"exit {result.returncode}"
+            )
+            raise RuntimeFailure(
+                f"cannot verify that the session is unlocked before {action}: "
+                f"lock status failed ({detail})"
+            )
+
+        def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            value: dict[str, Any] = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError(f"duplicate lock status field: {key}")
+                value[key] = item
+            return value
+
+        def reject_nonfinite_number(value: str) -> Any:
+            raise ValueError(f"non-finite lock status number: {value}")
+
+        try:
+            status = json.loads(
+                result.stdout,
+                object_pairs_hook=reject_duplicate_keys,
+                parse_constant=reject_nonfinite_number,
+            )
+        except (json.JSONDecodeError, ValueError) as error:
+            raise RuntimeFailure(
+                f"cannot verify that the session is unlocked before {action}: "
+                "lock status returned malformed or ambiguous JSON"
+            ) from error
+        required = ("locked", "requested", "pending", "sessionLocked", "secure")
+        if not isinstance(status, dict):
+            raise RuntimeFailure(
+                f"cannot verify that the session is unlocked before {action}: "
+                "lock status is not an object"
+            )
+        invalid = [name for name in required if type(status.get(name)) is not bool]
+        if invalid:
+            raise RuntimeFailure(
+                f"cannot verify that the session is unlocked before {action}: "
+                "lock status has missing or non-boolean fields "
+                + ", ".join(invalid)
+            )
+        active = [name for name in required if status[name] is True]
+        if active:
+            raise RuntimeFailure(
+                f"refusing {action} while the Omarchy session lock is active "
+                f"({', '.join(active)}); unlock the session and retry"
+            )
+
     def rescan(self) -> None:
         self.run([self.command("omarchy-shell"), "shell", "rescanPlugins"])
 

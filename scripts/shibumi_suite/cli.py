@@ -554,8 +554,7 @@ def command_install(
         transaction.stage_removal_ids(suite.retired_plugins)
         runtime.rescan()
         if not external:
-            runtime.stop_shell()
-            transaction.mark_shell_stopped()
+            transaction.stop_shell()
         transaction.write_config(encode_config(desired))
         if external:
             runtime.reload_config()
@@ -655,8 +654,7 @@ def command_migrate(
 
         transaction.expose()
         runtime.rescan()
-        runtime.stop_shell()
-        transaction.mark_shell_stopped()
+        transaction.stop_shell()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
         transaction.mark_shell_started()
@@ -773,6 +771,10 @@ def command_update(
             configured_bar=configured_bar_id(desired),
             previous_bar=previous_bar_for_state(state, defaults),
         )
+        # Hidden staging paths are ignored by Quattro's plugin watcher. Check
+        # the authoritative lock service only after staging is complete and
+        # immediately before the first live plugin directory is renamed.
+        runtime.require_session_unlocked("Shibumi update")
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
         runtime.rescan()
@@ -873,8 +875,7 @@ def command_repair(
             previous_bar=previous_bar_for_state(state, defaults),
         )
         if not external:
-            runtime.stop_shell()
-            transaction.mark_shell_stopped()
+            transaction.stop_shell()
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
         transaction.write_config(encode_config(desired))
@@ -947,8 +948,7 @@ def command_activate(
     with PluginTransaction(
         paths, runtime, restart_on_reconcile=True
     ) as transaction:
-        runtime.stop_shell()
-        transaction.mark_shell_stopped()
+        transaction.stop_shell()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
         transaction.mark_shell_started()
@@ -1037,8 +1037,7 @@ def command_deactivate(
     with PluginTransaction(
         paths, runtime, restart_on_reconcile=True
     ) as transaction:
-        runtime.stop_shell()
-        transaction.mark_shell_stopped()
+        transaction.stop_shell()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
         transaction.mark_shell_started()
@@ -1113,8 +1112,7 @@ def command_uninstall(
         paths, runtime, restart_on_reconcile=True
     ) as transaction:
         remove_picker_menu_extension(transaction, runtime, state)
-        runtime.stop_shell()
-        transaction.mark_shell_stopped()
+        transaction.stop_shell()
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
         transaction.mark_shell_started()
