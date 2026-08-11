@@ -102,6 +102,14 @@ Item {
       && /^[A-Za-z0-9._-]+$/.test(String(theme.name || ""))
   }
 
+  function openThemeReview(theme) {
+    if (!updateService.viewThemeChanges(theme)) return false
+    if (panel.ownerWidget
+        && typeof panel.ownerWidget.close === "function")
+      panel.ownerWidget.close()
+    return true
+  }
+
   function armAction(kind, theme) {
     if (!actionIdle || !theme) return
     confirmAction = String(kind || "")
@@ -260,7 +268,7 @@ Item {
                 enabled: root.canReview(modelData) && root.actionIdle
                 tooltipText: enabled
                   ? "View pinned changes" : "No reviewed changes"
-                onClicked: root.updateService.viewThemeChanges(modelData)
+                onClicked: root.openThemeReview(modelData)
               }
 
               PanelButton {
@@ -331,7 +339,7 @@ Item {
                 hoverEnabled: root.canReview(modelData)
                 enabled: root.canReview(modelData) && root.actionIdle
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                onClicked: root.updateService.viewThemeChanges(modelData)
+                onClicked: root.openThemeReview(modelData)
               }
             }
 

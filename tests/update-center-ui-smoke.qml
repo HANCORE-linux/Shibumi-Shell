@@ -14,7 +14,7 @@ ShellRoot {
   property int packageLaunchCalls: 0
   property int packageRefreshCalls: 0
   property int panelCloseCalls: 0
-  property var packageActionOrder: []
+  property var externalActionOrder: []
   property var fullPanelComponent: null
 
   function fail(message) {
@@ -49,7 +49,7 @@ ShellRoot {
     id: fakeOwnerWidget
     function close() {
       root.panelCloseCalls++
-      root.packageActionOrder.push("close")
+      root.externalActionOrder.push("close")
     }
   }
 
@@ -140,6 +140,7 @@ ShellRoot {
     property string actionStatus: ""
     property string actionError: ""
     property bool currentThemeNeedsReapply: true
+    property bool allowThemeReview: true
 
     function currentTheme() {
       for (let index = 0; index < themeState.themes.length; index++)
@@ -151,7 +152,7 @@ ShellRoot {
     function refreshThemes() { root.themeCheckCalls++ }
     function launchPackageUpdate() {
       root.packageLaunchCalls++
-      root.packageActionOrder.push("launch")
+      root.externalActionOrder.push("launch")
     }
     function updateTheme(_theme) { return true }
     function updateAllThemes() {
@@ -163,7 +164,9 @@ ShellRoot {
       return true
     }
     function viewThemeChanges(_theme) {
+      if (!allowThemeReview) return false
       root.reviewCalls++
+      root.externalActionOrder.push("review-launch")
       return true
     }
     function reinstallTheme(_theme) {
@@ -219,7 +222,7 @@ ShellRoot {
         return root.fail("full system update action did not render")
       systemUpdateButton.clicked()
       if (root.packageLaunchCalls !== 1 || root.panelCloseCalls !== 1
-          || root.packageActionOrder.join(",") !== "launch,close")
+          || root.externalActionOrder.join(",") !== "launch,close")
         return root.fail("system updater did not close its source panel")
       packageRefreshButton.clicked()
       if (root.packageRefreshCalls !== 1 || root.panelCloseCalls !== 1)
@@ -233,7 +236,15 @@ ShellRoot {
           || Number(blocked.behind || 0) <= 0)
         return root.fail("theme row capabilities were not preserved")
 
-      fakeService.viewThemeChanges(demo)
+      if (!themesPanel.openThemeReview(demo)
+          || root.reviewCalls !== 1 || root.panelCloseCalls !== 2
+          || root.externalActionOrder.join(",")
+            !== "launch,close,review-launch,close")
+        return root.fail("theme review did not close its source panel")
+      fakeService.allowThemeReview = false
+      if (themesPanel.openThemeReview(demo)
+          || root.reviewCalls !== 1 || root.panelCloseCalls !== 2)
+        return root.fail("rejected theme review unexpectedly closed the panel")
       themesPanel.armAction("reinstall", demo)
       themesPanel.confirmActionFor(demo)
       themesPanel.armAction("remove", demo)
@@ -306,7 +317,7 @@ ShellRoot {
       if (root.themeReapplyCalls !== 1 || root.themeCheckCalls !== 1
           || root.themeUpdateCalls !== 1)
         return root.fail("theme footer actions crossed their labels")
-      if (root.panelCloseCalls !== 1)
+      if (root.panelCloseCalls !== 2)
         return root.fail("theme footer action unexpectedly closed the panel")
 
       fakeService.packageState = Object.assign({}, fakeService.packageState, {
@@ -339,9 +350,9 @@ ShellRoot {
             || systemUpdateButton.text !== "Open system updater")
           return root.fail("empty package updater action drifted")
         systemUpdateButton.clicked()
-        if (root.packageLaunchCalls !== 2 || root.panelCloseCalls !== 2
-            || root.packageActionOrder.join(",")
-              !== "launch,close,launch,close")
+        if (root.packageLaunchCalls !== 2 || root.panelCloseCalls !== 3
+            || root.externalActionOrder.join(",")
+              !== "launch,close,review-launch,close,launch,close")
           return root.fail("empty system updater did not close its source panel")
         console.log("update center UI smoke passed")
         Qt.quit()

@@ -109,8 +109,18 @@ rg -q 'bash", themeApplyScript, "--all"' "$service" \
   || fail 'bulk theme apply does not use the pinned apply helper'
 rg -q 'themeReviewScript' "$service" \
   || fail 'theme review does not use the pinned review helper'
-rg -q 'viewThemeChanges\(modelData\)' "$themes" \
-  || fail 'theme table does not expose the reviewed change view'
+for theme_review_close_contract in \
+    'function openThemeReview(theme)' \
+    'if (!updateService.viewThemeChanges(theme)) return false' \
+    'typeof panel.ownerWidget.close === "function"' \
+    'panel.ownerWidget.close()'; do
+  rg -Fq "$theme_review_close_contract" "$themes" \
+    || fail "theme review close contract drifted: $theme_review_close_contract"
+done
+theme_review_triggers=$(rg -c -F \
+  'onClicked: root.openThemeReview(modelData)' "$themes")
+[[ $theme_review_triggers -eq 2 ]] \
+  || fail 'both theme review triggers must share the close-aware action'
 if sed -n '/text: root\.updateService\.themeRefreshing ? "Checking…" : "Check themes"/,/onClicked: root\.updateService\.refreshThemes()/p' \
     "$themes" | rg -q 'iconText:'; then
   fail 'check-themes text action still includes an icon'
