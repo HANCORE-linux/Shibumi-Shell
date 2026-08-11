@@ -11,6 +11,10 @@ ShellRoot {
   property int themeCheckCalls: 0
   property int themeUpdateCalls: 0
   property int themeReapplyCalls: 0
+  property int packageLaunchCalls: 0
+  property int packageRefreshCalls: 0
+  property int panelCloseCalls: 0
+  property var packageActionOrder: []
   property var fullPanelComponent: null
 
   function fail(message) {
@@ -42,8 +46,17 @@ ShellRoot {
   }
 
   QtObject {
+    id: fakeOwnerWidget
+    function close() {
+      root.panelCloseCalls++
+      root.packageActionOrder.push("close")
+    }
+  }
+
+  QtObject {
     id: fakePanel
     property var bar: fakeBar
+    property var ownerWidget: fakeOwnerWidget
     property var shibumiTokens: null
     property color controlForeground: fakeBar.foreground
     property color controlMuted: "#909090"
@@ -134,9 +147,12 @@ ShellRoot {
           return themeState.themes[index]
       return null
     }
-    function refreshPackages() {}
+    function refreshPackages() { root.packageRefreshCalls++ }
     function refreshThemes() { root.themeCheckCalls++ }
-    function launchPackageUpdate() {}
+    function launchPackageUpdate() {
+      root.packageLaunchCalls++
+      root.packageActionOrder.push("launch")
+    }
     function updateTheme(_theme) { return true }
     function updateAllThemes() {
       root.themeUpdateCalls++
@@ -192,6 +208,22 @@ ShellRoot {
       if (packagesPanel.packages.length !== 1
           || packagesPanel.summaryText().indexOf("1 official package") !== 0)
         return root.fail("package table did not render structured state")
+      const packageRefreshButton = root.findObject(
+        packagesPanel, "packageFooterRefresh")
+      const systemUpdateButton = root.findObject(
+        packagesPanel, "packageFooterSystemUpdate")
+      if (!packageRefreshButton || !systemUpdateButton
+          || !packageRefreshButton.enabled || !systemUpdateButton.enabled
+          || systemUpdateButton.text !== "Full system update (1)"
+          || systemUpdateButton.iconText !== "\uf019")
+        return root.fail("full system update action did not render")
+      systemUpdateButton.clicked()
+      if (root.packageLaunchCalls !== 1 || root.panelCloseCalls !== 1
+          || root.packageActionOrder.join(",") !== "launch,close")
+        return root.fail("system updater did not close its source panel")
+      packageRefreshButton.clicked()
+      if (root.packageRefreshCalls !== 1 || root.panelCloseCalls !== 1)
+        return root.fail("package refresh unexpectedly closed the panel")
       if (themesPanel.themes.length !== 3
           || !themesPanel.canReview(demo)
           || !themesPanel.canUpdate(demo)
@@ -274,7 +306,14 @@ ShellRoot {
       if (root.themeReapplyCalls !== 1 || root.themeCheckCalls !== 1
           || root.themeUpdateCalls !== 1)
         return root.fail("theme footer actions crossed their labels")
+      if (root.panelCloseCalls !== 1)
+        return root.fail("theme footer action unexpectedly closed the panel")
 
+      fakeService.packageState = Object.assign({}, fakeService.packageState, {
+        state: "current",
+        count: 0,
+        packages: []
+      })
       fakeService.themeState = Object.assign({}, fakeService.themeState, {
         total: 2,
         reachable: 2,
@@ -296,6 +335,14 @@ ShellRoot {
                 - footerRow.width) > tolerance
             || Math.abs(checkButton.width - updateButton.width) > tolerance)
           return root.fail("two-action theme footer fallback drifted")
+        if (!systemUpdateButton.enabled
+            || systemUpdateButton.text !== "Open system updater")
+          return root.fail("empty package updater action drifted")
+        systemUpdateButton.clicked()
+        if (root.packageLaunchCalls !== 2 || root.panelCloseCalls !== 2
+            || root.packageActionOrder.join(",")
+              !== "launch,close,launch,close")
+          return root.fail("empty system updater did not close its source panel")
         console.log("update center UI smoke passed")
         Qt.quit()
       })

@@ -90,8 +90,17 @@ if rg -n '(^|[^A-Za-z])(pacman|paru|yay)([^A-Za-z]|$)' \
     --glob '*.qml' --glob '*.js' "$plugin" >/dev/null; then
   fail 'update-center QML invokes a package manager directly'
 fi
-rg -q 'root\.updateService\.launchPackageUpdate\(\)' "$packages" \
-  || fail 'package tab bypasses the service action boundary'
+for package_update_contract in \
+    'function openSystemUpdater()' \
+    'updateService.launchPackageUpdate()' \
+    'typeof panel.ownerWidget.close === "function"' \
+    'panel.ownerWidget.close()' \
+    'objectName: "packageFooterRefresh"' \
+    'objectName: "packageFooterSystemUpdate"' \
+    'onClicked: root.openSystemUpdater()'; do
+  rg -Fq "$package_update_contract" "$packages" \
+    || fail "system update close contract drifted: $package_update_contract"
+done
 rg -q 'OMARCHY_THEME_UPDATE_STATE=' "$service" \
   || fail 'theme check/apply does not share pinned state'
 rg -q 'bash", themeApplyScript, name, target' "$service" \

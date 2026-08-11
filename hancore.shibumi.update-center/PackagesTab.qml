@@ -23,6 +23,13 @@ Item {
     ? String(panel.bar.fontFamily || Commons.Style.font.family)
     : Commons.Style.font.family
 
+  function openSystemUpdater() {
+    updateService.launchPackageUpdate()
+    if (panel.ownerWidget
+        && typeof panel.ownerWidget.close === "function")
+      panel.ownerWidget.close()
+  }
+
   function summaryText() {
     if (!updateService) return "Update service is loading"
     if (updateService.packageRefreshing)
@@ -238,6 +245,7 @@ Item {
       spacing: Commons.Style.space(8)
 
       PanelButton {
+        objectName: "packageFooterRefresh"
         width: Commons.Style.space(150)
         panel: root.panel
         text: root.updateService.packageRefreshing ? "Checking…" : "Refresh"
@@ -249,6 +257,7 @@ Item {
       }
 
       PanelButton {
+        objectName: "packageFooterSystemUpdate"
         width: parent.width - Commons.Style.space(158)
         panel: root.panel
         text: root.packages.length > 0
@@ -259,7 +268,7 @@ Item {
         enabled: !root.updateService.packageRefreshing
         controlHeight: Commons.Style.space(28)
         tooltipText: "Open Omarchy's full system updater"
-        onClicked: root.updateService.launchPackageUpdate()
+        onClicked: root.openSystemUpdater()
       }
     }
   }
