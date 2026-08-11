@@ -13,6 +13,7 @@ Item {
   property bool externalMode: false
   property bool requestedV2: false
   property bool requestedEditing: false
+  property bool requestedVertical: false
   property bool readyEmitted: false
   property int phase: 0
   property int attempts: 0
@@ -154,7 +155,7 @@ Item {
 
   QtObject {
     id: fakeBar
-    readonly property bool vertical: false
+    readonly property bool vertical: host.requestedVertical
     readonly property int barSize: 28
     readonly property string position: "top"
     readonly property string fontFamily: "monospace"
@@ -233,8 +234,10 @@ Item {
 
       if (host.externalMode) {
         host.configureVariant(host.requestedV2, host.requestedEditing)
+        const expectedTargets = host.requestedVertical
+          ? 0 : host.baseGroups.length
         if (!host.readyEmitted && sectionLoader.status === Loader.Ready
-            && host.targetCount === host.baseGroups.length) {
+            && host.targetCount === expectedTargets) {
           host.readyEmitted = true
           host.ready()
         }

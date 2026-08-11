@@ -87,7 +87,7 @@ for edit_contract in \
   rg -Fq "$edit_contract" styles/shibumi/BarSurface.qml \
     || fail "edit-mode frame drifted from V1: $edit_contract"
 done
-rg -Fq 'enabled: root.persistentSeparators || !root.v2Mode' \
+rg -Fq 'enabled: root ? root.persistentSeparators || !root.v2Mode : false' \
   styles/shibumi/GroupSection.qml \
   || fail "within-region separators are not live in V1 and persistent in V2"
 for stable_group_contract in \
@@ -105,21 +105,21 @@ fi
 rg -Fq 'onClicked: root.bar.toggleGroupSeparator(' \
   styles/shibumi/GroupSection.qml && \
   fail "separator click bypasses the V2 interaction guard"
-rg -Fq 'onClicked: root.toggleSeparator(' \
+rg -Uq 'onClicked: \{\n[[:space:]]*if \(root\) root\.toggleSeparator\(' \
   styles/shibumi/GroupSection.qml \
   || fail "within-region markers do not use the guarded interaction route"
 for v1_edit_interaction_contract in \
   'return !v2Mode && bar.layoutController' \
   'bar.layoutController.toggleSplit(region, Number(index))' \
   'function onSlotEditingChanged()' \
-  'enabled: !root.slotEditing'; do
+  'enabled: root ? !root.slotEditing : false'; do
   rg -Fq "$v1_edit_interaction_contract" styles/shibumi/GroupSection.qml \
     || fail "V1 edit interaction drifted: $v1_edit_interaction_contract"
 done
 rg -Fq 'return separated ? Math.max(0, splitGrow - groupSpacing)' \
   styles/shibumi/GroupSection.qml \
   || fail "active separators no longer follow the original V2 edge offset"
-rg -Fq 'width: horizontalCell.placeholderSlot ? root.slotVisualSize : 0' \
+rg -Fq 'width: root && horizontalCell.placeholderSlot' \
   styles/shibumi/GroupSection.qml \
   || fail "edit placeholder does not use the presentation-specific slot size"
 rg -Fq 'height: root.v2Shell' core/GroupSlot.qml \
@@ -146,8 +146,8 @@ for slot_add_contract in \
     || fail "inline add-slot affordance drifted: $slot_add_contract"
 done
 for v1_slot_contract in \
-  'readonly property bool proxySlot: root.v1Editing' \
-  'readonly property bool removableEmptySlot: emptySlot' \
+  'readonly property bool proxySlot: root' \
+  'readonly property bool removableEmptySlot: root && emptySlot' \
   '? root.v2Mode ? targetVisual.height : 32 : 0' \
   'anchors.verticalCenter: parent.verticalCenter' \
   'root.bar.layoutController.removeV1SlotAt(' \
@@ -252,7 +252,7 @@ for inactive_drag_contract in \
     | rg -Fq "$inactive_drag_contract" \
     || fail "inactive drag handles can own the cursor: $inactive_drag_contract"
 done
-rg -Fq 'radius: root.bar.visualTokens.pillRadius' \
+rg -Fq 'radius: root ? root.bar.visualTokens.pillRadius : 0' \
   styles/shibumi/GroupSection.qml \
   || fail "drop targets do not follow the selected V1 radius"
 rg -Fq '? tokenNumber("tileRadius", 8) : tokenNumber("pillRadius", 12)' \

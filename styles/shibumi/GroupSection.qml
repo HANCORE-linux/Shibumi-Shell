@@ -232,21 +232,28 @@ Item {
         x: Number(modelData.markerCenter || 0) - width / 2
         y: 0
         width: 14
-        height: root.height
-        enabled: root.persistentSeparators || !root.v2Mode
+        height: root ? root.height : 0
+        enabled: root ? root.persistentSeparators || !root.v2Mode : false
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton
         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
-        onEntered: root.hoveredSeparatorGroupId = String(modelData.groupId || "")
+        onEntered: {
+          if (root)
+            root.hoveredSeparatorGroupId = String(modelData.groupId || "")
+        }
         onExited: {
-          if (root.hoveredSeparatorGroupId === String(modelData.groupId || ""))
+          if (root && root.hoveredSeparatorGroupId
+              === String(modelData.groupId || ""))
             root.hoveredSeparatorGroupId = ""
         }
-        onClicked: root.toggleSeparator(
-          String(modelData.groupId || ""), Number(modelData.index))
+        onClicked: {
+          if (root) root.toggleSeparator(
+            String(modelData.groupId || ""), Number(modelData.index))
+        }
         Component.onDestruction: {
-          if (root.hoveredSeparatorGroupId === String(modelData.groupId || ""))
+          if (root && root.hoveredSeparatorGroupId
+              === String(modelData.groupId || ""))
             root.hoveredSeparatorGroupId = ""
         }
       }
@@ -260,16 +267,18 @@ Item {
       id: horizontalRow
 
       spacing: 0
-      property bool layoutScheduled: false
       function scheduleLayout() {
-        if (layoutScheduled) return
-        layoutScheduled = true
-        Qt.callLater(function() {
-          layoutScheduled = false
-          horizontalRow.forceLayout()
-        })
+        if (!layoutTimer.running) layoutTimer.start()
+      }
+      Timer {
+        id: layoutTimer
+        interval: 0
+        onTriggered: {
+          if (horizontalRow) horizontalRow.forceLayout()
+        }
       }
       readonly property real layoutWidth: {
+        if (!root) return 0
         void(root.visibilityStage)
         var total = 0
         for (var i = 0; i < horizontalRepeater.count; i++) {
@@ -280,6 +289,7 @@ Item {
           ? root.groupSpacing + addSlotTarget.width : 0)
       }
       readonly property real layoutHeight: {
+        if (!root) return 0
         var height = 0
         for (var i = 0; i < horizontalRepeater.count; i++) {
           var item = horizontalRepeater.itemAt(i)
@@ -288,6 +298,7 @@ Item {
         return Math.max(height, root.canAddSlot ? addSlotTarget.height : 0)
       }
       readonly property real minimumResponsiveWidth: {
+        if (!root) return 0
         void(root.groups)
         var total = 0
         var visibleCount = 0
@@ -301,6 +312,7 @@ Item {
         return total + Math.max(0, visibleCount - 1) * root.groupSpacing
       }
       readonly property var stageBudgetWidths: {
+        if (!root) return [0, 0, 0, 0]
         void(root.groups)
         var widths = [0, 0, 0, 0]
         for (var stage = 0; stage < 4; stage++) {
@@ -319,6 +331,7 @@ Item {
         return widths
       }
       readonly property var groupGeometry: {
+        if (!root) return []
         void(root.groups)
         var result = []
         for (var i = 0; i < horizontalRepeater.count; i++) {
@@ -342,6 +355,7 @@ Item {
         return result
       }
       readonly property var separatorGeometry: {
+        if (!root) return []
         void(root.groups)
         var result = []
         for (var i = 0; i < horizontalRepeater.count; i++) {
@@ -389,6 +403,7 @@ Item {
       }
 
       function nextBudgetShownIndex(index, stage) {
+        if (!root) return -1
         void(horizontalRepeater.count)
         for (var i = index + 1; i < horizontalRepeater.count; i++) {
           var item = horizontalRepeater.itemAt(i)
@@ -399,6 +414,7 @@ Item {
       }
 
       function splitAfterAtStage(index, stage) {
+        if (!root) return false
         var nextIndex = nextBudgetShownIndex(index, stage)
         if (nextIndex <= index) return false
         return root.v2Mode
@@ -415,20 +431,26 @@ Item {
           required property string groupId
           required property int index
           readonly property string modelData: groupId
-          readonly property bool emptySlot: root.slotEditing && modelData === ""
+          // The bar outlives every per-output section. Break this initial
+          // binding on completion so GroupSlot never receives null while its
+          // bound declaration context is being destroyed.
+          property var lifecycleBar: root ? root.bar : null
+          readonly property bool emptySlot: root
+            ? root.slotEditing && modelData === "" : false
           readonly property bool groupHasContent: groupSlot.hasContent
-          readonly property bool stageShown: modelData !== ""
-            && root.groupVisibleAtStage(modelData, root.visibilityStage)
+          readonly property bool stageShown: root && modelData !== ""
+            ? root.groupVisibleAtStage(modelData, root.visibilityStage) : false
           readonly property bool contentShown: modelData !== ""
             && groupSlot.groupEnabled && groupHasContent && stageShown
-          readonly property bool proxySlot: root.v1Editing && modelData !== ""
-            && !contentShown
+          readonly property bool proxySlot: root
+            ? root.v1Editing && modelData !== "" && !contentShown : false
           readonly property bool placeholderSlot: emptySlot || proxySlot
-          readonly property bool removableEmptySlot: emptySlot
-            && (root.v2Mode ? index >= root.baseSlotCount
+          readonly property bool removableEmptySlot: root && emptySlot
+            ? root.v2Mode ? index >= root.baseSlotCount
               : root.bar.layoutController
                 && typeof root.bar.layoutController.isExtraV1Slot === "function"
-                && root.bar.layoutController.isExtraV1Slot(root.region, index))
+                && root.bar.layoutController.isExtraV1Slot(root.region, index)
+            : false
           readonly property bool autoShown: placeholderSlot || stageShown
           readonly property Item targetVisual: placeholderSlot
             ? emptySlotTarget : groupSlot
@@ -450,19 +472,21 @@ Item {
           readonly property real contentLeft: targetVisual.x
           readonly property real contentRight: targetVisual.x + targetVisual.width
           readonly property real visualRightEdge: groupSlot.x + groupSlot.width
-          readonly property int nextShownIndex:
-            horizontalRow.nextShownIndex(index)
+          readonly property int nextShownIndex: horizontalRow
+            ? horizontalRow.nextShownIndex(index) : -1
           // V1 splits remain positional. When disabled or empty slots sit
           // before the next rendered group, the visible marker belongs to the
           // last slot boundary before that group (for example, directly left
           // of Brightness), not to the earlier rendered group's own index.
-          readonly property int separatorIndex: root.v2Mode
-            ? index : nextShownIndex > index ? nextShownIndex - 1 : index
+          readonly property int separatorIndex: root
+            ? root.v2Mode
+              ? index : nextShownIndex > index ? nextShownIndex - 1 : index
+            : index
           readonly property bool separatorAvailable:
             splitMarker.hasFollowingGroup
           readonly property real separatorCenter:
             splitMarker.x + splitMarker.width / 2
-          property var targetSession: root.layoutSession
+          property var targetSession: root ? root.layoutSession : null
           property var registeredSession: null
           property var registeredItem: null
           property string registeredGroupId: ""
@@ -470,19 +494,25 @@ Item {
           property int registeredIndex: -1
           property bool registeredAsSlot: false
           readonly property int leadingGap: effectiveHasContent
+            && root && horizontalRow
             && horizontalRow.hasContentBefore(index) ? root.groupSpacing : 0
-          readonly property bool separated: contentShown
+          readonly property bool separated: contentShown && root
             && nextShownIndex > index
             && root.splitAfter(separatorIndex)
           implicitWidth: effectiveHasContent
-            ? leadingGap + targetVisual.width + (separated ? root.splitGrow : 0)
+            ? leadingGap + targetVisual.width
+              + (separated && root ? root.splitGrow : 0)
             : 0
-          implicitHeight: effectiveHasContent
+          implicitHeight: effectiveHasContent && root
             ? root.v2Mode ? targetVisual.height : 32 : 0
           width: implicitWidth
           height: implicitHeight
-          onWidthChanged: horizontalRow.scheduleLayout()
-          onVisibleChanged: horizontalRow.scheduleLayout()
+          onWidthChanged: {
+            if (horizontalRow) horizontalRow.scheduleLayout()
+          }
+          onVisibleChanged: {
+            if (horizontalRow) horizontalRow.scheduleLayout()
+          }
           // Keep the cell visible while its widget determines its initial
           // size. Basing ancestor visibility on groupHasContent would make
           // the child's effective visible state false and deadlock discovery.
@@ -497,20 +527,7 @@ Item {
             NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
           }
 
-          function syncTargetRegistration(force) {
-            const nextSession = targetSession
-            const nextItem = targetVisual
-            const nextGroupId = String(modelData || "")
-            const nextAsSlot = root.slotEditing
-            const unchanged = registeredSession === nextSession
-              && registeredItem === nextItem
-              && registeredGroupId === nextGroupId
-              && registeredRegion === root.region
-              && registeredIndex === index
-              && registeredAsSlot === nextAsSlot
-              && effectiveHasContent
-            if (unchanged && force !== true) return
-
+          function clearTargetRegistration() {
             if (registeredSession && registeredItem
                 && typeof registeredSession.unregisterTarget === "function")
               registeredSession.unregisterTarget(registeredItem)
@@ -521,12 +538,35 @@ Item {
             registeredRegion = ""
             registeredIndex = -1
             registeredAsSlot = false
+          }
+
+          function syncTargetRegistration(force) {
+            const owner = root
+            if (!owner) {
+              clearTargetRegistration()
+              return
+            }
+
+            const nextSession = targetSession
+            const nextItem = targetVisual
+            const nextGroupId = String(modelData || "")
+            const nextAsSlot = owner.slotEditing
+            const unchanged = registeredSession === nextSession
+              && registeredItem === nextItem
+              && registeredGroupId === nextGroupId
+              && registeredRegion === owner.region
+              && registeredIndex === index
+              && registeredAsSlot === nextAsSlot
+              && effectiveHasContent
+            if (unchanged && force !== true) return
+
+            clearTargetRegistration()
             if (!nextSession || !effectiveHasContent || !nextItem) return
 
             if (nextAsSlot
                 && typeof nextSession.registerSlotTarget === "function")
               nextSession.registerSlotTarget(
-                root.region, index, nextGroupId, nextItem)
+                owner.region, index, nextGroupId, nextItem)
             else if (typeof nextSession.registerTarget === "function")
               nextSession.registerTarget(nextGroupId, nextItem)
             else return
@@ -534,7 +574,7 @@ Item {
             registeredSession = nextSession
             registeredItem = nextItem
             registeredGroupId = nextGroupId
-            registeredRegion = root.region
+            registeredRegion = owner.region
             registeredIndex = index
             registeredAsSlot = nextAsSlot
           }
@@ -577,30 +617,33 @@ Item {
             registrationTimer.restart()
           }
           Component.onDestruction: {
-            if (registeredSession && registeredItem
-                && typeof registeredSession.unregisterTarget === "function")
-              registeredSession.unregisterTarget(registeredItem)
+            if (registrationTimer) registrationTimer.stop()
+            clearTargetRegistration()
           }
           Component.onCompleted: {
+            const currentBar = lifecycleBar
+            lifecycleBar = currentBar
             retainResponsiveMetrics()
             registrationTimer.restart()
           }
           Timer {
             id: registrationTimer
             interval: 0
-            onTriggered: horizontalCell.syncTargetRegistration(true)
+            onTriggered: {
+              if (root) horizontalCell.syncTargetRegistration(true)
+            }
           }
 
           Core.GroupSlot {
             id: groupSlot
-            bar: root.bar
+            bar: horizontalCell.lifecycleBar
             groupId: horizontalCell.modelData
-            screenName: root.screenName
-            availableWidth: root.availableWidth
-            enabled: !root.slotEditing
+            screenName: root ? root.screenName : ""
+            availableWidth: root ? root.availableWidth : 0
+            enabled: root ? !root.slotEditing : false
             x: horizontalCell.leadingGap
             anchors.verticalCenter: parent.verticalCenter
-            opacity: root.layoutSession && root.layoutSession.active
+            opacity: root && root.layoutSession && root.layoutSession.active
               && root.layoutSession.sourceGroupId === horizontalCell.modelData
               ? 0.28 : 1
 
@@ -617,31 +660,38 @@ Item {
             id: emptySlotTarget
             x: horizontalCell.leadingGap
             anchors.verticalCenter: parent.verticalCenter
-            width: horizontalCell.placeholderSlot ? root.slotVisualSize : 0
-            height: horizontalCell.placeholderSlot
+            width: root && horizontalCell.placeholderSlot
               ? root.slotVisualSize : 0
-            visible: horizontalCell.placeholderSlot
-            opacity: root.layoutSession && root.layoutSession.active
+            height: root && horizontalCell.placeholderSlot
+              ? root.slotVisualSize : 0
+            visible: root ? horizontalCell.placeholderSlot : false
+            opacity: root && root.layoutSession && root.layoutSession.active
               && root.layoutSession.sourceGroupId === horizontalCell.modelData
               ? 0.28 : 1
-            radius: root.slotVisualRadius
-            color: removeEmptyMouse.containsMouse
-              ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
-                  root.bar.urgent.b, 0.14)
-              : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
-                  root.bar.foreground.b, 0.04)
+            radius: root ? root.slotVisualRadius : 0
+            color: root
+              ? removeEmptyMouse.containsMouse
+                ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
+                    root.bar.urgent.b, 0.14)
+                : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
+                    root.bar.foreground.b, 0.04)
+              : "transparent"
             border.width: 1
-            border.color: removeEmptyMouse.containsMouse
-              ? root.bar.urgent
-              : root.tokenColor("pillBorder", root.bar.foreground)
+            border.color: root
+              ? removeEmptyMouse.containsMouse
+                ? root.bar.urgent
+                : root.tokenColor("pillBorder", root.bar.foreground)
+              : "transparent"
 
             Text {
               anchors.centerIn: parent
               text: horizontalCell.removableEmptySlot ? "×" : "·"
-              color: removeEmptyMouse.containsMouse
-                ? root.bar.urgent
-                : root.tokenColor("sumi", root.bar.foreground)
-              font.family: root.bar.fontFamily
+              color: root
+                ? removeEmptyMouse.containsMouse
+                  ? root.bar.urgent
+                  : root.tokenColor("sumi", root.bar.foreground)
+                : "transparent"
+              font.family: root ? root.bar.fontFamily : ""
               font.pixelSize: 12
             }
 
@@ -650,9 +700,10 @@ Item {
               anchors.fill: parent
               hoverEnabled: true
               acceptedButtons: Qt.LeftButton
-              enabled: horizontalCell.removableEmptySlot
+              enabled: root ? horizontalCell.removableEmptySlot : false
               cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
               onClicked: {
+                if (!root) return
                 if (root.v2Mode)
                   root.bar.layoutController.removeV2SlotAt(
                     root.region, horizontalCell.index)
@@ -667,14 +718,14 @@ Item {
             y: horizontalCell.targetVisual.y - 2
             width: horizontalCell.targetVisual.width + 4
             height: horizontalCell.targetVisual.height + 4
-            visible: root.layoutSession && root.layoutSession.editing
+            visible: root && root.layoutSession && root.layoutSession.editing
               && root.layoutSession.active
               && root.layoutSession.targetItem === horizontalCell.targetVisual
-            color: Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
-              root.bar.urgent.b, 0.18)
+            color: root ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
+              root.bar.urgent.b, 0.18) : "transparent"
             border.width: 2
-            border.color: root.bar.urgent
-            radius: root.bar.visualTokens.pillRadius
+            border.color: root ? root.bar.urgent : "transparent"
+            radius: root ? root.bar.visualTokens.pillRadius : 0
             z: 20
           }
 
@@ -685,7 +736,7 @@ Item {
             y: horizontalCell.targetVisual.y
             width: horizontalCell.targetVisual.width
             height: horizontalCell.targetVisual.height
-            enabled: root.layoutSession && root.layoutSession.editing
+            enabled: root && root.layoutSession && root.layoutSession.editing
               && horizontalCell.modelData !== ""
               && horizontalCell.effectiveHasContent
             visible: enabled
@@ -702,31 +753,38 @@ Item {
             }
 
             onPressed: mouse => {
+              if (!root || !root.layoutSession) return
               const point = windowPoint(mouse)
               root.layoutSession.begin(horizontalCell.modelData,
                 horizontalCell.targetVisual,
                 point.x, point.y)
             }
             onPositionChanged: mouse => {
-              if (!pressed || !root.layoutSession.active) return
+              if (!pressed || !root || !root.layoutSession
+                  || !root.layoutSession.active) return
               const point = windowPoint(mouse)
               root.layoutSession.move(point.x, point.y)
             }
             onReleased: {
-              if (root.layoutSession.active) root.layoutSession.drop()
+              if (root && root.layoutSession && root.layoutSession.active)
+                root.layoutSession.drop()
             }
-            onCanceled: root.layoutSession.cancel()
+            onCanceled: {
+              if (root && root.layoutSession) root.layoutSession.cancel()
+            }
           }
 
           Item {
             id: splitMarker
 
-            readonly property bool hasFollowingGroup: horizontalCell.contentShown
+            readonly property bool hasFollowingGroup: root && horizontalRow
+              && horizontalCell.contentShown
               && (root.v2Mode
                 ? horizontalRow.hasContentAfter(horizontalCell.index)
                 : horizontalCell.nextShownIndex > horizontalCell.index)
             x: groupSlot.x + groupSlot.width
-              + root.separatorCenterOffset(horizontalCell.separated)
+              + (root
+                ? root.separatorCenterOffset(horizontalCell.separated) : 0)
               - width / 2
             anchors.verticalCenter: groupSlot.verticalCenter
             width: 14
@@ -738,11 +796,13 @@ Item {
               anchors.centerIn: parent
               width: 1
               height: Math.min(parent.height - 8, 14)
-              visible: horizontalCell.separated
+              visible: root && horizontalCell.separated
                 && root.persistentSeparators
-              color: root.hoveredSeparatorGroupId === horizontalCell.modelData
-                ? root.bar.urgent
-                : root.tokenColor("separator", root.bar.visualTokens.sumi)
+              color: root
+                ? root.hoveredSeparatorGroupId === horizontalCell.modelData
+                  ? root.bar.urgent
+                  : root.tokenColor("separator", root.bar.visualTokens.sumi)
+                : "transparent"
               opacity: 0.62
 
               Behavior on color { ColorAnimation { duration: 120 } }
@@ -750,20 +810,26 @@ Item {
 
             Text {
               anchors.centerIn: parent
-              visible: root.persistentSeparators
-                ? !horizontalCell.separated : !root.v2Mode
-              text: root.persistentSeparators || !horizontalCell.separated
-                ? "•" : "│"
-              color: root.hoveredSeparatorGroupId === horizontalCell.modelData
-                  || horizontalCell.separated
-                ? root.bar.urgent : root.bar.visualTokens.sumi
-              font.pixelSize: 10
-              font.family: root.bar.fontFamily
-              opacity: root.persistentSeparators && root.v2Editing
+              visible: root ? root.persistentSeparators
+                ? !horizontalCell.separated : !root.v2Mode : false
+              text: root
+                ? root.persistentSeparators || !horizontalCell.separated
+                  ? "•" : "│"
+                : ""
+              color: root
                 ? root.hoveredSeparatorGroupId === horizontalCell.modelData
-                  ? 0.95 : 0.34
-                : root.hoveredSeparatorGroupId === horizontalCell.modelData
-                  ? 0.9 : 0
+                    || horizontalCell.separated
+                  ? root.bar.urgent : root.bar.visualTokens.sumi
+                : "transparent"
+              font.pixelSize: 10
+              font.family: root ? root.bar.fontFamily : ""
+              opacity: root
+                ? root.persistentSeparators && root.v2Editing
+                  ? root.hoveredSeparatorGroupId === horizontalCell.modelData
+                    ? 0.95 : 0.34
+                  : root.hoveredSeparatorGroupId === horizontalCell.modelData
+                    ? 0.9 : 0
+                : 0
 
               Behavior on opacity { NumberAnimation { duration: 120 } }
             }
@@ -775,34 +841,40 @@ Item {
       Item {
         id: addSlotTarget
 
-        width: root.canAddSlot ? root.slotVisualSize : 0
-        height: root.canAddSlot
+        width: root && root.canAddSlot ? root.slotVisualSize : 0
+        height: root && root.canAddSlot
           ? root.v1Editing ? 32 : root.tokenNumber("slotHeight", 28) : 0
-        visible: root.canAddSlot
+        visible: root ? root.canAddSlot : false
 
         Rectangle {
-          x: root.groupSpacing
+          x: root ? root.groupSpacing : 0
           anchors.verticalCenter: parent.verticalCenter
-          width: root.slotVisualSize
-          height: root.slotVisualSize
-          radius: root.slotVisualRadius
-          color: addSlotMouse.containsMouse
-            ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
-                root.bar.urgent.b, 0.14)
-            : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
-                root.bar.foreground.b, 0.04)
+          width: root ? root.slotVisualSize : 0
+          height: root ? root.slotVisualSize : 0
+          radius: root ? root.slotVisualRadius : 0
+          color: root
+            ? addSlotMouse.containsMouse
+              ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g,
+                  root.bar.urgent.b, 0.14)
+              : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
+                  root.bar.foreground.b, 0.04)
+            : "transparent"
           border.width: 1
-          border.color: addSlotMouse.containsMouse
-            ? root.bar.urgent
-            : root.tokenColor("pillBorder", root.bar.foreground)
+          border.color: root
+            ? addSlotMouse.containsMouse
+              ? root.bar.urgent
+              : root.tokenColor("pillBorder", root.bar.foreground)
+            : "transparent"
 
           Text {
             anchors.centerIn: parent
             text: "+"
-            color: addSlotMouse.containsMouse
-              ? root.bar.urgent
-              : root.tokenColor("sumi", root.bar.foreground)
-            font.family: root.bar.fontFamily
+            color: root
+              ? addSlotMouse.containsMouse
+                ? root.bar.urgent
+                : root.tokenColor("sumi", root.bar.foreground)
+              : "transparent"
+            font.family: root ? root.bar.fontFamily : ""
             font.pixelSize: 14
           }
 
@@ -811,8 +883,10 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton
-            cursorShape: Qt.PointingHandCursor
+            enabled: root !== null
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onClicked: {
+              if (!root) return
               if (root.v2Mode)
                 root.bar.layoutController.addV2Slot(root.region)
               else root.bar.layoutController.addV1Slot(root.region)
@@ -857,24 +931,33 @@ Item {
           required property string groupId
           required property int index
           readonly property string modelData: groupId
+          property var lifecycleBar: root ? root.bar : null
           readonly property bool groupHasContent: groupSlot.hasContent
-          readonly property int leadingGap: groupHasContent
-            && verticalColumn.hasContentBefore(index) ? root.groupSpacing : 0
-          readonly property bool separated: groupHasContent
-            && index < verticalColumn.lastVisibleIndex && root.splitAfter(index)
+          readonly property int leadingGap: root && verticalColumn
+            && groupHasContent && verticalColumn.hasContentBefore(index)
+            ? root.groupSpacing : 0
+          readonly property bool separated: root && verticalColumn
+            && groupHasContent && index < verticalColumn.lastVisibleIndex
+            ? root.splitAfter(index) : false
           implicitWidth: groupHasContent ? groupSlot.implicitWidth : 0
-          implicitHeight: groupHasContent
-            ? leadingGap + groupSlot.implicitHeight + (separated ? root.splitGrow : 0)
+          implicitHeight: root && groupHasContent
+            ? leadingGap + groupSlot.implicitHeight
+              + (separated ? root.splitGrow : 0)
             : 0
           width: implicitWidth
           height: implicitHeight
 
+          Component.onCompleted: {
+            const currentBar = lifecycleBar
+            lifecycleBar = currentBar
+          }
+
           Core.GroupSlot {
             id: groupSlot
-            bar: root.bar
+            bar: verticalCell.lifecycleBar
             groupId: verticalCell.modelData
-            screenName: root.screenName
-            availableWidth: root.availableWidth
+            screenName: root ? root.screenName : ""
+            availableWidth: root ? root.availableWidth : 0
             y: verticalCell.leadingGap
           }
         }

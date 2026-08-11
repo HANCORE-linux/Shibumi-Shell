@@ -116,7 +116,7 @@ PanelWindow {
     y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"
       ? Math.max(0, parent.height - height) : 0
     active: barWindow.bar.hostReady && barWindow.bar.styleReady
-      && barWindow.bar.visualTokens !== null
+      && barWindow.validScreen && barWindow.bar.visualTokens !== null
     sourceComponent: active ? barWindow.bar.activeStyle.barSurfaceComponent : null
     z: 10
     onLoaded: {

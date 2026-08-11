@@ -167,6 +167,7 @@ def private_environment(root: Path, omarchy_path: Path) -> dict[str, str]:
         "WAYLAND_DISPLAY",
         "HYPRLAND_INSTANCE_SIGNATURE",
         "QS_CONFIG_PATH",
+        "SHIBUMI_TEST_VERTICAL",
     ):
         environment.pop(name, None)
     return environment

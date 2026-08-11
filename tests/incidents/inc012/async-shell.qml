@@ -4,6 +4,8 @@ import Quickshell
 ShellRoot {
   id: root
 
+  readonly property bool requestedVertical:
+    Quickshell.env("SHIBUMI_TEST_VERTICAL") === "1"
   property int cycleMode: 0
   property int cycleIndex: 0
   property bool unloading: false
@@ -36,6 +38,7 @@ ShellRoot {
       item.externalMode = true
       item.requestedV2 = root.cycleMode >= 2
       item.requestedEditing = root.cycleMode % 2 === 1
+      item.requestedVertical = root.requestedVertical
     }
   }
 

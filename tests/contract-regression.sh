@@ -30,6 +30,14 @@ python3 "$repo_root/tests/quickshell-empty-registry-mutation.py"
 "$repo_root/tests/v1-embedded-v2-differences-regression.sh"
 "$repo_root/tests/v2-feature-evidence-regression.sh"
 "$repo_root/tests/quattro-contract-regression.sh"
+"$repo_root/tests/group-section-lifecycle-regression.sh"
+[[ -x $repo_root/tests/group-section-wayland-lifecycle.sh ]] \
+  || fail "GroupSection Wayland lifecycle regression is missing"
+[[ -f $repo_root/tests/group-section-wayland-shell.qml ]] \
+  || fail "GroupSection Wayland lifecycle fixture is missing"
+if [[ ${SHIBUMI_RUN_WAYLAND_LIFECYCLE:-0} == 1 ]]; then
+  "$repo_root/tests/group-section-wayland-lifecycle.sh"
+fi
 
 [[ ! -e manifest.json ]] \
   || fail "repository root must not masquerade as one native Omarchy plugin"
@@ -123,6 +131,9 @@ rg -q 'visible: bar\.hostReady && bar\.styleReady && validScreen && !bar\.barHid
   || fail "output must wait for host and style readiness and honor bar-off"
 rg -q 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady' core/BarPanel.qml \
   || fail "bar surface may instantiate before host injection completes"
+rg -Uq 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady\n[[:space:]]*&& barWindow\.validScreen && barWindow\.bar\.visualTokens !== null' \
+  core/BarPanel.qml \
+  || fail "bar surface may instantiate for an invalid Wayland placeholder"
 rg -q 'Services\.HostWidgetResolver' Bar.qml \
   || fail "replacement bar does not own stable host widget components"
 if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|WeatherService|ThemePalette|AiUsageService|PickerService|ReactorService|QuoteService|WorkspaceService|ClockService|NetworkService|MonitorService|BluetoothService)|Adapters\.(SystemActions|WorkspaceActions)|Widgets\.WidgetRegistry' Bar.qml; then
@@ -341,8 +352,9 @@ rg -q 'property string screenName:' core/WidgetSlot.qml \
   || fail "widget slots do not accept explicit output identity"
 rg -q 'screenName: root\.screenName' core/GroupSlot.qml core/BarSection.qml \
   || fail "bar/group sections do not propagate explicit output identity"
-rg -q 'screenName: root\.screenName' styles/shibumi/GroupSection.qml \
-  || fail "group renderer does not propagate explicit output identity"
+rg -Fq 'screenName: root ? root.screenName : ""' \
+  styles/shibumi/GroupSection.qml \
+  || fail "group renderer does not propagate guarded output identity"
 rg -q 'function childPanelWidget\(pluginId\)' widgets/CenterWidget.qml \
   || fail "center composite does not expose nested weather routing"
 rg -q 'G3: \["hancore.shibumi.status"\]' core/GroupRegistry.js \
@@ -886,11 +898,36 @@ fi
 if rg -q 'Timer \{' core/GroupSlot.qml; then
   fail "group slots must not own timers"
 fi
-[[ $(rg -c 'Timer \{' styles/shibumi/GroupSection.qml) -eq 1 ]] \
-  || fail "group sections must own exactly one lifecycle timer"
+[[ $(rg -c 'Timer \{' styles/shibumi/GroupSection.qml) -eq 2 ]] \
+  || fail "group sections must own exactly two lifecycle-bound timers"
+rg -U -q 'Timer \{\n[[:space:]]*id: layoutTimer\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: \{\n[[:space:]]*if \(horizontalRow\) horizontalRow\.forceLayout\(\)' \
+  styles/shibumi/GroupSection.qml \
+  || fail "group layout work is not owned by the horizontal row lifecycle"
+if rg -Fq 'Qt.callLater' styles/shibumi/GroupSection.qml; then
+  fail "group layout work can outlive its horizontal row context"
+fi
 rg -U -q 'Timer \{\n[[:space:]]*id: registrationTimer\n[[:space:]]*interval: 0\n' \
   styles/shibumi/GroupSection.qml \
   || fail "group lifecycle timer must be the zero-delay target registration sync"
+for teardown_contract in \
+  'const owner = root' \
+  'if (!owner) {' \
+  'clearTargetRegistration()' \
+  'if (registrationTimer) registrationTimer.stop()' \
+  'if (horizontalRow) horizontalRow.scheduleLayout()' \
+  '? horizontalRow.nextShownIndex(index) : -1' \
+  '? root.separatorCenterOffset(horizontalCell.separated) : 0'; do
+  rg -Fq "$teardown_contract" styles/shibumi/GroupSection.qml \
+    || fail "group teardown guard is missing: $teardown_contract"
+done
+for unsafe_teardown_access in \
+  'const nextAsSlot = root.slotEditing' \
+  'onWidthChanged: horizontalRow.scheduleLayout()' \
+  'onVisibleChanged: horizontalRow.scheduleLayout()'; do
+  if rg -Fq "$unsafe_teardown_access" styles/shibumi/GroupSection.qml; then
+    fail "group teardown retains an unsafe owner access: $unsafe_teardown_access"
+  fi
+done
 rg -q 'acquire\("memory"\)' widgets/MemoryWidget.qml \
   || fail "memory widget does not activate shared telemetry"
 rg -q 'release\("memory"\)' widgets/MemoryWidget.qml \
