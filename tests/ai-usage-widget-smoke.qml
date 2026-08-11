@@ -144,9 +144,12 @@ ShellRoot {
             || aiWidget.providerIconSlotWidth !== 20
             || aiWidget.providerIconSlotHeight !== 16
             || aiWidget.claudeGlyphPixelSize !== 15
-            || aiWidget.providerGlyphWidth !== 15
-            || aiWidget.providerGlyphHeight !== 15
-            || aiWidget.providerGlyphHorizontalOffset !== -1
+            || aiWidget.providerGlyphWidth !== 14
+            || aiWidget.providerGlyphHeight !== 14
+            || aiWidget.providerGlyphHorizontalOffset !== 0
+            || aiWidget.providerContentHorizontalOffset !== -1
+            || aiWidget.providerGlyphHorizontalOffset
+              + aiWidget.providerContentHorizontalOffset !== -1
             || aiWidget.childPanelWidget("omarchy.model-usage") !== aiWidget)
           return root.fail("single-provider facade")
         root.stableProviderWidth = aiWidget.implicitWidth
@@ -160,7 +163,10 @@ ShellRoot {
             || aiWidget.implicitWidth !== root.stableProviderWidth
             || aiWidget.providerGlyphWidth !== 20
             || aiWidget.providerGlyphHeight !== 12
-            || aiWidget.providerGlyphHorizontalOffset !== 0)
+            || aiWidget.providerGlyphHorizontalOffset !== 0
+            || aiWidget.providerContentHorizontalOffset !== 0
+            || aiWidget.providerGlyphHorizontalOffset
+              + aiWidget.providerContentHorizontalOffset !== 0)
           return root.fail("provider switch/panel lifecycle")
         sharedAi.selectTool("claude")
       } else if (root.phase === 2) {
@@ -168,7 +174,10 @@ ShellRoot {
             || aiWidget.implicitWidth !== root.stableProviderWidth
             || aiWidget.providerGlyphWidth !== 15
             || aiWidget.providerGlyphHeight !== 15
-            || aiWidget.providerGlyphHorizontalOffset !== 0)
+            || aiWidget.providerGlyphHorizontalOffset !== 0
+            || aiWidget.providerContentHorizontalOffset !== 0
+            || aiWidget.providerGlyphHorizontalOffset
+              + aiWidget.providerContentHorizontalOffset !== 0)
           return root.fail("stable provider icon slot")
         aiWidget.close()
       } else {

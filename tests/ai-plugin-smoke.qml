@@ -65,9 +65,12 @@ ShellRoot {
     const customBaseContrast = root.contrastRatio(
       root.composite(expectedBase, fakeBar.customFill, expected.baseOpacity),
       fakeBar.customFill)
-    const glyphWidth = expected.providerId === "opencode" ? 20 : 15
-    const glyphHeight = expected.providerId === "opencode" ? 12 : 15
-    const glyphOffset = expected.providerId === "codex" ? -1 : 0
+    const glyphWidth = expected.providerId === "opencode" ? 20
+      : expected.providerId === "codex" ? 14 : 15
+    const glyphHeight = expected.providerId === "opencode" ? 12
+      : expected.providerId === "codex" ? 14 : 15
+    const glyphOffset = 0
+    const contentOffset = expected.providerId === "codex" ? -1 : 0
     return widget.providerId === expected.providerId
       && widget.providerIconSlotWidth === 20
       && widget.providerIconSlotHeight === 16
@@ -75,6 +78,9 @@ ShellRoot {
       && widget.providerGlyphWidth === glyphWidth
       && widget.providerGlyphHeight === glyphHeight
       && widget.providerGlyphHorizontalOffset === glyphOffset
+      && widget.providerContentHorizontalOffset === contentOffset
+      && widget.providerGlyphHorizontalOffset
+        + widget.providerContentHorizontalOffset === contentOffset
       && widget.tokens.v2Shell === expected.v2Shell
       && widget.customFillActive === customFillActive
       && Math.abs(Number(widget.baseIconOpacity) - expected.baseOpacity) < 0.001

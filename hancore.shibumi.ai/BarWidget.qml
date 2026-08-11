@@ -56,11 +56,12 @@ Ui.Panel {
   readonly property int providerIconSlotHeight: 16
   readonly property int claudeGlyphPixelSize: 15
   readonly property int providerGlyphWidth: providerId === "opencode" ? 20
-    : 15
+    : providerId === "codex" ? 14 : 15
   readonly property int providerGlyphHeight: providerId === "opencode" ? 12
-    : 15
-  readonly property int providerGlyphHorizontalOffset:
-    providerId === "codex" ? -1 : 0
+    : providerId === "codex" ? 14 : 15
+  readonly property int providerGlyphHorizontalOffset: 0
+  readonly property int providerContentHorizontalOffset:
+    providerId === "codex" && displayMode !== "text" ? -1 : 0
   readonly property var interactionTarget: actionButton
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -138,6 +139,7 @@ Ui.Panel {
     Row {
       id: contentRow
       anchors.centerIn: parent
+      anchors.horizontalCenterOffset: root.providerContentHorizontalOffset
       spacing: root.tokens ? root.tokens.compactGap : Commons.Style.space(5)
 
       Item {

@@ -614,6 +614,9 @@ for ai_contract in \
   'height: root.providerIconSlotHeight' \
   'width: root.providerGlyphWidth' \
   'height: root.providerGlyphHeight' \
+  'readonly property int providerContentHorizontalOffset:' \
+  'providerId === "codex" && displayMode !== "text" ? -1 : 0' \
+  'anchors.horizontalCenterOffset: root.providerContentHorizontalOffset' \
   'anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset' \
   '? Qt.size(20, 12) : Qt.size(56, 56)' \
   'readonly property color baseIconColor: customFillActive' \
