@@ -14,6 +14,7 @@ ShibumiPanel {
   required property var stateService
   required property var healthService
   required property var switchService
+  property var pluginUpdateService: null
   // Compatibility aliases for the Control Center views. Their provenance is
   // the active host's VisualTokens, which ultimately follow colors.toml.
   readonly property color marketBackground: shibumiTokens
@@ -118,6 +119,20 @@ ShibumiPanel {
       return entry.compatibility !== "Native" && entry.enabled
     }).length
   readonly property bool pluginRemovalRunning: pluginRemoval.running
+  readonly property bool pluginUpdateCheckRunning:
+    effectivePluginUpdateService
+      ? effectivePluginUpdateService.running === true : false
+  readonly property int pluginUpdateCount: effectivePluginUpdateService
+    ? Number(effectivePluginUpdateService.updateCount || 0) : 0
+  readonly property int pluginUpdateFailedCount: effectivePluginUpdateService
+    ? Number(effectivePluginUpdateService.failedCount || 0) : 0
+  readonly property string pluginUpdateCheckError: effectivePluginUpdateService
+    ? String(effectivePluginUpdateService.error || "") : ""
+  readonly property string pluginUpdateBadgeText: effectivePluginUpdateService
+    ? String(effectivePluginUpdateService.badgeText || "") : ""
+  readonly property string pluginUpdateStatusText: effectivePluginUpdateService
+    ? String(effectivePluginUpdateService.statusText || "")
+    : "Plugin update check unavailable"
   readonly property string pluginRemovalId: removalPluginId
   property string removalPluginId: ""
   property bool removalPluginWasInBar: false
@@ -128,6 +143,9 @@ ShibumiPanel {
   readonly property string managerCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-manager"
+  readonly property var effectivePluginUpdateService: pluginUpdateService
+    || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
+      ? bar.shell.serviceFor("hancore.shibumi.control-center") : null)
   readonly property string pluginUpdateCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-plugin-updates"
@@ -756,6 +774,8 @@ ShibumiPanel {
   function rescanPlugins() {
     if (!pluginRegistry
         || typeof pluginRegistry.rescan !== "function") return false
+    if (effectivePluginUpdateService)
+      effectivePluginUpdateService.invalidate(false)
     pluginRegistry.rescan()
     return true
   }
@@ -1118,8 +1138,15 @@ ShibumiPanel {
     return settings.openPluginInstaller()
   }
 
+  function checkPluginUpdates(force) {
+    if (stockOmarchyHost || !effectivePluginUpdateService) return false
+    return effectivePluginUpdateService.check(force === true)
+  }
+
   function openPluginUpdater() {
-    if (stockOmarchyHost) return false
+    if (stockOmarchyHost || pluginUpdateCheckRunning) return false
+    if (effectivePluginUpdateService)
+      effectivePluginUpdateService.invalidate(false)
     Quickshell.execDetached([
       "omarchy-launch-floating-terminal-with-presentation",
       pluginUpdateCommand

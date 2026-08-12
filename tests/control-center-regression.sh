@@ -25,6 +25,8 @@ cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -Dm0644 "$repo_root/tests/control-center-smoke.qml" "$tmpdir/shell.qml"
 install -Dm0644 "$repo_root/tests/fixtures/ControlCenterTestPanel.qml" \
   "$tmpdir/fixtures/ControlCenterTestPanel.qml"
+install -Dm0644 "$repo_root/tests/fixtures/PluginUpdateTestService.qml" \
+  "$tmpdir/control/PluginUpdateTestService.qml"
 install -Dm0755 "$repo_root/tests/fixtures/slow-health-report" \
   "$tmpdir/home/.config/omarchy/plugins/hancore.shibumi.control-center/manager/shibumi-health"
 mkdir -m 700 "$tmpdir/runtime"
@@ -1322,6 +1324,13 @@ for plugin_contract in \
     'onActionRequested: root.controller.openPluginInstaller()' \
     'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"' \
     'secondaryActionGlyph: "refresh"' \
+    'secondaryActionBadgeText: root.favoritesOnly ? ""' \
+    'secondaryActionDescription: root.favoritesOnly ? ""' \
+    'controller.pluginUpdateStatusText' \
+    'function syncPluginUpdateConsumer()' \
+    'service.acquireConsumer()' \
+    'service.releaseConsumer()' \
+    'Component.onDestruction:' \
     'actionWidth: Commons.Style.space(132)' \
     'onSecondaryActionRequested: root.controller.openPluginUpdater()' \
     'function providerCatalogCount(provider)' \
@@ -1365,16 +1374,50 @@ for plugin_height_contract in \
     || fail "Plugins compact panel-height contract drifted: $label"
 done
 for plugin_update_contract in \
+    'function checkPluginUpdates(force)' \
+    'effectivePluginUpdateService.check(force === true)' \
     'function openPluginUpdater()' \
+    'pluginUpdateCheckRunning) return false' \
     '"omarchy-launch-floating-terminal-with-presentation"' \
     'pluginUpdateCommand'; do
   rg -Fq "$plugin_update_contract" "$control_dir/ControlCenterPanel.qml" \
     || fail "manual plugin update action drifted: $plugin_update_contract"
 done
+rg -Fq 'hostShell.serviceFor("hancore.shibumi.control-center")' \
+  "$control_dir/BarWidget.qml" \
+  || fail 'plugin update status owner is not shared through the host service'
+jq -e '
+  (.kinds | index("service")) != null and
+  .entryPoints.service == "PluginUpdateService.qml"
+' "$control_dir/manifest.json" >/dev/null \
+  || fail 'control-center manifest does not declare its shared update service'
+for plugin_update_service_contract in \
+    'updateCheck.command = [' \
+    'command, "--list"' \
+    '"PLUGIN_UPDATE_COUNT"' \
+    '"PLUGIN_CHECKED_COUNT"' \
+    '"PLUGIN_UNMANAGED_COUNT"' \
+    '"PLUGIN_FETCH_FAILED_COUNT"' \
+    '? Date.now() : 0' \
+    'function acquireConsumer()' \
+    'function releaseConsumer()' \
+    'updateCheck.running = false' \
+    'function invalidate(rescan)' \
+    'const stale = finishedEpoch !== root.invalidationEpoch' \
+    'updateCount > 99 ? "99+"'; do
+  rg -Fq "$plugin_update_service_contract" \
+    "$control_dir/PluginUpdateService.qml" \
+    || fail "plugin update status service drifted: $plugin_update_service_contract"
+done
 for stacked_action_contract in \
     'anchors.left: root.secondaryActionLabel !== ""' \
     'anchors.left: parent.left' \
-    'anchors.leftMargin: Commons.Style.space(10)'; do
+    'anchors.leftMargin: Commons.Style.space(10)' \
+    'property string secondaryActionBadgeText: ""' \
+    'property string secondaryActionDescription: ""' \
+    'Accessible.description: root.secondaryActionDescription' \
+    'visible: root.secondaryActionBadgeText !== ""' \
+    'text: root.secondaryActionBadgeText'; do
   rg -Fq "$stacked_action_contract" "$control_dir/PageHeaderHero.qml" \
     || fail "stacked header actions lost their shared left edge"
 done

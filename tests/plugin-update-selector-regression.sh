@@ -39,9 +39,18 @@ printf '{"id":"third.party.archive"}\n' \
 printf '{"id":"hancore.shibumi.fixture","x-shibumi":{"suiteId":"hancore.shibumi"}}\n' \
   > "$plugins/hancore.shibumi.fixture/manifest.json"
 
-output=$(SHIBUMI_PLUGIN_DIR="$plugins" "$updater" --list)
+output=$(SHIBUMI_PLUGIN_DIR="$plugins" SHIBUMI_ALLOW_FILE_REMOTE=1 \
+  "$updater" --list)
+grep -Fxq 'PLUGIN_SCAN_EPOCH=0' <<< "$output" \
+  || fail "default scanner epoch is not machine-readable"
 grep -Fxq 'PLUGIN_UPDATE_COUNT=1' <<< "$output" \
   || fail "available update count is not derived before selection"
+grep -Fxq 'PLUGIN_CHECKED_COUNT=1' <<< "$output" \
+  || fail "Git-managed check count is not machine-readable"
+grep -Fxq 'PLUGIN_UNMANAGED_COUNT=1' <<< "$output" \
+  || fail "unmanaged count is not machine-readable"
+grep -Fxq 'PLUGIN_FETCH_FAILED_COUNT=0' <<< "$output" \
+  || fail "clean scan reported a failed Git check"
 grep -Fxq 'PLUGIN_UPDATE_ID=third.party.git' <<< "$output" \
   || fail "Git-managed update is not selectable"
 grep -Fxq 'PLUGIN_UNMANAGED_ID=third.party.archive' <<< "$output" \
@@ -49,6 +58,78 @@ grep -Fxq 'PLUGIN_UNMANAGED_ID=third.party.archive' <<< "$output" \
 if grep -Fq 'hancore.shibumi.fixture' <<< "$output"; then
   fail "suite-managed plugins must not enter third-party update selection"
 fi
+
+# Background scans must not follow plugin/.git symlinks or execute repository-
+# local Git helpers. These fixtures are never passed to Git at all.
+ln -s "$plugins/third.party.git" "$plugins/third.party.symlink"
+mkdir -p "$plugins/third.party.gitlink"
+printf '{"id":"third.party.gitlink"}\n' \
+  > "$plugins/third.party.gitlink/manifest.json"
+ln -s "$plugins/third.party.git/.git" "$plugins/third.party.gitlink/.git"
+hardened_output=$(SHIBUMI_PLUGIN_DIR="$plugins" SHIBUMI_ALLOW_FILE_REMOTE=1 \
+  "$updater" --list)
+grep -Fxq 'PLUGIN_UNMANAGED_COUNT=3' <<<"$hardened_output" \
+  || fail 'symlinked plugin repositories were not rejected as unmanaged'
+grep -Fxq 'PLUGIN_UNMANAGED_ID=third.party.symlink' <<<"$hardened_output" \
+  || fail 'symlinked plugin root was followed'
+grep -Fxq 'PLUGIN_UNMANAGED_ID=third.party.gitlink' <<<"$hardened_output" \
+  || fail 'symlinked .git path was followed'
+rm -f -- "$plugins/third.party.symlink"
+rm -rf -- "$plugins/third.party.gitlink"
+
+# A repository whose object database has no valid HEAD is a per-plugin failure,
+# not a reason to lose the machine-readable result for every healthy plugin.
+mkdir -p "$plugins/third.party.broken"
+printf '{"id":"third.party.broken"}\n' \
+  > "$plugins/third.party.broken/manifest.json"
+git -C "$plugins/third.party.broken" init --quiet --initial-branch=main
+git -C "$plugins/third.party.broken" remote add origin "$author"
+broken_output=$(SHIBUMI_PLUGIN_DIR="$plugins" SHIBUMI_ALLOW_FILE_REMOTE=1 \
+  "$updater" --list)
+grep -Fxq 'PLUGIN_UPDATE_COUNT=1' <<<"$broken_output" \
+  || fail 'broken checkout discarded a healthy update result'
+grep -Fxq 'PLUGIN_CHECKED_COUNT=1' <<<"$broken_output" \
+  || fail 'broken checkout polluted the successful-check count'
+grep -Fxq 'PLUGIN_FETCH_FAILED_COUNT=1' <<<"$broken_output" \
+  || fail 'broken checkout did not increment failed-check count'
+grep -Fxq 'PLUGIN_FETCH_FAILED_ID=third.party.broken (invalid checkout)' \
+  <<<"$broken_output" \
+  || fail 'broken checkout was not classified as invalid'
+rm -rf -- "$plugins/third.party.broken"
+
+mkdir -p "$plugins/third.party.noncommit"
+printf '{"id":"third.party.noncommit"}\n' \
+  > "$plugins/third.party.noncommit/manifest.json"
+git -C "$plugins/third.party.noncommit" init --quiet --initial-branch=main
+git -C "$plugins/third.party.noncommit" remote add origin "$author"
+blob=$(printf 'not a commit\n' | git -C "$plugins/third.party.noncommit" hash-object -w --stdin)
+printf '%s\n' "$blob" > "$plugins/third.party.noncommit/.git/refs/heads/main"
+noncommit_output=$(SHIBUMI_PLUGIN_DIR="$plugins" SHIBUMI_ALLOW_FILE_REMOTE=1 \
+  "$updater" --list)
+grep -Fxq 'PLUGIN_UPDATE_COUNT=1' <<<"$noncommit_output" \
+  || fail 'non-commit HEAD discarded a healthy update result'
+grep -Fxq 'PLUGIN_FETCH_FAILED_COUNT=1' <<<"$noncommit_output" \
+  || fail 'non-commit HEAD did not increment failed-check count'
+grep -Fxq 'PLUGIN_FETCH_FAILED_ID=third.party.noncommit (invalid checkout)' \
+  <<<"$noncommit_output" \
+  || fail 'non-commit HEAD was counted as checked'
+rm -rf -- "$plugins/third.party.noncommit"
+
+for hardening_contract in \
+    'export GIT_ASKPASS=/bin/false' \
+    'export SSH_ASKPASS=/bin/false' \
+    '-c core.hooksPath=/dev/null' \
+    '-c core.askPass=/bin/false' \
+    '-c core.gitProxy=' \
+    '-c credential.helper=' \
+    '-c protocol.allow=never' \
+    '-c protocol.ext.allow=never' \
+    '-c protocol.file.allow="$git_file_protocol"' \
+    '-c protocol.git.allow=never' \
+    'fetch --quiet --no-write-fetch-head'; do
+  grep -Fq -- "$hardening_contract" "$updater" \
+    || fail "Git scan hardening drifted: $hardening_contract"
+done
 
 grep -Fq 'gum choose --no-limit' "$updater" \
   || fail 'multi-selection delegation drifted'
@@ -110,7 +191,7 @@ run_selector() {
   local decision=$1 validation=${2:-pass}
   timeout --foreground --signal=TERM --kill-after=2 20 \
     script -qec \
-      "env HOME='$test_home' PATH='$stub_bin:$PATH' TEST_CONFIRM='$decision' TEST_VALIDATION='$validation' '$updater'" \
+      "env HOME='$test_home' PATH='$stub_bin:$PATH' SHIBUMI_ALLOW_FILE_REMOTE=1 TEST_CONFIRM='$decision' TEST_VALIDATION='$validation' '$updater'" \
       /dev/null
 }
 
@@ -179,9 +260,14 @@ git -C "$plugins/third.party.git" add local.txt
 git -C "$plugins/third.party.git" \
   -c user.name='Shibumi Test' -c user.email='shibumi@example.invalid' \
   commit --quiet -m local-divergence
-diverged_output=$(SHIBUMI_PLUGIN_DIR="$plugins" "$updater" --list)
+diverged_output=$(SHIBUMI_PLUGIN_DIR="$plugins" \
+  SHIBUMI_ALLOW_FILE_REMOTE=1 "$updater" --list)
 grep -Fxq 'PLUGIN_UPDATE_COUNT=0' <<<"$diverged_output" \
   || fail 'diverged plugin was offered as a fast-forward update'
+grep -Fxq 'PLUGIN_CHECKED_COUNT=0' <<<"$diverged_output" \
+  || fail 'diverged Git plugin was counted as successfully checked'
+grep -Fxq 'PLUGIN_FETCH_FAILED_COUNT=1' <<<"$diverged_output" \
+  || fail 'diverged plugin did not increment failed-check count'
 grep -Fxq 'PLUGIN_FETCH_FAILED_ID=third.party.git (diverged)' \
   <<<"$diverged_output" \
   || fail 'diverged plugin was not classified separately'
@@ -190,9 +276,14 @@ grep -Fxq 'PLUGIN_FETCH_FAILED_ID=third.party.git (diverged)' \
 # third-party checkout.
 git -C "$plugins/third.party.git" remote set-url origin \
   "$fixture_root/missing-origin"
-fetch_output=$(SHIBUMI_PLUGIN_DIR="$plugins" "$updater" --list 2>&1)
+fetch_output=$(SHIBUMI_PLUGIN_DIR="$plugins" \
+  SHIBUMI_ALLOW_FILE_REMOTE=1 "$updater" --list 2>&1)
 grep -Fxq 'PLUGIN_UPDATE_COUNT=0' <<<"$fetch_output" \
   || fail 'fetch-failed plugin was offered as an update'
+grep -Fxq 'PLUGIN_CHECKED_COUNT=0' <<<"$fetch_output" \
+  || fail 'fetch-failed plugin was counted as successfully checked'
+grep -Fxq 'PLUGIN_FETCH_FAILED_COUNT=1' <<<"$fetch_output" \
+  || fail 'fetch failure did not increment failed-check count'
 grep -Fxq 'PLUGIN_FETCH_FAILED_ID=third.party.git' <<<"$fetch_output" \
   || fail 'fetch failure was not reported to the caller'
 

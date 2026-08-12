@@ -6,6 +6,8 @@
 set -euo pipefail
 
 export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/bin/false
+export SSH_ASKPASS=/bin/false
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
 # Omarchy owns the changed-code review and final confirmation. Keep its plain
 # git fallback out of an implicit pager so long diffs reach that confirmation
@@ -40,39 +42,97 @@ is_shibumi_suite_plugin() {
 }
 
 updates=()
+checked=()
 unmanaged=()
 fetch_failed=()
 
 for plugin_dir in "$plugins_dir"/*/; do
   [[ -d $plugin_dir ]] || continue
-  plugin_id=${plugin_dir%/}
-  plugin_id=${plugin_id##*/}
+  plugin_dir=${plugin_dir%/}
+  plugin_id=${plugin_dir##*/}
   valid_plugin_id "$plugin_id" || continue
   is_shibumi_suite_plugin "$plugin_dir" && continue
 
-  if [[ ! -d $plugin_dir/.git ]]; then
+  if [[ -L $plugin_dir || ! -d $plugin_dir/.git || -L $plugin_dir/.git ]]; then
     unmanaged+=("$plugin_id")
     continue
   fi
 
-  if ! git -C "$plugin_dir" fetch --quiet origin HEAD; then
+  git_file_protocol=never
+  [[ ${SHIBUMI_ALLOW_FILE_REMOTE:-0} == 1 ]] && git_file_protocol=always
+  git_plugin=(git -C "$plugin_dir"
+    -c core.fsmonitor=
+    -c core.hooksPath=/dev/null
+    -c core.askPass=/bin/false
+    -c core.gitProxy=
+    -c core.sshCommand="$GIT_SSH_COMMAND"
+    -c credential.helper=
+    -c protocol.allow=never
+    -c protocol.ext.allow=never
+    -c protocol.file.allow="$git_file_protocol"
+    -c protocol.git.allow=never
+    -c protocol.http.allow=always
+    -c protocol.https.allow=always
+    -c protocol.ssh.allow=always)
+
+  if ! remote_head=$("${git_plugin[@]}" ls-remote --exit-code --quiet \
+      origin HEAD 2>/dev/null | awk 'NR == 1 { print $1 }') \
+      || [[ ! $remote_head =~ ^[0-9A-Fa-f]{40}$ \
+        && ! $remote_head =~ ^[0-9A-Fa-f]{64}$ ]]; then
     fetch_failed+=("$plugin_id")
     continue
   fi
-  local_head=$(git -C "$plugin_dir" rev-parse HEAD)
-  remote_head=$(git -C "$plugin_dir" rev-parse FETCH_HEAD)
-  if [[ $local_head == "$remote_head" ]]; then
+  if ! "${git_plugin[@]}" fetch --quiet --no-write-fetch-head origin \
+      "$remote_head"; then
+    fetch_failed+=("$plugin_id")
     continue
   fi
-  if git -C "$plugin_dir" merge-base --is-ancestor HEAD FETCH_HEAD; then
+  if ! local_head=$("${git_plugin[@]}" rev-parse --verify 'HEAD^{commit}' \
+      2>/dev/null) \
+      || ! remote_commit=$("${git_plugin[@]}" rev-parse --verify \
+        "$remote_head^{commit}" 2>/dev/null) \
+      || [[ $remote_commit != "$remote_head" ]]; then
+    fetch_failed+=("$plugin_id (invalid checkout)")
+    continue
+  fi
+  remote_head=$remote_commit
+  if [[ $local_head == "$remote_head" ]]; then
+    checked+=("$plugin_id")
+    continue
+  fi
+  if "${git_plugin[@]}" merge-base --is-ancestor "$local_head" \
+      "$remote_head"; then
+    checked+=("$plugin_id")
     updates+=("$plugin_id")
-  elif ! git -C "$plugin_dir" merge-base --is-ancestor FETCH_HEAD HEAD; then
-    fetch_failed+=("$plugin_id (diverged)")
+    continue
+  else
+    relation_rc=$?
+    if ((relation_rc != 1)); then
+      fetch_failed+=("$plugin_id (invalid history)")
+      continue
+    fi
+  fi
+  if "${git_plugin[@]}" merge-base --is-ancestor "$remote_head" \
+      "$local_head"; then
+    checked+=("$plugin_id")
+  else
+    relation_rc=$?
+    if ((relation_rc == 1)); then
+      fetch_failed+=("$plugin_id (diverged)")
+    else
+      fetch_failed+=("$plugin_id (invalid history)")
+    fi
   fi
 done
 
 if [[ $mode == "list" ]]; then
+  scan_epoch=${SHIBUMI_PLUGIN_SCAN_EPOCH:-0}
+  [[ $scan_epoch =~ ^[0-9]+$ ]] || scan_epoch=0
+  printf 'PLUGIN_SCAN_EPOCH=%s\n' "$scan_epoch"
   printf 'PLUGIN_UPDATE_COUNT=%d\n' "${#updates[@]}"
+  printf 'PLUGIN_CHECKED_COUNT=%d\n' "${#checked[@]}"
+  printf 'PLUGIN_UNMANAGED_COUNT=%d\n' "${#unmanaged[@]}"
+  printf 'PLUGIN_FETCH_FAILED_COUNT=%d\n' "${#fetch_failed[@]}"
   for plugin_id in "${updates[@]}"; do
     printf 'PLUGIN_UPDATE_ID=%s\n' "$plugin_id"
   done

@@ -23,7 +23,7 @@
     },
     {
       "id": "hancore.shibumi.control-center",
-      "kinds": ["bar-widget"],
+      "kinds": ["bar-widget", "service"],
       "role": "G1",
       "bundle": "core",
       "defaultSection": "left",

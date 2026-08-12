@@ -99,6 +99,11 @@ Ui.Panel {
     : shibumiWordmark ? Math.ceil(shibumiMetrics.advanceWidth)
       : archWordmark ? archWordmarkWidth : Math.round(logoHeight * wordmarkAspect)
   property url panelSource: Qt.resolvedUrl("ControlCenterPanel.qml")
+  property var pluginUpdateServiceOverride: null
+  readonly property var activePluginUpdateService:
+    pluginUpdateServiceOverride || (hostShell
+      && typeof hostShell.serviceFor === "function"
+      ? hostShell.serviceFor("hancore.shibumi.control-center") : null)
   property real phase: 0
   property var registeredBar: null
   property string pendingPage: ""
@@ -127,6 +132,8 @@ Ui.Panel {
     if ("stateService" in item) item.stateService = root.stateService
     if ("healthService" in item) item.healthService = healthState
     if ("switchService" in item) item.switchService = switchState
+    if ("pluginUpdateService" in item)
+      item.pluginUpdateService = activePluginUpdateService
   }
 
   function syncPanelLoader() {
@@ -148,7 +155,8 @@ Ui.Panel {
       ownerWidget: root,
       stateService: root.stateService,
       healthService: healthState,
-      switchService: switchState
+      switchService: switchState,
+      pluginUpdateService: activePluginUpdateService
     })
   }
 

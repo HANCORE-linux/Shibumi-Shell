@@ -34,6 +34,7 @@ Column {
   property string pendingRemovalName: ""
   property string removingPluginId: ""
   property string removingPluginName: ""
+  property bool pluginUpdateConsumerActive: false
 
   readonly property var allEntries: (controller.pluginEntries || [])
     .filter(function(entry) {
@@ -107,6 +108,14 @@ Column {
   readonly property color availableCountColor:
     typeof controller.accentColor === "function"
       ? controller.accentColor("color02") : accent
+  readonly property color pluginUpdateBadgeColor:
+    controller.pluginUpdateCheckError !== ""
+      || controller.pluginUpdateFailedCount > 0
+      ? (typeof controller.accentColor === "function"
+        ? controller.accentColor("color01") : Commons.Color.urgent)
+      : controller.pluginUpdateCount > 0 ? accent
+      : (typeof controller.accentColor === "function"
+        ? controller.accentColor("color03") : accent)
   readonly property bool feedbackCountdownRunning:
     feedbackCountdown.running
   readonly property bool feedbackCountdownPaused:
@@ -115,6 +124,7 @@ Column {
     providerSwitchRepeater.count === providerSwitchEntries.length
     && activeRepeater.count === displayedActiveEntries.length
     && availableRepeater.count === displayedAvailableEntries.length
+    && (!motionActive || favoritesOnly || pluginUpdateConsumerActive)
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
@@ -396,9 +406,41 @@ Column {
     return true
   }
 
+  function syncPluginUpdateConsumer() {
+    const shouldBeActive = motionActive && !favoritesOnly
+    const service = controller.effectivePluginUpdateService
+    if (!service) return false
+    if (shouldBeActive === pluginUpdateConsumerActive) return false
+    pluginUpdateConsumerActive = shouldBeActive
+    if (shouldBeActive) service.acquireConsumer()
+    else service.releaseConsumer()
+    return true
+  }
+
+  onMotionActiveChanged: pluginUpdateConsumerSync.restart()
+  onFavoritesOnlyChanged: pluginUpdateConsumerSync.restart()
+  Component.onCompleted: pluginUpdateConsumerSync.restart()
+  Component.onDestruction: {
+    if (pluginUpdateConsumerActive
+        && controller.effectivePluginUpdateService)
+      controller.effectivePluginUpdateService.releaseConsumer()
+    pluginUpdateConsumerActive = false
+  }
+
+  Timer {
+    id: pluginUpdateConsumerSync
+    interval: 0
+    repeat: false
+    onTriggered: root.syncPluginUpdateConsumer()
+  }
+
   Connections {
     target: root.controller
     ignoreUnknownSignals: true
+
+    function onEffectivePluginUpdateServiceChanged() {
+      pluginUpdateConsumerSync.restart()
+    }
 
     function onPluginRemovalFinished(pluginId, success, detail) {
       if (String(pluginId || "") !== root.removingPluginId) return
@@ -437,6 +479,12 @@ Column {
     actionGlyph: "add"
     secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"
     secondaryActionGlyph: "refresh"
+    secondaryActionEnabled: !root.controller.pluginUpdateCheckRunning
+    secondaryActionBadgeText: root.favoritesOnly ? ""
+      : root.controller.pluginUpdateBadgeText
+    secondaryActionDescription: root.favoritesOnly ? ""
+      : root.controller.pluginUpdateStatusText
+    secondaryActionBadgeColor: root.pluginUpdateBadgeColor
     onActionRequested: root.controller.openPluginInstaller()
     onSecondaryActionRequested: root.controller.openPluginUpdater()
   }

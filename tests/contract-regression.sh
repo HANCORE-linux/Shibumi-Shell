@@ -1011,6 +1011,7 @@ QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
 
 "$repo_root/tests/health-diagnostics-regression.sh"
 "$repo_root/tests/plugin-update-selector-regression.sh"
+"$repo_root/tests/plugin-update-service-regression.sh"
 "$repo_root/tests/audio-network-ipc-contract-regression.sh"
 "$repo_root/tests/network-ipc-routing-regression.sh"
 "$repo_root/tests/third-party-integration-regression.sh"

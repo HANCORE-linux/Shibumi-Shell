@@ -7,10 +7,12 @@
   "license": "MIT",
   "description": "Shibumi G1 presentation and bar configuration panel.",
   "kinds": [
-    "bar-widget"
+    "bar-widget",
+    "service"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "service": "PluginUpdateService.qml"
   },
   "barWidget": {
     "displayName": "Shibumi settings",

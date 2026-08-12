@@ -12,6 +12,7 @@ Item {
   required property var stateService
   required property var healthService
   required property var switchService
+  required property var pluginUpdateService
 
   readonly property bool open: ownerWidget.opened
   readonly property var healthReport: healthService.report
@@ -100,6 +101,14 @@ Item {
   readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
   property bool pluginRemovalRunning: false
+  readonly property bool pluginUpdateCheckRunning:
+    pluginUpdateService.running === true
+  readonly property int pluginUpdateCount: pluginUpdateService.updateCount
+  readonly property int pluginUpdateFailedCount: pluginUpdateService.failedCount
+  readonly property string pluginUpdateCheckError: pluginUpdateService.error
+  readonly property string pluginUpdateBadgeText: pluginUpdateService.badgeText
+  readonly property string pluginUpdateStatusText: pluginUpdateService.statusText
+  readonly property var effectivePluginUpdateService: pluginUpdateService
   property bool rejectProviderRestore: false
   readonly property string pluginRemovalId: ""
   signal pluginRemovalFinished(
@@ -554,6 +563,10 @@ Item {
   }
 
   property int pluginUpdaterOpenCount: 0
+
+  function checkPluginUpdates(force) {
+    return pluginUpdateService.check(force === true)
+  }
 
   function openPluginUpdater() {
     pluginUpdaterOpenCount++

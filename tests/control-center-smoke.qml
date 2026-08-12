@@ -19,6 +19,8 @@ ShellRoot {
   property var lifecycleHealthService: null
   property int lifecycleReportEpoch: 0
 
+  Control.PluginUpdateTestService { id: pluginUpdateService }
+
   function fail(message) {
     console.error("control-center-smoke:", message)
     Qt.exit(1)
@@ -187,6 +189,7 @@ ShellRoot {
       Control.BarWidget {
         bar: fakeBar
         panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
+        pluginUpdateServiceOverride: pluginUpdateService
       }
     }
   }
@@ -805,6 +808,24 @@ ShellRoot {
             || plugins.omarchyProviderCount !== 1
             || plugins.thirdPartyProviderCount !== 1)
           return root.fail("plugin provider summary is ambiguous")
+        if (pluginUpdateService.checkCount !== 1
+            || pluginUpdateService.consumerCount !== 1
+            || !pluginUpdateService.checked
+            || panel.pluginUpdateCount !== 2
+            || pluginUpdateService.checkedCount !== 3
+            || panel.pluginUpdateBadgeText !== "2"
+            || panel.pluginUpdateStatusText !== "2 updates available")
+          return root.fail("plugin update badge did not expose the scan state: checks="
+            + pluginUpdateService.checkCount + " consumers="
+            + pluginUpdateService.consumerCount + " checked="
+            + pluginUpdateService.checked + " updates=" + panel.pluginUpdateCount
+            + " checkedCount=" + pluginUpdateService.checkedCount
+            + " motion=" + plugins.motionActive
+            + " favorites=" + plugins.favoritesOnly
+            + " consumerActive=" + plugins.pluginUpdateConsumerActive
+            + " effective=" + (panel.effectivePluginUpdateService !== null)
+            + " badge=" + panel.pluginUpdateBadgeText
+            + " status=" + panel.pluginUpdateStatusText)
         if (!plugins.togglePluginById("omarchy.audio")
             || !plugins.feedbackVisible
             || !plugins.feedbackCountdownRunning
