@@ -28,6 +28,24 @@ Item {
   property string secondaryActionBadgeText: ""
   property string secondaryActionDescription: ""
   property color secondaryActionBadgeColor: accent
+  readonly property var secondaryActionGeometry: ({
+    actionWidth: secondaryAction.width,
+    contentX: secondaryActionContent.x,
+    contentWidth: secondaryActionContent.width,
+    labelX: secondaryActionContent.x + secondaryActionLabelText.x,
+    labelWidth: secondaryActionLabelText.width,
+    labelPaintedWidth: secondaryActionLabelText.paintedWidth,
+    labelPaintedHeight: secondaryActionLabelText.paintedHeight,
+    badgeVisible: secondaryActionBadge.visible,
+    badgeX: secondaryActionBadge.x,
+    badgeWidth: secondaryActionBadge.width,
+    badgeHeight: secondaryActionBadge.height,
+    badgeRightInset: secondaryAction.width
+      - secondaryActionBadge.x - secondaryActionBadge.width,
+    badgeText: secondaryBadgeLabel.text,
+    badgeLabelPaintedWidth: secondaryBadgeLabel.paintedWidth,
+    badgeLabelPaintedHeight: secondaryBadgeLabel.paintedHeight
+  })
   signal actionRequested()
   signal secondaryActionRequested()
 
@@ -187,10 +205,13 @@ Item {
           root.secondaryActionRequested()
 
         Row {
+          id: secondaryActionContent
           anchors.left: parent.left
           anchors.right: parent.right
           anchors.leftMargin: Commons.Style.space(10)
-          anchors.rightMargin: Commons.Style.space(10)
+          anchors.rightMargin: secondaryActionBadge.visible
+            ? secondaryActionBadge.width + Commons.Style.space(14)
+            : Commons.Style.space(10)
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(6)
 
@@ -208,8 +229,11 @@ Item {
           }
 
           Text {
+            id: secondaryActionLabelText
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - secondaryActionIcon.width - parent.spacing
+            width: parent.width
+              - (secondaryActionIcon.visible
+                ? secondaryActionIcon.width + parent.spacing : 0)
             text: root.secondaryActionLabel
             color: root.foreground
             font.family: root.controller.marketFont
@@ -219,17 +243,19 @@ Item {
             horizontalAlignment: Text.AlignLeft
             elide: Text.ElideRight
           }
+
         }
 
         Rectangle {
+          id: secondaryActionBadge
           visible: root.secondaryActionBadgeText !== ""
           anchors.right: parent.right
-          anchors.top: parent.top
-          anchors.rightMargin: Commons.Style.space(3)
-          anchors.topMargin: Commons.Style.space(3)
-          implicitWidth: Math.max(Commons.Style.space(18),
-            secondaryBadgeLabel.implicitWidth + Commons.Style.space(8))
-          implicitHeight: Commons.Style.space(18)
+          anchors.rightMargin: Commons.Style.space(8)
+          anchors.verticalCenter: parent.verticalCenter
+          width: Math.max(Commons.Style.space(14),
+            secondaryBadgeLabel.implicitWidth + Commons.Style.space(5))
+          height: Math.max(Commons.Style.space(14),
+            secondaryBadgeLabel.paintedHeight + Commons.Style.space(2))
           radius: height / 2
           color: Commons.Util.alpha(
             root.secondaryActionBadgeColor, 0.18)

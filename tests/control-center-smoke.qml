@@ -16,6 +16,7 @@ ShellRoot {
   property bool panelIdempotenceStarted: false
   property var stablePanelItem: null
   property int healthLifecycleStep: 0
+  property int badgeProbeStep: 0
   property var lifecycleHealthService: null
   property int lifecycleReportEpoch: 0
 
@@ -162,6 +163,12 @@ ShellRoot {
     property color controlBorderColor: "#444444"
     property string marketFont: "sans"
     property color marketBackground: "#000000"
+    property var workspaceConfig: ({ style: "default" })
+    property var launcherConfig: ({ mode: "text", text: "shibumi" })
+    property var barPresentation: ({ radius: "default" })
+    property var pluginEntries: []
+    property var healthReport: ({ checks: [] })
+    property string imagePickerStyle: "carousel"
 
     function accentColor(name) {
       return String(name || "") === "color03" ? "#336699" : "#ffffff"
@@ -175,6 +182,21 @@ ShellRoot {
     glyph: "extension"
     label: "Favorite probe"
     favorite: true
+  }
+
+  Control.PageHeaderHero {
+    id: headerBadgeProbe
+    visible: true
+    opacity: 0
+    width: 400
+    height: implicitHeight
+    controller: tileController
+    actionLabel: "Add plugin"
+    actionGlyph: "add"
+    secondaryActionLabel: "Check plugin"
+    secondaryActionGlyph: "refresh"
+    secondaryActionBadgeText: ""
+    actionWidth: 132
   }
 
   State.Service {
@@ -208,6 +230,68 @@ ShellRoot {
             || String(favoriteTileProbe.favoriteGlyphColor) !== "#336699"
             || favoriteTileProbe.favoriteGlyphText !== "󰓎")
           return root.fail("favorite star does not use the color03 Nerd Font glyph")
+        const badgeGeometry = headerBadgeProbe.secondaryActionGeometry
+        const contentRight = badgeGeometry.contentX
+          + badgeGeometry.contentWidth
+        const labelRight = badgeGeometry.labelX + badgeGeometry.labelWidth
+        if (root.badgeProbeStep === 0) {
+          if (badgeGeometry.badgeVisible
+              || Math.abs(contentRight - 122) > 0.5
+              || badgeGeometry.labelPaintedWidth > badgeGeometry.labelWidth
+              || badgeGeometry.labelPaintedHeight > 34)
+            return root.fail("empty header badge reserved or overlapped content")
+          headerBadgeProbe.secondaryActionBadgeText = "2"
+          root.badgeProbeStep++
+          return
+        }
+        if (root.badgeProbeStep === 1) {
+          if (!badgeGeometry.badgeVisible || badgeGeometry.badgeText !== "2"
+              || labelRight + 6 > badgeGeometry.badgeX + 0.5
+              || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
+              || badgeGeometry.badgeHeight < 14
+              || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.badgeLabelPaintedWidth
+                > badgeGeometry.badgeWidth
+              || badgeGeometry.badgeLabelPaintedHeight
+                > badgeGeometry.badgeHeight)
+            return root.fail("normal header badge overlapped its label")
+          headerBadgeProbe.secondaryActionBadgeText = "99+!"
+          root.badgeProbeStep++
+          return
+        }
+        if (root.badgeProbeStep === 2) {
+          if (badgeGeometry.badgeText !== "99+!"
+              || labelRight + 6 > badgeGeometry.badgeX + 0.5
+              || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
+              || badgeGeometry.badgeHeight < 14
+              || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.badgeLabelPaintedWidth
+                > badgeGeometry.badgeWidth
+              || badgeGeometry.badgeLabelPaintedHeight
+                > badgeGeometry.badgeHeight)
+            return root.fail("wide header badge overlapped its label")
+          headerBadgeProbe.uiScale = 1.25
+          root.badgeProbeStep++
+          return
+        }
+        if (root.badgeProbeStep === 3) {
+          if (labelRight + 6 > badgeGeometry.badgeX + 0.5
+              || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
+              || badgeGeometry.badgeHeight < 14
+              || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.badgeLabelPaintedWidth
+                > badgeGeometry.badgeWidth
+              || badgeGeometry.badgeLabelPaintedHeight
+                > badgeGeometry.badgeHeight)
+            return root.fail("scaled header badge overlapped its label: labelRight="
+              + labelRight + " badgeX=" + badgeGeometry.badgeX
+              + " inset=" + badgeGeometry.badgeRightInset
+              + " badge=" + badgeGeometry.badgeWidth + "x"
+              + badgeGeometry.badgeHeight + " painted="
+              + badgeGeometry.badgeLabelPaintedWidth + "x"
+              + badgeGeometry.badgeLabelPaintedHeight)
+          root.badgeProbeStep++
+        }
         if (widget.moduleName !== "hancore.shibumi.control-center"
             || widget.panelLoaded || widget.iconMode
             || !widget.shibumiWordmark

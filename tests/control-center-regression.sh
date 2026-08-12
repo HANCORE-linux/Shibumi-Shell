@@ -1416,7 +1416,11 @@ for stacked_action_contract in \
     'property string secondaryActionBadgeText: ""' \
     'property string secondaryActionDescription: ""' \
     'Accessible.description: root.secondaryActionDescription' \
+    'id: secondaryActionBadge' \
+    '? secondaryActionBadge.width + Commons.Style.space(14)' \
+    'anchors.rightMargin: Commons.Style.space(8)' \
     'visible: root.secondaryActionBadgeText !== ""' \
+    'height: Math.max(Commons.Style.space(14),' \
     'text: root.secondaryActionBadgeText'; do
   rg -Fq "$stacked_action_contract" "$control_dir/PageHeaderHero.qml" \
     || fail "stacked header actions lost their shared left edge"
