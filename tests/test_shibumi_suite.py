@@ -1047,6 +1047,39 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.managed_state_snapshot(), state_before)
         self.assertEqual(self.runtime_activity_snapshot(), activity_before)
 
+    def test_failed_stop_intent_write_never_drains_shell(self) -> None:
+        self.install()
+        transaction = PluginTransaction(
+            self.paths,
+            self.runtime,
+            restart_on_reconcile=True,
+        )
+        original_write = transaction._write_journal
+        stops_before = self.runtime.stops
+
+        def fail_stop_intent(
+            phase: str,
+            desired_state: object = "unchanged",
+            archive_previous: object = "unchanged",
+        ) -> None:
+            if phase == "stopping-shell":
+                raise OSError("injected stopping-shell journal failure")
+            original_write(phase, desired_state, archive_previous)
+
+        with patch.object(
+            transaction, "_write_journal", side_effect=fail_stop_intent
+        ):
+            with self.assertRaisesRegex(
+                OSError, "injected stopping-shell journal failure"
+            ):
+                with transaction:
+                    transaction.stop_shell()
+
+        self.assertEqual(self.runtime.stops, stops_before)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(transaction.transaction_dir.exists())
+        self.assertFalse(self.hidden_transaction_paths())
+
     def test_shell_stop_intent_is_durable_before_runtime_drain(self) -> None:
         self.install()
         state_before = self.managed_state_snapshot()
@@ -1088,9 +1121,9 @@ class SuiteLifecycleTests(unittest.TestCase):
 
         expected_activity = dict(activity_before)
         expected_activity.update(
-            events=(*activity_before["events"], "stop", "restart"),
+            events=(*activity_before["events"], "stop", "stop", "restart"),
             restarts=activity_before["restarts"] + 1,
-            stops=activity_before["stops"] + 1,
+            stops=activity_before["stops"] + 2,
         )
         self.assertEqual(self.managed_state_snapshot(), state_before)
         self.assertEqual(self.runtime_activity_snapshot(), expected_activity)
@@ -1123,9 +1156,11 @@ class SuiteLifecycleTests(unittest.TestCase):
         plugin_id = "hancore.shibumi.menu"
         state_before = (self.paths.state_dir / "install.json").read_bytes()
         config_before = self.paths.config_file.read_bytes()
-        self.runtime.fail_rescan_calls.add(self.runtime.rescans + 1)
+        self.runtime.fail_restart_count = 1
 
-        with self.assertRaisesRegex(RuntimeFailure, "injected rescan failure"):
+        with self.assertRaisesRegex(
+            RuntimeFailure, "injected shell restart failure"
+        ):
             command_update(self.args(), self.suite, self.paths, self.runtime)
 
         self.assertTrue((self.paths.plugin_dir / plugin_id).is_dir())
@@ -1885,6 +1920,32 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(command_status(self.suite, self.paths), 0)
 
+    def test_managed_update_stops_before_publish_and_restarts_once(self) -> None:
+        self.install()
+        original_expose = PluginTransaction.expose
+
+        def recording_expose(transaction: PluginTransaction) -> None:
+            self.runtime.events.append("expose")
+            original_expose(transaction)
+
+        self.runtime.events.clear()
+        with patch.object(PluginTransaction, "expose", recording_expose):
+            self.assertEqual(
+                command_update(self.args(), self.suite, self.paths, self.runtime),
+                0,
+            )
+
+        self.assertIn("stop", self.runtime.events)
+        self.assertIn("expose", self.runtime.events)
+        self.assertLess(
+            self.runtime.events.index("stop"), self.runtime.events.index("expose")
+        )
+        self.assertEqual(self.runtime.events.count("restart"), 1)
+        self.assertNotIn("rescan", self.runtime.events)
+        self.assertNotIn("reload-config", self.runtime.events)
+        self.assertNotIn("reload-payload", self.runtime.events)
+        self.assertEqual(command_status(self.suite, self.paths), 0)
+
     def test_managed_repair_stops_before_publish_and_restarts_once(self) -> None:
         self.install()
         plugin_id = "hancore.shibumi.bluetooth"
@@ -1977,7 +2038,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         self.assertFalse(self.hidden_transaction_paths())
 
-    def test_started_repair_uses_live_fallback_when_rollback_restart_is_blocked(self) -> None:
+    def test_started_repair_retains_recovery_when_rollback_restart_is_blocked(self) -> None:
         self.install()
         original_config = self.paths.config_file.read_bytes()
         original_state = (self.paths.state_dir / "install.json").read_bytes()
@@ -2000,17 +2061,26 @@ class SuiteLifecycleTests(unittest.TestCase):
             side_effect=RuntimeFailure("injected post-restart verification failure"),
         ):
             with self.assertRaisesRegex(
-                RuntimeFailure, "injected post-restart verification failure"
+                RuntimeFailure, "injected rollback restart preflight failure"
             ):
                 command_repair(self.args(), self.suite, self.paths, self.runtime)
 
         self.assertEqual(restart_calls, 2)
-        self.assertTrue(self.runtime.shell_running)
-        self.assertGreater(self.runtime.reloads, reloads_before)
+        self.assertFalse(self.runtime.shell_running)
+        self.assertEqual(self.runtime.reloads, reloads_before)
         self.assertEqual(self.paths.config_file.read_bytes(), original_config)
         self.assertEqual(
             (self.paths.state_dir / "install.json").read_bytes(), original_state
         )
+        self.assertEqual(
+            len(list(
+                (self.paths.state_dir / "transactions").glob("*/journal.json")
+            )),
+            1,
+        )
+
+        self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
+        self.assertTrue(self.runtime.shell_running)
         self.assertFalse(self.hidden_transaction_paths())
 
     def test_stopped_repair_retains_recovery_when_restart_remains_blocked(self) -> None:
@@ -2199,9 +2269,10 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.suite = Suite.load(self.source)
         stops_before = self.runtime.stops
         reloads_before = self.runtime.payload_reloads
-        # The operational restart and rollback restart both fail their host
-        # preflight before killing the still-running shell.
-        self.runtime.fail_restart_count = 2
+        restarts_before = self.runtime.restarts
+        # Publishing occurs only after a controlled drain. If the operational
+        # start fails, rollback restores the old bytes and starts them once.
+        self.runtime.fail_restart_count = 1
         with self.assertRaisesRegex(
             RuntimeFailure, "injected shell restart failure"
         ):
@@ -2209,10 +2280,101 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(target_file.read_bytes(), old_payload)
         self.assertEqual(self.paths.config_file.read_bytes(), old_config)
         self.assertEqual((self.paths.state_dir / "install.json").read_bytes(), old_state)
-        self.assertEqual(self.runtime.stops, stops_before)
-        self.assertGreater(self.runtime.payload_reloads, reloads_before)
+        self.assertEqual(self.runtime.stops, stops_before + 2)
+        self.assertEqual(self.runtime.restarts, restarts_before + 2)
+        self.assertEqual(self.runtime.payload_reloads, reloads_before)
         self.assertFalse(self.hidden_transaction_paths())
         self.assertFalse((self.paths.state_dir / "transactions").exists())
+
+    def test_update_rollback_drains_a_shell_started_before_timeout(self) -> None:
+        self.install()
+        source_file = (
+            self.source / "hancore.shibumi.center" / "BarWidget.qml"
+        )
+        source_file.write_text(
+            source_file.read_text(encoding="utf-8")
+            + "\n// post-launch rollback fixture\n",
+            encoding="utf-8",
+        )
+        self.suite = Suite.load(self.source)
+        original_restore = transaction_module._restore_records
+        restart_calls = 0
+
+        def start_then_report() -> None:
+            nonlocal restart_calls
+            restart_calls += 1
+            self.runtime.events.append("restart")
+            self.runtime.restarts += 1
+            self.runtime.shell_running = True
+            if restart_calls == 1:
+                raise RuntimeFailure("injected post-launch timeout")
+
+        def recording_restore(*args: object) -> None:
+            self.runtime.events.append("restore")
+            self.assertFalse(
+                self.runtime.shell_running,
+                "rollback restored plugin roots while the shell was running",
+            )
+            original_restore(*args)
+
+        self.runtime.events.clear()
+        with patch.object(
+            self.runtime, "restart_shell", side_effect=start_then_report
+        ), patch.object(
+            transaction_module, "_restore_records", side_effect=recording_restore
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure, "injected post-launch timeout"
+            ):
+                command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(restart_calls, 2)
+        self.assertEqual(self.runtime.events.count("stop"), 2)
+        self.assertLess(
+            [
+                index
+                for index, event in enumerate(self.runtime.events)
+                if event == "stop"
+            ][1],
+            self.runtime.events.index("restore"),
+        )
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_update_verification_failure_drains_before_live_restore(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.center"
+        target_file = self.paths.plugin_dir / plugin_id / "BarWidget.qml"
+        source_file = self.source / plugin_id / "BarWidget.qml"
+        old_payload = target_file.read_bytes()
+        old_state = (self.paths.state_dir / "install.json").read_bytes()
+        source_file.write_text(
+            source_file.read_text(encoding="utf-8")
+            + "\n// verification rollback fixture\n",
+            encoding="utf-8",
+        )
+        self.suite = Suite.load(self.source)
+        self.runtime.events.clear()
+
+        with patch.object(
+            self.runtime,
+            "verify_update",
+            side_effect=RuntimeFailure("injected update verification failure"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure, "injected update verification failure"
+            ):
+                command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(
+            self.runtime.events, ["stop", "restart", "stop", "restart"]
+        )
+        self.assertEqual(target_file.read_bytes(), old_payload)
+        self.assertEqual(
+            (self.paths.state_dir / "install.json").read_bytes(), old_state
+        )
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(self.hidden_transaction_paths())
 
     def test_update_adds_new_profile_plugin_without_rewriting_user_layout(self) -> None:
         self.install()
@@ -2885,6 +3047,115 @@ class SuiteLifecycleTests(unittest.TestCase):
                     )
                 self.assertFalse(self.hidden_transaction_paths())
 
+    def test_shell_started_recovery_drains_before_restoring_payload(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.memory"
+        target_file = self.paths.plugin_dir / plugin_id / "BarWidget.qml"
+        old_payload = target_file.read_bytes()
+        old_config = self.paths.config_file.read_bytes()
+        source_file = self.source / plugin_id / "BarWidget.qml"
+        source_file.write_text(
+            source_file.read_text(encoding="utf-8")
+            + "\n// shell-started recovery fixture\n",
+            encoding="utf-8",
+        )
+        suite = Suite.load(self.source)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stage(
+            (suite.plugins[plugin_id],),
+            revision="shell-started",
+            suite_version=suite.version,
+        )
+        transaction.stop_shell()
+        transaction.expose()
+        transaction.write_config(b'{"version":1,"bar":{"id":"broken"}}\n')
+        self.runtime.restart_shell()
+        transaction.mark_shell_started()
+        journal = json.loads(
+            transaction.journal_file.read_text(encoding="utf-8")
+        )
+        self.assertIs(journal["shellStopped"], False)
+        self.assertIs(journal["restoreRequiresDrain"], True)
+        stops_before = self.runtime.stops
+
+        self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
+
+        self.assertEqual(self.runtime.stops, stops_before + 1)
+        self.assertEqual(target_file.read_bytes(), old_payload)
+        self.assertEqual(self.paths.config_file.read_bytes(), old_config)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_recovery_rejects_external_target_before_stopping_shell(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.memory"
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stage(
+            (self.suite.plugins[plugin_id],),
+            revision="external-target",
+            suite_version=self.suite.version,
+        )
+        transaction.stop_shell()
+        transaction.expose()
+        self.runtime.restart_shell()
+
+        target = self.paths.plugin_dir / plugin_id
+        shutil.rmtree(target)
+        target.mkdir()
+        (target / "external.txt").write_text("foreign\n", encoding="utf-8")
+        stops_before = self.runtime.stops
+
+        with self.assertRaisesRegex(
+            TransactionError, "externally changed target"
+        ):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual(self.runtime.stops, stops_before)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertTrue(transaction.transaction_dir.is_dir())
+        self.assertEqual(
+            (target / "external.txt").read_text(encoding="utf-8"), "foreign\n"
+        )
+
+    def test_recovery_rejects_external_new_target_before_stopping_shell(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.memory"
+        target = self.paths.plugin_dir / plugin_id
+        shutil.rmtree(target)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stage(
+            (self.suite.plugins[plugin_id],),
+            revision="external-new-target",
+            suite_version=self.suite.version,
+        )
+        self.assertIs(transaction.records[0]["hadTarget"], False)
+        transaction.stop_shell()
+        transaction.expose()
+        self.runtime.restart_shell()
+
+        shutil.rmtree(target)
+        target.mkdir()
+        (target / "external.txt").write_text("foreign\n", encoding="utf-8")
+        stops_before = self.runtime.stops
+
+        with self.assertRaisesRegex(
+            TransactionError, "externally changed target"
+        ):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual(self.runtime.stops, stops_before)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertTrue(transaction.transaction_dir.is_dir())
+        self.assertEqual(
+            (target / "external.txt").read_text(encoding="utf-8"), "foreign\n"
+        )
+
     def test_legacy_journal_without_shell_state_requires_restart(self) -> None:
         self.install()
         plugin_id = "hancore.shibumi.memory"
@@ -2899,6 +3170,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         transaction.write_config(b'{"version":1,"bar":{"id":"broken"}}\n')
         journal = json.loads(transaction.journal_file.read_text(encoding="utf-8"))
         journal.pop("shellStopped")
+        journal.pop("restoreRequiresDrain")
         transaction.journal_file.write_text(
             json.dumps(journal, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

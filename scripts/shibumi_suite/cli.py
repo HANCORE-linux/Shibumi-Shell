@@ -775,11 +775,16 @@ def command_update(
         # the authoritative lock service only after staging is complete and
         # immediately before the first live plugin directory is renamed.
         runtime.require_session_unlocked("Shibumi update")
+        # Managed updates replace every live plugin root. Drain the shell before
+        # publishing them so Quattro cannot begin a hot reload while the
+        # subsequent restart is deregistering and recreating IPC handlers.
+        if not external:
+            transaction.stop_shell()
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
-        runtime.rescan()
         transaction.write_config(encode_config(desired))
         if external:
+            runtime.rescan()
             runtime.reload_config()
             runtime.reload_payload()
         else:

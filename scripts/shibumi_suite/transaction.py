@@ -359,6 +359,7 @@ class PluginTransaction:
         self.finished = False
         self.commit_point_reached = False
         self.shell_stopped = False
+        self.restore_requires_drain = False
         self.live_mutation_started = False
         self.payload_reload_expected = (
             paths.plugin_dir / "hancore.shibumi.state"
@@ -419,6 +420,7 @@ class PluginTransaction:
             "menuExtensionExisted": self.menu_extension_existed,
             "restartOnReconcile": self.restart_on_reconcile,
             "shellStopped": self.shell_stopped,
+            "restoreRequiresDrain": self.restore_requires_drain,
             "liveMutationStarted": self.live_mutation_started,
             "payloadReloadExpected": self.payload_reload_expected,
             "records": self.records,
@@ -459,8 +461,19 @@ class PluginTransaction:
         # A drain can kill the shell before the caller regains control. Record
         # that uncertainty first so an interruption can never be recovered as
         # a no-op while leaving the production shell stopped.
+        previous_shell_stopped = self.shell_stopped
+        previous_restore_requires_drain = self.restore_requires_drain
         self.shell_stopped = True
-        self._write_journal("stopping-shell")
+        self.restore_requires_drain = True
+        try:
+            self._write_journal("stopping-shell")
+        except Exception:
+            # No drain has occurred. Keep memory aligned with the last durable
+            # journal so context rollback cannot stop a shell whose recovery
+            # record still describes a pre-stop transaction.
+            self.shell_stopped = previous_shell_stopped
+            self.restore_requires_drain = previous_restore_requires_drain
+            raise
         self.runtime.stop_shell()
         self._write_journal("shell-stopped")
 
@@ -670,12 +683,16 @@ class PluginTransaction:
                 self._cleanup_transaction()
                 self.finished = True
                 return
-            # Do not unconditionally drain a still-running shell here. A host
-            # restart can fail its own preflight (for example a lock guard)
-            # before killing anything; stopping during rollback would then
-            # turn a recoverable update failure into a dead desktop. Restore
-            # atomically and let reconcile_rollback attempt the guarded
-            # restart first, followed by its in-process reload fallbacks.
+            # A managed transaction records a monotonic restore drain before
+            # its first stop. A later start may succeed before verification or
+            # commit, so drain again before restoring live roots and avoid a
+            # hot reload against the reconciliation restart. Transactions that
+            # never owned a stop retain the in-process external-bar fallback.
+            if self.restore_requires_drain:
+                _preflight_restore_records(
+                    self.paths.plugin_dir, self.token, self.records
+                )
+                self.runtime.stop_shell()
             _restore_records(self.paths.plugin_dir, self.token, self.records)
             if self.config_existed:
                 atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
@@ -684,7 +701,9 @@ class PluginTransaction:
             self._restore_menu_extension()
             self.runtime.reconcile_rollback(
                 restart_required=self.restart_on_reconcile,
-                shell_was_stopped=self.shell_stopped,
+                shell_was_stopped=(
+                    self.shell_stopped or self.restore_requires_drain
+                ),
                 payload_reload_expected=self.payload_reload_expected,
             )
         except Exception:
@@ -827,10 +846,32 @@ def _discard_pre_exposure_records(
         _fsync_directory(plugin_root)
 
 
-def _restore_records(
+def _preflight_restore_records(
     plugin_root: Path, token: str, records: Iterable[dict[str, Any]]
 ) -> None:
     for record in reversed(list(records)):
+        target, _stage, backup = _safe_record_paths(plugin_root, token, record)
+        target_marker = _marker(target) if target.is_dir() else None
+        target_exists = target.exists() or target.is_symlink()
+        if backup.exists() or backup.is_symlink():
+            if target_exists:
+                if not target_marker or target_marker.get("transaction") != token:
+                    raise TransactionError(
+                        f"cannot safely roll back externally changed target: {target}"
+                    )
+        elif not bool(record.get("hadTarget")) and target_exists:
+            if not target_marker or target_marker.get("transaction") != token:
+                raise TransactionError(
+                    f"cannot safely roll back externally changed target: {target}"
+                )
+
+
+def _restore_records(
+    plugin_root: Path, token: str, records: Iterable[dict[str, Any]]
+) -> None:
+    record_list = list(records)
+    _preflight_restore_records(plugin_root, token, record_list)
+    for record in reversed(record_list):
         target, stage, backup = _safe_record_paths(plugin_root, token, record)
         target_marker = _marker(target) if target.is_dir() else None
         if backup.exists() or backup.is_symlink():
@@ -1022,6 +1063,7 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
         config_snapshot_payload: bytes | None = None
         menu_snapshot_payload: bytes | None = None
         shell_stopped_value = True
+        restore_requires_drain_value: bool | None = None
         live_mutation_value: bool | None = None
         payload_reload_value: bool | None = None
         if phase in ROLLBACK_PHASES:
@@ -1038,6 +1080,15 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 raise TransactionError(
                     f"transaction shellStopped is malformed: {directory}"
                 )
+            if "restoreRequiresDrain" in journal:
+                restore_requires_drain_value = journal[
+                    "restoreRequiresDrain"
+                ]
+                if not isinstance(restore_requires_drain_value, bool):
+                    raise TransactionError(
+                        "transaction restoreRequiresDrain is malformed: "
+                        f"{directory}"
+                    )
             if "liveMutationStarted" in journal:
                 live_mutation_value = journal["liveMutationStarted"]
                 if not isinstance(live_mutation_value, bool):
@@ -1049,6 +1100,10 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 raise TransactionError(
                     "transaction pre-exposure phase is inconsistent: "
                     f"{directory}"
+                )
+            if restore_requires_drain_value is None:
+                restore_requires_drain_value = shell_stopped_value or (
+                    restart_value and live_mutation_value is not False
                 )
             if "payloadReloadExpected" in journal:
                 payload_reload_value = journal["payloadReloadExpected"]
@@ -1107,6 +1162,13 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
             if live_mutation_value is False and not shell_stopped_value:
                 _discard_pre_exposure_records(plugin_root, token, records)
             else:
+                # A managed transaction keeps restoreRequiresDrain monotonic
+                # after its first stop. A later start may have succeeded even
+                # when shellStopped is false, so re-establish the stopped state
+                # before restoring any live plugin root.
+                if restore_requires_drain_value:
+                    _preflight_restore_records(plugin_root, token, records)
+                    runtime.stop_shell()
                 _restore_records(plugin_root, token, records)
                 if config_existed_value:
                     atomic_write(config_path, config_snapshot_payload)
@@ -1135,7 +1197,10 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                     # Schema-v1 journals predating the live-mutation field are
                     # conservative because they may have crossed an exposure
                     # or ownership-changing stop boundary.
-                    shell_was_stopped=shell_stopped_value,
+                    shell_was_stopped=(
+                        shell_stopped_value
+                        or restore_requires_drain_value is True
+                    ),
                     payload_reload_expected=payload_reload_value,
                 )
         _retire_transaction_directory(root, directory, token)

@@ -143,7 +143,10 @@ git pull --ff-only
 
 An update requires a suite-managed Shibumi installation. It stages all 24
 current plugin roots as one transaction and verifies that the shell executes
-the accepted payload rather than a stale QML cache. Hidden staging directories
+the accepted payload rather than a stale QML cache. For the managed Shibumi
+bar, the updater drains the shell before publishing live plugin roots, then
+starts it once; this prevents a plugin hot reload from overlapping IPC teardown.
+Hidden staging directories
 do not trigger Quattro's live plugin watcher. Immediately before replacing the
 live roots, the updater requires an authoritative lock status with `locked`,
 `requested`, `pending`, `sessionLocked`, and `secure` all explicitly false. An
