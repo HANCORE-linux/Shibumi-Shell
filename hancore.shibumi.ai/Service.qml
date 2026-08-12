@@ -452,7 +452,13 @@ Item {
       if (String(provider.usageStatusText || "")
           && String(provider.providerId || "") === "codex")
         lines.push("General limit: " + String(provider.usageStatusText))
-      if (Number(provider.windowTokens) > 0) {
+      const providerId = String(provider.providerId || "")
+      if (providerId === "opencode") {
+        if (Number(provider.windowTokens) > 0)
+          lines.push("5h tokens: " + formatTokens(provider.windowTokens))
+        if (Number(provider.hourlyTokens) > 0)
+          lines.push("1h rate: " + formatTokens(provider.hourlyTokens) + "/h")
+      } else if (Number(provider.windowTokens) > 0) {
         let activity = formatTokens(provider.windowTokens) + " tokens"
         if (Number(provider.hourlyTokens) > 0)
           activity += " · " + formatTokens(provider.hourlyTokens) + "/h"
@@ -474,7 +480,8 @@ Item {
         lines.push("Today activity: " + activity.join(" · "))
       }
       if (String(provider.latestModel || ""))
-        lines.push(String(provider.latestModel))
+        lines.push((providerId === "opencode" ? "Latest today: " : "")
+          + String(provider.latestModel))
       const currentDataMessage = providerCurrentDataMessage(provider)
       if (currentDataMessage) lines.push(currentDataMessage)
     }

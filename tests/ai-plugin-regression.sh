@@ -100,6 +100,8 @@ printf '%s\n' "$legacy_output"
 [[ $legacy_rc -eq 0 ]] || fail "pinned legacy provider contract exited $legacy_rc"
 grep -F 'AI legacy provider contract passed' <<<"$legacy_output" >/dev/null \
   || fail "pinned legacy provider contract marker missing"
+python3 "$repo_root/tests/opencode-usage-regression.py" \
+  || fail "OpenCode current-model scope regression failed"
 [[ -s $tmpdir/state/shibumi-ai-agent-update.log ]] \
   || fail "agents update owner did not run"
 grep -Fx 'claude codex' "$tmpdir/state/shibumi-ai-agent-update.log" >/dev/null \
@@ -262,7 +264,7 @@ rg -q 'running: root\.runtimeProbesEnabled' "$service" \
   || fail "AI polling cannot be disabled for lifecycle validation"
 rg -q 'Component\.onDestruction:' "$service" \
   || fail "AI process owner does not define teardown cleanup"
-rg -q 'Component\.onDestruction: stopScanner\(\)' \
+rg -Uq 'Component\.onDestruction: \{(.|\n)*stopScanner\(\)(.|\n)*\}' \
   "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" \
   || fail "OpenCode scanner does not stop on teardown"
 if ! rg -q 'readonly property bool serviceActive:' "$service" \
@@ -272,6 +274,29 @@ fi
 if rg -q 'CACHE_FILE|stale_last' "$repo_root/hancore.shibumi.ai/scripts/opencode-usage"; then
   fail "OpenCode provider persists a usage cache"
 fi
+cmp -s "$repo_root/scripts/opencode-usage" \
+  "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
+  || fail "canonical and vendored OpenCode scanners drifted"
+diff -u \
+  <(sed 's#\.\./scripts/opencode-usage#scripts/opencode-usage#' \
+    "$repo_root/services/OpenCodeProvider.qml") \
+  "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" >/dev/null \
+  || fail "canonical and vendored OpenCode providers drifted"
+rg -q 'con\.execute\("begin"\)' \
+  "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
+  || fail "OpenCode aggregates do not share one SQLite read snapshot"
+rg -q 'handleLocalMidnight' \
+  "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" \
+  || fail "OpenCode provider does not invalidate today at local midnight"
+rg -q 'clearScannerData\(\)' \
+  "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" \
+  || fail "OpenCode provider does not clear stale data on scanner failure"
+rg -q 'model_rows\(messages, today_ms, tomorrow_ms\)' \
+  "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
+  || fail "OpenCode model rows are not scoped to today"
+rg -q 'newest_model\(messages, today_ms, tomorrow_ms\)' \
+  "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
+  || fail "OpenCode latest model does not share the today scope"
 [[ -x $repo_root/hancore.shibumi.ai/scripts/opencode-usage \
   && -x $repo_root/hancore.shibumi.ai/scripts/agents-update ]] \
   || fail "AI provider scripts are not executable"

@@ -14,6 +14,9 @@ ShellRoot {
   property bool waitingBackendTransition: false
   property bool waitingExpiryProbe: false
   property var expiryProbeRecord: null
+  property bool midnightRacePassed: false
+  property int midnightRaceStage: 0
+  property int midnightRaceTicks: 0
   property var iconMatrix: [
     { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
     { providerId: "codex", v2Shell: false, customFill: false, baseOpacity: 0.65 },
@@ -276,6 +279,59 @@ ShellRoot {
       && incompleteRejected && malformedRejected && fractionalCounterRejected
       && invalidHelpRejected && invalidCalendarDateRejected && neverUsedRejected
       && promptOnlyAccepted && invalidLimitsRejected
+  }
+
+  function openCodeParserContract() {
+    const currentDay = openCodeParserProbe.localDay()
+    const success = JSON.stringify({
+      ready: true,
+      "5h-utilization": "0.25",
+      "7d-utilization": "0.10",
+      _day: currentDay,
+      _today_tokens: 150,
+      _tokens_used: 200,
+      _rate_per_hour: 50,
+      _model: "current-model",
+      _models: [{ name: "current-model", total: 150, pct: 100 }],
+      _plan: "local messages",
+      status: "allowed"
+    })
+    openCodeParserProbe.parseScannerOutput(success)
+    const loaded = openCodeParserProbe.ready
+      && openCodeParserProbe.todayTotalTokens === 150
+      && openCodeParserProbe.windowTokens === 200
+      && openCodeParserProbe.hourlyTokens === 50
+      && openCodeParserProbe.latestModel === "current-model"
+      && openCodeParserProbe.models.length === 1
+      && openCodeParserProbe.dataDay === currentDay
+
+    openCodeParserProbe.handleLocalMidnight()
+    const midnightCleared = openCodeParserProbe.todayTotalTokens === 0
+      && openCodeParserProbe.latestModel === ""
+      && openCodeParserProbe.models.length === 0
+      && openCodeParserProbe.dataDay === ""
+      && openCodeParserProbe.windowTokens === 200
+      && !openCodeParserProbe.midnightRefreshPending
+
+    openCodeParserProbe.parseScannerOutput(success)
+    openCodeParserProbe.parseScannerOutput('{"ready":false}')
+    const unavailableCleared = !openCodeParserProbe.ready
+      && openCodeParserProbe.rateLimitPercent === -1
+      && openCodeParserProbe.secondaryRateLimitPercent === -1
+      && openCodeParserProbe.todayTotalTokens === 0
+      && openCodeParserProbe.windowTokens === 0
+      && openCodeParserProbe.hourlyTokens === 0
+      && openCodeParserProbe.latestModel === ""
+      && openCodeParserProbe.models.length === 0
+
+    openCodeParserProbe.parseScannerOutput(success)
+    openCodeParserProbe.parseScannerOutput("not-json")
+    const malformedCleared = !openCodeParserProbe.ready
+      && openCodeParserProbe.todayTotalTokens === 0
+      && openCodeParserProbe.windowTokens === 0
+      && openCodeParserProbe.latestModel === ""
+      && openCodeParserProbe.models.length === 0
+    return loaded && midnightCleared && unavailableCleared && malformedCleared
   }
 
   function legacyContractMatches() {
@@ -587,6 +643,19 @@ ShellRoot {
     function targetBelongsToWindow(_target, _window) { return true }
   }
 
+  Ai.OpenCodeProvider {
+    id: openCodeParserProbe
+    enabled: false
+  }
+
+  Ai.OpenCodeProvider {
+    id: midnightRaceProbe
+    enabled: true
+    scannerCommandOverride: ["/bin/sh", "-c",
+      "sleep 0.5; printf '{\"ready\":false}\\n'"]
+    onScanGenerationChanged: root.midnightRaceStage = scanGeneration
+  }
+
   Ai.Service {
     id: aiService
     shell: fakeShell
@@ -682,6 +751,27 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
+      if (!root.midnightRacePassed) {
+        root.midnightRaceTicks++
+        if (root.midnightRaceStage === 1
+            && midnightRaceProbe.scannerRunning) {
+          midnightRaceProbe.handleLocalMidnight()
+          if (!midnightRaceProbe.midnightRefreshPending
+              || midnightRaceProbe.scanGeneration !== 1)
+            return root.fail("OpenCode midnight started a parallel scanner")
+          root.midnightRaceStage = -1
+        } else if (root.midnightRaceStage === 2
+            && midnightRaceProbe.scannerRunning) {
+          if (midnightRaceProbe.midnightRefreshPending)
+            return root.fail("OpenCode pending midnight refresh stayed queued")
+          root.midnightRacePassed = true
+          midnightRaceProbe.enabled = false
+        } else if (root.midnightRaceStage > 2) {
+          return root.fail("OpenCode midnight queued more than one refresh")
+        } else if (root.midnightRaceTicks >= 30) {
+          return root.fail("OpenCode midnight refresh race timed out")
+        }
+      }
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item
@@ -689,7 +779,8 @@ ShellRoot {
           || (!root.waitingExpiryProbe
             && agentsService.providers.length !== 2)
           || genericService.providers.length !== 1
-          || legacyService.providers.length !== 2) {
+          || legacyService.providers.length !== 2
+          || !root.midnightRacePassed) {
         if (root.ticks >= 20)
           root.fail("widget/agents fixtures did not resolve")
         return
@@ -727,8 +818,10 @@ ShellRoot {
               || first.childPanelWidget("omarchy.agents") !== first
               || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
               || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
-              || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
-              || first.tooltipText.indexOf("local-test") < 0))
+              || first.tooltipText.indexOf("5h tokens: 2.3K") < 0
+              || first.tooltipText.indexOf("1h rate: 180/h") < 0
+              || first.tooltipText.indexOf("Latest today: local-test") < 0
+              || !root.openCodeParserContract()))
           return root.fail("Claude/agents provider metadata")
         if (root.phase === 0) {
           agentsState.g7Enabled = false

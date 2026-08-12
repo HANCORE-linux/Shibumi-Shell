@@ -11,7 +11,7 @@ import json
 import os
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 DATA_DIR = Path(os.environ.get("OPENCODE_DATA_DIR") or (Path.home() / ".local" / "share" / "opencode"))
@@ -63,15 +63,17 @@ def model_label(model_id: str, provider_id: str = "") -> str:
     return model_id + (f" ({provider_id})" if provider_id else "")
 
 
-def assistant_messages(con: sqlite3.Connection, since_ms: int = 0) -> list[dict]:
+def assistant_messages(
+    con: sqlite3.Connection, since_ms: int, before_ms: int
+) -> list[dict]:
     rows = con.execute(
         """
         select session_id, time_created, time_updated, data
         from message
-        where time_updated >= ?
+        where time_updated >= ? and time_updated < ?
         order by time_updated asc
         """,
-        (since_ms,),
+        (since_ms, before_ms),
     ).fetchall()
     out = []
     for session_id, time_created, time_updated, raw in rows:
@@ -111,19 +113,24 @@ def assistant_messages(con: sqlite3.Connection, since_ms: int = 0) -> list[dict]
     return out
 
 
-def sum_since(con: sqlite3.Connection, since_ms: int) -> tuple[int, float, int]:
+def sum_since(messages: list[dict], since_ms: int) -> tuple[int, float, int]:
     usage = 0
     cost = 0.0
     with_cache_read = 0
-    for msg in assistant_messages(con, since_ms):
+    for msg in messages:
+        if msg["time"] < since_ms:
+            continue
         usage += msg["total"]
         with_cache_read += msg["total_with_cache_read"]
         cost += msg["cost"]
     return usage, cost, with_cache_read
 
 
-def newest_model(con: sqlite3.Connection) -> str:
-    msgs = assistant_messages(con)
+def newest_model(messages: list[dict], today_ms: int, tomorrow_ms: int) -> str:
+    msgs = [
+        msg for msg in messages
+        if today_ms <= msg["time"] < tomorrow_ms and msg["total"] > 0
+    ]
     if not msgs:
         return ""
     msg = max(msgs, key=lambda item: item["time"])
@@ -138,9 +145,13 @@ def fmt_tokens(value: int) -> str:
     return str(value)
 
 
-def model_rows(con: sqlite3.Connection, today_ms: int, limit: int = 6) -> list[dict]:
+def model_rows(
+    messages: list[dict], today_ms: int, tomorrow_ms: int, limit: int = 6
+) -> list[dict]:
     by_model = {}
-    for msg in assistant_messages(con):
+    for msg in messages:
+        if not today_ms <= msg["time"] < tomorrow_ms or msg["total"] <= 0:
+            continue
         key = (msg["provider_id"], msg["model_id"])
         cur = by_model.setdefault(key, {
             "name": model_label(msg["model_id"], msg["provider_id"]),
@@ -166,8 +177,7 @@ def model_rows(con: sqlite3.Connection, today_ms: int, limit: int = 6) -> list[d
         cur["last_seen"] = max(cur["last_seen"], msg["time"])
         cur["total"] += msg["total"]
         cur["total_with_cache_read"] += msg["total_with_cache_read"]
-        if msg["time"] >= today_ms:
-            cur["today"] += msg["total"]
+        cur["today"] += msg["total"]
 
     rows = sorted(by_model.values(), key=lambda item: item["last_seen"], reverse=True)[:limit]
     totals = []
@@ -184,7 +194,9 @@ def model_rows(con: sqlite3.Connection, today_ms: int, limit: int = 6) -> list[d
             "reasoningLabel": fmt_tokens(int(row["reasoning"])),
             "cacheReadLabel": fmt_tokens(int(row["cache_read"])),
             "cacheWriteLabel": fmt_tokens(int(row["cache_write"])),
-            "todayLabel": fmt_tokens(int(row["today"])),
+            # Every model component in this row already has today's scope.
+            # Keep the legacy field inert rather than repeating the total.
+            "todayLabel": "0",
             "costLabel": f"${cost:.2f}" if cost > 0 else "",
             "lastSeen": int(row["last_seen"]),
             "totalWithCacheRead": int(row["total_with_cache_read"]),
@@ -202,6 +214,17 @@ def pct(tokens: int, limit: int) -> float:
     return min(1.0, max(0.0, tokens / float(limit)))
 
 
+def local_day_bounds(now_value: datetime | None = None) -> tuple[int, int, str]:
+    current = now_value or datetime.now()
+    start_today = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_tomorrow = start_today + timedelta(days=1)
+    return (
+        int(start_today.timestamp() * 1000),
+        int(start_tomorrow.timestamp() * 1000),
+        start_today.date().isoformat(),
+    )
+
+
 def main() -> None:
     if not DB_FILE.exists():
         unavailable()
@@ -211,18 +234,26 @@ def main() -> None:
     five_h_ms = int((now - 5 * 3600) * 1000)
     seven_d_ms = int((now - 7 * 24 * 3600) * 1000)
     hour_ms = int((now - 3600) * 1000)
-    start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
-    today_ms = int(start_today * 1000)
+    today_ms, tomorrow_ms, local_day = local_day_bounds()
+    current_ms_exclusive = int(now * 1000) + 1
 
     try:
         con = connect()
         with con:
-            tok_5h, cost_5h, tok_5h_with_cache = sum_since(con, five_h_ms)
-            tok_7d, cost_7d, tok_7d_with_cache = sum_since(con, seven_d_ms)
-            tok_1h, _, tok_1h_with_cache = sum_since(con, hour_ms)
-            tok_today, cost_today, tok_today_with_cache = sum_since(con, today_ms)
-            model = newest_model(con)
-            models = model_rows(con, today_ms)
+            # Explicitly pin every aggregate to one SQLite read snapshot. A
+            # concurrent OpenCode write cannot split latestModel, model rows,
+            # and token totals across different database states.
+            con.execute("begin")
+            messages = assistant_messages(
+                con, min(seven_d_ms, today_ms),
+                min(tomorrow_ms, current_ms_exclusive),
+            )
+            tok_5h, cost_5h, tok_5h_with_cache = sum_since(messages, five_h_ms)
+            tok_7d, cost_7d, tok_7d_with_cache = sum_since(messages, seven_d_ms)
+            tok_1h, _, tok_1h_with_cache = sum_since(messages, hour_ms)
+            tok_today, cost_today, tok_today_with_cache = sum_since(messages, today_ms)
+            model = newest_model(messages, today_ms, tomorrow_ms)
+            models = model_rows(messages, today_ms, tomorrow_ms)
     except sqlite3.Error:
         unavailable()
         return
@@ -233,6 +264,7 @@ def main() -> None:
         "7d-utilization": f"{pct(tok_7d, LIMIT_7D):.4f}",
         "7d-reset": "0",
         "updated_at": datetime.now().strftime("%H:%M:%S"),
+        "_day": local_day,
         "_source": "sqlite",
         "_plan": "local messages",
         "_model": model,

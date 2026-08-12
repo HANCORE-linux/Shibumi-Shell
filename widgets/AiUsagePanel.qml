@@ -283,13 +283,15 @@ ShibumiPanel {
         }
         DetailRow {
           visible: panel.provider && Number(panel.provider.windowTokens) > 0
-          label: "Tokens"
+          label: panel.provider && String(panel.provider.providerId || "")
+            === "opencode" ? "5h tokens" : "Tokens"
           value: visible && panel.aiService
             ? panel.aiService.formatTokens(panel.provider.windowTokens) : ""
         }
         DetailRow {
           visible: panel.provider && Number(panel.provider.hourlyTokens) > 0
-          label: "Rate"
+          label: panel.provider && String(panel.provider.providerId || "")
+            === "opencode" ? "1h rate" : "Rate"
           value: visible && panel.aiService
             ? panel.aiService.formatTokens(panel.provider.hourlyTokens) + "/h" : ""
         }
@@ -313,7 +315,8 @@ ShibumiPanel {
         }
         DetailRow {
           visible: panel.provider && String(panel.provider.latestModel || "") !== ""
-          label: "Latest"
+          label: panel.provider && String(panel.provider.providerId || "")
+            === "opencode" ? "Latest today" : "Latest"
           value: panel.provider ? String(panel.provider.latestModel || "") : ""
         }
 
@@ -335,7 +338,8 @@ ShibumiPanel {
           Text {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: "recent"
+            text: panel.provider && String(panel.provider.providerId || "")
+              === "opencode" ? "today" : "recent"
             color: panel.controlMuted
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
