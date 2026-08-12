@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "claude",
+  "name": "Claude Code",
+  "ready": true,
+  "updatedAt": "2026-08-12T18:00:00Z",
+  "limits": [],
+  "tierLabel": "",
+  "usageStatusText": "",
+  "authHelpText": "Run `claude auth login` to restore authoritative usage.",
+  "todayPrompts": 0,
+  "todaySessions": 0,
+  "todayTotalTokens": 0,
+  "totalPrompts": 1936,
+  "totalSessions": 26,
+  "activeDays": 15,
+  "todayTokensByModel": {},
+  "modelUsage": {
+    "claude-historical": {
+      "inputTokens": 45745,
+      "outputTokens": 585854,
+      "cacheReadInputTokens": 79378814,
+      "cacheCreationInputTokens": 3273773
+    }
+  }
+}

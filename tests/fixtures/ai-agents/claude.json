@@ -3,7 +3,7 @@
   "id": "claude",
   "name": "Claude Code",
   "ready": true,
-  "updatedAt": "2099-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T18:00:00Z",
   "limits": [
     {"label": "Session (5-hour)", "percent": 0.02, "resetsAt": "2099-08-12T01:40:00Z"},
     {"label": "Weekly (7-day)", "percent": 0.35, "resetsAt": "2099-08-14T17:00:00Z"}

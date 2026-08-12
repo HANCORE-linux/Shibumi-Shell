@@ -3,7 +3,7 @@
   "id": "codex",
   "name": "Codex",
   "ready": true,
-  "updatedAt": "2099-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T18:00:00Z",
   "limits": [
     {"label": "Weekly (7-day)", "percent": 0.24, "resetsAt": "2099-08-18T00:00:37Z"}
   ],

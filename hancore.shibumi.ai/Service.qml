@@ -27,11 +27,22 @@ Item {
     ? shell.serviceFor("hancore.shibumi.state") : null
 
   property bool detectionReady: false
+  // Wall-clock expiry is rechecked at this bounded interval while Agents
+  // records exist. This also handles suspend/resume and system-time jumps.
+  property int agentRecordExpiryCheckIntervalMs: 60 * 1000
   property bool claudeAvailable: false
   property bool codexAvailable: false
   property bool openCodeAvailable: false
   property var agentsClaudeRecord: null
   property var agentsCodexRecord: null
+  readonly property double nextAgentRecordExpiryAtMs: {
+    const expiries = []
+    if (agentsClaudeRecord && Number(agentsClaudeRecord.expiresAtMs) > 0)
+      expiries.push(Number(agentsClaudeRecord.expiresAtMs))
+    if (agentsCodexRecord && Number(agentsCodexRecord.expiresAtMs) > 0)
+      expiries.push(Number(agentsCodexRecord.expiresAtMs))
+    return expiries.length > 0 ? Math.min.apply(null, expiries) : 0
+  }
   property bool agentsUpdateHealthy: false
   property int providerRevision: 0
   property string backendProcessKind: ""
@@ -228,8 +239,18 @@ Item {
     return result
   }
 
-  function providerSnapshot(provider) {
-    if (!provider) return null
+  function agentRecordFresh(record, nowMs) {
+    if (!record || String(record.backend || "") !== "omarchy.agents")
+      return true
+    const currentMs = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
+    const updatedAtMs = Number(record.updatedAtMs)
+    const expiresAtMs = Number(record.expiresAtMs)
+    return isFinite(updatedAtMs) && isFinite(expiresAtMs)
+      && updatedAtMs <= currentMs && expiresAtMs >= currentMs
+  }
+
+  function providerSnapshot(provider, nowMs) {
+    if (!provider || !agentRecordFresh(provider, nowMs)) return null
     const id = String(provider.providerId || "")
     if (!id || !providerEnabled(id)) return null
     return {
@@ -250,6 +271,8 @@ Item {
       secondaryRateLimitResetAt:
         String(provider.secondaryRateLimitResetAt || "").slice(0, 512),
       todayTotalTokens: Math.max(0, Number(provider.todayTotalTokens) || 0),
+      todayPrompts: Math.max(0, Number(provider.todayPrompts) || 0),
+      todaySessions: Math.max(0, Number(provider.todaySessions) || 0),
       windowTokens: Math.max(0, Number(provider.windowTokens) || 0),
       hourlyTokens: Math.max(0, Number(provider.hourlyTokens) || 0),
       models: cloneModels(provider.models),
@@ -340,6 +363,25 @@ Item {
     return -1
   }
 
+  function providerHasCurrentData(provider) {
+    if (!provider) return false
+    return Number(provider.rateLimitPercent) >= 0
+      || Number(provider.secondaryRateLimitPercent) >= 0
+      || Number(provider.todayTotalTokens) > 0
+      || Number(provider.todayPrompts) > 0
+      || Number(provider.todaySessions) > 0
+      || Number(provider.windowTokens) > 0
+      || Number(provider.hourlyTokens) > 0
+      || (Array.isArray(provider.models) && provider.models.length > 0)
+      || String(provider.latestModel || "") !== ""
+  }
+
+  function providerCurrentDataMessage(provider) {
+    if (!provider || providerHasCurrentData(provider)) return ""
+    const authHelp = String(provider.authHelpText || "").trim()
+    return authHelp || "No current usage or limit data."
+  }
+
   function displayPercent(provider, value) {
     const number = Number(value)
     if (!isFinite(number) || number < 0) return -1
@@ -421,8 +463,20 @@ Item {
       if (provider.todayTotalTokens !== undefined
           && Number(provider.todayTotalTokens) > 0)
         lines.push("Today: " + formatTokens(provider.todayTotalTokens) + " tokens")
+      const todayPrompts = Math.max(0, Number(provider.todayPrompts) || 0)
+      const todaySessions = Math.max(0, Number(provider.todaySessions) || 0)
+      if (todayPrompts > 0 || todaySessions > 0) {
+        const activity = []
+        if (todayPrompts > 0)
+          activity.push(todayPrompts + (todayPrompts === 1 ? " prompt" : " prompts"))
+        if (todaySessions > 0)
+          activity.push(todaySessions + (todaySessions === 1 ? " session" : " sessions"))
+        lines.push("Today activity: " + activity.join(" · "))
+      }
       if (String(provider.latestModel || ""))
         lines.push(String(provider.latestModel))
+      const currentDataMessage = providerCurrentDataMessage(provider)
+      if (currentDataMessage) lines.push(currentDataMessage)
     }
     return lines.join("\n")
   }
@@ -451,11 +505,26 @@ Item {
     }
   }
 
-  function applyAgentRecord(expectedId, raw) {
-    const record = AgentUsageModel.parseRecord(raw, expectedId)
+  function applyAgentRecord(expectedId, raw, nowMs) {
+    const record = AgentUsageModel.parseRecord(raw, expectedId, nowMs)
     if (expectedId === "claude") agentsClaudeRecord = record
     else if (expectedId === "codex") agentsCodexRecord = record
     providerRevision++
+  }
+
+  function expireAgentRecords(nowMs) {
+    const currentMs = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
+    let changed = false
+    if (agentsClaudeRecord && !agentRecordFresh(agentsClaudeRecord, currentMs)) {
+      agentsClaudeRecord = null
+      changed = true
+    }
+    if (agentsCodexRecord && !agentRecordFresh(agentsCodexRecord, currentMs)) {
+      agentsCodexRecord = null
+      changed = true
+    }
+    if (changed) providerRevision++
+    return changed
   }
 
   function clearAgentRecord(expectedId) {
@@ -600,6 +669,15 @@ Item {
   }
 
   Timer {
+    id: agentRecordExpiryTimer
+    interval: Math.max(10, root.agentRecordExpiryCheckIntervalMs)
+    running: root.serviceActive && root.agentsBackendActive
+      && root.nextAgentRecordExpiryAtMs > 0
+    repeat: true
+    onTriggered: root.expireAgentRecords(Date.now())
+  }
+
+  Timer {
     id: backendTimer
     interval: root.agentsBackendActive
       ? root.agentsRefreshInterval : 60 * 1000
@@ -692,6 +770,7 @@ Item {
   }
 
   Component.onDestruction: {
+    agentRecordExpiryTimer.stop()
     backendTimer.stop()
     if (backendProcess.running) backendProcess.running = false
   }

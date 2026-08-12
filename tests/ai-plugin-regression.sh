@@ -33,6 +33,8 @@ mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home/.claude" \
   "$tmpdir/omarchy/bin"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.ai" "$tmpdir/ai"
+install -m 0644 "$repo_root/tests/fixtures/AiPanelHost.qml" \
+  "$tmpdir/ai/ShibumiPanel.qml"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/ai-plugin-smoke.qml" "$tmpdir/shell.qml"
@@ -40,9 +42,14 @@ install -m 0644 "$repo_root/tests/fixtures/AiTestPanel.qml" "$tmpdir/fixtures/"
 printf '{}\n' >"$tmpdir/home/.claude/.credentials.json"
 : >"$tmpdir/home/.claude/history.jsonl"
 printf '{}\n' >"$tmpdir/home/.codex/auth.json"
-install -m 0644 "$repo_root/tests/fixtures/ai-agents/claude.json" \
-  "$tmpdir/state/omarchy/agents/usage/claude.json"
-install -m 0644 "$repo_root/tests/fixtures/ai-agents/codex.json" \
+record_now=$(date --utc --iso-8601=seconds)
+jq --arg updatedAt "$record_now" '.updatedAt = $updatedAt' \
+  "$repo_root/tests/fixtures/ai-agents/claude-ready-empty.json" \
+  >"$tmpdir/state/omarchy/agents/usage/claude.json"
+jq --arg updatedAt "$record_now" '.updatedAt = $updatedAt' \
+  "$repo_root/tests/fixtures/ai-agents/codex.json" \
+  >"$tmpdir/state/omarchy/agents/usage/codex.json"
+chmod 0644 "$tmpdir/state/omarchy/agents/usage/claude.json" \
   "$tmpdir/state/omarchy/agents/usage/codex.json"
 install -m 0755 \
   "$repo_root/tests/fixtures/ai-agents/omarchy-agent-usage-update" \
@@ -72,6 +79,10 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'ai plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -Eq ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' \
+    <<<"$output"; then
+  fail "component smoke emitted a QML/runtime warning or error"
+fi
 
 set +e
 legacy_output=$(timeout 8 env \
@@ -208,6 +219,10 @@ rg -q 'registeredWidgetSource\("omarchy\.model-usage"\)' "$service" \
   || fail "AI service does not retain the pinned model-usage fallback"
 rg -q 'AgentUsageModel\.parseRecord' "$service" \
   || fail "AI service does not normalize primitive agents records"
+rg -q 'providerCurrentDataMessage' "$service" \
+  || fail "AI service does not expose the ready-without-current-data state"
+rg -q 'onTriggered: root\.expireAgentRecords\(Date\.now\(\)\)' "$service" \
+  || fail "AI service does not expire already loaded stale agent records"
 if rg -q 'source:.*agents/(Main|Panel)\.qml|setSource\([^\n]*agents' "$service"; then
   fail "AI service embeds the host agents presentation"
 fi
@@ -224,6 +239,8 @@ rg -q 'color: selected \? panel\.controlActiveFillColor' "$panel" \
   || fail "AI provider tabs bypass shared V1 active tokens"
 rg -q 'component ModelUsageRow: Item' "$panel" \
   || fail "AI panel lost OpenCode model rows"
+rg -q 'providerEmptyStateText' "$panel" \
+  || fail "AI panel does not render the provider no-current-data/auth state"
 rg -q 'implicitWidth: Commons\.Style\.space\(28\)' "$panel" \
   || fail "AI header actions lost NetworkPanel geometry"
 rg -q 'ShibumiPanelToolTip' "$panel" \

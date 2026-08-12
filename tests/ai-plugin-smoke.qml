@@ -12,6 +12,8 @@ ShellRoot {
   property real stableProviderWidth: 0
   property var clickTargets: []
   property bool waitingBackendTransition: false
+  property bool waitingExpiryProbe: false
+  property var expiryProbeRecord: null
   property var iconMatrix: [
     { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
     { providerId: "codex", v2Shell: false, customFill: false, baseOpacity: 0.65 },
@@ -67,51 +69,213 @@ ShellRoot {
     return claude && codex
       && claude.backend === "omarchy.agents"
       && codex.backend === "omarchy.agents"
-      && agentsService.usagePercent(claude) === 2
+      && agentsService.usagePercent(claude) === -1
       && agentsService.usagePercent(codex) === 24
-      && claude.rateLimitLabel === "Session (5-hour)"
-      && claude.secondaryRateLimitLabel === "Weekly (7-day)"
+      && claude.rateLimitPercent === -1
+      && claude.secondaryRateLimitPercent === -1
       && claude.models.length === 0
       && codex.models.length === 0
       && codex.todayTotalTokens === 1031649
       && codex.latestModel === ""
       && claude.ready && codex.ready
+      && !agentsService.providerHasCurrentData(claude)
+      && agentsService.providerCurrentDataMessage(claude)
+        === "Run `claude auth login` to restore authoritative usage."
       && agentsService.agentsRefreshInterval === 42000
       && agentsService.providerEnabled("fireworks") === false
       && agentsService.providerEnabled("claude") === true
-      && agentsService.resetText(claude, claude.rateLimitResetAt) !== ""
+      && agentsService.resetText(claude, claude.rateLimitResetAt) === ""
       && typeof claude.refresh !== "function"
       && typeof codex.refresh !== "function"
   }
 
-  function historicalOnlyRecordRejected() {
-    const raw = JSON.stringify({
+  function readyRecordWithoutCurrentDataAccepted() {
+    const recordNow = Date.now()
+    const currentUpdatedAt = new Date(recordNow).toISOString()
+    const futureUpdatedAt = new Date(recordNow + 1).toISOString()
+    const staleUpdatedAt = new Date(
+      recordNow - 24 * 60 * 60 * 1000 - 1).toISOString()
+    const current = JSON.stringify({
       schemaVersion: 1,
       id: "claude",
       name: "Claude Code",
       ready: true,
+      updatedAt: currentUpdatedAt,
       limits: [],
       todayPrompts: 0,
       todaySessions: 0,
       todayTotalTokens: 0,
       totalPrompts: 20,
       totalSessions: 2,
-      activeDays: 4
+      activeDays: 4,
+      modelUsage: { "historical-model": { inputTokens: 5000 } },
+      authHelpText: "Authenticate Claude"
     })
-    agentsService.applyAgentRecord("claude", raw)
-    const rejected = agentsService.providerFor("claude") === null
+    agentsService.applyAgentRecord("claude", current, recordNow)
+    const provider = agentsService.providerFor("claude")
+    const accepted = provider && provider.ready
+      && agentsService.usagePercent(provider) === -1
+      && provider.models.length === 0
+      && provider.latestModel === ""
+      && agentsService.providerCurrentDataMessage(provider)
+        === "Authenticate Claude"
+
+    const expiredSnapshotRejected = agentsService.providerSnapshot(
+      agentsService.agentsClaudeRecord,
+      recordNow + 24 * 60 * 60 * 1000 + 1) === null
+
     agentsService.applyAgentRecord("claude", JSON.stringify({
       schemaVersion: 1,
       id: "claude",
       name: "Claude Code",
       ready: true,
-      limits: [{ label: "Session (5-hour)", percent: 0.02,
-        resetsAt: "2099-08-12T01:40:00Z" }],
-      todayPrompts: 3,
+      updatedAt: staleUpdatedAt,
+      limits: [],
+      todayPrompts: 0,
+      todaySessions: 0,
+      todayTotalTokens: 0,
+      totalPrompts: 20,
+      totalSessions: 2,
+      activeDays: 4,
+      modelUsage: {}
+    }), recordNow)
+    const staleRejected = agentsService.providerFor("claude") === null
+
+    agentsService.applyAgentRecord("claude", JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      updatedAt: futureUpdatedAt,
+      limits: [],
+      todayPrompts: 0,
+      todaySessions: 0,
+      todayTotalTokens: 0,
+      totalPrompts: 20,
+      totalSessions: 2,
+      activeDays: 4,
+      modelUsage: {}
+    }), recordNow)
+    const futureRejected = agentsService.providerFor("claude") === null
+
+    agentsService.applyAgentRecord("claude", JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      updatedAt: currentUpdatedAt,
+      limits: [],
+      modelUsage: {}
+    }), recordNow)
+    const incompleteRejected = agentsService.providerFor("claude") === null
+
+    agentsService.applyAgentRecord("claude", JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: "true",
+      updatedAt: currentUpdatedAt,
+      limits: {},
+      todayPrompts: 0,
+      todaySessions: 0,
+      todayTotalTokens: 0,
+      totalPrompts: 20,
+      totalSessions: 2,
+      activeDays: 4,
+      modelUsage: {}
+    }), recordNow)
+    const malformedRejected = agentsService.providerFor("claude") === null
+
+    const invalidCounter = JSON.parse(current)
+    invalidCounter.todayPrompts = 0.5
+    agentsService.applyAgentRecord("claude",
+      JSON.stringify(invalidCounter), recordNow)
+    const fractionalCounterRejected =
+      agentsService.providerFor("claude") === null
+
+    const invalidHelp = JSON.parse(current)
+    invalidHelp.authHelpText = { command: "claude auth login" }
+    agentsService.applyAgentRecord("claude",
+      JSON.stringify(invalidHelp), recordNow)
+    const invalidHelpRejected = agentsService.providerFor("claude") === null
+
+    const invalidDate = JSON.parse(current)
+    invalidDate.updatedAt = "2026-02-30T12:00:00Z"
+    agentsService.applyAgentRecord("claude",
+      JSON.stringify(invalidDate), recordNow)
+    const invalidCalendarDateRejected =
+      agentsService.providerFor("claude") === null
+
+    const emptyNeverUsed = JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      updatedAt: currentUpdatedAt,
+      limits: [],
+      todayPrompts: 0,
+      todaySessions: 0,
+      todayTotalTokens: 0,
+      totalPrompts: 0,
+      totalSessions: 0,
+      activeDays: 0,
+      modelUsage: {}
+    })
+    agentsService.applyAgentRecord("claude", emptyNeverUsed, recordNow)
+    const neverUsedRejected = agentsService.providerFor("claude") === null
+
+    const promptOnly = JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      updatedAt: currentUpdatedAt,
+      limits: [],
+      todayPrompts: 1,
       todaySessions: 1,
-      todayTotalTokens: 1200
-    }))
-    return rejected
+      todayTotalTokens: 0,
+      totalPrompts: 20,
+      totalSessions: 2,
+      activeDays: 4,
+      modelUsage: {}
+    })
+    agentsService.applyAgentRecord("claude", promptOnly, recordNow)
+    const promptProvider = agentsService.providerFor("claude")
+    const promptOnlyAccepted = promptProvider
+      && promptProvider.todayPrompts === 1
+      && promptProvider.todaySessions === 1
+      && agentsService.providerHasCurrentData(promptProvider)
+      && agentsService.providerCurrentDataMessage(promptProvider) === ""
+
+    let invalidLimitsRejected = true
+    const invalidPercents = [-0.1, 2, "0.2"]
+    for (let index = 0; index < invalidPercents.length; index++) {
+      const invalidLimit = JSON.stringify({
+        schemaVersion: 1,
+        id: "claude",
+        name: "Claude Code",
+        ready: true,
+        updatedAt: currentUpdatedAt,
+        limits: [{ label: "Session (5-hour)",
+          percent: invalidPercents[index], resetsAt: "" }],
+        todayPrompts: 0,
+        todaySessions: 0,
+        todayTotalTokens: 0,
+        totalPrompts: 20,
+        totalSessions: 2,
+        activeDays: 4,
+        modelUsage: {}
+      })
+      agentsService.applyAgentRecord("claude", invalidLimit, recordNow)
+      if (agentsService.providerFor("claude") !== null)
+        invalidLimitsRejected = false
+    }
+
+    agentsService.applyAgentRecord("claude", current, recordNow)
+    return accepted && expiredSnapshotRejected && staleRejected && futureRejected
+      && incompleteRejected && malformedRejected && fractionalCounterRejected
+      && invalidHelpRejected && invalidCalendarDateRejected && neverUsedRejected
+      && promptOnlyAccepted && invalidLimitsRejected
   }
 
   function legacyContractMatches() {
@@ -433,6 +597,7 @@ ShellRoot {
   Ai.Service {
     id: agentsService
     shell: agentsShell
+    agentRecordExpiryCheckIntervalMs: 20
     omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
     agentsSourceOverride: "file:///fixture/agents/Panel.qml"
     agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
@@ -458,6 +623,28 @@ ShellRoot {
     shell: legacyShell
     modelUsageSourceOverride:
       Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
+  }
+
+  Item {
+    id: emptyPanelAnchor
+    visible: false
+    width: 1
+    height: 1
+  }
+
+  QtObject {
+    id: emptyPanelOwner
+    property bool opened: false
+    function close() { opened = false }
+    function switchPanel(_direction) { return false }
+  }
+
+  Ai.AiUsagePanel {
+    id: emptyAgentsPanel
+    anchorItem: emptyPanelAnchor
+    bar: fakeBar
+    ownerWidget: emptyPanelOwner
+    aiService: agentsService
   }
 
   Loader {
@@ -499,10 +686,12 @@ ShellRoot {
       const first = firstLoader.item
       const second = secondLoader.item
       if (!first || (root.phase <= root.iconMatrix.length + 1 && !second)
-          || agentsService.providers.length !== 2
+          || (!root.waitingExpiryProbe
+            && agentsService.providers.length !== 2)
           || genericService.providers.length !== 1
           || legacyService.providers.length !== 2) {
-        if (root.ticks >= 20) root.fail("widget/agents fixtures did not resolve")
+        if (root.ticks >= 20)
+          root.fail("widget/agents fixtures did not resolve")
         return
       }
       if (root.ticks < 3) return
@@ -529,6 +718,12 @@ ShellRoot {
               || genericService.providerEnabled("codex")
               || genericService.providerFor("claude") === null
               || genericService.providerFor("codex") !== null
+              || emptyAgentsPanel.renderedProviderCount !== 2
+              || emptyAgentsPanel.providerEmptyStateText
+                !== "Run `claude auth login` to restore authoritative usage."
+              || emptyAgentsPanel.primaryUsageVisible
+              || emptyAgentsPanel.secondaryUsageVisible
+              || emptyAgentsPanel.renderedModelCount !== 0
               || first.childPanelWidget("omarchy.agents") !== first
               || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
               || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
@@ -611,8 +806,28 @@ ShellRoot {
         if (first.panelLoaded || secondLoader.item !== null
             || root.clickTargets.length !== 1)
           return root.fail("panel/widget teardown")
-        if (!root.historicalOnlyRecordRejected())
-          return root.fail("historical-only agents record remained visible")
+        if (!root.waitingExpiryProbe) {
+          if (!root.readyRecordWithoutCurrentDataAccepted())
+            return root.fail("ready empty/stale agents record contract")
+          root.expiryProbeRecord = agentsService.agentsClaudeRecord
+          const expiringRecord = ({})
+          for (const key in root.expiryProbeRecord)
+            expiringRecord[key] = root.expiryProbeRecord[key]
+          expiringRecord.expiresAtMs = Date.now() + 30
+          agentsService.agentsClaudeRecord = expiringRecord
+          agentsService.providerRevision++
+          root.waitingExpiryProbe = true
+          root.ticks = 0
+          return
+        }
+        if (agentsService.providerFor("claude") !== null) {
+          if (root.ticks >= 20)
+            return root.fail("loaded agent record expiry timer")
+          return
+        }
+        agentsService.agentsClaudeRecord = root.expiryProbeRecord
+        agentsService.providerRevision++
+        root.waitingExpiryProbe = false
         agentsService.agentsUpdateHealthy = false
         agentsService.providerRevision++
         if (agentsService.providerFor("claude").ready
@@ -641,9 +856,9 @@ ShellRoot {
             || legacyService.providerFor("codex").usageStatusText !== "refreshed")
           return root.fail("legacy fallback did not forward refresh")
         agentsService.applyAgentRecord("claude",
-          '{"schemaVersion":2,"id":"claude"}')
+          '{"schemaVersion":2,"id":"claude","updatedAt":"2099-08-12T00:00:00Z"}')
         agentsService.applyAgentRecord("codex",
-          '{"schemaVersion":1,"id":"claude"}')
+          '{"schemaVersion":1,"id":"claude","updatedAt":"2099-08-12T00:00:00Z"}')
         if (agentsService.providerFor("claude") !== null
             || agentsService.providerFor("codex") !== null)
           return root.fail("malformed agents records did not fail closed")
