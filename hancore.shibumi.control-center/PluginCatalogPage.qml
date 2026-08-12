@@ -471,7 +471,7 @@ Column {
     descriptionComponent: root.favoritesOnly ? null : providerSummary
     preferredHeight: root.favoritesOnly
       ? Commons.Style.space(80) : Commons.Style.space(110)
-    actionWidth: Commons.Style.space(132)
+    actionWidth: Commons.Style.space(148)
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale

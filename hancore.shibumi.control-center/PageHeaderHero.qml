@@ -20,6 +20,16 @@ Item {
   property real preferredHeight: Commons.Style.space(80)
   property real previewWidth: Commons.Style.space(150)
   property real actionWidth: Commons.Style.space(116)
+  readonly property real secondaryActionRequiredWidth:
+    Commons.Style.space(20)
+      + (secondaryActionIcon.visible ? secondaryActionIcon.width : 0)
+      + (secondaryActionIcon.visible ? Commons.Style.space(6) : 0)
+      + secondaryActionLabelText.implicitWidth
+      + (secondaryActionBadge.visible
+        ? Commons.Style.space(6) + secondaryActionBadge.width
+          + Commons.Style.space(8) : 0)
+  readonly property real effectiveActionWidth: Math.max(
+    actionWidth * uiScale, secondaryActionRequiredWidth)
   property string actionLabel: ""
   property string actionGlyph: ""
   property string secondaryActionLabel: ""
@@ -36,6 +46,7 @@ Item {
     labelWidth: secondaryActionLabelText.width,
     labelPaintedWidth: secondaryActionLabelText.paintedWidth,
     labelPaintedHeight: secondaryActionLabelText.paintedHeight,
+    labelTruncated: secondaryActionLabelText.truncated,
     badgeVisible: secondaryActionBadge.visible,
     badgeX: secondaryActionBadge.x,
     badgeWidth: secondaryActionBadge.width,
@@ -106,7 +117,8 @@ Item {
 
     Item {
       id: trailingStage
-      width: Math.min(root.previewWidth, parent.width * 0.43)
+      width: Math.min(Math.max(root.previewWidth,
+        root.effectiveActionWidth), parent.width * 0.43)
       height: parent.height
 
       PageMotionStage {
@@ -127,7 +139,7 @@ Item {
         anchors.verticalCenterOffset: root.secondaryActionLabel !== ""
           ? -Commons.Style.space(20) : 0
         visible: root.actionLabel !== ""
-        width: root.actionWidth
+        width: root.effectiveActionWidth
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: actionPointer.containsMouse
@@ -186,7 +198,7 @@ Item {
         anchors.top: primaryAction.bottom
         anchors.topMargin: Commons.Style.space(6)
         visible: root.secondaryActionLabel !== ""
-        width: root.actionWidth
+        width: root.effectiveActionWidth
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: secondaryPointer.containsMouse

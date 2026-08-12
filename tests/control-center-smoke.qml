@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import qs.Commons as Commons
 import "state" as State
 import "control" as Control
 
@@ -161,7 +162,7 @@ ShellRoot {
     property color controlFillColor: "#111111"
     property real controlBorderWidth: 1
     property color controlBorderColor: "#444444"
-    property string marketFont: "sans"
+    property string marketFont: Commons.Style.font.family
     property color marketBackground: "#000000"
     property var workspaceConfig: ({ style: "default" })
     property var launcherConfig: ({ mode: "text", text: "shibumi" })
@@ -196,7 +197,7 @@ ShellRoot {
     secondaryActionLabel: "Check plugin"
     secondaryActionGlyph: "refresh"
     secondaryActionBadgeText: ""
-    actionWidth: 132
+    actionWidth: 148
   }
 
   State.Service {
@@ -236,7 +237,8 @@ ShellRoot {
         const labelRight = badgeGeometry.labelX + badgeGeometry.labelWidth
         if (root.badgeProbeStep === 0) {
           if (badgeGeometry.badgeVisible
-              || Math.abs(contentRight - 122) > 0.5
+              || Math.abs(contentRight - 138) > 0.5
+              || badgeGeometry.labelTruncated
               || badgeGeometry.labelPaintedWidth > badgeGeometry.labelWidth
               || badgeGeometry.labelPaintedHeight > 34)
             return root.fail("empty header badge reserved or overlapped content")
@@ -250,6 +252,8 @@ ShellRoot {
               || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
               || badgeGeometry.badgeHeight < 14
               || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.labelTruncated
+              || badgeGeometry.labelPaintedWidth > badgeGeometry.labelWidth
               || badgeGeometry.badgeLabelPaintedWidth
                 > badgeGeometry.badgeWidth
               || badgeGeometry.badgeLabelPaintedHeight
@@ -265,6 +269,8 @@ ShellRoot {
               || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
               || badgeGeometry.badgeHeight < 14
               || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.labelTruncated
+              || badgeGeometry.labelPaintedWidth > badgeGeometry.labelWidth
               || badgeGeometry.badgeLabelPaintedWidth
                 > badgeGeometry.badgeWidth
               || badgeGeometry.badgeLabelPaintedHeight
@@ -279,6 +285,8 @@ ShellRoot {
               || Math.abs(badgeGeometry.badgeRightInset - 8) > 0.5
               || badgeGeometry.badgeHeight < 14
               || badgeGeometry.badgeHeight > 20
+              || badgeGeometry.labelTruncated
+              || badgeGeometry.labelPaintedWidth > badgeGeometry.labelWidth
               || badgeGeometry.badgeLabelPaintedWidth
                 > badgeGeometry.badgeWidth
               || badgeGeometry.badgeLabelPaintedHeight

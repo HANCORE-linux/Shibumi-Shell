@@ -1331,7 +1331,7 @@ for plugin_contract in \
     'service.acquireConsumer()' \
     'service.releaseConsumer()' \
     'Component.onDestruction:' \
-    'actionWidth: Commons.Style.space(132)' \
+    'actionWidth: Commons.Style.space(148)' \
     'onSecondaryActionRequested: root.controller.openPluginUpdater()' \
     'function providerCatalogCount(provider)' \
     'shibumiCount: root.shibumiProviderCount' \
