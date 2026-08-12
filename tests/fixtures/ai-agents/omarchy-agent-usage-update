@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+state_home=${XDG_STATE_HOME:?}
+printf '%s\n' "$*" >>"$state_home/shibumi-ai-agent-update.log"
+
+if [[ ${SHIBUMI_TEST_STUBBORN:-0} == 1 ]]; then
+  trap '' TERM
+  (
+    trap '' TERM
+    while true; do sleep 1; done
+  ) &
+  descendant=$!
+  printf '%s %s\n' "$BASHPID" "$descendant" \
+    >"$state_home/shibumi-ai-agent-processes"
+  wait "$descendant"
+fi

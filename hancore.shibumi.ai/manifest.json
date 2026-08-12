@@ -27,6 +27,6 @@
     "preferredRegion": "left",
     "requires": ["hancore.shibumi.state"],
     "recommends": [],
-    "hostContracts": ["omarchy.model-usage"]
+    "hostContracts": ["omarchy.agents", "omarchy.model-usage"]
   }
 }

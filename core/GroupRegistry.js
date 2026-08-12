@@ -40,6 +40,7 @@ var OptionalGroups = {
 var ConsumedAliases = [
   "omarchy.menu",
   "omarchy.workspaces",
+  "omarchy.agents",
   "omarchy.model-usage",
   "omarchy.audio",
   "omarchy.media",

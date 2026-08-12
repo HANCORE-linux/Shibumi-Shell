@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+omarchy_path=${1:-}
+shift || true
+timeout_seconds=${SHIBUMI_AI_UPDATE_TIMEOUT:-120}
+child_pid=""
+watchdog_pid=""
+
+fail() {
+  printf 'shibumi-ai agents update: %s\n' "$*" >&2
+  exit 1
+}
+
+[[ $omarchy_path == /* ]] || fail "OMARCHY_PATH must be absolute"
+if [[ ! $timeout_seconds =~ ^[1-9][0-9]*$ ]] \
+    || (( timeout_seconds > 300 )); then
+  fail "SHIBUMI_AI_UPDATE_TIMEOUT must be 1..300 seconds"
+fi
+command -v setsid >/dev/null 2>&1 || fail "setsid is required"
+updater="$omarchy_path/bin/omarchy-agent-usage-update"
+[[ -x $updater ]] || fail "agent updater is missing: $updater"
+
+cleanup_process_group() {
+  local group=${1:-}
+  [[ -n $group ]] || return 0
+  if kill -0 -- "-$group" 2>/dev/null; then
+    kill -TERM -- "-$group" 2>/dev/null || true
+    for _ in {1..30}; do
+      kill -0 -- "-$group" 2>/dev/null || break
+      sleep 0.1
+    done
+  fi
+  if kill -0 -- "-$group" 2>/dev/null; then
+    kill -KILL -- "-$group" 2>/dev/null || true
+    for _ in {1..30}; do
+      kill -0 -- "-$group" 2>/dev/null || break
+      sleep 0.1
+    done
+  fi
+}
+
+cleanup_group() {
+  cleanup_process_group "$child_pid"
+}
+
+stop_watchdog() {
+  [[ -n $watchdog_pid ]] || return 0
+  kill -TERM "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  watchdog_pid=""
+}
+
+# shellcheck disable=SC2329 # Invoked by the EXIT trap below.
+cleanup_all() {
+  cleanup_group
+  stop_watchdog
+}
+
+# If the QML Process is killed before its TERM trap can finish, this short-lived
+# sibling observes the vanished wrapper, drains the updater process group, and
+# exits. It exists only for the duration of one bounded update.
+# shellcheck disable=SC2329 # Started in a subshell below.
+watch_parent() {
+  local parent=$1 group=$2
+  trap - EXIT INT TERM HUP
+  while kill -0 "$parent" 2>/dev/null; do sleep 0.1; done
+  cleanup_process_group "$group"
+}
+
+# shellcheck disable=SC2329 # Invoked by the signal trap below.
+finish_signal() {
+  trap - EXIT INT TERM HUP
+  cleanup_all
+  exit 143
+}
+trap finish_signal INT TERM HUP
+trap cleanup_all EXIT
+
+if [[ -s ${HOME:?}/.local/share/opencode/opencode.db ]]; then
+  printf '{"opencode":true}\n'
+else
+  printf '{"opencode":false}\n'
+fi
+
+if [[ ${1:-} == --probe-only ]]; then
+  exit 0
+fi
+
+for argument in "$@"; do
+  case $argument in
+    --force | --limits-only) continue ;;
+    --*) fail "unsupported agent updater option: $argument" ;;
+  esac
+  [[ $argument =~ ^[a-z0-9][a-z0-9._-]*$ ]] \
+    || fail "invalid agent id: $argument"
+  collector="$omarchy_path/bin/omarchy-agent-usage-$argument"
+  [[ -x $collector ]] || fail "agent collector is missing: $collector"
+done
+
+setsid env OMARCHY_PATH="$omarchy_path" "$updater" "$@" &
+child_pid=$!
+watch_parent "$$" "$child_pid" &
+watchdog_pid=$!
+deadline=$(( SECONDS + timeout_seconds ))
+while kill -0 "$child_pid" 2>/dev/null; do
+  if (( SECONDS >= deadline )); then
+    cleanup_group
+    wait "$child_pid" 2>/dev/null || true
+    child_pid=""
+    stop_watchdog
+    fail "agent updater exceeded ${timeout_seconds}s"
+  fi
+  sleep 0.1
+done
+
+set +e
+wait "$child_pid"
+rc=$?
+set -e
+cleanup_group
+child_pid=""
+stop_watchdog
+exit "$rc"

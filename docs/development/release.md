@@ -63,6 +63,8 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-12af188 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
   ./tests/omarchy-forward-compat-contract-regression.sh
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+  ./tests/omarchy-agents-contract-regression.sh
 ```
 
 Preview and perform the exact suite update:

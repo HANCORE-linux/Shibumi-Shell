@@ -541,7 +541,7 @@ feature is intentionally implemented by Shibumi and is not an upstream gap.
 | `hancore.shibumi.memory` | Telemetry service | Own |
 | `hancore.shibumi.cpu` | Telemetry service | Own |
 | `hancore.shibumi.audio` | QTR-005 audio; media service already exists | Host service gap |
-| `hancore.shibumi.ai` | QTR-005 model usage; OpenCode extension is Own | Partial host service gap |
+| `hancore.shibumi.ai` | Current `omarchy.agents` primitive record contract; QTR-005 model-usage fallback on pinned older hosts; OpenCode extension is Own | Partial host service gap |
 | `hancore.shibumi.center` | QTR-005 weather, QTR-006 system update | Host service gap |
 | `hancore.shibumi.media` | `omarchy.media` already supplies a service | Contract available |
 | `hancore.shibumi.quick-access` | `omarchy.background`; discovery via QTR-007 | Partial host service gap |

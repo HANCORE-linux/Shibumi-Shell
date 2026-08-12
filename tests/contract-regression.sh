@@ -30,6 +30,11 @@ python3 "$repo_root/tests/quickshell-empty-registry-mutation.py"
 "$repo_root/tests/v1-embedded-v2-differences-regression.sh"
 "$repo_root/tests/v2-feature-evidence-regression.sh"
 "$repo_root/tests/quattro-contract-regression.sh"
+[[ -x $repo_root/tests/omarchy-agents-contract-regression.sh ]] \
+  || fail "Omarchy agents contract regression is missing"
+if [[ -n ${SHIBUMI_AGENTS_OMARCHY_PATH:-} ]]; then
+  "$repo_root/tests/omarchy-agents-contract-regression.sh"
+fi
 "$repo_root/tests/group-section-lifecycle-regression.sh"
 [[ -x $repo_root/tests/group-section-wayland-lifecycle.sh ]] \
   || fail "GroupSection Wayland lifecycle regression is missing"
@@ -1114,11 +1119,21 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
       || fail "official notification widget contract changed: $status_contract"
   done
 
-  while IFS= read -r module_id; do
+  host_has_module() {
     find "${OMARCHY_PATH}/shell/plugins" -type f \
       \( -name manifest.json -o -name '*.manifest.json' \) -print0 \
-      | xargs -0 -r jq -e --arg id "$module_id" \
-          "select(.id == \$id)" >/dev/null \
+      | xargs -0 -r jq -r '.id // empty' \
+      | grep -Fxq -- "$1"
+  }
+  if ! host_has_module omarchy.agents \
+      && ! host_has_module omarchy.model-usage; then
+    fail "Omarchy host provides neither supported AI usage contract"
+  fi
+  while IFS= read -r module_id; do
+    case $module_id in
+      omarchy.agents | omarchy.model-usage) continue ;;
+    esac
+    host_has_module "$module_id" \
       || fail "group registry references unavailable Quattro widget: $module_id"
   done < <(rg -o '"omarchy\.[a-z0-9-]+"' core/GroupRegistry.js \
     | tr -d '"' | sort -u)

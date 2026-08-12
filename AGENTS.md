@@ -48,6 +48,8 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-baseline-202
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-upstream-engineering-audit-20260806 \
   ./tests/omarchy-forward-compat-contract-regression.sh
+SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-agents-b99fd91 \
+  ./tests/omarchy-agents-contract-regression.sh
 ```
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.

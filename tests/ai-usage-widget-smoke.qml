@@ -150,6 +150,7 @@ ShellRoot {
             || aiWidget.providerContentHorizontalOffset !== -1
             || aiWidget.providerGlyphHorizontalOffset
               + aiWidget.providerContentHorizontalOffset !== -1
+            || aiWidget.childPanelWidget("omarchy.agents") !== aiWidget
             || aiWidget.childPanelWidget("omarchy.model-usage") !== aiWidget)
           return root.fail("single-provider facade")
         root.stableProviderWidth = aiWidget.implicitWidth

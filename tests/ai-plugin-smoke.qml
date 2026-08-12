@@ -11,6 +11,7 @@ ShellRoot {
   property int ticks: 0
   property real stableProviderWidth: 0
   property var clickTargets: []
+  property bool waitingBackendTransition: false
   property var iconMatrix: [
     { providerId: "claude", v2Shell: false, customFill: false, baseOpacity: 0.25 },
     { providerId: "codex", v2Shell: false, customFill: false, baseOpacity: 0.65 },
@@ -54,6 +55,76 @@ ShellRoot {
       foreground.r * opacity + background.r * (1 - opacity),
       foreground.g * opacity + background.g * (1 - opacity),
       foreground.b * opacity + background.b * (1 - opacity), 1)
+  }
+
+  function agentsContractMatches() {
+    if (!agentsService.agentsBackendActive
+        || agentsService.modelUsageSource !== ""
+        || agentsService.providers.length !== 2
+        || agentsService.selectedTool !== fakeState.selectedTool) return false
+    const claude = agentsService.providerFor("claude")
+    const codex = agentsService.providerFor("codex")
+    return claude && codex
+      && claude.backend === "omarchy.agents"
+      && codex.backend === "omarchy.agents"
+      && agentsService.usagePercent(claude) === 2
+      && agentsService.usagePercent(codex) === 24
+      && claude.rateLimitLabel === "Session (5-hour)"
+      && claude.secondaryRateLimitLabel === "Weekly (7-day)"
+      && claude.models.length === 0
+      && codex.models.length === 0
+      && codex.todayTotalTokens === 1031649
+      && codex.latestModel === ""
+      && claude.ready && codex.ready
+      && agentsService.agentsRefreshInterval === 42000
+      && agentsService.providerEnabled("fireworks") === false
+      && agentsService.providerEnabled("claude") === true
+      && agentsService.resetText(claude, claude.rateLimitResetAt) !== ""
+      && typeof claude.refresh !== "function"
+      && typeof codex.refresh !== "function"
+  }
+
+  function historicalOnlyRecordRejected() {
+    const raw = JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      limits: [],
+      todayPrompts: 0,
+      todaySessions: 0,
+      todayTotalTokens: 0,
+      totalPrompts: 20,
+      totalSessions: 2,
+      activeDays: 4
+    })
+    agentsService.applyAgentRecord("claude", raw)
+    const rejected = agentsService.providerFor("claude") === null
+    agentsService.applyAgentRecord("claude", JSON.stringify({
+      schemaVersion: 1,
+      id: "claude",
+      name: "Claude Code",
+      ready: true,
+      limits: [{ label: "Session (5-hour)", percent: 0.02,
+        resetsAt: "2099-08-12T01:40:00Z" }],
+      todayPrompts: 3,
+      todaySessions: 1,
+      todayTotalTokens: 1200
+    }))
+    return rejected
+  }
+
+  function legacyContractMatches() {
+    if (legacyService.agentsBackendActive
+        || legacyService.modelUsageSource === ""
+        || legacyService.providers.length !== 2) return false
+    const claude = legacyService.providerFor("claude")
+    const codex = legacyService.providerFor("codex")
+    return claude && codex
+      && claude.providerName === "Legacy Claude"
+      && codex.providerName === "Legacy Codex"
+      && legacyService.usagePercent(claude) === 10
+      && legacyService.usagePercent(codex) === 20
   }
 
   function iconContractMatches(widget, expected) {
@@ -171,6 +242,10 @@ ShellRoot {
     id: fakeState
     property int revision: 0
     property string selectedTool: "claude"
+    property bool g7Enabled: true
+    function groupEnabled(groupId) {
+      return groupId === "G7" ? g7Enabled : true
+    }
     function setWidgetSetting(groupId, moduleId, key, value) {
       if (groupId !== "G7" || moduleId !== "hancore.shibumi.ai"
           || key !== "aiTool") return false
@@ -181,12 +256,83 @@ ShellRoot {
   }
 
   QtObject {
+    id: agentsState
+    property int revision: 0
+    property bool g7Enabled: true
+    function groupEnabled(groupId) {
+      return groupId === "G7" ? g7Enabled : true
+    }
+    function setWidgetSetting(groupId, moduleId, key, value) {
+      return fakeState.setWidgetSetting(groupId, moduleId, key, value)
+    }
+  }
+
+  QtObject {
+    id: agentsShell
+    property var bar: fakeBar
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.state" ? agentsState : null
+    }
+  }
+
+  QtObject {
+    id: missingStateShell
+    property var bar: genericBar
+    function serviceFor(_pluginId) { return null }
+  }
+
+  QtObject {
+    id: genericBar
+  }
+
+  QtObject {
+    id: genericShell
+    property var bar: genericBar
+    property var shellConfig: ({
+      bar: {
+        layout: {
+          left: [
+            { id: "omarchy.agents", refreshIntervalSec: 31,
+              providers: { claude: { enabled: false } } },
+            { id: "hancore.shibumi.ai", refreshIntervalSec: 33,
+              providers: { claude: { enabled: true },
+                codex: { enabled: false } } }
+          ],
+          center: [],
+          right: []
+        }
+      }
+    })
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.state" ? agentsState : null
+    }
+  }
+
+  QtObject {
     id: fakeShell
     property var bar: fakeBar
     function serviceFor(pluginId) {
       if (pluginId === "hancore.shibumi.state") return fakeState
       if (pluginId === "hancore.shibumi.ai") return aiService
       return null
+    }
+  }
+
+  QtObject {
+    id: legacyBar
+    function registeredWidgetSource(_id) { return "" }
+    function widgetSettings(groupId, moduleId) {
+      if (groupId !== "G7" || moduleId !== "hancore.shibumi.ai") return ({})
+      return ({ aiTool: fakeState.selectedTool,
+        providers: { claude: { enabled: true }, codex: { enabled: true } } })
+    }
+  }
+
+  QtObject {
+    id: legacyShell
+    property var bar: legacyBar
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.state" ? fakeState : null
     }
   }
 
@@ -207,6 +353,7 @@ ShellRoot {
     property bool foregroundAnimationEnabled: false
     property bool v2ShellMode: false
     property bool customFillEnabled: false
+    property bool agentsDisabled: false
     property var shell: fakeShell
     property var activePopout: null
     function widgetHasFill(_settings) {
@@ -247,8 +394,19 @@ ShellRoot {
     })
     function registeredWidgetSource(_id) { return "" }
     function widgetSettings(groupId, moduleId) {
-      return groupId === "G7" && moduleId === "hancore.shibumi.ai"
-        ? ({ aiTool: fakeState.selectedTool }) : ({})
+      if (groupId !== "G7") return ({})
+      if (moduleId === "omarchy.agents") return ({
+        refreshIntervalSec: 42,
+        providers: {
+          claude: { enabled: false },
+          codex: { enabled: !fakeBar.agentsDisabled },
+          fireworks: { enabled: false }
+        }
+      })
+      return moduleId === "hancore.shibumi.ai" ? ({
+        aiTool: fakeState.selectedTool,
+        providers: { claude: { enabled: !fakeBar.agentsDisabled } }
+      }) : ({})
     }
     function registerClickTarget(target) {
       if (root.clickTargets.indexOf(target) < 0)
@@ -270,6 +428,36 @@ ShellRoot {
     shell: fakeShell
     runtimeProbesEnabled: false
     providerOverrides: [claudeProvider, codexProvider, openCodeProvider]
+  }
+
+  Ai.Service {
+    id: agentsService
+    shell: agentsShell
+    omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
+    agentsSourceOverride: "file:///fixture/agents/Panel.qml"
+    agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
+  }
+
+  Ai.Service {
+    id: missingStateService
+    shell: missingStateShell
+    agentsSourceOverride: "file:///fixture/agents/Panel.qml"
+    agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
+  }
+
+  Ai.Service {
+    id: genericService
+    shell: genericShell
+    runtimeProbesEnabled: false
+    agentsSourceOverride: "file:///fixture/agents/Panel.qml"
+    agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
+  }
+
+  Ai.Service {
+    id: legacyService
+    shell: legacyShell
+    modelUsageSourceOverride:
+      Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
   }
 
   Loader {
@@ -310,8 +498,11 @@ ShellRoot {
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item
-      if (!first || (root.phase <= root.iconMatrix.length + 1 && !second)) {
-        if (root.ticks >= 10) root.fail("widget loaders did not resolve")
+      if (!first || (root.phase <= root.iconMatrix.length + 1 && !second)
+          || agentsService.providers.length !== 2
+          || genericService.providers.length !== 1
+          || legacyService.providers.length !== 2) {
+        if (root.ticks >= 20) root.fail("widget/agents fixtures did not resolve")
         return
       }
       if (root.ticks < 3) return
@@ -329,11 +520,36 @@ ShellRoot {
             && (first.usagePercent !== 3 || first.steppedPercent !== 5
               || aiService.providers.length !== 3
               || aiService.detectionReady
+              || !root.agentsContractMatches()
+              || !root.legacyContractMatches()
+              || missingStateService.serviceActive
+              || missingStateService.providers.length !== 0
+              || genericService.agentsRefreshInterval !== 33000
+              || !genericService.providerEnabled("claude")
+              || genericService.providerEnabled("codex")
+              || genericService.providerFor("claude") === null
+              || genericService.providerFor("codex") !== null
+              || first.childPanelWidget("omarchy.agents") !== first
               || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
               || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
               || first.tooltipText.indexOf("2.3K tokens · 180/h") < 0
               || first.tooltipText.indexOf("local-test") < 0))
-          return root.fail("Claude percentage scaling/provider metadata")
+          return root.fail("Claude/agents provider metadata")
+        if (root.phase === 0) {
+          agentsState.g7Enabled = false
+          agentsState.revision++
+          if (agentsService.serviceActive
+              || agentsService.providers.length !== 0)
+            return root.fail("disabled G7 retained backend work")
+          agentsState.g7Enabled = true
+          agentsState.revision++
+          fakeBar.agentsDisabled = true
+          const probeCommand = agentsService.agentsUpdateCommand(false)
+          if (probeCommand[probeCommand.length - 1] !== "--probe-only")
+            return root.fail("OpenCode probe depends on enabled agent collectors")
+          fakeBar.agentsDisabled = false
+          legacyService.refreshAll(true)
+        }
         if (root.phase === 0) root.stableProviderWidth = first.implicitWidth
         else if (first.implicitWidth !== root.stableProviderWidth
             || second.implicitWidth !== root.stableProviderWidth)
@@ -372,13 +588,67 @@ ShellRoot {
         root.phase++
         root.ticks = 0
       } else {
+        if (root.waitingBackendTransition) {
+          if (agentsService.backendRunning
+              || agentsService.backendProcessKind !== ""
+              || agentsService.pendingBackendRefresh) {
+            if (root.ticks >= 20)
+              return root.fail("queued backend transition did not complete")
+            return
+          }
+          if (!agentsService.agentsUpdateHealthy
+              || agentsService.runningSettingsGeneration
+                !== agentsService.providerSettingsGeneration
+              || agentsService.providerFor("claude") === null
+              || agentsService.providerFor("codex") === null)
+            return root.fail("queued Agents update did not become current")
+          stop()
+          watchdog.stop()
+          console.log("ai plugin smoke passed")
+          Qt.quit()
+          return
+        }
         if (first.panelLoaded || secondLoader.item !== null
             || root.clickTargets.length !== 1)
           return root.fail("panel/widget teardown")
-        stop()
-        watchdog.stop()
-        console.log("ai plugin smoke passed")
-        Qt.quit()
+        if (!root.historicalOnlyRecordRejected())
+          return root.fail("historical-only agents record remained visible")
+        agentsService.agentsUpdateHealthy = false
+        agentsService.providerRevision++
+        if (agentsService.providerFor("claude").ready
+            || agentsService.providerFor("codex").ready
+            || agentsService.usagePercent(
+              agentsService.providerFor("claude")) !== -1
+            || agentsService.usagePercent(
+              agentsService.providerFor("codex")) !== -1)
+          return root.fail("failed agents update did not suppress live quota")
+        const backendGeneration = agentsService.providerSettingsGeneration
+        agentsService.modelUsageSourceOverride =
+          Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
+        agentsService.agentsSourceOverride = ""
+        if (agentsService.agentsBackendActive
+            || agentsService.modelUsageSource === ""
+            || agentsService.providerSettingsGeneration <= backendGeneration
+            || agentsService.backendProcessKind !== "legacy-detection")
+          return root.fail("Agents to legacy transition was not reconciled")
+        agentsService.agentsSourceOverride =
+          "file:///fixture/agents/Panel.qml"
+        if (!agentsService.agentsBackendActive
+            || agentsService.modelUsageSource !== ""
+            || !agentsService.pendingBackendRefresh)
+          return root.fail("legacy to Agents transition was not reconciled")
+        if (legacyService.providerFor("claude").usageStatusText !== "refreshed"
+            || legacyService.providerFor("codex").usageStatusText !== "refreshed")
+          return root.fail("legacy fallback did not forward refresh")
+        agentsService.applyAgentRecord("claude",
+          '{"schemaVersion":2,"id":"claude"}')
+        agentsService.applyAgentRecord("codex",
+          '{"schemaVersion":1,"id":"claude"}')
+        if (agentsService.providerFor("claude") !== null
+            || agentsService.providerFor("codex") !== null)
+          return root.fail("malformed agents records did not fail closed")
+        root.waitingBackendTransition = true
+        root.ticks = 0
       }
     }
   }

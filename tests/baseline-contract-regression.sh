@@ -7,6 +7,7 @@ helper="$repo_root/tests/lib/baselines.sh"
 installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-12af188.json"
 installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-12af188.json"
 forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-fd1034f.json"
+agents_baseline="$repo_root/contracts/baselines/omarchy-agents-b99fd91.json"
 predecessor_baseline="$repo_root/contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json"
 installed_package_job="$repo_root/tests/omarchy-installed-package-contract-regression.sh"
 installed_source_job="$repo_root/tests/omarchy-installed-source-parity-contract-regression.sh"
@@ -30,6 +31,7 @@ command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required'
   || fail 'installed-source-parity Omarchy baseline is missing'
 [[ -r $forward_compat_baseline ]] \
   || fail 'forward-compat Omarchy baseline is missing'
+[[ -r $agents_baseline ]] || fail 'Agents Omarchy baseline is missing'
 [[ ! -e $repo_root/contracts/baselines/omarchy-12af188.json ]] \
   || fail 'legacy nine-file Omarchy baseline is still present'
 [[ ! -e $repo_root/contracts/baselines/omarchy-installed-12af188.json ]] \
@@ -86,6 +88,27 @@ jq -e '
   and all(.subtrees[]; .entryPolicy == "regular-files")
 ' "$forward_compat_baseline" >/dev/null \
   || fail 'forward-compat baseline identity or provenance is invalid'
+
+agents_fixture=$(mktemp)
+trap 'rm -f -- "$agents_fixture"' EXIT
+cp "$agents_baseline" "$agents_fixture"
+shibumi_validate_agents_baseline_schema "$agents_baseline" \
+  || fail 'Agents baseline does not satisfy its central schema'
+jq '.sourceRevision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  | .provenance.revision = .sourceRevision' \
+  "$agents_baseline" >"$agents_fixture"
+if shibumi_validate_agents_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'Agents baseline accepts revision substitution'
+fi
+jq 'del(.files["shell/plugins/agents/Agent.qml"])
+  | .files["shell/plugins/agents/README.md"] =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  "$agents_baseline" >"$agents_fixture"
+if shibumi_validate_agents_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'Agents baseline accepts contracted path substitution'
+fi
 
 jq -e '
   .schemaVersion == 1

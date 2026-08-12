@@ -603,18 +603,26 @@ Current Phase 2 foundation:
   settings, screen-aware alias routing, action forwarding, unique click
   registration, model release, and teardown. Real Wayland panel mapping remains
   an acceptance gate.
-- G7 replaces the stock multi-chip `omarchy.model-usage` presentation with one
-  selected-provider Shibumi pill and one lazy local panel. A single root-owned
-  `AiUsageService` dynamically loads Quattro's official Claude/Codex provider
-  scanners only when matching local data exists, so missing providers do not
-  poll or emit missing-file errors;
-- OpenCode is supplied by one plugin-local read-only SQLite adapter because
-  Quattro has no OpenCode provider. It runs at activation and every five
-  minutes while OpenCode data exists, writes no cache, makes no network call,
-  and is shared by every output. Provider selection, refresh, legacy
-  `omarchy.model-usage` summon/hide routing, real Wayland panel mapping, and the
-  complete Quattro contract suite are accepted on the validation system. Real Claude/Codex
-  account-data and multi-output acceptance remain gates.
+- G7 replaces the stock AI presentation with one selected-provider Shibumi
+  pill and one lazy local panel. A single root-owned `AiUsageService` consumes
+  the primitive schema-v1 records produced by current `omarchy.agents`; it
+  never loads the host Agents panel or exposes host backend objects to views.
+  The service owns one bounded update process and two watched Claude/Codex
+  record paths process-wide while G7 is active; disabled G7/providers own no
+  collector, record watcher, legacy provider, or OpenCode worker. On the
+  pinned older Quattro baselines, the
+  legacy `omarchy.model-usage` providers remain an exclusive fallback;
+- OpenCode is supplied by one plugin-local read-only SQLite adapter because the
+  consumed Agents record set does not publish an OpenCode record. It runs at
+  activation and every five minutes while OpenCode data exists, writes no
+  cache, makes no network call, and is shared by every output. Provider
+  selection, refresh, `omarchy.agents` plus legacy `omarchy.model-usage`
+  summon/hide routing, real Wayland panel mapping, and the complete pinned
+  Quattro contract suite remain the acceptance boundary. Real Claude/Codex
+  account-data on the current Agents host and multi-output acceptance remain
+  gates. The consumed Agents manifest, update command, collectors, and record
+  schema are revision-bound to Omarchy `b99fd91` by a repository-owned
+  compatibility contract rather than inferred from mutable installed files.
 - G9 replaces only the official media presentation. The keep-loaded
   `omarchy.media` service remains the sole MPRIS/PipeWire selection and action
   owner while Shibumi views supply the default row, FULL/muse row, lazy panel,

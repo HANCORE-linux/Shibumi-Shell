@@ -46,6 +46,11 @@ Item {
     usageScanner.running = true
   }
 
+  function stopScanner() {
+    if (usageScanner.running) usageScanner.running = false
+    refreshing = false
+  }
+
   function parseScannerOutput(output) {
     const raw = String(output || "").trim()
     if (!raw) {
@@ -106,4 +111,7 @@ Item {
     triggeredOnStart: true
     onTriggered: root.refresh(false)
   }
+
+  onEnabledChanged: if (!enabled) stopScanner()
+  Component.onDestruction: stopScanner()
 }

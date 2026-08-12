@@ -88,7 +88,8 @@ Ui.Panel {
 
   function childPanelWidget(pluginId) {
     const id = String(pluginId || "")
-    return id === moduleName || id === "omarchy.model-usage" ? root : null
+    return id === moduleName || id === "omarchy.agents"
+      || id === "omarchy.model-usage" ? root : null
   }
 
   onOpenedChanged: syncPanelLoader()

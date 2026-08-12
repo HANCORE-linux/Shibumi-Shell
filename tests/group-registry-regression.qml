@@ -98,6 +98,7 @@ QtObject {
       "omarchy.indicators": ["G3"],
       "omarchy.tray": ["G3"],
       "omarchy.audio": ["G6"],
+      "omarchy.agents": ["G7"],
       "omarchy.model-usage": ["G7"],
       "omarchy.clock": ["G8"],
       "omarchy.weather": ["G8"],
@@ -173,6 +174,7 @@ QtObject {
     }
     if (!GroupRegistry.isAssignedModule("omarchy.menu")
         || !GroupRegistry.isAssignedModule("omarchy.workspaces")
+        || !GroupRegistry.isAssignedModule("omarchy.agents")
         || !GroupRegistry.isAssignedModule("omarchy.model-usage")
         || !GroupRegistry.isAssignedModule("omarchy.audio")
         || !GroupRegistry.isAssignedModule("omarchy.media")

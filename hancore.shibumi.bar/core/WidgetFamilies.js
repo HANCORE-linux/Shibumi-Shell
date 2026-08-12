@@ -32,7 +32,7 @@ var Families = [
     capabilities: ["model-usage"],
     group: "G7",
     shibumi: "Shibumi AI Usage",
-    alternatives: ["omarchy.model-usage"],
+    alternatives: ["omarchy.agents", "omarchy.model-usage"],
     region: "left"
   },
   {
@@ -93,6 +93,7 @@ var KnownCapabilities = {
   "omarchy.indicators": ["indicators"],
   "omarchy.tray": ["tray"],
   "omarchy.audio": ["audio"],
+  "omarchy.agents": ["model-usage"],
   "omarchy.model-usage": ["model-usage"],
   "omarchy.clock": ["clock"],
   "omarchy.weather": ["weather"],

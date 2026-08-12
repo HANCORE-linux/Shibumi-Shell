@@ -281,6 +281,94 @@ shibumi_validate_omarchy_tree() {
   SHIBUMI_VALIDATED_OMARCHY_BASELINE=$canonical_manifest
 }
 
+shibumi_validate_agents_baseline_schema() {
+  shibumi_require_baseline_tools || return
+
+  local requested_manifest=${1:-}
+  [[ $requested_manifest == /* && -f $requested_manifest \
+    && -r $requested_manifest ]] \
+    || shibumi_baseline_fail \
+      "Omarchy agents manifest is unreadable: $requested_manifest" || return
+
+  jq -e '
+    .schemaVersion == 1
+    and .id == "omarchy-agents-b99fd91"
+    and .profile == "agents-current"
+    and .repository == "https://github.com/basecamp/omarchy"
+    and .sourceRevision == "b99fd91cf11db92b03bbd69e4fff908662bd74a3"
+    and .provenance.kind == "git"
+    and .provenance.revision == .sourceRevision
+    and (.files | type == "object" and length == 6)
+    and ((.files | keys | sort) == [
+      "bin/omarchy-agent-usage-claude",
+      "bin/omarchy-agent-usage-codex",
+      "bin/omarchy-agent-usage-update",
+      "shell/plugins/agents/Agent.qml",
+      "shell/plugins/agents/Main.qml",
+      "shell/plugins/agents/manifest.json"
+    ])
+    and all(.files | to_entries[];
+      (.key | type == "string" and length > 0
+        and (startswith("/") | not)
+        and (contains("..") | not))
+      and (.value | test("^[0-9a-f]{64}$")))
+  ' "$requested_manifest" >/dev/null \
+    || shibumi_baseline_fail \
+      "Omarchy agents baseline schema is invalid: $requested_manifest" \
+    || return
+}
+
+shibumi_validate_agents_baseline() {
+  shibumi_require_baseline_tools || return
+
+  local requested_path=${1:-}
+  local requested_manifest=${2:-}
+  [[ $requested_path == /* ]] \
+    || shibumi_baseline_fail 'OMARCHY_PATH must be absolute' || return
+  [[ -d $requested_path ]] \
+    || shibumi_baseline_fail \
+      "Omarchy agents baseline root is missing: $requested_path" || return
+  shibumi_validate_agents_baseline_schema "$requested_manifest" || return
+
+  local canonical_path canonical_manifest expected_revision actual_revision
+  canonical_path=$(realpath -e -- "$requested_path") \
+    || shibumi_baseline_fail \
+      "cannot resolve OMARCHY_PATH: $requested_path" || return
+  canonical_manifest=$(realpath -e -- "$requested_manifest") \
+    || shibumi_baseline_fail \
+      "cannot resolve agents manifest: $requested_manifest" || return
+  command -v git >/dev/null 2>&1 \
+    || shibumi_baseline_fail 'git is required for agents-current' || return
+  expected_revision=$(jq -r '.sourceRevision' "$canonical_manifest")
+  actual_revision=$(git -C "$canonical_path" rev-parse HEAD 2>/dev/null) \
+    || shibumi_baseline_fail \
+      "agents-current baseline is not a Git checkout: $canonical_path" \
+    || return
+  [[ $actual_revision == "$expected_revision" ]] \
+    || shibumi_baseline_fail \
+      "agents-current revision drift: expected $expected_revision, got $actual_revision" \
+    || return
+
+  local relative_path expected_hash candidate actual_hash
+  while IFS=$'\t' read -r relative_path expected_hash; do
+    candidate="$canonical_path/$relative_path"
+    [[ -f $candidate && ! -L $candidate ]] \
+      || shibumi_baseline_fail \
+        "agents-current file is missing or linked: $relative_path" || return
+    [[ $(realpath -e -- "$candidate") == "$canonical_path/$relative_path" ]] \
+      || shibumi_baseline_fail \
+        "agents-current file escapes its root: $relative_path" || return
+    actual_hash=$(sha256sum "$candidate" | awk '{print $1}')
+    [[ $actual_hash == "$expected_hash" ]] \
+      || shibumi_baseline_fail \
+        "agents-current content drift: $relative_path" || return
+  done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' \
+    "$canonical_manifest")
+
+  SHIBUMI_VALIDATED_OMARCHY_PATH=$canonical_path
+  SHIBUMI_VALIDATED_OMARCHY_BASELINE=$canonical_manifest
+}
+
 shibumi_load_omarchy_baseline() {
   shibumi_require_baseline_tools || return
 
@@ -305,13 +393,23 @@ shibumi_load_omarchy_baseline() {
           'OMARCHY_PATH is required for forward-compat' || return
       manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-fd1034f.json"
       ;;
+    agents-current)
+      requested_path=${OMARCHY_PATH:-}
+      [[ -n $requested_path ]] \
+        || shibumi_baseline_fail \
+          'OMARCHY_PATH is required for agents-current' || return
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-b99fd91.json"
+      shibumi_validate_agents_baseline "$requested_path" "$manifest" || return
+      ;;
     *)
       shibumi_baseline_fail "unsupported Omarchy baseline profile: $profile"
       return
       ;;
   esac
 
-  shibumi_validate_omarchy_tree "$requested_path" "$manifest" || return
+  if [[ $profile != agents-current ]]; then
+    shibumi_validate_omarchy_tree "$requested_path" "$manifest" || return
+  fi
   local canonical_path=$SHIBUMI_VALIDATED_OMARCHY_PATH
   local canonical_manifest=$SHIBUMI_VALIDATED_OMARCHY_BASELINE
 
@@ -319,7 +417,8 @@ shibumi_load_omarchy_baseline() {
     || shibumi_baseline_fail \
       "baseline profile mismatch in $canonical_manifest" || return
 
-  if [[ $profile == installed-source-parity || $profile == forward-compat ]]; then
+  if [[ $profile == installed-source-parity || $profile == forward-compat \
+      || $profile == agents-current ]]; then
     command -v git >/dev/null 2>&1 \
       || shibumi_baseline_fail "git is required for $profile" \
       || return

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "codex",
+  "name": "Codex",
+  "ready": true,
+  "updatedAt": "2099-08-12T00:00:00Z",
+  "limits": [
+    {"label": "Weekly (7-day)", "percent": 0.24, "resetsAt": "2099-08-18T00:00:37Z"}
+  ],
+  "tierLabel": "pro",
+  "usageStatusText": "",
+  "authHelpText": "fixture",
+  "todayPrompts": 14,
+  "todaySessions": 2,
+  "todayTotalTokens": 1031649,
+  "totalPrompts": 69089,
+  "totalSessions": 136,
+  "activeDays": 31,
+  "todayTokensByModel": {"gpt-test": 1031649},
+  "modelUsage": {
+    "gpt-test": {
+      "inputTokens": 700000,
+      "outputTokens": 200000,
+      "cacheReadInputTokens": 131649,
+      "cacheCreationInputTokens": 0
+    }
+  }
+}

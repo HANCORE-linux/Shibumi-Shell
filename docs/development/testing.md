@@ -45,6 +45,18 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
+The current AI Agents integration has its own narrower revision-bound host
+contract because `omarchy.agents` postdates those complete baseline axes:
+
+```bash
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+  ./tests/omarchy-agents-contract-regression.sh
+```
+
+This gate binds the consumed Agents manifest, record reader, updater, and
+Claude/Codex collectors. It does not broaden compatibility claims for other
+mutable files in that host revision.
+
 Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The jobs select three repository-owned manifests with non-overlapping
 claims:
