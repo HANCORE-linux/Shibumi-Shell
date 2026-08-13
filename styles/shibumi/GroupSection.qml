@@ -79,7 +79,7 @@ Item {
   implicitHeight: contentItem && "layoutHeight" in contentItem
     ? contentItem.layoutHeight : contentItem ? contentItem.implicitHeight : 0
   width: implicitWidth
-  height: implicitHeight
+  height: parent && parent.height > 0 ? parent.height : implicitHeight
 
   // QML Repeaters rebuild every delegate when a JavaScript array model is
   // replaced. V1 extension changes must retain existing widget owners (most
@@ -266,6 +266,8 @@ Item {
     Row {
       id: horizontalRow
 
+      height: parent && parent.height > 0 ? parent.height : implicitHeight
+      anchors.verticalCenter: parent ? parent.verticalCenter : undefined
       spacing: 0
       function scheduleLayout() {
         if (!layoutTimer.running) layoutTimer.start()
@@ -506,7 +508,8 @@ Item {
           implicitHeight: effectiveHasContent && root
             ? root.v2Mode ? targetVisual.height : 32 : 0
           width: implicitWidth
-          height: implicitHeight
+          height: parent && parent.height > 0 ? parent.height : implicitHeight
+          anchors.verticalCenter: parent ? parent.verticalCenter : undefined
           onWidthChanged: {
             if (horizontalRow) horizontalRow.scheduleLayout()
           }

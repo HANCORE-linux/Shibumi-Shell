@@ -335,6 +335,7 @@ Item {
         anchors.leftMargin: horizontalSurface.shellX
           + horizontalSurface.shellContentInset
         anchors.verticalCenter: runChrome.verticalCenter
+        height: runChrome.height
         z: 10
 
         Shibumi.GroupSection {
@@ -359,6 +360,7 @@ Item {
         id: centerRegion
 
         anchors.verticalCenter: runChrome.verticalCenter
+        height: runChrome.height
         x: horizontalSurface.centerTargetX
         z: 10
 
@@ -392,6 +394,7 @@ Item {
         anchors.rightMargin: horizontalSurface.shellX
           + horizontalSurface.shellContentInset
         anchors.verticalCenter: runChrome.verticalCenter
+        height: runChrome.height
         z: 10
 
         Core.BarSection {
