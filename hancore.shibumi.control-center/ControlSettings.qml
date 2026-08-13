@@ -136,6 +136,15 @@ Item {
     Commons.Style.space(28) + Commons.Style.spacing.sm * 2
     + Commons.Style.space(1) + Commons.Style.space(42) * 2
     + Commons.Style.space(12) + Commons.Style.space(18)
+  readonly property bool compactBarsPage:
+    currentPage === "configure"
+    && configureDetailPage === "bars"
+    && settingsQuery.trim() === ""
+    && pageLoader.item !== null
+  readonly property real compactBarsPanelHeight:
+    configureDetailPanelChromeHeight
+    + Math.max(1, Number(pageLoader.item
+      ? pageLoader.item.implicitHeight : 1))
   readonly property bool compactIconsOverview:
     currentPage === "configure"
     && configureDetailPage === "functions"

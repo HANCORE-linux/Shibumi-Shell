@@ -980,6 +980,14 @@ ShellRoot {
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 0
               || panel.settingsPageItem.splitActionPreviewCount !== 0
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 0
+              || panel.settingsPageItem.layoutActionCount !== 3
+              || panel.settingsPageItem.layoutActionCardWidth < 88
+              || !panel.settingsPageItem.layoutActionLabelsFit
+              || !panel.compactBarsPage
+              || panel.compactBarsPanelHeight > 656
+              || Math.abs(panel.compactBarsPanelHeight
+                - (panel.configureDetailPanelChromeHeight
+                  + panel.settingsPageItem.implicitHeight)) > 0.5
               || panel.settingsPageItem.childRouteAvailable
               || panel.settingsPageItem.activeLayoutProtected)
             return root.fail("V2 exposed V1 Bar Surface settings"
@@ -1000,6 +1008,14 @@ ShellRoot {
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 3
               || panel.settingsPageItem.splitActionPreviewCount !== 2
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
+              || panel.settingsPageItem.layoutActionCount !== 3
+              || panel.settingsPageItem.layoutActionCardWidth < 88
+              || !panel.settingsPageItem.layoutActionLabelsFit
+              || !panel.compactBarsPage
+              || panel.compactBarsPanelHeight > 656
+              || Math.abs(panel.compactBarsPanelHeight
+                - (panel.configureDetailPanelChromeHeight
+                  + panel.settingsPageItem.implicitHeight)) > 0.5
               || !panel.settingsPageItem.childRouteAvailable
               || !panel.settingsPageItem.activeLayoutProtected
               || panel.settingsPageItem.childRouteLabel !== "Gap Animations"
@@ -1027,7 +1043,15 @@ ShellRoot {
             || panel.settingsPageItem.surfaceEffectOptionCount !== 3
             || panel.settingsPageItem.surfaceEffectPreviewCount !== 3
             || panel.settingsPageItem.splitActionPreviewCount !== 2
-            || panel.settingsPageItem.surfaceRadiusOptionCount !== 2)
+            || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
+            || panel.settingsPageItem.layoutActionCount !== 3
+            || panel.settingsPageItem.layoutActionCardWidth < 88
+            || !panel.settingsPageItem.layoutActionLabelsFit
+            || !panel.compactBarsPage
+            || panel.compactBarsPanelHeight > 656
+            || Math.abs(panel.compactBarsPanelHeight
+              - (panel.configureDetailPanelChromeHeight
+                + panel.settingsPageItem.implicitHeight)) > 0.5)
           return root.fail("Bars return navigation did not restore V1")
         panel.healthService.report = {
           schemaVersion: 1,

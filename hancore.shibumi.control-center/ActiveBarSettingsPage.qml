@@ -65,6 +65,15 @@ Column {
     barSurfaceSettings.radiusOptions.length
   readonly property int splitActionPreviewCount:
     v1SplitChoiceRow.visible ? 2 : 0
+  readonly property int layoutActionCount:
+    shibumiActive && mainSettingsVisible ? 3 : 0
+  readonly property real layoutActionCardWidth: v2Active
+    ? v2EditAction.width : v1EditAction.width
+  readonly property bool layoutActionLabelsFit: v2Active
+    ? v2EditAction.labelFits && v2ProtectAction.labelFits
+      && v2RestoreAction.labelFits
+    : v1EditAction.labelFits && v1ProtectAction.labelFits
+      && v1RestoreAction.labelFits
   readonly property bool childRouteAvailable:
     shibumiActive && !v2Active
   readonly property string childRouteLabel: "Gap Animations"
@@ -287,23 +296,6 @@ Column {
     uiScale: root.uiScale
   }
 
-  LayoutProtectionToggle {
-    id: protectionToggle
-    width: parent.width
-    visible: root.shibumiActive && root.mainSettingsVisible
-    controller: root.controller
-    label: "Protect " + (root.v2Active ? "V2" : "V1") + " layout"
-    detail: root.activeLayoutProtected
-      ? root.v2Active
-        ? "Use Edit layout to change dividers"
-        : "Use Edit slots to change splits"
-      : "Direct bar changes are allowed"
-    selected: root.activeLayoutProtected
-    foreground: root.foreground
-    accent: root.accent
-    onClicked: root.toggleActiveLayoutProtection()
-  }
-
   Column {
     width: parent.width
     spacing: Commons.Style.space(8)
@@ -312,38 +304,47 @@ Column {
 
     SectionLabel { text: "V1 LAYOUT" }
 
-    Text {
-      width: parent.width
-      text: "V1 supports positional slots, live split islands and drag editing."
-      color: root.foreground
-      opacity: 0.48
-      wrapMode: Text.WordWrap
-      font.family: root.controller.marketFont
-      font.pixelSize: Commons.Style.font.caption * root.uiScale
-    }
-
     Row {
       width: parent.width
-      height: Commons.Style.space(50)
+      height: Commons.Style.space(56)
       spacing: Commons.Style.space(7)
 
-      ActionCard {
-        width: (parent.width - parent.spacing) / 2
+      LayoutActionCard {
+        id: v1EditAction
+        width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         glyph: "view_column"
         label: "Edit slots"
-        detail: "Add, move and drag on the bar"
+        accessibleDescription: "Add, move and drag V1 slots on the bar"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.beginBarEditing()
       }
 
-      ActionCard {
-        width: (parent.width - parent.spacing) / 2
+      LayoutActionCard {
+        id: v1ProtectAction
+        width: (parent.width - parent.spacing * 2) / 3
+        controller: root.controller
+        glyph: root.activeLayoutProtected ? "lock" : "lock_open"
+        label: "Protect V1"
+        accessibleName: "Protect V1 layout"
+        accessibleDescription: root.activeLayoutProtected
+          ? "Protected; use Edit slots to change splits"
+          : "Direct V1 split changes are allowed"
+        checkable: true
+        selected: root.activeLayoutProtected
+        foreground: root.foreground
+        accent: root.accent
+        onClicked: root.toggleActiveLayoutProtection()
+      }
+
+      LayoutActionCard {
+        id: v1RestoreAction
+        width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         glyph: "restart_alt"
         label: "Restore layout"
-        detail: "Reset V1 slots, order and splits"
+        accessibleDescription: "Reset V1 slots, order and splits"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.resetBarLayout()
@@ -357,28 +358,49 @@ Column {
     spacing: Commons.Style.space(8)
     visible: root.v2Active && root.mainSettingsVisible
 
+    SectionLabel { text: "V2 LAYOUT" }
+
     Row {
       width: parent.width
-      height: Commons.Style.space(50)
+      height: Commons.Style.space(56)
       spacing: Commons.Style.space(7)
 
-      ActionCard {
-        width: (parent.width - parent.spacing) / 2
+      LayoutActionCard {
+        id: v2EditAction
+        width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         glyph: "splitscreen"
         label: "Edit layout"
-        detail: "Add slots and place dividers"
+        accessibleDescription: "Add slots and place V2 dividers"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.beginBarEditing()
       }
 
-      ActionCard {
-        width: (parent.width - parent.spacing) / 2
+      LayoutActionCard {
+        id: v2ProtectAction
+        width: (parent.width - parent.spacing * 2) / 3
+        controller: root.controller
+        glyph: root.activeLayoutProtected ? "lock" : "lock_open"
+        label: "Protect V2"
+        accessibleName: "Protect V2 layout"
+        accessibleDescription: root.activeLayoutProtected
+          ? "Protected; use Edit layout to change dividers"
+          : "Direct V2 divider changes are allowed"
+        checkable: true
+        selected: root.activeLayoutProtected
+        foreground: root.foreground
+        accent: root.accent
+        onClicked: root.toggleActiveLayoutProtection()
+      }
+
+      LayoutActionCard {
+        id: v2RestoreAction
+        width: (parent.width - parent.spacing * 2) / 3
         controller: root.controller
         glyph: "restart_alt"
         label: "Restore layout"
-        detail: "Reset V2 slots, order and dividers"
+        accessibleDescription: "Reset V2 slots, order and dividers"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.resetBarLayout()
@@ -621,118 +643,82 @@ Column {
     Keys.onSpacePressed: gapChoice.clicked()
   }
 
-  component LayoutProtectionToggle: Rectangle {
-    id: layoutToggle
+  component LayoutActionCard: Rectangle {
+    id: layoutAction
 
     required property var controller
+    property string glyph: ""
     property string label: ""
-    property string detail: ""
+    property string accessibleName: label
+    property string accessibleDescription: ""
+    property bool checkable: false
     property bool selected: false
     property color foreground: "white"
     property color accent: "white"
+    readonly property bool labelFits:
+      actionLabel.implicitWidth <= actionLabel.width + 0.5
     signal clicked()
 
-    height: Commons.Style.space(50)
+    height: Commons.Style.space(56)
     activeFocusOnTab: true
-    Accessible.role: Accessible.CheckBox
-    Accessible.name: label
-    Accessible.description: detail
-    Accessible.checked: selected
+    Accessible.role: checkable ? Accessible.CheckBox : Accessible.Button
+    Accessible.name: accessibleName
+    Accessible.description: accessibleDescription
+    Accessible.checked: checkable && selected
     radius: controller.controlRadius
-    color: togglePointer.containsMouse
-      ? controller.controlHoverFillColor : controller.controlFillColor
+    color: selected
+      ? Commons.Util.alpha(accent, 0.10)
+      : actionPointer.containsMouse
+        ? controller.controlHoverFillColor : controller.controlFillColor
     border.width: controller.controlBorderWidth
     border.color: selected || activeFocus ? accent
-      : togglePointer.containsMouse
+      : actionPointer.containsMouse
         ? controller.controlHoverBorderColor : controller.controlBorderColor
 
-    IconText {
-      id: protectionGlyph
-      anchors.left: parent.left
-      anchors.leftMargin: Commons.Style.space(9)
-      anchors.verticalCenter: parent.verticalCenter
-      width: Commons.Style.space(20)
-      text: layoutToggle.selected ? "lock" : "lock_open"
-      color: layoutToggle.selected
-        ? layoutToggle.accent : layoutToggle.foreground
-      horizontalAlignment: Text.AlignHCenter
-      font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
-      fill: layoutToggle.selected ? 1 : 0
-    }
-
     Column {
-      anchors.left: protectionGlyph.right
-      anchors.right: protectionTrack.left
-      anchors.leftMargin: Commons.Style.space(8)
-      anchors.rightMargin: Commons.Style.space(10)
-      anchors.verticalCenter: parent.verticalCenter
-      spacing: 0
+      anchors.centerIn: parent
+      width: parent.width - Commons.Style.space(10)
+      spacing: Commons.Style.space(1)
 
-      Text {
+      IconText {
         width: parent.width
-        text: layoutToggle.label
-        color: layoutToggle.foreground
-        elide: Text.ElideRight
-        font.family: layoutToggle.controller.marketFont
-        font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
-        font.weight: Font.DemiBold
+        height: Commons.Style.space(24)
+        text: layoutAction.glyph
+        color: layoutAction.selected
+          ? layoutAction.accent : layoutAction.foreground
+        horizontalAlignment: Text.AlignHCenter
+        font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
+        fill: layoutAction.selected ? 1 : 0
       }
 
       Text {
+        id: actionLabel
         width: parent.width
-        text: layoutToggle.detail
-        color: layoutToggle.foreground
-        opacity: 0.42
+        text: layoutAction.label
+        color: layoutAction.selected
+          ? layoutAction.accent : layoutAction.foreground
+        horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
-        font.family: layoutToggle.controller.marketFont
+        font.family: layoutAction.controller.marketFont
         font.pixelSize: Commons.Style.font.caption * root.uiScale
-      }
-    }
-
-    Rectangle {
-      id: protectionTrack
-      anchors.right: parent.right
-      anchors.rightMargin: Commons.Style.space(10)
-      anchors.verticalCenter: parent.verticalCenter
-      width: Commons.Style.space(34)
-      height: Commons.Style.space(18)
-      radius: height / 2
-      color: layoutToggle.selected
-        ? Commons.Util.alpha(layoutToggle.accent, 0.30)
-        : Commons.Util.alpha(layoutToggle.foreground, 0.08)
-      border.width: 1
-      border.color: layoutToggle.selected
-        ? Commons.Util.alpha(layoutToggle.accent, 0.76)
-        : layoutToggle.controller.controlBorderColor
-
-      Rectangle {
-        width: Commons.Style.space(12)
-        height: width
-        radius: width / 2
-        x: layoutToggle.selected
-          ? parent.width - width - Commons.Style.space(3)
-          : Commons.Style.space(3)
-        anchors.verticalCenter: parent.verticalCenter
-        color: layoutToggle.selected
-          ? layoutToggle.accent : layoutToggle.foreground
-        opacity: layoutToggle.selected ? 1 : 0.58
+        font.weight: Font.DemiBold
       }
     }
 
     MouseArea {
-      id: togglePointer
+      id: actionPointer
       anchors.fill: parent
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onClicked: {
-        layoutToggle.forceActiveFocus()
-        layoutToggle.clicked()
+        layoutAction.forceActiveFocus()
+        layoutAction.clicked()
       }
     }
 
-    Keys.onReturnPressed: layoutToggle.clicked()
-    Keys.onEnterPressed: layoutToggle.clicked()
-    Keys.onSpacePressed: layoutToggle.clicked()
+    Keys.onReturnPressed: layoutAction.clicked()
+    Keys.onEnterPressed: layoutAction.clicked()
+    Keys.onSpacePressed: layoutAction.clicked()
   }
 
   component ActionCard: Rectangle {

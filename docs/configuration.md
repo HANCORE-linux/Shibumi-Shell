@@ -71,9 +71,10 @@ up to two additional slots on each outer side. The center cannot be extended.
 
 ### Layout protection
 
-The Bars page shows **Protect V1 layout** or **Protect V2 layout**, depending
-on the active Shibumi generation. The preferences are independent and default
-to off, preserving direct live editing for existing users.
+The Bars page places **Protect V1** or **Protect V2** between the active
+profile's Edit and Restore cards. Their full accessible names are
+**Protect V1 layout** and **Protect V2 layout**. The preferences are independent
+and default to off, preserving direct live editing for existing users.
 
 When protection is on, direct split, divider, and section-boundary clicks on
 the bar are ignored outside **Edit slots** or **Edit layout**. Entering the

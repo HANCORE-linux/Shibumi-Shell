@@ -235,6 +235,9 @@ Item {
   readonly property var settingsPageItem: settings.pageItem
   readonly property real configureDetailPanelChromeHeight:
     settings.configureDetailPanelChromeHeight
+  readonly property bool compactBarsPage: settings.compactBarsPage
+  readonly property real compactBarsPanelHeight:
+    settings.compactBarsPanelHeight
   readonly property real compactIconsPanelHeight:
     settings.compactIconsPanelHeight
   readonly property bool compactIconsSelection:

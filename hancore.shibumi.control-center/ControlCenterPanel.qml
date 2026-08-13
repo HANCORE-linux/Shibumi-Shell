@@ -258,6 +258,9 @@ ShibumiPanel {
     : settings.compactConfigureLanding
       ? fittedContentHeight(settings.compactConfigureLandingPanelHeight,
           Commons.Style.space(680))
+    : settings.compactBarsPage
+      ? fittedContentHeight(settings.compactBarsPanelHeight,
+          Commons.Style.space(680))
     : settings.compactIconsOverview
       ? fittedContentHeight(settings.compactIconsPanelHeight,
           Commons.Style.space(680))

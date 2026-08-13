@@ -196,9 +196,14 @@ The bulk Split all and Merge all actions sit directly below Top/Bottom in the
 V1 `Position & Layout` column, using the height beside V1's three surface rows
 instead of consuming another full-width row below.
 V2 exposes a single bar edit mode for adding slots and placing dividers, plus
-layout restore. V1 and V2 each retain an independent **Protect layout**
-preference on their active Bars page. Both default off. When enabled, direct
-split, divider, and section-boundary clicks require the matching edit mode;
+layout restore. The active generation uses only its concise **V1 LAYOUT** or
+**V2 LAYOUT** heading, without a redundant explanatory paragraph, followed by
+one balanced three-card row: **Edit**, its variant-specific **Protect V1/V2**,
+and **Restore**. The compact Bars panel derives its fitted height from that
+active page so the complete main route remains visible without scrolling.
+Protection is an independent preference for each generation and both default off. When
+enabled, direct split, divider, and section-boundary clicks require the
+matching edit mode;
 leaving edit mode restores protection without disabling deliberate Bars-page
 bulk or restore actions. Bars does not duplicate slot-capacity controls in a
 second editor. V2 never exposes V1 gap-animation or split-island controls. The former

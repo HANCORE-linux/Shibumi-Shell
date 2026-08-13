@@ -135,6 +135,7 @@ for contract in \
   'ControlMainPage.qml:RUNTIME' \
   'ActiveBarSettingsPage.qml:BAR FORM' \
   'ActiveBarSettingsPage.qml:V1 LAYOUT' \
+  'ActiveBarSettingsPage.qml:V2 LAYOUT' \
   'ActiveBarSettingsPage.qml:GAP ANIMATIONS' \
   'BarSurfaceSettings.qml:BAR SURFACE' \
   'BarSurfaceSettings.qml:BAR ACCENT' \
@@ -374,7 +375,7 @@ for configure_contract in \
   'ActiveBarSettingsPage.qml:property bool motionDetailOpen: false' \
   'ActiveBarSettingsPage.qml:columns: 3' \
   'ActiveBarSettingsPage.qml:motionEnabled && (selected || previewPointer.containsMouse)' \
-  'ActiveBarSettingsPage.qml:detail: "Add slots and place dividers"' \
+  'ActiveBarSettingsPage.qml:accessibleDescription: "Add slots and place V2 dividers"' \
   'ControlSettings.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
@@ -778,11 +779,18 @@ for route_contract in \
   'label: "Edit slots"' \
   'label: "Edit layout"' \
   'label: "Restore layout"' \
-  'label: "Protect " + (root.v2Active ? "V2" : "V1") + " layout"' \
+  'label: "Protect V1"' \
+  'label: "Protect V2"' \
+  'accessibleName: "Protect V1 layout"' \
+  'accessibleName: "Protect V2 layout"' \
   'readonly property bool activeLayoutProtected:' \
+  'readonly property int layoutActionCount:' \
+  'readonly property bool layoutActionLabelsFit:' \
   'function toggleActiveLayoutProtection()' \
-  'Accessible.role: Accessible.CheckBox' \
-  'Accessible.checked: selected' \
+  'component LayoutActionCard: Rectangle' \
+  'Accessible.role: checkable ? Accessible.CheckBox : Accessible.Button' \
+  'Accessible.checked: checkable && selected' \
+  'width: (parent.width - parent.spacing * 2) / 3' \
   'id: reactorRepeater'; do
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
     || fail "active Bars drill-down drifted: $route_contract"
@@ -810,13 +818,13 @@ if [[ -z "$split_row_line" || -z "$position_row_line" \
     || "$split_row_line" -ge "$position_row_line" ]]; then
   fail "V1 split actions are no longer placed above bar position"
 fi
-if rg -q 'SLOT CAPACITY|V2 LAYOUT|v2SlotRepeater|controller\.(add|remove)V2Slot|Add slots and place dividers directly' \
+if rg -q 'SLOT CAPACITY|v2SlotRepeater|controller\.(add|remove)V2Slot|Add slots and place dividers directly' \
     "$control_dir/ActiveBarSettingsPage.qml"; then
   fail "Bars reintroduced redundant V2 layout or slot-capacity copy"
 fi
-if rg -q 'Choose the active V2 shape|V1 uses the Islands form' \
+if rg -q 'Choose the active V2 shape|V1 uses the Islands form|V1 supports positional slots' \
     "$control_dir/ActiveBarSettingsPage.qml"; then
-  fail "Bars reintroduced redundant copy below Bar Form"
+  fail "Bars reintroduced redundant copy below Bar Form or Layout"
 fi
 for v1_slot_contract in \
   'ControlCenterPanel.qml:v1LayoutSlots' \
@@ -879,7 +887,7 @@ rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
 rg -Fq 'visible: root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 slot and divider controls are not capability-gated"
-rg -Fq 'detail: "Add slots and place dividers"' \
+rg -Fq 'accessibleDescription: "Add slots and place V2 dividers"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 edit mode does not explain its layout capability"
 
@@ -1599,7 +1607,7 @@ rg -Fq 'function beginBarEditing()' \
 rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V1-only split and gap controls are not capability-gated"
-rg -Fq 'detail: "Add slots and place dividers"' \
+rg -Fq 'accessibleDescription: "Add slots and place V2 dividers"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 layout action does not explain its capability contract"
 if rg -Fq 'label: "Group separator"' "$control_dir/BarFunctionsPage.qml"; then
@@ -1841,6 +1849,17 @@ for icons_drilldown_contract in \
   label=${icons_drilldown_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
     || fail "Icons drill-down contract drifted: $label"
+done
+for bars_height_contract in \
+    'ControlSettings.qml:readonly property bool compactBarsPage:' \
+    'ControlSettings.qml:configureDetailPage === "bars"' \
+    'ControlSettings.qml:readonly property real compactBarsPanelHeight:' \
+    'ControlCenterPanel.qml:: settings.compactBarsPage' \
+    'ControlCenterPanel.qml:? fittedContentHeight(settings.compactBarsPanelHeight,'; do
+  file=${bars_height_contract%%:*}
+  label=${bars_height_contract#*:}
+  rg -Fq "$label" "$control_dir/$file" \
+    || fail "Bars no-scroll panel-height contract drifted: $label"
 done
 for icons_height_contract in \
     'WidgetAppearanceWorkbench.qml:readonly property int overviewRowCount:' \
