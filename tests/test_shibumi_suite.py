@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -970,8 +971,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.7")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.7")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.8")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.8")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -990,8 +991,97 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.7")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.8")
         self.assertNotIn("sourceRoot", package_state)
+
+    def test_sandbox_update_advances_beta_7_to_beta_8(self) -> None:
+        beta7_source = self.root / "beta7-source"
+        beta7_source.mkdir()
+        archive = subprocess.run(
+            [
+                "git",
+                "archive",
+                "--format=tar",
+                "v0.1.1-beta.7",
+                "contracts/plugin-suite-v1.json",
+                *self.suite.plugins.keys(),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as stream:
+            stream.extractall(beta7_source, filter="data")
+        beta7_suite = Suite.load(beta7_source)
+        control_id = "hancore.shibumi.control-center"
+        self.assertEqual(beta7_suite.version, "0.1.1-beta.7")
+        self.assertNotIn("service", beta7_suite.plugins[control_id].kinds)
+        self.assertIn("service", self.suite.plugins[control_id].kinds)
+        self.assertNotEqual(
+            beta7_suite.plugins[control_id].payload_digest(),
+            self.suite.plugins[control_id].payload_digest(),
+        )
+
+        self.assertEqual(
+            command_install(self.args(), beta7_suite, self.paths, self.runtime),
+            0,
+        )
+        config = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        config["bar"].setdefault("shibumi", {})["layoutProtection"] = {
+            "v1": True,
+            "v2": False,
+        }
+        atomic_write(self.paths.config_file, encode_config(config))
+        state_before = self.managed_state_snapshot()
+        activity_before = self.runtime_activity_snapshot()
+        self.assertEqual(self.hidden_transaction_paths(), [])
+
+        self.assertEqual(
+            command_update(
+                self.args(dry_run=True),
+                self.suite,
+                self.paths,
+                self.runtime,
+            ),
+            0,
+        )
+        self.assertEqual(self.managed_state_snapshot(), state_before)
+        self.assertEqual(self.runtime_activity_snapshot(), activity_before)
+        self.assertEqual(self.hidden_transaction_paths(), [])
+
+        self.assertEqual(
+            command_update(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        updated = load_install_state(self.paths, self.suite)
+        updated_config = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        expected_digests = {
+            plugin_id: spec.payload_digest()
+            for plugin_id, spec in self.suite.plugins.items()
+        }
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.8")
+        self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
+        self.assertEqual(updated["pluginDigests"], expected_digests)
+        self.assertEqual(len(updated["plugins"]), 24)
+        self.assertEqual(
+            updated_config["bar"]["shibumi"]["layoutProtection"],
+            {"v1": True, "v2": False},
+        )
+        control_plugin = self.runtime.list_plugins()[control_id]
+        self.assertTrue(control_plugin["enabled"])
+        self.assertIn("service", control_plugin["kinds"])
+        self.assertEqual(self.hidden_transaction_paths(), [])
+        for plugin_id in updated["plugins"]:
+            manifest = json.loads(
+                (self.paths.plugin_dir / plugin_id / "manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["version"], "0.1.1-beta.8")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -1199,7 +1289,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.7+installed.7"
+                state["suiteVersion"] = "0.1.1-beta.8+installed.8"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -1208,7 +1298,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.7")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.8")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -1271,9 +1361,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.7")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.7")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.7")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.8")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.8")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.8")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

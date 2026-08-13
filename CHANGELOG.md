@@ -2,6 +2,34 @@
 
 This changelog records user-visible Shibumi changes.
 
+## 0.1.1-beta.8: Layout protection and update hardening
+
+Release candidate for 2026-08-13.
+
+### Added
+
+- Added independent, opt-in V1 and V2 layout locks with each generation's edit mode retained as a temporary override
+- Added V1/V2 widget appearance controls, reset actions, and clearer cross-section transfer controls
+- Added Omarchy Agents usage support and third-party plugin update visibility
+
+### Changed
+
+- Compacted each Bars layout section into a no-scroll Edit, Lock, and Restore row with matching V1/V2 headings and a visible lock toggle
+- Refined telemetry units, widget spacing, theme-update actions, and plugin-update labels and review status
+- Scoped OpenCode usage to the current day while retaining ready Agents providers without current usage
+
+### Fixed
+
+- Kept Shibumi bars opaque without changing or materializing Omarchy's `bar.transparent` preference
+- Drained the managed Quickshell process before payload swaps and blocked updates while the session lock is active
+- Enforced exclusive bar-widget ownership and hardened group teardown across output lifecycle changes
+- Restored the Omarchy plugin diff pager and kept update panels from covering launched review or updater actions
+
+### Known limits
+
+- Physical mixed-scale multi-monitor, enterprise Wi-Fi, remaining device-backed Bluetooth, clean-chroot packaging, and safe nested-compositor lifecycle acceptance remain external stable gates
+- AUR publication remains unavailable until the package name can be registered
+
 ## 0.1.1-beta.7: Network label stability
 
 Release candidate for 2026-08-07.

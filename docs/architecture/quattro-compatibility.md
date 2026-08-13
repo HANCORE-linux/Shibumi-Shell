@@ -1,6 +1,6 @@
 # Shibumi host compatibility record
 
-Status: beta-candidate reference (updated 2026-08-04)
+Status: beta-candidate reference (updated 2026-08-13)
 
 Shibumi Shell is built exclusively for Omarchy Quattro. This record ties each
 Shibumi candidate to a measured host baseline. Versions not listed here have
@@ -8,23 +8,25 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.7` candidate is reviewed against this internal validation
+The `0.1.1-beta.8` candidate is reviewed against this internal validation
 baseline:
 
 | Component | Observed value |
 | --- | --- |
-| Omarchy package | `omarchy-dev 4.0.0.r1508.g12af188-1` |
-| Omarchy source revision | `12af188` (encoded in the package version) |
+| Omarchy package reference | `omarchy-dev 4.0.0.r1508.g12af188-1` |
+| Immutable source-parity revision | `12af188304793b65551b5c43d20f02961dc938a9` |
+| Immutable forward-compatibility revision | `fd1034f71b16aa45d5431ab41ed9e48c89fdac8e` |
 | Quickshell package | `quickshell-git 0.3.0.r18.g10b439f-3` |
-| Omarchy path | `/usr/share/omarchy` |
-| Validation date | 2026-08-04 |
+| Validation date | 2026-08-13 |
 
-The validation system uses the development package, which declares
-`provides = omarchy`.
-It therefore satisfies the Arch package dependency while retaining the exact
-host-build record above.
+The package reference declares `provides = omarchy` and remains the accepted
+host-build identity. For beta.8, the complete immutable source-parity checkout
+at the same `12af188` revision and the separate `fd1034f` forward snapshot pass.
+The mutable `/usr/share/omarchy` tree currently has 214 shell inventory entries
+instead of the package baseline's 208, so its installed-package rerun is
+externally blocked and is not beta.8 evidence.
 
-The package-managed host files are the authoritative production baseline:
+The package-managed baseline records these authoritative production anchors:
 
 | Contract-sensitive file | SHA-256 |
 | --- | --- |

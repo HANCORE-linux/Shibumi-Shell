@@ -1,8 +1,8 @@
-# Is Shibumi 0.1.1-beta.7 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.8 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.7` is an automated prerelease candidate. Its complete
+Shibumi `0.1.1-beta.8` is an automated prerelease candidate. Its complete
 contract is revision-bound across the installed-package, installed-source-parity,
 and forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
@@ -30,24 +30,27 @@ no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 
-The beta.7 working-tree candidate plus explicitly retained beta.5 and beta.6
-acceptance currently provide these results. Rows marked historical do not become
-beta.7 evidence until the revision-bound release collector reruns them:
+The beta.8 source candidate plus explicitly retained prior acceptance currently
+provides these results. Rows marked historical do not become beta.8 evidence
+until the revision-bound release collector reruns them:
 
 | Gate | Result |
 | --- | --- |
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Passed against `4.0.0.r1508.g12af188-1` |
+| Quattro compatibility | Passed through the immutable `12af188` source-parity checkout; the mutable installed-package rerun is blocked by host inventory drift |
 | Plugin validation and self-containment | Passed for all 24 plugins |
-| Complete repository contract | Passed against the installed package baseline; source-parity and forward-compatibility are separate required jobs |
-| Suite lifecycle unit tests | Passed: 77 of 77 |
+| Complete installed-package contract | Blocked externally: `/usr/share/omarchy` has 214 shell inventory entries while the immutable `12af188` package baseline declares 208; not beta.8 evidence |
+| Complete installed-source-parity contract | Passed against immutable `12af188304793b65551b5c43d20f02961dc938a9` |
+| Complete forward-compatibility contract | Passed against immutable `fd1034f71b16aa45d5431ab41ed9e48c89fdac8e` |
+| Agents integration contract | Passed against immutable `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
+| Suite lifecycle unit tests | Passed: 99 of 99 |
 | Control Center manager tests | Passed: 29 of 29 |
 | Health tests | Passed: 31 of 31 |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Working-tree beta.7 pass for all 24 plugins on two physical systems; clean-commit collector still required |
+| Transactional live update | Beta.7 to beta.8 sandbox pass plus prior physical source passes; exact release-commit live acceptance and clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.state",
   "name": "Shibumi State",
-  "version": "0.1.1-beta.7",
+  "version": "0.1.1-beta.8",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Normalized Shibumi configuration and theme palette state.",

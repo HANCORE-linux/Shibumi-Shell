@@ -1,7 +1,7 @@
 # Maintainer: HANCORE Linux <hancore@users.noreply.github.com>
 pkgname=shibumi-shell
-_upstream_version=0.1.1-beta.7
-_source_sha256=8d3c3ccf4c4a6cc971369ebe07d03b3489b2b73ded5ae3ef18e1963bb5071cf6
+_upstream_version=0.1.1-beta.8
+_source_sha256=b9397c7ab3b14137fb82a849e5840e80fbb1b2e7a3a591a98ae12cde3af53fe9
 pkgver=${_upstream_version//-/}
 pkgrel=1
 pkgdesc="Transactional Shibumi desktop shell plugins for Omarchy Quattro"
