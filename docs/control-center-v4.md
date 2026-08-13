@@ -196,8 +196,12 @@ The bulk Split all and Merge all actions sit directly below Top/Bottom in the
 V1 `Position & Layout` column, using the height beside V1's three surface rows
 instead of consuming another full-width row below.
 V2 exposes a single bar edit mode for adding slots and placing dividers, plus
-layout restore. Bars does not duplicate slot-capacity controls in a second
-editor. V2 never exposes V1 gap-animation or split-island controls. The former
+layout restore. V1 and V2 each retain an independent **Protect layout**
+preference on their active Bars page. Both default off. When enabled, direct
+split, divider, and section-boundary clicks require the matching edit mode;
+leaving edit mode restores protection without disabling deliberate Bars-page
+bulk or restore actions. Bars does not duplicate slot-capacity controls in a
+second editor. V2 never exposes V1 gap-animation or split-island controls. The former
 Layout deep links remain compatible by resolving directly to Bars; there is no
 second Layout editor in Configure, search, Icons, or Bars navigation.
 
@@ -246,6 +250,7 @@ The Bars page selects its layout section from the active Shibumi presentation:
 | Locked base slots | `7 / 1 / 7` | Yes |
 | Optional outer slots | Up to two per side | Style-defined capacity |
 | Persistent manual dividers | No | Yes |
+| Independent direct-edit protection | Yes | Yes |
 | Restore active layout | Yes | Yes |
 
 V1 controls are not merely described as incompatible on V2: they are removed

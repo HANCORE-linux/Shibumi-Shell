@@ -33,6 +33,10 @@ Item {
     return effective
   }
   readonly property var workspaceConfig: stateConfig.workspace || ({})
+  readonly property var layoutProtection: stateConfig.layoutProtection
+    || ({ v1: false, v2: false })
+  readonly property bool v1LayoutProtected: layoutProtection.v1 === true
+  readonly property bool v2LayoutProtected: layoutProtection.v2 === true
   readonly property var pluginConfig: stateConfig.plugins || ({})
   readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
     ? pluginConfig.favorites : []
@@ -384,6 +388,12 @@ Item {
         && typeof restoreBar.cancelWidgetRestore === "function")
       restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
     return changed
+  }
+
+  function setLayoutProtection(variant, enabled) {
+    return stateService
+      && typeof stateService.setLayoutProtection === "function"
+      ? stateService.setLayoutProtection(variant, enabled) : false
   }
 
   function setBarVariant(target) {

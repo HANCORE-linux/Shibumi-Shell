@@ -29,6 +29,10 @@ Column {
       ? activeStyle.charAt(0).toUpperCase() + activeStyle.slice(1)
         + " · slots and dividers"
       : "Split islands, slots and layout"
+  readonly property string activeVariant: v2Active ? "v2" : "v1"
+  readonly property bool activeLayoutProtected: v2Active
+    ? controller.v2LayoutProtected === true
+    : controller.v1LayoutProtected === true
   readonly property var shellStyleOptions: [
     {
       value: "shibumi", label: "V1 · Islands",
@@ -84,6 +88,12 @@ Column {
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
+
+  function toggleActiveLayoutProtection() {
+    return shibumiActive
+      && controller.setLayoutProtection(
+        activeVariant, !activeLayoutProtected)
+  }
 
   Rectangle {
     width: parent.width
@@ -275,6 +285,23 @@ Column {
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
+  }
+
+  LayoutProtectionToggle {
+    id: protectionToggle
+    width: parent.width
+    visible: root.shibumiActive && root.mainSettingsVisible
+    controller: root.controller
+    label: "Protect " + (root.v2Active ? "V2" : "V1") + " layout"
+    detail: root.activeLayoutProtected
+      ? root.v2Active
+        ? "Use Edit layout to change dividers"
+        : "Use Edit slots to change splits"
+      : "Direct bar changes are allowed"
+    selected: root.activeLayoutProtected
+    foreground: root.foreground
+    accent: root.accent
+    onClicked: root.toggleActiveLayoutProtection()
   }
 
   Column {
@@ -592,6 +619,120 @@ Column {
     Keys.onReturnPressed: gapChoice.clicked()
     Keys.onEnterPressed: gapChoice.clicked()
     Keys.onSpacePressed: gapChoice.clicked()
+  }
+
+  component LayoutProtectionToggle: Rectangle {
+    id: layoutToggle
+
+    required property var controller
+    property string label: ""
+    property string detail: ""
+    property bool selected: false
+    property color foreground: "white"
+    property color accent: "white"
+    signal clicked()
+
+    height: Commons.Style.space(50)
+    activeFocusOnTab: true
+    Accessible.role: Accessible.CheckBox
+    Accessible.name: label
+    Accessible.description: detail
+    Accessible.checked: selected
+    radius: controller.controlRadius
+    color: togglePointer.containsMouse
+      ? controller.controlHoverFillColor : controller.controlFillColor
+    border.width: controller.controlBorderWidth
+    border.color: selected || activeFocus ? accent
+      : togglePointer.containsMouse
+        ? controller.controlHoverBorderColor : controller.controlBorderColor
+
+    IconText {
+      id: protectionGlyph
+      anchors.left: parent.left
+      anchors.leftMargin: Commons.Style.space(9)
+      anchors.verticalCenter: parent.verticalCenter
+      width: Commons.Style.space(20)
+      text: layoutToggle.selected ? "lock" : "lock_open"
+      color: layoutToggle.selected
+        ? layoutToggle.accent : layoutToggle.foreground
+      horizontalAlignment: Text.AlignHCenter
+      font.pixelSize: Commons.Style.font.iconLarge * root.uiScale
+      fill: layoutToggle.selected ? 1 : 0
+    }
+
+    Column {
+      anchors.left: protectionGlyph.right
+      anchors.right: protectionTrack.left
+      anchors.leftMargin: Commons.Style.space(8)
+      anchors.rightMargin: Commons.Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 0
+
+      Text {
+        width: parent.width
+        text: layoutToggle.label
+        color: layoutToggle.foreground
+        elide: Text.ElideRight
+        font.family: layoutToggle.controller.marketFont
+        font.pixelSize: Commons.Style.font.bodySmall * root.uiScale
+        font.weight: Font.DemiBold
+      }
+
+      Text {
+        width: parent.width
+        text: layoutToggle.detail
+        color: layoutToggle.foreground
+        opacity: 0.42
+        elide: Text.ElideRight
+        font.family: layoutToggle.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+      }
+    }
+
+    Rectangle {
+      id: protectionTrack
+      anchors.right: parent.right
+      anchors.rightMargin: Commons.Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      width: Commons.Style.space(34)
+      height: Commons.Style.space(18)
+      radius: height / 2
+      color: layoutToggle.selected
+        ? Commons.Util.alpha(layoutToggle.accent, 0.30)
+        : Commons.Util.alpha(layoutToggle.foreground, 0.08)
+      border.width: 1
+      border.color: layoutToggle.selected
+        ? Commons.Util.alpha(layoutToggle.accent, 0.76)
+        : layoutToggle.controller.controlBorderColor
+
+      Rectangle {
+        width: Commons.Style.space(12)
+        height: width
+        radius: width / 2
+        x: layoutToggle.selected
+          ? parent.width - width - Commons.Style.space(3)
+          : Commons.Style.space(3)
+        anchors.verticalCenter: parent.verticalCenter
+        color: layoutToggle.selected
+          ? layoutToggle.accent : layoutToggle.foreground
+        opacity: layoutToggle.selected ? 1 : 0.58
+      }
+    }
+
+    MouseArea {
+      id: togglePointer
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: {
+        layoutToggle.forceActiveFocus()
+        layoutToggle.clicked()
+      }
+    }
+
+    Keys.onReturnPressed: layoutToggle.clicked()
+    Keys.onEnterPressed: layoutToggle.clicked()
+    Keys.onSpacePressed: layoutToggle.clicked()
   }
 
   component ActionCard: Rectangle {

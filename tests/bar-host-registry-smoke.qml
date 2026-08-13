@@ -99,6 +99,7 @@ ShellRoot {
     })
     readonly property color selectedColor: "#55aa77"
     property bool rejectGroupVariantStates: false
+    property int separatorToggleCount: 0
     readonly property var appearanceKeys: [
       "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth", "widgetBorderColor",
@@ -200,6 +201,18 @@ ShellRoot {
       if (!settings.appearance[variant]) settings.appearance[variant] = ({})
       if (settings.appearance[variant][key] === value) return false
       settings.appearance[variant][key] = value
+      publishConfig(next)
+      return true
+    }
+
+    function toggleGroupSeparator(groupId) {
+      const group = String(groupId || "")
+      if (group === "") return false
+      const next = JSON.parse(JSON.stringify(config))
+      if (!next.widgets) next.widgets = ({})
+      if (!next.widgets[group]) next.widgets[group] = ({})
+      next.widgets[group].separator = next.widgets[group].separator !== true
+      separatorToggleCount++
       publishConfig(next)
       return true
     }
@@ -864,6 +877,20 @@ ShellRoot {
           || stateService.config.widgets.G1.separator !== true) {
         return root.fail("shared appearance IPC compatibility")
       }
+      if (!hostBar.toggleGroupSeparator("G1")
+          || stateService.separatorToggleCount !== 1
+          || stateService.config.widgets.G1.separator !== false)
+        return root.fail("unprotected V2 separator route")
+      const protectedLayout = JSON.parse(JSON.stringify(stateService.config))
+      protectedLayout.layoutProtection = { v1: false, v2: true }
+      stateService.config = protectedLayout
+      if (!hostBar.layoutController.activeLayoutProtected
+          || hostBar.toggleGroupSeparator("G1")
+          || stateService.separatorToggleCount !== 1
+          || !hostBar.toggleGroupSeparator("G1", true)
+          || stateService.separatorToggleCount !== 2
+          || stateService.config.widgets.G1.separator !== true)
+        return root.fail("protected V2 separator edit override")
 
       hostBar.requestPopout(outputAFirst, "DP-1")
       hostBar.requestPopout(outputBFirst, "HDMI-A-1")

@@ -87,9 +87,17 @@ for edit_contract in \
   rg -Fq "$edit_contract" styles/shibumi/BarSurface.qml \
     || fail "edit-mode frame drifted from V1: $edit_contract"
 done
-rg -Fq 'enabled: root ? root.persistentSeparators || !root.v2Mode : false' \
-  styles/shibumi/GroupSection.qml \
-  || fail "within-region separators are not live in V1 and persistent in V2"
+for protection_contract in \
+  'readonly property bool separatorChangesAllowed: editing || !layoutProtected' \
+  'if (!separatorChangesAllowed) return false' \
+  'enabled: root ? root.persistentSeparators || !root.v2Mode : false' \
+  'hoverEnabled: root ? root.separatorChangesAllowed : false' \
+  'readonly property int enabledSeparatorHitTargetCount:' \
+  'bar.toggleGroupSeparator(String(groupId || ""), editing)' \
+  'bar.layoutController.toggleSplit(region, Number(index), editing)'; do
+  rg -Fq "$protection_contract" styles/shibumi/GroupSection.qml \
+    || fail "within-region layout protection drifted: $protection_contract"
+done
 for stable_group_contract in \
   'ListModel { id: stableGroupModel }' \
   'function syncStableGroups()' \
@@ -110,7 +118,6 @@ rg -Uq 'onClicked: \{\n[[:space:]]*if \(root\) root\.toggleSeparator\(' \
   || fail "within-region markers do not use the guarded interaction route"
 for v1_edit_interaction_contract in \
   'return !v2Mode && bar.layoutController' \
-  'bar.layoutController.toggleSplit(region, Number(index))' \
   'function onSlotEditingChanged()' \
   'enabled: root ? !root.slotEditing : false'; do
   rg -Fq "$v1_edit_interaction_contract" styles/shibumi/GroupSection.qml \
@@ -155,9 +162,14 @@ for v1_slot_contract in \
   rg -Fq "$v1_slot_contract" styles/shibumi/GroupSection.qml \
     || fail "V1 editable slot proxy drifted: $v1_slot_contract"
 done
-rg -Fq 'enabled: true' \
-  styles/shibumi/BarSurface.qml \
-  || fail "boundary separators are not live in V1 and locked V2 modes"
+for boundary_protection_contract in \
+  'readonly property bool layoutChangesAllowed:' \
+  'if (!root.layoutChangesAllowed) return false' \
+  'enabled: root.layoutChangesAllowed' \
+  'root.layoutSession && root.layoutSession.editing'; do
+  rg -Fq "$boundary_protection_contract" styles/shibumi/BarSurface.qml \
+    || fail "boundary layout protection drifted: $boundary_protection_contract"
+done
 for v1_boundary_contract in \
   'visible: root.bar.layoutController.v2Mode !== true' \
   '&& boundaryMarker.splitOn ? "│" : "•"'; do

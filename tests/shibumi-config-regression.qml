@@ -53,6 +53,9 @@ TestCase {
       fail("invalid default picker state")
     if (defaults.reactor.mode !== 0)
       fail("reactor must default to zero-work mode 0")
+    if (defaults.layoutProtection.v1 !== false
+        || defaults.layoutProtection.v2 !== false)
+      fail("layout protection must preserve live editing by default")
     if (!defaults.widgets.G7 || defaults.widgets.G7.enabled !== false
         || !defaults.widgets.G14 || defaults.widgets.G14.enabled !== false
         || !defaults.widgets.G15 || defaults.widgets.G15.enabled !== false
@@ -152,7 +155,8 @@ TestCase {
         imageStyle: "omarchy",
         mediaStyle: "hearthstone"
       },
-      reactor: { mode: 7 }
+      reactor: { mode: 7 },
+      layoutProtection: { v1: true, v2: false }
     })
     if (valid.order.left[0] !== "G7" || valid.order.left[6] !== "G1")
       fail("valid order was not retained")
@@ -289,6 +293,16 @@ TestCase {
       fail("picker presentation was not normalized")
     if (valid.reactor.mode !== 7)
       fail("reactor mode was not normalized")
+    if (valid.layoutProtection.v1 !== true
+        || valid.layoutProtection.v2 !== false)
+      fail("V1/V2 layout protection was not retained independently")
+    const unsafeProtection = Config.normalize({
+      version: 1,
+      layoutProtection: { v1: "true", v2: 1 }
+    })
+    if (unsafeProtection.layoutProtection.v1 !== false
+        || unsafeProtection.layoutProtection.v2 !== false)
+      fail("non-boolean layout protection did not fail closed")
 
     const carousel = Config.normalize({
       version: 1,

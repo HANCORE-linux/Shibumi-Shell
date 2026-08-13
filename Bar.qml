@@ -221,10 +221,11 @@ Item {
       ? layoutStateController.setAllSplits(value) : false
   }
 
-  function toggleGroupSeparator(groupId) {
+  function toggleGroupSeparator(groupId, editingValue) {
     const state = pluginService("hancore.shibumi.state")
-    return layoutStateController.v2Mode && state
-      && typeof state.toggleGroupSeparator === "function"
+    return layoutStateController.v2Mode
+      && layoutStateController.interactiveMutationAllowed(editingValue)
+      && state && typeof state.toggleGroupSeparator === "function"
       ? state.toggleGroupSeparator(String(groupId || "")) : false
   }
 

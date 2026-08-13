@@ -14,6 +14,12 @@ Item {
   readonly property bool v2Mode: config && config.presentation
     ? String(config.presentation.shellStyle || "shibumi") !== "shibumi"
     : false
+  readonly property var layoutProtection: config && config.layoutProtection
+    ? config.layoutProtection : ({ v1: false, v2: false })
+  readonly property bool v1LayoutProtected: layoutProtection.v1 === true
+  readonly property bool v2LayoutProtected: layoutProtection.v2 === true
+  readonly property bool activeLayoutProtected: v2Mode
+    ? v2LayoutProtected : v1LayoutProtected
   readonly property var v1Slots: LayoutModel.validOrder(
     config ? config.order : null)
     ? LayoutModel.copyOrder(config.order) : LayoutModel.defaultOrder()
@@ -38,6 +44,10 @@ Item {
   visible: false
   width: 0
   height: 0
+
+  function interactiveMutationAllowed(editingValue) {
+    return editingValue === true || !activeLayoutProtected
+  }
 
   function groupLocation(groupId) {
     return v2Mode
@@ -191,7 +201,8 @@ Item {
     return next ? stateService.setV2Layout(next) : false
   }
 
-  function toggleSplit(region, index) {
+  function toggleSplit(region, index, editingValue) {
+    if (!interactiveMutationAllowed(editingValue)) return false
     if (v2Mode && String(region || "") === "boundaries")
       return stateService
         && typeof stateService.toggleV2Boundary === "function"

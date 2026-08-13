@@ -102,6 +102,21 @@ ShellRoot {
             || !Array.isArray(state.config.v2Boundaries)
             || state.config.v2Boundaries.length !== 2)
           return root.fail("V2 slot defaults")
+        if (state.config.layoutProtection.v1
+            || state.config.layoutProtection.v2
+            || !state.setLayoutProtection("v1", true)
+            || state.setLayoutProtection("v1", true)
+            || !state.config.layoutProtection.v1
+            || state.config.layoutProtection.v2
+            || !state.setLayoutProtection("v2", true)
+            || !state.config.layoutProtection.v2
+            || !state.setLayoutProtection("v2", false)
+            || state.config.layoutProtection.v2
+            || state.setLayoutProtection("v3", true)
+            || state.setLayoutProtection("v1", "true")
+            || fakeShell.writes !== 3)
+          return root.fail("V1/V2 layout protection isolation")
+        fakeShell.writes = 0
         if (state.setGroupSetting("BAD", "compact", true)
             || fakeShell.writes !== 0)
           return root.fail("invalid group mutation")
@@ -315,6 +330,9 @@ ShellRoot {
         if (!state.setReactorMode(8) || state.setReactorMode(9)
             || state.config.reactor.mode !== 8)
           return root.fail("reactor mutation validation")
+        if (state.config.layoutProtection.v1 !== true
+            || state.config.layoutProtection.v2 !== false)
+          return root.fail("layout protection was not retained across commits")
 
         root.revisionBeforeExternalChange = state.revision
         fakeShell.shellConfig = {
@@ -328,6 +346,8 @@ ShellRoot {
       if (state.config.reactor.mode !== 2
           || state.config.presentation.radius !== "large"
           || state.config.presentation.accent !== "color01"
+          || state.config.layoutProtection.v1
+          || state.config.layoutProtection.v2
           || state.revision <= root.revisionBeforeExternalChange)
         return root.fail("external shell config reactivity")
 

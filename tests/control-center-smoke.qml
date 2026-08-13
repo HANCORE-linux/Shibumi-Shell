@@ -255,7 +255,9 @@ ShellRoot {
             || !panel.setWorkspacePreference("mode", "5")
             || !panel.setImagePickerStyle("tanzaku")
             || !panel.setMediaPickerStyle("hearthstone")
-            || !panel.setReactorMode(8))
+            || !panel.setReactorMode(8)
+            || !panel.setLayoutProtection("v1", true)
+            || panel.setLayoutProtection("v3", true))
           return root.fail("state mutation facade rejected valid values")
 
         if (stateService.groupAppearanceSettingForVariant(
@@ -270,7 +272,9 @@ ShellRoot {
             || stateService.config.picker.mediaStyle !== "hearthstone"
             || stateService.config.picker.style !== "hearthstone"
             || stateService.config.reactor.mode !== 8
-            || fakeShell.writes !== 7)
+            || panel.v1LayoutProtected !== true
+            || panel.v2LayoutProtected !== false
+            || fakeShell.writes !== 8)
           return root.fail("state mutations did not persist")
 
         if (!panel.setBarPosition("bottom")
@@ -298,7 +302,7 @@ ShellRoot {
             || fakeBar.restoredPage !== "functions"
             || !fakeBar.restoreNeedsReplacement
             || stateService.config.presentation.shellStyle !== "full"
-            || fakeShell.writes !== 10)
+            || fakeShell.writes !== 11)
           return root.fail("bar presentation changes did not preserve the open page"
             + " restore=" + fakeBar.restoreWrites
             + " id=" + fakeBar.restoredWidgetId
@@ -976,7 +980,8 @@ ShellRoot {
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 0
               || panel.settingsPageItem.splitActionPreviewCount !== 0
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 0
-              || panel.settingsPageItem.childRouteAvailable)
+              || panel.settingsPageItem.childRouteAvailable
+              || panel.settingsPageItem.activeLayoutProtected)
             return root.fail("V2 exposed V1 Bar Surface settings"
               + " effects=" + (panel && panel.settingsPageItem
                 ? panel.settingsPageItem.surfaceEffectOptionCount : "missing")
@@ -986,12 +991,17 @@ ShellRoot {
               + " page-v2=" + (panel && panel.settingsPageItem
                 ? panel.settingsPageItem.v2Active : "missing")
               + " shell=" + (panel ? panel.activeShell : "missing"))
+          if (!panel.settingsPageItem.toggleActiveLayoutProtection()
+              || stateService.config.layoutProtection.v2 !== true
+              || !panel.settingsPageItem.activeLayoutProtected)
+            return root.fail("V2 layout protection toggle did not persist")
           panel.v2LayoutActive = false
           if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 3
               || panel.settingsPageItem.splitActionPreviewCount !== 2
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
               || !panel.settingsPageItem.childRouteAvailable
+              || !panel.settingsPageItem.activeLayoutProtected
               || panel.settingsPageItem.childRouteLabel !== "Gap Animations"
               || !panel.showSettingsPage("bars-motion"))
             return root.fail("V1 Gap Animations child route was unavailable")

@@ -85,6 +85,11 @@ baseline.
   `G9, G10, G11, G14, G12, G13, G15` on the right.
 - All split boundaries start disabled. Split markers, drag targets, invalid
   returns, persistence, and geometry must retain the V1 behavior.
+- V1 and V2 own independent optional layout-protection preferences. Both
+  default off to preserve direct live editing. When protection is enabled for
+  the active generation, direct split, divider, and section-boundary clicks on
+  the bar require that output's explicit edit mode; the Control Center's
+  deliberate bulk and restore actions remain available.
 - G7 AI usage, G14 power profile, and G15 Bluetooth start disabled. Other
   groups start enabled. Hardware-dependent widgets may remain hidden when the
   required hardware is absent.

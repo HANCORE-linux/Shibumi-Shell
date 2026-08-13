@@ -39,6 +39,16 @@ Item {
     function resetLayout() {
       return setLayout(ShibumiConfig.defaultOrder(), ShibumiConfig.defaultSplits())
     }
+
+    function toggleV2Boundary(indexValue) {
+      const index = Number(indexValue)
+      if (!Number.isInteger(index) || index < 0 || index > 1) return false
+      const next = ShibumiConfig.normalize(config)
+      next.v2Boundaries[index] = next.v2Boundaries[index] !== true
+      config = ShibumiConfig.normalize(next)
+      root.writes++
+      return true
+    }
   }
 
   Core.LayoutController {
@@ -146,6 +156,21 @@ Item {
     if (!firstScreen.begin("G3") || firstScreen.updateTarget("G3")
         || firstScreen.updateTarget("G99") || firstScreen.drop())
       fail("invalid drag target handling")
+
+    let protectedState = ShibumiConfig.normalize(fakeStateService.config)
+    protectedState.layoutProtection.v1 = true
+    fakeStateService.config = ShibumiConfig.normalize(protectedState)
+    if (!controller.activeLayoutProtected
+        || controller.interactiveMutationAllowed(false)
+        || !controller.interactiveMutationAllowed(true)
+        || controller.toggleSplit("left", 0)
+        || !controller.toggleSplit("left", 0, true)
+        || !controller.toggleSplit("left", 0, true))
+      fail("protected V1 split mutation bypassed edit mode")
+    protectedState = ShibumiConfig.normalize(fakeStateService.config)
+    protectedState.layoutProtection.v1 = false
+    fakeStateService.config = ShibumiConfig.normalize(protectedState)
+
     if (!controller.toggleSplit("left", 0)
         || !controller.splitEnabled("left", 0)
         || controller.toggleSplit("left", 6))
@@ -183,7 +208,7 @@ Item {
         || !same(controller.order, ShibumiConfig.defaultOrder())
         || !same(controller.splits, ShibumiConfig.defaultSplits()))
       fail("V1 empty-slot swap/remove transaction")
-    if (root.writes !== 11)
+    if (root.writes !== 13)
       fail("unexpected persistence count " + root.writes)
 
     if (!controller.reconcileV1PluginGroups([
@@ -206,8 +231,21 @@ Item {
         || !controller.reconcileV1PluginGroups([])
         || !same(controller.order, ShibumiConfig.defaultOrder())
         || !same(controller.splits, ShibumiConfig.defaultSplits())
-        || root.writes !== 15)
+        || root.writes !== 17)
       fail("V1 plugin-group lifecycle transaction")
+
+    const protectedV2State = ShibumiConfig.normalize(fakeStateService.config)
+    protectedV2State.presentation.shellStyle = "full"
+    protectedV2State.layoutProtection.v2 = true
+    fakeStateService.config = ShibumiConfig.normalize(protectedV2State)
+    if (!controller.v2Mode || !controller.v2LayoutProtected
+        || !controller.activeLayoutProtected
+        || controller.interactiveMutationAllowed(false)
+        || !controller.interactiveMutationAllowed(true)
+        || controller.toggleSplit("boundaries", 0)
+        || !controller.toggleSplit("boundaries", 0, true)
+        || controller.v2Boundaries[0] !== true)
+      fail("protected V2 interaction state did not activate independently")
 
     console.log("layout controller regression passed")
     Qt.exit(0)

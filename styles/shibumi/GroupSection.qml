@@ -20,6 +20,10 @@ Item {
   readonly property bool v2Editing: editing && v2Mode
   readonly property bool v1Editing: editing && !v2Mode
   readonly property bool slotEditing: v1Editing || v2Editing
+  readonly property bool layoutProtected: bar.layoutController
+    && "activeLayoutProtected" in bar.layoutController
+    && bar.layoutController.activeLayoutProtected === true
+  readonly property bool separatorChangesAllowed: editing || !layoutProtected
   readonly property var groups: v2Mode
     ? v2Editing && bar.layoutController.v2Slots
       ? bar.layoutController.v2Slots[region] || []
@@ -63,6 +67,18 @@ Item {
   readonly property var separatorGeometry: contentItem
     && contentItem.separatorGeometry ? contentItem.separatorGeometry : []
   readonly property int separatorHitTargetCount: separatorHitRepeater.count
+  readonly property int enabledSeparatorHitTargetCount: {
+    void(separatorHitRepeater.count)
+    var enabledCount = 0
+    for (var index = 0; index < separatorHitRepeater.count; index++) {
+      var target = separatorHitRepeater.itemAt(index)
+      if (target) {
+        void(target.enabled)
+        if (target.enabled) enabledCount++
+      }
+    }
+    return enabledCount
+  }
   property string hoveredSeparatorGroupId: ""
   readonly property var stageBudgetWidths: contentItem
     && contentItem.stageBudgetWidths ? contentItem.stageBudgetWidths : [0, 0, 0, 0]
@@ -182,12 +198,13 @@ Item {
   }
 
   function toggleSeparator(groupId, index) {
+    if (!separatorChangesAllowed) return false
     if (persistentSeparators && bar
         && typeof bar.toggleGroupSeparator === "function")
-      return bar.toggleGroupSeparator(String(groupId || ""))
+      return bar.toggleGroupSeparator(String(groupId || ""), editing)
     return !v2Mode && bar.layoutController
       && typeof bar.layoutController.toggleSplit === "function"
-      ? bar.layoutController.toggleSplit(region, Number(index)) : false
+      ? bar.layoutController.toggleSplit(region, Number(index), editing) : false
   }
 
   function groupVisibleAtStage(groupId, stage) {
@@ -233,10 +250,14 @@ Item {
         y: 0
         width: 14
         height: root ? root.height : 0
+        // Keep the hit target active while protected so clicks cannot fall
+        // through the intentionally overlapping divider area to a widget.
+        // toggleSeparator() consumes the click without mutating layout state.
         enabled: root ? root.persistentSeparators || !root.v2Mode : false
-        hoverEnabled: true
+        hoverEnabled: root ? root.separatorChangesAllowed : false
         acceptedButtons: Qt.LeftButton
-        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+        cursorShape: root && root.separatorChangesAllowed
+          ? Qt.PointingHandCursor : Qt.ArrowCursor
 
         onEntered: {
           if (root)

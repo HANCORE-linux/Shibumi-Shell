@@ -201,6 +201,20 @@ for variant_memory_contract in \
   rg -Fq "$label" "$target_file" \
     || fail "V1/V2 style-memory contract drifted: $label"
 done
+for layout_protection_contract in \
+    'ShibumiConfig.js:function defaultLayoutProtectionConfig()' \
+    'Service.qml:function setLayoutProtection(variantValue, enabled)' \
+    'ControlCenterPanel.qml:function setLayoutProtection(variant, enabled)' \
+    'ActiveBarSettingsPage.qml:controller.setLayoutProtection(' \
+    'ActiveBarSettingsPage.qml:? controller.v2LayoutProtected === true' \
+    'ActiveBarSettingsPage.qml:: controller.v1LayoutProtected === true'; do
+  file=${layout_protection_contract%%:*}
+  label=${layout_protection_contract#*:}
+  target_file="$control_dir/$file"
+  [[ -f $target_file ]] || target_file="$repo_root/hancore.shibumi.state/$file"
+  rg -Fq "$label" "$target_file" \
+    || fail "V1/V2 layout protection contract drifted: $label"
+done
 rg -Fq 'restoreBar.scheduleWidgetRestore(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style changes do not preserve the open Control Center page"
@@ -493,7 +507,7 @@ for refined_contract in \
   'ActiveBarSettingsPage.qml:visible: root.v2Active' \
   'ActiveBarSettingsPage.qml:surfaceEffectOptionCount:' \
   'ActiveBarSettingsPage.qml:surfaceRadiusOptionCount:' \
-  'ControlSettings.qml:split gap slots divider separator full fit dock notch'; do
+  'ControlSettings.qml:protect protection lock split gap slots divider separator'; do
   file=${refined_contract%%:*}
   label=${refined_contract#*:}
   rg -Fq "$label" "$control_dir/$file" \
@@ -764,6 +778,11 @@ for route_contract in \
   'label: "Edit slots"' \
   'label: "Edit layout"' \
   'label: "Restore layout"' \
+  'label: "Protect " + (root.v2Active ? "V2" : "V1") + " layout"' \
+  'readonly property bool activeLayoutProtected:' \
+  'function toggleActiveLayoutProtection()' \
+  'Accessible.role: Accessible.CheckBox' \
+  'Accessible.checked: selected' \
   'id: reactorRepeater'; do
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
     || fail "active Bars drill-down drifted: $route_contract"

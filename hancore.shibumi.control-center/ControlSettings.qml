@@ -42,7 +42,8 @@ Item {
   readonly property var settingsSearchEntries: {
     const pageKeywords = {
       bars: "bars shell omarchy shibumi switch continuity layout v1 v2 "
-        + "split gap slots divider separator full fit dock notch position "
+        + "protect protection lock split gap slots divider separator "
+        + "full fit dock notch position "
         + "surface color accent border panel tooltip",
       plugins: "widgets modules plugins add install enable disable remove "
         + "delete provider active available",

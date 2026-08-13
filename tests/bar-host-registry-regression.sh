@@ -62,6 +62,11 @@ for bar_host in \
   rg -Uq 'function setRequestedTransparency\(value\) \{[^}]*return false' \
     "$bar_host" \
     || fail "transparency compatibility method is not a no-op in ${bar_host#$repo_root/}"
+  rg -Fq 'function toggleGroupSeparator(groupId, editingValue)' "$bar_host" \
+    || fail "V2 separator route lacks edit context in ${bar_host#$repo_root/}"
+  rg -Fq 'layoutStateController.interactiveMutationAllowed(editingValue)' \
+    "$bar_host" \
+    || fail "V2 separator route bypasses layout protection in ${bar_host#$repo_root/}"
 done
 
 for bar_surface in \

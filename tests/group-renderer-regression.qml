@@ -193,6 +193,7 @@ ShellRoot {
       property int toggleCount: 0
       property string lastToggleRegion: ""
       property int lastToggleIndex: -1
+      property bool activeLayoutProtected: false
 
       readonly property bool v2Mode: false
       readonly property var order: ({
@@ -270,6 +271,7 @@ ShellRoot {
     QtObject {
       id: v2SplitController
 
+      property bool activeLayoutProtected: false
       readonly property bool v2Mode: true
       readonly property var order: noSplitController.order
 
@@ -643,6 +645,7 @@ ShellRoot {
       id: v2LeftWithSplit
       bar: v2SplitBar
       region: "left"
+      layoutSession: editingSession
     }
 
     ShibumiStyle.GroupSection {
@@ -1057,7 +1060,9 @@ ShellRoot {
           return
         }
         if (leftWithSplit.persistentSeparators
-            || !v2LeftWithSplit.persistentSeparators) {
+            || !v2LeftWithSplit.persistentSeparators
+            || leftWithoutSplit.enabledSeparatorHitTargetCount !== 6
+            || v2LeftWithSplit.enabledSeparatorHitTargetCount !== 6) {
           test.fail("separator visibility must stay transient in Shibumi"
             + " and persist in V2 shell styles")
           return
@@ -1108,6 +1113,30 @@ ShellRoot {
           test.fail("live V1 splits and persistent V2 separators diverged")
           return
         }
+        noSplitController.activeLayoutProtected = true
+        v2SplitController.activeLayoutProtected = true
+        if (leftWithoutSplit.separatorChangesAllowed
+            || v2LeftWithSplit.separatorChangesAllowed
+            || leftWithoutSplit.enabledSeparatorHitTargetCount !== 6
+            || v2LeftWithSplit.enabledSeparatorHitTargetCount !== 6
+            || leftWithoutSplit.toggleSeparator("G1", 0)
+            || v2LeftWithSplit.toggleSeparator("G1", 0)
+            || noSplitController.toggleCount !== 1
+            || v2SplitBar.separatorToggles !== 1) {
+          test.fail("protected layouts accepted direct separator changes")
+          return
+        }
+        editingSession.editing = true
+        if (!leftWithoutSplit.separatorChangesAllowed
+            || !v2LeftWithSplit.separatorChangesAllowed
+            || !leftWithoutSplit.toggleSeparator("G1", 0)
+            || !v2LeftWithSplit.toggleSeparator("G1", 0)
+            || noSplitController.toggleCount !== 2
+            || v2SplitBar.separatorToggles !== 2) {
+          test.fail("edit mode did not override V1/V2 layout protection")
+          return
+        }
+        editingSession.editing = false
 
         if (!test.closeEnough(leftWithoutSplit.implicitWidth, expectedLeft)) {
           test.fail("left group composition: got "

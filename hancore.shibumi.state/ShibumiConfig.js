@@ -67,6 +67,10 @@ function defaultV2Boundaries() {
   return [false, false]
 }
 
+function defaultLayoutProtectionConfig() {
+  return { v1: false, v2: false }
+}
+
 function defaultConfig() {
   return {
     version: SchemaVersion,
@@ -76,6 +80,7 @@ function defaultConfig() {
     splits: defaultSplits(),
     v2Layout: defaultV2Layout(),
     v2Boundaries: defaultV2Boundaries(),
+    layoutProtection: defaultLayoutProtectionConfig(),
     widgets: defaultWidgetConfig(),
     presentation: defaultPresentationConfig(),
     workspace: defaultWorkspaceConfig(),
@@ -469,6 +474,14 @@ function normalizeReactor(value) {
   return result
 }
 
+function normalizeLayoutProtection(value) {
+  var result = defaultLayoutProtectionConfig()
+  if (!isPlainObject(value)) return result
+  if (typeof value.v1 === "boolean") result.v1 = value.v1
+  if (typeof value.v2 === "boolean") result.v2 = value.v2
+  return result
+}
+
 function normalize(value) {
   var result = defaultConfig()
   if (!isPlainObject(value) || Number(value.version) !== SchemaVersion) return result
@@ -487,6 +500,7 @@ function normalize(value) {
   }
   if (v2Layout) result.v2Layout = v2Layout
   if (v2Boundaries) result.v2Boundaries = v2Boundaries
+  result.layoutProtection = normalizeLayoutProtection(value.layoutProtection)
   result.widgets = mergeWidgetConfig(value.widgets)
   result.presentation = normalizePresentation(value.presentation)
   result.workspace = normalizeWorkspace(value.workspace)

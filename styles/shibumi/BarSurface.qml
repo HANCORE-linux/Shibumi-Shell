@@ -24,6 +24,11 @@ Item {
     ? bar.shell.serviceFor("hancore.shibumi.reactor") : null
   readonly property int reactorMode: reactorFacade
     ? Number(reactorFacade.mode || 0) : 0
+  readonly property bool layoutProtected: bar.layoutController
+    && "activeLayoutProtected" in bar.layoutController
+    && bar.layoutController.activeLayoutProtected === true
+  readonly property bool layoutChangesAllowed:
+    layoutSession && layoutSession.editing || !layoutProtected
   focus: layoutSession && layoutSession.editing
 
   Loader {
@@ -187,7 +192,10 @@ Item {
       }
 
       function toggleBoundary(index) {
-        root.bar.layoutController.toggleSplit("boundaries", index)
+        if (!root.layoutChangesAllowed) return false
+        return root.bar.layoutController.toggleSplit(
+          "boundaries", index,
+          root.layoutSession && root.layoutSession.editing)
       }
 
       function updateNarrowStage() {
@@ -465,7 +473,7 @@ Item {
         MouseArea {
           id: boundaryMouse
           anchors.fill: parent
-          enabled: true
+          enabled: root.layoutChangesAllowed
           hoverEnabled: true
           acceptedButtons: Qt.LeftButton
           cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor

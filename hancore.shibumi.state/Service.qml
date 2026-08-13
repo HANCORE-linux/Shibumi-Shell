@@ -389,6 +389,18 @@ Item {
     })
   }
 
+  function setLayoutProtection(variantValue, enabled) {
+    const variant = String(variantValue || "").toLowerCase()
+    if (["v1", "v2"].indexOf(variant) < 0
+        || typeof enabled !== "boolean") return false
+    return commit(function(next) {
+      const protection = ShibumiConfig.normalizeLayoutProtection(
+        next.layoutProtection)
+      protection[variant] = enabled
+      next.layoutProtection = protection
+    })
+  }
+
   function toggleGroupSeparator(groupId) {
     const group = String(groupId || "")
     if (!ShibumiConfig.isGroupId(group)) return false

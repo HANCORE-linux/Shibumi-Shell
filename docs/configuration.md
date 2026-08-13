@@ -27,7 +27,8 @@ and normalizes this branch before using it. It includes:
 - image and media picker styles;
 - the selected thermal sensor and its persisted Celsius or Fahrenheit display;
 - V1 Reactor mode, selected through **Bars → Gap Animations** from nine direct
-  preview tiles.
+  preview tiles;
+- independent V1 and V2 layout-protection preferences.
 
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema.
@@ -67,6 +68,18 @@ up to two additional slots on each outer side. The center cannot be extended.
   split array in the same validated state transaction.
 - **Restore layout** returns V1 to its fixed `7 / 1 / 7` default and removes
   every extra position.
+
+### Layout protection
+
+The Bars page shows **Protect V1 layout** or **Protect V2 layout**, depending
+on the active Shibumi generation. The preferences are independent and default
+to off, preserving direct live editing for existing users.
+
+When protection is on, direct split, divider, and section-boundary clicks on
+the bar are ignored outside **Edit slots** or **Edit layout**. Entering the
+matching edit mode temporarily permits those changes; leaving it with Escape
+or an outside click protects the layout again. Deliberate Control Center
+actions such as Split all, Merge all, and Restore layout remain available.
 
 Existing fixed-layout configurations migrate without changing group order or
 split values. Order, slot roles, and split arrays are accepted as one unit; an
