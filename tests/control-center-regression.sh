@@ -1322,7 +1322,7 @@ for plugin_contract in \
     'controller.restoreShibumiProviders(undoGroups)' \
     'actionLabel: "Add plugin"' \
     'onActionRequested: root.controller.openPluginInstaller()' \
-    'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"' \
+    'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugins"' \
     'secondaryActionGlyph: "refresh"' \
     'secondaryActionStatusText: root.favoritesOnly ? ""' \
     'secondaryActionDescription: root.favoritesOnly ? ""' \

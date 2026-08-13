@@ -324,7 +324,7 @@ chip total therefore does not indicate a catalog mismatch.
 The theme-aware gloss runs once when the page opens and again only after a
 provider count changes; reduced motion keeps a static highlight.
 
-**Check plugin** below **Add plugin** first performs a bounded read-only scan of
+**Check plugins** below **Add plugin** first performs a bounded read-only scan of
 every independently installed Git-managed plugin. A compact text line below
 the button reports the result, for example `0 available`, while the tooltip
 and accessibility description spell out checked, unmanaged, and failed totals

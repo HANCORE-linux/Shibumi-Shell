@@ -475,7 +475,7 @@ Column {
     uiScale: root.uiScale
     actionLabel: "Add plugin"
     actionGlyph: "add"
-    secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"
+    secondaryActionLabel: root.favoritesOnly ? "" : "Check plugins"
     secondaryActionGlyph: "refresh"
     secondaryActionEnabled: !root.controller.pluginUpdateCheckRunning
     secondaryActionStatusText: root.favoritesOnly ? ""
