@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+printf 'fixture speed failure\n' >&2
+exit 7

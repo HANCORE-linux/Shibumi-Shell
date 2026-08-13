@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+case "${1:-}" in
+  down) value=42.5 ;;
+  up) value=17.25 ;;
+  *)
+    printf 'unexpected speed-test phase\n' >&2
+    exit 2
+    ;;
+esac
+
+child_pid=""
+cleanup() {
+  if [[ -n $child_pid ]]; then
+    kill "$child_pid" 2>/dev/null || true
+    wait "$child_pid" 2>/dev/null || true
+  fi
+}
+trap 'exit 0' TERM INT
+trap cleanup EXIT
+
+sleep 30 &
+child_pid=$!
+if [[ -n ${SHIBUMI_SPEEDTEST_PID_LOG:-} ]]; then
+  printf '%s\n' "$$" >>"$SHIBUMI_SPEEDTEST_PID_LOG"
+fi
+if [[ -n ${SHIBUMI_SPEEDTEST_CHILD_PID_LOG:-} ]]; then
+  printf '%s\n' "$child_pid" >>"$SHIBUMI_SPEEDTEST_CHILD_PID_LOG"
+fi
+
+printf '%s\n' "$value"
+while true; do
+  sleep 0.1
+done

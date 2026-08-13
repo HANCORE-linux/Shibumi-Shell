@@ -18,7 +18,7 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
-mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
+mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.network" "$tmpdir/network"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
@@ -27,11 +27,20 @@ install -m 0644 "$repo_root/tests/network-plugin-smoke.qml" "$tmpdir/shell.qml"
 install -m 0644 "$repo_root/tests/fixtures/NetworkTestService.qml" \
   "$repo_root/tests/fixtures/NetworkTestView.qml" \
   "$repo_root/tests/fixtures/NetworkTestPanel.qml" \
-  "$repo_root/tests/fixtures/NetworkCurrentTestPanel.qml" \
-  "$repo_root/tests/fixtures/NetworkSpeedTestPanel.qml" "$tmpdir/fixtures/"
+  "$repo_root/tests/fixtures/NetworkCurrentTestPanel.qml" "$tmpdir/fixtures/"
+install -m 0755 "$repo_root/tests/fixtures/omarchy-network-speedtest" \
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-fail" \
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-empty" \
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-malformed" \
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-resistant" "$tmpdir/bin/"
 
 set +e
-output=$(timeout 8 env \
+output=$(timeout 12 env \
+  PATH="$tmpdir/bin:$PATH" \
+  SHIBUMI_SPEEDTEST_PID_LOG="$tmpdir/speedtest-pids" \
+  SHIBUMI_SPEEDTEST_CHILD_PID_LOG="$tmpdir/speedtest-child-pids" \
+  SHIBUMI_SPEEDTEST_RESISTANT_PID_LOG="$tmpdir/speedtest-resistant-pid" \
+  SHIBUMI_SPEEDTEST_RESISTANT_CHILD_PID_LOG="$tmpdir/speedtest-resistant-child-pid" \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
@@ -45,18 +54,92 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'network plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+for pid_log in "$tmpdir/speedtest-pids" "$tmpdir/speedtest-child-pids" \
+    "$tmpdir/speedtest-resistant-pid" \
+    "$tmpdir/speedtest-resistant-child-pid"; do
+  [[ -s $pid_log ]] || fail "speed-test cleanup fixture did not record PIDs"
+  while IFS= read -r pid; do
+    for _ in {1..50}; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.02
+    done
+    kill -0 "$pid" 2>/dev/null \
+      && fail "speed-test teardown left process $pid alive"
+  done <"$pid_log"
+done
+
+normal_pid_log="$tmpdir/bounded-parent-pid"
+normal_child_pid_log="$tmpdir/bounded-child-pid"
+PATH="$tmpdir/bin:$PATH" \
+SHIBUMI_SPEEDTEST_PID_LOG="$normal_pid_log" \
+SHIBUMI_SPEEDTEST_CHILD_PID_LOG="$normal_child_pid_log" \
+  "$repo_root/hancore.shibumi.network/InlineSpeedTestRunner.py" \
+  omarchy-network-speedtest down >"$tmpdir/bounded-output" 2>&1 &
+bounded_runner_pid=$!
+for _ in {1..50}; do
+  [[ -s $tmpdir/bounded-output ]] && break
+  sleep 0.02
+done
+[[ -s $tmpdir/bounded-output ]] || fail "bounded cleanup runner produced no sample"
+start_ns=$(date +%s%N)
+kill -TERM "$bounded_runner_pid"
+wait "$bounded_runner_pid" \
+  || fail "bounded cleanup runner did not stop successfully"
+elapsed_ms=$(( ($(date +%s%N) - start_ns) / 1000000 ))
+(( elapsed_ms < 1500 )) \
+  || fail "normal speed-test cleanup took ${elapsed_ms}ms"
+for pid_log in "$normal_pid_log" "$normal_child_pid_log"; do
+  [[ -s $pid_log ]] || fail "bounded cleanup fixture did not record PIDs"
+  while IFS= read -r pid; do
+    kill -0 "$pid" 2>/dev/null \
+      && fail "bounded cleanup left process $pid alive"
+  done <"$pid_log"
+done
+
 if grep -F 'Binding loop detected' <<<"$output" >/dev/null; then
   fail "V1/V2 network presentation produced a binding loop"
 fi
 
 widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 service="$repo_root/hancore.shibumi.network/Service.qml"
-rg -Fq 'registeredPanelSource("omarchy.speedtest")' "$service" \
-  || fail "network service does not resolve the standalone speed-test panel"
-rg -Fq 'readonly property bool legacySpeedTestBackend:' "$service" \
-  || fail "network service lost legacy/current speed-test selection"
-rg -Fq 'id: speedTestLoader' "$service" \
-  || fail "network service does not own one lazy standalone speed-test adapter"
+bridge="$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml"
+runner="$repo_root/hancore.shibumi.network/InlineSpeedTestRunner.py"
+rg -Fq 'property string speedTestExecutable: "omarchy-network-speedtest"' \
+  "$service" || fail "network service does not use the host speed-test command"
+rg -Fq 'Qt.resolvedUrl("InlineSpeedTestRunner.py")' "$service" \
+  || fail "network service does not resolve its crash-safe inline runner"
+rg -Fq 'id: speedTestProc' "$service" \
+  || fail "network service does not own the inline speed-test process"
+rg -Fq 'String(speedTestExecutable || ""), String(phaseValue || "")' "$service" \
+  || fail "network service does not pass down/up phases to the command"
+rg -Fq 'stdout: SplitParser {' "$service" \
+  || fail "network service does not consume live speed-test samples"
+rg -Fq 'if (nextOwners.length === 0) stopSpeedTest()' "$service" \
+  || fail "network service does not stop traffic after the final panel closes"
+rg -Fq 'property bool speedTestPendingRun: false' "$service" \
+  || fail "network service cannot queue an immediate close/reopen run"
+rg -Fq 'if (speedTestPendingRun) {' "$service" \
+  || fail "queued speed test does not restart after cleanup exit"
+rg -Fq 'speedTestPhaseHasSample()' "$service" \
+  || fail "network service accepts empty speed-test phases"
+rg -Fq 'if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return' "$service" \
+  || fail "network service accepts malformed partial-number samples"
+rg -Fq 'Unable to start network speed test' "$service" \
+  || fail "network service does not surface process-start failures"
+rg -Fq 'start_new_session=True' "$runner" \
+  || fail "inline runner does not isolate the traffic process group"
+rg -Fq 'supervise_worker' "$runner" \
+  || fail "inline runner lacks a pre-spawn crash-safe cleanup owner"
+rg -Fq 'os.killpg(process_group, signal.SIGKILL)' "$runner" \
+  || fail "inline runner cannot escalate cleanup for resistant descendants"
+if rg -q 'speedTestPanel|speedTestBackend|legacySpeedTestBackend|speedTestModalOpen' \
+    "$repo_root/hancore.shibumi.network"; then
+  fail "network plugin still embeds an official Omarchy speed-test panel/backend"
+fi
+[[ $(rg -c 'String\(id \|\| ""\) === "omarchy\.speedtest"' "$bridge") -eq 1 ]] \
+  || fail "network bridge does not intercept the host speed-test summon exactly once"
+rg -Fq 'networkService.runSpeedTest()' "$bridge" \
+  || fail "host speed-test compatibility route does not use Shibumi's inline owner"
 [[ $(rg -c 'BoundedLabel \{' "$widget") -eq 2 ]] \
   || fail "V1/V2 bounded labels do not share the independent metrics path"
 rg -Fq 'component BoundedLabel: Text' "$widget" \
@@ -178,10 +261,13 @@ if grep -Eq 'height: 8|id: connectionStatus|statusHeadline' <<<"$status_block" \
     || grep -Fq '"\uEB2F"' <<<"$status_block"; then
   fail "network panel still contains the non-repository hero/progress layout"
 fi
-rg -Fq 'speedBackend.runSpeedTest()' "$service" \
-  || fail "inline speed test does not delegate to the selected Omarchy runner"
-if rg -q 'showSpeedTest\(' "$repo_root/hancore.shibumi.network"; then
-  fail "network plugin opens Omarchy's external speed-test overlay"
+rg -Fq 'startSpeedTestPhase("down")' "$service" \
+  || fail "inline speed test does not start its Shibumi-owned download phase"
+rg -Fq 'startSpeedTestPhase("up")' "$service" \
+  || fail "inline speed test does not advance to its Shibumi-owned upload phase"
+if rg -q 'showSpeedTest\(|registeredPanelSource\("omarchy\.speedtest"\)|speedTestModalOpen' \
+    "$repo_root/hancore.shibumi.network"; then
+  fail "network plugin opens or embeds Omarchy's external speed-test panel"
 fi
 [[ $(rg -c 'onClicked: panel\.networkService\.toggleWifi\(\)' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml") -eq 1 ]] \

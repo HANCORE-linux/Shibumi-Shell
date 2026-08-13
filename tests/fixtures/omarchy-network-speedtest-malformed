@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+printf '42.5 garbage\n'
+exit 0

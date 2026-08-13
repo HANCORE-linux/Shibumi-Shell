@@ -651,14 +651,21 @@ Current Phase 2 foundation:
   Multiple real players and physical multi-output acceptance remain gates.
 - G11 uses one root-owned `NetworkService`, regardless of output count. It
   hosts the registered `omarchy.network` component as the authoritative
-  `Quickshell.Networking`, status, scan, DNS, speed-test, and visible-network
-  action owner while suppressing its stock button, popup, and IPC handler;
+  `Quickshell.Networking`, status, scan, DNS, and visible-network action owner
+  while suppressing its stock button, popup, and IPC handler;
+- Shibumi owns the active `omarchy.network` compatibility handler and the
+  inline speed-test process. Current and legacy host speed-test routes both
+  open the Shibumi Network panel and run bounded `omarchy-network-speedtest`
+  download/upload phases without loading Omarchy's speed-test panel;
 - each output owns only its bar presentation and lazy Shibumi popup. A single
   panel-lifecycle detail sampler feeds the official parser, and a one-shot
   `nmcli` adapter supplies saved profiles absent from Quickshell's visible AP
-  model. Both stop after the final screen-local panel closes. V1's separate
-  permanent Ethernet poller is not restored. Top Wayland mapping and cleanup
-  pass on the validation system; bottom, mutation, and physical multi-output gates remain.
+  model. Speed-test and profile workers stop after the final screen-local panel
+  closes; the shared detail sampler remains active only when an Ethernet bar
+  still consumes its throughput data. V1's separate permanent Ethernet poller
+  is not restored. Top Wayland mapping
+  and cleanup pass on the validation system; the new direct speed-test path,
+  bottom, mutation, and physical multi-output remain runtime gates.
 - G13 has one root-owned `MonitorService` around the registered
   `omarchy.monitor` component. That hidden component remains the only
   brightness, display, scale, IPC, poller, and command owner;

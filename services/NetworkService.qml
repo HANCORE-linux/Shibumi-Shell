@@ -7,27 +7,34 @@ import "../adapters" as Adapters
 
 // One process-wide NetworkManager owner for every Shibumi output. Quattro's
 // official network component remains authoritative for live status, details,
-// scanning, DNS, speed tests, and visible-network actions. This service adds
-// only the saved-profile view that the host networking API does not expose.
+// scanning, DNS, and visible-network actions. Shibumi owns its inline speed-
+// test process and adds the saved-profile view missing from the host API.
 Item {
   id: root
 
   required property var bar
-  readonly property var shell: bar && "shell" in bar ? bar.shell : null
   readonly property url panelSource: bar
     ? bar.registeredWidgetSource("omarchy.network") : ""
   property Component panelComponent: String(panelSource) ? null
     : bar ? bar.registeredWidgetComponent("omarchy.network") : null
-  readonly property url speedTestPanelSource:
-    registeredPanelSource("omarchy.speedtest")
-  property Component speedTestPanelComponent: null
   readonly property var backend: bridge.panel
-  readonly property bool legacySpeedTestBackend: backend
-    && typeof backend.runSpeedTest === "function"
-    && "speedTestRunning" in backend
-  readonly property var speedTestBackend: legacySpeedTestBackend
-    ? backend : speedTestLoader.item
-  readonly property bool speedTestReady: speedTestBackend !== null
+  readonly property url speedTestRunnerSource:
+    Qt.resolvedUrl("../hancore.shibumi.network/InlineSpeedTestRunner.py")
+  property string speedTestExecutable: "omarchy-network-speedtest"
+  property int speedTestPhaseDuration: 5000
+  readonly property bool speedTestReady: String(speedTestRunnerSource) !== ""
+    && String(speedTestExecutable || "") !== ""
+  property bool speedTestRunning: false
+  readonly property bool speedTestHasRun: speedTestDownloadMbps !== ""
+    || speedTestUploadMbps !== ""
+  property string speedTestPhase: ""
+  property string speedTestDownloadMbps: ""
+  property string speedTestUploadMbps: ""
+  property string speedTestError: ""
+  property bool speedTestExpectedStop: false
+  property bool speedTestPendingRun: false
+  property bool speedTestProcessStarted: false
+  property string speedTestStderr: ""
   readonly property bool ready: backend !== null
   readonly property bool backendAvailable: ready && bridge.backendAvailable
   readonly property string kind: bridge.kind
@@ -51,29 +58,6 @@ Item {
     ? String(backend.dnsProvider || "DHCP") : "DHCP"
   readonly property var dnsProviders: backend && backend.dnsProviders
     ? backend.dnsProviders : ["DHCP", "Cloudflare", "Google", "Custom"]
-  readonly property bool speedTestRunning: speedTestBackend
-    ? legacySpeedTestBackend
-      ? speedTestBackend.speedTestRunning === true
-      : speedTestBackend.running === true
-    : false
-  readonly property bool speedTestHasRun: speedTestDownloadMbps !== ""
-    || speedTestUploadMbps !== ""
-  readonly property string speedTestPhase: speedTestBackend
-    ? String(legacySpeedTestBackend
-      ? speedTestBackend.speedTestPhase || ""
-      : speedTestBackend.phase || "") : ""
-  readonly property string speedTestDownloadMbps: speedTestBackend
-    ? String(legacySpeedTestBackend
-      ? speedTestBackend.speedTestDownloadMbps || ""
-      : speedTestBackend.downloadMbps || "") : ""
-  readonly property string speedTestUploadMbps: speedTestBackend
-    ? String(legacySpeedTestBackend
-      ? speedTestBackend.speedTestUploadMbps || ""
-      : speedTestBackend.uploadMbps || "") : ""
-  readonly property string speedTestError: speedTestBackend
-    ? String(legacySpeedTestBackend
-      ? speedTestBackend.speedTestError || ""
-      : speedTestBackend.error || "") : ""
   readonly property string actionSsid: backend ? String(backend.actionSsid || "") : ""
   readonly property string actionKind: backend ? String(backend.actionKind || "") : ""
   readonly property string failureSsid: backend ? String(backend.failureSsid || "") : ""
@@ -86,21 +70,6 @@ Item {
   property var sessionOwners: []
   readonly property int sessionCount: sessionOwners.length
   readonly property var networks: mergedNetworks(visibleNetworks, savedProfiles)
-
-  function hostManifest(id) {
-    const registry = shell && "pluginRegistry" in shell
-      ? shell.pluginRegistry : null
-    return registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-  }
-
-  function registeredPanelSource(id) {
-    const registry = shell && "pluginRegistry" in shell
-      ? shell.pluginRegistry : null
-    const pluginManifest = hostManifest(id)
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "panel") : ""
-  }
 
   visible: false
   width: 0
@@ -137,13 +106,7 @@ Item {
   function endSession(owner) {
     if (!owner) return
     const nextOwners = sessionOwners.filter(candidate => candidate !== owner)
-    if (nextOwners.length === 0 && speedTestRunning && speedTestBackend) {
-      if (legacySpeedTestBackend
-          && typeof speedTestBackend.hideSpeedTest === "function")
-        speedTestBackend.hideSpeedTest()
-      else if (typeof speedTestBackend.close === "function")
-        speedTestBackend.close()
-    }
+    if (nextOwners.length === 0) stopSpeedTest()
     sessionOwners = nextOwners
     if (sessionCount !== 0) return
     detailsPoll.stop()
@@ -335,12 +298,124 @@ Item {
     return true
   }
 
+  function speedTestCommandFor(phaseValue) {
+    return [String(speedTestRunnerSource),
+      String(speedTestExecutable || ""), String(phaseValue || "")]
+  }
+
+  function updateSpeedTestLine(line) {
+    const raw = String(line || "").trim()
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return
+    const value = Number(raw)
+    if (!isFinite(value) || value < 0) return
+    const normalized = String(value)
+    if (speedTestPhase === "down") speedTestDownloadMbps = normalized
+    else if (speedTestPhase === "up") speedTestUploadMbps = normalized
+  }
+
+  function startSpeedTestPhase(phaseValue) {
+    speedTestExpectedStop = false
+    speedTestProcessStarted = false
+    speedTestPhase = phaseValue
+    speedTestStderr = ""
+    speedTestProc.command = speedTestCommandFor(phaseValue)
+    speedTestProc.running = true
+    speedTestPhaseTimer.restart()
+  }
+
+  function speedTestPhaseHasSample() {
+    return speedTestPhase === "down"
+      ? speedTestDownloadMbps !== "" : speedTestUploadMbps !== ""
+  }
+
+  function failSpeedTest(message) {
+    speedTestPhaseTimer.stop()
+    speedTestError = String(message || "Speed test failed")
+    speedTestPhase = ""
+    speedTestRunning = false
+    speedTestExpectedStop = false
+    speedTestProcessStarted = false
+  }
+
+  function finishSpeedTestPhase() {
+    if (!speedTestRunning) return
+    if (speedTestPhase === "down") {
+      startSpeedTestPhase("up")
+      return
+    }
+    speedTestPhase = ""
+    speedTestRunning = false
+    speedTestExpectedStop = false
+  }
+
+  function stopSpeedTestPhase() {
+    speedTestPhaseTimer.stop()
+    if (!speedTestRunning) return
+    if (speedTestProc.running) {
+      speedTestExpectedStop = true
+      speedTestProc.running = false
+      return
+    }
+    finishSpeedTestPhase()
+  }
+
+  function handleSpeedTestExit(exitCode) {
+    speedTestPhaseTimer.stop()
+    const expected = speedTestExpectedStop
+    speedTestExpectedStop = false
+    speedTestProcessStarted = false
+    if (speedTestPendingRun) {
+      speedTestPendingRun = false
+      speedTestRunning = false
+      if (sessionCount > 0) Qt.callLater(function() {
+        if (root.sessionCount > 0) root.runSpeedTest()
+      })
+      return
+    }
+    if (!speedTestRunning) return
+    if (!expected && exitCode !== 0) {
+      failSpeedTest(speedTestStderr || "Speed test failed")
+      return
+    }
+    if (!speedTestPhaseHasSample()) {
+      failSpeedTest(speedTestStderr || "Speed test produced no "
+        + speedTestPhase + "load data")
+      return
+    }
+    finishSpeedTestPhase()
+  }
+
+  function stopSpeedTest() {
+    const active = speedTestRunning || speedTestProc.running
+    speedTestPhaseTimer.stop()
+    speedTestPendingRun = false
+    speedTestPhase = ""
+    speedTestRunning = false
+    if (speedTestProc.running) {
+      speedTestExpectedStop = true
+      speedTestProc.running = false
+    } else {
+      speedTestExpectedStop = false
+      speedTestProcessStarted = false
+    }
+    return active
+  }
+
   function runSpeedTest() {
-    const speedBackend = speedTestBackend
-    if (!ready || !speedBackend
-        || typeof speedBackend.runSpeedTest !== "function"
-        || speedTestRunning) return false
-    speedBackend.runSpeedTest()
+    if (!ready || !speedTestReady || speedTestRunning) return false
+    speedTestError = ""
+    speedTestDownloadMbps = ""
+    speedTestUploadMbps = ""
+    if (speedTestProc.running) {
+      if (sessionCount <= 0) return false
+      speedTestPendingRun = true
+      speedTestRunning = true
+      speedTestPhase = ""
+      return true
+    }
+    speedTestPendingRun = false
+    speedTestRunning = true
+    startSpeedTestPhase("down")
     return true
   }
 
@@ -382,25 +457,40 @@ Item {
     id: bridge
     bar: root.bar
     ownerWidget: root.bar
+    networkService: root
     panelComponent: root.panelComponent
     panelSource: root.panelSource
     panelSettings: root.officialSettings()
   }
 
-  Loader {
-    id: speedTestLoader
-    active: root.sessionCount > 0 && !root.legacySpeedTestBackend
-      && (String(root.speedTestPanelSource) !== ""
-        || root.speedTestPanelComponent !== null)
-    source: active && String(root.speedTestPanelSource) !== ""
-      ? root.speedTestPanelSource : ""
-    sourceComponent: active && String(root.speedTestPanelSource) === ""
-      ? root.speedTestPanelComponent : null
-    onLoaded: {
-      if (!item) return
-      if ("shell" in item) item.shell = root.shell
-      if ("manifest" in item)
-        item.manifest = root.hostManifest("omarchy.speedtest")
+  Timer {
+    id: speedTestPhaseTimer
+    interval: root.speedTestPhaseDuration
+    repeat: false
+    onTriggered: root.stopSpeedTestPhase()
+  }
+
+  Process {
+    id: speedTestProc
+    onStarted: root.speedTestProcessStarted = true
+    onRunningChanged: {
+      if (!running && root.speedTestRunning
+          && !root.speedTestProcessStarted)
+        root.failSpeedTest("Unable to start network speed test")
+    }
+    stdout: SplitParser {
+      onRead: function(line) { root.updateSpeedTestLine(line) }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.speedTestStderr = String(text || "").trim()
+        if (root.speedTestError !== "" && root.speedTestStderr !== "")
+          root.speedTestError = root.speedTestStderr
+      }
+    }
+    onExited: function(exitCode, _exitStatus) {
+      root.handleSpeedTestExit(exitCode)
     }
   }
 
@@ -488,6 +578,7 @@ Item {
 
   Component.onDestruction: {
     sessionOwners = []
+    stopSpeedTest()
     detailsProc.running = false
     profileList.running = false
     if (backend && backend.wifiDevice) backend.wifiDevice.scannerEnabled = false

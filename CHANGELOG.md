@@ -25,7 +25,7 @@ Release candidate for 2026-08-13.
 - Enforced exclusive bar-widget ownership and hardened group teardown across output lifecycle changes
 - Restored the Omarchy plugin diff pager and kept update panels from covering launched review or updater actions
 - Selected the current `omarchy.agents` replacement when legacy model-usage providers are absent, while retaining the complete legacy contract on older hosts
-- Preserved Shibumi's inline Network speed test after Omarchy moved its runner into the standalone `omarchy.speedtest` panel
+- Kept Network speed tests entirely inline by running `omarchy-network-speedtest` from Shibumi without loading Omarchy's standalone speed-test panel
 
 ### Known limits
 

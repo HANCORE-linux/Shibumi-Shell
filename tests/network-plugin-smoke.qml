@@ -8,6 +8,11 @@ ShellRoot {
 
   property int phase: 0
   property int phaseTicks: 0
+  property int speedPhase: 0
+  property int speedFailureTicks: 0
+  property int destructionTicks: 0
+  property bool restartContractPassed: false
+  property bool speedContractPassed: false
   property real fullWidth: 0
   property var clickTargets: []
 
@@ -37,11 +42,6 @@ ShellRoot {
   Component {
     id: currentNetworkPanelComponent
     Fixtures.NetworkCurrentTestPanel {}
-  }
-
-  Component {
-    id: speedTestPanelComponent
-    Fixtures.NetworkSpeedTestPanel {}
   }
 
   Item {
@@ -121,6 +121,7 @@ ShellRoot {
     id: extractedService
     bar: fakeBar
     panelComponent: networkPanelComponent
+    speedTestPhaseDuration: 120
   }
 
   Item { id: currentSpeedOwner }
@@ -129,8 +130,243 @@ ShellRoot {
     id: currentService
     bar: fakeBar
     panelComponent: currentNetworkPanelComponent
-    speedTestPanelComponent: speedTestPanelComponent
+    speedTestPhaseDuration: 120
     Component.onCompleted: beginSession(currentSpeedOwner)
+  }
+
+  Network.Service {
+    id: failingSpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "omarchy-network-speedtest-fail"
+  }
+
+  Network.Service {
+    id: emptySpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "omarchy-network-speedtest-empty"
+  }
+
+  Network.Service {
+    id: missingSpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "shibumi-definitely-missing-speedtest"
+  }
+
+  Network.Service {
+    id: malformedSpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "omarchy-network-speedtest-malformed"
+  }
+
+  Network.Service {
+    id: resistantSpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "omarchy-network-speedtest-resistant"
+    speedTestPhaseDuration: 10000
+  }
+
+  Loader {
+    id: immediateDestructionLoader
+    active: false
+    sourceComponent: Component {
+      Network.Service {
+        bar: fakeBar
+        panelComponent: currentNetworkPanelComponent
+        speedTestPhaseDuration: 10000
+      }
+    }
+  }
+
+  Loader {
+    id: destructionSpeedLoader
+    active: true
+    sourceComponent: Component {
+      Network.Service {
+        bar: fakeBar
+        panelComponent: currentNetworkPanelComponent
+        speedTestPhaseDuration: 10000
+      }
+    }
+  }
+
+  Timer {
+    interval: 20
+    repeat: true
+    running: !root.speedContractPassed
+    onTriggered: {
+      if (root.speedPhase === 0) {
+        if (!extractedService.ready || !currentService.ready) return
+        if (!extractedService.speedTestReady || !currentService.speedTestReady
+            || !extractedService.runSpeedTest()
+            || extractedService.runSpeedTest()
+            || !extractedService.speedTestRunning
+            || extractedService.speedTestPhase !== "down"
+            || extractedService.backend.speedTestRunCount !== 0
+            || !currentService.runSpeedTest()
+            || !currentService.speedTestRunning
+            || currentService.speedTestPhase !== "down")
+          return root.fail("Shibumi-owned speed-test startup")
+        currentService.endSession(currentSpeedOwner)
+        if (currentService.sessionCount !== 0
+            || currentService.speedTestRunning
+            || currentService.speedTestPhase !== "")
+          return root.fail("Shibumi-owned speed-test final-session cleanup")
+        currentService.beginSession(currentSpeedOwner)
+        if (!currentService.runSpeedTest()
+            || !currentService.speedTestPendingRun
+            || !currentService.speedTestRunning)
+          return root.fail("immediate close/reopen speed-test queue")
+        root.speedPhase = 1
+        return
+      }
+
+      if (!root.restartContractPassed
+          && !currentService.speedTestRunning
+          && !currentService.speedTestPendingRun) {
+        if (currentService.speedTestPhase !== ""
+            || currentService.speedTestDownloadMbps !== "42.5"
+            || currentService.speedTestUploadMbps !== "17.25"
+            || currentService.speedTestError !== "")
+          return root.fail("queued close/reopen speed-test completion")
+        currentService.endSession(currentSpeedOwner)
+        root.restartContractPassed = true
+      }
+
+      if (root.speedPhase === 1) {
+        if (extractedService.speedTestPhase === "down") {
+          if (extractedService.speedTestDownloadMbps === "") return
+          if (extractedService.speedTestDownloadMbps !== "42.5")
+            return root.fail("inline speed-test download sample")
+          return
+        }
+        if (extractedService.speedTestPhase !== "up"
+            || !extractedService.speedTestRunning
+            || extractedService.speedTestDownloadMbps !== "42.5")
+          return root.fail("inline speed-test phase transition")
+        root.speedPhase = 2
+        return
+      }
+
+      if (root.speedPhase === 2) {
+        if (extractedService.speedTestRunning) {
+          if (extractedService.speedTestPhase !== "up")
+            return root.fail("inline speed-test upload phase")
+          return
+        }
+        if (extractedService.speedTestPhase !== ""
+            || extractedService.speedTestDownloadMbps !== "42.5"
+            || extractedService.speedTestUploadMbps !== "17.25"
+            || extractedService.speedTestError !== ""
+            || extractedService.backend.speedTestRunCount !== 0
+            || extractedService.formatSpeed("107") !== "107 Mbps"
+            || extractedService.formatSpeed("9.25") !== "9.3 Mbps"
+            || extractedService.formatSpeed("") !== "—")
+          return root.fail("inline speed-test completion and formatting")
+        if (!failingSpeedService.ready || !failingSpeedService.runSpeedTest())
+          return root.fail("inline speed-test failure startup")
+        root.speedPhase = 3
+        return
+      }
+
+      if (root.speedPhase === 3) {
+        root.speedFailureTicks++
+        if (failingSpeedService.speedTestRunning) return
+        if (failingSpeedService.speedTestError === "Speed test failed"
+            && root.speedFailureTicks < 20) return
+        if (failingSpeedService.speedTestPhase !== ""
+            || failingSpeedService.speedTestDownloadMbps !== ""
+            || failingSpeedService.speedTestUploadMbps !== ""
+            || failingSpeedService.speedTestError !== "fixture speed failure")
+          return root.fail("inline speed-test failure reporting")
+        if (!emptySpeedService.ready || !emptySpeedService.runSpeedTest())
+          return root.fail("empty inline speed-test startup")
+        root.speedPhase = 4
+        return
+      }
+
+      if (root.speedPhase === 4) {
+        if (emptySpeedService.speedTestRunning) return
+        if (emptySpeedService.speedTestPhase !== ""
+            || emptySpeedService.speedTestError
+              !== "Speed test produced no download data")
+          return root.fail("empty inline speed-test rejection")
+        if (!missingSpeedService.ready || !missingSpeedService.runSpeedTest())
+          return root.fail("missing inline speed-test startup")
+        root.speedPhase = 5
+        return
+      }
+
+      if (root.speedPhase === 5) {
+        if (missingSpeedService.speedTestRunning) return
+        if (missingSpeedService.speedTestPhase !== ""
+            || missingSpeedService.speedTestError.indexOf(
+              "Unable to start network speed test") < 0)
+          return root.fail("missing inline speed-test executable reporting")
+        if (!malformedSpeedService.ready
+            || !malformedSpeedService.runSpeedTest())
+          return root.fail("malformed inline speed-test startup")
+        root.speedPhase = 6
+        return
+      }
+
+      if (root.speedPhase === 6) {
+        if (malformedSpeedService.speedTestRunning) return
+        if (malformedSpeedService.speedTestDownloadMbps !== ""
+            || malformedSpeedService.speedTestError
+              !== "Speed test produced no download data")
+          return root.fail("malformed inline speed-test rejection")
+        if (!resistantSpeedService.ready
+            || !resistantSpeedService.runSpeedTest())
+          return root.fail("resistant inline speed-test startup")
+        root.speedPhase = 7
+        return
+      }
+
+      if (root.speedPhase === 7) {
+        if (resistantSpeedService.speedTestDownloadMbps === "") return
+        resistantSpeedService.stopSpeedTest()
+        immediateDestructionLoader.active = true
+        root.speedPhase = 8
+        return
+      }
+
+      if (root.speedPhase === 8) {
+        const immediateService = immediateDestructionLoader.item
+        if (!immediateService || !immediateService.ready) return
+        if (!immediateService.runSpeedTest())
+          return root.fail("immediate destruction speed-test startup")
+        immediateDestructionLoader.active = false
+        const destructionService = destructionSpeedLoader.item
+        if (!destructionService || !destructionService.ready
+            || !destructionService.runSpeedTest())
+          return root.fail("destruction speed-test startup")
+        root.speedPhase = 9
+        return
+      }
+
+      if (root.speedPhase === 9) {
+        const destructionService = destructionSpeedLoader.item
+        if (!destructionService || !destructionService.speedTestRunning) return
+        if (destructionService.speedTestDownloadMbps === "") return
+        destructionSpeedLoader.active = false
+        root.speedPhase = 10
+        return
+      }
+
+      if (root.speedPhase === 10) {
+        root.destructionTicks++
+        if (immediateDestructionLoader.item !== null
+            || destructionSpeedLoader.item !== null)
+          return root.fail("active speed-test service survived Loader teardown")
+        if (root.destructionTicks < 140 || !root.restartContractPassed) return
+        root.speedContractPassed = true
+      }
+    }
   }
 
   Loader {
@@ -175,7 +411,7 @@ ShellRoot {
       const second = secondLoader.item
       if (root.phase === 0) {
         if (!first || !second || !first.networkReady || !second.networkReady
-            || root.phaseTicks < 3) return
+            || root.phaseTicks < 3 || !root.speedContractPassed) return
         if (first.networkService !== second.networkService
             || first.networkService !== sharedNetworkService
             || !extractedService.ready || !currentService.ready
@@ -210,27 +446,6 @@ ShellRoot {
             || extractedService.connectEnterprise(enterpriseEntry, "", "test-secret")
             || extractedService.connectEnterprise(enterpriseEntry, "user@example.test", ""))
           return root.fail("enterprise credential forwarding and validation")
-        if (!extractedService.runSpeedTest()
-            || extractedService.backend.speedTestRunCount !== 1
-            || !extractedService.speedTestRunning
-            || extractedService.formatSpeed("107") !== "107 Mbps"
-            || extractedService.formatSpeed("9.25") !== "9.3 Mbps"
-            || extractedService.formatSpeed("") !== "—")
-          return root.fail("speed test forwarding and inline Mbps formatting")
-        extractedService.backend.speedTestRunning = false
-        if (currentService.legacySpeedTestBackend
-            || !currentService.runSpeedTest()
-            || currentService.speedTestBackend.runCount !== 1
-            || !currentService.speedTestRunning
-            || currentService.speedTestPhase !== "down"
-            || currentService.speedTestDownloadMbps !== "42.5")
-          return root.fail("standalone speed-test adapter contract")
-        const currentSpeedBackend = currentService.speedTestBackend
-        currentService.endSession(currentSpeedOwner)
-        if (currentSpeedBackend.closeCount !== 1
-            || currentService.sessionCount !== 0)
-          return root.fail("standalone speed-test adapter cleanup")
-
         root.fullWidth = first.implicitWidth
         sharedNetworkService.label = "Fixture Wi-Fi network with a deliberately long SSID"
         first.settings = root.appearanceSettings("text")

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Io
 
 // Host Quattro's complete network component as a hidden backend. This bridge
 // is instantiated once by NetworkService, never once per output.
@@ -9,6 +10,7 @@ Item {
 
   required property var bar
   required property Item ownerWidget
+  property var networkService: null
   property Component panelComponent: null
   property url panelSource: ""
   property var panelSettings: ({})
@@ -41,8 +43,15 @@ Item {
     ? panel.busy === true : false
   property string pendingPresentationMode: ""
   property int presentationAttempts: 0
-  property bool synchronizingPanelState: false
+  property bool backendIpcSuppressed: false
   property var presentationOwner: null
+  readonly property bool externalQrOpen: hostShellProxy.realShell
+    && typeof hostShellProxy.realShell.isPluginOpen === "function"
+    ? hostShellProxy.realShell.isPluginOpen("omarchy.wifiqr") === true
+    : hostShellProxy.realShell
+      && "openPanelIds" in hostShellProxy.realShell
+      && hostShellProxy.realShell.openPanelIds
+      && hostShellProxy.realShell.openPanelIds["omarchy.wifiqr"] === true
 
   function focusedPresentationWidget() {
     return bar && typeof bar.findPanelWidget === "function"
@@ -71,35 +80,40 @@ Item {
     return true
   }
 
-  function hideNetworkPresentation() {
+  function hideNetworkPresentation(closeBackend) {
     pendingPresentationMode = ""
     presentationRedirect.stop()
     const owner = presentationOwner
+    const focusedOwner = closeBackend === true
+      ? focusedPresentationWidget() : null
     presentationOwner = null
-    if (!owner) return false
-    if (owner.opened === true && typeof owner.close === "function")
+    if (owner && owner.opened === true && typeof owner.close === "function")
       owner.close()
-    return true
+    if (focusedOwner && focusedOwner !== owner
+        && focusedOwner.opened === true
+        && typeof focusedOwner.close === "function")
+      focusedOwner.close()
+    if (closeBackend === true) hostShellProxy.hide("omarchy.wifiqr")
+    if (panel && (closeBackend === true || panel.opened === true)
+        && typeof panel.close === "function")
+      panel.close()
+    return owner !== null || focusedOwner !== null
   }
 
   function applyPresentationMode() {
     const widget = presentationWidget()
     if (!widget) return false
+    if (panel && panel.opened === true && typeof panel.close === "function")
+      panel.close()
     if (widget.opened !== true && typeof widget.open === "function")
       widget.open()
     if (pendingPresentationMode === "speed") {
       if (widget.panelLoaded === true && widget.panelItem) {
         if ("speedDetailsVisible" in widget.panelItem)
           widget.panelItem.speedDetailsVisible = true
-        // Keep the authoritative speed-test process and data owner. Preserve
-        // its compatibility open/close/toggle state before hiding the stock
-        // modal so subsequent direct IPC remains synchronized with Shibumi.
-        if (panel && panel.controller
-            && typeof panel.controller.show === "function"
-            && panel.opened !== true)
-          panel.controller.show()
-        if (panel && "speedTestModalOpen" in panel)
-          panel.speedTestModalOpen = false
+        if (networkService
+            && typeof networkService.runSpeedTest === "function")
+          networkService.runSpeedTest()
         pendingPresentationMode = ""
         return true
       }
@@ -164,8 +178,8 @@ Item {
           || candidate.owner !== panel) continue
       // The official backend's KeyboardPanel is a separate PanelWindow, so
       // hiding the backend Item after Loader.onLoaded cannot hide that window.
-      // Break only the KeyboardPanel visibility binding; centered QR and speed
-      // overlays (which do not expose beginFocusPrime) remain authoritative.
+      // Break only that KeyboardPanel visibility binding; QR remains routed
+      // to Omarchy while speed-test requests are intercepted below.
       candidate.open = false
       candidate.visible = false
       suppressed = true
@@ -173,8 +187,23 @@ Item {
     return suppressed
   }
 
+  function suppressBackendIpc() {
+    if (!panel || !panel.data || panel.data.length === undefined) return false
+    for (let index = 0; index < panel.data.length; index++) {
+      const candidate = panel.data[index]
+      if (!candidate || !("target" in candidate)
+          || !("enabled" in candidate)
+          || String(candidate.target || "") !== "omarchy.network") continue
+      candidate.enabled = false
+      backendIpcSuppressed = true
+      return true
+    }
+    return false
+  }
+
   function injectPanel() {
     if (!panel) return
+    suppressBackendIpc()
     suppressBackendKeyboardPanel()
     if ("bar" in panel) panel.bar = hostProxy
     if ("moduleName" in panel) panel.moduleName = "omarchy.network"
@@ -186,6 +215,10 @@ Item {
   }
 
   function syncPanelSource() {
+    // Disable our replacement before destroying the suppressed host handler.
+    // The newly loaded host handler owns the target only until injectPanel()
+    // disables it and republishes this bridge handler.
+    backendIpcSuppressed = false
     panelLoader.sourceComponent = null
     panelLoader.source = ""
     if (panelComponent !== null) {
@@ -200,51 +233,61 @@ Item {
     }
   }
 
+  IpcHandler {
+    target: "omarchy.network"
+    enabled: root.backendIpcSuppressed
+
+    function open(): void { root.summonNetworkPresentation("panel") }
+    function show(): void { root.summonNetworkPresentation("panel") }
+    function close(): void { root.hideNetworkPresentation(true) }
+    function hide(): void { root.hideNetworkPresentation(true) }
+    function toggle(): void {
+      const owner = root.focusedPresentationWidget()
+      const embeddedQrOpen = root.panel && ("qrVisible" in root.panel)
+        && root.panel.qrVisible === true
+      if ((owner && owner.opened === true) || embeddedQrOpen
+          || root.externalQrOpen)
+        root.hideNetworkPresentation(true)
+      else root.summonNetworkPresentation("panel")
+    }
+    function toggleNetwork(): void {
+      if (root.panel && typeof root.panel.toggleNetwork === "function")
+        root.panel.toggleNetwork()
+    }
+    function showQr(): void {
+      if (!root.panel) return
+      root.hideNetworkPresentation(true)
+      if (typeof root.panel.summonWifiQr === "function")
+        root.panel.summonWifiQr(true)
+      else if (typeof root.panel.showWifiQr === "function")
+        root.panel.showWifiQr(true)
+    }
+    function speedTest(): void { root.summonNetworkPresentation("speed") }
+  }
+
   Connections {
     target: root.panel
     ignoreUnknownSignals: true
 
     function onOpenedChanged() {
-      if (!root.panel || root.synchronizingPanelState) return
-      if (root.panel.opened === true)
-        root.summonNetworkPresentation("panel")
-      else if (!root.panel.qrVisible && !root.panel.speedTestModalOpen)
-        root.hideNetworkPresentation()
+      if (!root.panel || root.panel.opened !== true) return
+      root.summonNetworkPresentation("panel")
+      if (typeof root.panel.close === "function") root.panel.close()
     }
 
     function onQrVisibleChanged() {
       if (root.panel && root.panel.qrVisible === true)
         root.summonNetworkPresentation("qr")
     }
-
-    function onSpeedTestModalOpenChanged() {
-      if (root.panel && root.panel.speedTestModalOpen === true)
-        root.summonNetworkPresentation("speed")
-    }
   }
 
   Connections {
     target: root.presentationOwner
     ignoreUnknownSignals: true
-
     function onOpenedChanged() {
       const widget = root.presentationWidget()
-      if (!widget || !root.panel || root.synchronizingPanelState
-          || root.panel.qrVisible || root.panel.speedTestModalOpen) return
-      root.synchronizingPanelState = true
-      if (widget.opened === true && root.panel.opened !== true
-          && typeof root.panel.open === "function")
-        root.panel.open()
-      else if (widget.opened !== true && root.panel.opened === true
-          && typeof root.panel.close === "function")
-        root.panel.close()
-      const observedOwner = widget
-      Qt.callLater(function() {
-        if (root.presentationOwner === observedOwner
-            && observedOwner.opened !== true)
-          root.presentationOwner = null
-        root.synchronizingPanelState = false
-      })
+      if (widget && widget.opened !== true)
+        root.presentationOwner = null
     }
   }
 
@@ -286,7 +329,7 @@ Item {
     readonly property color urgent: realBar ? realBar.urgent : foreground
     readonly property bool foregroundAnimationEnabled: realBar
       ? realBar.foregroundAnimationEnabled !== false : false
-    readonly property var shell: realBar ? realBar.shell : null
+    readonly property var shell: hostShellProxy
     readonly property var activePopout: realBar ? realBar.activePopout : null
     readonly property var clickTargets: realBar ? realBar.clickTargets : []
 
@@ -317,6 +360,24 @@ Item {
     function targetBelongsToWindow(target, window) {
       return realBar && typeof realBar.targetBelongsToWindow === "function"
         ? realBar.targetBelongsToWindow(target, window) : false
+    }
+  }
+
+  QtObject {
+    id: hostShellProxy
+
+    readonly property var realShell: root.bar ? root.bar.shell : null
+
+    function summon(id, payloadJson) {
+      if (String(id || "") === "omarchy.speedtest")
+        return root.summonNetworkPresentation("speed") ? "ok" : "unknown"
+      return realShell && typeof realShell.summon === "function"
+        ? realShell.summon(id, payloadJson) : "unknown"
+    }
+
+    function hide(id) {
+      return realShell && typeof realShell.hide === "function"
+        ? realShell.hide(id) : undefined
     }
   }
 

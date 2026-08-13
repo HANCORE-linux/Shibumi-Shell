@@ -3,6 +3,15 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+if [[ ${SHIBUMI_TEST_NETWORK_IPC_MATRIX_CHILD:-0} != 1 ]]; then
+  for style in current current-clone current-fallback legacy; do
+    SHIBUMI_TEST_NETWORK_IPC_MATRIX_CHILD=1 \
+      SHIBUMI_TEST_NETWORK_IPC_STYLE=$style "$0"
+  done
+  printf 'network IPC routing matrix regression passed\n'
+  exit 0
+fi
+
 tmpdir=$(mktemp -d /tmp/shibumi-network-ipc-routing.XXXXXX)
 shell_pid=""
 
@@ -27,6 +36,7 @@ cp "$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml" "$tmpdir/network/
 cp "$repo_root/tests/fixtures/NetworkIpcTestPanel.qml" "$tmpdir/fixtures/"
 
 QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY='' \
+SHIBUMI_TEST_NETWORK_IPC_STYLE="${SHIBUMI_TEST_NETWORK_IPC_STYLE:-current}" \
 HOME="$tmpdir/home" XDG_RUNTIME_DIR="$tmpdir/runtime" \
   /usr/bin/quickshell -p "$tmpdir" --no-color \
   >"$tmpdir/quickshell.log" 2>&1 &
@@ -64,7 +74,7 @@ wait_state() {
   fail "expected state $expected, got $actual"
 }
 
-base='backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
+base='backend-closed:a-closed:b-closed:qr-closed:speed-idle:0:details-closed'
 wait_state "$base"
 wait_backend_hidden
 [[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
@@ -76,47 +86,73 @@ ipc network-ipc-routing-test clearSpeedWindowProbe >/dev/null
 [[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
   || fail 'speed window probe did not close'
 ipc omarchy.network open >/dev/null
-wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
 wait_backend_hidden
 ipc network-ipc-routing-test focusB >/dev/null
 ipc network-ipc-routing-test closeA >/dev/null
 wait_state "$base"
 ipc omarchy.network toggle >/dev/null
-wait_state 'backend-open:a-closed:b-open:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-closed:b-open:qr-closed:speed-idle:0:details-closed'
 ipc network-ipc-routing-test openA >/dev/null
-wait_state 'backend-open:a-open:b-open:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-open:b-open:qr-closed:speed-idle:0:details-closed'
 ipc network-ipc-routing-test closeB >/dev/null
-wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
 ipc omarchy.network toggle >/dev/null
-wait_state 'backend-open:a-open:b-open:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-open:b-open:qr-closed:speed-idle:0:details-closed'
 ipc omarchy.network close >/dev/null
-wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
 ipc network-ipc-routing-test closeA >/dev/null
 wait_state "$base"
 ipc network-ipc-routing-test focusA >/dev/null
+ipc network-ipc-routing-test openA >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
+ipc omarchy.network close >/dev/null
+wait_state "$base"
+ipc network-ipc-routing-test openA >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
+ipc omarchy.network toggle >/dev/null
+wait_state "$base"
+ipc omarchy.network open >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
+ipc network-ipc-routing-test focusB >/dev/null
+ipc network-ipc-routing-test openB >/dev/null
+wait_state 'backend-closed:a-open:b-open:qr-closed:speed-idle:0:details-closed'
+ipc omarchy.network close >/dev/null
+wait_state "$base"
+ipc network-ipc-routing-test focusA >/dev/null
+ipc omarchy.network open >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:0:details-closed'
 ipc omarchy.network showQr >/dev/null
-wait_state 'backend-closed:a-closed:b-closed:qr-open:speed-modal-closed:speed-idle:details-closed'
+wait_state 'backend-closed:a-closed:b-closed:qr-open:speed-idle:0:details-closed'
 [[ $(overlay_window_state) == qr-visible:speed-hidden ]] \
   || fail 'authoritative QR overlay was suppressed with KeyboardPanel'
-ipc network-ipc-routing-test closeQr >/dev/null
+ipc omarchy.network close >/dev/null
 wait_state "$base"
 [[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
-  || fail 'authoritative QR overlay did not close'
-ipc omarchy.network speedTest >/dev/null
-wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-running:details-open'
+  || fail 'authoritative QR overlay did not close through public IPC'
+ipc omarchy.network showQr >/dev/null
+wait_state 'backend-closed:a-closed:b-closed:qr-open:speed-idle:0:details-closed'
+ipc omarchy.network toggle >/dev/null
+wait_state "$base"
 [[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
-  || fail 'redirected speed overlay did not hand off to Shibumi details'
-ipc omarchy.network close >/dev/null
-wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
-ipc omarchy.network toggle >/dev/null
-wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
-ipc omarchy.network toggle >/dev/null
-wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
-ipc omarchy.network open >/dev/null
-wait_state 'backend-open:a-open:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
+  || fail 'authoritative or cloned QR overlay did not close through toggle'
+ipc network-ipc-routing-test reloadBackend >/dev/null
+wait_state "$base"
+ipc omarchy.network speedTest >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-running:1:details-open'
+[[ $(overlay_window_state) == qr-hidden:speed-hidden ]] \
+  || fail 'inline speed-test routing opened an Omarchy speed overlay'
 ipc network-ipc-routing-test closeA >/dev/null
-wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-modal-closed:speed-idle:details-open'
+wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-idle:1:details-open'
+ipc omarchy.network open >/dev/null
+wait_state 'backend-closed:a-open:b-closed:qr-closed:speed-idle:1:details-open'
+ipc omarchy.network close >/dev/null
+wait_state 'backend-closed:a-closed:b-closed:qr-closed:speed-idle:1:details-open'
 wait_backend_hidden
+[[ $(ipc network-ipc-routing-test backendOpenCount) == 0 ]] \
+  || fail "${SHIBUMI_TEST_NETWORK_IPC_STYLE:-current} host backend opened behind Shibumi"
+[[ $(ipc network-ipc-routing-test officialSpeedRuns) == 0 ]] \
+  || fail "${SHIBUMI_TEST_NETWORK_IPC_STYLE:-current} host IPC started its official speed test"
 
 ipc_show=$(env WAYLAND_DISPLAY= XDG_RUNTIME_DIR="$tmpdir/runtime" \
   /usr/bin/qs ipc -p "$tmpdir" show)
@@ -130,4 +166,5 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|failed to load' \
   fail 'runtime emitted a QML error'
 fi
 
-printf 'network IPC routing regression passed\n'
+printf 'network IPC routing regression passed (%s host style)\n' \
+  "${SHIBUMI_TEST_NETWORK_IPC_STYLE:-current}"

@@ -20,6 +20,8 @@ Item {
     { ssid: "Fixture Network", connected: true }
   ]
   property int enterpriseConnectCount: 0
+  // Deliberate legacy trap: Shibumi must not delegate its inline speed test
+  // back to these formerly host-owned fields or function.
   property bool speedTestRunning: false
   property string speedTestPhase: ""
   property string speedTestDownloadMbps: ""

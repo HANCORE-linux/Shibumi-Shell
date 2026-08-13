@@ -9,6 +9,7 @@ Item {
 
   required property var bar
   required property Item ownerWidget
+  property var networkService: null
   property Component panelComponent: null
   property url panelSource: ""
   property var panelSettings: ({})
@@ -152,7 +153,7 @@ Item {
     readonly property color urgent: realBar ? realBar.urgent : foreground
     readonly property bool foregroundAnimationEnabled: realBar
       ? realBar.foregroundAnimationEnabled !== false : false
-    readonly property var shell: realBar ? realBar.shell : null
+    readonly property var shell: hostShellProxy
     readonly property var activePopout: realBar ? realBar.activePopout : null
     readonly property var clickTargets: realBar ? realBar.clickTargets : []
 
@@ -183,6 +184,27 @@ Item {
     function targetBelongsToWindow(target, window) {
       return realBar && typeof realBar.targetBelongsToWindow === "function"
         ? realBar.targetBelongsToWindow(target, window) : false
+    }
+  }
+
+  QtObject {
+    id: hostShellProxy
+
+    readonly property var realShell: root.bar ? root.bar.shell : null
+
+    function summon(id, payloadJson) {
+      if (String(id || "") === "omarchy.speedtest") {
+        return root.networkService
+          && typeof root.networkService.runSpeedTest === "function"
+          && root.networkService.runSpeedTest() ? "ok" : "unknown"
+      }
+      return realShell && typeof realShell.summon === "function"
+        ? realShell.summon(id, payloadJson) : "unknown"
+    }
+
+    function hide(id) {
+      return realShell && typeof realShell.hide === "function"
+        ? realShell.hide(id) : undefined
     }
   }
 

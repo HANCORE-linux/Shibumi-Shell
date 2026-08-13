@@ -1082,32 +1082,18 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     rg -q "${network_contract}" "$official_network_panel" \
       || fail "official network panel contract changed: $network_contract"
   done
-  if rg -q 'speedTestRunning' "$official_network_panel"; then
-    for speed_contract in speedTestRunning speedTestPhase \
-      speedTestDownloadMbps speedTestUploadMbps speedTestError runSpeedTest \
-      hideSpeedTest; do
-      rg -q "$speed_contract" "$official_network_panel" \
-        || fail "legacy network speed-test contract changed: $speed_contract"
-    done
-  else
-    rg -q 'summonSpeedTest' "$official_network_panel" \
-      || fail "network panel exposes neither legacy nor standalone speed test"
-    official_speedtest_panel=${OMARCHY_PATH}/shell/plugins/panels/speedtest/Panel.qml
-    official_speedtest_manifest=${OMARCHY_PATH}/shell/plugins/panels/speedtest/manifest.json
-    [[ -s $official_speedtest_panel && -s $official_speedtest_manifest ]] \
-      || fail "official standalone speed-test panel is missing"
-    jq -e '
-      .id == "omarchy.speedtest"
-      and .kinds == ["panel"]
-      and .entryPoints.panel == "Panel.qml"
-    ' "$official_speedtest_manifest" >/dev/null \
-      || fail "official standalone speed-test manifest changed"
-    for speed_contract in running phase downloadMbps uploadMbps error \
-      runSpeedTest close; do
-      rg -q "$speed_contract" "$official_speedtest_panel" \
-        || fail "standalone speed-test contract changed: $speed_contract"
-    done
-  fi
+  official_network_speedtest=${OMARCHY_PATH}/bin/omarchy-network-speedtest
+  [[ -x $official_network_speedtest ]] \
+    || fail "official network speed-test command is missing"
+  for speed_contract in \
+    'direction="${1:-}"' \
+    'down | up' \
+    'omarchy-network-speedtest [down|up]' \
+    'format_mbps' \
+    'trap cleanup EXIT'; do
+    rg -Fq "$speed_contract" "$official_network_speedtest" \
+      || fail "network speed-test command changed: $speed_contract"
+  done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
   for monitor_contract in brightnessAvailable brightnessPercent refresh \

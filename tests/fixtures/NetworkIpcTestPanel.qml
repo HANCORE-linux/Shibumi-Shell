@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
 Item {
@@ -9,9 +10,11 @@ Item {
   property var settings: ({})
   property bool manageIpc: false
   property bool opened: false
+  property bool legacyHostStyle:
+    Quickshell.env("SHIBUMI_TEST_NETWORK_IPC_STYLE") === "legacy"
+  property int backendOpenCount: 0
+  property int officialSpeedRunCount: 0
   property bool qrVisible: false
-  property bool speedTestModalOpen: false
-  property bool speedTestRunning: false
   property bool speedWindowProbe: false
   property bool networkManagerAvailable: true
   property string kind: "wifi"
@@ -25,11 +28,14 @@ Item {
   property var info: ({})
 
   readonly property QtObject controller: QtObject {
-    function show() { root.opened = true }
+    function show() {
+      root.backendOpenCount++
+      root.opened = true
+    }
     function hide() { root.opened = false }
   }
 
-  readonly property bool overlayVisible: qrVisible || speedTestModalOpen
+  readonly property bool overlayVisible: qrVisible
   readonly property bool backendKeyboardPanelOpen:
     backendKeyboardPanel.open
   readonly property bool backendKeyboardPanelVisible:
@@ -56,14 +62,13 @@ Item {
   QtObject {
     id: speedWindow
     property Item anchorItem: root
-    property bool open: root.speedTestModalOpen
-    property bool visible: root.speedTestModalOpen || root.speedWindowProbe
+    property bool open: false
+    property bool visible: root.speedWindowProbe
   }
 
   function open() {
     if (overlayVisible) {
       hideWifiQr()
-      hideSpeedTest()
       return
     }
     controller.show()
@@ -71,7 +76,6 @@ Item {
   function close() {
     controller.hide()
     hideWifiQr()
-    hideSpeedTest()
   }
   function refresh(_scan) {}
   function showWifiQr(_force) {
@@ -79,14 +83,18 @@ Item {
     qrVisible = true
   }
   function hideWifiQr() { qrVisible = false }
-  function showSpeedTest() {
-    opened = false
-    speedTestModalOpen = true
-    speedTestRunning = true
+  function summonWifiQr(_forceDetect) {
+    controller.hide()
+    if (bar && bar.shell && typeof bar.shell.summon === "function")
+      bar.shell.summon("omarchy.wifiqr", "{}")
   }
-  function hideSpeedTest() {
-    speedTestModalOpen = false
-    speedTestRunning = false
+  function summonSpeedTest() {
+    controller.hide()
+    if (bar && bar.shell && typeof bar.shell.summon === "function")
+      bar.shell.summon("omarchy.speedtest", "{}")
+  }
+  function showLegacySpeedTest() {
+    officialSpeedRunCount++
   }
 
   IpcHandler {
@@ -96,7 +104,13 @@ Item {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.opened ? root.close() : root.open() }
-    function showQr(): void { root.showWifiQr(true) }
-    function speedTest(): void { root.showSpeedTest() }
+    function showQr(): void {
+      if (root.legacyHostStyle) root.showWifiQr(true)
+      else root.summonWifiQr(true)
+    }
+    function speedTest(): void {
+      if (root.legacyHostStyle) root.showLegacySpeedTest()
+      else root.summonSpeedTest()
+    }
   }
 }

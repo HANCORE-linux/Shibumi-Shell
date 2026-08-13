@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+child_pid=""
+cleanup() {
+  if [[ -n $child_pid ]]; then
+    kill "$child_pid" 2>/dev/null || true
+    wait "$child_pid" 2>/dev/null || true
+  fi
+}
+trap 'exit 0' TERM INT
+trap cleanup EXIT
+
+bash -c '
+  trap "" TERM INT
+  printf "%s\n" "$$" >"$SHIBUMI_SPEEDTEST_RESISTANT_CHILD_PID_LOG"
+  while true; do sleep 1; done
+' &
+child_pid=$!
+printf '%s\n' "$$" >"$SHIBUMI_SPEEDTEST_RESISTANT_PID_LOG"
+printf '8.5\n'
+while true; do sleep 0.1; done

@@ -39,7 +39,7 @@ Every feature has exactly one state owner and one action boundary:
 | G8 | Weather, clock, date, status indicators, Omarchy update | Shared Shibumi clock/status adapters plus official Quattro weather-detail, idle, notification, and update owners | Single V1 pill, lazy routed calendar, local weather/status/update facades, child settings, and monitor-local normal/compact/minimal stages are implemented. Top weather, update-available, idle/DND, the complete recording-indicator lifecycle, and a real Voxtype recording/transcription cycle pass on the validation system; bottom and physical multi-output acceptance remain. |
 | G9 | MPRIS | Keep-loaded official `omarchy.media` service plus one lazy process-wide Shibumi Cava service | Preserve the default row and current V1 FULL/muse 24-band spectrum, vinyl, transport, click, and wheel outcome; implementation plus real-player/failure/resource/Top-Bottom single-output acceptance pass, while multiple-real-player and physical multi-output gates remain |
 | G10 | Idle inhibitor, media browser, theme/wallpaper picker | Surface-bound Quickshell idle inhibitor, Omarchy theme/background actions, and one root-owned Shibumi picker/media controller | V1 quick-tools pill plus Tanzaku and Hearthstone presentation-only views; Quattro keeps its native carousel; basic focused-output runtime and worker cleanup accepted on the validation system |
-| G11 | Network | One root-owned service around the official `omarchy.network` backend; one panel-lifecycle saved-profile adapter fills the host API gap | V1 `NET`/SSID/signal and compact views plus a lazy local details/DNS/speed-test/available/saved/connect/forget panel; top Wayland mapping and cleanup pass on the validation system, while mutation, bottom, and physical multi-output acceptance remain |
+| G11 | Network | One root-owned service around the official `omarchy.network` state/action backend, plus Shibumi-owned inline speed-test and saved-profile workers | V1 `NET`/SSID/signal and compact views plus a lazy local details/DNS/speed-test/available/saved/connect/forget panel; top Wayland mapping and cleanup pass on the validation system, while mutation, bottom, and physical multi-output acceptance remain |
 | G12 | Battery | One root-owned Shibumi power service over Quickshell's UPower singleton; Quattro battery helper only while the detail panel is open | V1 compact/full battery view and lazy battery panel; hidden on batteryless desktops; a real discharging-to-charging transition passes on the validation system |
 | G13 | Brightness | One root-owned service around the complete official `omarchy.monitor` backend | V1 `BRI`/sun/percentage and compact views plus a lazy, screen-local Shibumi brightness/scale/display panel; top/Bottom mapping, reversible laptop brightness mutation, and a real `1.0 -> 1.25 -> 1.0` scale round trip pass on the validation system, while physical display enable/disable and multi-output acceptance remain |
 | G14 | Power profile | Same root-owned Shibumi power service; one Quattro profile-list poller and one validated setter | V1 compact/full profile view and lazy profile panel; remains available without a battery |
@@ -177,11 +177,14 @@ Network uses the same state/action delegation principle as audio, but the owner
 must be root-scoped: Quattro's component includes a permanent three-second bar
 status process, so instantiating it inside every output would duplicate work.
 One `NetworkService` hosts that component, and all G11 widgets consume it.
-Screen-local popups delegate visible-network, DNS, and speed-test mutations to
-the official backend. A lifecycle-only `nmcli` query/action path adds saved
-profiles that are not currently visible because Quickshell's model omits them.
-One open-only verbose status process supplies throughput without restoring V1's
-permanent `/proc`/`ip`/`iw` poller.
+Screen-local popups delegate visible-network and DNS mutations to the official
+backend. The root service runs `omarchy-network-speedtest` itself for bounded
+download/upload phases and publishes progress only to Shibumi's inline panel;
+it never loads Omarchy's standalone speed-test panel. A lifecycle-only `nmcli`
+query/action path adds saved profiles that are not currently visible because
+Quickshell's model omits them. One shared verbose status process runs while a
+Network panel is open or an Ethernet bar still consumes throughput, without
+restoring V1's permanent `/proc`/`ip`/`iw` poller.
 
 ## Sequencing Decision
 
