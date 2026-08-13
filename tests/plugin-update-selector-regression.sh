@@ -25,8 +25,8 @@ printf 'initial line\n' > "$author/update.txt"
 git -C "$author" add manifest.json update.txt
 git -C "$author" commit --quiet -m initial
 git clone --quiet "$author" "$plugins/third.party.git"
-# A deliberately long review proves the Shibumi wrapper reaches Omarchy's
-# confirmation without an implicit git pager swallowing the terminal first.
+# A deliberately long review proves Omarchy keeps ownership of its pager and
+# reaches confirmation after the user exits that pager with `q`.
 for line in $(seq 1 400); do
   printf 'changed line %04d\n' "$line"
 done > "$author/update.txt"
@@ -133,10 +133,11 @@ done
 
 grep -Fq 'gum choose --no-limit' "$updater" \
   || fail 'multi-selection delegation drifted'
-grep -Fq 'export GIT_PAGER=cat' "$updater" \
-  || fail 'long changed-code review can disappear behind an implicit pager'
-grep -Fq 'full diff, then ask for confirmation' "$updater" \
-  || fail 'changed-code review does not explain the second confirmation'
+if grep -Fq 'GIT_PAGER=' "$updater"; then
+  fail 'Shibumi overrides the authoritative Omarchy diff pager'
+fi
+grep -Fq "if Omarchy opens a diff pager, exit it with q" "$updater" \
+  || fail 'changed-code review does not explain how to leave the pager'
 grep -Fq 'omarchy-plugin-update "$plugin_id"' "$updater" \
   || fail 'updates are not delegated to the authoritative Omarchy updater'
 if grep -Fq 'omarchy-plugin-update "$plugin_id" --yes' "$updater"; then
@@ -195,14 +196,14 @@ run_selector() {
       /dev/null
 }
 
-cancel_output=$(run_selector deny)
+cancel_output=$(printf q | run_selector deny)
 grep -Fq 'Changes for third.party.git:' <<<"$cancel_output" \
   || fail 'authoritative updater did not show the changed-code diff'
 grep -Fq 'FIXTURE_CONFIRM=Update third.party.git?' <<<"$cancel_output" \
-  || fail 'long changed-code review did not reach the final TTY confirmation'
-grep -Fq 'Reviewing third.party.git: Omarchy will show the full diff' \
+  || fail 'q did not leave the authoritative pager for final confirmation'
+grep -Fq "Reviewing third.party.git: if Omarchy opens a diff pager, exit it with q" \
   <<<"$cancel_output" \
-  || fail 'wrapper did not announce the review and confirmation sequence'
+  || fail 'wrapper did not announce the authoritative pager sequence'
 [[ $(git -C "$plugins/third.party.git" rev-parse HEAD) == "$initial_head" ]] \
   || fail 'cancelling changed-code review modified plugin HEAD'
 [[ -z $(git -C "$plugins/third.party.git" status --porcelain) ]] \
@@ -212,7 +213,7 @@ grep -Fq 'Reviewing third.party.git: Omarchy will show the full diff' \
 printf 'local edit\n' > "$plugins/third.party.git/update.txt"
 local_edit_hash=$(sha256sum "$plugins/third.party.git/update.txt" | awk '{print $1}')
 set +e
-local_output=$(run_selector allow 2>&1)
+local_output=$(printf q | run_selector allow 2>&1)
 local_rc=$?
 set -e
 [[ $local_rc -eq 1 ]] || fail "local-change failure returned $local_rc"
@@ -232,7 +233,7 @@ git -C "$plugins/third.party.git" restore -- update.txt
 
 # Validation failure must rollback the fetched fast-forward and return failure.
 set +e
-validation_output=$(run_selector allow fail 2>&1)
+validation_output=$(printf q | run_selector allow fail 2>&1)
 validation_rc=$?
 set -e
 [[ $validation_rc -eq 1 ]] || fail "validation failure returned $validation_rc"
@@ -243,7 +244,7 @@ grep -Fq "failed validation; rolled back" <<<"$validation_output" \
 [[ -z $(git -C "$plugins/third.party.git" status --porcelain) ]] \
   || fail 'validation rollback left the plugin worktree dirty'
 
-apply_output=$(run_selector allow)
+apply_output=$(printf q | run_selector allow)
 grep -Fq 'Changes for third.party.git:' <<<"$apply_output" \
   || fail 'confirmed update did not show the changed-code diff'
 [[ $(git -C "$plugins/third.party.git" rev-parse HEAD) == "$remote_head" ]] \

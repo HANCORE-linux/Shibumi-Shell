@@ -9,11 +9,6 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_ASKPASS=/bin/false
 export SSH_ASKPASS=/bin/false
 export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -oBatchMode=yes}"
-# Omarchy owns the changed-code review and final confirmation. Keep its plain
-# git fallback out of an implicit pager so long diffs reach that confirmation
-# without requiring an undiscoverable `q` first. Delta already disables paging.
-export GIT_PAGER=cat
-
 plugins_dir="${SHIBUMI_PLUGIN_DIR:-$HOME/.config/omarchy/plugins}"
 mode="select"
 
@@ -196,7 +191,7 @@ done <<< "$selected"
 echo
 update_failed=0
 for plugin_id in "${selected_ids[@]}"; do
-  echo "Reviewing $plugin_id: Omarchy will show the full diff, then ask for confirmation."
+  echo "Reviewing $plugin_id: if Omarchy opens a diff pager, exit it with q; then confirm the update."
   if ! omarchy-plugin-update "$plugin_id"; then
     update_failed=1
   fi
