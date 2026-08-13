@@ -375,7 +375,7 @@ for configure_contract in \
   'ActiveBarSettingsPage.qml:property bool motionDetailOpen: false' \
   'ActiveBarSettingsPage.qml:columns: 3' \
   'ActiveBarSettingsPage.qml:motionEnabled && (selected || previewPointer.containsMouse)' \
-  'ActiveBarSettingsPage.qml:accessibleDescription: "Add slots and place V2 dividers"' \
+  'ActiveBarSettingsPage.qml:detail: "Add slots and dividers"' \
   'ControlSettings.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
@@ -779,17 +779,16 @@ for route_contract in \
   'label: "Edit slots"' \
   'label: "Edit layout"' \
   'label: "Restore layout"' \
-  'label: "Protect V1"' \
-  'label: "Protect V2"' \
-  'accessibleName: "Protect V1 layout"' \
-  'accessibleName: "Protect V2 layout"' \
+  'label: "Lock V1 layout"' \
+  'label: "Lock V2 layout"' \
   'readonly property bool activeLayoutProtected:' \
   'readonly property int layoutActionCount:' \
   'readonly property bool layoutActionLabelsFit:' \
   'function toggleActiveLayoutProtection()' \
-  'component LayoutActionCard: Rectangle' \
-  'Accessible.role: checkable ? Accessible.CheckBox : Accessible.Button' \
-  'Accessible.checked: checkable && selected' \
+  'component LayoutProtectionToggle: Rectangle' \
+  'Accessible.role: Accessible.CheckBox' \
+  'Accessible.checked: selected' \
+  'id: protectionTrack' \
   'width: (parent.width - parent.spacing * 2) / 3' \
   'id: reactorRepeater'; do
   rg -Fq "$route_contract" "$control_dir/ActiveBarSettingsPage.qml" \
@@ -887,7 +886,7 @@ rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
 rg -Fq 'visible: root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 slot and divider controls are not capability-gated"
-rg -Fq 'accessibleDescription: "Add slots and place V2 dividers"' \
+rg -Fq 'detail: "Add slots and dividers"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 edit mode does not explain its layout capability"
 
@@ -1607,7 +1606,7 @@ rg -Fq 'function beginBarEditing()' \
 rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V1-only split and gap controls are not capability-gated"
-rg -Fq 'accessibleDescription: "Add slots and place V2 dividers"' \
+rg -Fq 'detail: "Add slots and dividers"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 layout action does not explain its capability contract"
 if rg -Fq 'label: "Group separator"' "$control_dir/BarFunctionsPage.qml"; then

@@ -198,8 +198,10 @@ instead of consuming another full-width row below.
 V2 exposes a single bar edit mode for adding slots and placing dividers, plus
 layout restore. The active generation uses only its concise **V1 LAYOUT** or
 **V2 LAYOUT** heading, without a redundant explanatory paragraph, followed by
-one balanced three-card row: **Edit**, its variant-specific **Protect V1/V2**,
-and **Restore**. The compact Bars panel derives its fitted height from that
+one balanced three-control row: **Edit**, its variant-specific **Lock V1/V2
+layout** toggle, and **Restore**. Edit and Restore retain the established
+horizontal action style; the middle control uses a visible toggle track instead
+of a lock icon. The compact Bars panel derives its fitted height from that
 active page so the complete main route remains visible without scrolling.
 Protection is an independent preference for each generation and both default off. When
 enabled, direct split, divider, and section-boundary clicks require the

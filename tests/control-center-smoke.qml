@@ -981,7 +981,7 @@ ShellRoot {
               || panel.settingsPageItem.splitActionPreviewCount !== 0
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 0
               || panel.settingsPageItem.layoutActionCount !== 3
-              || panel.settingsPageItem.layoutActionCardWidth < 88
+              || panel.settingsPageItem.layoutActionControlWidth < 88
               || !panel.settingsPageItem.layoutActionLabelsFit
               || !panel.compactBarsPage
               || panel.compactBarsPanelHeight > 656
@@ -1009,7 +1009,7 @@ ShellRoot {
               || panel.settingsPageItem.splitActionPreviewCount !== 2
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
               || panel.settingsPageItem.layoutActionCount !== 3
-              || panel.settingsPageItem.layoutActionCardWidth < 88
+              || panel.settingsPageItem.layoutActionControlWidth < 88
               || !panel.settingsPageItem.layoutActionLabelsFit
               || !panel.compactBarsPage
               || panel.compactBarsPanelHeight > 656
@@ -1045,7 +1045,7 @@ ShellRoot {
             || panel.settingsPageItem.splitActionPreviewCount !== 2
             || panel.settingsPageItem.surfaceRadiusOptionCount !== 2
             || panel.settingsPageItem.layoutActionCount !== 3
-            || panel.settingsPageItem.layoutActionCardWidth < 88
+            || panel.settingsPageItem.layoutActionControlWidth < 88
             || !panel.settingsPageItem.layoutActionLabelsFit
             || !panel.compactBarsPage
             || panel.compactBarsPanelHeight > 656
