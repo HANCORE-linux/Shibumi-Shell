@@ -33,6 +33,10 @@
     "centerSectionRevealHeld",
     "centerHoverRevealSuppressed"
   ],
+  "fixedPropertyValues": {
+    "requestedTransparent": false,
+    "transparent": false
+  },
   "requiredMethods": [
     "registeredWidgetComponent",
     "registeredWidgetSource",

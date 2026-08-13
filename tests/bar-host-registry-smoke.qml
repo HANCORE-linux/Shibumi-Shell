@@ -15,6 +15,74 @@ ShellRoot {
     Qt.exit(1)
   }
 
+  function verifyTransparencyContract() {
+    const trueBarConfig = JSON.parse(JSON.stringify(hostBar.barConfig))
+    const trueStoredConfig = JSON.stringify(fakeShell.shellConfig)
+    if (trueBarConfig.transparent !== true
+        || fakeShell.shellConfig.bar.transparent !== true) {
+      fail("enabled stock transparency preference was not present in the fixture")
+      return false
+    }
+
+    hostBar.applyBarConfig()
+    hostBar.setRequestedTransparency(true)
+    if (hostBar.requestedTransparent || hostBar.transparent) {
+      fail("barConfig.transparent=true made Shibumi transparent")
+      return false
+    }
+    if (JSON.stringify(hostBar.barConfig) !== JSON.stringify(trueBarConfig)
+        || JSON.stringify(fakeShell.shellConfig) !== trueStoredConfig) {
+      fail("Shibumi rewrote the enabled stock transparency preference")
+      return false
+    }
+
+    const originalState = JSON.parse(JSON.stringify(stateService.config))
+    const variants = [
+      { shellStyle: "shibumi", v2: false },
+      { shellStyle: "full", v2: true },
+      { shellStyle: "fit", v2: true },
+      { shellStyle: "dock", v2: true },
+      { shellStyle: "notch", v2: true }
+    ]
+    for (let index = 0; index < variants.length; index++) {
+      const next = JSON.parse(JSON.stringify(originalState))
+      if (!next.presentation) next.presentation = ({})
+      next.presentation.shellStyle = variants[index].shellStyle
+      stateService.config = next
+      if (hostBar.layoutController.v2Mode !== variants[index].v2
+          || hostBar.requestedTransparent || hostBar.transparent) {
+        fail((variants[index].v2 ? "V2" : "V1")
+          + " did not remain opaque")
+        return false
+      }
+    }
+    stateService.config = originalState
+
+    const falseBarConfig = JSON.parse(JSON.stringify(trueBarConfig))
+    falseBarConfig.transparent = false
+    const falseShellConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    falseShellConfig.bar.transparent = false
+    fakeShell.shellConfig = falseShellConfig
+    const falseStoredConfig = JSON.stringify(fakeShell.shellConfig)
+    hostBar.barConfig = falseBarConfig
+    hostBar.applyBarConfig()
+    hostBar.setRequestedTransparency(false)
+    if (hostBar.requestedTransparent || hostBar.transparent
+        || hostBar.barConfig.transparent !== false
+        || JSON.stringify(fakeShell.shellConfig) !== falseStoredConfig) {
+      fail("disabled stock transparency preference changed behavior")
+      return false
+    }
+
+    trueBarConfig.transparent = true
+    const restoredShellConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    restoredShellConfig.bar.transparent = true
+    fakeShell.shellConfig = restoredShellConfig
+    hostBar.barConfig = trueBarConfig
+    hostBar.applyBarConfig()
+    return !hostBar.requestedTransparent && !hostBar.transparent
+  }
+
   QtObject {
     id: stateService
 
@@ -201,7 +269,9 @@ ShellRoot {
     id: fakeShell
 
     property var bar: null
-    property var shellConfig: ({ bar: ({ shibumi: stateService.config }) })
+    property var shellConfig: ({
+      bar: ({ transparent: true, shibumi: stateService.config })
+    })
 
     function serviceFor(pluginId) {
       if (pluginId === "hancore.shibumi.state") return stateService
@@ -316,7 +386,7 @@ ShellRoot {
     barWidgetRegistry: fakeBarWidgetRegistry
     barConfig: ({
       position: "top",
-      transparent: false,
+      transparent: true,
       style: "shibumi",
       centerAnchor: "hancore.shibumi.center",
       layout: { left: [], center: [], right: [] },
@@ -856,6 +926,9 @@ ShellRoot {
           || !hostBar.clearConnectedPanel(secondConnectedPanelOwner)) {
         return root.fail("closing panel owner overwrote the active border seam")
       }
+
+      if (!root.verifyTransparencyContract())
+        return root.fail("transparency contract did not settle opaque")
 
       stop()
       console.log("bar host registry smoke passed")

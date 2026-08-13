@@ -282,13 +282,19 @@ barWidgetRegistry
 barConfig
 ```
 
-`barConfig` is host-owned. Shibumi renders it and requests mutations through the
-host API; it must not maintain a competing `shell.json` representation.
+`barConfig` is host-owned. Shibumi consumes supported fields and requests
+mutations through the host API; it must not maintain a competing `shell.json`
+representation. `bar.transparent` is exclusively the saved transparency
+preference of `omarchy.bar`. Shibumi V1 and V2 ignore it, render opaque, expose
+fixed-false compatibility facade values, and never create, remove, or rewrite
+the saved preference.
 
 ### Configuration and reset behavior
 
 - Shibumi owns only its `bar.shibumi` extension inside the host-owned
-  `shell.json` document.
+  `shell.json` document. The sibling `bar.transparent` preference remains
+  stock-bar-owned and survives install, update, activation, deactivation, and
+  migration unchanged.
 - The one-time migration renames `hancore.qsrise.*` IDs, `bar.qsrise`, nested
   plugin-keyed settings, and string references without changing unrelated
   configuration or the user's layout order.

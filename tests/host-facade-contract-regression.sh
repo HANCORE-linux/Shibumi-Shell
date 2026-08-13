@@ -59,6 +59,11 @@ done < <(jq -r '.requiredProperties[]' "$contract")
 rg -q "^[[:space:]]*readonly property int shibumiHostContractVersion:[[:space:]]*$contract_version([[:space:]]|$)" \
   "$bar_source" || fail "host contract identity does not equal $contract_version"
 
+while IFS=$'\t' read -r name value; do
+  rg -q "^[[:space:]]*readonly property bool ${name}:[[:space:]]*${value}([[:space:]]|$)" \
+    "$bar_source" || fail "fixed facade property drifted: $name"
+done < <(jq -r '.fixedPropertyValues | to_entries[] | [.key, (.value | tostring)] | @tsv' "$contract")
+
 while IFS= read -r name; do
   rg -q "^[[:space:]]*function[[:space:]]+${name}[[:space:]]*\(" "$bar_source" \
     || fail "missing required method: $name"

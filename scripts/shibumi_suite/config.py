@@ -124,7 +124,15 @@ def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
         raise ConfigError(f"cannot read shell config {source}: {error}") from error
     if not isinstance(data, dict):
         raise ConfigError(f"shell config must be a JSON object: {source}")
-    return data, source == path
+    user_config_exists = source == path
+    if not user_config_exists:
+        # Host defaults provide a construction fallback, not a saved stock-bar
+        # transparency preference. Do not materialize that preference merely
+        # because Shibumi creates the first user shell configuration.
+        bar = data.get("bar")
+        if isinstance(bar, dict):
+            bar.pop("transparent", None)
+    return data, user_config_exists
 
 
 def _normalize(config: dict[str, Any]) -> dict[str, Any]:
@@ -304,6 +312,12 @@ def remove_suite(
             restored_layout[region] = entries
         restored["layout"] = restored_layout
         result["bar"] = restored
+        if "transparent" in current_bar:
+            result["bar"]["transparent"] = copy.deepcopy(
+                current_bar["transparent"]
+            )
+        else:
+            result["bar"].pop("transparent", None)
         if keep_settings and isinstance(current_bar.get("shibumi"), dict):
             result["bar"]["shibumi"] = copy.deepcopy(current_bar["shibumi"])
     elif result["bar"].get("id") == active_bar:

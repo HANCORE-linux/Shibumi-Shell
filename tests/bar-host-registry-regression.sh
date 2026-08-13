@@ -46,6 +46,34 @@ for provider_lifecycle_contract in \
     || fail "provider lifecycle contract drifted: $provider_lifecycle_contract"
 done
 
+for bar_host in \
+    "$repo_root/Bar.qml" \
+    "$repo_root/hancore.shibumi.bar/Bar.qml"; do
+  for fixed_property in \
+      'readonly property bool requestedTransparent: false' \
+      'readonly property bool transparent: false'; do
+    rg -Fq "$fixed_property" "$bar_host" \
+      || fail "opaque facade contract drifted in ${bar_host#$repo_root/}: $fixed_property"
+  done
+  if rg -q 'config\.transparent|^[[:space:]]*(requestedTransparent|transparent)[[:space:]]*=' \
+      "$bar_host"; then
+    fail "Shibumi applies the stock transparency preference in ${bar_host#$repo_root/}"
+  fi
+  rg -Uq 'function setRequestedTransparency\(value\) \{[^}]*return false' \
+    "$bar_host" \
+    || fail "transparency compatibility method is not a no-op in ${bar_host#$repo_root/}"
+done
+
+for bar_surface in \
+    "$repo_root/styles/shibumi/BarSurface.qml" \
+    "$repo_root/hancore.shibumi.bar/styles/shibumi/BarSurface.qml"; do
+  rg -Fq 'visible: true' "$bar_surface" \
+    || fail "V1/V2 chrome is not explicitly opaque in ${bar_surface#$repo_root/}"
+  if rg -q 'bar\.transparent' "$bar_surface"; then
+    fail "bar surface still consumes stock transparency in ${bar_surface#$repo_root/}"
+  fi
+done
+
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'
 [[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'

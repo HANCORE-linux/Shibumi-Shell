@@ -634,6 +634,14 @@ def command_migrate(
         payload_digest, plugin_digests = transaction.stage(
             specs, revision=revision, suite_version=suite.version
         )
+        previous_bar = previous_bar_for_state(legacy_state, defaults)
+        current_bar = current.get("bar")
+        if isinstance(current_bar, dict) and "transparent" in current_bar:
+            previous_bar["transparent"] = copy.deepcopy(
+                current_bar["transparent"]
+            )
+        else:
+            previous_bar.pop("transparent", None)
         desired_state = make_install_state(
             suite,
             list(profile.install),
@@ -642,7 +650,7 @@ def command_migrate(
             revision,
             payload_digest,
             plugin_digests,
-            previous_bar=previous_bar_for_state(legacy_state, defaults),
+            previous_bar=previous_bar,
         )
         desired_state["migratedFrom"] = {
             "suiteId": LEGACY_SUITE_ID,

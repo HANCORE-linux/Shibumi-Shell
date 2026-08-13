@@ -34,7 +34,6 @@ Item {
   property string home: Quickshell.env("HOME")
   property var fallbackBarConfig: ({
     position: "top",
-    transparent: false,
     style: "shibumi",
     centerAnchor: "omarchy.clock",
     layout: { left: [], center: [], right: [] }
@@ -42,8 +41,10 @@ Item {
   property var layoutConfig: fallbackBarConfig.layout
   property string centerAnchor: ""
   property string position: "top"
-  property bool requestedTransparent: false
-  property bool transparent: false
+  // Quattro keeps this facade surface for stock-widget compatibility, but
+  // barConfig.transparent belongs exclusively to the stock Omarchy bar.
+  readonly property bool requestedTransparent: false
+  readonly property bool transparent: false
   property bool barToggledOff: false
   property bool barToggleStateLoaded: false
   readonly property var idleService: root.shell
@@ -191,7 +192,6 @@ Item {
   function applyBarConfig() {
     const config = Util.isPlainObject(barConfig) ? barConfig : fallbackBarConfig
     position = normalizePosition(config.position)
-    setRequestedTransparency(config.transparent === true)
     requestedStyleId = String(config.style || "shibumi")
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
     const nextLayout = Util.normalizeLayout(config.layout)
@@ -287,8 +287,9 @@ Item {
   }
 
   function setRequestedTransparency(value) {
-    requestedTransparent = value === true
-    transparent = requestedTransparent
+    // Compatibility no-op: Shibumi V1/V2 are always opaque and must neither
+    // apply nor rewrite the stock Omarchy bar's saved preference.
+    return false
   }
 
   function layoutEntries(region) {

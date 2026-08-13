@@ -245,7 +245,9 @@ Item {
         screenName: root.screenName
         screenX: horizontalSurface.shellX
         runs: horizontalSurface.runs
-        visible: !root.bar.transparent
+        // V1 and every V2 shell form are intentionally opaque. The saved
+        // transparency preference belongs only to the stock Omarchy bar.
+        visible: true
         x: horizontalSurface.shellX
         width: Math.max(0, horizontalSurface.shellWidth)
         height: horizontalSurface.shibumiShell

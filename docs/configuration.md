@@ -123,6 +123,12 @@ layout snapshots through the suite's continuity manager.
 - `omarchy bar defaults` replaces the complete `bar` object, including
   `bar.shibumi`.
 
+`bar.transparent` belongs to the stock `omarchy.bar`. Shibumi V1 and V2 remain
+opaque regardless of that value and provide no transparency control. Suite
+install, update, activation, deactivation, and migration preserve an existing
+preference unchanged, so returning to `omarchy.bar` restores its previous
+transparent or opaque presentation.
+
 ## Plugin installation and suite state
 
 Installed plugin payloads live under:

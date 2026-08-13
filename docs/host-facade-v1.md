@@ -23,7 +23,8 @@ implements Shibumi-only split, style, or layout-control methods. See
 Omarchy may assign `omarchyPath`, `shell`, `manifest`, `pluginRegistry`,
 `barWidgetRegistry`, and `barConfig` after constructing a third-party bar.
 Those properties remain optional at QML construction time. The bar exposes
-`hostReady` only after every required injection is valid.
+`hostReady` only after every required injection is valid. The injected
+`barConfig.transparent` field is stock-bar state, not a Shibumi input.
 
 ## Public Shibumi Surface
 
@@ -52,8 +53,12 @@ official Omarchy contract.
 
 The bar continues to expose the standard Omarchy color, font, position,
 tooltip, shell and bar-widget-registry properties consumed by official
-components. Compatibility is verified against the supported Quattro commit and
-the validation system; it is not inferred from successful QML parsing.
+components. `requestedTransparent` and `transparent` remain on the facade with
+fixed value `false`, and `setRequestedTransparency()` is a compatibility no-op.
+This does not alter the host-owned preference: V1 and V2 always render opaque,
+while switching back to `omarchy.bar` reactivates its saved value.
+Compatibility is verified against the supported Quattro commit and the
+validation system; it is not inferred from successful QML parsing.
 
 ## Internal State
 
@@ -82,6 +87,9 @@ one implementation and duplicate services when the active bar changes.
 - `hancore.shibumi.state` owns normalized Shibumi settings and persistence.
 - The active bar owns layout mutation semantics such as split, reset, style and
   position.
+- Shibumi never mutates or normalizes `bar.transparent`; lifecycle and migration
+  operations preserve both an existing `true` and an existing `false`, and do
+  not generate the field when it is absent.
 - The Control Center calls facade methods for bar-host changes and state-service
   methods for feature settings.
 - A feature plugin never mutates another feature plugin's settings.

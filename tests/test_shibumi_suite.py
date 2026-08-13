@@ -600,6 +600,30 @@ class SuiteLifecycleTests(unittest.TestCase):
             command_install(self.args(), self.suite, self.paths, self.runtime), 0
         )
 
+    def test_fresh_install_does_not_create_stock_transparency_preference(
+        self,
+    ) -> None:
+        defaults = json.loads(self.defaults.read_text(encoding="utf-8"))
+        defaults["bar"]["transparent"] = False
+        self.defaults.write_text(
+            json.dumps(defaults, indent=2) + "\n", encoding="utf-8"
+        )
+        self.assertFalse(self.paths.config_file.exists())
+
+        self.install()
+        installed = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        state = load_install_state(self.paths, self.suite)
+        self.assertNotIn("transparent", installed["bar"])
+        self.assertNotIn("transparent", state["previousBar"])
+
+        self.assertEqual(
+            command_uninstall(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        uninstalled = json.loads(
+            self.paths.config_file.read_text(encoding="utf-8")
+        )
+        self.assertNotIn("transparent", uninstalled["bar"])
+
     def test_lifecycle_never_mutates_hyprland_appearance_config(self) -> None:
         hypr_root = self.root / "config/hypr"
         hypr_root.mkdir(parents=True)
@@ -1318,6 +1342,171 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.restarts, restarts_before + 3)
         self.assertEqual(self.runtime.stops, stops_before + 3)
 
+    def test_lifecycle_preserves_enabled_stock_bar_transparency(self) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["transparent"] = True
+        atomic_write(self.paths.config_file, encode_config(base))
+
+        self.install()
+        installed = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertIs(installed["bar"]["transparent"], True)
+        self.assertIs(
+            load_install_state(self.paths, self.suite)["previousBar"]["transparent"],
+            True,
+        )
+
+        self.assertEqual(
+            command_update(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        updated = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertIs(updated["bar"]["transparent"], True)
+
+        self.assertEqual(
+            command_repair(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        repaired = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertIs(repaired["bar"]["transparent"], True)
+
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        inactive = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(inactive["bar"].get("id", "omarchy.bar"), "omarchy.bar")
+        self.assertIs(inactive["bar"]["transparent"], True)
+
+        self.assertEqual(
+            command_activate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        active = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
+        self.assertIs(active["bar"]["transparent"], True)
+
+    def test_deactivate_uses_current_stock_bar_transparency_preference(
+        self,
+    ) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["transparent"] = True
+        atomic_write(self.paths.config_file, encode_config(base))
+        self.install()
+
+        absent = object()
+        for index, preference in enumerate((False, True, absent)):
+            current = json.loads(
+                self.paths.config_file.read_text(encoding="utf-8")
+            )
+            if preference is absent:
+                current["bar"].pop("transparent", None)
+            else:
+                current["bar"]["transparent"] = preference
+            atomic_write(self.paths.config_file, encode_config(current))
+
+            self.assertEqual(
+                command_deactivate(
+                    self.args(), self.suite, self.paths, self.runtime
+                ),
+                0,
+            )
+            inactive = json.loads(
+                self.paths.config_file.read_text(encoding="utf-8")
+            )
+            if preference is absent:
+                self.assertNotIn("transparent", inactive["bar"])
+            else:
+                self.assertIs(inactive["bar"]["transparent"], preference)
+
+            if index < 2:
+                self.assertEqual(
+                    command_activate(
+                        self.args(), self.suite, self.paths, self.runtime
+                    ),
+                    0,
+                )
+
+    def test_deactivate_preserves_true_over_false_transparency_snapshot(
+        self,
+    ) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["transparent"] = False
+        atomic_write(self.paths.config_file, encode_config(base))
+        self.install()
+
+        current = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        current["bar"]["transparent"] = True
+        atomic_write(self.paths.config_file, encode_config(current))
+
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime),
+            0,
+        )
+        inactive = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertIs(inactive["bar"]["transparent"], True)
+
+    def test_uninstall_uses_current_stock_bar_transparency_preference(
+        self,
+    ) -> None:
+        absent = object()
+        for snapshot, preference in (
+            (True, False),
+            (False, True),
+            (True, absent),
+        ):
+            base = json.loads(self.defaults.read_text(encoding="utf-8"))
+            base["bar"]["transparent"] = snapshot
+            atomic_write(self.paths.config_file, encode_config(base))
+            self.install()
+
+            current = json.loads(
+                self.paths.config_file.read_text(encoding="utf-8")
+            )
+            if preference is absent:
+                current["bar"].pop("transparent", None)
+            else:
+                current["bar"]["transparent"] = preference
+            atomic_write(self.paths.config_file, encode_config(current))
+
+            self.assertEqual(
+                command_uninstall(
+                    self.args(), self.suite, self.paths, self.runtime
+                ),
+                0,
+            )
+            uninstalled = json.loads(
+                self.paths.config_file.read_text(encoding="utf-8")
+            )
+            if preference is absent:
+                self.assertNotIn("transparent", uninstalled["bar"])
+            else:
+                self.assertIs(uninstalled["bar"]["transparent"], preference)
+
+    def test_lifecycle_preserves_disabled_stock_bar_transparency(self) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["transparent"] = False
+        atomic_write(self.paths.config_file, encode_config(base))
+
+        self.install()
+        for operation in (
+            lambda: command_update(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            lambda: command_repair(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            lambda: command_deactivate(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+            lambda: command_activate(
+                self.args(), self.suite, self.paths, self.runtime
+            ),
+        ):
+            current = json.loads(
+                self.paths.config_file.read_text(encoding="utf-8")
+            )
+            self.assertIs(current["bar"]["transparent"], False)
+            self.assertEqual(operation(), 0)
+        current = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertIs(current["bar"]["transparent"], False)
+
     def test_activate_after_deactivate_keeps_host_layouts_separate(self) -> None:
         self.install()
         self.assertEqual(
@@ -1397,9 +1586,45 @@ class SuiteLifecycleTests(unittest.TestCase):
             any(plugin_id.startswith("omarchy.") for plugin_id in layout_ids)
         )
 
+    def test_migration_does_not_create_transparency_preference(self) -> None:
+        self.prepare_legacy_install()
+        config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertNotIn("transparent", config["bar"])
+        defaults = json.loads(self.defaults.read_text(encoding="utf-8"))
+        defaults["bar"]["transparent"] = False
+        self.defaults.write_text(
+            json.dumps(defaults, indent=2) + "\n", encoding="utf-8"
+        )
+
+        self.assertEqual(
+            command_migrate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+
+        migrated = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        state = load_install_state(self.paths, self.suite)
+        self.assertNotIn("transparent", migrated["bar"])
+        self.assertNotIn("transparent", state["previousBar"])
+
+    def test_migration_preserves_false_transparency_preference(self) -> None:
+        self.prepare_legacy_install()
+        config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        config["bar"]["transparent"] = False
+        atomic_write(self.paths.config_file, encode_config(config))
+
+        self.assertEqual(
+            command_migrate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+
+        migrated = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        state = load_install_state(self.paths, self.suite)
+        self.assertIs(migrated["bar"]["transparent"], False)
+        self.assertIs(state["previousBar"]["transparent"], False)
+
     def test_migrate_preserves_settings_and_retires_legacy_namespace(self) -> None:
         legacy_state = self.prepare_legacy_install()
         legacy_config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        legacy_config["bar"]["transparent"] = True
+        atomic_write(self.paths.config_file, encode_config(legacy_config))
         expected_left = [
             entry_id(entry).replace("hancore.qsrise", "hancore.shibumi", 1)
             for entry in legacy_config["bar"]["layout"]["left"]
@@ -1413,6 +1638,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(config["bar"]["id"], "hancore.shibumi.bar")
         self.assertEqual(config["bar"]["centerAnchor"], "hancore.shibumi.center")
         self.assertEqual(config["bar"]["style"], "shibumi")
+        self.assertIs(config["bar"]["transparent"], True)
         self.assertNotIn("qsrise", config["bar"])
         settings = config["bar"]["shibumi"]
         self.assertEqual(settings["iconSize"], 17)
@@ -1444,6 +1670,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             new_state["migratedFrom"]["sourceRevision"],
             legacy_state["sourceRevision"],
         )
+        self.assertIs(new_state["previousBar"]["transparent"], True)
         for new_id in self.suite.plugins:
             old_id = new_id.replace("hancore.shibumi", "hancore.qsrise", 1)
             self.assertTrue((self.paths.plugin_dir / new_id).is_dir())
