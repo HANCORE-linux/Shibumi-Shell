@@ -17,8 +17,8 @@ process.</sub></p>
 [Release status](docs/release-readiness.md)
 
 The current `0.1.1-beta.8` candidate is reviewed against Omarchy
-`4.0.0.r1508.g12af188-1` and Quickshell
-`0.3.0.r18.g10b439f-3`. See the
+`4.0.0.r1664.gb99fd91-1` and Quickshell
+`0.3.0.r20.g28771c7-1`. See the
 [Shibumi host compatibility record](docs/architecture/quattro-compatibility.md)
 for the latest validated host versions.
 

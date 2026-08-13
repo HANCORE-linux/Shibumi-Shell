@@ -34,6 +34,16 @@ ShellRoot {
     Fixtures.NetworkTestPanel {}
   }
 
+  Component {
+    id: currentNetworkPanelComponent
+    Fixtures.NetworkCurrentTestPanel {}
+  }
+
+  Component {
+    id: speedTestPanelComponent
+    Fixtures.NetworkSpeedTestPanel {}
+  }
+
   Item {
     id: fakeBar
     visible: false
@@ -113,6 +123,16 @@ ShellRoot {
     panelComponent: networkPanelComponent
   }
 
+  Item { id: currentSpeedOwner }
+
+  Network.Service {
+    id: currentService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestPanelComponent: speedTestPanelComponent
+    Component.onCompleted: beginSession(currentSpeedOwner)
+  }
+
   Loader {
     id: firstLoader
     active: true
@@ -158,7 +178,8 @@ ShellRoot {
             || root.phaseTicks < 3) return
         if (first.networkService !== second.networkService
             || first.networkService !== sharedNetworkService
-            || !extractedService.ready
+            || !extractedService.ready || !currentService.ready
+            || !currentService.speedTestReady
             || extractedService.kind !== "wifi"
             || extractedService.label !== "Fixture Network"
             || first.mode !== "wifi" || first.label !== "Test Network"
@@ -197,6 +218,18 @@ ShellRoot {
             || extractedService.formatSpeed("") !== "—")
           return root.fail("speed test forwarding and inline Mbps formatting")
         extractedService.backend.speedTestRunning = false
+        if (currentService.legacySpeedTestBackend
+            || !currentService.runSpeedTest()
+            || currentService.speedTestBackend.runCount !== 1
+            || !currentService.speedTestRunning
+            || currentService.speedTestPhase !== "down"
+            || currentService.speedTestDownloadMbps !== "42.5")
+          return root.fail("standalone speed-test adapter contract")
+        const currentSpeedBackend = currentService.speedTestBackend
+        currentService.endSession(currentSpeedOwner)
+        if (currentSpeedBackend.closeCount !== 1
+            || currentService.sessionCount !== 0)
+          return root.fail("standalone speed-test adapter cleanup")
 
         root.fullWidth = first.implicitWidth
         sharedNetworkService.label = "Fixture Wi-Fi network with a deliberately long SSID"

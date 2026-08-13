@@ -84,22 +84,41 @@ if grep -Eq ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' \
   fail "component smoke emitted a QML/runtime warning or error"
 fi
 
-set +e
-legacy_output=$(timeout 8 env \
-  HOME="$tmpdir/home" \
-  QT_QPA_PLATFORM=offscreen \
-  WAYLAND_DISPLAY= \
-  XDG_RUNTIME_DIR="$tmpdir/runtime" \
-  SHIBUMI_TEST_LEGACY_CLAUDE_SOURCE="file://$omarchy_path/shell/plugins/model-usage/providers/Claude.qml" \
-  SHIBUMI_TEST_LEGACY_CODEX_SOURCE="file://$omarchy_path/shell/plugins/model-usage/providers/Codex.qml" \
-  "$quickshell_bin" -p "$repo_root/tests/ai-legacy-provider-contract.qml" \
-  2>&1)
-legacy_rc=$?
-set -e
-printf '%s\n' "$legacy_output"
-[[ $legacy_rc -eq 0 ]] || fail "pinned legacy provider contract exited $legacy_rc"
-grep -F 'AI legacy provider contract passed' <<<"$legacy_output" >/dev/null \
-  || fail "pinned legacy provider contract marker missing"
+legacy_claude="$omarchy_path/shell/plugins/model-usage/providers/Claude.qml"
+legacy_codex="$omarchy_path/shell/plugins/model-usage/providers/Codex.qml"
+agents_manifest="$omarchy_path/shell/plugins/agents/manifest.json"
+if [[ -f $legacy_claude && -f $legacy_codex ]]; then
+  set +e
+  legacy_output=$(timeout 8 env \
+    HOME="$tmpdir/home" \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/runtime" \
+    SHIBUMI_TEST_LEGACY_CLAUDE_SOURCE="file://$legacy_claude" \
+    SHIBUMI_TEST_LEGACY_CODEX_SOURCE="file://$legacy_codex" \
+    "$quickshell_bin" -p "$repo_root/tests/ai-legacy-provider-contract.qml" \
+    2>&1)
+  legacy_rc=$?
+  set -e
+  printf '%s\n' "$legacy_output"
+  [[ $legacy_rc -eq 0 ]] \
+    || fail "pinned legacy provider contract exited $legacy_rc"
+  grep -F 'AI legacy provider contract passed' <<<"$legacy_output" >/dev/null \
+    || fail "pinned legacy provider contract marker missing"
+elif [[ -e $legacy_claude || -e $legacy_codex ]]; then
+  fail "host exposes only part of the legacy model-usage provider contract"
+else
+  [[ -f $agents_manifest ]] \
+    || fail "host exposes neither legacy model-usage nor current agents"
+  jq -e '
+    .id == "omarchy.agents"
+    and .kinds == ["bar-widget"]
+    and .entryPoints.barWidget == "Panel.qml"
+    and (.barWidget.aliases | index("model-usage")) != null
+  ' "$agents_manifest" >/dev/null \
+    || fail "current agents replacement contract drifted"
+  printf 'AI legacy provider contract absent; current agents replacement selected\n'
+fi
 python3 "$repo_root/tests/opencode-usage-regression.py" \
   || fail "OpenCode current-model scope regression failed"
 [[ -s $tmpdir/state/shibumi-ai-agent-update.log ]] \

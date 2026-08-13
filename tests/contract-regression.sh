@@ -1077,11 +1077,37 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   official_network_panel=${OMARCHY_PATH}/shell/plugins/panels/network/Panel.qml
   [[ -s $official_network_panel ]] || fail "official Quattro network panel is missing"
   for network_contract in networkManagerAvailable kind signalStrength \
-    connectedWifiNetwork info wifiNetworks wifiDevice dnsProvider speedTestRunning refresh \
-    connectKnown connectWithPassphrase disconnect forget setDns runSpeedTest; do
+    connectedWifiNetwork info wifiNetworks wifiDevice dnsProvider refresh \
+    connectKnown connectWithPassphrase disconnect forget setDns; do
     rg -q "${network_contract}" "$official_network_panel" \
       || fail "official network panel contract changed: $network_contract"
   done
+  if rg -q 'speedTestRunning' "$official_network_panel"; then
+    for speed_contract in speedTestRunning speedTestPhase \
+      speedTestDownloadMbps speedTestUploadMbps speedTestError runSpeedTest \
+      hideSpeedTest; do
+      rg -q "$speed_contract" "$official_network_panel" \
+        || fail "legacy network speed-test contract changed: $speed_contract"
+    done
+  else
+    rg -q 'summonSpeedTest' "$official_network_panel" \
+      || fail "network panel exposes neither legacy nor standalone speed test"
+    official_speedtest_panel=${OMARCHY_PATH}/shell/plugins/panels/speedtest/Panel.qml
+    official_speedtest_manifest=${OMARCHY_PATH}/shell/plugins/panels/speedtest/manifest.json
+    [[ -s $official_speedtest_panel && -s $official_speedtest_manifest ]] \
+      || fail "official standalone speed-test panel is missing"
+    jq -e '
+      .id == "omarchy.speedtest"
+      and .kinds == ["panel"]
+      and .entryPoints.panel == "Panel.qml"
+    ' "$official_speedtest_manifest" >/dev/null \
+      || fail "official standalone speed-test manifest changed"
+    for speed_contract in running phase downloadMbps uploadMbps error \
+      runSpeedTest close; do
+      rg -q "$speed_contract" "$official_speedtest_panel" \
+        || fail "standalone speed-test contract changed: $speed_contract"
+    done
+  fi
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
   for monitor_contract in brightnessAvailable brightnessPercent refresh \

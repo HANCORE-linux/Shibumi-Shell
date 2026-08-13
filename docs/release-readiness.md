@@ -16,7 +16,7 @@ The current acceptance target is an internal validation system. Its hostname,
 account, and network address are intentionally not part of the public product
 documentation and are not required by Shibumi users.
 
-- **Omarchy**: `4.0.0.r1508.g12af188-1`
+- **Omarchy**: `4.0.0.r1664.gb99fd91-1`
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `DP-1`, `2560x1440`, scale `1.0`
 - **Candidate**: 24 plugins under `hancore.shibumi.*`
@@ -39,18 +39,18 @@ until the revision-bound release collector reruns them:
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Passed through the immutable `12af188` source-parity checkout; the mutable installed-package rerun is blocked by host inventory drift |
+| Quattro compatibility | Passed against package and source-parity `b99fd91`, plus forward snapshot `d6b21f80` |
 | Plugin validation and self-containment | Passed for all 24 plugins |
-| Complete installed-package contract | Blocked externally: `/usr/share/omarchy` has 214 shell inventory entries while the immutable `12af188` package baseline declares 208; not beta.8 evidence |
-| Complete installed-source-parity contract | Passed against immutable `12af188304793b65551b5c43d20f02961dc938a9` |
-| Complete forward-compatibility contract | Passed against immutable `fd1034f71b16aa45d5431ab41ed9e48c89fdac8e` |
+| Complete installed-package contract | Passed against `omarchy-dev 4.0.0.r1664.gb99fd91-1` with 214 bound shell entries |
+| Complete installed-source-parity contract | Passed against immutable `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
+| Complete forward-compatibility contract | Passed against immutable `d6b21f80750ccaf488373973f1ee25db21de7d26` |
 | Agents integration contract | Passed against immutable `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
 | Suite lifecycle unit tests | Passed: 99 of 99 |
 | Control Center manager tests | Passed: 29 of 29 |
 | Health tests | Passed: 31 of 31 |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Beta.7 to beta.8 sandbox pass plus prior physical source passes; exact release-commit live acceptance and clean-commit collector still required |
+| Transactional live update | Beta.7 to beta.8 sandbox pass; exact final-commit live acceptance and clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |

@@ -13,38 +13,36 @@ baseline:
 
 | Component | Observed value |
 | --- | --- |
-| Omarchy package reference | `omarchy-dev 4.0.0.r1508.g12af188-1` |
-| Immutable source-parity revision | `12af188304793b65551b5c43d20f02961dc938a9` |
-| Immutable forward-compatibility revision | `fd1034f71b16aa45d5431ab41ed9e48c89fdac8e` |
-| Quickshell package | `quickshell-git 0.3.0.r18.g10b439f-3` |
+| Omarchy package reference | `omarchy-dev 4.0.0.r1664.gb99fd91-1` |
+| Immutable source-parity revision | `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
+| Immutable forward-compatibility revision | `d6b21f80750ccaf488373973f1ee25db21de7d26` |
+| Quickshell package | `quickshell-git 0.3.0.r20.g28771c7-1` |
 | Validation date | 2026-08-13 |
 
 The package reference declares `provides = omarchy` and remains the accepted
-host-build identity. For beta.8, the complete immutable source-parity checkout
-at the same `12af188` revision and the separate `fd1034f` forward snapshot pass.
-The mutable `/usr/share/omarchy` tree currently has 214 shell inventory entries
-instead of the package baseline's 208, so its installed-package rerun is
-externally blocked and is not beta.8 evidence.
+host-build identity. The complete immutable source-parity checkout is pinned to
+the same `b99fd91` revision; the separate `d6b21f80` snapshot proves bounded
+forward compatibility without following a moving branch.
 
 The package-managed baseline records these authoritative production anchors:
 
 | Contract-sensitive file | SHA-256 |
 | --- | --- |
-| `shell/services/PluginRegistry.qml` | `598b02719d1dd9badd3547194c6772b13bf28928672fd2b3e0cdc9cf6dda2a99` |
-| `shell/shell.qml` | `c1d785275dc379345e9a075dae2066efd7b8d8469bf7b1cdb4d0e91384758836` |
+| `shell/services/PluginRegistry.qml` | `63371e4224f948e5444531282ad9f7c74ca2e578470b549f4c6b898c3a15c50f` |
+| `shell/shell.qml` | `9f1db77dcc3c111ceccc860ac472d19b35d385958a63d270ea51e413ab86f1f0` |
 | `shell/Ui/KeyboardPanel.qml` | `96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d` |
-| `shell/plugins/bar/Bar.qml` | `955558deae28c5b8927962ab32e9f2c9cf14caee5deac7d14808c63c803f5389` |
-| `shell/plugins/bar/BarModel.js` | `c1e90525e4182bee8c3d05a181a0ffeecb303804839d81ceec4ff255ec91943f` |
+| `shell/plugins/bar/Bar.qml` | `8bbe27ad7c617da1a3770fd5731b8cc79935ac34f04873c3933f7ff581a7cb15` |
+| `shell/plugins/bar/BarModel.js` | `908f30edce60dcba46d2039ba3d501fd0faa35fa1f90b7dbda69439288f8a8d0` |
 
 The table is a human-readable set of important anchors, not the complete
 machine identity. Three separate manifests bind every file or symlink below the
 consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 
-- [`omarchy-installed-package-12af188.json`](../../contracts/baselines/omarchy-installed-package-12af188.json)
-  records the package-managed layout at `12af188`;
-- [`omarchy-installed-source-parity-12af188.json`](../../contracts/baselines/omarchy-installed-source-parity-12af188.json)
+- [`omarchy-installed-package-b99fd91.json`](../../contracts/baselines/omarchy-installed-package-b99fd91.json)
+  records the package-managed layout at `b99fd91`;
+- [`omarchy-installed-source-parity-b99fd91.json`](../../contracts/baselines/omarchy-installed-source-parity-b99fd91.json)
   records the full Git checkout of that same installed revision;
-- [`omarchy-forward-compat-fd1034f.json`](../../contracts/baselines/omarchy-forward-compat-fd1034f.json)
+- [`omarchy-forward-compat-d6b21f80.json`](../../contracts/baselines/omarchy-forward-compat-d6b21f80.json)
   records the immutable forward-compatibility snapshot from the engineering
   audit. It does not follow the moving remote branch.
 
@@ -80,9 +78,9 @@ Run the repository contract suite separately against all three host proof axes:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-12af188 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

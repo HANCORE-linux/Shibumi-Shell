@@ -377,21 +377,21 @@ shibumi_load_omarchy_baseline() {
   case $profile in
     installed-package)
       requested_path=${OMARCHY_PATH:-/usr/share/omarchy}
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-12af188.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-b99fd91.json"
       ;;
     installed-source-parity)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-12af188.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-b99fd91.json"
       ;;
     forward-compat)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for forward-compat' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-fd1034f.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-d6b21f80.json"
       ;;
     agents-current)
       requested_path=${OMARCHY_PATH:-}

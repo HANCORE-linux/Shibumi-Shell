@@ -24,6 +24,8 @@ Release candidate for 2026-08-13.
 - Drained the managed Quickshell process before payload swaps and blocked updates while the session lock is active
 - Enforced exclusive bar-widget ownership and hardened group teardown across output lifecycle changes
 - Restored the Omarchy plugin diff pager and kept update panels from covering launched review or updater actions
+- Selected the current `omarchy.agents` replacement when legacy model-usage providers are absent, while retaining the complete legacy contract on older hosts
+- Preserved Shibumi's inline Network speed test after Omarchy moved its runner into the standalone `omarchy.speedtest` panel
 
 ### Known limits
 

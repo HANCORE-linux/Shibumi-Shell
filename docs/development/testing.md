@@ -30,10 +30,10 @@ baseline jobs. The installed-package job defaults to the package-managed host:
 ```
 
 The installed-source-parity job requires an explicit Git checkout of the same
-`12af188` revision as the installed package:
+`b99fd91` revision as the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-12af188 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 ```
 
@@ -41,12 +41,12 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The current AI Agents integration has its own narrower revision-bound host
-contract because `omarchy.agents` postdates those complete baseline axes:
+The AI Agents integration retains its own narrower revision-bound host
+contract in addition to the complete `b99fd91` baseline:
 
 ```bash
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
@@ -54,18 +54,17 @@ SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
 ```
 
 This gate binds the consumed Agents manifest, record reader, updater, and
-Claude/Codex collectors. It does not broaden compatibility claims for other
-mutable files in that host revision.
+Claude/Codex collectors independently of the complete host inventory.
 
 Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The jobs select three repository-owned manifests with non-overlapping
 claims:
 
-- `contracts/baselines/omarchy-installed-package-12af188.json` validates the
+- `contracts/baselines/omarchy-installed-package-b99fd91.json` validates the
   package-managed layout;
-- `contracts/baselines/omarchy-installed-source-parity-12af188.json` proves that
+- `contracts/baselines/omarchy-installed-source-parity-b99fd91.json` proves that
   the source form of the installed revision satisfies the same complete suite;
-- `contracts/baselines/omarchy-forward-compat-fd1034f.json` proves forward
+- `contracts/baselines/omarchy-forward-compat-d6b21f80.json` proves forward
   compatibility with the audit's pinned upstream snapshot.
 
 All three manifests bind the complete consumed `shell`, `bin`, and `config`

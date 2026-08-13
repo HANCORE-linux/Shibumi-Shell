@@ -59,9 +59,9 @@ Run the complete contract against all three pinned Quattro proof axes:
 ```bash
 cd /path/to/shibumi
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-12af188 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-fd1034f \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
   ./tests/omarchy-agents-contract-regression.sh

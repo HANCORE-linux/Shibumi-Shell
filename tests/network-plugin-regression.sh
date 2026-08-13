@@ -26,7 +26,9 @@ cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/network-plugin-smoke.qml" "$tmpdir/shell.qml"
 install -m 0644 "$repo_root/tests/fixtures/NetworkTestService.qml" \
   "$repo_root/tests/fixtures/NetworkTestView.qml" \
-  "$repo_root/tests/fixtures/NetworkTestPanel.qml" "$tmpdir/fixtures/"
+  "$repo_root/tests/fixtures/NetworkTestPanel.qml" \
+  "$repo_root/tests/fixtures/NetworkCurrentTestPanel.qml" \
+  "$repo_root/tests/fixtures/NetworkSpeedTestPanel.qml" "$tmpdir/fixtures/"
 
 set +e
 output=$(timeout 8 env \
@@ -49,6 +51,12 @@ fi
 
 widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 service="$repo_root/hancore.shibumi.network/Service.qml"
+rg -Fq 'registeredPanelSource("omarchy.speedtest")' "$service" \
+  || fail "network service does not resolve the standalone speed-test panel"
+rg -Fq 'readonly property bool legacySpeedTestBackend:' "$service" \
+  || fail "network service lost legacy/current speed-test selection"
+rg -Fq 'id: speedTestLoader' "$service" \
+  || fail "network service does not own one lazy standalone speed-test adapter"
 [[ $(rg -c 'BoundedLabel \{' "$widget") -eq 2 ]] \
   || fail "V1/V2 bounded labels do not share the independent metrics path"
 rg -Fq 'component BoundedLabel: Text' "$widget" \
@@ -170,8 +178,8 @@ if grep -Eq 'height: 8|id: connectionStatus|statusHeadline' <<<"$status_block" \
     || grep -Fq '"\uEB2F"' <<<"$status_block"; then
   fail "network panel still contains the non-repository hero/progress layout"
 fi
-rg -Fq 'backend.runSpeedTest()' "$service" \
-  || fail "inline speed test does not delegate directly to Omarchy's runner"
+rg -Fq 'speedBackend.runSpeedTest()' "$service" \
+  || fail "inline speed test does not delegate to the selected Omarchy runner"
 if rg -q 'showSpeedTest\(' "$repo_root/hancore.shibumi.network"; then
   fail "network plugin opens Omarchy's external speed-test overlay"
 fi

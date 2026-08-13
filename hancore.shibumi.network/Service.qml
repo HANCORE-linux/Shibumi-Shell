@@ -17,7 +17,16 @@ Item {
   readonly property url panelSource: registeredSource("omarchy.network")
   property Component panelComponent: String(panelSource) ? null
     : registeredComponent("omarchy.network")
+  readonly property url speedTestPanelSource:
+    registeredPanelSource("omarchy.speedtest")
+  property Component speedTestPanelComponent: null
   readonly property var backend: bridge.panel
+  readonly property bool legacySpeedTestBackend: backend
+    && typeof backend.runSpeedTest === "function"
+    && "speedTestRunning" in backend
+  readonly property var speedTestBackend: legacySpeedTestBackend
+    ? backend : speedTestLoader.item
+  readonly property bool speedTestReady: speedTestBackend !== null
   readonly property bool ready: backend !== null
   readonly property bool backendAvailable: ready && bridge.backendAvailable
   readonly property string kind: bridge.kind
@@ -42,16 +51,29 @@ Item {
     ? String(backend.dnsProvider || "DHCP") : "DHCP"
   readonly property var dnsProviders: backend && backend.dnsProviders
     ? backend.dnsProviders : ["DHCP", "Cloudflare", "Google", "Custom"]
-  readonly property bool speedTestRunning: backend
-    ? backend.speedTestRunning === true : false
+  readonly property bool speedTestRunning: speedTestBackend
+    ? legacySpeedTestBackend
+      ? speedTestBackend.speedTestRunning === true
+      : speedTestBackend.running === true
+    : false
   readonly property bool speedTestHasRun: speedTestDownloadMbps !== ""
     || speedTestUploadMbps !== ""
-  readonly property string speedTestPhase: backend ? String(backend.speedTestPhase || "") : ""
-  readonly property string speedTestDownloadMbps: backend
-    ? String(backend.speedTestDownloadMbps || "") : ""
-  readonly property string speedTestUploadMbps: backend
-    ? String(backend.speedTestUploadMbps || "") : ""
-  readonly property string speedTestError: backend ? String(backend.speedTestError || "") : ""
+  readonly property string speedTestPhase: speedTestBackend
+    ? String(legacySpeedTestBackend
+      ? speedTestBackend.speedTestPhase || ""
+      : speedTestBackend.phase || "") : ""
+  readonly property string speedTestDownloadMbps: speedTestBackend
+    ? String(legacySpeedTestBackend
+      ? speedTestBackend.speedTestDownloadMbps || ""
+      : speedTestBackend.downloadMbps || "") : ""
+  readonly property string speedTestUploadMbps: speedTestBackend
+    ? String(legacySpeedTestBackend
+      ? speedTestBackend.speedTestUploadMbps || ""
+      : speedTestBackend.uploadMbps || "") : ""
+  readonly property string speedTestError: speedTestBackend
+    ? String(legacySpeedTestBackend
+      ? speedTestBackend.speedTestError || ""
+      : speedTestBackend.error || "") : ""
   readonly property string actionSsid: backend ? String(backend.actionSsid || "") : ""
   readonly property string actionKind: backend ? String(backend.actionKind || "") : ""
   readonly property string failureSsid: backend ? String(backend.failureSsid || "") : ""
@@ -85,6 +107,21 @@ Item {
     const widgets = registry && registry.widgets ? registry.widgets : ({})
     const entry = widgets[String(id || "")]
     return entry && entry.component ? entry.component : null
+  }
+
+  function hostManifest(id) {
+    const registry = shell && "pluginRegistry" in shell
+      ? shell.pluginRegistry : null
+    return registry && registry.installedPlugins
+      ? registry.installedPlugins[String(id || "")] : null
+  }
+
+  function registeredPanelSource(id) {
+    const registry = shell && "pluginRegistry" in shell
+      ? shell.pluginRegistry : null
+    const pluginManifest = hostManifest(id)
+    return registry && typeof registry.entryPointUrl === "function"
+      ? registry.entryPointUrl(pluginManifest, "panel") : ""
   }
 
   function connectedVisibleLabel(rows) {
@@ -131,11 +168,16 @@ Item {
 
   function endSession(owner) {
     if (!owner) return
-    sessionOwners = sessionOwners.filter(candidate => candidate !== owner)
+    const nextOwners = sessionOwners.filter(candidate => candidate !== owner)
+    if (nextOwners.length === 0 && speedTestRunning && speedTestBackend) {
+      if (legacySpeedTestBackend
+          && typeof speedTestBackend.hideSpeedTest === "function")
+        speedTestBackend.hideSpeedTest()
+      else if (typeof speedTestBackend.close === "function")
+        speedTestBackend.close()
+    }
+    sessionOwners = nextOwners
     if (sessionCount !== 0) return
-    if (speedTestRunning && backend
-        && typeof backend.hideSpeedTest === "function")
-      backend.hideSpeedTest()
     // Ethernet bar presentations consume the same central throughput sample as
     // the panel. Keep that one worker alive while a wired route is active.
     if (kind !== "ethernet") {
@@ -330,9 +372,11 @@ Item {
   }
 
   function runSpeedTest() {
-    if (!ready || typeof backend.runSpeedTest !== "function"
-        || backend.speedTestRunning === true) return false
-    backend.runSpeedTest()
+    const speedBackend = speedTestBackend
+    if (!ready || !speedBackend
+        || typeof speedBackend.runSpeedTest !== "function"
+        || speedTestRunning) return false
+    speedBackend.runSpeedTest()
     return true
   }
 
@@ -377,6 +421,23 @@ Item {
     panelComponent: root.panelComponent
     panelSource: root.panelSource
     panelSettings: root.officialSettings()
+  }
+
+  Loader {
+    id: speedTestLoader
+    active: root.sessionCount > 0 && !root.legacySpeedTestBackend
+      && (String(root.speedTestPanelSource) !== ""
+        || root.speedTestPanelComponent !== null)
+    source: active && String(root.speedTestPanelSource) !== ""
+      ? root.speedTestPanelSource : ""
+    sourceComponent: active && String(root.speedTestPanelSource) === ""
+      ? root.speedTestPanelComponent : null
+    onLoaded: {
+      if (!item) return
+      if ("shell" in item) item.shell = root.shell
+      if ("manifest" in item)
+        item.manifest = root.hostManifest("omarchy.speedtest")
+    }
   }
 
   Timer {
