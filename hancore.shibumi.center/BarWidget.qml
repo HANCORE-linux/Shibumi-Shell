@@ -203,9 +203,10 @@ Ui.Panel {
     bar: root.bar
     settings: root.settings
     v1AppearanceEnabled: true
-    anchors.fill: parent
-    anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
-    anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.verticalCenter: parent.verticalCenter
+    height: root.tokens ? root.tokens.pillHeight : 0
   }
 
   Row {

@@ -13,6 +13,15 @@ ShellRoot {
     Qt.exit(1)
   }
 
+  function pillSurface(widget) {
+    const children = widget ? widget.children || [] : []
+    for (const child of children) {
+      if (child && "v1AppearanceEnabled" in child
+          && "tokenSource" in child) return child
+    }
+    return null
+  }
+
   component FakeUpdate: Item {
     property var bar: null
     property string moduleName: ""
@@ -339,9 +348,39 @@ ShellRoot {
         sharedStatus.recording = false
         sharedStatus.voxtypeActive = false
         sharedStatus.voxtypeState = "idle"
+      } else if (root.phase === 5) {
+        const surface = root.pillSurface(center)
+        if (center.stage !== 0 || center.implicitHeight !== 35
+            || !surface || surface.height !== 24
+            || Math.abs(surface.y - 6) > 0.01
+            || !surface.v1CustomFill
+            || surface.renderedSurfaceCount !== 1)
+          return root.fail("V1 center pill geometry"
+            + " root=" + center.implicitHeight
+            + " pill=" + (surface ? surface.height : -1)
+            + " y=" + (surface ? surface.y : -1)
+            + " fill=" + (surface ? surface.v1CustomFill : false))
+        const v2Tokens = ({})
+        for (const key in fakeBar.visualTokens)
+          v2Tokens[key] = fakeBar.visualTokens[key]
+        v2Tokens.shellStyle = "notch"
+        v2Tokens.v2Shell = true
+        fakeBar.visualTokens = v2Tokens
+        fakeBar.barSize = 33
       } else {
-        if (center.stage !== 0 || center.implicitHeight !== 35)
-          return root.fail("normal stage restore/geometry")
+        const surface = root.pillSurface(center)
+        if (center.implicitHeight !== 33
+            || !surface || surface.height !== 24
+            || Math.abs(surface.y - 5) > 0.01
+            || surface.shellPillVisible
+            || surface.renderedSurfaceCount !== 0
+            || !surface.customDecorated)
+          return root.fail("V2 center pill geometry"
+            + " root=" + center.implicitHeight
+            + " pill=" + (surface ? surface.height : -1)
+            + " y=" + (surface ? surface.y : -1)
+            + " shellPill=" + (surface
+              ? surface.shellPillVisible : true))
         stop()
         console.log("center plugin smoke passed")
         Qt.quit()

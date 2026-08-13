@@ -113,6 +113,12 @@ grep -Fx -- '--clear' "$tmpdir/location.log" >/dev/null \
 center_widget="$repo_root/hancore.shibumi.center/BarWidget.qml"
 center_service="$repo_root/hancore.shibumi.center/Service.qml"
 weather_panel="$repo_root/hancore.shibumi.center/WeatherPanel.qml"
+rg -U -q 'PillSurface \{\n([^\n]*\n)*[[:space:]]*anchors\.verticalCenter: parent\.verticalCenter\n[[:space:]]*height: root\.tokens \? root\.tokens\.pillHeight : 0' \
+  "$center_widget" \
+  || fail "G8 pill does not retain the exact shared pill height"
+if rg -q 'anchors\.(top|bottom)Margin:.*pillHeight' "$center_widget"; then
+  fail "G8 pill height still depends on independently rounded margins"
+fi
 rg -q 'serviceFor\("hancore\.shibumi\.center"\)' "$center_widget" \
   || fail "center view does not resolve its shared service"
 rg -q 'serviceFor\("hancore\.shibumi\.status"\)' "$center_widget" \
