@@ -30,12 +30,11 @@ Item {
   property int consumerCount: 0
   property bool cancellationRequested: false
   property int rerunToken: 0
-  readonly property string badgeText: running ? "…"
-    : error !== "" ? "!"
-    : !checked ? ""
-    : updateCount > 0 ? (updateCount > 99 ? "99+" : String(updateCount))
-      + (failedCount > 0 ? "!" : "")
-    : failedCount > 0 ? "!" : "✓"
+  readonly property string shortStatusText: running ? "checking…"
+    : error !== "" ? "check failed"
+    : !checked ? "not checked"
+    : updateCount === 1 ? "1 available"
+    : updateCount + " available"
   readonly property string statusText: {
     if (running) return "Checking third-party plugins…"
     if (error !== "") return error

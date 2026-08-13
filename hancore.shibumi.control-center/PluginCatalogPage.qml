@@ -108,14 +108,12 @@ Column {
   readonly property color availableCountColor:
     typeof controller.accentColor === "function"
       ? controller.accentColor("color02") : accent
-  readonly property color pluginUpdateBadgeColor:
+  readonly property color pluginUpdateStatusColor:
     controller.pluginUpdateCheckError !== ""
       || controller.pluginUpdateFailedCount > 0
       ? (typeof controller.accentColor === "function"
         ? controller.accentColor("color01") : Commons.Color.urgent)
-      : controller.pluginUpdateCount > 0 ? accent
-      : (typeof controller.accentColor === "function"
-        ? controller.accentColor("color03") : accent)
+      : controller.pluginUpdateCount > 0 ? accent : foreground
   readonly property bool feedbackCountdownRunning:
     feedbackCountdown.running
   readonly property bool feedbackCountdownPaused:
@@ -471,7 +469,7 @@ Column {
     descriptionComponent: root.favoritesOnly ? null : providerSummary
     preferredHeight: root.favoritesOnly
       ? Commons.Style.space(80) : Commons.Style.space(110)
-    actionWidth: Commons.Style.space(148)
+    actionWidth: Commons.Style.space(132)
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale
@@ -480,11 +478,11 @@ Column {
     secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"
     secondaryActionGlyph: "refresh"
     secondaryActionEnabled: !root.controller.pluginUpdateCheckRunning
-    secondaryActionBadgeText: root.favoritesOnly ? ""
-      : root.controller.pluginUpdateBadgeText
+    secondaryActionStatusText: root.favoritesOnly ? ""
+      : root.controller.pluginUpdateShortStatusText
     secondaryActionDescription: root.favoritesOnly ? ""
       : root.controller.pluginUpdateStatusText
-    secondaryActionBadgeColor: root.pluginUpdateBadgeColor
+    secondaryActionStatusColor: root.pluginUpdateStatusColor
     onActionRequested: root.controller.openPluginInstaller()
     onSecondaryActionRequested: root.controller.openPluginUpdater()
   }

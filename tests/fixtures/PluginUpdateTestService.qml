@@ -16,10 +16,10 @@ QtObject {
   property int invalidationCount: 0
   property int observedPluginRevision: -1
   property int consumerCount: 0
-  readonly property string badgeText: running ? "…"
-    : error !== "" ? "!"
-    : !checked ? ""
-    : updateCount > 0 ? String(updateCount) : failedCount > 0 ? "!" : "✓"
+  readonly property string shortStatusText: running ? "checking…"
+    : error !== "" ? "check failed"
+    : !checked ? "not checked"
+    : updateCount === 1 ? "1 available" : updateCount + " available"
   readonly property string statusText: running
     ? "Checking third-party plugins…"
     : error !== "" ? error

@@ -128,8 +128,9 @@ ShibumiPanel {
     ? Number(effectivePluginUpdateService.failedCount || 0) : 0
   readonly property string pluginUpdateCheckError: effectivePluginUpdateService
     ? String(effectivePluginUpdateService.error || "") : ""
-  readonly property string pluginUpdateBadgeText: effectivePluginUpdateService
-    ? String(effectivePluginUpdateService.badgeText || "") : ""
+  readonly property string pluginUpdateShortStatusText:
+    effectivePluginUpdateService
+      ? String(effectivePluginUpdateService.shortStatusText || "") : ""
   readonly property string pluginUpdateStatusText: effectivePluginUpdateService
     ? String(effectivePluginUpdateService.statusText || "")
     : "Plugin update check unavailable"

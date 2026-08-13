@@ -1324,14 +1324,15 @@ for plugin_contract in \
     'onActionRequested: root.controller.openPluginInstaller()' \
     'secondaryActionLabel: root.favoritesOnly ? "" : "Check plugin"' \
     'secondaryActionGlyph: "refresh"' \
-    'secondaryActionBadgeText: root.favoritesOnly ? ""' \
+    'secondaryActionStatusText: root.favoritesOnly ? ""' \
     'secondaryActionDescription: root.favoritesOnly ? ""' \
+    'controller.pluginUpdateShortStatusText' \
     'controller.pluginUpdateStatusText' \
     'function syncPluginUpdateConsumer()' \
     'service.acquireConsumer()' \
     'service.releaseConsumer()' \
     'Component.onDestruction:' \
-    'actionWidth: Commons.Style.space(148)' \
+    'actionWidth: Commons.Style.space(132)' \
     'onSecondaryActionRequested: root.controller.openPluginUpdater()' \
     'function providerCatalogCount(provider)' \
     'shibumiCount: root.shibumiProviderCount' \
@@ -1404,7 +1405,7 @@ for plugin_update_service_contract in \
     'updateCheck.running = false' \
     'function invalidate(rescan)' \
     'const stale = finishedEpoch !== root.invalidationEpoch' \
-    'updateCount > 99 ? "99+"'; do
+    'updateCount + " available"'; do
   rg -Fq "$plugin_update_service_contract" \
     "$control_dir/PluginUpdateService.qml" \
     || fail "plugin update status service drifted: $plugin_update_service_contract"
@@ -1413,15 +1414,11 @@ for stacked_action_contract in \
     'anchors.left: root.secondaryActionLabel !== ""' \
     'anchors.left: parent.left' \
     'anchors.leftMargin: Commons.Style.space(10)' \
-    'property string secondaryActionBadgeText: ""' \
+    'property string secondaryActionStatusText: ""' \
     'property string secondaryActionDescription: ""' \
     'Accessible.description: root.secondaryActionDescription' \
-    'id: secondaryActionBadge' \
-    '? secondaryActionBadge.width + Commons.Style.space(14)' \
-    'anchors.rightMargin: Commons.Style.space(8)' \
-    'visible: root.secondaryActionBadgeText !== ""' \
-    'height: Math.max(Commons.Style.space(14),' \
-    'text: root.secondaryActionBadgeText'; do
+    'anchors.top: secondaryAction.bottom' \
+    'text: root.secondaryActionStatusText'; do
   rg -Fq "$stacked_action_contract" "$control_dir/PageHeaderHero.qml" \
     || fail "stacked header actions lost their shared left edge"
 done

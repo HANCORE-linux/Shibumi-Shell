@@ -20,43 +20,14 @@ Item {
   property real preferredHeight: Commons.Style.space(80)
   property real previewWidth: Commons.Style.space(150)
   property real actionWidth: Commons.Style.space(116)
-  readonly property real secondaryActionRequiredWidth:
-    Commons.Style.space(20)
-      + (secondaryActionIcon.visible ? secondaryActionIcon.width : 0)
-      + (secondaryActionIcon.visible ? Commons.Style.space(6) : 0)
-      + secondaryActionLabelText.implicitWidth
-      + (secondaryActionBadge.visible
-        ? Commons.Style.space(6) + secondaryActionBadge.width
-          + Commons.Style.space(8) : 0)
-  readonly property real effectiveActionWidth: Math.max(
-    actionWidth * uiScale, secondaryActionRequiredWidth)
   property string actionLabel: ""
   property string actionGlyph: ""
   property string secondaryActionLabel: ""
   property string secondaryActionGlyph: ""
   property bool secondaryActionEnabled: true
-  property string secondaryActionBadgeText: ""
+  property string secondaryActionStatusText: ""
   property string secondaryActionDescription: ""
-  property color secondaryActionBadgeColor: accent
-  readonly property var secondaryActionGeometry: ({
-    actionWidth: secondaryAction.width,
-    contentX: secondaryActionContent.x,
-    contentWidth: secondaryActionContent.width,
-    labelX: secondaryActionContent.x + secondaryActionLabelText.x,
-    labelWidth: secondaryActionLabelText.width,
-    labelPaintedWidth: secondaryActionLabelText.paintedWidth,
-    labelPaintedHeight: secondaryActionLabelText.paintedHeight,
-    labelTruncated: secondaryActionLabelText.truncated,
-    badgeVisible: secondaryActionBadge.visible,
-    badgeX: secondaryActionBadge.x,
-    badgeWidth: secondaryActionBadge.width,
-    badgeHeight: secondaryActionBadge.height,
-    badgeRightInset: secondaryAction.width
-      - secondaryActionBadge.x - secondaryActionBadge.width,
-    badgeText: secondaryBadgeLabel.text,
-    badgeLabelPaintedWidth: secondaryBadgeLabel.paintedWidth,
-    badgeLabelPaintedHeight: secondaryBadgeLabel.paintedHeight
-  })
+  property color secondaryActionStatusColor: foreground
   signal actionRequested()
   signal secondaryActionRequested()
 
@@ -117,8 +88,7 @@ Item {
 
     Item {
       id: trailingStage
-      width: Math.min(Math.max(root.previewWidth,
-        root.effectiveActionWidth), parent.width * 0.43)
+      width: Math.min(root.previewWidth, parent.width * 0.43)
       height: parent.height
 
       PageMotionStage {
@@ -139,7 +109,7 @@ Item {
         anchors.verticalCenterOffset: root.secondaryActionLabel !== ""
           ? -Commons.Style.space(20) : 0
         visible: root.actionLabel !== ""
-        width: root.effectiveActionWidth
+        width: root.actionWidth
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: actionPointer.containsMouse
@@ -198,7 +168,7 @@ Item {
         anchors.top: primaryAction.bottom
         anchors.topMargin: Commons.Style.space(6)
         visible: root.secondaryActionLabel !== ""
-        width: root.effectiveActionWidth
+        width: root.actionWidth
         height: Commons.Style.space(34)
         radius: root.controller.controlRadius
         color: secondaryPointer.containsMouse
@@ -217,13 +187,8 @@ Item {
           root.secondaryActionRequested()
 
         Row {
-          id: secondaryActionContent
           anchors.left: parent.left
-          anchors.right: parent.right
           anchors.leftMargin: Commons.Style.space(10)
-          anchors.rightMargin: secondaryActionBadge.visible
-            ? secondaryActionBadge.width + Commons.Style.space(14)
-            : Commons.Style.space(10)
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(6)
 
@@ -241,11 +206,7 @@ Item {
           }
 
           Text {
-            id: secondaryActionLabelText
             anchors.verticalCenter: parent.verticalCenter
-            width: parent.width
-              - (secondaryActionIcon.visible
-                ? secondaryActionIcon.width + parent.spacing : 0)
             text: root.secondaryActionLabel
             color: root.foreground
             font.family: root.controller.marketFont
@@ -253,37 +214,6 @@ Item {
             font.weight: Font.Medium
             renderType: Text.NativeRendering
             horizontalAlignment: Text.AlignLeft
-            elide: Text.ElideRight
-          }
-
-        }
-
-        Rectangle {
-          id: secondaryActionBadge
-          visible: root.secondaryActionBadgeText !== ""
-          anchors.right: parent.right
-          anchors.rightMargin: Commons.Style.space(8)
-          anchors.verticalCenter: parent.verticalCenter
-          width: Math.max(Commons.Style.space(14),
-            secondaryBadgeLabel.implicitWidth + Commons.Style.space(5))
-          height: Math.max(Commons.Style.space(14),
-            secondaryBadgeLabel.paintedHeight + Commons.Style.space(2))
-          radius: height / 2
-          color: Commons.Util.alpha(
-            root.secondaryActionBadgeColor, 0.18)
-          border.width: 1
-          border.color: Commons.Util.alpha(
-            root.secondaryActionBadgeColor, 0.62)
-
-          Text {
-            id: secondaryBadgeLabel
-            anchors.centerIn: parent
-            text: root.secondaryActionBadgeText
-            color: root.secondaryActionBadgeColor
-            font.family: root.controller.marketFont
-            font.pixelSize: Commons.Style.font.caption * root.uiScale
-            font.weight: Font.DemiBold
-            renderType: Text.NativeRendering
           }
         }
 
@@ -309,6 +239,24 @@ Item {
           root.secondaryActionRequested()
         Keys.onSpacePressed: if (root.secondaryActionEnabled)
           root.secondaryActionRequested()
+      }
+
+      Text {
+        anchors.top: secondaryAction.bottom
+        anchors.topMargin: Commons.Style.space(2)
+        anchors.horizontalCenter: secondaryAction.horizontalCenter
+        visible: secondaryAction.visible
+          && root.secondaryActionStatusText !== ""
+        width: secondaryAction.width
+        text: root.secondaryActionStatusText
+        color: root.secondaryActionStatusColor
+        opacity: 0.68
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignHCenter
+        font.family: root.controller.marketFont
+        font.pixelSize: Commons.Style.font.caption * root.uiScale
+        font.weight: Font.Medium
+        renderType: Text.NativeRendering
       }
     }
   }

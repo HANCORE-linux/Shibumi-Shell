@@ -106,7 +106,8 @@ Item {
   readonly property int pluginUpdateCount: pluginUpdateService.updateCount
   readonly property int pluginUpdateFailedCount: pluginUpdateService.failedCount
   readonly property string pluginUpdateCheckError: pluginUpdateService.error
-  readonly property string pluginUpdateBadgeText: pluginUpdateService.badgeText
+  readonly property string pluginUpdateShortStatusText:
+    pluginUpdateService.shortStatusText
   readonly property string pluginUpdateStatusText: pluginUpdateService.statusText
   readonly property var effectivePluginUpdateService: pluginUpdateService
   property bool rejectProviderRestore: false

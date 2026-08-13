@@ -325,19 +325,20 @@ The theme-aware gloss runs once when the page opens and again only after a
 provider count changes; reduced motion keeps a static highlight.
 
 **Check plugin** below **Add plugin** first performs a bounded read-only scan of
-every independently installed Git-managed plugin. Its compact badge stays
-hidden before the first scan, shows an ellipsis while checking, the available
-update count (capped at `99+`), a check mark when current, or an exclamation
-mark for failed and partial checks. The tooltip and accessibility description
-spell out checked, unmanaged, and failed totals without duplicating the
-provider inventory above. The scan is shared across outputs, invalidated when
-the plugin registry changes, and stopped when no plugin catalog is visible.
+every independently installed Git-managed plugin. A compact text line below
+the button reports the result, for example `0 available`, while the tooltip
+and accessibility description spell out checked, unmanaged, and failed totals
+without duplicating the provider inventory above. The scan is shared across
+outputs, invalidated when the plugin registry changes, and stopped when no
+plugin catalog is visible.
 
 The terminal reports the number of available updates and offers a
 multi-selection. Only the selected plugins are then passed individually to
-Omarchy's validating `omarchy-plugin-update` command. Non-Git plugin
-directories are reported as not automatically checkable rather than treated
-as current. Shibumi does not silently update third-party code.
+Omarchy's validating `omarchy-plugin-update` command. Omarchy remains the owner
+of changed-code review: long diffs use its normal pager, which is exited with
+`q` before the final confirmation. Non-Git plugin directories are reported as
+not automatically checkable rather than treated as current. Shibumi does not
+silently update third-party code.
 
 Every plugin card, including a card revealed by search, exposes a star action.
 Starred plugin IDs are persisted in `bar.shibumi.plugins.favorites`. The
