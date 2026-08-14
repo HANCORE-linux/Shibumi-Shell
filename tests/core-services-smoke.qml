@@ -93,6 +93,29 @@ ShellRoot {
         && cpu.gpu.driverName === "xe",
         "Intel model or driver parsing changed")
 
+      cpu.gpu.parse([
+        "device|pci:0000:03:00.0|sysfs|17|49|0|0|"
+          + "AMD Ryzen 9 7950X Integrated Graphics|amdgpu|6.14.2|card0",
+        "device|pci:0000:04:00.0|sysfs|73|61|4096|16384|"
+          + "AMD Radeon RX 7900 XTX|amdgpu|6.14.2|card1",
+        "status|ok"
+      ].join("\n"))
+      const dedicatedGpu = cpu.gpu.deviceForId("pci:0000:04:00.0")
+      root.check(cpu.gpu.deviceCount === 2
+        && cpu.gpu.defaultDevice.name
+          === "AMD Ryzen 9 7950X Integrated Graphics"
+        && cpu.gpu.utilization === 17
+        && dedicatedGpu !== null
+        && dedicatedGpu.name === "AMD Radeon RX 7900 XTX"
+        && dedicatedGpu.utilization === 73
+        && cpu.gpu.deviceForId("missing") === null,
+        "multi-GPU inventory or stable device selection changed")
+      cpu.gpu.parse("device|pci:0000:05:00.0|sysfs|99|80|0|0|"
+        + "Incomplete GPU|xe||card2")
+      root.check(cpu.gpu.probeFailed && cpu.gpu.deviceCount === 2
+        && cpu.gpu.deviceForId("pci:0000:04:00.0") !== null,
+        "incomplete GPU refresh replaced the last complete inventory")
+
       cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
 
       telemetry.thermal.parseDetailed("55|63|80|100|44|70|90|39")

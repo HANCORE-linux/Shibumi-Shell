@@ -4,6 +4,9 @@ set -uo pipefail
 shopt -s extglob nullglob
 
 sys_root=${SHIBUMI_GPU_SYS_ROOT:-/sys}
+found=0
+legacy_emitted=0
+declare -A seen_devices=()
 
 clean_field() {
   local value=${1:-}
@@ -24,39 +27,89 @@ integer_field() {
   return 1
 }
 
+normalize_pci_slot() {
+  local value
+  value=$(clean_field "${1:-}")
+  value=${value,,}
+  if [[ $value =~ ^[[:xdigit:]]{8}: ]]; then
+    value=${value:4}
+  fi
+  [[ $value =~ ^[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[[:xdigit:]]$ ]] \
+    || return 1
+  printf '%s' "$value"
+}
+
+emit_device() {
+  local id backend util temp used total name driver version node
+  id=$(clean_field "${1:-}")
+  backend=$(clean_field "${2:-}")
+  util=$(integer_field "${3:-}") || util=0
+  temp=$(integer_field "${4:-}") || temp=0
+  used=$(integer_field "${5:-}") || used=0
+  total=$(integer_field "${6:-}") || total=0
+  name=$(clean_field "${7:-}")
+  driver=$(clean_field "${8:-}")
+  version=$(clean_field "${9:-}")
+  node=$(clean_field "${10:-}")
+  [[ -n $id && -n $backend ]] || return 1
+  (( util > 100 )) && util=100
+  [[ -n $name ]] || name="$driver GPU"
+  # Keep the first two records compatible with a pre-upgrade telemetry parser
+  # while a transactional update replaces the helper before loaded QML.
+  if (( legacy_emitted == 0 )); then
+    printf '%s|%s|%s|%s|%s\n' "$backend" "$util" "$temp" "$used" "$total"
+    printf 'meta|%s|%s|%s\n' "$name" "$driver" "$version"
+    legacy_emitted=1
+  fi
+  printf 'device|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$id" "$backend" "$util" "$temp" "$used" "$total" \
+    "$name" "$driver" "$version" "$node"
+  seen_devices["$id"]=1
+  found=$((found + 1))
+}
+
 probe_nvidia() {
-  [[ ${SHIBUMI_GPU_DISABLE_NVIDIA:-0} != 1 ]] || return 1
+  [[ ${SHIBUMI_GPU_DISABLE_NVIDIA:-0} != 1 ]] || return 0
 
-  local nvidia_bin
-  nvidia_bin=$(command -v nvidia-smi 2>/dev/null) || return 1
+  local nvidia_bin output summary slot name version util temp used total id
+  nvidia_bin=$(command -v nvidia-smi 2>/dev/null) || return 0
+  output=$("$nvidia_bin" \
+    --query-gpu=pci.bus_id,name,driver_version,utilization.gpu,temperature.gpu,memory.used,memory.total \
+    --format=csv,noheader,nounits 2>/dev/null) || return 0
 
-  local summary name version util temp used total
-  IFS= read -r summary < <(
-    "$nvidia_bin" \
-      --query-gpu=name,driver_version,utilization.gpu,temperature.gpu,memory.used,memory.total \
-      --format=csv,noheader,nounits 2>/dev/null
-  ) || return 1
-  IFS=, read -r name version util temp used total <<<"$summary"
-  util=$(integer_field "$util") || return 1
-  temp=$(integer_field "$temp") || return 1
-  used=$(integer_field "$used") || return 1
-  total=$(integer_field "$total") || return 1
-  name=$(clean_field "$name")
-  version=$(clean_field "$version")
-
-  printf 'nvidia|%s|%s|%s|%s\n' "$util" "$temp" "$used" "$total"
-  printf 'meta|%s|nvidia|%s\n' "$name" "$version"
+  while IFS= read -r summary; do
+    [[ -n $summary ]] || continue
+    IFS=, read -r slot name version util temp used total <<<"$summary"
+    slot=$(normalize_pci_slot "$slot" 2>/dev/null || true)
+    # A runtime index is not stable enough for persisted selection. Let the
+    # DRM pass recover this device by its PCI slot when NVIDIA omits one.
+    [[ -n $slot ]] || continue
+    id="pci:$slot"
+    [[ -z ${seen_devices[$id]+x} ]] || continue
+    util=$(integer_field "$util") || continue
+    temp=$(integer_field "$temp") || continue
+    used=$(integer_field "$used") || continue
+    total=$(integer_field "$total") || continue
+    emit_device "$id" nvidia "$util" "$temp" "$used" "$total" \
+      "$name" nvidia "$version" ""
+  done <<<"$output"
 }
 
 probe_drm() {
-  local device resolved slot driver_path driver util temp raw sensor
+  local device card_node resolved slot id driver_path driver util temp raw sensor
   local total_bytes used_bytes total_mib used_mib model model_line lspci_bin
   local version
 
   for device in "$sys_root"/class/drm/card+([0-9])/device; do
     [[ -d $device ]] || continue
+    card_node=${device%/device}
+    card_node=${card_node##*/}
     resolved=$(readlink -f "$device" 2>/dev/null) || continue
     slot=${resolved##*/}
+    slot=$(normalize_pci_slot "$slot" 2>/dev/null || true)
+    [[ -n $slot ]] || continue
+    id="pci:$slot"
+    [[ -z ${seen_devices[$id]+x} ]] || continue
     driver_path=$(readlink -f "$device/driver" 2>/dev/null) || continue
     driver=${driver_path##*/}
 
@@ -104,21 +157,14 @@ probe_drm() {
       && IFS= read -r version <"$sys_root/module/$driver/version"
     version=$(clean_field "$version")
 
-    printf 'sysfs|%s|%s|%s|%s\n' \
-      "$util" "$temp" "$used_mib" "$total_mib"
-    printf 'meta|%s|%s|%s\n' "$model" "$driver" "$version"
-    return 0
+    emit_device "$id" sysfs "$util" "$temp" "$used_mib" "$total_mib" \
+      "$model" "$driver" "$version" "$card_node"
   done
-  return 1
 }
 
-if probe_nvidia; then
-  printf 'status|ok\n'
-  exit 0
+probe_nvidia
+probe_drm
+if (( found == 0 )); then
+  printf 'none|0|0|0|0\n'
 fi
-if probe_drm; then
-  printf 'status|ok\n'
-  exit 0
-fi
-printf 'none|0|0|0|0\n'
 printf 'status|ok\n'

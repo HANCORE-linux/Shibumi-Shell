@@ -829,8 +829,8 @@ rg -q 'function setGroupSetting\(groupId, key, value\)' \
 rg -q 'function setPresentationSetting\(key, value\)' \
   hancore.shibumi.state/Service.qml \
   || fail "G1 cannot persist Shibumi presentation settings"
-rg -q 'function setBarPosition\(value\)' Bar.qml \
-  || fail "G1 cannot persist top/bottom position"
+rg -q 'function setBarPosition\(value, ownerValue, screenName\)' Bar.qml \
+  || fail "G1 cannot persist output-local top/bottom position"
 rg -q 'function setAllSplits\(value\)' Bar.qml \
   || fail "G1 cannot persist split presets"
 detail_panel_count=$(rg --files widgets -g '*Panel.qml' \

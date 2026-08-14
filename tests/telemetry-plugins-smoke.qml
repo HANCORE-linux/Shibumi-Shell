@@ -13,6 +13,8 @@ ShellRoot {
 
   property int attempts: 0
   property int phase: 0
+  property bool gpuFixtureParsed: false
+  property int gpuSelectionPhase: 0
 
   Component.onCompleted:
     telemetryService.thermal.parseDetailed("55|63|90|105|44|82|90|39")
@@ -161,7 +163,8 @@ ShellRoot {
     sourceComponent: Component {
       Gpu.BarWidget {
         bar: fakeBar
-        settings: ({ displayMode: "icon" })
+        hostGroupId: "G:hancore.shibumi.gpu"
+        settings: ({ displayMode: "icon", device: "auto" })
       }
     }
   }
@@ -193,9 +196,78 @@ ShellRoot {
           || root.attempts < 4) return
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
+      if (!root.gpuFixtureParsed) {
+        cpuService.gpu.parse([
+          "device|pci:0000:03:00.0|sysfs|17|49|0|0|"
+            + "AMD Ryzen 9 7950X Integrated Graphics|amdgpu|6.14.2|card0",
+          "device|pci:0000:04:00.0|sysfs|73|61|4096|16384|"
+            + "AMD Radeon RX 7900 XTX|amdgpu|6.14.2|card1",
+          "status|ok"
+        ].join("\n"))
+        root.gpuFixtureParsed = true
+        return
+      }
+
+      if (root.gpuSelectionPhase === 0) {
+        if (gpu.availableGpus.length !== 2
+            || gpu.selectedDeviceId !== "pci:0000:03:00.0"
+            || gpu.selectedGpu.utilization !== 17
+            || !gpu.setGpuDevice("pci:0000:04:00.0")
+            || fakeState.lastGroup !== "G:hancore.shibumi.gpu"
+            || fakeState.lastKey !== "device"
+            || fakeState.lastValue !== "pci:0000:04:00.0")
+          return root.fail("automatic GPU source or persistence")
+        gpu.settings = ({
+          displayMode: "icon", device: "pci:0000:04:00.0"
+        })
+        root.gpuSelectionPhase = 1
+        return
+      }
+      if (root.gpuSelectionPhase === 1) {
+        if (gpu.selectedDeviceId !== "pci:0000:04:00.0"
+            || gpu.selectedGpu.name !== "AMD Radeon RX 7900 XTX"
+            || gpu.selectedGpu.utilization !== 73
+            || gpu.configuredDeviceMissing)
+          return root.fail("dedicated GPU source selection")
+        gpu.settings = ({ displayMode: "icon", device: "pci:missing" })
+        root.gpuSelectionPhase = 2
+        return
+      }
+      if (root.gpuSelectionPhase === 2) {
+        if (!gpu.configuredDeviceMissing
+            || gpu.selectedDeviceId !== "pci:0000:03:00.0")
+          return root.fail("missing GPU automatic fallback")
+        if (gpu.setGpuDevice("pci:missing"))
+          return root.fail("unavailable GPU source accepted")
+        gpu.settings = ({
+          displayMode: "icon", device: "pci:0000:04:00.0"
+        })
+        root.gpuSelectionPhase = 3
+        return
+      }
+
       if (root.phase === 1) {
-        if (!gpu.opened || !temperature.opened
+        if (!gpu.opened || !gpu.panelLoaded || !gpu.panelItem
+            || !temperature.opened
             || !temperature.panelLoaded || !temperature.panelItem) return
+        if (gpu.panelItem.sourceChoiceCount !== 3
+            || gpu.panelItem.sourceCursor !== 2
+            || !gpu.panelItem.moveSourceCursor(0, 1)
+            || gpu.panelItem.sourceCursor !== 0)
+          return root.fail("GPU source keyboard cursor")
+        cpuService.gpu.parse([
+          "device|pci:0000:03:00.0|sysfs|19|50|0|0|"
+            + "AMD Ryzen 9 7950X Integrated Graphics|amdgpu|6.14.2|card0",
+          "device|pci:0000:04:00.0|sysfs|75|62|4096|16384|"
+            + "AMD Radeon RX 7900 XTX|amdgpu|6.14.2|card1",
+          "status|ok"
+        ].join("\n"))
+        if (gpu.panelItem.sourceCursor !== 0
+            || !gpu.panelItem.activateSourceCursor()
+            || fakeState.lastGroup !== "G:hancore.shibumi.gpu"
+            || fakeState.lastKey !== "device"
+            || fakeState.lastValue !== "auto")
+          return root.fail("GPU source keyboard navigation")
         if (temperature.temperatureUnit !== "imperial"
             || temperature.temperatureText(55) !== "131°F")
           return root.fail("imperial temperature rendering")
@@ -262,6 +334,8 @@ ShellRoot {
               + fakeBar.visualTokens.compactGap
           || cpuCompact.implicitWidth >= cpu.implicitWidth
           || gpu.displayMode !== "icon"
+          || gpu.stateGroupId !== "G:hancore.shibumi.gpu"
+          || gpu.selectedDeviceId !== "pci:0000:04:00.0"
           || !gpu.visible || gpu.implicitWidth <= 0
           || temperature.stateGroupId !== "G:hancore.shibumi.temperature"
           || temperature.temperatureUnit !== "metric"

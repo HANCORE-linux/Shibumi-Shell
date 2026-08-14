@@ -16,6 +16,27 @@ Ui.Panel {
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.cpu") : null
   readonly property var gpu: cpuService ? cpuService.gpu : null
+  readonly property var stateService: hostShell
+    && typeof hostShell.serviceFor === "function"
+    ? hostShell.serviceFor("hancore.shibumi.state") : null
+  property string hostGroupId: ""
+  readonly property string stateGroupId: hostGroupId !== ""
+    ? hostGroupId : "G17"
+  readonly property string configuredDeviceId: String(
+    setting("device", "auto"))
+  readonly property var availableGpus: gpu && Array.isArray(gpu.devices)
+    ? gpu.devices : []
+  readonly property var automaticGpu: availableGpus.length > 0
+    ? availableGpus[0] : gpu && gpu.available ? gpu : null
+  readonly property var configuredGpu: configuredDeviceId === "auto"
+    ? automaticGpu : gpuForDevice(configuredDeviceId)
+  readonly property var selectedGpu: configuredGpu || automaticGpu
+  readonly property bool configuredDeviceMissing:
+    configuredDeviceId !== "auto" && configuredGpu === null
+  readonly property string selectedDeviceId: selectedGpu
+    && selectedGpu.id !== undefined ? String(selectedGpu.id) : "auto"
+  readonly property string selectedLabel: selectedGpu
+    ? String(selectedGpu.name || selectedGpu.driverName || "GPU") : "GPU"
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -26,8 +47,10 @@ Ui.Panel {
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool telemetryAvailable:
-    root.gpu && root.gpu.available === true
+    root.selectedGpu && root.selectedGpu.available === true
   property var acquiredGpu: null
+  readonly property bool panelLoaded: panelLoader.status === Loader.Ready
+  readonly property var panelItem: panelLoader.item
 
   implicitWidth: bar && bar.vertical ? bar.barSize : surface.implicitWidth
   implicitHeight: bar && bar.vertical ? surface.implicitHeight
@@ -36,6 +59,27 @@ Ui.Panel {
   // widget visible on unsupported/iGPU-only hosts and communicate that the
   // metric is unavailable instead of silently rendering a 0x0 active slot.
   visible: true
+
+  function gpuForDevice(deviceId) {
+    const target = String(deviceId || "")
+    for (let index = 0; index < availableGpus.length; index++) {
+      if (String(availableGpus[index].id || "") === target)
+        return availableGpus[index]
+    }
+    return null
+  }
+
+  function gpuDeviceAvailable(deviceId) {
+    const target = String(deviceId || "")
+    return target === "auto" || gpuForDevice(target) !== null
+  }
+
+  function setGpuDevice(deviceId) {
+    const target = String(deviceId || "")
+    if (!gpuDeviceAvailable(target)) return false
+    return stateService && typeof stateService.setGroupSetting === "function"
+      ? stateService.setGroupSetting(stateGroupId, "device", target) : false
+  }
 
   function syncGpuOwner() {
     if (acquiredGpu === gpu) return
@@ -53,7 +97,7 @@ Ui.Panel {
       anchorItem: surface,
       bar: root.bar,
       ownerWidget: root,
-      gpu: root.gpu
+      gpuTelemetry: root.gpu
     })
   }
 
@@ -103,7 +147,7 @@ Ui.Panel {
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.telemetryAvailable
-          ? String(Math.min(100, root.gpu.utilization)).padStart(2, "0") + "%"
+          ? String(Math.min(100, root.selectedGpu.utilization)).padStart(2, "0") + "%"
           : "--"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -119,7 +163,8 @@ Ui.Panel {
       onEntered: if (root.bar && root.gpu)
         root.bar.showTooltip(surface,
           root.telemetryAvailable
-            ? root.gpu.utilization + "% · " + root.gpu.temperatureC + "°C"
+            ? root.selectedLabel + " · " + root.selectedGpu.utilization
+              + "% · " + root.selectedGpu.temperatureC + "°C"
             : "GPU telemetry unavailable")
       onExited: if (root.bar) root.bar.hideTooltip(surface)
       onClicked: root.toggle()

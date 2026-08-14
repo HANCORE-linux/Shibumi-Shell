@@ -2,5 +2,16 @@
 
 set -euo pipefail
 
-printf '%s VGA compatible controller: %s\n' \
-  "${3:-0000:03:00.0}" "${SHIBUMI_TEST_GPU_MODEL:-Fixture GPU}"
+slot=${3:-0000:03:00.0}
+case $slot in
+  0000:03:00.0)
+    model=${SHIBUMI_TEST_GPU_MODEL_03:-${SHIBUMI_TEST_GPU_MODEL:-Fixture GPU}}
+    ;;
+  0000:04:00.0)
+    model=${SHIBUMI_TEST_GPU_MODEL_04:-${SHIBUMI_TEST_GPU_MODEL:-Fixture GPU}}
+    ;;
+  *)
+    model=${SHIBUMI_TEST_GPU_MODEL:-Fixture GPU}
+    ;;
+esac
+printf '%s VGA compatible controller: %s\n' "$slot" "$model"

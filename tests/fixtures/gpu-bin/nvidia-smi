@@ -4,7 +4,17 @@ set -euo pipefail
 
 case ${1:-} in
   --query-gpu=*)
-    printf '%s\n' 'NVIDIA GeForce RTX 2080 SUPER, 610.43.03, 28, 39, 1908, 8192'
+    if [[ ${SHIBUMI_TEST_NVIDIA_MALFORMED_BUS:-0} == 1 ]]; then
+      printf '%s\n' \
+        'not-a-pci-slot, NVIDIA GeForce RTX 2080 SUPER, 610.43.03, 28, 39, 1908, 8192'
+    elif [[ ${SHIBUMI_TEST_NVIDIA_NA:-0} == 1 ]]; then
+      printf '%s\n' \
+        '00000000:01:00.0, NVIDIA GeForce RTX 2080 SUPER, 610.43.03, N/A, 39, 1908, 8192'
+    else
+      printf '%s\n' \
+        '00000000:01:00.0, NVIDIA GeForce RTX 2080 SUPER, 610.43.03, 28, 39, 1908, 8192' \
+        '00000000:02:00.0, NVIDIA GeForce RTX 4090, 610.43.03, 72, 61, 12288, 24576'
+    fi
     ;;
   *)
     exit 2
