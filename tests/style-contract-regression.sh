@@ -716,7 +716,13 @@ if rg -Fq 'text: "GPU "' hancore.shibumi.gpu/BarWidget.qml; then
   fail "GPU bar restored the obsolete GPU prefix"
 fi
 rg -Fq 'text: ""' hancore.shibumi.temperature/BarWidget.qml \
-  || fail "temperature bar icon drifted from the original V2 glyph"
+  || fail "temperature bar icon drifted from the shared Nerd Font glyph"
+if rg -q 'device_thermostat|v1TemperatureIcon|v2TemperatureIcon' \
+    hancore.shibumi.temperature/BarWidget.qml; then
+  fail "temperature still switches icon families between V1 and V2"
+fi
+rg -Fq 'font.family: root.bar' hancore.shibumi.temperature/BarWidget.qml \
+  || fail "temperature icon does not use the configured Nerd Font"
 rg -Fq 'readonly property int iconSlotSize: 14' \
   hancore.shibumi.temperature/BarWidget.qml \
   || fail "temperature icon lost its stable optical slot"

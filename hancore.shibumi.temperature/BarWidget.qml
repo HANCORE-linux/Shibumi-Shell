@@ -150,11 +150,15 @@ Ui.Panel {
         width: root.iconSlotSize
         height: root.iconSlotSize
 
-        Loader {
+        Text {
           anchors.centerIn: parent
           anchors.horizontalCenterOffset: root.iconGlyphHorizontalOffset
-          sourceComponent: root.tokens.v2Shell === true
-            ? v2TemperatureIcon : v1TemperatureIcon
+          text: ""
+          color: root.widgetInk
+          font.family: root.bar
+            ? root.bar.fontFamily : Commons.Style.font.family
+          font.pixelSize: root.tokens.iconSize
+          renderType: Text.NativeRendering
         }
       }
 
@@ -182,25 +186,4 @@ Ui.Panel {
   }
 
   Loader { id: panelLoader }
-
-  Component {
-    id: v1TemperatureIcon
-    IconText {
-      text: "device_thermostat"
-      color: root.widgetInk
-      font.pixelSize: root.tokens.iconSize
-      font.weight: Font.DemiBold
-    }
-  }
-
-  Component {
-    id: v2TemperatureIcon
-    Text {
-      text: ""
-      color: root.widgetInk
-      font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: root.tokens.iconSize
-      renderType: Text.NativeRendering
-    }
-  }
 }
