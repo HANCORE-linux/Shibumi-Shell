@@ -886,15 +886,14 @@ ShibumiPanel {
   function runWithControlCenterRestore(callback) {
     if (typeof callback !== "function") return false
     const restoreBar = bar
-    const preservePage = settings.restorePage
-    if (restoreBar
-        && typeof restoreBar.scheduleWidgetRestore === "function")
-      restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage, true)
+    const created = restoreBar
+      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
+      ? restoreBar.scheduleOpenControlCenterRestores(
+          settings.restorePage, true, ownerWidget, popoutScreenName) : []
     const changed = callback()
     if (!changed && restoreBar
-        && typeof restoreBar.cancelWidgetRestore === "function")
-      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
+      restoreBar.cancelCreatedWidgetRestores(created)
     return changed
   }
 
@@ -908,26 +907,39 @@ ShibumiPanel {
       "accent", "border", "panelBorder", "frost", "shadow",
       "radius", "shellStyle"
     ].indexOf(presentationName) >= 0
-    const preservePage = settings.restorePage
     const restoreBar = bar
-    if (preservePanel && restoreBar
-        && typeof restoreBar.scheduleWidgetRestore === "function")
-      restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage,
-        presentationName === "shellStyle")
+    const created = preservePanel && restoreBar
+      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
+      ? restoreBar.scheduleOpenControlCenterRestores(
+          settings.restorePage, presentationName === "shellStyle",
+          ownerWidget, popoutScreenName) : []
     const changed = stateService
       && typeof stateService.setPresentationSetting === "function"
       ? stateService.setPresentationSetting(name, value) : false
-    if (!changed && preservePanel && restoreBar
-        && typeof restoreBar.cancelWidgetRestore === "function")
-      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
+      restoreBar.cancelCreatedWidgetRestores(created)
     return changed
   }
 
   function setLayoutProtection(variant, enabled) {
-    return stateService
+    const requested = String(variant || "").toLowerCase()
+    if (["v1", "v2"].indexOf(requested) < 0
+        || typeof enabled !== "boolean") return false
+    const restoreBar = bar
+    // A lock write republishes shell.json. Enroll every open output without
+    // downgrading an already-running V1/V2 replacement-owner handoff.
+    const created = restoreBar
+      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
+      ? restoreBar.scheduleOpenControlCenterRestores(
+          settings.restorePage, false, ownerWidget, popoutScreenName) : []
+    const changed = stateService
       && typeof stateService.setLayoutProtection === "function"
-      ? stateService.setLayoutProtection(variant, enabled) : false
+      ? stateService.setLayoutProtection(requested, enabled) : false
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
+      restoreBar.cancelCreatedWidgetRestores(created)
+    return changed
   }
 
   function setBarVariant(target) {
@@ -935,16 +947,15 @@ ShibumiPanel {
     if (requested !== "v1" && requested !== "v2"
         || !stateService
         || typeof stateService.setShellVariant !== "function") return false
-    const preservePage = settings.restorePage
     const restoreBar = bar
-    if (restoreBar
-        && typeof restoreBar.scheduleWidgetRestore === "function")
-      restoreBar.scheduleWidgetRestore(
-        "hancore.shibumi.control-center", preservePage, true)
+    const created = restoreBar
+      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
+      ? restoreBar.scheduleOpenControlCenterRestores(
+          settings.restorePage, true, ownerWidget, popoutScreenName) : []
     const changed = stateService.setShellVariant(requested)
     if (!changed && restoreBar
-        && typeof restoreBar.cancelWidgetRestore === "function")
-      restoreBar.cancelWidgetRestore("hancore.shibumi.control-center")
+        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
+      restoreBar.cancelCreatedWidgetRestores(created)
     return changed
   }
 
@@ -978,7 +989,7 @@ ShibumiPanel {
 
   function setBarPosition(value) {
     return bar && typeof bar.setBarPosition === "function"
-      ? bar.setBarPosition(value) : false
+      ? bar.setBarPosition(value, ownerWidget, popoutScreenName) : false
   }
 
   function setAllSplits(value) {
@@ -1117,7 +1128,8 @@ ShibumiPanel {
       bar.clearControlCenterWidgetDetail()
     return bar && typeof bar.trackWidgetRestorePage === "function"
       ? bar.trackWidgetRestorePage(
-          "hancore.shibumi.control-center", page) : false
+          "hancore.shibumi.control-center", page,
+          ownerWidget, popoutScreenName) : false
   }
 
   function trackWidgetDetails(groupId, pluginId) {

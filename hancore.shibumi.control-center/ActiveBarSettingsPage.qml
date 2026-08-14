@@ -665,8 +665,10 @@ Column {
     color: togglePointer.containsMouse
       ? controller.controlHoverFillColor : controller.controlFillColor
     border.width: controller.controlBorderWidth
-    border.color: selected || activeFocus ? accent
-      : togglePointer.containsMouse
+    // Selection owns the accent. Keyboard focus stays visible without making
+    // an unlocked layout look locked after pointer activation.
+    border.color: activeFocus ? foreground : selected
+      ? accent : togglePointer.containsMouse
         ? controller.controlHoverBorderColor : controller.controlBorderColor
 
     Column {
@@ -736,7 +738,7 @@ Column {
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onClicked: {
-        layoutToggle.forceActiveFocus()
+        layoutToggle.focus = false
         layoutToggle.clicked()
       }
     }

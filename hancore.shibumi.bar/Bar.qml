@@ -107,12 +107,9 @@ Item {
   property var pendingTooltipTarget: null
   property string pendingTooltipText: ""
   property bool tooltipShown: false
-  property string pendingWidgetRestoreId: ""
-  property string pendingWidgetRestorePage: ""
-  property int pendingWidgetRestoreAttempts: 0
-  property var pendingWidgetRestoreOwner: null
-  property var pendingWidgetRestoreActiveOwner: null
-  property bool pendingWidgetRestoreNeedsReplacement: false
+  // Restore records are output-local. A V1/V2 owner handoff on one output
+  // must not suppress or overwrite a value-only mutation on another output.
+  property var pendingWidgetRestores: []
   property string controlCenterWidgetDetailGroup: ""
   property string controlCenterWidgetDetailPlugin: ""
 
@@ -199,16 +196,12 @@ Item {
       layoutConfig = nextLayout
   }
 
-  function setBarPosition(value) {
+  function setBarPosition(value, ownerValue, screenName) {
     const next = String(value || "")
     if (["top", "bottom"].indexOf(next) < 0 || !shell
         || typeof shell.mutateShellConfig !== "function") return false
-    const preservePanel = root.isBarWidgetOpen(
-      "hancore.shibumi.control-center")
-    if (preservePanel)
-      root.scheduleWidgetRestore(
-        "hancore.shibumi.control-center",
-        root.barWidgetPage("hancore.shibumi.control-center", "bars"), false)
+    root.scheduleOpenControlCenterRestores(
+      "bars", false, ownerValue, screenName)
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.position = next
@@ -1263,6 +1256,19 @@ Item {
     return PanelRouting.findPanelWidgetForScreen(moduleSlots, pluginId, requested)
   }
 
+  function findPanelWidgetOnScreen(pluginId, screenName) {
+    const id = String(pluginId || "")
+    const requested = String(screenName || "")
+    if (requested === "") return findPanelWidget(id)
+    for (let index = 0; index < moduleSlots.length; index++) {
+      const slot = moduleSlots[index]
+      if (!slot || String(slot.screenName || "") !== requested) continue
+      const panel = PanelRouting.panelForSlot(slot, id)
+      if (panel) return panel
+    }
+    return null
+  }
+
   function panelWidgets(pluginId) {
     return PanelRouting.panelWidgets(moduleSlots, pluginId)
   }
@@ -1315,6 +1321,46 @@ Item {
       : String(fallbackPage || "")
   }
 
+  function scheduleOpenControlCenterRestores(page, needsReplacement,
+      preferredOwner, preferredScreenName) {
+    const id = "hancore.shibumi.control-center"
+    const owners = panelWidgets(id).filter(function(owner) {
+      return owner && owner.opened === true
+    })
+    if (preferredOwner && preferredOwner.opened === true
+        && owners.indexOf(preferredOwner) < 0) owners.push(preferredOwner)
+    const created = []
+    for (let index = 0; index < owners.length; index++) {
+      const owner = owners[index]
+      const preferred = owner === preferredOwner
+        ? String(preferredScreenName || "") : ""
+      const screenName = restoreScreenName(owner, preferred)
+      const alreadyPending = widgetRestorePendingForOutput(
+        id, owner, screenName)
+      const requestedPage = owner.panelLoaded === true && owner.panelItem
+        ? String(owner.panelItem.settingsPage || page || "")
+        : String(page || "")
+      scheduleWidgetRestore(id, requestedPage, needsReplacement,
+        owner, screenName)
+      if (!alreadyPending) created.push({
+        id: id, owner: owner, screenName: screenName
+      })
+    }
+    return created
+  }
+
+  function cancelCreatedWidgetRestores(records) {
+    const values = Array.isArray(records) ? records : []
+    let changed = false
+    for (let index = 0; index < values.length; index++) {
+      const record = values[index]
+      if (!record) continue
+      changed = cancelWidgetRestore(
+        record.id, record.owner, record.screenName) || changed
+    }
+    return changed
+  }
+
   function openConfigPanel() {
     return summonBarWidget("hancore.shibumi.control-center")
   }
@@ -1325,45 +1371,101 @@ Item {
       ? widget.openPage(String(page || "")) : false
   }
 
-  function scheduleWidgetRestore(pluginId, page, needsReplacement) {
+  function restoreScreenName(owner, screenName) {
+    const explicit = String(screenName || "")
+    if (explicit !== "") return explicit
+    const window = targetWindow(owner)
+    return window && window.screen ? String(window.screen.name || "") : ""
+  }
+
+  function widgetRestoreIndex(pluginId, owner, screenName) {
+    const id = String(pluginId || "")
+    const requestedScreen = restoreScreenName(owner, screenName)
+    for (let index = 0; index < pendingWidgetRestores.length; index++) {
+      const record = pendingWidgetRestores[index]
+      if (record && record.id === id
+          && String(record.screenName || "") === requestedScreen) return index
+    }
+    return -1
+  }
+
+  function widgetRestorePendingForOutput(pluginId, owner, screenName) {
+    return widgetRestoreIndex(pluginId, owner, screenName) >= 0
+  }
+
+  function widgetRestorePendingForOwner(pluginId, owner, screenName) {
+    const index = widgetRestoreIndex(pluginId, owner, screenName)
+    if (index < 0) return false
+    const record = pendingWidgetRestores[index]
+    return record.owner === owner || record.activeOwner === owner
+  }
+
+  function scheduleWidgetRestore(pluginId, page, needsReplacement,
+      ownerValue, screenName) {
     const id = String(pluginId || "")
     if (id === "") return false
-    pendingWidgetRestoreId = id
-    pendingWidgetRestorePage = String(page || "")
-    pendingWidgetRestoreAttempts = 0
-    pendingWidgetRestoreOwner = findPanelWidget(id)
-    pendingWidgetRestoreActiveOwner = null
-    pendingWidgetRestoreNeedsReplacement = needsReplacement === true
-    widgetRestoreTimer.restart()
+    const owner = ownerValue || findPanelWidget(id, screenName)
+    const outputName = restoreScreenName(owner, screenName)
+    const index = widgetRestoreIndex(id, owner, outputName)
+    const next = pendingWidgetRestores.slice()
+    if (index >= 0) {
+      const current = next[index]
+      next[index] = {
+        id: id,
+        page: String(page || current.page || ""),
+        attempts: Number(current.attempts || 0),
+        owner: current.owner || owner,
+        activeOwner: current.activeOwner || null,
+        needsReplacement: current.needsReplacement === true
+          || needsReplacement === true,
+        screenName: outputName
+      }
+    } else {
+      next.push({
+        id: id,
+        page: String(page || ""),
+        attempts: 0,
+        owner: owner,
+        activeOwner: null,
+        needsReplacement: needsReplacement === true,
+        screenName: outputName
+      })
+    }
+    pendingWidgetRestores = next
+    if (!widgetRestoreTimer.running) widgetRestoreTimer.start()
     return true
   }
 
-  function clearWidgetRestore() {
-    pendingWidgetRestoreId = ""
-    pendingWidgetRestorePage = ""
-    pendingWidgetRestoreAttempts = 0
-    pendingWidgetRestoreOwner = null
-    pendingWidgetRestoreActiveOwner = null
-    pendingWidgetRestoreNeedsReplacement = false
+  function removeWidgetRestoreAt(index) {
+    if (index < 0 || index >= pendingWidgetRestores.length) return false
+    const next = pendingWidgetRestores.slice()
+    next.splice(index, 1)
+    pendingWidgetRestores = next
+    if (next.length === 0) widgetRestoreTimer.stop()
+    return true
   }
 
-  function trackWidgetRestorePage(pluginId, page) {
+  function trackWidgetRestorePage(pluginId, page, ownerValue, screenName) {
     const id = String(pluginId || "")
     const requestedPage = String(page || "")
-    if (id === "" || requestedPage === ""
-        || id !== pendingWidgetRestoreId) return false
+    const owner = ownerValue || findPanelWidget(id, screenName)
+    const index = widgetRestoreIndex(id, owner, screenName)
+    if (id === "" || requestedPage === "" || index < 0) return false
+    const next = pendingWidgetRestores.slice()
+    const record = next[index]
     // Navigation issued while the layout is rebuilding is newer than the
     // page captured at mutation time. Preserve that intent even when the
     // click still lands on the outgoing owner.
-    pendingWidgetRestorePage = requestedPage
+    record.page = requestedPage
+    next[index] = record
+    pendingWidgetRestores = next
     return true
   }
 
-  function cancelWidgetRestore(pluginId) {
-    if (String(pluginId || "") !== pendingWidgetRestoreId) return false
-    widgetRestoreTimer.stop()
-    clearWidgetRestore()
-    return true
+  function cancelWidgetRestore(pluginId, ownerValue, screenName) {
+    const id = String(pluginId || "")
+    const owner = ownerValue || findPanelWidget(id, screenName)
+    return removeWidgetRestoreAt(widgetRestoreIndex(id, owner, screenName))
   }
 
   function trackControlCenterWidgetDetail(groupId, pluginId) {
@@ -1380,37 +1482,33 @@ Item {
     return true
   }
 
-  function widgetRestoreSatisfied(pluginId, page) {
-    const id = String(pluginId || "")
-    const requestedPage = String(page || "")
-    const widget = findPanelWidget(id)
-    if (!widget || widget.opened !== true) return false
+  function widgetRestoreSatisfied(record, widget) {
+    if (!record || !widget || widget.opened !== true) return false
     // A V1/V2 change replaces the WidgetSlot owner. The outgoing owner can
     // remain alive long enough to satisfy an early timer tick, then disappear
     // after the restore has already stopped. Only the replacement owner may
     // complete a variant-switch restore.
-    if (pendingWidgetRestoreNeedsReplacement
-        && widget === pendingWidgetRestoreOwner) return false
+    if (record.needsReplacement && widget === record.owner) return false
     // Once the replacement owner is established, navigation belongs to the
     // user. Follow its current page instead of forcing the page captured at
     // switch time; if this owner is replaced again, that latest page becomes
     // the handoff target for its successor.
-    if (widget === pendingWidgetRestoreActiveOwner) {
-      if (id === "hancore.shibumi.control-center"
+    if (widget === record.activeOwner) {
+      if (record.id === "hancore.shibumi.control-center"
           && widget.panelLoaded === true && widget.panelItem) {
         const currentPage = String(widget.panelItem.settingsPage || "")
-        if (currentPage !== "") pendingWidgetRestorePage = currentPage
+        if (currentPage !== "") record.page = currentPage
       }
       return true
     }
-    if (id !== "hancore.shibumi.control-center"
-        || requestedPage === "") {
-      pendingWidgetRestoreActiveOwner = widget
+    if (record.id !== "hancore.shibumi.control-center"
+        || String(record.page || "") === "") {
+      record.activeOwner = widget
       return true
     }
     const pageReady = widget.panelLoaded === true && widget.panelItem
-      && String(widget.panelItem.settingsPage || "") === requestedPage
-    if (pageReady) pendingWidgetRestoreActiveOwner = widget
+      && String(widget.panelItem.settingsPage || "") === record.page
+    if (pageReady) record.activeOwner = widget
     return pageReady
   }
 
@@ -1420,23 +1518,30 @@ Item {
     repeat: true
 
     onTriggered: {
-      root.pendingWidgetRestoreAttempts++
-      const satisfied = root.widgetRestoreSatisfied(
-        root.pendingWidgetRestoreId, root.pendingWidgetRestorePage)
-      if (!satisfied && root.pendingWidgetRestoreId
-          === "hancore.shibumi.control-center"
-          && root.pendingWidgetRestorePage !== "") {
-        root.openConfigPage(root.pendingWidgetRestorePage)
-      } else if (!satisfied) {
-        root.summonBarWidget(root.pendingWidgetRestoreId)
+      const next = []
+      const records = root.pendingWidgetRestores.slice()
+      for (let index = 0; index < records.length; index++) {
+        const record = records[index]
+        record.attempts = Number(record.attempts || 0) + 1
+        // Never let a missing replacement owner fall back to another output.
+        const widget = root.findPanelWidgetOnScreen(
+          record.id, record.screenName)
+        const satisfied = root.widgetRestoreSatisfied(record, widget)
+        if (!satisfied && record.id
+            === "hancore.shibumi.control-center"
+            && String(record.page || "") !== "") {
+          if (widget && typeof widget.openPage === "function")
+            widget.openPage(record.page)
+        } else if (!satisfied) {
+          root.summonBarWidget(record.id, record.screenName)
+        }
+        // Filesystem-backed config publication and the layout delegate rebuild
+        // can replace the panel owner more than once. Keep each output-local
+        // handoff alive for its full 1.6 s window.
+        if (record.attempts < 20) next.push(record)
       }
-      // Filesystem-backed config publication and the layout delegate rebuild
-      // can replace the panel owner more than once. Keep the bounded handoff
-      // alive for its full 1.6 s window, even after the first successful open,
-      // so a later replacement inherits the same page as well.
-      if (root.pendingWidgetRestoreAttempts < 20) return
-      stop()
-      root.clearWidgetRestore()
+      root.pendingWidgetRestores = next
+      if (next.length === 0) stop()
     }
   }
 
@@ -1691,16 +1796,10 @@ Item {
       } catch (error) {
         // Plain strings remain convenient for CLI callers.
       }
-      const preservePanel = root.isBarWidgetOpen(
-        "hancore.shibumi.control-center")
-      if (preservePanel)
-        root.scheduleWidgetRestore(
-          "hancore.shibumi.control-center",
-          root.barWidgetPage("hancore.shibumi.control-center", "bars"),
-          name === "shellStyle")
+      const scheduled = root.scheduleOpenControlCenterRestores(
+        "bars", name === "shellStyle", null, "")
       const changed = state.setPresentationSetting(name, value)
-      if (!changed && preservePanel)
-        root.cancelWidgetRestore("hancore.shibumi.control-center")
+      if (!changed) root.cancelCreatedWidgetRestores(scheduled)
       return changed ? "ok" : "rejected"
     }
 
@@ -1740,17 +1839,12 @@ Item {
     function setShellStyle(style: string): string {
       const value = String(style || "")
       const state = root.pluginService("hancore.shibumi.state")
-      const preservePanel = root.isBarWidgetOpen(
-        "hancore.shibumi.control-center")
-      if (preservePanel)
-        root.scheduleWidgetRestore(
-          "hancore.shibumi.control-center",
-          root.barWidgetPage("hancore.shibumi.control-center", "bars"), true)
+      const scheduled = root.scheduleOpenControlCenterRestores(
+        "bars", true, null, "")
       const changed = state
         && typeof state.setPresentationSetting === "function"
         && state.setPresentationSetting("shellStyle", value)
-      if (!changed && preservePanel)
-        root.cancelWidgetRestore("hancore.shibumi.control-center")
+      if (!changed) root.cancelCreatedWidgetRestores(scheduled)
       return changed ? "ok" : "rejected"
     }
 

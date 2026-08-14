@@ -187,8 +187,12 @@ Ui.Panel {
   }
 
   function close() {
-    if (bar && typeof bar.cancelWidgetRestore === "function")
-      bar.cancelWidgetRestore(moduleName)
+    if (bar && typeof bar.cancelWidgetRestore === "function") {
+      const window = root.QsWindow ? root.QsWindow.window : null
+      const outputName = window && window.screen
+        ? String(window.screen.name || "") : ""
+      bar.cancelWidgetRestore(moduleName, root, outputName)
+    }
     controller.hide()
   }
 

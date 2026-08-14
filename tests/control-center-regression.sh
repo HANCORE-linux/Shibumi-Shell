@@ -216,40 +216,48 @@ for layout_protection_contract in \
   rg -Fq "$label" "$target_file" \
     || fail "V1/V2 layout protection contract drifted: $label"
 done
-rg -Fq 'restoreBar.scheduleWidgetRestore(' \
+rg -Fq 'restoreBar.scheduleOpenControlCenterRestores(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style changes do not preserve the open Control Center page"
 rg -Fq 'presentationName === "shellStyle"' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style restore does not wait for the replacement panel owner"
-rg -Fq 'preservePage, true)' \
+rg -Fq 'settings.restorePage, true, ownerWidget, popoutScreenName' \
   "$control_dir/ControlCenterPanel.qml" \
-  || fail "V1/V2 restore does not wait for the replacement panel owner"
-rg -A14 -F 'function setBarPosition(value)' \
+  || fail "V1/V2 restore does not wait for replacement owners"
+layout_protection_controller=$(sed -n \
+  '/^  function setLayoutProtection(variant, enabled) {$/,/^  }$/p' \
+  "$control_dir/ControlCenterPanel.qml")
+for protection_restore_contract in \
+    'restoreBar.scheduleOpenControlCenterRestores' \
+    'settings.restorePage, false, ownerWidget, popoutScreenName' \
+    'restoreBar.cancelCreatedWidgetRestores(created)'; do
+  grep -Fq "$protection_restore_contract" \
+    <<<"$layout_protection_controller" \
+    || fail "layout lock restore drifted: $protection_restore_contract"
+done
+rg -A18 -F 'function setBarPosition(value, ownerValue, screenName)' \
     "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  | rg -Fq 'root.scheduleWidgetRestore(' \
+  | rg -Fq 'root.scheduleOpenControlCenterRestores(' \
   || fail "Top/Bottom changes do not preserve the Control Center route"
-rg -Fq 'pendingWidgetRestoreAttempts < 20' \
-  "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  || fail "V1/V2 restore window no longer covers late owner replacement"
-rg -Fq 'even after the first successful open' \
-  "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  || fail "V1/V2 restore no longer protects a second panel-owner rebuild"
-rg -Fq 'property var pendingWidgetRestoreActiveOwner: null' \
-  "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  || fail "V1/V2 restore does not track the established replacement owner"
-rg -Fq 'pendingWidgetRestorePage = currentPage' \
-  "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  || fail "V1/V2 restore overwrites navigation performed during handoff"
-rg -Fq 'function trackWidgetRestorePage(pluginId, page)' \
-  "$repo_root/hancore.shibumi.bar/Bar.qml" \
-  || fail "V1/V2 restore does not preserve navigation during owner handoff"
+for output_restore_contract in \
+    'property var pendingWidgetRestores: []' \
+    'function widgetRestoreIndex(pluginId, owner, screenName)' \
+    'function widgetRestorePendingForOutput(pluginId, owner, screenName)' \
+    'function findPanelWidgetOnScreen(pluginId, screenName)' \
+    'record.activeOwner === owner' \
+    'function trackWidgetRestorePage(pluginId, page, ownerValue, screenName)' \
+    'if (record.attempts < 20) next.push(record)'; do
+  rg -Fq "$output_restore_contract" \
+    "$repo_root/hancore.shibumi.bar/Bar.qml" \
+    || fail "output-local panel restore drifted: $output_restore_contract"
+done
 rg -Fq 'controller.trackSettingsPage(next)' \
   "$control_dir/ControlSettings.qml" \
   || fail "Control Center navigation is not handed to the restore lifecycle"
-rg -Fq 'bar.cancelWidgetRestore(moduleName)' \
+rg -Fq 'bar.cancelWidgetRestore(moduleName, root, outputName)' \
   "$control_dir/BarWidget.qml" \
-  || fail "closing the Control Center does not cancel a pending restore"
+  || fail "closing the Control Center does not cancel its output-local restore"
 rg -Fq 'function runWithControlCenterRestore(callback)' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "widget Appearance changes do not preserve the Control Center"
@@ -259,7 +267,7 @@ plugin_bar_toggle=$(sed -n \
 grep -Fq 'return runWithControlCenterRestore(function() {' \
     <<<"$plugin_bar_toggle" \
   || fail "V1 plugin activation does not preserve the Control Center"
-rg -Fq 'restoreBar.scheduleWidgetRestore(' \
+rg -Fq 'restoreBar.scheduleOpenControlCenterRestores(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "state mutations are not enrolled in panel-owner handoff"
 rg -Fq 'function trackControlCenterWidgetDetail(groupId, pluginId)' \
@@ -788,6 +796,8 @@ for route_contract in \
   'component LayoutProtectionToggle: Rectangle' \
   'Accessible.role: Accessible.CheckBox' \
   'Accessible.checked: selected' \
+  'border.color: activeFocus ? foreground : selected' \
+  'layoutToggle.focus = false' \
   'id: protectionTrack' \
   'width: (parent.width - parent.spacing * 2) / 3' \
   'id: reactorRepeater'; do

@@ -66,6 +66,9 @@ ShellRoot {
     property string restoredWidgetId: ""
     property string restoredPage: ""
     property bool restoreNeedsReplacement: false
+    property string pendingWidgetRestoreId: ""
+    property var pendingWidgetRestoreOwner: null
+    property string pendingWidgetRestoreScreenName: ""
     property bool lastSplitValue: false
     property var clickTargets: root.clickTargets
     property var visualTokens: ({
@@ -117,15 +120,54 @@ ShellRoot {
     function switchPanelFrom(_owner, _direction) { return false }
     function targetBelongsToWindow(_target, _window) { return true }
 
-    function scheduleWidgetRestore(pluginId, page, needsReplacement) {
+    function scheduleOpenControlCenterRestores(page, needsReplacement,
+        owner, screenName) {
+      const existing = widgetRestorePendingForOutput(
+        "hancore.shibumi.control-center", owner, screenName)
+      if (!existing) scheduleWidgetRestore(
+        "hancore.shibumi.control-center", page, needsReplacement,
+        owner, screenName)
+      return existing ? [] : [{
+        id: "hancore.shibumi.control-center",
+        owner: owner,
+        screenName: String(screenName || "")
+      }]
+    }
+
+    function cancelCreatedWidgetRestores(records) {
+      const values = Array.isArray(records) ? records : []
+      for (let index = 0; index < values.length; index++) {
+        const record = values[index]
+        cancelWidgetRestore(record.id, record.owner, record.screenName)
+      }
+      return values.length > 0
+    }
+
+    function widgetRestorePendingForOutput(pluginId, owner, screenName) {
+      void(owner)
+      return pendingWidgetRestoreId === String(pluginId || "")
+        && pendingWidgetRestoreScreenName === String(screenName || "")
+    }
+
+    function widgetRestorePendingForOwner(pluginId, owner, screenName) {
+      return widgetRestorePendingForOutput(pluginId, owner, screenName)
+        && pendingWidgetRestoreOwner === owner
+    }
+
+    function scheduleWidgetRestore(pluginId, page, needsReplacement,
+        owner, screenName) {
       restoredWidgetId = String(pluginId || "")
       restoredPage = String(page || "")
       restoreNeedsReplacement = needsReplacement === true
+      void(owner)
+      void(screenName)
       restoreWrites++
       return true
     }
 
-    function cancelWidgetRestore(pluginId) {
+    function cancelWidgetRestore(pluginId, owner, screenName) {
+      void(owner)
+      void(screenName)
       if (String(pluginId || "") !== restoredWidgetId) return false
       restoreCancelWrites++
       return true
@@ -255,10 +297,16 @@ ShellRoot {
             || !panel.setWorkspacePreference("mode", "5")
             || !panel.setImagePickerStyle("tanzaku")
             || !panel.setMediaPickerStyle("hearthstone")
-            || !panel.setReactorMode(8)
-            || !panel.setLayoutProtection("v1", true)
-            || panel.setLayoutProtection("v3", true))
+            || !panel.setReactorMode(8))
           return root.fail("state mutation facade rejected valid values")
+        const layoutRestoreWrites = fakeBar.restoreWrites
+        if (!panel.setLayoutProtection("v1", true)
+            || fakeBar.restoreWrites !== layoutRestoreWrites + 1
+            || fakeBar.restoredPage !== "quick"
+            || fakeBar.restoreNeedsReplacement
+            || panel.setLayoutProtection("v3", true)
+            || fakeBar.restoreCancelWrites !== 0)
+          return root.fail("layout protection restore contract failed")
 
         if (stateService.groupAppearanceSettingForVariant(
               "G4", "v1", "compact", false) !== true
@@ -276,6 +324,18 @@ ShellRoot {
             || panel.v2LayoutProtected !== false
             || fakeShell.writes !== 8)
           return root.fail("state mutations did not persist")
+
+        fakeBar.pendingWidgetRestoreId = ""
+        fakeBar.pendingWidgetRestoreOwner = null
+        fakeBar.pendingWidgetRestoreScreenName = ""
+        const unchangedProtectionRestoreWrites = fakeBar.restoreWrites
+        const unchangedProtectionCancelWrites = fakeBar.restoreCancelWrites
+        if (panel.setLayoutProtection("v1", true)
+            || fakeBar.restoreWrites
+              !== unchangedProtectionRestoreWrites + 1
+            || fakeBar.restoreCancelWrites
+              !== unchangedProtectionCancelWrites + 1)
+          return root.fail("unchanged layout protection left a pending restore")
 
         if (!panel.setBarPosition("bottom")
             || !panel.setAllSplits(true)
@@ -297,7 +357,7 @@ ShellRoot {
             + " owner=" + widget.opened
             + " type=" + typeof fakeBar.scheduleWidgetRestore)
         if (!panel.setBarPresentation("shellStyle", "full")
-            || fakeBar.restoreWrites !== 3
+            || fakeBar.restoreWrites !== 5
             || fakeBar.restoredWidgetId !== "hancore.shibumi.control-center"
             || fakeBar.restoredPage !== "functions"
             || !fakeBar.restoreNeedsReplacement
@@ -999,10 +1059,26 @@ ShellRoot {
               + " page-v2=" + (panel && panel.settingsPageItem
                 ? panel.settingsPageItem.v2Active : "missing")
               + " shell=" + (panel ? panel.activeShell : "missing"))
+          // Reproduce a lock click while the variant-switch restore still
+          // owns the handoff. The lock mutation must neither restart nor
+          // downgrade that stronger replacement-owner restore.
+          fakeBar.pendingWidgetRestoreId =
+            "hancore.shibumi.control-center"
+          // The restored replacement owner differs from the outgoing owner;
+          // output identity, not owner identity, must preserve the handoff.
+          fakeBar.pendingWidgetRestoreOwner = null
+          fakeBar.pendingWidgetRestoreScreenName = ""
+          fakeBar.restoreNeedsReplacement = true
+          const v2LayoutRestoreWrites = fakeBar.restoreWrites
           if (!panel.settingsPageItem.toggleActiveLayoutProtection()
               || stateService.config.layoutProtection.v2 !== true
-              || !panel.settingsPageItem.activeLayoutProtected)
-            return root.fail("V2 layout protection toggle did not persist")
+              || !panel.settingsPageItem.activeLayoutProtected
+              || fakeBar.restoreWrites !== v2LayoutRestoreWrites
+              || !fakeBar.restoreNeedsReplacement)
+            return root.fail("V2 layout protection disturbed variant handoff")
+          fakeBar.pendingWidgetRestoreId = ""
+          fakeBar.pendingWidgetRestoreOwner = null
+          fakeBar.pendingWidgetRestoreScreenName = ""
           panel.v2LayoutActive = false
           if (panel.settingsPageItem.surfaceEffectOptionCount !== 3
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 3

@@ -252,6 +252,8 @@ ShellRoot {
 
   QtObject { id: firstConnectedPanelOwner }
   QtObject { id: secondConnectedPanelOwner }
+  QtObject { id: restoreOwnerA }
+  QtObject { id: restoreOwnerB }
 
   QtObject {
     id: outputAFirst
@@ -482,6 +484,44 @@ ShellRoot {
       if (root.screensaverStage === 5) {
         if (hostBar.barHidden)
           return root.fail("bar toggle did not restore visibility")
+        const strictLookup = hostBar.findPanelWidgetOnScreen(
+          "hancore.shibumi.control-center", "DP-MISSING")
+        if (strictLookup !== null)
+          return root.fail("missing output restore fell back to another output")
+
+        if (!hostBar.scheduleWidgetRestore(
+              "hancore.shibumi.control-center", "bars", true,
+              restoreOwnerA, "DP-A")
+            || !hostBar.scheduleWidgetRestore(
+              "hancore.shibumi.control-center", "bars", false,
+              restoreOwnerB, "DP-B")
+            || hostBar.pendingWidgetRestores.length !== 2
+            || !hostBar.widgetRestorePendingForOwner(
+              "hancore.shibumi.control-center", restoreOwnerA, "DP-A")
+            || !hostBar.widgetRestorePendingForOwner(
+              "hancore.shibumi.control-center", restoreOwnerB, "DP-B")
+            || !hostBar.pendingWidgetRestores[0].needsReplacement
+            || hostBar.pendingWidgetRestores[1].needsReplacement)
+          return root.fail("output-local panel restores were not isolated")
+        if (!hostBar.scheduleWidgetRestore(
+              "hancore.shibumi.control-center", "bars-motion", false,
+              restoreOwnerA, "DP-A")
+            || hostBar.pendingWidgetRestores.length !== 2
+            || hostBar.pendingWidgetRestores[0].page !== "bars-motion"
+            || !hostBar.pendingWidgetRestores[0].needsReplacement
+            || !hostBar.widgetRestorePendingForOutput(
+              "hancore.shibumi.control-center", restoreOwnerB, "DP-A"))
+          return root.fail("weaker lock restore downgraded V1/V2 handoff")
+        if (!hostBar.cancelWidgetRestore(
+              "hancore.shibumi.control-center", restoreOwnerB, "DP-B")
+            || hostBar.pendingWidgetRestores.length !== 1
+            || !hostBar.widgetRestorePendingForOwner(
+              "hancore.shibumi.control-center", restoreOwnerA, "DP-A"))
+          return root.fail("one output cancelled another output restore")
+        if (!hostBar.cancelWidgetRestore(
+              "hancore.shibumi.control-center", restoreOwnerA, "DP-A")
+            || hostBar.pendingWidgetRestores.length !== 0)
+          return root.fail("output-local panel restore did not clean up")
         root.screensaverStage = 6
       }
 

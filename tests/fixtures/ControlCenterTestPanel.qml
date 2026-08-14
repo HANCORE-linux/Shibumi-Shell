@@ -394,9 +394,21 @@ Item {
   }
 
   function setLayoutProtection(variant, enabled) {
-    return stateService
+    const requested = String(variant || "").toLowerCase()
+    if (["v1", "v2"].indexOf(requested) < 0
+        || typeof enabled !== "boolean") return false
+    const restoreBar = bar
+    const created = restoreBar
+      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
+      ? restoreBar.scheduleOpenControlCenterRestores(
+          settings.restorePage, false, ownerWidget, "") : []
+    const changed = stateService
       && typeof stateService.setLayoutProtection === "function"
-      ? stateService.setLayoutProtection(variant, enabled) : false
+      ? stateService.setLayoutProtection(requested, enabled) : false
+    if (!changed && restoreBar
+        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
+      restoreBar.cancelCreatedWidgetRestores(created)
+    return changed
   }
 
   function setBarVariant(target) {
