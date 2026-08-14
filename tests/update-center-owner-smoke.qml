@@ -91,6 +91,7 @@ ShellRoot {
     bar: fakeBar
     contentColor: fakeBar.background
     customToneActive: true
+    badgeContrastColor: "#cc8844"
   }
 
   Timer {
@@ -99,8 +100,9 @@ ShellRoot {
     running: true
     onTriggered: {
       if (root.phase === 0) {
-        if (Math.abs(widget.badgeFillColor.a - 0.18) > 0.001
-            || !Qt.colorEqual(widget.badgeTextColor, fakeBar.background))
+        if (!Qt.colorEqual(widget.badgeFillColor, fakeBar.background)
+            || !Qt.colorEqual(widget.badgeTextColor, "#cc8844")
+            || widget.badgeLayer !== 10)
           return root.fail("custom content tone badge")
         widget.open()
       } else if (root.phase === 1

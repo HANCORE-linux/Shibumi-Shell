@@ -52,6 +52,10 @@ Item {
     && tokens.v2Shell !== true
     && typeof tokens.widgetHasFill === "function"
     && tokens.widgetHasFill(settings))
+  readonly property color badgeContrastColor: v1CustomToneActive && tokens
+    && typeof tokens.widgetFillColor === "function"
+    ? tokens.widgetFillColor(settings)
+    : bar ? bar.background : Commons.Color.background
   readonly property var updateWidget: updateLoader.item
   readonly property var trayWidget: trayLoader.item
   readonly property var notificationService: bar && bar.shell
@@ -112,6 +116,13 @@ Item {
     notificationView.badgeTextColor
   readonly property real notificationIconOffset:
     notificationView.iconHorizontalOffset
+  readonly property real updateSlotLayer: updateSlot.z
+  readonly property real traySlotLayer: trayView.z
+  readonly property real notificationSlotLayer: notificationView.z
+  readonly property real updateBadgeLayer: updateWidget
+    && "badgeLayer" in updateWidget ? Number(updateWidget.badgeLayer) : 0
+  readonly property real trayBadgeLayer: trayView.badgeLayer
+  readonly property real notificationBadgeLayer: notificationView.badgeLayer
 
   visible: ready && hasVisibleChild
   implicitWidth: visible ? contentWidth + 2 * horizontalInset : 0
@@ -177,6 +188,8 @@ Item {
     if ("contentColor" in item) item.contentColor = root.widgetInk
     if ("customToneActive" in item)
       item.customToneActive = root.v1CustomToneActive
+    if ("badgeContrastColor" in item)
+      item.badgeContrastColor = root.badgeContrastColor
   }
 
   function syncUpdateInk() {
@@ -185,6 +198,8 @@ Item {
       updateWidget.contentColor = root.widgetInk
     if ("customToneActive" in updateWidget)
       updateWidget.customToneActive = root.v1CustomToneActive
+    if ("badgeContrastColor" in updateWidget)
+      updateWidget.badgeContrastColor = root.badgeContrastColor
   }
 
   function injectChildren() {
@@ -440,6 +455,7 @@ Item {
 
   onWidgetInkChanged: syncUpdateInk()
   onV1CustomToneActiveChanged: syncUpdateInk()
+  onBadgeContrastColorChanged: syncUpdateInk()
 
   Component.onCompleted: {
     scheduleChildSync()
@@ -561,6 +577,7 @@ Item {
       implicitHeight: updateLoader.implicitHeight
       width: implicitWidth
       height: implicitHeight
+      z: 3
 
       Loader {
         id: updateLoader
@@ -577,6 +594,8 @@ Item {
       customToneActive: root.v1CustomToneActive
       contentColor: root.v1CustomToneActive
         ? root.widgetInk : root.bar ? root.bar.foreground : root.widgetInk
+      badgeContrastColor: root.badgeContrastColor
+      z: 2
       onDrawerRequested: root.toggleTrayDrawer()
     }
 
@@ -586,8 +605,10 @@ Item {
       bar: root.bar
       contentColor: root.widgetInk
       customToneActive: root.v1CustomToneActive
+      badgeContrastColor: root.badgeContrastColor
       slotWidth: root.statusActionSlot
       notificationService: root.notificationService
+      z: 1
       onToggleRequested: root.toggle()
       onDndRequested: root.toggleNotificationDnd()
     }

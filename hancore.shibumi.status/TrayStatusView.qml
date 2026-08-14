@@ -11,9 +11,12 @@ Item {
   property bool customToneActive: false
   property color contentColor: bar
     ? bar.foreground : Commons.Color.foreground
+  property color badgeContrastColor: bar
+    ? bar.background : Commons.Color.background
   readonly property color drawerIconColor: moreIcon.color
   readonly property color drawerBadgeColor: drawerBadge.color
   readonly property color drawerBadgeTextColor: badgeText.color
+  readonly property real badgeLayer: drawerBadge.z
   readonly property var pinnedItems: trayBackend
     && Array.isArray(trayBackend.pinnedItems) ? trayBackend.pinnedItems : []
   readonly property int drawerCount: trayBackend
@@ -175,12 +178,11 @@ Item {
         height: Commons.Style.space(12)
         radius: height / 2
         color: root.customToneActive
-          ? Qt.rgba(root.contentColor.r, root.contentColor.g,
-              root.contentColor.b, root.contentColor.a * 0.18)
+          ? root.contentColor
           : root.bar ? root.bar.urgent : Commons.Color.accent
-        border.width: root.customToneActive ? 1 : 0
-        border.color: root.customToneActive
-          ? root.contentColor : "transparent"
+        border.width: 0
+        border.color: "transparent"
+        z: 10
         anchors.verticalCenter: moreIcon.verticalCenter
         anchors.verticalCenterOffset: -6
         anchors.horizontalCenter: moreIcon.horizontalCenter
@@ -191,7 +193,7 @@ Item {
           anchors.centerIn: parent
           text: root.drawerCount > 99 ? "99" : String(root.drawerCount)
           color: root.customToneActive
-            ? root.contentColor
+            ? root.badgeContrastColor
             : root.bar ? root.bar.background : Commons.Color.background
           font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 7

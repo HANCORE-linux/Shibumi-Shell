@@ -295,6 +295,12 @@ ShellRoot {
             || status.notificationSlotWidth !== 22
             || status.trayPinnedIconOffset !== 1
             || status.notificationIconOffset !== 1
+            || status.updateSlotLayer !== 3
+            || status.traySlotLayer !== 2
+            || status.notificationSlotLayer !== 1
+            || status.updateBadgeLayer !== 10
+            || status.trayBadgeLayer !== 10
+            || status.notificationBadgeLayer !== 10
             || status.implicitWidth !== 112)
           return root.fail("V2 status geometry is not symmetric: inset="
             + Number(status.horizontalInset) + ", gap="
@@ -474,12 +480,17 @@ ShellRoot {
             || Math.abs(status.trayDrawerIconColor.b
               - fakeBar.background.b) > 0.001
             || Math.abs(status.trayDrawerIconColor.a - 0.7) > 0.003
-            || Math.abs(status.trayDrawerBadgeColor.a - 0.18) > 0.001
             || !Qt.colorEqual(
-              status.trayDrawerBadgeTextColor, fakeBar.background)
-            || Math.abs(status.notificationBadgeColor.a - 0.18) > 0.001
+              status.trayDrawerBadgeColor, fakeBar.background)
             || !Qt.colorEqual(
-              status.notificationBadgeTextColor, fakeBar.background))
+              status.trayDrawerBadgeTextColor, "#cc8844")
+            || !Qt.colorEqual(
+              status.notificationBadgeColor, fakeBar.background)
+            || !Qt.colorEqual(
+              status.notificationBadgeTextColor, "#cc8844")
+            || !Qt.colorEqual(status.badgeContrastColor, "#cc8844")
+            || !Qt.colorEqual(
+              status.updateWidget.badgeContrastColor, "#cc8844"))
           return root.fail("V1 tray drawer content tone"
             + " v2=" + status.v2Mode
             + " custom=" + status.v1CustomToneActive
