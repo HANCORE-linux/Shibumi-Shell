@@ -1342,7 +1342,13 @@ for plugin_contract in \
     'id: feedbackCountdown' \
     'duration: 7000' \
     'paused: feedbackHover.hovered || undoButton.activeFocus' \
-    '(parent.width - 2) * root.feedbackProgress' \
+    'Math.max(0, Math.min(1, feedbackProgress))' \
+    'Commons.Style.space(4), Number(controller.controlRadius || 0))' \
+    'statusSlot.width - 2 * feedbackProgressInset' \
+    'id: feedbackProgressBar' \
+    'anchors.leftMargin: root.feedbackProgressInset' \
+    'anchors.bottomMargin: Commons.Style.space(2)' \
+    '* root.boundedFeedbackProgress' \
     'id: pluginSearch' \
     'height: Commons.Style.space(34)' \
     'border.color: root.controller.controlBorderColor' \

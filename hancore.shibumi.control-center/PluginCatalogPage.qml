@@ -29,6 +29,14 @@ Column {
   property var undoProviderSnapshot: null
   property var undoPluginIds: []
   property real feedbackProgress: 0
+  readonly property real boundedFeedbackProgress:
+    Math.max(0, Math.min(1, feedbackProgress))
+  readonly property real feedbackProgressInset: Math.max(
+    Commons.Style.space(4), Number(controller.controlRadius || 0))
+  readonly property real feedbackProgressAvailableWidth: Math.max(0,
+    statusSlot.width - 2 * feedbackProgressInset)
+  readonly property real feedbackProgressRenderedWidth:
+    feedbackProgressBar.width
   property bool removalConfirmationVisible: false
   property string pendingRemovalId: ""
   property string pendingRemovalName: ""
@@ -746,12 +754,14 @@ Column {
     }
 
     Rectangle {
+      id: feedbackProgressBar
       anchors.left: parent.left
       anchors.bottom: parent.bottom
-      anchors.leftMargin: 1
-      anchors.bottomMargin: 1
+      anchors.leftMargin: root.feedbackProgressInset
+      anchors.bottomMargin: Commons.Style.space(2)
       visible: root.feedbackVisible && root.undoMode !== ""
-      width: Math.max(0, (parent.width - 2) * root.feedbackProgress)
+      width: root.feedbackProgressAvailableWidth
+        * root.boundedFeedbackProgress
       height: 2
       radius: 1
       color: root.undoColor

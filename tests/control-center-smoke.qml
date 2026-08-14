@@ -940,10 +940,31 @@ ShellRoot {
             + " effective=" + (panel.effectivePluginUpdateService !== null)
             + " shortStatus=" + panel.pluginUpdateShortStatusText
             + " status=" + panel.pluginUpdateStatusText)
+        plugins.feedbackProgress = 2
+        if (plugins.boundedFeedbackProgress !== 1
+            || Math.abs(plugins.feedbackProgressRenderedWidth
+              - plugins.feedbackProgressAvailableWidth) > 0.01)
+          return root.fail("plugin feedback progress upper clamp")
+        plugins.feedbackProgress = -1
+        if (plugins.boundedFeedbackProgress !== 0
+            || plugins.feedbackProgressRenderedWidth !== 0)
+          return root.fail("plugin feedback progress lower clamp")
+        plugins.feedbackProgress = 0
         if (!plugins.togglePluginById("omarchy.audio")
             || !plugins.feedbackVisible
             || !plugins.feedbackCountdownRunning
             || plugins.feedbackProgress <= 0
+            || plugins.feedbackProgressInset < panel.controlRadius
+            || plugins.feedbackProgressAvailableWidth <= 0
+            || Math.abs(plugins.feedbackProgressAvailableWidth
+              - Math.max(0, plugins.width
+                - 2 * plugins.feedbackProgressInset)) > 0.01
+            || plugins.feedbackProgressRenderedWidth <= 0
+            || plugins.feedbackProgressRenderedWidth
+              > plugins.feedbackProgressAvailableWidth + 0.01
+            || plugins.feedbackProgressInset
+              + plugins.feedbackProgressRenderedWidth
+              > plugins.width - plugins.feedbackProgressInset + 0.01
             || plugins.feedbackTitle !== "Omarchy Audio activated"
             || plugins.feedbackDetail.indexOf("hidden") < 0
             || !plugins.undoGroupStates.G6
