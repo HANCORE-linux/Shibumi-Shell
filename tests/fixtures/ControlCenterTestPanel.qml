@@ -254,6 +254,12 @@ Item {
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property bool pluginInstallerOpen: settings.paletteOpen
     && settings.installMode && settings.installerDirect
+  readonly property string pluginInstallUrl: settings.installUrl
+  readonly property string normalizedPluginInstallUrl:
+    settings.normalizedInstallUrl
+  readonly property bool validPluginInstallUrl: settings.validInstallUrl
+  readonly property bool pluginInstallInputWasCommand:
+    settings.installInputWasCommand
   readonly property var settingsSearchSuggestions:
     settings.settingsSearchSuggestions
   readonly property var settingsSearchResults:
@@ -586,6 +592,25 @@ Item {
   function openPluginInstaller() {
     settings.setPage("plugins")
     return settings.openPluginInstaller()
+  }
+
+  function extractPluginInstallUrl(value) {
+    return settings.extractInstallUrl(value)
+  }
+
+  function pluginInstallCommandFor(value) {
+    return settings.pluginInstallCommand(value)
+  }
+
+  function setPluginInstallInput(value) {
+    settings.installUrl = String(value || "")
+    settings.installConfirmed = false
+    settings.installStatus = ""
+    return settings.normalizedInstallUrl
+  }
+
+  function normalizePluginInstallInput() {
+    return settings.normalizeInstallInput()
   }
 
   property int pluginUpdaterOpenCount: 0

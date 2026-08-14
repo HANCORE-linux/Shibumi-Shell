@@ -1418,9 +1418,44 @@ ShellRoot {
             || panel.lastQuickSystemAction !== "screensaver")
           return root.fail("Quick action deck did not delegate to its owners")
         if (!quick.activateAction("add-plugin")
-            || !panel.pluginInstallerOpen || !panel.handleEscape()
-            || panel.pluginInstallerOpen || !panel.open || !widget.opened)
-          return root.fail("direct plugin installer or staged Escape failed")
+            || !panel.pluginInstallerOpen)
+          return root.fail("direct plugin installer did not open")
+        const pluginRepository =
+          "https://github.com/robzolkos/omarchy-github.git"
+        const pluginCommand = "omarchy plugin add " + pluginRepository
+          + " --enable"
+        if (panel.extractPluginInstallUrl(pluginRepository)
+              !== pluginRepository
+            || panel.extractPluginInstallUrl(pluginCommand)
+              !== pluginRepository
+            || panel.extractPluginInstallUrl(
+              "$ omarchy plugin add 'git@github.com:owner/plugin.git' --enable")
+              !== "git@github.com:owner/plugin.git"
+            || panel.extractPluginInstallUrl(
+              "omarchy plugin add \"ssh://git@github.com/owner/plugin.git\"")
+              !== "ssh://git@github.com/owner/plugin.git"
+            || panel.extractPluginInstallUrl(pluginRepository + " "
+              + "https://github.com/other/plugin.git") !== ""
+            || panel.extractPluginInstallUrl(
+              "omarchy plugin add '" + pluginRepository) !== "")
+          return root.fail("plugin installer command extraction")
+        const normalizedInstallCommand =
+          panel.pluginInstallCommandFor(pluginCommand)
+        if (JSON.stringify(normalizedInstallCommand) !== JSON.stringify([
+              "omarchy", "plugin", "add", pluginRepository, "--yes"
+            ]))
+          return root.fail("plugin installer argv normalization")
+        if (panel.setPluginInstallInput(pluginCommand) !== pluginRepository
+            || !panel.validPluginInstallUrl
+            || !panel.pluginInstallInputWasCommand
+            || panel.normalizedPluginInstallUrl !== pluginRepository
+            || !panel.normalizePluginInstallInput()
+            || panel.pluginInstallUrl !== pluginRepository
+            || panel.pluginInstallInputWasCommand)
+          return root.fail("plugin installer input normalization")
+        if (!panel.handleEscape() || panel.pluginInstallerOpen
+            || !panel.open || !widget.opened)
+          return root.fail("direct plugin installer staged Escape failed")
         if (!quick.activateAction("bars") || panel.settingsPage !== "bars"
             || !panel.showSettingsPage("quick"))
           return root.fail("Quick Bars tile did not open its existing editor")

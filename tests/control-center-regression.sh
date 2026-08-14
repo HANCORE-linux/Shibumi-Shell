@@ -487,6 +487,11 @@ for contract in \
   'PluginCatalogPage.qml:title: root.favoritesOnly ? "Favorites" : "Plugins"' \
   'ControlSettings.qml:Add plugin' \
   'ControlSettings.qml:Install plugin from Git' \
+  'ControlSettings.qml:function extractInstallUrl(value)' \
+  'ControlSettings.qml:function pluginInstallCommand(value)' \
+  'ControlSettings.qml:if (repository !== "") return ""' \
+  'ControlSettings.qml:"omarchy", "plugin", "add", repository, "--yes"' \
+  'ControlSettings.qml:onEditingFinished: root.normalizeInstallInput()' \
   'ControlSettings.qml:Plugins run as unsandboxed code'; do
   file=${contract%%:*}
   label=${contract#*:}
@@ -941,7 +946,7 @@ rg -Fq 'font.pixelSize: Commons.Style.space(24) * root.uiScale' \
   "$control_dir/PageHeaderHero.qml" \
   || fail "shared page-title typography drifted"
 
-rg -Fq '"omarchy", "plugin", "add", installUrl.trim(), "--yes"' \
+rg -Fq '"omarchy", "plugin", "add", repository, "--yes"' \
   "$control_dir/ControlSettings.qml" \
   || fail "Git plugin installation does not use Quattro's plugin contract"
 rg -Fq 'typeof pluginRegistry.setEnabled' \
