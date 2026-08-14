@@ -1291,16 +1291,15 @@ ShibumiPanel {
           }
         }
 
-        Text {
+        ActiveBarStatus {
           id: stateSync
           anchors.verticalCenter: parent.verticalCenter
-          text: panel.stockOmarchyHost
-            ? "●  OMARCHY BAR ACTIVE" : "●  STATE SYNCED"
-          color: panel.marketAccent
-          font.family: panel.bar
+          stockOmarchyHost: panel.stockOmarchyHost
+          v2LayoutActive: panel.v2LayoutActive
+          stateService: panel.stateService
+          neutralColor: panel.marketText
+          fontFamily: panel.bar
             ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.caption
-          font.letterSpacing: 1.1
         }
 
         IconAction {

@@ -170,6 +170,10 @@ fi
 for header_contract in \
   'ControlCenterPanel.qml:id: headerBand' \
   'ControlCenterPanel.qml:id: headerDivider' \
+  'ControlCenterPanel.qml:ActiveBarStatus {' \
+  'ActiveBarStatus.qml:stateService.paletteColor("color03")' \
+  'ActiveBarStatus.qml:"OMARCHY BAR ACTIVE"' \
+  'ActiveBarStatus.qml:"SHIBUMI V2 ACTIVE" : "SHIBUMI V1 ACTIVE"' \
   'ControlCenterPanel.qml:anchors.leftMargin: Commons.Style.space(20)' \
   'ControlCenterPanel.qml:anchors.rightMargin: Commons.Style.space(20)' \
   'ControlSettings.qml:anchors.leftMargin: Commons.Style.space(20)' \

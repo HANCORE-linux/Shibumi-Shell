@@ -18,6 +18,10 @@ ShellRoot {
   property int healthLifecycleStep: 0
   property var lifecycleHealthService: null
   property int lifecycleReportEpoch: 0
+  property int activeBarStatusStep: 0
+  property bool statusStockHost: false
+  property bool statusV2Layout: false
+  property real widestActiveBarStatus: 0
 
   Control.PluginUpdateTestService { id: pluginUpdateService }
 
@@ -210,6 +214,23 @@ ShellRoot {
     }
   }
 
+  QtObject {
+    id: fakeStatusState
+    function paletteColor(name) {
+      return name === "color03" ? "#33aa55" : "#ffffff"
+    }
+  }
+
+  Control.ActiveBarStatus {
+    id: activeBarStatusProbe
+    visible: false
+    stockOmarchyHost: root.statusStockHost
+    v2LayoutActive: root.statusV2Layout
+    stateService: fakeStatusState
+    neutralColor: "#aabbcc"
+    fontFamily: "monospace"
+  }
+
   Control.WidgetModuleTile {
     id: favoriteTileProbe
     visible: false
@@ -246,6 +267,35 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!stateService.ready || !widget || root.ticks < 3) return
+        root.widestActiveBarStatus = Math.max(root.widestActiveBarStatus,
+          activeBarStatusProbe.implicitWidth)
+        if (root.activeBarStatusStep === 0) {
+          if (activeBarStatusProbe.statusText !== "SHIBUMI V1 ACTIVE"
+              || activeBarStatusProbe.Accessible.role !== Accessible.StaticText
+              || activeBarStatusProbe.Accessible.name !== "SHIBUMI V1 ACTIVE"
+              || String(activeBarStatusProbe.renderedDotColor) !== "#33aa55"
+              || String(activeBarStatusProbe.renderedLabelColor) !== "#aabbcc")
+            return root.fail("V1 active-bar header status")
+          root.statusV2Layout = true
+          root.activeBarStatusStep = 1
+          return
+        }
+        if (root.activeBarStatusStep === 1) {
+          if (activeBarStatusProbe.statusText !== "SHIBUMI V2 ACTIVE"
+              || activeBarStatusProbe.Accessible.name !== "SHIBUMI V2 ACTIVE")
+            return root.fail("V2 active-bar header status")
+          root.statusStockHost = true
+          root.activeBarStatusStep = 2
+          return
+        }
+        if (root.activeBarStatusStep === 2) {
+          if (activeBarStatusProbe.statusText !== "OMARCHY BAR ACTIVE"
+              || activeBarStatusProbe.Accessible.name !== "OMARCHY BAR ACTIVE"
+              || activeBarStatusProbe.implicitWidth <= 0
+              || root.widestActiveBarStatus >= 240)
+            return root.fail("Omarchy active-bar header status geometry")
+          root.activeBarStatusStep = 3
+        }
         if (String(favoriteTileProbe.favoriteStatusColor) !== "#336699"
             || String(favoriteTileProbe.favoriteGlyphColor) !== "#336699"
             || favoriteTileProbe.favoriteGlyphText !== "󰓎")
