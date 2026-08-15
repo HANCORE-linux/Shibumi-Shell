@@ -304,6 +304,7 @@ ShellRoot {
       readonly property bool vertical: false
       readonly property int barSize: 26
       readonly property bool transparent: false
+      property bool testShadowEnabled: true
       readonly property string fontFamily: "monospace"
       readonly property color foreground: "#eeeeee"
       readonly property color background: "#181818"
@@ -325,6 +326,8 @@ ShellRoot {
         pillBorder: "#606060",
         sumi: "#aaaaaa",
         pillBorderWidth: 1,
+        pillShadow: "#66000000",
+        shadowEnabled: noSplitBar.testShadowEnabled,
         islandBorder: "#505050",
         v2Shell: false,
         widgetHasFill: function(settings) {
@@ -509,7 +512,7 @@ ShellRoot {
         pillHeight: 24,
         pillBorderWidth: 1,
         pillShadow: "#66000000",
-        shadowEnabled: false,
+        shadowEnabled: true,
         islandBorder: "#505050",
         slotHeight: 28,
         tileRadius: 10,
@@ -526,7 +529,10 @@ ShellRoot {
         widgetSurfaceOpacity: function(settings) { return 1 },
         widgetRadius: function(settings) { return 10 }
       })
-      readonly property var layoutConfig: noSplitBar.layoutConfig
+      readonly property var layoutConfig: ({
+        left: [], center: [],
+        right: [{ id: "omarchy.active-window" }]
+      })
       readonly property var layoutController: v2SplitController
       property var activePopout: null
       property int separatorToggles: 0
@@ -875,6 +881,12 @@ ShellRoot {
     }
 
     Core.GroupSlot {
+      id: dynamicV2Group
+      bar: v2SplitBar
+      groupId: "G:omarchy.active-window"
+    }
+
+    Core.GroupSlot {
       id: shapeGroup
       bar: shapeBar
       groupId: "G1"
@@ -1013,6 +1025,7 @@ ShellRoot {
       property int separatorPhase: 0
       property real separatorBaseWidth: 0
       property int shapePhase: 0
+      property int shadowPhase: 0
       property int hiddenGapPhase: 0
       property int alignmentPhase: 0
       readonly property var alignmentCases: [
@@ -1293,6 +1306,65 @@ ShellRoot {
           return
         }
 
+        if (shadowPhase === 0) {
+          const dynamicV2Slots = test.widgetSlots(
+            dynamicV2Group.contentItem, [])
+          if (dynamicV2Group.moduleCount !== 1
+              || !dynamicV2Group.contentItem
+              || dynamicV2Slots.length !== 1
+              || !dynamicV2Slots[0].activeItem) {
+            if (attempts < 50) return
+            stop()
+            test.fail("dynamic V2 external widget did not load: modules="
+              + dynamicV2Group.moduleCount + ", content="
+              + dynamicV2Group.contentItem + ", slots="
+              + dynamicV2Slots.length)
+            return
+          }
+          if (!dynamicV1Group.dynamicShadowLoaded) {
+            if (attempts < 50) return
+            stop()
+            test.fail("dynamic V1 shadow did not load before lifecycle toggle")
+            return
+          }
+          if (dynamicV2Group.dynamicShadowLoaded) {
+            stop()
+            test.fail("dynamic V2 group loaded a V1 pill shadow")
+            return
+          }
+          noSplitBar.testShadowEnabled = false
+          shadowPhase = 1
+          attempts = 0
+          return
+        }
+        if (shadowPhase === 1) {
+          if (dynamicV1Group.dynamicShadowLoaded) {
+            if (attempts < 50) return
+            stop()
+            test.fail("dynamic V1 shadow did not unload when disabled")
+            return
+          }
+          noSplitBar.testShadowEnabled = true
+          shadowPhase = 2
+          attempts = 0
+          return
+        }
+        if (shadowPhase === 2) {
+          if (!dynamicV1Group.dynamicShadowLoaded) {
+            if (attempts < 50) return
+            stop()
+            test.fail("dynamic V1 shadow did not reload when re-enabled")
+            return
+          }
+          if (dynamicV2Group.dynamicShadowLoaded) {
+            stop()
+            test.fail("dynamic V2 group loaded a V1 pill shadow after toggle")
+            return
+          }
+          shadowPhase = 3
+          attempts = 0
+        }
+
         stop()
         const spacing = leftWithoutSplit.groupSpacing
         const expectedLeft = 70 + 6 * spacing
@@ -1449,6 +1521,22 @@ ShellRoot {
             + dynamicV1Group.visualSurfaceItem.height + ", radius="
             + dynamicV1Group.visualSurfaceItem.radius + ", border="
             + dynamicV1Group.visualSurfaceItem.border.width)
+          return
+        }
+        if (directGroup.dynamicShadowLoaded !== false
+            || dynamicV1Group.dynamicShadowLoaded !== true
+            || dynamicSuiteV1FillGroup.dynamicShadowLoaded !== false
+            || dynamicSuiteV1InheritedGroup.dynamicShadowLoaded !== false
+            || v2FillGroup.dynamicShadowLoaded !== false
+            || dynamicV2Group.dynamicShadowLoaded !== false) {
+          test.fail("dynamic V1 shadow lifecycle is not load-gated: fixed="
+            + directGroup.dynamicShadowLoaded + ", external="
+            + dynamicV1Group.dynamicShadowLoaded + ", suiteFill="
+            + dynamicSuiteV1FillGroup.dynamicShadowLoaded
+            + ", suiteInherited="
+            + dynamicSuiteV1InheritedGroup.dynamicShadowLoaded + ", v2="
+            + v2FillGroup.dynamicShadowLoaded + ", dynamicV2="
+            + dynamicV2Group.dynamicShadowLoaded)
           return
         }
         const dynamicFillSlots = test.widgetSlots(

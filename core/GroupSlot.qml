@@ -84,6 +84,8 @@ Item {
     && bar.visualTokens.slotHeight !== undefined
     ? Number(bar.visualTokens.slotHeight) || 28 : 28
   readonly property Item visualSurfaceItem: widgetSurface
+  readonly property bool dynamicShadowLoaded:
+    dynamicShadowLoader.item !== null
   readonly property bool hasContent: implicitWidth > 0.5 && implicitHeight > 0.5
   readonly property real minimumResponsiveWidth: contentItem
     && "minimumResponsiveWidth" in contentItem
@@ -146,20 +148,31 @@ Item {
       ? root.bar.visualTokens.widgetBorderColor(root.groupSettings)
       : "transparent"
 
-    RectangularShadow {
+    Loader {
+      id: dynamicShadowLoader
+
       anchors.fill: parent
-      visible: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface
+      active: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface
         && root.bar.visualTokens
         && root.bar.visualTokens.shadowEnabled === true
-      radius: parent.radius
-      blur: 8
-      spread: 0
-      offset: Qt.vector2d(0,
-        root.bar && root.bar.position === "bottom" ? -1 : 1)
-      color: root.bar.visualTokens
-        && root.bar.visualTokens.pillShadow !== undefined
-        ? root.bar.visualTokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+      sourceComponent: active ? dynamicV1Shadow : null
       z: -1
+    }
+
+    Component {
+      id: dynamicV1Shadow
+
+      RectangularShadow {
+        anchors.fill: parent
+        radius: widgetSurface.radius
+        blur: 8
+        spread: 0
+        offset: Qt.vector2d(0,
+          root.bar && root.bar.position === "bottom" ? -1 : 1)
+        color: root.bar.visualTokens
+          && root.bar.visualTokens.pillShadow !== undefined
+          ? root.bar.visualTokens.pillShadow : Qt.rgba(0, 0, 0, 0.55)
+      }
     }
   }
 

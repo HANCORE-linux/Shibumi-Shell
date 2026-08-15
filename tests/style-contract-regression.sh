@@ -285,8 +285,12 @@ for dynamic_v1_contract in \
   '"hancore.shibumi.storage"' \
   '|| (root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface)' \
   'root.bar.visualTokens.pillBorderWidth' \
+  'readonly property bool dynamicShadowLoaded:' \
+  'id: dynamicShadowLoader' \
+  'active: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface' \
+  'sourceComponent: active ? dynamicV1Shadow : null' \
+  'id: dynamicV1Shadow' \
   'RectangularShadow {' \
-  'visible: root.dynamicV1Group && !root.dynamicV1WidgetOwnsSurface' \
   'root.bar.visualTokens.shadowEnabled === true'; do
   rg -Fq "$dynamic_v1_contract" core/GroupSlot.qml \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
