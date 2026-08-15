@@ -9,7 +9,7 @@ ShellRoot {
     id: test
 
     width: 1200
-    height: 120
+    height: 180
     property int narrowStage: 0
 
     Component {
@@ -49,6 +49,22 @@ ShellRoot {
             }
           }
         }
+      }
+    }
+
+    Component {
+      id: mixedHeightExternalWidget
+
+      Item {
+        property var bar: null
+        property string moduleName: ""
+        property string hostGroupId: ""
+        property var settings: ({})
+        property real availableWidth: 0
+
+        visible: true
+        implicitWidth: 36
+        implicitHeight: bar ? bar.externalWidgetHeight : 35
       }
     }
 
@@ -274,6 +290,7 @@ ShellRoot {
       property bool activeLayoutProtected: false
       readonly property bool v2Mode: true
       readonly property var order: noSplitController.order
+      readonly property var splits: noSplitController.splits
 
       function splitEnabled(region, index) {
         // Deliberately active: V1 positional splits must not leak into V2.
@@ -339,6 +356,100 @@ ShellRoot {
     }
 
     QtObject {
+      id: tallAlignmentBar
+
+      property bool useV2: false
+      property string position: "top"
+      readonly property int externalWidgetHeight: 35
+      readonly property bool vertical: false
+      readonly property int barSize: useV2 ? 33 : 35
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color barForeground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property bool foregroundAnimationEnabled: false
+      readonly property var shell: fakeShell
+      readonly property var visualTokens: useV2
+        ? v2SplitBar.visualTokens : noSplitBar.visualTokens
+      readonly property var layoutConfig: ({
+        left: [{ id: "custom.tall-left" }],
+        center: [{ id: "custom.tall-center" }],
+        right: [{ id: "custom.tall-right" }]
+      })
+      readonly property var layoutController: useV2
+        ? v2SplitController : noSplitController
+      readonly property var pluginRegistry: ({ installedPlugins: ({}) })
+      property var activePopout: null
+      property var pendingTooltipTarget: null
+      property var tooltipTarget: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return String(moduleName || "").indexOf("custom.tall-") === 0
+          ? mixedHeightExternalWidget
+          : fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function showTooltip(_owner, _text) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(region) {
+        return layoutConfig[String(region || "")] || []
+      }
+    }
+
+    QtObject {
+      id: shortAlignmentBar
+
+      property bool useV2: false
+      property string position: "top"
+      readonly property int externalWidgetHeight: 8
+      readonly property bool vertical: false
+      readonly property int barSize: useV2 ? 33 : 35
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color barForeground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property bool foregroundAnimationEnabled: false
+      readonly property var shell: fakeShell
+      readonly property var visualTokens: useV2
+        ? v2SplitBar.visualTokens : noSplitBar.visualTokens
+      readonly property var layoutConfig: ({
+        left: [{ id: "custom.short-left" }],
+        center: [{ id: "custom.short-center" }],
+        right: [{ id: "custom.short-right" }]
+      })
+      readonly property var layoutController: useV2
+        ? v2SplitController : noSplitController
+      readonly property var pluginRegistry: ({ installedPlugins: ({}) })
+      property var activePopout: null
+      property var pendingTooltipTarget: null
+      property var tooltipTarget: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return String(moduleName || "").indexOf("custom.short-") === 0
+          ? mixedHeightExternalWidget
+          : fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function showTooltip(_owner, _text) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(region) {
+        return layoutConfig[String(region || "")] || []
+      }
+    }
+
+    QtObject {
       id: splitBar
 
       readonly property bool vertical: false
@@ -378,6 +489,12 @@ ShellRoot {
       readonly property color urgent: noSplitBar.urgent
       readonly property var shell: fakeShell
       readonly property var visualTokens: ({
+        shellStyle: "full",
+        shellWingWidth: 14,
+        shellFitRadius: 6,
+        shellDockRadius: 8,
+        shellBorder: "#505050",
+        shellShadow: "#66000000",
         islandRadius: 16,
         islandHeight: 32,
         islandInsetX: 5,
@@ -391,7 +508,11 @@ ShellRoot {
         separator: "#555555",
         pillHeight: 24,
         pillBorderWidth: 1,
+        pillShadow: "#66000000",
+        shadowEnabled: false,
         islandBorder: "#505050",
+        slotHeight: 28,
+        tileRadius: 10,
         v2Shell: true,
         widgetHasFill: function(settings) {
           return settings && settings.color === "color01"
@@ -694,6 +815,22 @@ ShellRoot {
       y: 50
     }
 
+    ShibumiStyle.BarSurface {
+      id: tallAlignmentSurface
+      bar: tallAlignmentBar
+      width: 1200
+      height: tallAlignmentBar.barSize
+      y: 80
+    }
+
+    ShibumiStyle.BarSurface {
+      id: shortAlignmentSurface
+      bar: shortAlignmentBar
+      width: 1200
+      height: shortAlignmentBar.barSize
+      y: 120
+    }
+
     Core.WidgetSlot {
       id: directWidget
       bar: noSplitBar
@@ -790,6 +927,63 @@ ShellRoot {
       return result
     }
 
+    function regionItem(item, region) {
+      if (!item) return null
+      if ("region" in item && "contentItem" in item
+          && String(item.region || "") === region) return item
+      const children = item.children || []
+      for (const child of children) {
+        const match = regionItem(child, region)
+        if (match) return match
+      }
+      return null
+    }
+
+    function centerY(item, relativeTo) {
+      const point = item.mapToItem(relativeTo, 0, 0)
+      return point.y + item.height / 2
+    }
+
+    function regionAlignmentError(surface, alignmentTestBar, region,
+        expectedV2, expectedPosition, expectedExtraHeight) {
+      const groups = regionItem(surface, region)
+      const extras = regionItem(surface, region + "-extra")
+      if (!groups || !extras || groups.implicitWidth <= 0
+          || extras.implicitWidth <= 0)
+        return region + " region did not load"
+      if (alignmentTestBar.useV2 !== expectedV2
+          || groups.v2Mode !== expectedV2)
+        return region + " region did not enter "
+          + (expectedV2 ? "V2" : "V1")
+      if (alignmentTestBar.position !== expectedPosition)
+        return region + " region did not enter " + expectedPosition
+      if (!closeEnough(extras.implicitHeight, expectedExtraHeight)
+          || closeEnough(extras.implicitHeight, groups.implicitHeight))
+        return region + " fixture lost its mixed-height precondition: groups="
+          + groups.implicitHeight + ", extras=" + extras.implicitHeight
+          + ", expected extra=" + expectedExtraHeight
+      const groupCenter = centerY(groups, surface)
+      const extraCenter = centerY(extras, surface)
+      const shibumiShell = String(
+        alignmentTestBar.visualTokens.shellStyle || "shibumi") === "shibumi"
+      const chromeHeight = shibumiShell
+        ? Math.min(surface.height,
+            alignmentTestBar.visualTokens.islandHeight)
+        : surface.height
+      const chromeY = shibumiShell
+        ? expectedPosition === "bottom" ? 0
+          : alignmentTestBar.visualTokens.islandOffsetY
+        : expectedPosition === "bottom"
+          ? surface.height - chromeHeight : 0
+      const expectedCenter = chromeY + chromeHeight / 2
+      if (!closeEnough(groupCenter, extraCenter)
+          || !closeEnough(groupCenter, expectedCenter))
+        return region + " centers differ: groups=" + groupCenter
+          + ", extras=" + extraCenter + ", expected=" + expectedCenter
+          + ", heights=" + groups.height + "/" + extras.height
+      return ""
+    }
+
     function sectionState(section) {
       const result = []
       const children = section && section.contentItem
@@ -820,6 +1014,27 @@ ShellRoot {
       property real separatorBaseWidth: 0
       property int shapePhase: 0
       property int hiddenGapPhase: 0
+      property int alignmentPhase: 0
+      readonly property var alignmentCases: [
+        { v2: false, position: "top" },
+        { v2: false, position: "bottom" },
+        { v2: true, position: "top" },
+        { v2: true, position: "bottom" }
+      ]
+      readonly property var alignmentFixtures: [
+        {
+          name: "tall",
+          surface: tallAlignmentSurface,
+          bar: tallAlignmentBar,
+          extraHeight: 35
+        },
+        {
+          name: "short",
+          surface: shortAlignmentSurface,
+          bar: shortAlignmentBar,
+          extraHeight: 8
+        }
+      ]
 
       interval: 10
       running: true
@@ -856,6 +1071,38 @@ ShellRoot {
             + ", childWidth="
             + (directGroup.contentItem ? directGroup.contentItem.childrenRect.width : -1))
           return
+        }
+
+        if (alignmentPhase < alignmentCases.length) {
+          const alignmentCase = alignmentCases[alignmentPhase]
+          for (const fixture of alignmentFixtures) {
+            for (const region of ["left", "center", "right"]) {
+              const alignmentError = test.regionAlignmentError(
+                fixture.surface, fixture.bar, region, alignmentCase.v2,
+                alignmentCase.position, fixture.extraHeight)
+              if (alignmentError !== "") {
+                if (attempts < 50) return
+                stop()
+                test.fail("mixed-height extra shifted grouped widgets in "
+                  + (alignmentCase.v2 ? "V2" : "V1") + " "
+                  + alignmentCase.position + " with " + fixture.name
+                  + " " + fixture.extraHeight + "px extra: "
+                  + alignmentError)
+                return
+              }
+            }
+          }
+          alignmentPhase++
+          if (alignmentPhase < alignmentCases.length) {
+            const nextAlignmentCase = alignmentCases[alignmentPhase]
+            tallAlignmentBar.useV2 = nextAlignmentCase.v2
+            tallAlignmentBar.position = nextAlignmentCase.position
+            shortAlignmentBar.useV2 = nextAlignmentCase.v2
+            shortAlignmentBar.position = nextAlignmentCase.position
+            attempts = 0
+            return
+          }
+          attempts = 0
         }
 
         if (hiddenGapPhase === 0) {

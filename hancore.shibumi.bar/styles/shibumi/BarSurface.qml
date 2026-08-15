@@ -349,6 +349,10 @@ Item {
 
         Shibumi.GroupSection {
           id: leftGroups
+          // Provider-owned extras may follow the full bar height while the
+          // grouped V1 row remains 32px. Center both siblings independently
+          // so either height cannot displace the other from the island axis.
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "left"
           screenName: root.screenName
@@ -358,6 +362,7 @@ Item {
 
         Core.BarSection {
           id: leftExtras
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "left-extra"
           screenName: root.screenName
@@ -378,6 +383,7 @@ Item {
 
         Shibumi.GroupSection {
           id: centerGroups
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "center"
           screenName: root.screenName
@@ -388,6 +394,7 @@ Item {
 
         Core.BarSection {
           id: centerExtras
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "center-extra"
           screenName: root.screenName
@@ -406,6 +413,7 @@ Item {
 
         Core.BarSection {
           id: rightExtras
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "right-extra"
           screenName: root.screenName
@@ -414,6 +422,7 @@ Item {
 
         Shibumi.GroupSection {
           id: rightGroups
+          anchors.verticalCenter: parent.verticalCenter
           bar: root.bar
           region: "right"
           screenName: root.screenName
