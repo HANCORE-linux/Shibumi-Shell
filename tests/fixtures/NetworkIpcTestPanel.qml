@@ -97,6 +97,13 @@ Item {
     officialSpeedRunCount++
   }
 
+  // Ui.Panel retains this disabled generic handler when a specialized panel
+  // sets manageIpc=false and publishes its own compatibility target below.
+  IpcHandler {
+    target: "omarchy.network"
+    enabled: root.manageIpc
+  }
+
   IpcHandler {
     target: "omarchy.network"
     function open(): void { root.open() }

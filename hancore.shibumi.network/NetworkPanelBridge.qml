@@ -189,16 +189,17 @@ Item {
 
   function suppressBackendIpc() {
     if (!panel || !panel.data || panel.data.length === undefined) return false
+    let suppressed = false
     for (let index = 0; index < panel.data.length; index++) {
       const candidate = panel.data[index]
       if (!candidate || !("target" in candidate)
           || !("enabled" in candidate)
           || String(candidate.target || "") !== "omarchy.network") continue
       candidate.enabled = false
-      backendIpcSuppressed = true
-      return true
+      suppressed = true
     }
-    return false
+    backendIpcSuppressed = suppressed
+    return suppressed
   }
 
   function injectPanel() {
