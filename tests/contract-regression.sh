@@ -141,6 +141,20 @@ rg -Uq 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady\n[[:spac
   || fail "bar surface may instantiate for an invalid Wayland placeholder"
 rg -q 'Services\.HostWidgetResolver' Bar.qml \
   || fail "replacement bar does not own stable host widget components"
+rg -Fq 'function inlineSettingsDelta(current, next)' Bar.qml \
+  || fail "bar host cannot distinguish inline state from structural layout changes"
+rg -Fq 'function applyInlineSettingsDelta(changes)' Bar.qml \
+  || fail "bar host recreates widgets for inline state persistence"
+rg -Fq 'function applyInlineSettings(nextEntry)' core/WidgetSlot.qml \
+  || fail "widget slots cannot receive inline state without replacing their entry binding"
+rg -Fq 'function hostEntryFor(moduleValue, layout)' core/GroupRegistry.js \
+  || fail "grouped widgets do not expose their host settings layer"
+rg -Fq 'function settingsOverridesFor(groupValue, moduleValue, groupValueSettings,' \
+  core/GroupRegistry.js \
+  || fail "grouped widgets do not expose explicit local settings overrides"
+if rg -Fq 'slot.entry = change.entry' Bar.qml; then
+  fail "inline state persistence overwrites the delegate-owned slot entry binding"
+fi
 if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|WeatherService|ThemePalette|AiUsageService|PickerService|ReactorService|QuoteService|WorkspaceService|ClockService|NetworkService|MonitorService|BluetoothService)|Adapters\.(SystemActions|WorkspaceActions)|Widgets\.WidgetRegistry' Bar.qml; then
   fail "registry-only bar host still instantiates a feature owner"
 fi
@@ -173,6 +187,10 @@ rg -q 'active: root\.moduleEnabled && root\.resolvedComponent !== null' \
   || fail "disabled widgets remain instantiated"
 for compatibility_contract in \
     'fallbackTooltipText' \
+    'compatibilityPanelCandidate' \
+    'compatibilityTraversalChildren' \
+    'compatibilityTraversalDepthLimit' \
+    'compatibilityTraversalObjectLimit' \
     'findCompatibilityPanel' \
     'findCompatibilityCard' \
     'hostedModule' \
@@ -182,7 +200,9 @@ for compatibility_contract in \
     'compatibilityAvailableContentHeight' \
     'findCompatibilityContentHolder' \
     'measureCompatibilityContent' \
+    'compatibilitySurfaceTimer' \
     'compatibilityMeasureTimer' \
+    'compatibilityOpenMeasureTimer' \
     'hostedCardOrigin' \
     'publishCompatibilityConnection'; do
   rg -Fq "$compatibility_contract" core/WidgetSlot.qml \
@@ -205,6 +225,9 @@ rg -Fq 'property: "contentHeight"' core/WidgetSlot.qml \
   || fail "screen-sized hosted panels do not repair KeyboardPanel height"
 rg -Fq 'screenHeight - barThickness - gap - margin' core/WidgetSlot.qml \
   || fail "hosted panel height is not capped at the visible bar edge"
+rg -Fq 'Math.min(compatibilityNativeContentHeight, currentNativeHeight)' \
+  core/WidgetSlot.qml \
+  || fail "opening a hosted panel can recapture its repaired height as native"
 rg -Fq 'item.mapToItem(holder, 0, 0)' core/WidgetSlot.qml \
   || fail "hosted panel height does not follow rendered child geometry"
 rg -q '^PanelWindow \{' core/HostedPanelConnector.qml \

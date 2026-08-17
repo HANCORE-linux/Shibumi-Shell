@@ -16,7 +16,16 @@ Item {
   // Keep this opt-in so direct/V2/vertical hosts retain provider geometry.
   property real horizontalHostHeight: 0
   readonly property string moduleName: bar.entryId(entry)
-  readonly property var moduleSettings: bar.entrySettings(entry)
+  property var hostEntry: entry
+  property var settingsOverrides: ({})
+  property var inlineHostEntry: null
+  readonly property var moduleSettings: {
+    const source = inlineHostEntry || hostEntry
+    const result = bar.entrySettings(source)
+    const overrides = settingsOverrides || ({})
+    for (const key in overrides) result[key] = overrides[key]
+    return result
+  }
   readonly property bool moduleEnabled: moduleSettings.enabled !== false
   // Make the component binding observe the resolver explicitly. A registry
   // refresh may briefly remove an entry point; the resolver publishes another
@@ -59,7 +68,12 @@ Item {
   property var compatibilityContentHolder: null
   property real compatibilityNativeContentHeight: 0
   property real compatibilityMeasuredContentHeight: 0
+  property int compatibilitySurfaceResolutionAttempts: 0
   property int compatibilityContentResolutionAttempts: 0
+  readonly property bool compatibilityMeasurementRunning:
+    compatibilityMeasureTimer.running || compatibilityOpenMeasureTimer.running
+  readonly property int compatibilityTraversalDepthLimit: 8
+  readonly property int compatibilityTraversalObjectLimit: 256
   readonly property bool hostPanelChromeEnabled: hostedModule
     && compatibilityPanel !== null
     && compatibilityCard !== null
@@ -140,6 +154,7 @@ Item {
   }
   onModuleSettingsChanged: injectProperties()
   onModuleNameChanged: {
+    inlineHostEntry = null
     resolvedComponent = null
     resolutionAttempts = 0
     ensureResolvedComponent()
@@ -168,7 +183,11 @@ Item {
     compatibilityContentHolder = null
     compatibilityNativeContentHeight = 0
     compatibilityMeasuredContentHeight = 0
+    compatibilitySurfaceResolutionAttempts = 0
     compatibilityContentResolutionAttempts = 0
+    compatibilitySurfaceTimer.stop()
+    compatibilityMeasureTimer.stop()
+    compatibilityOpenMeasureTimer.stop()
     syncActiveItemMetrics()
     deferredSync.restart()
   }
@@ -176,6 +195,14 @@ Item {
     publishCompatibilityConnection()
   onCompatibilityAnchorXChanged:
     publishCompatibilityConnection()
+  onCompatibilityPanelChanged: {
+    const providerOpen = activeItem
+      && "opened" in activeItem && activeItem.opened === true
+    if (!compatibilityPanel && hostedModule && providerOpen) {
+      compatibilitySurfaceResolutionAttempts = 0
+      compatibilitySurfaceTimer.restart()
+    }
+  }
 
   function syncActiveItemMetrics() {
     const target = activeItem
@@ -213,18 +240,74 @@ Item {
     if (component === null && moduleEnabled) ensureResolvedComponent()
   }
 
+  function compatibilityPanelCandidate(candidate) {
+    if (!candidate
+        || (typeof candidate !== "object"
+          && typeof candidate !== "function")) return false
+    try {
+      return "anchorItem" in candidate
+        && "cardOrigin" in candidate
+        && "borderSpec" in candidate
+        && "contentWidth" in candidate
+        && "contentHeight" in candidate
+        && "open" in candidate
+    } catch (error) {
+      return false
+    }
+  }
+
+  function compatibilityTraversalChildren(candidate) {
+    const children = []
+    if (!candidate
+        || (typeof candidate !== "object"
+          && typeof candidate !== "function")) return children
+
+    try {
+      const objects = candidate.data || []
+      const count = Math.min(Number(objects.length) || 0,
+        compatibilityTraversalObjectLimit)
+      for (let index = 0; index < count; index++)
+        if (objects[index]) children.push(objects[index])
+    } catch (error) {}
+
+    // Loader.item is not guaranteed to appear in the Loader's QML data list.
+    // Follow only real Loader ownership edges; arbitrary foreign `item`
+    // properties are not a safe panel-discovery contract.
+    try {
+      if (candidate instanceof Loader && candidate.item)
+        children.push(candidate.item)
+    } catch (error) {}
+    return children
+  }
+
   function findCompatibilityPanel(owner) {
-    const objects = owner && owner.data ? owner.data : []
-    for (let index = 0; index < objects.length; index++) {
-      const candidate = objects[index]
-      if (!candidate
-          || !("anchorItem" in candidate)
-          || !("cardOrigin" in candidate)
-          || !("borderSpec" in candidate)
-          || !("contentWidth" in candidate)
-          || !("contentHeight" in candidate)
-          || !("open" in candidate)) continue
-      return candidate
+    const initial = compatibilityTraversalChildren(owner)
+    const queue = []
+    const seen = []
+    for (let index = 0; index < initial.length; index++)
+      queue.push({ object: initial[index], depth: 0 })
+
+    // Breadth-first traversal preserves the existing direct-panel precedence.
+    // The depth and object caps keep foreign, unsandboxed object trees bounded.
+    for (let cursor = 0;
+         cursor < queue.length
+           && cursor < compatibilityTraversalObjectLimit;
+         cursor++) {
+      const entry = queue[cursor]
+      const candidate = entry.object
+      if (!candidate || seen.indexOf(candidate) >= 0) continue
+      seen.push(candidate)
+      if (compatibilityPanelCandidate(candidate)) return candidate
+      if (entry.depth >= compatibilityTraversalDepthLimit) continue
+
+      const nested = compatibilityTraversalChildren(candidate)
+      for (let index = 0;
+           index < nested.length
+             && queue.length < compatibilityTraversalObjectLimit;
+           index++) {
+        if (seen.indexOf(nested[index]) < 0)
+          queue.push({ object: nested[index], depth: entry.depth + 1 })
+      }
     }
     return null
   }
@@ -346,22 +429,50 @@ Item {
   }
 
   function resolveCompatibilitySurface() {
+    const previousPanel = compatibilityPanel
     const panel = findCompatibilityPanel(activeItem)
+    const currentNativeHeight = panel
+      ? Math.max(0, Number(panel.contentHeight) || 0) : 0
     compatibilityPanel = panel
     compatibilityCard = findCompatibilityCard(panel)
-    compatibilityNativeContentHeight = panel
-      ? Math.max(0, Number(panel.contentHeight) || 0) : 0
+    // Opening an already-discovered panel emits openedChanged after the host
+    // height binding has expanded it. Preserve the smallest native height
+    // observed for the same panel so that re-resolution cannot mistake the
+    // host-repaired value for the provider's original geometry and collapse
+    // the card back to KeyboardPanel's 120px safety minimum.
+    compatibilityNativeContentHeight = panel && panel === previousPanel
+        && compatibilityNativeContentHeight > 0
+      ? Math.min(compatibilityNativeContentHeight, currentNativeHeight)
+      : currentNativeHeight
     compatibilityContentHolder = findCompatibilityContentHolder(
       compatibilityCard)
     compatibilityMeasuredContentHeight = measureCompatibilityContent(
       compatibilityContentHolder)
     compatibilityContentResolutionAttempts = 0
-    if (hostedModule && compatibilityCard) compatibilityMeasureTimer.restart()
+    if (panel) {
+      compatibilitySurfaceResolutionAttempts = 0
+      compatibilitySurfaceTimer.stop()
+    } else if (hostedModule && activeItem
+        && compatibilitySurfaceResolutionAttempts < 20) {
+      // A nested Loader can complete after the outer bar-widget Loader.
+      compatibilitySurfaceTimer.restart()
+    }
+    if (hostedModule && compatibilityCard) {
+      compatibilityOpenMeasureTimer.stop()
+      compatibilityMeasureTimer.restart()
+    } else {
+      compatibilityMeasureTimer.stop()
+      compatibilityOpenMeasureTimer.stop()
+    }
     publishCompatibilityConnection()
   }
 
   function refreshCompatibilityContent() {
-    if (!compatibilityCard || !activeItem) return
+    if (!compatibilityCard || !activeItem) {
+      compatibilityMeasureTimer.stop()
+      compatibilityOpenMeasureTimer.stop()
+      return
+    }
     compatibilityContentHolder = findCompatibilityContentHolder(
       compatibilityCard)
     compatibilityMeasuredContentHeight = measureCompatibilityContent(
@@ -403,6 +514,16 @@ Item {
         && connectedCompatibilityOwner === owner)
       connectedCompatibilityOwner = null
     return published
+  }
+
+  function applyInlineSettings(nextEntry) {
+    inlineHostEntry = nextEntry
+    inlineSettingsSync.restart()
+  }
+
+  function clearInlineSettings() {
+    inlineHostEntry = null
+    inlineSettingsSync.restart()
   }
 
   function injectProperties() {
@@ -524,8 +645,24 @@ Item {
     function onImplicitWidthChanged() { root.syncActiveItemMetrics() }
     function onImplicitHeightChanged() { root.syncActiveItemMetrics() }
     function onOpenedChanged() {
-      root.publishCompatibilityConnection()
-      if (root.hostedModule && root.compatibilityCard) {
+      // Re-resolve on the provider's public open signal as well as during the
+      // bounded construction retry. This covers a Loader activated on demand.
+      const panelOpened = root.activeItem
+        && "opened" in root.activeItem
+        && root.activeItem.opened === true
+      if (root.hostedModule) {
+        if (panelOpened && !root.compatibilityPanel)
+          root.compatibilitySurfaceResolutionAttempts = 0
+        root.resolveCompatibilitySurface()
+        if (!panelOpened) {
+          // A close may destroy an on-demand Loader. Resolve once to clear
+          // stale objects, but never leave discovery or measurement polling.
+          compatibilitySurfaceTimer.stop()
+          compatibilityMeasureTimer.stop()
+          compatibilityOpenMeasureTimer.stop()
+        }
+      } else root.publishCompatibilityConnection()
+      if (panelOpened && root.hostedModule && root.compatibilityCard) {
         root.compatibilityContentResolutionAttempts = 0
         compatibilityMeasureTimer.restart()
       }
@@ -554,6 +691,14 @@ Item {
   }
 
   Timer {
+    id: inlineSettingsSync
+
+    interval: 0
+    repeat: false
+    onTriggered: root.injectProperties()
+  }
+
+  Timer {
     id: resolverRefresh
     interval: 0
     repeat: false
@@ -571,13 +716,55 @@ Item {
   }
 
   Timer {
+    id: compatibilitySurfaceTimer
+
+    interval: 40
+    repeat: false
+    onTriggered: {
+      root.compatibilitySurfaceResolutionAttempts++
+      root.resolveCompatibilitySurface()
+    }
+  }
+
+  Timer {
     id: compatibilityMeasureTimer
 
+    // Fast construction settling: 25 Hz for at most 800 ms after discovery
+    // or open, owned by this hosted slot and stopped on close/destruction.
     interval: 40
     repeat: true
     onTriggered: {
       root.refreshCompatibilityContent()
-      if (root.compatibilityContentResolutionAttempts >= 20) stop()
+      if (root.compatibilityContentResolutionAttempts >= 20) {
+        stop()
+        if (root.compatibilityPanel && root.compatibilityCard
+            && root.compatibilityPanel.open)
+          compatibilityOpenMeasureTimer.start()
+      }
+    }
+  }
+
+  Timer {
+    id: compatibilityOpenMeasureTimer
+
+    // Standard third-party panels such as Otoru change their rendered extent
+    // after asynchronous work or later user actions. Reconcile at 4 Hz only
+    // while that panel is open; close, unload and slot destruction stop it.
+    interval: 250
+    repeat: true
+    onTriggered: {
+      if (!root.activeItem || !root.compatibilityPanel
+          || !root.compatibilityCard || !root.compatibilityPanel.open) {
+        stop()
+        const providerOpen = root.activeItem
+          && "opened" in root.activeItem && root.activeItem.opened === true
+        if (providerOpen && !root.compatibilityPanel) {
+          root.compatibilitySurfaceResolutionAttempts = 0
+          compatibilitySurfaceTimer.restart()
+        }
+        return
+      }
+      root.refreshCompatibilityContent()
     }
   }
 

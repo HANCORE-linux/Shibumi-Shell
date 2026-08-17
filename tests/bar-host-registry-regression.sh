@@ -99,6 +99,32 @@ cp -a "$bar_root/styles" "$tmpdir/"
 cp "$bar_root/Bar.qml" "$tmpdir/Bar.qml"
 cp "$repo_root/tests/fixtures/ResolverTestWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/ResolverReplacementWidget.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/DirectPreferredHostedPanelWidget.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/MisleadingItemHostedPanelWidget.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/NestedHostedPanelWidget.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/hosted-panel-loader-smoke.qml" "$tmpdir/shell.qml"
+
+set +e
+nested_output=$(timeout 8 env \
+  HOME="$tmpdir/home" \
+  DBUS_SESSION_BUS_ADDRESS= \
+  WAYLAND_DISPLAY= \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  /usr/bin/quickshell -p "$tmpdir" 2>&1)
+nested_rc=$?
+set -e
+printf '%s\n' "$nested_output"
+
+[[ $nested_rc -eq 0 ]] || fail "nested hosted-panel smoke exited $nested_rc"
+grep -q 'hosted panel loader smoke passed' <<<"$nested_output" \
+  || fail 'nested hosted-panel smoke did not reach its success marker'
+if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' \
+    <<<"$nested_output"; then
+  fail 'nested hosted-panel runtime log contains a composition error'
+fi
+
 sed "s#testOmarchyPath#\"${omarchy_path//\\/\\\\}\"#" \
   "$repo_root/tests/bar-host-registry-smoke.qml" \
   | sed "s#testCommandMarker#\"$tmpdir/run-marker\"#" \
@@ -107,7 +133,10 @@ sed "s#testOmarchyPath#\"${omarchy_path//\\/\\\\}\"#" \
 set +e
 output=$(timeout 6 env \
   HOME="$tmpdir/home" \
+  DBUS_SESSION_BUS_ADDRESS= \
+  WAYLAND_DISPLAY= \
   QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
   /usr/bin/quickshell -p "$tmpdir" 2>&1)
 rc=$?

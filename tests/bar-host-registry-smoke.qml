@@ -8,6 +8,8 @@ ShellRoot {
   property int stage: 0
   property int screensaverStage: 0
   property var retainedItems: []
+  property var inlineStateItem: null
+  property var inlineStateSlot: null
   property string commandMarker: testCommandMarker
 
   function fail(message) {
@@ -87,8 +89,13 @@ ShellRoot {
     id: stateService
 
     readonly property bool ready: true
+    property int revision: 0
     property var config: ({
-      widgets: ({}),
+      widgets: ({
+        "G:example.inline-state": {
+          groupOwned: "keep", collision: "same"
+        }
+      }),
       presentation: {
         border: true,
         shadow: false,
@@ -97,6 +104,8 @@ ShellRoot {
       },
       reactor: { mode: 0 }
     })
+    onConfigChanged: revision++
+
     readonly property color selectedColor: "#55aa77"
     property bool rejectGroupVariantStates: false
     property int separatorToggleCount: 0
@@ -106,6 +115,11 @@ ShellRoot {
       "widgetBorderUsesSurfaceColor", "widgetPadding", "widgetRadius",
       "surfaceOpacity"
     ]
+
+    function groupSettingsForVariant(groupId, _variant) {
+      return config.widgets ? config.widgets[String(groupId || "")] || ({})
+        : ({})
+    }
 
     function setLayout(order, splits) {
       const next = JSON.parse(JSON.stringify(config))
@@ -373,6 +387,15 @@ ShellRoot {
           semanticCapabilities: ["battery"],
           allowMultiple: false
         }
+      },
+      "example.inline-state": {
+        id: "example.inline-state",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "InlineState.qml" },
+        barWidget: {
+          displayName: "Inline state fixture",
+          allowMultiple: false
+        }
       }
     })
 
@@ -404,7 +427,13 @@ ShellRoot {
       transparent: true,
       style: "shibumi",
       centerAnchor: "hancore.shibumi.center",
-      layout: { left: [], center: [], right: [] },
+      layout: {
+        left: [], center: [],
+        right: [{
+          id: "example.inline-state", bestScore: 0,
+          collision: "same", shibumiModule: true
+        }]
+      },
       shibumi: stateService.config
     })
     outputWindowsEnabled: false
@@ -426,14 +455,14 @@ ShellRoot {
       root.attempts++
       if ((!hostBar.hostReady || !hostBar.styleReady
            || !hostBar.barToggleStateLoaded
-           || hostBar.moduleSlots.length < 15)
+           || hostBar.moduleSlots.length < 16)
           && root.attempts < 100) return
 
       if (!hostBar.hostReady || !hostBar.styleReady
           || !hostBar.barToggleStateLoaded)
         return root.fail("bar host did not become ready")
-      if (hostBar.moduleSlots.length !== 15)
-        return root.fail("expected 15 registry slots, got "
+      if (hostBar.moduleSlots.length !== 16)
+        return root.fail("expected 16 registry slots, got "
                          + hostBar.moduleSlots.length)
 
       if (root.screensaverStage === 0) {
@@ -525,14 +554,30 @@ ShellRoot {
         root.screensaverStage = 6
       }
 
+      if (root.stage === 13) {
+        if (root.attempts < 2) return
+        root.inlineStateSlot.ensureResolvedComponent()
+        root.stage = 14
+        root.attempts = 0
+        return
+      }
+
       const ids = []
       for (let index = 0; index < hostBar.moduleSlots.length; index++) {
         const slot = hostBar.moduleSlots[index]
-        const expectedMarker = root.stage < 3
-          ? "resolver-owned" : "resolver-replaced"
+        const expectedMarker = root.stage === 3
+          ? "resolver-replaced" : "resolver-owned"
         if (!slot || !slot.activeItem
-            || slot.activeItem.marker !== expectedMarker)
-          return root.fail("registry widget did not load at slot " + index)
+            || slot.activeItem.marker !== expectedMarker) {
+          if ((root.stage === 11 || root.stage === 14)
+              && root.attempts < 30) return
+          return root.fail("registry widget did not load at slot " + index
+            + " stage=" + root.stage + " attempts=" + root.attempts
+            + " slots=" + hostBar.moduleSlots.length
+            + " item=" + slot.activeItem
+            + " marker=" + (slot.activeItem ? slot.activeItem.marker : "null")
+            + " module=" + (slot ? slot.moduleName : "null"))
+        }
         ids.push(slot.moduleName)
       }
 
@@ -542,6 +587,21 @@ ShellRoot {
         for (let index = 0; index < hostBar.moduleSlots.length; index++)
           items.push(hostBar.moduleSlots[index].activeItem)
         root.retainedItems = items
+        for (let index = 0; index < hostBar.moduleSlots.length; index++) {
+          if (hostBar.moduleSlots[index].moduleName === "example.inline-state") {
+            root.inlineStateSlot = hostBar.moduleSlots[index]
+            root.inlineStateItem = hostBar.moduleSlots[index].activeItem
+          }
+        }
+        if (!root.inlineStateItem
+            || Number(root.inlineStateItem.settings.bestScore) !== 0
+            || root.inlineStateItem.settings.groupOwned !== "keep"
+            || root.inlineStateItem.settings.collision !== "same")
+          return root.fail("inline-state fixture did not receive initial settings"
+            + " region=" + (root.inlineStateSlot
+              ? root.inlineStateSlot.region : "null")
+            + " settings=" + JSON.stringify(root.inlineStateItem
+              ? root.inlineStateItem.settings : null))
         root.stage = 1
         root.attempts = 0
         const nextConfig = JSON.parse(JSON.stringify(stateService.config))
@@ -557,6 +617,139 @@ ShellRoot {
           if (hostBar.moduleSlots[index].activeItem !== root.retainedItems[index])
             return root.fail("settings update recreated slot " + index)
         }
+        const nextBarConfig = JSON.parse(JSON.stringify(hostBar.barConfig))
+        nextBarConfig.layout.right[0].bestScore = 3
+        nextBarConfig.layout.right[0].collision = "host-next"
+        if (hostBar.inlineSettingsDelta(
+              hostBar.layoutConfig, nextBarConfig.layout) === null)
+          return root.fail("inline settings fixture changed layout structure")
+        const structuralCurrent = {
+          left: [], center: [],
+          right: [{ id: "example.inline-state", shibumiModule: true }]
+        }
+        const structuralNext = {
+          left: [], center: [],
+          right: [{ id: "example.inline-state", shibumiModule: false }]
+        }
+        if (hostBar.inlineSettingsDelta(
+              structuralCurrent, structuralNext) !== null)
+          return root.fail("slot-ownership change was treated as inline state")
+        if (hostBar.applyInlineSettingsDelta([{
+              region: "right", index: 0,
+              entry: { id: "example.no-live-slot", value: 1 }
+            }]) !== false)
+          return root.fail("slotless inline state bypassed structural refresh")
+        hostBar.barConfig = nextBarConfig
+        root.stage = 11
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 11) {
+        let inlineSlot = null
+        for (let index = 0; index < hostBar.moduleSlots.length; index++) {
+          if (hostBar.moduleSlots[index].moduleName === "example.inline-state") {
+            inlineSlot = hostBar.moduleSlots[index]
+            break
+          }
+        }
+        if (!inlineSlot || !inlineSlot.activeItem) {
+          if (root.attempts < 30) return
+          return root.fail("inline settings update removed its widget slot")
+        }
+        if (inlineSlot.activeItem !== root.inlineStateItem)
+          return root.fail("inline settings update recreated the active widget")
+        if (Number(inlineSlot.activeItem.settings.bestScore) !== 3) {
+          if (root.attempts < 30) return
+          return root.fail("inline settings update did not reach the active widget")
+        }
+        if (inlineSlot.activeItem.settings.groupOwned !== "keep"
+            || inlineSlot.activeItem.settings.collision !== "same")
+          return root.fail("inline settings update dropped merged group settings")
+        const secondBarConfig = JSON.parse(JSON.stringify(hostBar.barConfig))
+        secondBarConfig.layout.right[0].bestScore = 4
+        secondBarConfig.layout.right[0].collision = "host-later"
+        hostBar.barConfig = secondBarConfig
+        root.stage = 15
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 15) {
+        if (Number(root.inlineStateSlot.activeItem.settings.bestScore) !== 4) {
+          if (root.attempts < 30) return
+          return root.fail("consecutive inline state write stayed stale")
+        }
+        if (root.inlineStateSlot.activeItem !== root.inlineStateItem)
+          return root.fail("consecutive inline state write recreated the widget")
+        if (root.inlineStateSlot.activeItem.settings.collision !== "same")
+          return root.fail("equal-valued group override lost to host state")
+        const updatedState = JSON.parse(JSON.stringify(stateService.config))
+        updatedState.widgets["G:example.inline-state"].collision
+          = "group-updated"
+        stateService.config = updatedState
+        root.stage = 16
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 16) {
+        if (root.inlineStateSlot.activeItem.settings.collision
+              !== "group-updated") {
+          if (root.attempts < 30) return
+          return root.fail("group override update did not reach inline state")
+        }
+        const updatedState = JSON.parse(JSON.stringify(stateService.config))
+        delete updatedState.widgets["G:example.inline-state"].collision
+        stateService.config = updatedState
+        root.stage = 17
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 17) {
+        if (root.inlineStateSlot.activeItem.settings.collision
+              !== "host-later") {
+          if (root.attempts < 30) return
+          return root.fail("removed group override did not reveal host state")
+        }
+        root.inlineStateSlot.availableWidth += 1
+        root.stage = 12
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 12) {
+        if (root.attempts < 2) return
+        if (Number(root.inlineStateSlot.activeItem.settings.bestScore) !== 4
+            || root.inlineStateSlot.activeItem.settings.groupOwned !== "keep"
+            || root.inlineStateSlot.activeItem.settings.collision
+              !== "host-later")
+          return root.fail("property reinjection restored stale inline settings")
+        root.inlineStateSlot.resolvedComponent = null
+        root.stage = 13
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 14) {
+        if (!root.inlineStateSlot.activeItem) {
+          if (root.attempts < 30) return
+          return root.fail("inline-state provider did not reload")
+        }
+        if (root.inlineStateSlot.activeItem === root.inlineStateItem)
+          return root.fail("inline-state reload fixture retained the old provider")
+        if (Number(root.inlineStateSlot.activeItem.settings.bestScore) !== 4
+            || root.inlineStateSlot.activeItem.settings.groupOwned !== "keep"
+            || root.inlineStateSlot.activeItem.settings.collision
+              !== "host-later")
+          return root.fail("provider reload restored stale inline settings")
+        const retained = root.retainedItems.slice()
+        for (let index = 0; index < hostBar.moduleSlots.length; index++) {
+          if (hostBar.moduleSlots[index] === root.inlineStateSlot)
+            retained[index] = root.inlineStateSlot.activeItem
+        }
+        root.retainedItems = retained
         root.stage = 2
         root.attempts = 0
         fakePluginRegistry.pluginsChanged()

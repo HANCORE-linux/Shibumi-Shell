@@ -21,11 +21,18 @@ Item {
       ? Number(stateService.revision) || 0 : 0
   readonly property bool v2Shell: !!(bar.visualTokens
     && bar.visualTokens.v2Shell === true)
-  readonly property var groupSettings: stateService
-    && typeof stateService.groupSettingsForVariant === "function"
-    ? stateService.groupSettingsForVariant(groupId,
-        v2Shell ? "v2" : "v1")
-    : stateConfig.widgets ? stateConfig.widgets[groupId] || ({}) : ({})
+  readonly property var groupSettings: {
+    // Calls across the plugin-service boundary do not reliably retain nested
+    // config dependencies. Observe both published invalidation surfaces before
+    // resolving variant-local settings and explicit WidgetSlot overrides.
+    void(stateConfig)
+    void(stateRevision)
+    return stateService
+      && typeof stateService.groupSettingsForVariant === "function"
+      ? stateService.groupSettingsForVariant(groupId,
+          v2Shell ? "v2" : "v1")
+      : stateConfig.widgets ? stateConfig.widgets[groupId] || ({}) : ({})
+  }
   readonly property bool groupEnabled: {
     // Calls across the plugin-service boundary do not reliably retain nested
     // config dependencies. Observe the published config/revision explicitly
@@ -230,6 +237,11 @@ Item {
             required property int index
             bar: root.bar
             entry: root.resolvedEntry(modelData)
+            hostEntry: GroupRegistry.hostEntryFor(
+              modelData, root.bar.layoutConfig)
+            settingsOverrides: GroupRegistry.settingsOverridesFor(
+              root.groupId, modelData, root.groupSettings,
+              root.bar.layoutConfig)
             region: root.groupId
             screenName: root.screenName
             availableWidth: root.availableWidth > 0
@@ -258,6 +270,11 @@ Item {
             required property string modelData
             bar: root.bar
             entry: root.resolvedEntry(modelData)
+            hostEntry: GroupRegistry.hostEntryFor(
+              modelData, root.bar.layoutConfig)
+            settingsOverrides: GroupRegistry.settingsOverridesFor(
+              root.groupId, modelData, root.groupSettings,
+              root.bar.layoutConfig)
             region: root.groupId
             screenName: root.screenName
             availableWidth: root.availableWidth

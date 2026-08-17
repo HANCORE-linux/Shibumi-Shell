@@ -196,6 +196,21 @@ function entryFor(groupValue, moduleValue, groupValueSettings, layout) {
     groupSettings(groupValueSettings, id, ids.length))
 }
 
+// WidgetSlot needs explicit host and group-local layers so an inline host-state
+// write can preserve equal-valued overrides and survive consecutive updates.
+function hostEntryFor(moduleValue, layout) {
+  var id = String(moduleValue || "")
+  var entry = configuredEntry(layout, id)
+  return entry !== null ? entry : { id: id }
+}
+
+function settingsOverridesFor(groupValue, moduleValue, groupValueSettings,
+    layout) {
+  var id = String(moduleValue || "")
+  var ids = moduleIdsFor(groupValue, layout)
+  return groupSettings(groupValueSettings, id, ids.length)
+}
+
 function assignedModuleIds() {
   var result = []
   for (var i = 0; i < GroupIds.length; i++) {

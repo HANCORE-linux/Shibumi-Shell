@@ -186,14 +186,110 @@ Item {
       String(groupId || ""), variant, name, value) ? "ok" : "rejected"
   }
 
+  function inlineSettingsDelta(current, next) {
+    if (!Util.isPlainObject(current) || !Util.isPlainObject(next)) return null
+    const regions = ["left", "center", "right"]
+    const counts = Object.create(null)
+    for (let regionIndex = 0; regionIndex < regions.length; regionIndex++) {
+      const entries = Array.isArray(next[regions[regionIndex]])
+        ? next[regions[regionIndex]] : []
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+        const id = entryId(entries[entryIndex])
+        counts[id] = (counts[id] || 0) + 1
+      }
+    }
+
+    const changes = []
+    for (let regionIndex = 0; regionIndex < regions.length; regionIndex++) {
+      const region = regions[regionIndex]
+      const currentEntries = Array.isArray(current[region])
+        ? current[region] : []
+      const nextEntries = Array.isArray(next[region]) ? next[region] : []
+      if (currentEntries.length !== nextEntries.length) return null
+      for (let entryIndex = 0; entryIndex < currentEntries.length;
+          entryIndex++) {
+        const currentId = entryId(currentEntries[entryIndex])
+        const nextId = entryId(nextEntries[entryIndex])
+        if (currentId !== nextId) return null
+        if (JSON.stringify(currentEntries[entryIndex])
+            === JSON.stringify(nextEntries[entryIndex])) continue
+        const currentEntry = Util.isPlainObject(currentEntries[entryIndex])
+          ? currentEntries[entryIndex] : ({})
+        const nextEntry = Util.isPlainObject(nextEntries[entryIndex])
+          ? nextEntries[entryIndex] : ({})
+        // These values determine slot ownership or Loader activation rather
+        // than provider state. They require the structural reconciliation path.
+        if ((currentEntry.shibumiModule === true)
+              !== (nextEntry.shibumiModule === true)
+            || (currentEntry.enabled !== false)
+              !== (nextEntry.enabled !== false)) return null
+        // Without stable per-entry identities, repeated providers cannot be
+        // patched safely. Fall back to the normal structural rebuild.
+        if (counts[nextId] > 1) return null
+        changes.push({
+          region: region,
+          index: entryIndex,
+          entry: nextEntries[entryIndex]
+        })
+      }
+    }
+    return changes
+  }
+
+  function applyInlineSettingsDelta(changes) {
+    // Composite-consumed entries (clock, weather, tray, and similar) have no
+    // same-ID WidgetSlot to invalidate. If any changed entry lacks a live slot,
+    // use the structural path rather than leaving that consumer stale.
+    for (let changeIndex = 0; changeIndex < changes.length; changeIndex++) {
+      const id = entryId(changes[changeIndex].entry)
+      let found = false
+      for (let slotIndex = 0; slotIndex < moduleSlots.length; slotIndex++) {
+        const slot = moduleSlots[slotIndex]
+        if (slot && slot.moduleName === id
+            && typeof slot.applyInlineSettings === "function") {
+          found = true
+          break
+        }
+      }
+      if (!found) return false
+    }
+
+    for (let changeIndex = 0; changeIndex < changes.length; changeIndex++) {
+      const change = changes[changeIndex]
+      layoutConfig[change.region][change.index] = change.entry
+      const id = entryId(change.entry)
+      // One logical slot may be rendered on multiple outputs or as a
+      // zero-size anchor placeholder. Patch every live copy in place so
+      // state persistence cannot destroy an open third-party panel. Keep the
+      // delegate-owned entry binding intact; later group updates still need it.
+      for (let slotIndex = 0; slotIndex < moduleSlots.length; slotIndex++) {
+        const slot = moduleSlots[slotIndex]
+        if (slot && slot.moduleName === id
+            && typeof slot.applyInlineSettings === "function")
+          slot.applyInlineSettings(change.entry)
+      }
+    }
+    return true
+  }
+
   function applyBarConfig() {
     const config = Util.isPlainObject(barConfig) ? barConfig : fallbackBarConfig
     position = normalizePosition(config.position)
     requestedStyleId = String(config.style || "shibumi")
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
     const nextLayout = Util.normalizeLayout(config.layout)
-    if (JSON.stringify(layoutConfig) !== JSON.stringify(nextLayout))
-      layoutConfig = nextLayout
+    // QML cannot diff reassigned JavaScript layout arrays: replacing one for
+    // an inline setting (for example a saved game score) recreates every
+    // widget and closes its panel. Match Omarchy's stock host by updating
+    // shape-stable, uniquely identified entries and their live slots in place.
+    const delta = inlineSettingsDelta(layoutConfig, nextLayout)
+    if (delta !== null && applyInlineSettingsDelta(delta)) return
+    for (let slotIndex = 0; slotIndex < moduleSlots.length; slotIndex++) {
+      const slot = moduleSlots[slotIndex]
+      if (slot && typeof slot.clearInlineSettings === "function")
+        slot.clearInlineSettings()
+    }
+    layoutConfig = nextLayout
   }
 
   function setBarPosition(value, ownerValue, screenName) {

@@ -20,11 +20,19 @@ screen ownership, and click routing still come from the active bar's standard
 Quattro widget interface.
 
 When the Shibumi V2 bar hosts a non-Shibumi widget, one generic hosted-panel
-adapter discovers the standard Omarchy `KeyboardPanel`/card contract. It
-applies the active Shibumi panel color, border, radius, tooltip behavior, bar
-cutout, and native connected panel tip. The path is provider-neutral: Quattro
-built-ins and third-party plugins use the same adapter, so adding another
-compatible plugin does not require a panel-specific geometry patch.
+adapter discovers the standard Omarchy `KeyboardPanel`/card contract, including
+bar-widget entry points that load their standard panel owner through nested
+`Loader` objects. It applies the active Shibumi panel color, border, radius,
+tooltip behavior, bar cutout, and native connected panel tip. The path is
+provider-neutral: Quattro built-ins and third-party plugins use the same
+adapter, so adding another compatible plugin does not require a panel-specific
+geometry patch.
+
+Inline widget-state writes that keep the same unique layout entry in place are
+also applied to the running widget without rebuilding it. A third-party panel
+therefore remains open when its provider persists state such as a high score or
+selection. Structural layout changes and ambiguous repeated entries still use
+the normal rebuild path.
 
 A plugin with fully custom panel objects that do not expose the standard
 contract cannot be adapted safely by guessing its visual tree. Such a plugin
