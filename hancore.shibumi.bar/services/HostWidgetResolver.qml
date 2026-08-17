@@ -18,9 +18,16 @@ QtObject {
     const registry = bar ? bar.pluginRegistry : null
     const plugins = registry && registry.installedPlugins
       ? registry.installedPlugins : null
-    const manifest = plugins ? plugins[String(widgetId || "")] : null
-    if (!manifest || !registry || typeof registry.entryPointUrl !== "function")
+    if (!registry || typeof registry.entryPointUrl !== "function")
       return ""
+    // Host widgets are addressed by their built-in id, but an enabled local
+    // clone replaces the implementation — the same rule the shell applies in
+    // PluginRegistry.resolveEnabledId.
+    let id = String(widgetId || "")
+    if (typeof registry.resolveEnabledId === "function")
+      id = registry.resolveEnabledId(id)
+    const manifest = plugins ? plugins[id] : null
+    if (!manifest) return ""
     return String(registry.entryPointUrl(manifest, "barWidget") || "")
   }
 
