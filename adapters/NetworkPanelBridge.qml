@@ -109,7 +109,6 @@ Item {
     if ("settings" in panel) panel.settings = panelSettings
     if ("manageIpc" in panel) panel.manageIpc = false
     if (panel.opened === true && typeof panel.close === "function") panel.close()
-    if (panel.wifiDevice) panel.wifiDevice.scannerEnabled = false
     panel.opacity = 0
   }
 

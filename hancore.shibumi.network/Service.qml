@@ -6,8 +6,9 @@ import Quickshell.Networking
 
 // One process-wide NetworkManager owner for every Shibumi output. Quattro's
 // official network component remains authoritative for live status, details,
-// scanning, DNS, and visible-network actions. Shibumi owns its inline speed-
-// test process and adds the saved-profile view missing from the host API.
+// DNS, and visible-network actions. Shibumi owns the session-scoped scanner
+// lease required by its hidden backend, its inline speed-test process, and the
+// saved-profile view missing from the host API.
 Item {
   id: root
 
@@ -41,7 +42,9 @@ Item {
   readonly property string label: bridge.label !== ""
     ? bridge.label : connectedVisibleLabel(visibleNetworks)
   readonly property int signalStrength: bridge.signalStrength
-  readonly property bool scanning: bridge.scanning
+  property bool scanPending: false
+  property var scannerDevice: null
+  readonly property bool scanning: bridge.scanning || scanPending
   readonly property bool busy: bridge.busy || profileAction.running
   readonly property bool wifiEnabled: Networking.wifiEnabled
   readonly property bool wifiAvailable: backend
@@ -104,20 +107,65 @@ Item {
     return ""
   }
 
+  function activeWifiDevice() {
+    return ready && backend && backend.wifiDevice
+      ? backend.wifiDevice : null
+  }
+
+  function setSessionScannerEnabled(enabled) {
+    const nextDevice = sessionCount > 0 ? activeWifiDevice() : null
+    if (scannerDevice && scannerDevice !== nextDevice)
+      scannerDevice.scannerEnabled = false
+    scannerDevice = nextDevice
+    if (!scannerDevice) return false
+    scannerDevice.scannerEnabled = enabled === true
+    return true
+  }
+
+  function releaseWifiScanner() {
+    scanRestart.stop()
+    scanDone.stop()
+    scanPending = false
+    const currentDevice = activeWifiDevice()
+    if (scannerDevice) scannerDevice.scannerEnabled = false
+    if (currentDevice && currentDevice !== scannerDevice)
+      currentDevice.scannerEnabled = false
+    scannerDevice = null
+  }
+
+  function requestWifiScan() {
+    scanRestart.stop()
+    scanDone.stop()
+    if (sessionCount <= 0 || !activeWifiDevice()) {
+      releaseWifiScanner()
+      return false
+    }
+    scanPending = true
+    setSessionScannerEnabled(false)
+    scanRestart.restart()
+    return true
+  }
+
+  function completeWifiScan() {
+    scanPending = false
+    if (backend && typeof backend.syncWifiNetworks === "function")
+      backend.syncWifiNetworks()
+  }
+
   visible: false
   width: 0
   height: 0
 
   onReadyChanged: {
-    if (ready && backend && sessionCount === 0 && backend.wifiDevice)
-      backend.wifiDevice.scannerEnabled = false
+    if (!ready || sessionCount === 0) releaseWifiScanner()
+    else requestWifiScan()
   }
 
   Connections {
     target: root.backend
     function onWifiDeviceChanged() {
-      if (root.backend && root.sessionCount === 0 && root.backend.wifiDevice)
-        root.backend.wifiDevice.scannerEnabled = false
+      if (root.sessionCount > 0) root.requestWifiScan()
+      else root.releaseWifiScanner()
     }
   }
 
@@ -149,15 +197,24 @@ Item {
       detailsProc.running = false
     }
     profileList.running = false
-    if (backend && backend.wifiDevice) backend.wifiDevice.scannerEnabled = false
+    releaseWifiScanner()
   }
 
   function refresh(scanWifi) {
     if (!ready || typeof backend.refresh !== "function") return false
-    const shouldScanWifi = scanWifi === true && wifiAvailable
-    backend.refresh(shouldScanWifi)
-    if (sessionCount > 0 && shouldScanWifi && !profileList.running)
-      refreshProfiles()
+    const shouldScanWifi = scanWifi === true && activeWifiDevice() !== null
+    // The hidden backend may gate its own scanner on `opened`, while older
+    // hosts enable it synchronously even for refresh(false). A requested scan
+    // therefore defers every backend refresh until our scanner lease starts.
+    if (shouldScanWifi) {
+      requestWifiScan()
+      if (sessionCount > 0 && !profileList.running) refreshProfiles()
+      return true
+    }
+    if (scanPending) return true
+    backend.refresh(false)
+    if (sessionCount > 0) setSessionScannerEnabled(true)
+    else releaseWifiScanner()
     return true
   }
 
@@ -501,6 +558,29 @@ Item {
   }
 
   Timer {
+    id: scanRestart
+    interval: 100
+    repeat: false
+    onTriggered: {
+      if (root.sessionCount > 0
+          && root.setSessionScannerEnabled(true)) {
+        if (root.backend && typeof root.backend.refresh === "function")
+          root.backend.refresh(false)
+        scanDone.restart()
+      } else {
+        root.scanPending = false
+      }
+    }
+  }
+
+  Timer {
+    id: scanDone
+    interval: 1500
+    repeat: false
+    onTriggered: root.completeWifiScan()
+  }
+
+  Timer {
     id: speedTestPhaseTimer
     interval: root.speedTestPhaseDuration
     repeat: false
@@ -617,9 +697,9 @@ Item {
 
   Component.onDestruction: {
     sessionOwners = []
+    releaseWifiScanner()
     stopSpeedTest()
     detailsProc.running = false
     profileList.running = false
-    if (backend && backend.wifiDevice) backend.wifiDevice.scannerEnabled = false
   }
 }

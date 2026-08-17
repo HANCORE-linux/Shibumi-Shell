@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Return an empty, successful profile inventory without touching NetworkManager.
+exit 0

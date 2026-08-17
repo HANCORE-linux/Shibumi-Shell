@@ -576,8 +576,16 @@ rg -q 'profileList\.running = false' services/NetworkService.qml \
   || fail "network service does not stop saved-profile discovery on final close"
 rg -q 'detailsProc\.running = false' services/NetworkService.qml \
   || fail "network service does not stop detail sampling on final close"
-rg -q 'backend\.wifiDevice\.scannerEnabled = false' services/NetworkService.qml \
-  || fail "network scanner is not disabled outside panel sessions"
+rg -q 'property var scannerDevice: null' services/NetworkService.qml \
+  || fail "network service does not track its scanner lease"
+rg -q 'if \(scannerDevice && scannerDevice !== nextDevice\)' \
+  services/NetworkService.qml \
+  || fail "network service does not release replaced scanner devices"
+rg -q 'releaseWifiScanner\(\)' services/NetworkService.qml \
+  || fail "network scanner is not released outside panel sessions"
+if rg -q 'scannerEnabled' adapters/NetworkPanelBridge.qml; then
+  fail "network bridge competes with the root scanner owner"
+fi
 rg -q 'command: \["omarchy-network-status", "--verbose"\]' \
   services/NetworkService.qml \
   || fail "network panel details do not use the shared root lifecycle worker"

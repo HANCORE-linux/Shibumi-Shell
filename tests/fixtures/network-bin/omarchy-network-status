@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# Isolated network-service tests do not query the host's live interfaces.
+exit 0

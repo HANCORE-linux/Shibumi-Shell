@@ -21,18 +21,25 @@ fail() {
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.network" "$tmpdir/network"
+cp -a -- "$repo_root/hancore.shibumi.network" \
+  "$tmpdir/hancore.shibumi.network"
+cp -a -- "$repo_root/services" "$tmpdir/services"
+cp -a -- "$repo_root/adapters" "$tmpdir/adapters"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/network-plugin-smoke.qml" "$tmpdir/shell.qml"
 install -m 0644 "$repo_root/tests/fixtures/NetworkTestService.qml" \
   "$repo_root/tests/fixtures/NetworkTestView.qml" \
   "$repo_root/tests/fixtures/NetworkTestPanel.qml" \
-  "$repo_root/tests/fixtures/NetworkCurrentTestPanel.qml" "$tmpdir/fixtures/"
+  "$repo_root/tests/fixtures/NetworkCurrentTestPanel.qml" \
+  "$repo_root/tests/fixtures/NetworkScannerGateTestPanel.qml" "$tmpdir/fixtures/"
 install -m 0755 "$repo_root/tests/fixtures/omarchy-network-speedtest" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-fail" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-empty" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-malformed" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-resistant" "$tmpdir/bin/"
+install -m 0755 "$repo_root/tests/fixtures/network-bin/omarchy-network-status" \
+  "$repo_root/tests/fixtures/network-bin/nmcli" "$tmpdir/bin/"
 
 set +e
 output=$(timeout 12 env \
@@ -66,6 +73,39 @@ for pid_log in "$tmpdir/speedtest-pids" "$tmpdir/speedtest-child-pids" \
     kill -0 "$pid" 2>/dev/null \
       && fail "speed-test teardown left process $pid alive"
   done <"$pid_log"
+done
+
+install -m 0644 "$repo_root/tests/network-scanner-lifecycle-smoke.qml" \
+  "$tmpdir/shell.qml"
+for scanner_mode in plugin canonical; do
+  mkdir -p "$tmpdir/scanner-$scanner_mode-runtime" \
+    "$tmpdir/scanner-$scanner_mode-home"
+  chmod 700 "$tmpdir/scanner-$scanner_mode-runtime"
+  canonical_flag=0
+  [[ $scanner_mode == canonical ]] && canonical_flag=1
+  set +e
+  scanner_output=$(timeout 12 env \
+    HOME="$tmpdir/scanner-$scanner_mode-home" \
+    PATH="$tmpdir/bin:$PATH" \
+    SHIBUMI_TEST_CANONICAL_NETWORK="$canonical_flag" \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/scanner-$scanner_mode-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  scanner_rc=$?
+  set -e
+  printf '%s\n' "$scanner_output"
+  [[ $scanner_rc -eq 0 ]] \
+    || fail "$scanner_mode scanner lifecycle smoke exited $scanner_rc"
+  grep -F 'network scanner lifecycle smoke passed' \
+    <<<"$scanner_output" >/dev/null \
+    || fail "$scanner_mode scanner lifecycle success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$scanner_output"; then
+    fail "$scanner_mode scanner lifecycle produced a QML runtime error"
+  fi
 done
 
 normal_pid_log="$tmpdir/bounded-parent-pid"
@@ -233,8 +273,17 @@ rg -Fq 'readonly property bool wifiControlsVisible: networkService' \
 [[ $(rg -c 'visible: panel\.wifiControlsVisible' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml") -ge 6 ]] \
   || fail "desktop network panel still exposes Wi-Fi-only controls"
-rg -Fq 'const shouldScanWifi = scanWifi === true && wifiAvailable' "$service" \
-  || fail "desktop network sessions still request Wi-Fi scans"
+rg -Fq 'const shouldScanWifi = scanWifi === true && activeWifiDevice() !== null' \
+  "$service" || fail "network sessions do not scan the active Wi-Fi device"
+rg -Fq 'property var scannerDevice: null' "$service" \
+  || fail "network service does not track its acquired scanner device"
+rg -Fq 'if (scannerDevice && scannerDevice !== nextDevice)' "$service" \
+  || fail "network service cannot release a replaced scanner device"
+rg -Fq 'if (root.sessionCount > 0) root.requestWifiScan()' "$service" \
+  || fail "active sessions do not rescan a late or replaced Wi-Fi adapter"
+if rg -q 'scannerEnabled' "$bridge"; then
+  fail "hidden network bridge competes with the service scanner owner"
+fi
 rg -Fq 'if (!backendAvailable || !wifiAvailable) return false' "$service" \
   || fail "Wi-Fi toggle is not guarded by adapter availability"
 rg -Fq 'return (speed >= 100 ? speed.toFixed(0) : speed.toFixed(1)) + " Mbps"' \
