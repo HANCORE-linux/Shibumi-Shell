@@ -54,6 +54,32 @@ SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-agents-b99fd91 \
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.
 
+## Change delivery approvals
+
+Treat each delivery phase as a separate authorization boundary. Approval for one
+phase never authorizes a later phase, and a bundled request must still be
+confirmed immediately before each phase begins.
+
+1. **Branch or worktree preparation:** show the intended branch and worktree
+   path, then obtain explicit approval before creating, deleting, or resetting
+   either one.
+2. **Commit:** show the files or staged diff, validation result, and proposed
+   English commit message, then obtain explicit approval before creating the
+   local commit.
+3. **Push:** report the exact commit hashes, source branch, and destination
+   remote branch, then obtain a new explicit approval before pushing.
+4. **Pull request:** show the proposed base, head, title, body summary, and any
+   issue-closing keywords, then obtain a new explicit approval before creating,
+   editing, commenting on, or otherwise mutating the PR.
+5. **Merge:** wait for the required checks and reviews, report their results and
+   the intended merge method, then obtain a new explicit approval before
+   merging. Do not treat PR approval or a general request to finish as merge
+   authorization.
+
+Issue comments, labels, and closure are independent GitHub writes and require
+separate explicit approval. Read-only status and CI inspection do not require
+approval. If authorization is unclear, stop at the current phase and ask.
+
 ## Release safety
 
 - Do not push, tag, publish a release, update Omarchy, log out, or reboot unless explicitly authorized.
