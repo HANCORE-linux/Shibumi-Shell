@@ -29,6 +29,7 @@ PanelWindow {
   property bool popoutSwitching: false
   property bool popoutSwitchClosing: false
   property Item focusTarget: null
+  property bool focusPrimed: false
   property bool surfaceOverrideEnabled: false
   property color surfaceColorOverride: "transparent"
   property color surfaceBorderColorOverride: "transparent"
@@ -135,6 +136,19 @@ PanelWindow {
     else root.open = false
   }
 
+  function beginFocusPrime() {
+    if (open && backingWindowVisible) focusPrimeTimer.restart()
+  }
+
+  function requestKeyboardFocus(target) {
+    if (!open || !target) return
+    focusPrimed = false
+    beginFocusPrime()
+    Qt.callLater(function() {
+      if (root.open && target) target.forceActiveFocus()
+    })
+  }
+
   screen: anchorWindow ? anchorWindow.screen : null
   visible: open || card.opacity > 0 || popoutSwitching
   color: "transparent"
@@ -143,7 +157,11 @@ PanelWindow {
   WlrLayershell.namespace: "omarchy-keyboard-panel"
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: open
-    ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    ? (focusPrimed ? WlrKeyboardFocus.OnDemand
+      : WlrKeyboardFocus.Exclusive)
+    : WlrKeyboardFocus.None
+
+  onBackingWindowVisibleChanged: beginFocusPrime()
 
   anchors {
     top: true
@@ -262,9 +280,14 @@ PanelWindow {
   }
 
   onOpenChanged: {
-    if (open && focusTarget) Qt.callLater(function() {
-      if (root.open && root.focusTarget) root.focusTarget.forceActiveFocus()
-    })
+    if (open) {
+      focusPrimed = false
+      beginFocusPrime()
+      if (focusTarget) requestKeyboardFocus(focusTarget)
+    } else {
+      focusPrimeTimer.stop()
+      focusPrimed = false
+    }
     if (!bar) return
     const activeOwner = typeof bar.activePopoutForScreen === "function"
       ? bar.activePopoutForScreen(popoutScreenName) : bar.activePopout
@@ -287,6 +310,12 @@ PanelWindow {
       bar.releasePopout(coordinatorKey, popoutScreenName)
     if (bar && typeof bar.clearConnectedPanel === "function")
       bar.clearConnectedPanel(coordinatorKey)
+  }
+
+  Timer {
+    id: focusPrimeTimer
+    interval: 75
+    onTriggered: if (root.open) root.focusPrimed = true
   }
 
   Timer {
