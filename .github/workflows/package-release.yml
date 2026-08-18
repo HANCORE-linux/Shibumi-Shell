@@ -24,6 +24,7 @@ jobs:
           set -euo pipefail
           bash -n packaging/aur/PKGBUILD
           bash -n packaging/shibumi-shell
+          python3 tests/production-boundary-regression.py
           python3 tests/test_package_release.py
           python3 tests/test_shibumi_manager.py
           python3 tests/test_shibumi_suite.py

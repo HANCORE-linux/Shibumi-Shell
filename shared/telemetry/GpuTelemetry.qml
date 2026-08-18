@@ -7,7 +7,7 @@ Scope {
 
   property int consumers: 0
   property string helperPath: String(Qt.resolvedUrl(
-    "../scripts/shibumi-gpu-probe")).replace("file://", "")
+    "scripts/shibumi-gpu-probe")).replace("file://", "")
   property var devices: []
   property string backend: ""
   property string name: ""
