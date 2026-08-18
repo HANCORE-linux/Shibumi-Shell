@@ -24,7 +24,6 @@ mappings=(
   "shared/telemetry/SystemTelemetry.qml:hancore.shibumi.telemetry/SystemTelemetry.qml"
   "shared/telemetry/ThermalTelemetry.qml:services/ThermalTelemetry.qml"
   "shared/telemetry/ThermalTelemetry.qml:hancore.shibumi.telemetry/ThermalTelemetry.qml"
-  "shared/telemetry/GpuTelemetry.qml:services/GpuTelemetry.qml"
   "shared/telemetry/GpuTelemetry.qml:hancore.shibumi.cpu/GpuTelemetry.qml"
   "shared/power-state/Service.qml:services/PowerService.qml"
   "shared/power-state/Service.qml:hancore.shibumi.power-state/Service.qml"
@@ -124,7 +123,6 @@ mappings=(
 )
 
 executable_mappings=(
-  "shared/telemetry/shibumi-gpu-probe:scripts/shibumi-gpu-probe"
   "shared/telemetry/shibumi-gpu-probe:hancore.shibumi.cpu/scripts/shibumi-gpu-probe"
   "shared/quick-access/shibumi-picker:scripts/shibumi-picker"
   "shared/quick-access/shibumi-picker:hancore.shibumi.quick-access/scripts/shibumi-picker"

@@ -19,6 +19,7 @@ command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 
 "$repo_root/tests/baseline-contract-regression.sh"
 "$repo_root/tests/documentation-regression.py"
+python3 "$repo_root/tests/production-boundary-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
 python3 "$repo_root/tests/test_shibumi_manager.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
@@ -52,7 +53,9 @@ for retired_root_copy in \
   adapters/BluetoothDiscoveryGuard.qml \
   adapters/BluetoothModel.js \
   adapters/WorkspaceActions.qml \
-  services/OpenCodeProvider.qml; do
+  services/GpuTelemetry.qml \
+  services/OpenCodeProvider.qml \
+  scripts/shibumi-gpu-probe; do
   [[ ! -e $retired_root_copy ]] \
     || fail "plugin-canonical source regained a root copy: $retired_root_copy"
 done

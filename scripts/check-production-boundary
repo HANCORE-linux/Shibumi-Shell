@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import os
+import posixpath
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+
+CODE_SUFFIXES = {"", ".bash", ".js", ".mjs", ".py", ".qml", ".sh"}
+
+# Exact, reviewed compatibility debt. A capability cutover removes entries; it
+# must not broaden them. This is a repository policy gate, not a hostile-code
+# sandbox: deliberate lexical obfuscation is outside its threat model.
+TOKEN_ALLOWANCES = {
+    "hancore.shibumi.ai/Service.qml": Counter({
+        "entryPointUrl": 2,
+        "registeredWidgetSource": 2,
+        "standardWidgetSource": 3,
+    }),
+    "hancore.shibumi.audio/BarWidget.qml": Counter({
+        "entryPointUrl": 2,
+        "registeredComponent": 2,
+        "registeredSource": 2,
+        "registeredWidgetComponent": 2,
+        "registeredWidgetSource": 2,
+    }),
+    "hancore.shibumi.bar/Bar.qml": Counter({
+        "entryPointUrl": 3,
+        "firstPartyServiceFor": 2,
+        "registeredWidgetComponent": 1,
+        "registeredWidgetSource": 1,
+    }),
+    "hancore.shibumi.bar/core/WidgetSlot.qml": Counter({
+        "registeredWidgetComponent": 4,
+    }),
+    "hancore.shibumi.bar/services/HostWidgetResolver.qml": Counter({
+        "Qt.createComponent": 1,
+        "entryPointUrl": 5,
+    }),
+    "hancore.shibumi.brightness/Service.qml": Counter({
+        "entryPointUrl": 2,
+        "registeredComponent": 2,
+        "registeredSource": 2,
+        "registeredWidgetComponent": 2,
+        "registeredWidgetSource": 2,
+    }),
+    "hancore.shibumi.center/BarWidget.qml": Counter({
+        "entryPointUrl": 2,
+        "registeredComponent": 2,
+        "registeredSource": 2,
+        "registeredWidgetComponent": 2,
+        "registeredWidgetSource": 2,
+    }),
+    "hancore.shibumi.center/SystemUpdateWidget.qml": Counter({
+        "firstPartyServiceFor": 2,
+    }),
+    "hancore.shibumi.media/BarWidget.qml": Counter({
+        "firstPartyServiceFor": 2,
+    }),
+    "hancore.shibumi.media/Service.qml": Counter({
+        "firstPartyServiceFor": 2,
+    }),
+    "hancore.shibumi.network/Service.qml": Counter({
+        "entryPointUrl": 2,
+        "registeredComponent": 2,
+        "registeredSource": 2,
+        "registeredWidgetComponent": 2,
+        "registeredWidgetSource": 2,
+    }),
+    "hancore.shibumi.reactor/ReactorService.qml": Counter({
+        "firstPartyService": 2,
+        "firstPartyServiceFor": 2,
+    }),
+    "hancore.shibumi.status/BarWidget.qml": Counter({
+        "entryPointUrl": 2,
+        "firstPartyServiceFor": 5,
+        "registeredComponent": 3,
+        "registeredSource": 3,
+        "registeredWidgetComponent": 2,
+        "registeredWidgetSource": 2,
+    }),
+    "hancore.shibumi.status/Service.qml": Counter({
+        "firstPartyServiceFor": 4,
+    }),
+}
+
+PROVIDER_ALLOWANCES = {
+    "hancore.shibumi.ai/Service.qml": {
+        "omarchy.agents", "omarchy.model-usage",
+    },
+    "hancore.shibumi.audio/BarWidget.qml": {"omarchy.audio"},
+    "hancore.shibumi.brightness/Service.qml": {"omarchy.monitor"},
+    "hancore.shibumi.center/BarWidget.qml": {"omarchy.system-update"},
+    "hancore.shibumi.network/Service.qml": {"omarchy.network"},
+    "hancore.shibumi.status/BarWidget.qml": {"omarchy.tray"},
+}
+
+FIRST_PARTY_ALLOWANCES = {
+    "hancore.shibumi.bar/Bar.qml": {"omarchy.idle"},
+    "hancore.shibumi.center/SystemUpdateWidget.qml": {
+        "omarchy.system-update",
+    },
+    "hancore.shibumi.media/BarWidget.qml": {"omarchy.media"},
+    "hancore.shibumi.media/Service.qml": {"omarchy.media"},
+    "hancore.shibumi.reactor/ReactorService.qml": {"omarchy.media"},
+    "hancore.shibumi.status/BarWidget.qml": {"omarchy.notifications"},
+    "hancore.shibumi.status/Service.qml": {
+        "omarchy.idle", "omarchy.notifications",
+    },
+}
+
+HELPER_ALLOWANCES = {
+    "hancore.shibumi.network/Service.qml": Counter({
+        "omarchy-network-status": 1,
+    }),
+    "hancore.shibumi.power-state/Service.qml": Counter({
+        "omarchy-battery-status": 1,
+        "omarchy-powerprofiles-list": 1,
+    }),
+    "hancore.shibumi.status/Service.qml": Counter({
+        "/tmp/omarchy-screenrecord-filename": 1,
+        "omarchy-voxtype-status": 1,
+        "pgrep": 1,
+    }),
+    "hancore.shibumi.quick-access/scripts/shibumi-picker": Counter({
+        "pgrep": 1,
+    }),
+}
+
+PROTECTED_TOKENS = {
+    token for allowance in TOKEN_ALLOWANCES.values() for token in allowance
+}
+PRIVATE_PATHS = (
+    re.compile(r"/usr/share/omarchy/(?:plugins|shell)(?:/|$)"),
+    re.compile(r"(?:^|[/\"'\s])shell/plugins/", re.MULTILINE),
+    re.compile(r"\.config/omarchy/plugins/omarchy\."),
+)
+PROVIDER_CALL = re.compile(
+    r"\b(?:registeredSource|registeredComponent|registeredWidgetSource|"
+    r"registeredWidgetComponent|standardWidgetSource)\s*\(\s*"
+    r"[\"'](omarchy\.[A-Za-z0-9_.-]+)[\"']"
+)
+FIRST_PARTY_CALL = re.compile(
+    r"\b(?:firstPartyServiceFor|firstPartyService)\s*\(\s*"
+    r"[\"'](omarchy\.[A-Za-z0-9_.-]+)[\"']"
+)
+HELPER_MARKER = re.compile(
+    r"/tmp/omarchy-[A-Za-z0-9_.-]+|"
+    r"\bomarchy-[A-Za-z0-9-]*(?:status|state|list)\b|"
+    r"\b(?:pgrep|pidof)\b"
+)
+RELATIVE_LITERAL = re.compile(r"[\"']([^\"']*\.\.[^\"']*)[\"']")
+
+
+def add(findings: list[str], path: str, kind: str, detail: str) -> None:
+    findings.append(f"{path}: {kind}: {detail}")
+
+
+def production_files(root: Path) -> list[tuple[Path, Path]]:
+    files: list[tuple[Path, Path]] = []
+    for plugin in sorted(root.glob("hancore.shibumi.*")):
+        if plugin.is_symlink():
+            files.append((plugin, plugin))
+            continue
+        if not plugin.is_dir():
+            continue
+        for path in sorted(plugin.rglob("*")):
+            if path.is_symlink() or (
+                path.is_file()
+                and (path.suffix.lower() in CODE_SUFFIXES or os.access(path, os.X_OK))
+            ):
+                files.append((path, plugin))
+    return files
+
+
+def compare_exact(
+    findings: list[str], relative: str, kind: str,
+    observed: Counter[str], allowed: Counter[str],
+) -> None:
+    for token, count in sorted((observed - allowed).items()):
+        add(findings, relative, kind, f"{token} occurs {count} unapproved time(s)")
+    for token, count in sorted((allowed - observed).items()):
+        add(
+            findings,
+            relative,
+            kind,
+            f"approved {token} occurrence disappeared {count} time(s); "
+            "remove or update its narrow allowance",
+        )
+
+
+def check_tree(root: Path) -> list[str]:
+    root = root.resolve()
+    findings: list[str] = []
+    visited: set[str] = set()
+    present_plugins = {
+        path.name for path in root.glob("hancore.shibumi.*") if path.is_dir()
+    }
+
+    for path, plugin in production_files(root):
+        relative = path.relative_to(root).as_posix()
+        visited.add(relative)
+        resolved_plugin = plugin.resolve()
+        if path.is_symlink():
+            kind = "package escape" \
+                if not path.resolve().is_relative_to(resolved_plugin) \
+                else "production symlink"
+            add(findings, relative, kind, "production symlinks are not allowed")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            add(findings, relative, "undecodable production source", "not UTF-8")
+            continue
+
+        for pattern in PRIVATE_PATHS:
+            if pattern.search(text):
+                add(findings, relative, "private component path", pattern.pattern)
+
+        observed_tokens: Counter[str] = Counter()
+        for token in PROTECTED_TOKENS:
+            count = text.count(token) if "." in token else len(re.findall(
+                rf"(?<![A-Za-z0-9_$]){re.escape(token)}(?![A-Za-z0-9_$])",
+                text,
+            ))
+            if count:
+                observed_tokens[token] = count
+        compare_exact(
+            findings,
+            relative,
+            "hidden component loading",
+            observed_tokens,
+            TOKEN_ALLOWANCES.get(relative, Counter()),
+        )
+
+        providers = {match.group(1) for match in PROVIDER_CALL.finditer(text)}
+        allowed_providers = PROVIDER_ALLOWANCES.get(relative, set())
+        if providers != allowed_providers:
+            add(
+                findings,
+                relative,
+                "private provider QML",
+                f"observed {sorted(providers)}, allowed {sorted(allowed_providers)}",
+            )
+
+        first_party = {match.group(1) for match in FIRST_PARTY_CALL.finditer(text)}
+        allowed_first_party = FIRST_PARTY_ALLOWANCES.get(relative, set())
+        if first_party != allowed_first_party:
+            add(
+                findings,
+                relative,
+                "undeclared first-party service",
+                f"observed {sorted(first_party)}, allowed {sorted(allowed_first_party)}",
+            )
+
+        helper_counts = Counter(HELPER_MARKER.findall(text))
+        compare_exact(
+            findings,
+            relative,
+            "helper-backed state polling",
+            helper_counts,
+            HELPER_ALLOWANCES.get(relative, Counter()),
+        )
+
+        for match in RELATIVE_LITERAL.finditer(text):
+            value = posixpath.normpath(match.group(1))
+            if ".." not in value.split("/"):
+                continue
+            resolved = (path.parent / value).resolve()
+            if not resolved.is_relative_to(resolved_plugin):
+                add(
+                    findings,
+                    relative,
+                    "package escape",
+                    f"relative literal leaves plugin: {match.group(1)}",
+                )
+
+    allowed_paths = set(TOKEN_ALLOWANCES) | set(PROVIDER_ALLOWANCES) \
+        | set(FIRST_PARTY_ALLOWANCES) | set(HELPER_ALLOWANCES)
+    complete_suite = (root / "contracts/plugin-suite-v1.json").is_file()
+    for allowed_path in sorted(allowed_paths - visited):
+        if complete_suite or allowed_path.split("/", 1)[0] in present_plugins:
+            add(
+                findings,
+                allowed_path,
+                "stale boundary allowance",
+                "allowlisted production file is missing",
+            )
+    return sorted(set(findings))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Reject undeclared private backends in shipped Shibumi plugins."
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        default=Path(__file__).resolve().parents[1],
+        help="tree containing hancore.shibumi.* plugin directories",
+    )
+    args = parser.parse_args()
+    if not args.root.is_dir():
+        parser.error(f"production root is not a directory: {args.root}")
+    findings = check_tree(args.root)
+    if findings:
+        for finding in findings:
+            print(f"production boundary error: {finding}", file=sys.stderr)
+        return 1
+    print("Shibumi production boundary check passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
