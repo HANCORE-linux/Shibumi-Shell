@@ -879,6 +879,12 @@ rg -q 'property int padding: Commons\.Style\.spacing\.popupPadding' \
   || fail "Shibumi panel border changes its V1 content inset"
 rg -q '^PanelWindow \{' widgets/ShibumiPanel.qml \
   || fail "Shibumi panel does not own its visible surface"
+rg -Fq 'function requestKeyboardFocus(target)' widgets/ShibumiPanel.qml \
+  || fail "Shibumi panel cannot reacquire keyboard focus for inline editors"
+rg -Fq 'focusPrimed ? WlrKeyboardFocus.OnDemand' widgets/ShibumiPanel.qml \
+  || fail "Shibumi panel does not settle its keyboard-focus prime"
+rg -q 'id: focusPrimeTimer' widgets/ShibumiPanel.qml \
+  || fail "Shibumi panel does not bound its exclusive focus prime"
 if rg -q '^Ui\.KeyboardPanel|shibumiSurfaceBleed' widgets/ShibumiPanel.qml; then
   fail "Shibumi panel still paints host and custom panel layers together"
 fi
