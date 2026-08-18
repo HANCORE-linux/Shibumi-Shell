@@ -18,11 +18,21 @@ ShibumiPanel {
   property string passwordKey: ""
   property string passwordText: ""
   property string identityText: ""
+  property var credentialDisplayNetworks: []
+  property string credentialSsid: ""
+  property var credentialSecurity: null
+  property string credentialError: ""
+  property Item credentialEditor: null
   property string pendingForgetKey: ""
   property int cursorIndex: -1
   readonly property bool wifiControlsVisible: networkService
     && networkService.wifiAvailable === true
   readonly property var displayNetworks: filteredNetworks()
+  readonly property var presentedNetworks: passwordKey !== ""
+    ? credentialDisplayNetworks : displayNetworks
+  readonly property bool credentialEditorFocused: !!(credentialEditor
+    && credentialEditor.activeFocus)
+  readonly property bool panelKeyboardFocusActive: keyCatcher.activeFocus
   readonly property int savedCount: {
     let count = 0
     const rows = networkService ? networkService.networks : []
@@ -125,16 +135,79 @@ ShibumiPanel {
   }
 
   function clearPassword() {
+    const restorePanelFocus = passwordKey !== "" && open
     passwordKey = ""
     passwordText = ""
     identityText = ""
+    credentialDisplayNetworks = []
+    credentialSsid = ""
+    credentialSecurity = null
+    credentialError = ""
+    credentialEditor = null
+    if (restorePanelFocus) requestPanelKeyboardFocus(keyCatcher)
   }
 
   function openPassword(entry) {
+    credentialDisplayNetworks = displayNetworks.slice()
+    credentialSsid = String(entry && entry.ssid || "")
+    credentialSecurity = entry ? entry.security : null
+    credentialError = ""
     expandedKey = entryKey(entry)
     passwordKey = expandedKey
     passwordText = ""
     identityText = ""
+  }
+
+  function currentCredentialRow() {
+    let result = null
+    let count = 0
+    const rows = displayNetworks
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row || row.visible === false
+          || String(row.ssid || "") !== credentialSsid
+          || row.security !== credentialSecurity) continue
+      result = row
+      count++
+    }
+    return count === 1 ? result : null
+  }
+
+  function evaluateCredentialCompletion() {
+    if (passwordKey === "") return
+    const current = currentCredentialRow()
+    if (current && current.connected === true) clearPassword()
+  }
+
+  function requestPanelKeyboardFocus(target) {
+    if (!open || !target) return
+    if (typeof requestKeyboardFocus === "function") {
+      requestKeyboardFocus(target)
+      return
+    }
+    Qt.callLater(function() {
+      if (panel.open && target) target.forceActiveFocus()
+    })
+  }
+
+  function registerCredentialEditor(editor) {
+    if (!editor) return
+    credentialEditor = editor
+    requestPanelKeyboardFocus(editor)
+  }
+
+  function credentialEditorFocusChanged(editor, active) {
+    if (!editor) return
+    if (active) {
+      credentialEditor = editor
+      return
+    }
+    Qt.callLater(function() {
+      if (panel.open && panel.passwordKey !== ""
+          && panel.credentialEditor === editor && editor.visible
+          && !editor.activeFocus && keyCatcher.activeFocus)
+        panel.requestPanelKeyboardFocus(editor)
+    })
   }
 
   function openNetworkSettings() {
@@ -143,20 +216,28 @@ ShibumiPanel {
       bar.run("omarchy-launch-or-focus-tui nmtui")
   }
 
+  function needsCredentials(entry) {
+    return !!entry && !entry.known
+      && (entry.securityKind === "psk"
+        || entry.securityKind === "enterprise")
+  }
+
+  function needsNetworkSettings(entry) {
+    return !!entry && !entry.known && !needsCredentials(entry)
+      && entry.securityKind !== "open"
+  }
+
   function runPrimary(entry) {
     if (!entry || networkService.busy) return
     if (entry.connected) {
       networkService.disconnect(entry)
       return
     }
-    if (entry.network && !entry.known
-        && (entry.securityKind === "psk"
-          || entry.securityKind === "enterprise")) {
+    if (needsCredentials(entry)) {
       openPassword(entry)
       return
     }
-    if (entry.network && !entry.known
-        && entry.securityKind !== "open") {
+    if (needsNetworkSettings(entry)) {
       openNetworkSettings()
       return
     }
@@ -164,13 +245,18 @@ ShibumiPanel {
   }
 
   function submitPassword(entry) {
-    if (!entry || !passwordText || networkService.busy) return
+    if (!entry || !passwordText || networkService.busy) return false
+    let accepted = false
     if (entry.securityKind === "enterprise") {
-      if (!identityText) return
-      networkService.connectEnterprise(entry, identityText, passwordText)
+      if (!identityText) return false
+      accepted = networkService.connectEnterprise(
+        entry, identityText, passwordText)
     } else {
-      networkService.connectWithPassphrase(entry, passwordText)
+      accepted = networkService.connectWithPassphrase(entry, passwordText)
     }
+    if (!accepted)
+      credentialError = "Network changed. Select it again."
+    return accepted
   }
 
   function requestForget(entry) {
@@ -210,6 +296,8 @@ ShibumiPanel {
   onDisplayNetworksChanged: {
     if (cursorIndex >= displayNetworks.length) cursorIndex = displayNetworks.length - 1
     if (displayNetworks.length === 0) cursorIndex = -1
+    if (passwordKey !== "")
+      Qt.callLater(function() { panel.evaluateCredentialCompletion() })
   }
 
   onOpenChanged: {
@@ -230,16 +318,9 @@ ShibumiPanel {
     target: panel.networkService
 
     function onActionKindChanged() {
-      if (!panel.networkService || panel.networkService.actionKind !== "") return
-      const key = panel.passwordKey
-      if (!key) return
-      const rows = panel.displayNetworks
-      for (let i = 0; i < rows.length; i++) {
-        if (panel.entryKey(rows[i]) === key && rows[i].connected) {
-          panel.clearPassword()
-          return
-        }
-      }
+      if (!panel.networkService || panel.networkService.actionKind !== ""
+          || panel.passwordKey === "") return
+      Qt.callLater(function() { panel.evaluateCredentialCompletion() })
     }
   }
 
@@ -253,6 +334,14 @@ ShibumiPanel {
     id: keyCatcher
     anchors.fill: parent
     blocked: panel.passwordKey !== ""
+    onActiveFocusChanged: {
+      if (activeFocus && panel.passwordKey !== ""
+          && panel.credentialEditor) Qt.callLater(function() {
+        if (keyCatcher.activeFocus && panel.open
+            && panel.passwordKey !== "" && panel.credentialEditor)
+          panel.requestPanelKeyboardFocus(panel.credentialEditor)
+      })
+    }
     onCloseRequested: panel.ownerWidget.close()
     onTabRequested: function(direction) { panel.ownerWidget.switchPanel(direction) }
     onMoveRequested: function(_dx, dy) {
@@ -604,7 +693,10 @@ ShibumiPanel {
           visible: panel.wifiControlsVisible
 
           Repeater {
-            model: panel.displayNetworks
+            // Scanner/signal updates replace the service's JS array. Keep the
+            // delegate containing an active credential editor alive until the
+            // editor closes, while actions still revalidate against live rows.
+            model: panel.presentedNetworks
 
             Ui.CursorSurface {
               id: networkRow
@@ -722,10 +814,7 @@ ShibumiPanel {
                     label: networkRow.actionRunning
                       ? (networkRow.modelData.connected ? "Disconnecting..." : "Connecting...")
                       : networkRow.modelData.connected ? "Disconnect"
-                      : networkRow.modelData.network && !networkRow.modelData.known
-                        && networkRow.modelData.securityKind !== "open"
-                        && networkRow.modelData.securityKind !== "psk"
-                        && networkRow.modelData.securityKind !== "enterprise"
+                      : panel.needsNetworkSettings(networkRow.modelData)
                         ? "Open network settings" : "Connect"
                     enabled: !panel.networkService.busy
                     onClicked: panel.runPrimary(networkRow.modelData)
@@ -752,7 +841,8 @@ ShibumiPanel {
                     id: identityField
                     width: parent.width
                     height: Commons.Style.space(30)
-                    visible: networkRow.enterpriseCredentials
+                    visible: networkRow.passwordOpen
+                      && networkRow.enterpriseCredentials
                     text: panel.identityText
                     placeholderText: "Identity (user@domain)"
                     color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
@@ -765,11 +855,18 @@ ShibumiPanel {
                     onTextChanged: panel.identityText = text
                     onAccepted: passwordField.forceActiveFocus()
                     Keys.onEscapePressed: panel.clearPassword()
+                    onActiveFocusChanged:
+                      panel.credentialEditorFocusChanged(identityField,
+                        activeFocus)
                     onVisibleChanged: {
-                      if (visible) Qt.callLater(function() {
-                        identityField.forceActiveFocus()
-                      })
+                      if (visible) panel.registerCredentialEditor(identityField)
+                      else if (panel.credentialEditor === identityField)
+                        panel.credentialEditor = null
                     }
+                    Component.onCompleted: if (visible)
+                      panel.registerCredentialEditor(identityField)
+                    Component.onDestruction: if (panel.credentialEditor === identityField)
+                      panel.credentialEditor = null
                     background: Rectangle {
                       radius: panel.controlRadius
                       color: identityField.activeFocus
@@ -781,6 +878,17 @@ ShibumiPanel {
                     }
                   }
 
+                  Text {
+                    width: parent.width
+                    visible: panel.credentialError !== ""
+                    text: panel.credentialError
+                    color: panel.bar ? panel.bar.urgent : Commons.Color.accent
+                    font.family: panel.bar
+                      ? panel.bar.fontFamily : Commons.Style.font.family
+                    font.pixelSize: Commons.Style.font.caption
+                    wrapMode: Text.Wrap
+                  }
+
                   Row {
                     width: parent.width
                     spacing: Commons.Style.space(5)
@@ -790,6 +898,7 @@ ShibumiPanel {
                       width: parent.width - connectPassword.width - cancelPassword.width
                         - 2 * parent.spacing
                       height: Commons.Style.space(30)
+                      visible: networkRow.passwordOpen
                       text: panel.passwordText
                       placeholderText: networkRow.enterpriseCredentials
                         ? "Enterprise password" : "Wi-Fi password"
@@ -804,10 +913,21 @@ ShibumiPanel {
                       onTextChanged: panel.passwordText = text
                       onAccepted: panel.submitPassword(networkRow.modelData)
                       Keys.onEscapePressed: panel.clearPassword()
+                      onActiveFocusChanged:
+                        panel.credentialEditorFocusChanged(passwordField,
+                          activeFocus)
                       onVisibleChanged: {
                         if (visible && !networkRow.enterpriseCredentials)
-                          Qt.callLater(function() { passwordField.forceActiveFocus() })
+                          panel.registerCredentialEditor(passwordField)
+                        else if (!visible
+                            && panel.credentialEditor === passwordField)
+                          panel.credentialEditor = null
                       }
+                      Component.onCompleted: if (visible
+                          && !networkRow.enterpriseCredentials)
+                        panel.registerCredentialEditor(passwordField)
+                      Component.onDestruction: if (panel.credentialEditor === passwordField)
+                        panel.credentialEditor = null
                       background: Rectangle {
                         radius: panel.controlRadius
                         color: passwordField.activeFocus
@@ -826,6 +946,7 @@ ShibumiPanel {
                       enabled: panel.passwordText !== ""
                         && (!networkRow.enterpriseCredentials
                           || panel.identityText !== "")
+                        && panel.credentialError === ""
                         && !panel.networkService.busy
                       onClicked: panel.submitPassword(networkRow.modelData)
                     }
