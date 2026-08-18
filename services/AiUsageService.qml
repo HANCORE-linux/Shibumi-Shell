@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.ai" as Ai
 
 // One process-wide provider owner. Official Claude/Codex scanners are loaded
 // only when their local data exists; OpenCode uses the plugin-local read-only
@@ -262,7 +263,7 @@ Item {
     onItemChanged: root.providerRevision++
   }
 
-  OpenCodeProvider {
+  Ai.OpenCodeProvider {
     id: openCodeProvider
     enabled: root.detectionReady && root.openCodeAvailable
     onReadyChanged: root.providerRevision++

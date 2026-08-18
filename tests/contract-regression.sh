@@ -47,6 +47,20 @@ fi
 [[ ! -e manifest.json ]] \
   || fail "repository root must not masquerade as one native Omarchy plugin"
 
+for retired_root_copy in \
+  adapters/BluetoothBackendAdapter.qml \
+  adapters/BluetoothDiscoveryGuard.qml \
+  adapters/BluetoothModel.js \
+  adapters/WorkspaceActions.qml \
+  services/OpenCodeProvider.qml; do
+  [[ ! -e $retired_root_copy ]] \
+    || fail "plugin-canonical source regained a root copy: $retired_root_copy"
+done
+if rg -q 'BluetoothBackendAdapter|BluetoothDiscoveryGuard|WorkspaceActions' \
+    adapters/qmldir; then
+  fail "root adapters module still declares plugin-canonical types"
+fi
+
 jq -e '
   .schemaVersion == 1 and
   .id == "hancore.shibumi.bar" and

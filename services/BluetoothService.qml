@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
-import "../adapters" as Adapters
+import "../hancore.shibumi.bluetooth" as Bluetooth
 
 // One process-wide owner for Quattro's Bluetooth and Bluetooth-audio state.
 // Screen-local widgets and panels consume this facade without constructing
@@ -92,7 +92,7 @@ Item {
     function toggleBluetooth(): void { root.toggleBluetooth() }
   }
 
-  Adapters.BluetoothBackendAdapter {
+  Bluetooth.BluetoothBackendAdapter {
     id: adapter
     backendOverride: root.backendOverride
     discoveryDesired: root.sessionCount > 0
