@@ -149,12 +149,7 @@ rg -Fq 'if (discovering && !discoveryOwned) return true' "$adapter" \
 rg -q 'property var discoveryOwnerAdapter: null' "$adapter" \
   || fail "Bluetooth discovery ownership is not tied to its adapter instance"
 [[ -f $model ]] || fail "Bluetooth native model is missing"
-cmp -s "$repo_root/adapters/BluetoothBackendAdapter.qml" "$adapter" \
-  || fail "root and plugin Bluetooth adapters drifted"
-cmp -s "$repo_root/adapters/BluetoothModel.js" "$model" \
-  || fail "root and plugin Bluetooth models drifted"
-cmp -s "$repo_root/adapters/BluetoothDiscoveryGuard.qml" "$discovery_guard" \
-  || fail "root and plugin Bluetooth discovery guards drifted"
+[[ -f $discovery_guard ]] || fail "Bluetooth discovery guard is missing"
 if rg -q 'IpcHandler \{' "$adapter"; then
   fail "Bluetooth backend adapter must not register a second IPC owner"
 fi

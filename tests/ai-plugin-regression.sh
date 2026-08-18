@@ -296,11 +296,9 @@ fi
 cmp -s "$repo_root/scripts/opencode-usage" \
   "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
   || fail "canonical and vendored OpenCode scanners drifted"
-diff -u \
-  <(sed 's#\.\./scripts/opencode-usage#scripts/opencode-usage#' \
-    "$repo_root/services/OpenCodeProvider.qml") \
-  "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" >/dev/null \
-  || fail "canonical and vendored OpenCode providers drifted"
+rg -Fq 'Qt.resolvedUrl("scripts/opencode-usage")' \
+  "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" \
+  || fail "OpenCode provider does not resolve its shipped scanner"
 rg -q 'con\.execute\("begin"\)' \
   "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
   || fail "OpenCode aggregates do not share one SQLite read snapshot"
