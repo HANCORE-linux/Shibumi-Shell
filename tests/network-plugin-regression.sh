@@ -75,6 +75,36 @@ for pid_log in "$tmpdir/speedtest-pids" "$tmpdir/speedtest-child-pids" \
   done <"$pid_log"
 done
 
+install -m 0644 "$repo_root/tests/network-credentials-smoke.qml" \
+  "$tmpdir/shell.qml"
+# The credential contract exercises NetworkPanel's real decision and submission
+# logic without mapping a production layer-shell surface in the offscreen test.
+install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+  "$tmpdir/network/ShibumiPanel.qml"
+mkdir -p "$tmpdir/credentials-runtime" "$tmpdir/credentials-home"
+chmod 700 "$tmpdir/credentials-runtime"
+set +e
+credentials_output=$(timeout 12 env \
+  HOME="$tmpdir/credentials-home" \
+  PATH="$tmpdir/bin:$PATH" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/credentials-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+credentials_rc=$?
+set -e
+printf '%s\n' "$credentials_output"
+[[ $credentials_rc -eq 0 ]] \
+  || fail "network credentials smoke exited $credentials_rc"
+grep -F 'network credentials smoke passed' <<<"$credentials_output" >/dev/null \
+  || fail "network credentials success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$credentials_output"; then
+  fail "network credentials smoke produced a QML runtime error"
+fi
+
 install -m 0644 "$repo_root/tests/network-scanner-lifecycle-smoke.qml" \
   "$tmpdir/shell.qml"
 for scanner_mode in plugin canonical; do
@@ -237,12 +267,85 @@ rg -Fq 'connectedVisibleLabel(visibleNetworks)' \
   || fail "network service lacks the connected official-row SSID fallback"
 rg -Fq 'function connectEnterprise(entry, identity, passphrase)' "$service" \
   || fail "network service lacks Quattro enterprise forwarding"
-rg -Fq 'backend.connectEnterprise(entry.ssid, String(identity), String(passphrase))' \
+rg -Fq 'backend.connectEnterprise(String(entry.ssid || ""),' \
   "$service" || fail "network service does not delegate 802.1X to the official owner"
+rg -Fq 'function profileMatchesSecurity(profile, security)' "$service" \
+  || fail "saved Wi-Fi profiles are associated by SSID without security"
+rg -Fq 'wpa-eap-suite-b-192' "$service" \
+  || fail "WPA3 Suite B profiles are conflated with generic WPA-EAP"
+rg -Fq 'profile.authAlgorithm' "$service" \
+  || fail "LEAP profiles are conflated with generic IEEE 802.1X"
+rg -Fq '802-11-wireless-security.auth-alg' "$service" \
+  || fail "saved profile inventory omits authentication mode metadata"
+rg -Fq 'matchingProfiles.length === 1' "$service" \
+  || fail "ambiguous saved Wi-Fi profiles can be assigned to a visible row"
+rg -Fq 'function profileVisibleMatchCount(profile, visible)' "$service" \
+  || fail "saved profiles are not matched globally across visible variants"
+rg -Fq 'profileVisibleMatchCount(matchingProfiles[0], visibleRows) === 1' \
+  "$service" \
+  || fail "one saved profile can be assigned to multiple visible rows"
+rg -Fq 'case "open": return security === WifiSecurityType.Open' "$service" \
+  || fail "open saved profiles are not distinguished from WEP"
+rg -Fq 'case "none": return security === WifiSecurityType.StaticWep' \
+  "$service" \
+  || fail "static WEP profiles can be assigned to open networks"
+rg -Fq 'key_mgmt=open' "$service" \
+  || fail "profiles without a wireless security setting are not inventoried as open"
+rg -Fq 'representedProfileUuids' "$service" \
+  || fail "unmatched saved Wi-Fi profiles disappear behind visible SSIDs"
+rg -Fq 'function currentVisibleEntry(entry)' "$service" \
+  || fail "credential actions do not resolve the current merged row"
+rg -Fq 'const rows = mergedNetworks(visibleNetworks, savedProfiles)' "$service" \
+  || fail "credential actions ignore newly associated saved profiles"
+rg -Fq 'function savedProfileMatchCount(entry)' "$service" \
+  || fail "credential actions ignore ambiguous compatible saved profiles"
+rg -Fq 'current.connected === true || current.known === true' "$service" \
+  || fail "credential actions accept newly connected or known rows"
+rg -Fq 'function visibleIdentityMatchCount(entry)' "$service" \
+  || fail "network service does not revalidate primitive visible identities"
+rg -Fq 'function hasUniqueVisibleIdentity(entry)' "$service" \
+  || fail "network service cannot reject ambiguous visible identities"
+rg -Fq 'function hasUnambiguousVisibleSsid(entry)' "$service" \
+  || fail "SSID-only backend actions accept heterogeneous duplicate SSIDs"
+rg -Fq 'entry.profileUuid && entry.visible === false' "$service" \
+  || fail "saved-only profile routing is not separated from visible rows"
+if rg -q 'entry\.network|modelData\.network|network: source\.network' \
+    "$service" "$repo_root/hancore.shibumi.network/NetworkPanel.qml"; then
+  fail "network view/action contract still depends on a live WifiNetwork QObject"
+fi
+rg -Fq 'function needsCredentials(entry)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "network panel lacks a primitive credential decision"
+rg -Fq 'credentialDisplayNetworks = displayNetworks.slice()' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "live network refreshes can rebuild the active credential editor"
+rg -Fq 'model: panel.presentedNetworks' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "credential rows do not preserve delegate identity while editing"
+rg -Fq 'function evaluateCredentialCompletion()' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "credential completion does not wait for refreshed network state"
+rg -Fq 'credentialError = "Network changed. Select it again."' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "rejected stale credentials have no explicit panel feedback"
+rg -Fq 'requestPanelKeyboardFocus(keyCatcher)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "closing credentials does not restore panel keyboard focus"
+rg -Fq 'function credentialEditorFocusChanged(editor, active)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "credential editor does not recover unexpected focus loss"
+rg -Fq 'Component.onCompleted: if (visible' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "new credential fields do not acquire initial focus"
+rg -Fq 'panel.needsNetworkSettings(networkRow.modelData)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "network action label disagrees with primitive action routing"
+rg -Fq 'typeof backend.disconnectRow !== "function"' "$service" \
+  || fail "network disconnect does not resolve the current row by primitive identity"
 rg -Fq 'placeholderText: "Identity (user@domain)"' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
   || fail "network panel lacks the enterprise identity field"
-rg -Fq 'networkService.connectEnterprise(entry, identityText, passwordText)' \
+rg -Fq 'accepted = networkService.connectEnterprise(' \
   "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
   || fail "network panel does not submit enterprise credentials"
 if rg -q 'nmcli.*(802-1x|wpa-eap|password|identity)' \

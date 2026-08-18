@@ -235,9 +235,9 @@ Item {
     case WifiSecurityType.StaticWep:
     case WifiSecurityType.DynamicWep: return "wep"
     case WifiSecurityType.WpaEap:
-    case WifiSecurityType.Wpa2Eap:
+    case WifiSecurityType.Wpa2Eap: return "enterprise"
     case WifiSecurityType.Wpa3SuiteB192:
-    case WifiSecurityType.Leap: return "enterprise"
+    case WifiSecurityType.Leap: return "unsupported"
     default: return "unknown"
     }
   }
@@ -259,35 +259,78 @@ Item {
     }
   }
 
-  function profileSecurityLabel(keyManagement) {
+  function profileSecurityLabel(keyManagement, authAlgorithm) {
     switch (String(keyManagement || "").toLowerCase()) {
     case "wpa-psk": return "WPA Personal profile"
     case "sae": return "WPA3 Personal profile"
     case "owe": return "Enhanced Open profile"
     case "wpa-eap": return "WPA Enterprise profile"
-    case "ieee8021x": return "802.1X profile"
-    case "none": return "Open or WEP profile"
+    case "wpa-eap-suite-b-192": return "WPA3 Suite B profile"
+    case "ieee8021x": return String(authAlgorithm || "").toLowerCase()
+      === "leap" ? "LEAP profile" : "802.1X profile"
+    case "open": return "Open profile"
+    case "none": return "WEP profile"
     default: return "Saved Wi-Fi profile"
     }
+  }
+
+  function profileMatchesSecurity(profile, security) {
+    const keyManagement = String(profile && profile.keyManagement || "")
+      .toLowerCase()
+    switch (keyManagement) {
+    case "wpa-psk":
+      return security === WifiSecurityType.WpaPsk
+        || security === WifiSecurityType.Wpa2Psk
+    case "sae": return security === WifiSecurityType.Sae
+    case "owe": return security === WifiSecurityType.Owe
+    case "wpa-eap":
+      return security === WifiSecurityType.WpaEap
+        || security === WifiSecurityType.Wpa2Eap
+    case "wpa-eap-suite-b-192":
+      return security === WifiSecurityType.Wpa3SuiteB192
+    case "ieee8021x":
+      return String(profile.authAlgorithm || "").toLowerCase() === "leap"
+        ? security === WifiSecurityType.Leap
+        : security === WifiSecurityType.DynamicWep
+    case "open": return security === WifiSecurityType.Open
+    case "none": return security === WifiSecurityType.StaticWep
+    default: return false
+    }
+  }
+
+  function profileVisibleMatchCount(profile, visible) {
+    if (!profile || !Array.isArray(visible)) return 0
+    let count = 0
+    for (let i = 0; i < visible.length; i++) {
+      const candidate = visible[i]
+      if (candidate && candidate.ssid === profile.ssid
+          && profileMatchesSecurity(profile, candidate.security)) count++
+    }
+    return count
   }
 
   function mergedNetworks(visible, profiles) {
     const rows = []
     const visibleRows = Array.isArray(visible) ? visible : []
     const savedRows = Array.isArray(profiles) ? profiles : []
+    const representedProfileUuids = ({})
 
     for (let i = 0; i < visibleRows.length; i++) {
       const source = visibleRows[i]
       if (!source) continue
-      let profile = null
+      const matchingProfiles = []
       for (let p = 0; p < savedRows.length; p++) {
-        if (savedRows[p] && savedRows[p].ssid === source.ssid) {
-          profile = savedRows[p]
-          break
-        }
+        const candidate = savedRows[p]
+        if (candidate && candidate.ssid === source.ssid
+            && profileMatchesSecurity(candidate, source.security))
+          matchingProfiles.push(candidate)
       }
+      const profile = matchingProfiles.length === 1
+        && profileVisibleMatchCount(matchingProfiles[0], visibleRows) === 1
+        ? matchingProfiles[0] : null
+      if (profile && String(profile.uuid || ""))
+        representedProfileUuids[String(profile.uuid)] = true
       rows.push({
-        network: source.network || null,
         connected: source.connected === true,
         known: source.known === true || profile !== null,
         ssid: String(source.ssid || ""),
@@ -305,15 +348,8 @@ Item {
 
     for (let p = 0; p < savedRows.length; p++) {
       const profile = savedRows[p]
-      if (!profile) continue
-      let represented = false
-      for (let i = 0; i < rows.length; i++) {
-        if (rows[i].ssid === profile.ssid) {
-          represented = true
-          break
-        }
-      }
-      if (represented) continue
+      if (!profile || representedProfileUuids[String(profile.uuid || "")])
+        continue
       rows.push({
         network: null,
         connected: false,
@@ -322,7 +358,8 @@ Item {
         signal: 0,
         security: null,
         securityKind: "saved",
-        securityLabel: profileSecurityLabel(profile.keyManagement),
+        securityLabel: profileSecurityLabel(profile.keyManagement,
+          profile.authAlgorithm),
         visible: false,
         profileUuid: String(profile.uuid || ""),
         lastSuccessful: Number(profile.lastSuccessful || 0),
@@ -339,49 +376,143 @@ Item {
     return rows
   }
 
+  function visibleIdentityMatchCount(entry) {
+    if (!entry || entry.visible === false) return 0
+    const ssid = String(entry.ssid || "")
+    if (!ssid) return 0
+    const expectedKind = String(entry.securityKind
+      || securityKind(entry.security))
+    const hasExactSecurity = entry.security !== undefined
+      && entry.security !== null
+    const rows = Array.isArray(visibleNetworks) ? visibleNetworks : []
+    let count = 0
+    for (let i = 0; i < rows.length; i++) {
+      const candidate = rows[i]
+      if (!candidate || String(candidate.ssid || "") !== ssid) continue
+      if (hasExactSecurity && candidate.security !== entry.security) continue
+      if (!hasExactSecurity
+          && securityKind(candidate.security) !== expectedKind) continue
+      count++
+    }
+    return count
+  }
+
+  function hasUniqueVisibleIdentity(entry) {
+    return visibleIdentityMatchCount(entry) === 1
+  }
+
+  function currentVisibleEntry(entry) {
+    if (!entry || entry.visible === false) return null
+    const ssid = String(entry.ssid || "")
+    const hasExactSecurity = entry.security !== undefined
+      && entry.security !== null
+    const expectedKind = String(entry.securityKind
+      || securityKind(entry.security))
+    const rows = mergedNetworks(visibleNetworks, savedProfiles)
+    let result = null
+    let count = 0
+    for (let i = 0; i < rows.length; i++) {
+      const candidate = rows[i]
+      if (!candidate || candidate.visible === false
+          || String(candidate.ssid || "") !== ssid) continue
+      if (hasExactSecurity && candidate.security !== entry.security) continue
+      if (!hasExactSecurity && candidate.securityKind !== expectedKind) continue
+      result = candidate
+      count++
+    }
+    return count === 1 ? result : null
+  }
+
+  function savedProfileMatchCount(entry) {
+    if (!entry || !Array.isArray(savedProfiles)) return 0
+    let count = 0
+    for (let i = 0; i < savedProfiles.length; i++) {
+      const profile = savedProfiles[i]
+      if (profile && profile.ssid === entry.ssid
+          && profileMatchesSecurity(profile, entry.security)) count++
+    }
+    return count
+  }
+
+  function visibleSsidMatchCount(entry) {
+    const ssid = String(entry && entry.ssid || "")
+    if (!ssid || !Array.isArray(visibleNetworks)) return 0
+    let count = 0
+    for (let i = 0; i < visibleNetworks.length; i++) {
+      const candidate = visibleNetworks[i]
+      if (candidate && String(candidate.ssid || "") === ssid) count++
+    }
+    return count
+  }
+
+  function hasUnambiguousVisibleSsid(entry) {
+    return hasUniqueVisibleIdentity(entry)
+      && visibleSsidMatchCount(entry) === 1
+  }
+
   function connect(entry) {
     if (!entry || busy) return false
     profileError = ""
-    if (!entry.network && entry.profileUuid)
+    if (entry.profileUuid && entry.visible === false)
       return runProfileAction("connect", entry.profileUuid)
-    if (!entry.network || !ready) return false
+    if (!ready || !hasUniqueVisibleIdentity(entry)) return false
     if (entry.connected) return disconnect(entry)
-    if (entry.known || entry.securityKind === "open") {
-      backend.connectKnown(entry.ssid)
+    if (entry.profileUuid)
+      return runProfileAction("connect", entry.profileUuid)
+    if (hasUnambiguousVisibleSsid(entry)
+        && (entry.known || entry.securityKind === "open")
+        && typeof backend.connectKnown === "function") {
+      backend.connectKnown(String(entry.ssid || ""))
       return true
     }
     return false
   }
 
   function connectWithPassphrase(entry, passphrase) {
-    if (!entry || !entry.network || entry.securityKind !== "psk"
-        || !String(passphrase || "") || !ready || busy) return false
+    const current = currentVisibleEntry(entry)
+    if (!entry || entry.securityKind !== "psk"
+        || !String(passphrase || "") || !ready || busy
+        || !hasUnambiguousVisibleSsid(entry) || !current
+        || current.connected === true || current.known === true
+        || savedProfileMatchCount(entry) > 0
+        || typeof backend.connectWithPassphrase !== "function") return false
     profileError = ""
-    backend.connectWithPassphrase(entry.ssid, String(passphrase))
+    backend.connectWithPassphrase(String(entry.ssid || ""), String(passphrase))
     return true
   }
 
   function connectEnterprise(entry, identity, passphrase) {
-    if (!entry || !entry.network || entry.securityKind !== "enterprise"
+    const current = currentVisibleEntry(entry)
+    if (!entry || entry.securityKind !== "enterprise"
         || !String(identity || "") || !String(passphrase || "")
-        || !ready || busy) return false
+        || !ready || busy || !hasUnambiguousVisibleSsid(entry) || !current
+        || current.connected === true || current.known === true
+        || savedProfileMatchCount(entry) > 0
+        || typeof backend.connectEnterprise !== "function") return false
     profileError = ""
-    backend.connectEnterprise(entry.ssid, String(identity), String(passphrase))
+    backend.connectEnterprise(String(entry.ssid || ""),
+      String(identity), String(passphrase))
     return true
   }
 
   function disconnect(entry) {
-    if (!ready || busy) return false
-    backend.disconnect(entry && entry.network ? entry.network : null)
+    if (!entry || entry.connected !== true || !ready || busy
+        || !hasUnambiguousVisibleSsid(entry)
+        || typeof backend.disconnectRow !== "function") return false
+    backend.disconnectRow(String(entry.ssid || ""))
     return true
   }
 
   function forget(entry) {
     if (!entry || !entry.known || busy) return false
     profileError = ""
-    if (!entry.network && entry.profileUuid)
+    if (entry.profileUuid && entry.visible === false)
       return runProfileAction("forget", entry.profileUuid)
-    if (!entry.network || !ready) return false
+    if (!ready || !hasUniqueVisibleIdentity(entry)) return false
+    if (entry.profileUuid)
+      return runProfileAction("forget", entry.profileUuid)
+    if (!hasUnambiguousVisibleSsid(entry)
+        || typeof backend.forget !== "function") return false
     backend.forget(entry)
     return true
   }
@@ -642,12 +773,12 @@ Item {
       + "printf '__READY__\\n'; "
       + "while IFS=: read -r uuid type; do "
       + "case \"$type\" in 802-11-wireless|wifi) ;; *) continue ;; esac; "
-      + "mapfile -t details < <(nmcli --escape no -g 802-11-wireless.ssid,connection.timestamp,802-11-wireless-security.key-mgmt connection show uuid \"$uuid\"); "
-      + "ssid=${details[0]-}; timestamp=${details[1]:-0}; key_mgmt=${details[2]:-unknown}; "
+      + "mapfile -t details < <(nmcli --escape no -g 802-11-wireless.ssid,connection.timestamp,802-11-wireless-security.key-mgmt,802-11-wireless-security.auth-alg connection show uuid \"$uuid\"); "
+      + "ssid=${details[0]-}; timestamp=${details[1]:-0}; key_mgmt=${details[2]-}; auth_alg=${details[3]-}; "
       + "[ -n \"$ssid\" ] || continue; "
       + "case \"$timestamp\" in ''|*[!0-9]*) timestamp=0 ;; esac; "
-      + "[ -n \"$key_mgmt\" ] || key_mgmt=unknown; "
-      + "printf '%s\\t%s\\t%s\\t%s\\n' \"$uuid\" \"$ssid\" \"$timestamp\" \"$key_mgmt\"; "
+      + "[ -n \"$key_mgmt\" ] || key_mgmt=open; [ -n \"$auth_alg\" ] || auth_alg=unknown; "
+      + "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$uuid\" \"$ssid\" \"$timestamp\" \"$key_mgmt\" \"$auth_alg\"; "
       + "done <<< \"$connections\""]
     stdout: StdioCollector {
       waitForEnd: true
@@ -663,12 +794,13 @@ Item {
         for (let i = 1; i < lines.length; i++) {
           if (!lines[i]) continue
           const fields = lines[i].split("\t")
-          if (fields.length < 4) continue
+          if (fields.length < 5) continue
           profiles.push({
             uuid: fields[0],
-            ssid: fields.slice(1, fields.length - 2).join("\t"),
-            lastSuccessful: parseInt(fields[fields.length - 2]) || 0,
-            keyManagement: fields[fields.length - 1]
+            ssid: fields.slice(1, fields.length - 3).join("\t"),
+            lastSuccessful: parseInt(fields[fields.length - 3]) || 0,
+            keyManagement: fields[fields.length - 2],
+            authAlgorithm: fields[fields.length - 1]
           })
         }
         root.profileError = ""

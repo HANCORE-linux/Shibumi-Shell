@@ -9,6 +9,7 @@ Item {
   property var owner: null
   property bool open: false
   property Item focusTarget: null
+  property int focusRequestCount: 0
   property bool centerOnBar: false
   property real centerOnBarOffset: 0
   property int padding: 0
@@ -30,6 +31,7 @@ Item {
   readonly property real controlBorderWidth: 0
   readonly property real controlRadius: 6
   readonly property var shibumiTokens: ({
+    paper: "#181818",
     separator: "#404040",
     fillIdle: "#202020",
     fillHover: "#282828",
@@ -46,6 +48,13 @@ Item {
   function fittedContentHeight(value, cap) {
     const desired = (Number(value) || 0) + padding * 2
     return cap ? Math.min(desired, Number(cap)) : desired
+  }
+  function requestKeyboardFocus(target) {
+    if (!open || !target) return
+    focusRequestCount++
+    Qt.callLater(function() {
+      if (root.open && target) target.forceActiveFocus()
+    })
   }
   function syncPopout() {
     if (!bar || !owner) return
