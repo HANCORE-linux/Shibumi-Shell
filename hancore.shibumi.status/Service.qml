@@ -17,13 +17,19 @@ Item {
   readonly property var idleService: shell
     && typeof shell.firstPartyServiceFor === "function"
     ? shell.firstPartyServiceFor("omarchy.idle") : null
-  readonly property var notificationService: shell
-    && typeof shell.firstPartyServiceFor === "function"
-    ? shell.firstPartyServiceFor("omarchy.notifications") : null
+  readonly property var notificationService: notificationAdapter.available
+    ? notificationAdapter : null
   readonly property bool stayAwake: idleService
     ? idleService.stayAwake === true : false
   readonly property bool notificationsSilenced: notificationService
     ? notificationService.doNotDisturb === true : false
+
+  NotificationAdapter {
+    id: notificationAdapter
+  }
+
+  onShellChanged: notificationAdapter.attachShell(shell)
+  Component.onCompleted: notificationAdapter.attachShell(shell)
 
   property string recordingPid: ""
   property int recordingElapsed: 0

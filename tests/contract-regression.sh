@@ -1099,6 +1099,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/workspaces-plugin-regression.sh"
   "$repo_root/tests/update-center-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/status-plugin-regression.sh"
+  OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/notification-adapter-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/center-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/network-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/brightness-plugin-regression.sh"
@@ -1177,11 +1178,21 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     rg -q "$status_contract" "$official_tray_widget" \
       || fail "official tray widget contract changed: $status_contract"
   done
-  for status_contract in pendingModel pastModel doNotDisturb setDoNotDisturb \
-    markAllSeen dismissPending dismissPast clearPast; do
-    rg -q "$status_contract" "$official_notification_service" \
-      || fail "official notification widget contract changed: $status_contract"
-  done
+  if rg -q 'popupModel' "$official_notification_service"; then
+    for status_contract in popupModel doNotDisturb setDoNotDisturb \
+      dismissPopup clearPopups focusApp showRecentHistory; do
+      rg -q "$status_contract" "$official_notification_service" \
+        || fail "official current notification contract changed: $status_contract"
+    done
+  elif rg -q 'pendingModel' "$official_notification_service"; then
+    for status_contract in pendingModel pastModel doNotDisturb setDoNotDisturb \
+      markAllSeen dismissPending dismissPast clearPast; do
+      rg -q "$status_contract" "$official_notification_service" \
+        || fail "official legacy notification contract changed: $status_contract"
+    done
+  else
+    fail "official notification service exposes neither current nor legacy model contract"
+  fi
 
   host_has_module() {
     find "${OMARCHY_PATH}/shell/plugins" -type f \

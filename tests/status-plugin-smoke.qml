@@ -102,8 +102,11 @@ ShellRoot {
 
   QtObject {
     id: fakeShell
+    property var statusFacade: null
     function serviceFor(id) {
-      return id === "hancore.shibumi.state" ? fakeState : null
+      if (id === "hancore.shibumi.state") return fakeState
+      if (id === "hancore.shibumi.status") return statusFacade
+      return null
     }
     function firstPartyServiceFor(id) {
       if (id === "omarchy.idle") return fakeIdle
@@ -127,6 +130,8 @@ ShellRoot {
     actionRunner: actionRecorder
     runtimeProbesEnabled: false
   }
+
+  Component.onCompleted: fakeShell.statusFacade = statusService
 
   QtObject {
     id: fakeBar
