@@ -40,6 +40,26 @@ Item {
       return setLayout(ShibumiConfig.defaultOrder(), ShibumiConfig.defaultSplits())
     }
 
+    function setV2Layout(value) {
+      const normalized = ShibumiConfig.normalizedV2Layout(value)
+      if (!normalized
+          || root.same(config.v2Layout, normalized)) return false
+      const next = ShibumiConfig.normalize(config)
+      next.v2Layout = normalized
+      config = ShibumiConfig.normalize(next)
+      root.writes++
+      return true
+    }
+
+    function resetV2Layout() {
+      const next = ShibumiConfig.normalize(config)
+      next.v2Layout = ShibumiConfig.defaultV2Layout()
+      next.v2Boundaries = ShibumiConfig.defaultV2Boundaries()
+      config = ShibumiConfig.normalize(next)
+      root.writes++
+      return true
+    }
+
     function toggleV2Boundary(indexValue) {
       const index = Number(indexValue)
       if (!Number.isInteger(index) || index < 0 || index > 1) return false
@@ -246,6 +266,21 @@ Item {
         || !controller.toggleSplit("boundaries", 0, true)
         || controller.v2Boundaries[0] !== true)
       fail("protected V2 interaction state did not activate independently")
+
+    if (!controller.reconcileV2PluginGroups([
+          { pluginId: "custom.v2", region: "left" }
+        ])
+        || controller.groupLocation("G:custom.v2") === null
+        || !controller.moveGroupToSlot("G:custom.v2", "right", 0)
+        || controller.groupLocation("G:custom.v2").region !== "right"
+        || !controller.reconcileV2PluginGroups([])
+        || controller.groupLocation("G:custom.v2") !== null
+        || !controller.reconcileV2PluginGroups([
+          { pluginId: "custom.reset", region: "right" }
+        ])
+        || !controller.resetLayout()
+        || controller.groupLocation("G:custom.reset") !== null)
+      fail("V2 third-party group lifecycle transaction")
 
     console.log("layout controller regression passed")
     Qt.exit(0)

@@ -33,6 +33,29 @@ TestCase {
     if (!movedToEmpty || movedToEmpty.left[3] !== "G4"
         || movedToEmpty.left[6] !== "")
       fail("V2 empty slots are not valid drag targets")
+    const dynamicV2 = V2Layout.reconcilePluginGroups(
+      defaults.v2Layout, [{ pluginId: "custom.widget", region: "center" }])
+    if (!dynamicV2 || dynamicV2.unplaced.length !== 0
+        || dynamicV2.layout.center[1] !== "G:custom.widget"
+        || V2Layout.locationFor(dynamicV2.layout, "G:custom.widget") === null
+        || !V2Layout.valid(dynamicV2.layout))
+      fail("V2 third-party group creation")
+    const movedDynamicV2 = V2Layout.moveGroupToSlot(
+      dynamicV2.layout, "G:custom.widget", "left", 0)
+    const removedDynamicV2 = movedDynamicV2
+      ? V2Layout.removeDynamicGroup(movedDynamicV2, "G:custom.widget") : null
+    if (!movedDynamicV2 || movedDynamicV2.left[0] !== "G:custom.widget"
+        || !removedDynamicV2
+        || V2Layout.locationFor(removedDynamicV2, "G:custom.widget") !== null
+        || !V2Layout.valid(removedDynamicV2))
+      fail("V2 third-party group move/remove")
+    const normalizedDynamicV2 = Config.normalize({
+      version: 1,
+      v2Layout: dynamicV2.layout
+    })
+    if (normalizedDynamicV2.v2Layout.center[1] !== "G:custom.widget"
+        || !Config.isGroupId("G:custom.widget"))
+      fail("V2 third-party group config persistence")
     const extended = V2Layout.addSlot(defaults.v2Layout, "center")
     const trimmed = extended
       ? V2Layout.removeSlotAt(extended, "center", 1) : null

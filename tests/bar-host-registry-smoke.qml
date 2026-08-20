@@ -129,6 +129,15 @@ ShellRoot {
       return true
     }
 
+    function setV2Layout(value) {
+      if (!value || !value.left || !value.center || !value.right)
+        return false
+      const next = JSON.parse(JSON.stringify(config))
+      next.v2Layout = JSON.parse(JSON.stringify(value))
+      publishConfig(next)
+      return true
+    }
+
     function publishConfig(next) {
       config = next
       const shellConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig))
@@ -394,6 +403,15 @@ ShellRoot {
         entryPoints: { barWidget: "InlineState.qml" },
         barWidget: {
           displayName: "Inline state fixture",
+          allowMultiple: false
+        }
+      },
+      "example.plain": {
+        id: "example.plain",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Plain.qml" },
+        barWidget: {
+          displayName: "Plain fixture",
           allowMultiple: false
         }
       }
@@ -934,6 +952,198 @@ ShellRoot {
       if (!hostBar.removeWidgetFamilyAlternatives("G8")
           || (fakeShell.shellConfig.bar.layout.center || []).length !== 0) {
         return root.fail("Shibumi Center did not remove its alternatives")
+      }
+
+      hostBar.layoutConfig = { left: [], center: [], right: [] }
+      fakeShell.shellConfig.bar.layout = { left: [], center: [], right: [] }
+      if (!hostBar.setBarWidgetInstalled(
+            "example.inline-state", true, "left"))
+        return root.fail("V2 generic third-party activation")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.setBarWidgetInstalled(
+            "example.plain", true, "left"))
+        return root.fail("V2 generic third-party activation")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const unmarkedDynamicLayout = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const unmarkedInlineEntry = unmarkedDynamicLayout.left.find(
+        function(entry) {
+          return String(entry.id || "") === "example.inline-state"
+        })
+      if (!unmarkedInlineEntry)
+        return root.fail("V2 generic unmarked settings fixture")
+      delete unmarkedInlineEntry.shibumiModule
+      hostBar.layoutConfig = unmarkedDynamicLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(
+        unmarkedDynamicLayout))
+      if (!hostBar.reconcileActivePluginGroupsAndProviders()
+          || !hostBar.layoutController.groupLocation(
+            "G:example.inline-state"))
+        return root.fail("V2 generic unmarked provider discovery")
+
+      const driftedDynamicLayout = {
+        left: [fakeShell.shellConfig.bar.layout.left[1]],
+        center: [],
+        right: [fakeShell.shellConfig.bar.layout.left[0]]
+      }
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        driftedDynamicLayout))
+      fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(
+        driftedDynamicLayout))
+      if (!hostBar.reconcileActivePluginGroupsAndProviders()
+          || hostBar.layoutController.groupLocation(
+            "G:example.inline-state").region !== "right")
+        return root.fail("V2 generic background region reconciliation")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.setBarWidgetInstalled(
+            "example.inline-state", true, "right"))
+        return root.fail("V2 generic third-party requested-region move")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const requestedRegionGroup = hostBar.layoutController.groupLocation(
+        "G:example.inline-state")
+      if (!requestedRegionGroup || requestedRegionGroup.region !== "right")
+        return root.fail("V2 generic third-party requested-region state")
+      if (!hostBar.setBarWidgetInstalled(
+            "example.inline-state", true, "left"))
+        return root.fail("V2 generic third-party region restoration")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const dynamicV2Group = hostBar.layoutController.groupLocation(
+        "G:example.inline-state")
+      const secondDynamicV2Group = hostBar.layoutController.groupLocation(
+        "G:example.plain")
+      if (!dynamicV2Group || dynamicV2Group.region !== "left"
+          || !secondDynamicV2Group || secondDynamicV2Group.region !== "left"
+          || hostBar.unassignedLayoutEntries("left").length !== 0)
+        return root.fail("V2 generic third-party group placement")
+      const configuredDynamicLayout = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      const duplicateDynamicLayout = {
+        left: [
+          { id: "example.plain", shibumiModule: true },
+          { id: "example.plain", shibumiModule: true }
+        ],
+        center: [],
+        right: []
+      }
+      hostBar.layoutConfig = duplicateDynamicLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(duplicateDynamicLayout))
+      const duplicateBefore = JSON.stringify(fakeShell.shellConfig.bar.layout)
+      if (hostBar.syncV2DynamicLayout({
+            left: ["G:example.plain"], center: [], right: []
+          })
+          || JSON.stringify(fakeShell.shellConfig.bar.layout)
+            !== duplicateBefore
+          || JSON.stringify(fakeShell.shellConfig.bar.layout).indexOf("null")
+            >= 0) {
+        return root.fail("duplicate V2 dynamic entries were not rejected")
+      }
+      hostBar.layoutConfig = configuredDynamicLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(configuredDynamicLayout))
+      const crossRegionDuplicateLayout = {
+        left: [{ id: "example.plain", shibumiModule: true }],
+        center: [],
+        right: [{ id: "example.plain", shibumiModule: true }]
+      }
+      hostBar.layoutConfig = crossRegionDuplicateLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(crossRegionDuplicateLayout))
+      const crossRegionDuplicateBefore = JSON.stringify(
+        fakeShell.shellConfig.bar.layout)
+      if (hostBar.syncV2DynamicLayout({
+            left: ["G:example.plain"], center: [], right: []
+          })
+          || JSON.stringify(fakeShell.shellConfig.bar.layout)
+            !== crossRegionDuplicateBefore
+          || JSON.stringify(fakeShell.shellConfig.bar.layout).indexOf("null")
+            >= 0) {
+        return root.fail("cross-region V2 duplicate was not rejected")
+      }
+      hostBar.layoutConfig = configuredDynamicLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(
+        JSON.stringify(configuredDynamicLayout))
+      const inlineEntry = configuredDynamicLayout.left.find(function(entry) {
+        return String(entry.id || "") === "example.inline-state"
+      })
+      if (!inlineEntry) return root.fail("V2 generic settings fixture")
+      inlineEntry.bestScore = 41
+      inlineEntry.collision = "persisted"
+      hostBar.layoutConfig = configuredDynamicLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(
+        configuredDynamicLayout))
+      if (!hostBar.layoutController.moveGroupToSlot(
+            "G:example.plain", "left", dynamicV2Group.index))
+        return root.fail("V2 generic third-party same-region reorder")
+      const reorderedEntries = fakeShell.shellConfig.bar.layout.left || []
+      if (reorderedEntries.length !== 2
+          || String(reorderedEntries[0].id || "")
+            !== "example.plain"
+          || String(reorderedEntries[1].id || "")
+            !== "example.inline-state"
+          || reorderedEntries[1].bestScore !== 41
+          || reorderedEntries[1].collision !== "persisted")
+        return root.fail("V2 generic third-party same-region persistence")
+      if (!hostBar.layoutController.moveGroupToSlot(
+            "G:example.inline-state", "center", 0))
+        return root.fail("V2 generic third-party cross-region move")
+      const movedDynamicV2Group = hostBar.layoutController.groupLocation(
+        "G:example.inline-state")
+      const movedDynamicEntries = fakeShell.shellConfig.bar.layout.center || []
+      if (!movedDynamicV2Group || movedDynamicV2Group.region !== "center"
+          || movedDynamicEntries.length !== 1
+          || String(movedDynamicEntries[0].id || "")
+            !== "example.inline-state"
+          || hostBar.unassignedLayoutEntries("left").length !== 0
+          || hostBar.unassignedLayoutEntries("center").length !== 0)
+        return root.fail("V2 generic third-party persisted move")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.setBarWidgetInstalled(
+            "example.inline-state", false, "center")
+          || hostBar.layoutController.groupLocation(
+            "G:example.inline-state") !== null
+          || (fakeShell.shellConfig.bar.layout.center || []).length !== 0)
+        return root.fail("V2 generic third-party removal")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig.bar.layout))
+      if (!hostBar.setBarWidgetInstalled(
+            "example.plain", false, "left")
+          || hostBar.layoutController.groupLocation(
+            "G:example.plain") !== null)
+        return root.fail("V2 generic third-party removal")
+
+      const v2Styles = ["full", "fit", "dock", "notch"]
+      for (let styleIndex = 0; styleIndex < v2Styles.length; styleIndex++) {
+        const styleState = JSON.parse(JSON.stringify(stateService.config))
+        styleState.presentation.shellStyle = v2Styles[styleIndex]
+        stateService.config = styleState
+        hostBar.layoutConfig = { left: [], center: [], right: [] }
+        fakeShell.shellConfig.bar.layout = {
+          left: [], center: [], right: []
+        }
+        if (!hostBar.layoutController.v2Mode
+            || !hostBar.setBarWidgetInstalled(
+              "example.plain", true, "left"))
+          return root.fail("V2 generic lifecycle style "
+            + v2Styles[styleIndex])
+        hostBar.layoutConfig = JSON.parse(JSON.stringify(
+          fakeShell.shellConfig.bar.layout))
+        if (!hostBar.layoutController.groupLocation(
+              "G:example.plain"))
+          return root.fail("V2 generic placement style "
+            + v2Styles[styleIndex])
+        if (!hostBar.setBarWidgetInstalled(
+              "example.plain", false, "left"))
+          return root.fail("V2 generic removal style "
+            + v2Styles[styleIndex])
+        hostBar.layoutConfig = JSON.parse(JSON.stringify(
+          fakeShell.shellConfig.bar.layout))
       }
 
       const complementaryLayout = {

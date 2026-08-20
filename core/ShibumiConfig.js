@@ -162,9 +162,13 @@ function isV1DynamicGroupId(value) {
     && /^[a-z0-9][a-z0-9._-]*$/.test(pluginId)
 }
 
+function isDynamicGroupId(value) {
+  return isV1DynamicGroupId(value)
+}
+
 function isGroupId(value) {
   var groupId = String(value || "")
-  return GroupIds.indexOf(groupId) >= 0 || isV1DynamicGroupId(groupId)
+  return GroupIds.indexOf(groupId) >= 0 || isDynamicGroupId(groupId)
 }
 
 function boolArray(value, length) {
@@ -241,12 +245,17 @@ function normalizedV2Layout(value) {
       return null
     for (var i = 0; i < entries.length; i++) {
       var id = String(entries[i] || "")
-      if (id !== "" && (GroupIds.indexOf(id) < 0 || seen[id])) return null
+      if (id !== "" && ((GroupIds.indexOf(id) < 0
+          && !isDynamicGroupId(id)) || seen[id])) return null
       if (id !== "") seen[id] = true
       result[region].push(id)
     }
   }
-  return Object.keys(seen).length === GroupIds.length ? result : null
+  var fixedCount = 0
+  for (var groupId in seen) {
+    if (GroupIds.indexOf(groupId) >= 0) fixedCount++
+  }
+  return fixedCount === GroupIds.length ? result : null
 }
 
 function normalizedV2Boundaries(value) {

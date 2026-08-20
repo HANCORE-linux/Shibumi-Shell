@@ -50,10 +50,12 @@ versions. Immediate Undo restores the exact prior V1/V2 activation state;
 deleting an active provider plugin restores its Shibumi replacement groups.
 
 The five Quattro compatibility siblings assigned by `OptionalGroups` have one
-owner at a time. Plain legacy entries remain children of their fixed group,
-while entries explicitly added by the plugin catalog with
-`shibumiModule: true` render only through the dynamic V1 slot or V2 unassigned
-deck. The catalog recognizes either form as installed.
+owner at a time. Plain legacy entries remain children of their fixed group. Eligible
+third-party entries explicitly added by the plugin catalog with
+`shibumiModule: true` render through the dynamic V1 slot or the assigned V2
+dynamic group; assigned or consumed modules remain under their existing
+provider-specific handling. Entries not yet assigned to a V2 group remain in
+the V2 unassigned deck. The catalog recognizes either form as installed.
 
 Only manifests with a resolvable `entryPoints.barWidget` are accepted by the
 bar host. Service-only plugins remain available to widgets through Quattro's

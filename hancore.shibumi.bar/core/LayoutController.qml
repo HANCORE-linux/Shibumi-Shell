@@ -11,9 +11,13 @@ Item {
   property var stateService: null
   readonly property var config: stateService && stateService.config
     ? stateService.config : ({})
-  readonly property bool v2Mode: config && config.presentation
-    ? String(config.presentation.shellStyle || "shibumi") !== "shibumi"
-    : false
+  readonly property bool v2Mode: {
+    const source = stateService && stateService.config
+      ? stateService.config : config
+    return source && source.presentation
+      ? String(source.presentation.shellStyle || "shibumi") !== "shibumi"
+      : false
+  }
   readonly property var layoutProtection: config && config.layoutProtection
     ? config.layoutProtection : ({ v1: false, v2: false })
   readonly property bool v1LayoutProtected: layoutProtection.v1 === true
@@ -93,13 +97,25 @@ Item {
       LayoutModel.copySplits(nextSplits, nextOrder))
   }
 
+  function persistV2Layout(nextSlots) {
+    if (!stateService || typeof stateService.setV2Layout !== "function")
+      return false
+    const previousSlots = V2LayoutModel.copy(v2Slots)
+    if (!previousSlots || !stateService.setV2Layout(nextSlots)) return false
+    if (bar && typeof bar.syncV2DynamicLayout === "function"
+        && !bar.syncV2DynamicLayout(nextSlots)) {
+      if (!stateService.setV2Layout(previousSlots))
+        console.warn("V2 layout rollback failed after host sync rejection")
+      return false
+    }
+    return true
+  }
+
   function swapGroups(sourceGroupId, targetGroupId) {
     if (v2Mode) {
       const nextSlots = V2LayoutModel.swapGroups(
         v2Slots, sourceGroupId, targetGroupId)
-      return nextSlots && stateService
-        && typeof stateService.setV2Layout === "function"
-        ? stateService.setV2Layout(nextSlots) : false
+      return nextSlots ? persistV2Layout(nextSlots) : false
     }
     const currentOrder = currentV1Order()
     const nextOrder = LayoutModel.swapGroups(
@@ -109,11 +125,9 @@ Item {
 
   function moveGroupToSlot(sourceGroupId, targetRegion, targetIndex) {
     if (v2Mode) {
-      if (!stateService || typeof stateService.setV2Layout !== "function")
-        return false
       const nextSlots = V2LayoutModel.moveGroupToSlot(
         v2Slots, sourceGroupId, targetRegion, targetIndex)
-      return nextSlots ? stateService.setV2Layout(nextSlots) : false
+      return nextSlots ? persistV2Layout(nextSlots) : false
     }
     const currentOrder = currentV1Order()
     const nextOrder = LayoutModel.moveGroupToSlot(
@@ -158,6 +172,29 @@ Item {
     return persist(next.order, next.splits)
   }
 
+  function reconcileV2PluginGroups(specs, syncValue, followRegionsValue) {
+    if (!v2Mode || !stateService
+        || typeof stateService.setV2Layout !== "function") return false
+    const current = V2LayoutModel.copy(v2Slots)
+    const next = V2LayoutModel.reconcilePluginGroups(
+      current, specs, followRegionsValue === true)
+    if (!next || next.unplaced.length > 0) return false
+    if (V2LayoutModel.same(current, next.layout)) {
+      return syncValue === true && bar
+        && typeof bar.syncV2DynamicLayout === "function"
+        ? bar.syncV2DynamicLayout(next.layout) : true
+    }
+    if (!stateService.setV2Layout(next.layout)) return false
+    if (syncValue === true && bar
+        && typeof bar.syncV2DynamicLayout === "function"
+        && !bar.syncV2DynamicLayout(next.layout)) {
+      if (!stateService.setV2Layout(current))
+        console.warn("V2 reconciliation rollback failed after host sync rejection")
+      return false
+    }
+    return true
+  }
+
   function baseV1SlotCount(region) {
     return LayoutModel.baseCount(region)
   }
@@ -171,17 +208,15 @@ Item {
   }
 
   function addV2Slot(region) {
-    if (!v2Mode || !stateService
-        || typeof stateService.setV2Layout !== "function") return false
+    if (!v2Mode) return false
     const next = V2LayoutModel.addSlot(v2Slots, region)
-    return next ? stateService.setV2Layout(next) : false
+    return next ? persistV2Layout(next) : false
   }
 
   function removeV2Slot(region) {
-    if (!v2Mode || !stateService
-        || typeof stateService.setV2Layout !== "function") return false
+    if (!v2Mode) return false
     const next = V2LayoutModel.removeSlot(v2Slots, region)
-    return next ? stateService.setV2Layout(next) : false
+    return next ? persistV2Layout(next) : false
   }
 
   function baseV2SlotCount(region) {
@@ -195,10 +230,9 @@ Item {
   }
 
   function removeV2SlotAt(region, index) {
-    if (!v2Mode || !stateService
-        || typeof stateService.setV2Layout !== "function") return false
+    if (!v2Mode) return false
     const next = V2LayoutModel.removeSlotAt(v2Slots, region, index)
-    return next ? stateService.setV2Layout(next) : false
+    return next ? persistV2Layout(next) : false
   }
 
   function toggleSplit(region, index, editingValue) {
@@ -223,10 +257,25 @@ Item {
     return nextSplits ? persist(currentOrder, nextSplits) : false
   }
 
+  function resetV2Layout() {
+    if (!v2Mode || !stateService
+        || typeof stateService.resetV2Layout !== "function") return false
+    if (!stateService.resetV2Layout()) return false
+    return !bar || typeof bar.syncV2DynamicLayout !== "function"
+      ? true : bar.syncV2DynamicLayout(V2LayoutModel.defaultLayout())
+  }
+
+  function restoreV2Layout(value) {
+    if (!v2Mode || !stateService
+        || typeof stateService.setV2Layout !== "function") return false
+    const target = V2LayoutModel.copy(value)
+    if (!target) return false
+    return V2LayoutModel.same(v2Slots, target)
+      || stateService.setV2Layout(target)
+  }
+
   function resetLayout() {
-    if (v2Mode && stateService
-        && typeof stateService.resetV2Layout === "function")
-      return stateService.resetV2Layout()
+    if (v2Mode) return resetV2Layout()
     return stateService && typeof stateService.resetLayout === "function"
       ? stateService.resetLayout() : false
   }
