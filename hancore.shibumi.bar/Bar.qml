@@ -396,7 +396,7 @@ Item {
   }
 
   function deduplicatedUnassignedEntries(entries) {
-    const seen = ({})
+    const seen = Object.create(null)
     return entries.filter(function(entry) {
       const id = entryId(entry)
       if (widgetAllowsMultiple(id)) return true
@@ -413,7 +413,9 @@ Item {
       // Keep their persisted V1 provider entries out of V2's unassigned deck,
       // otherwise the same widget would be rendered twice after a switch.
       return deduplicatedUnassignedEntries(entries.filter(function(entry) {
-        return !isV1AdditionalSuiteWidget(entryId(entry))
+        if (isV1AdditionalSuiteWidget(entryId(entry))) return false
+        const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+        return groupId === "" || !layoutStateController.groupLocation(groupId)
       }))
     }
     return deduplicatedUnassignedEntries(entries.filter(function(entry) {
@@ -422,21 +424,27 @@ Item {
     }))
   }
 
-  function v1PluginSpecsForLayout(layoutValue, excludeValue, includeSpec) {
+  function pluginSpecsForLayout(layoutValue, excludeValue, includeSpec,
+      v2Value) {
     const excluded = Array.isArray(excludeValue)
       ? excludeValue.map(function(value) { return String(value || "") })
       : [String(excludeValue || "")]
     const source = Util.isPlainObject(layoutValue) ? layoutValue : ({})
     const specs = []
-    const seen = ({})
+    const seen = Object.create(null)
     for (const region of ["left", "center", "right"]) {
       const entries = Array.isArray(source[region]) ? source[region] : []
       for (let index = 0; index < entries.length; index++) {
         const entry = entries[index]
         const id = entryId(entry)
+        const hasBarWidget = hasBarWidgetEntryPoint(id)
+        const shibumiModule = Util.isPlainObject(entry)
+          && entry.shibumiModule === true && hasBarWidget
+        const dynamicV2Provider = v2Value === true && hasBarWidget
         if (id === "" || excluded.indexOf(id) >= 0 || seen[id]
             || !Util.isPlainObject(entry)
-            || entry.shibumiModule !== true
+            || (!shibumiModule && !dynamicV2Provider)
+            || (v2Value === true && GroupRegistry.isAssignedModule(id))
             || widgetAllowsMultiple(id)) continue
         seen[id] = true
         specs.push({ pluginId: id, region: region })
@@ -444,7 +452,8 @@ Item {
     }
     if (includeSpec && Util.isPlainObject(includeSpec)) {
       const id = entryId(includeSpec)
-      if (id !== "" && !seen[id] && !widgetAllowsMultiple(id))
+      if (id !== "" && !seen[id] && !widgetAllowsMultiple(id)
+          && (v2Value !== true || !GroupRegistry.isAssignedModule(id)))
         specs.push({
           pluginId: id,
           region: ["left", "center", "right"].indexOf(
@@ -455,12 +464,56 @@ Item {
     return specs
   }
 
+  function v1PluginSpecsForLayout(layoutValue, excludeValue, includeSpec) {
+    return pluginSpecsForLayout(
+      layoutValue, excludeValue, includeSpec, false)
+  }
+
+  function v2PluginSpecsForLayout(layoutValue, excludeValue, includeSpec) {
+    return pluginSpecsForLayout(
+      layoutValue, excludeValue, includeSpec, true)
+  }
+
   function v1PluginSpecs(excludeValue, includeSpec) {
     return v1PluginSpecsForLayout(layoutConfig, excludeValue, includeSpec)
   }
 
+  function v2PluginSpecs(excludeValue, includeSpec) {
+    return v2PluginSpecsForLayout(layoutConfig, excludeValue, includeSpec)
+  }
+
+  function activePluginSpecsForLayout(layoutValue, excludeValue, includeSpec) {
+    return layoutStateController.v2Mode
+      ? v2PluginSpecsForLayout(layoutValue, excludeValue, includeSpec)
+      : v1PluginSpecsForLayout(layoutValue, excludeValue, includeSpec)
+  }
+
+  function activePluginSpecs(excludeValue, includeSpec) {
+    return activePluginSpecsForLayout(
+      layoutConfig, excludeValue, includeSpec)
+  }
+
+  function reconcileActivePluginGroups(specs, syncValue, followRegionsValue) {
+    return layoutStateController.v2Mode
+      ? layoutStateController.reconcileV2PluginGroups(
+          specs, syncValue, followRegionsValue)
+      : layoutStateController.reconcileV1PluginGroups(specs)
+  }
+
   function reconcileV1PluginGroups() {
+    if (layoutStateController.v2Mode) return true
     if (!layoutStateController.reconcileV1PluginGroups(v1PluginSpecs()))
+      return false
+    return reconcileWidgetFamilyProviders()
+  }
+
+  function reconcileActivePluginGroupsAndProviders() {
+    // The shared host layout is also the V1 provider-region source. During a
+    // background reconciliation, let it repair an existing V2 dynamic group
+    // whose provider entry was moved outside the V2 editor. Explicit V2 drag
+    // mutations update both stores first, so this does not undo an edit.
+    if (!reconcileActivePluginGroups(
+          activePluginSpecs(), true, layoutStateController.v2Mode))
       return false
     return reconcileWidgetFamilyProviders()
   }
@@ -615,13 +668,127 @@ Item {
     }))
   }
 
+  function syncV2DynamicLayout(slotsValue) {
+    if (!Util.isPlainObject(slotsValue)) return false
+    const nextLayout = currentLayoutSnapshot()
+    const dynamicById = Object.create(null)
+    const desiredByRegion = ({ left: [], center: [], right: [] })
+    let changed = false
+    const desiredIds = Object.create(null)
+    for (const region of ["left", "center", "right"]) {
+      const slots = Array.isArray(slotsValue[region])
+        ? slotsValue[region] : []
+      for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+        const moduleId = GroupRegistry.dynamicModuleIdForGroup(
+          String(slots[slotIndex] || ""))
+        if (moduleId === "") continue
+        if (Object.prototype.hasOwnProperty.call(desiredIds, moduleId))
+          return false
+        desiredIds[moduleId] = true
+        desiredByRegion[region].push(moduleId)
+      }
+    }
+
+    // A malformed host layout must not let one dynamic provider appear twice.
+    // Count before moving or reordering so duplicates across regions also
+    // fail closed without ever reaching shell-config persistence.
+    const actualCounts = Object.create(null)
+    for (const region of ["left", "center", "right"]) {
+      const entries = nextLayout[region]
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+        const moduleId = entryId(entries[entryIndex])
+        if (!Object.prototype.hasOwnProperty.call(desiredIds, moduleId))
+          continue
+        actualCounts[moduleId] = (actualCounts[moduleId] || 0) + 1
+      }
+    }
+    for (const moduleId in desiredIds) {
+      if (actualCounts[moduleId] !== 1) return false
+    }
+
+    // First put every V2-assigned dynamic entry in its model-owned region.
+    for (const region of ["left", "center", "right"]) {
+      const desired = desiredByRegion[region]
+      for (let index = 0; index < desired.length; index++) {
+        const moduleId = desired[index]
+        let sourceRegion = ""
+        let sourceIndex = -1
+        for (const candidateRegion of ["left", "center", "right"]) {
+          const entries = nextLayout[candidateRegion]
+          const candidateIndex = entries.findIndex(function(entry) {
+            return entryId(entry) === moduleId
+          })
+          if (candidateIndex >= 0) {
+            sourceRegion = candidateRegion
+            sourceIndex = candidateIndex
+            break
+          }
+        }
+        if (sourceRegion === "") return false
+        if (sourceRegion === region) continue
+        const entry = nextLayout[sourceRegion].splice(sourceIndex, 1)[0]
+        nextLayout[region].push(entry)
+        changed = true
+      }
+    }
+
+    // Then reorder only the dynamic entries inside each region. Native and
+    // unassigned entries retain their relative positions and settings.
+    for (const region of ["left", "center", "right"]) {
+      const desired = desiredByRegion[region]
+      const desiredSet = Object.create(null)
+      for (let index = 0; index < desired.length; index++) {
+        const moduleId = desired[index]
+        desiredSet[moduleId] = true
+        const entries = nextLayout[region]
+        const entryIndex = entries.findIndex(function(entry) {
+          return entryId(entry) === moduleId
+        })
+        if (entryIndex < 0) return false
+        dynamicById[moduleId] = entries[entryIndex]
+      }
+      let dynamicIndex = 0
+      for (let entryIndex = 0;
+          entryIndex < nextLayout[region].length; entryIndex++) {
+        const currentId = entryId(nextLayout[region][entryIndex])
+        if (!desiredSet[currentId]) continue
+        if (dynamicIndex >= desired.length) return false
+        const desiredId = desired[dynamicIndex++]
+        if (currentId === desiredId) continue
+        nextLayout[region][entryIndex] = dynamicById[desiredId]
+        changed = true
+      }
+    }
+    if (!changed) return true
+    if (!shell || typeof shell.mutateShellConfig !== "function") return false
+    shell.mutateShellConfig(function(config) {
+      if (!Util.isPlainObject(config.bar)) config.bar = {}
+      config.bar.layout = JSON.parse(JSON.stringify(nextLayout))
+    })
+    layoutConfig = nextLayout
+    return true
+  }
+
+  function currentV2LayoutSnapshot() {
+    return layoutStateController.v2Mode
+      && layoutStateController.v2Slots
+      ? JSON.parse(JSON.stringify(layoutStateController.v2Slots)) : null
+  }
+
+  function restoreV2LayoutSnapshot(snapshotValue) {
+    return snapshotValue === null || snapshotValue === undefined
+      || !layoutStateController.v2Mode
+      ? true : layoutStateController.restoreV2Layout(snapshotValue)
+  }
+
   function providerLayoutSnapshot(groupValues) {
     const groups = normalizedProviderGroups(groupValues)
     const states = groups.length > 0 ? widgetGroupVariantStates(groups) : ({})
     if (groups.length > 0 && !states) return null
     return {
       layout: currentLayoutSnapshot(),
-      groupStates: states || ({})
+      groupStates: states || ({}),
+      v2Layout: currentV2LayoutSnapshot()
     }
   }
 
@@ -633,10 +800,17 @@ Item {
     for (const region of ["left", "center", "right"]) {
       if (!Array.isArray(layout[region])) return false
     }
-    return applyProviderLayoutTransaction(
-      JSON.parse(JSON.stringify(layout)),
-      v1PluginSpecsForLayout(layout),
-      JSON.parse(JSON.stringify(snapshotValue.groupStates)))
+    const previousV2Layout = currentV2LayoutSnapshot()
+    if (!restoreV2LayoutSnapshot(snapshotValue.v2Layout)) return false
+    if (!applyProviderLayoutTransaction(
+          JSON.parse(JSON.stringify(layout)),
+          activePluginSpecsForLayout(layout),
+          JSON.parse(JSON.stringify(snapshotValue.groupStates)))) {
+      if (!restoreV2LayoutSnapshot(previousV2Layout))
+        console.warn("provider snapshot V2 rollback was incomplete")
+      return false
+    }
+    return true
   }
 
   function layoutWithoutProviderIds(layoutValue, providerIds) {
@@ -762,7 +936,7 @@ Item {
     }
     if (removedProviderIds.length > 0)
       return applyProviderLayoutTransaction(nextLayout,
-        v1PluginSpecs(removedProviderIds), stateValues)
+        activePluginSpecsForLayout(nextLayout), stateValues)
     const groups = Object.keys(stateValues)
     return groups.length === 0 || setWidgetGroupVariantStates(stateValues)
   }
@@ -777,8 +951,9 @@ Item {
     if (installed === true && !hasBarWidgetEntryPoint(id))
       return false
 
-    const previousSpecs = v1PluginSpecs()
+    const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
+    const previousV2Layout = currentV2LayoutSnapshot()
     const replacedProviderIds = installed === true
       ? conflictingLayoutProviderIds(id) : [id]
     const displacedGroups = []
@@ -821,9 +996,10 @@ Item {
     const registryWasEnabled = pluginRegistry
       && typeof pluginRegistry.isEnabled === "function"
       ? pluginRegistry.isEnabled(id) : null
-    const desiredSpecs = v1PluginSpecs(replacedProviderIds,
+    const desiredSpecs = activePluginSpecs(replacedProviderIds,
       installed === true ? { id: id, region: targetRegion } : null)
-    if (!layoutStateController.reconcileV1PluginGroups(desiredSpecs))
+    if (!reconcileActivePluginGroups(
+          desiredSpecs, false, layoutStateController.v2Mode))
       return false
 
     if (installed === true && pluginRegistry
@@ -860,12 +1036,16 @@ Item {
         if (!Util.isPlainObject(config.bar)) config.bar = {}
         config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
       })
-      layoutStateController.reconcileV1PluginGroups(previousSpecs)
+      const restoredGroups = reconcileActivePluginGroups(
+        previousSpecs, false)
+      const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
       if (registryWasEnabled === false && pluginRegistry
           && typeof pluginRegistry.setEnabled === "function")
         pluginRegistry.setEnabled(id, false)
-      if (previousFamilyStates)
-        setWidgetGroupVariantStates(previousFamilyStates)
+      const restoredFamilies = !previousFamilyStates
+        || setWidgetGroupVariantStates(previousFamilyStates)
+      if (!restoredGroups || !restoredV2 || !restoredFamilies)
+        console.warn("provider transaction rollback was incomplete")
       return false
     }
     return true
@@ -874,13 +1054,14 @@ Item {
   function applyProviderLayoutTransaction(nextLayout, desiredSpecs,
       stateValues) {
     if (!shell || typeof shell.mutateShellConfig !== "function") return false
-    const previousSpecs = v1PluginSpecs()
+    const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
+    const previousV2Layout = currentV2LayoutSnapshot()
     const groups = Util.isPlainObject(stateValues)
       ? Object.keys(stateValues) : []
     const previousStates = groups.length > 0
       ? widgetGroupVariantStates(groups) : null
-    if (!layoutStateController.reconcileV1PluginGroups(desiredSpecs))
+    if (!reconcileActivePluginGroups(desiredSpecs, false))
       return false
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
@@ -892,8 +1073,13 @@ Item {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
     })
-    layoutStateController.reconcileV1PluginGroups(previousSpecs)
-    if (previousStates) setWidgetGroupVariantStates(previousStates)
+    const restoredGroups = reconcileActivePluginGroups(
+      previousSpecs, false)
+    const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
+    const restoredStates = !previousStates
+      || setWidgetGroupVariantStates(previousStates)
+    if (!restoredGroups || !restoredV2 || !restoredStates)
+      console.warn("provider layout rollback was incomplete")
     return false
   }
 
@@ -948,7 +1134,7 @@ Item {
       }
     }
     return applyProviderLayoutTransaction(
-      nextLayout, v1PluginSpecs(alternatives), effectiveStates)
+      nextLayout, activePluginSpecs(alternatives), effectiveStates)
   }
 
   function restoreWidgetFamilyProviders(groupValues) {
@@ -974,7 +1160,7 @@ Item {
         states[group] = { v1: true, v2: true }
     }
     return applyProviderLayoutTransaction(
-      nextLayout, v1PluginSpecs([id]), states)
+      nextLayout, activePluginSpecs([id]), states)
   }
 
   function removeWidgetFamilyAlternatives(groupId) {
@@ -1740,7 +1926,19 @@ Item {
     id: v1PluginReconcileTimer
     interval: 1
     repeat: false
-    onTriggered: root.reconcileV1PluginGroups()
+    onTriggered: {
+      if (root.injectionComplete)
+        root.reconcileActivePluginGroupsAndProviders()
+    }
+  }
+
+  Connections {
+    target: layoutStateController
+    ignoreUnknownSignals: true
+
+    function onV2ModeChanged() {
+      v1PluginReconcileTimer.restart()
+    }
   }
 
   Connections {
