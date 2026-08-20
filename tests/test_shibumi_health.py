@@ -20,6 +20,7 @@ HEALTH = (
     / "manager"
     / "shibumi-health"
 )
+HEALTH_ATTRIBUTION_FIXTURES = REPO_ROOT / "tests/fixtures/health-attribution"
 
 QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
 INVALID_EMPTY_REGISTRY_OUTPUTS = (
@@ -128,6 +129,18 @@ class HealthDiagnosticsTests(unittest.TestCase):
                 "kinds": ["bar"],
                 "enabled": False,
                 "active": False,
+            },
+            {
+                "id": "hancore.shibumi.control-center",
+                "kinds": ["service"],
+                "enabled": True,
+                "active": True,
+            },
+            {
+                "id": "OmaConnect",
+                "kinds": ["service"],
+                "enabled": True,
+                "active": True,
             },
         ]
         self.write_json(self.registry_file, self.registry)
@@ -632,6 +645,158 @@ class HealthDiagnosticsTests(unittest.TestCase):
         checks = self.by_id(payload)
         self.assertEqual(checks["bar-runtime"]["status"], "error")
         self.assertEqual(checks["lifecycle"]["value"], "Last switch failed")
+
+    def test_runtime_errors_are_attributed_without_cross_owner_issue_filing(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "mixed-runtime-errors.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        checks = self.by_id(self.run_health())
+
+        shibumi = checks["runtime-errors"]
+        self.assertEqual(shibumi["owner"], "shibumi")
+        self.assertEqual(shibumi["pluginId"], "hancore.shibumi.control-center")
+        self.assertIn("ControlMainPage.qml:123", shibumi["sourcePath"])
+        self.assertTrue(shibumi["issueEligible"])
+
+        omarchy = checks["runtime-errors-omarchy"]
+        self.assertEqual(omarchy["owner"], "omarchy")
+        self.assertEqual(omarchy["pluginId"], "omarchy.active-window")
+        self.assertIn("/usr/share/omarchy/", omarchy["sourcePath"])
+        self.assertFalse(omarchy["issueEligible"])
+        self.assertIn("cannot file", omarchy["action"])
+
+        third_party = checks["runtime-errors-third-party"]
+        self.assertEqual(third_party["owner"], "third-party")
+        self.assertEqual(third_party["pluginId"], "OmaConnect")
+        self.assertIn("OmaConnect/Main.qml:18", third_party["sourcePath"])
+        self.assertFalse(third_party["issueEligible"])
+        self.assertIn("upstream", third_party["action"])
+
+    def test_authoritative_omarchy_path_wins_over_incidental_plugin_names(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "ownership-precedence.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors-omarchy"]
+        self.assertEqual(check["owner"], "omarchy")
+        self.assertEqual(check["pluginId"], "omarchy.active-window")
+        self.assertFalse(check["issueEligible"])
+
+    def test_omarchy_path_with_unrelated_source_remains_unknown(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "omarchy-unrelated-ambiguity.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+
+    def test_omarchy_path_with_explicit_shibumi_id_remains_unknown(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "omarchy-explicit-ambiguity.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+
+    def test_unanchored_plugin_names_and_urls_remain_unknown(self) -> None:
+        probe = self.module["Probe"](False)
+        attribution = probe.attribute_source(
+            "TypeError: https://user:secret@host/hancore.shibumi.control-center/Thing.qml:4"
+        )
+        self.assertEqual(attribution["owner"], "unknown")
+        self.assertNotIn("secret", attribution["sourcePath"])
+
+    def test_unverified_explicit_plugin_id_remains_unknown(self) -> None:
+        probe = self.module["Probe"](False)
+        attribution = probe.attribute_source(
+            "TypeError: plugin: hancore.shibumi.not-installed"
+        )
+        self.assertEqual(attribution["owner"], "unknown")
+        self.assertEqual(attribution["pluginId"], "hancore.shibumi.not-installed")
+
+    def test_mixed_verified_plugin_owners_remain_unknown(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "ambiguous-ownership.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+        self.assertIn("hancore.shibumi.control-center", check["pluginId"])
+        self.assertIn("OmaConnect", check["pluginId"])
+
+    def test_plugin_path_and_explicit_owner_conflict_remains_unknown(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "path-explicit-ambiguity.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+
+    def test_plugin_path_and_unrelated_path_remains_unknown(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "path-unrelated-ambiguity.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+
+    def test_nested_omarchy_name_does_not_override_third_party_root(self) -> None:
+        self.log_file.write_text(
+            (HEALTH_ATTRIBUTION_FIXTURES / "nested-omarchy-name.log")
+            .read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors-third-party"]
+        self.assertEqual(check["owner"], "third-party")
+        self.assertEqual(check["pluginId"], "OmaConnect")
+
+    def test_public_text_redacts_quoted_sensitive_values(self) -> None:
+        probe = self.module["Probe"](False)
+        sanitized = probe.public_text(
+            '"password":"secret value" token="long secret token"'
+        )
+        self.assertNotIn("secret value", sanitized)
+        self.assertNotIn("long secret token", sanitized)
+        escaped = probe.public_text('password="sec\\\"ret"')
+        self.assertNotIn("sec", escaped)
+        self.assertIn("redacted", sanitized)
+
+    def test_unattributed_runtime_error_is_not_issue_eligible(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "TypeError in /home/test/Widget.qml:9\n",
+            encoding="utf-8",
+        )
+        check = self.by_id(self.run_health())["runtime-errors"]
+        self.assertEqual(check["owner"], "unknown")
+        self.assertFalse(check["issueEligible"])
+        self.assertIn("Confirm the source", check["action"])
+
+    def test_sensitive_runtime_error_does_not_report_clean(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "TypeError password=secret-value\n",
+            encoding="utf-8",
+        )
+        checks = self.by_id(self.run_health())
+        self.assertNotIn("runtime-errors", checks)
+        check = checks["runtime-errors-sensitive"]
+        self.assertEqual(check["status"], "warning")
+        self.assertEqual(check["value"], "Details redacted")
+        self.assertNotIn("secret-value", check["detail"])
 
     def test_logs_are_filtered_redacted_and_bounded(self) -> None:
         self.log_file.write_text(

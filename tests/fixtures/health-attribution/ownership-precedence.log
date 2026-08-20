@@ -1,0 +1,2 @@
+INFO Configuration Loaded
+TypeError: hancore.shibumi.control-center/ControlMainPage.qml failed while loading /usr/share/omarchy/shell/plugins/bar/widgets/ActiveWindow.qml:42 and mentions OmaConnect

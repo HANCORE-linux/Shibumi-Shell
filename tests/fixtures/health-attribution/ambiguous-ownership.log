@@ -1,0 +1,2 @@
+INFO Configuration Loaded
+TypeError: failed to load /home/test/.config/omarchy/plugins/hancore.shibumi.control-center/ControlMainPage.qml:123 and /home/test/.config/omarchy/plugins/OmaConnect/Main.qml:18

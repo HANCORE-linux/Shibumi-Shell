@@ -1052,7 +1052,9 @@ for health_contract in \
     '? "SOURCE CHECKOUT" : "CHECKING …"' \
     'return "SHIBUMI-HEALTH/" + String(check.id || "UNKNOWN")' \
     'function diagnosticIssueUrl(check)' \
-    'Qt.openUrlExternally(diagnosticIssueUrl(check))' \
+    'const url = diagnosticIssueUrl(check)' \
+    'if (url !== "") Qt.openUrlExternally(url)' \
+    'function ownerLabel(owner)' \
     'label: root.copiedCheckId === String(checkRow.check.id || "")' \
     '? "Copied" : "Copy"' \
     'label: "Open issue"' \

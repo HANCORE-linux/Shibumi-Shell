@@ -51,13 +51,67 @@ Item {
     return runChecks(false)
   }
 
+  function sanitizeDiagnosticText(value, limit) {
+    let text = String(value || "")
+      .replace(/\u0000/g, "")
+    const containsSensitive = /authorization|cookie|credential|password|secret|ssid|token/i
+      .test(text)
+    text = text
+      .replace(/\r/g, "")
+      .replace(/\/home\/[^\/\s]+/g, "~")
+      .replace(/\b(?:https?|ftp):\/\/[^\s]+/gi, "[URL redacted]")
+      .replace(/\b(?:bearer|basic)\s+[^\s]+/gi,
+        "[authorization redacted]")
+      .replace(/\b(?:password|passwd|passphrase|token|secret|cookie|credential|ssid|authorization)\b\s*["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,}]+)/gi,
+        "[sensitive value redacted]")
+    if (containsSensitive
+        || /authorization|cookie|credential|password|secret|ssid|token/i.test(text))
+      return "[sensitive diagnostic redacted]"
+    const max = Math.max(1, Number(limit || 320))
+    return text.length <= max ? text : text.slice(0, max - 1) + "…"
+  }
+
   function acceptReport(raw) {
     try {
       const parsed = JSON.parse(String(raw || "{}"))
+      const owners = ["shibumi", "omarchy", "third-party", "unknown"]
+      const statuses = ["ok", "warning", "error", "info"]
       if (Number(parsed.schemaVersion || 0) !== 1
           || !Array.isArray(parsed.checks)
           || typeof parsed.summary !== "string")
         throw new Error("unsupported report")
+      parsed.checks = parsed.checks.map(function(check) {
+        if (!check || typeof check !== "object"
+            || typeof check.id !== "string"
+            || typeof check.status !== "string"
+            || statuses.indexOf(check.status) < 0)
+          throw new Error("invalid check")
+        if (check.owner !== undefined
+            && (typeof check.owner !== "string"
+              || owners.indexOf(check.owner) < 0))
+          throw new Error("invalid check owner")
+        const normalized = Object.assign({}, check)
+        normalized.owner = check.owner === undefined ? "unknown" : check.owner
+        const rawDiagnostic = String(check.value || "") + " "
+          + String(check.detail || "") + " "
+          + String(check.component || "") + " "
+          + String(check.sourcePath || "") + " "
+          + String(check.action || "")
+        const sensitive = /authorization|cookie|credential|password|secret|ssid|token/i
+          .test(rawDiagnostic)
+        normalized.label = root.sanitizeDiagnosticText(check.label, 160)
+        normalized.value = root.sanitizeDiagnosticText(check.value, 160)
+        normalized.detail = root.sanitizeDiagnosticText(check.detail, 900)
+        normalized.component = root.sanitizeDiagnosticText(check.component, 240)
+        normalized.action = root.sanitizeDiagnosticText(check.action, 240)
+        normalized.sourcePath = root.sanitizeDiagnosticText(
+          check.sourcePath, 240)
+        normalized.pluginId = root.sanitizeDiagnosticText(check.pluginId, 240)
+        normalized.upstream = root.sanitizeDiagnosticText(check.upstream, 240)
+        normalized.issueEligible = normalized.owner === "shibumi"
+          && check.issueEligible === true && !sensitive
+        return normalized
+      })
       report = parsed
       failure = ""
       return true

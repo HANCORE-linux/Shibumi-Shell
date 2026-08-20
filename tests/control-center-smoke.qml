@@ -1213,6 +1213,10 @@ ShellRoot {
             value: "1 loader error",
             detail: "Unable to assign Example.qml:42",
             component: "hancore.shibumi.example",
+            pluginId: "hancore.shibumi.example",
+            sourcePath: "hancore.shibumi.example/Example.qml:42",
+            owner: "shibumi",
+            issueEligible: true,
             action: "Review the affected component."
           }]
         }
@@ -1255,11 +1259,43 @@ ShellRoot {
               || decodeURIComponent(issueUrl).indexOf(
                 "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
             return root.fail("Health error report or issue URL is incomplete")
+          if (health.diagnosticIssueUrl({
+                id: "runtime-errors-omarchy",
+                status: "error",
+                owner: "omarchy",
+                issueEligible: true
+              }) !== ""
+              || health.diagnosticIssueUrl({
+                id: "runtime-errors",
+                status: "warning",
+                owner: "shibumi",
+                issueEligible: true
+              }) !== "")
+            return root.fail("Health filing gate accepted an external or warning finding")
           health.copyDiagnostic(error)
           if (health.copiedCheckId !== "runtime-errors")
             return root.fail("Health error report was not copied")
 
           const stableReport = panel.healthService.report
+          const unsafeReport = JSON.stringify({
+            schemaVersion: 1,
+            summary: "unsafe fixture",
+            checks: [{
+              id: "runtime-errors",
+              status: "error",
+              label: "Sensitive fixture",
+              value: "1 error",
+              detail: "password=\"secret value\"",
+              owner: "shibumi",
+              issueEligible: true
+            }]
+          })
+          if (!panel.healthService.acceptReport(unsafeReport)
+              || panel.healthService.report.checks[0].issueEligible
+              || panel.healthService.report.checks[0].detail
+                .indexOf("secret value") >= 0)
+            return root.fail("Health report sanitization or filing gate failed")
+          panel.healthService.report = stableReport
           if (panel.healthService.acceptReport("{broken")
               || panel.healthService.report !== stableReport
               || panel.healthService.failure === "")

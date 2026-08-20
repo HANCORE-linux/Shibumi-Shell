@@ -29,6 +29,34 @@ SENSITIVE_PATTERNS = re.compile(
     r"authorization|cookie|credential|password|secret|ssid|token",
     re.IGNORECASE,
 )
+SOURCE_PATH_PATTERN = re.compile(
+    r"(?P<path>(?:file://)?(?:/|~/|[A-Za-z0-9_.-]+/)[^\s\"'`()]+?"
+    r"\.(?:qml|js|py|sh)(?::\d+(?::\d+)?)?(?=$|[\s,;:)\]]))",
+    re.IGNORECASE,
+)
+EXPLICIT_PLUGIN_PATTERN = re.compile(
+    r"(?i)\b(?:plugin|component|source|module)\s*[:=]\s*[\"']?"
+    r"(?P<id>[A-Za-z0-9_.-]+)"
+)
+URL_AUTHORITY_PATTERN = re.compile(
+    r"(?i)\b[A-Za-z][A-Za-z0-9+.-]*://(?!/)[^/\s]+"
+)
+OWNER_SHIBUMI = "shibumi"
+OWNER_OMARCHY = "omarchy"
+OWNER_THIRD_PARTY = "third-party"
+OWNER_UNKNOWN = "unknown"
+OWNERS = {
+    OWNER_SHIBUMI,
+    OWNER_OMARCHY,
+    OWNER_THIRD_PARTY,
+    OWNER_UNKNOWN,
+}
+OWNER_ORDER = {
+    OWNER_SHIBUMI: 0,
+    OWNER_OMARCHY: 1,
+    OWNER_THIRD_PARTY: 2,
+    OWNER_UNKNOWN: 3,
+}
 PACKAGE_NAME = "shibumi-shell"
 AUR_INFO_URL = (
     "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=shibumi-shell"
@@ -45,11 +73,39 @@ class Check:
     detail: str = ""
     component: str = ""
     action: str = ""
+    owner: str = OWNER_UNKNOWN
+    sourcePath: str = ""
+    pluginId: str = ""
+    issueEligible: bool = False
+    upstream: str = ""
 
 
 def safe_text(value: Any, limit: int = 320) -> str:
     text = " ".join(str(value or "").replace("\x00", "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def safe_public_text(value: Any, limit: int = 320) -> str:
+    text = str(value or "").replace("\x00", "")
+    text = re.sub(r"(?<![A-Za-z0-9._-])/home/[^/\s]+", "~", text)
+    text = re.sub(
+        r"(?i)\b[A-Za-z][A-Za-z0-9+.-]*://[^\s]+",
+        "[URL redacted]",
+        text,
+    )
+    text = re.sub(
+        r"(?i)\b(?:bearer|basic)\s+[^\s]+",
+        "[authorization redacted]",
+        text,
+    )
+    text = re.sub(
+        r'''(?i)\b(?:password|passwd|passphrase|token|secret|cookie|credential|ssid|authorization)\b\s*["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,\s}]+)''',
+        "[sensitive value redacted]",
+        text,
+    )
+    if SENSITIVE_PATTERNS.search(text):
+        return "[sensitive diagnostic redacted]"
+    return safe_text(text, limit)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -169,17 +225,29 @@ class Probe:
         detail: str = "",
         component: str = "",
         action: str = "",
+        owner: str = OWNER_UNKNOWN,
+        source_path: str = "",
+        plugin_id: str = "",
+        issue_eligible: bool = False,
+        upstream: str = "",
     ) -> None:
+        safe_owner = owner if owner in OWNERS else OWNER_UNKNOWN
         self.checks.append(
             Check(
                 check_id,
                 group,
                 label,
                 status if status in STATUS_ORDER else "error",
-                safe_text(value, 120),
-                safe_text(detail, 900),
-                self.display_path(component),
-                safe_text(action, 240),
+                self.public_text(value, 120),
+                self.public_text(detail, 900),
+                self.public_text(self.display_path(component), 240),
+                self.public_text(action, 240),
+                safe_owner,
+                self.public_text(self.display_path(source_path), 240)
+                if source_path else "",
+                self.public_text(plugin_id, 240),
+                bool(issue_eligible and safe_owner == OWNER_SHIBUMI),
+                self.public_text(upstream, 240),
             )
         )
 
@@ -197,6 +265,197 @@ class Probe:
             else:
                 text = text.replace(home + "/", "~/")
         return re.sub(r"(?<![A-Za-z0-9._-])/home/[^/\s]+", "~", text)
+
+    def public_text(self, value: Any, limit: int = 320) -> str:
+        """Return bounded diagnostic text safe for clipboard and issue drafts."""
+        return safe_public_text(self.redact_home_paths(value), limit)
+
+    def is_omarchy_path(self, value: Any) -> bool:
+        text = str(value or "").replace("file://", "")
+        text = re.sub(r":\d+(?::\d+)?$", "", text)
+        if not text.startswith("/"):
+            return False
+        candidate = os.path.normpath(text).lower()
+        roots = (
+            Path("/usr/share/omarchy"),
+            self.omarchy_root,
+            self.home / ".local/share/omarchy",
+        )
+        return any(
+            candidate == os.path.normpath(root).lower()
+            or candidate.startswith(os.path.normpath(root).lower() + "/")
+            for root in roots
+        )
+
+    def plugin_id_for_path(self, value: Any) -> str:
+        text = str(value or "").replace("file://", "")
+        text = re.sub(r":\d+(?::\d+)?$", "", text)
+        roots = [str(self.plugin_dir).rstrip("/")]
+        foreign_root = re.match(r"^/(?:home/[^/\s]+|root)/\.config/omarchy/plugins", text)
+        if foreign_root:
+            roots.append(foreign_root.group(0))
+        for root in roots:
+            prefix = root + "/"
+            if text.startswith(prefix):
+                plugin_id = text[len(prefix):].split("/", 1)[0]
+                return plugin_id
+        return ""
+
+    def source_paths(self, value: Any) -> list[str]:
+        text = str(value or "").replace("file://", "")
+        paths: list[str] = []
+        for match in SOURCE_PATH_PATTERN.finditer(text):
+            candidate = match.group("path").rstrip(".,;)]}")
+            if candidate.startswith("//") or candidate in paths:
+                continue
+            paths.append(candidate)
+        return paths
+
+    def source_path(self, value: Any) -> str:
+        """Return the first source path for compatibility with diagnostics callers."""
+        return (self.source_paths(value) or [""])[0]
+
+    def known_plugin_ids(self) -> dict[str, str]:
+        """Return plugin IDs verified by install state or the live registry."""
+        known: dict[str, str] = {}
+        state_plugins = self.state.get("plugins", [])
+        if isinstance(state_plugins, list):
+            for plugin_id in state_plugins:
+                if isinstance(plugin_id, str) and plugin_id:
+                    known.setdefault(plugin_id.lower(), plugin_id)
+        for entry in self.registry:
+            plugin_id = entry.get("id")
+            if isinstance(plugin_id, str) and plugin_id:
+                known.setdefault(plugin_id.lower(), plugin_id)
+        return known
+
+    def plugin_owner(self, plugin_id: str) -> str:
+        lowered = plugin_id.lower()
+        if lowered.startswith("hancore.shibumi."):
+            return OWNER_SHIBUMI
+        if lowered.startswith("omarchy."):
+            return OWNER_OMARCHY
+        return OWNER_THIRD_PARTY
+
+    def attributed(self, owner: str, source_paths: list[str], plugin_ids: list[str]) -> dict[str, str]:
+        return {
+            "owner": owner,
+            "sourcePath": "; ".join(source_paths),
+            "pluginId": "; ".join(dict.fromkeys(plugin_ids)),
+        }
+
+    def attribute_source(self, value: Any) -> dict[str, str]:
+        """Classify only authoritative, unambiguous local runtime sources."""
+        raw_text = str(value or "")
+        if URL_AUTHORITY_PATTERN.search(raw_text):
+            return self.attributed(OWNER_UNKNOWN, [], [])
+        text = raw_text.replace("file://", "")
+        paths = self.source_paths(text)
+        known = self.known_plugin_ids()
+        omarchy_paths = [path for path in paths if self.is_omarchy_path(path)]
+        plugin_candidates: list[tuple[str, str]] = []
+        unverified_plugin_paths: list[tuple[str, str]] = []
+        unrelated_paths: list[str] = []
+        for path in paths:
+            if path in omarchy_paths:
+                continue
+            candidate = self.plugin_id_for_path(path)
+            if not candidate:
+                unrelated_paths.append(path)
+                continue
+            verified = known.get(candidate.lower(), "")
+            if verified:
+                plugin_candidates.append((path, verified))
+            else:
+                unverified_plugin_paths.append((path, candidate))
+        all_evidence_paths = [
+            *omarchy_paths,
+            *[path for path, _ in plugin_candidates],
+            *[path for path, _ in unverified_plugin_paths],
+            *unrelated_paths,
+        ]
+        competing_unrelated_paths = [
+            path
+            for path in unrelated_paths
+            if path.startswith("/") or path.startswith("~/")
+        ]
+
+        # Explicit plugin fields are accepted only when install state or the
+        # live registry verifies every ID. Bare names in free-form text remain
+        # unknown because they do not identify an authoritative local source.
+        explicit_ids = [
+            match.group("id")
+            for match in EXPLICIT_PLUGIN_PATTERN.finditer(text)
+        ]
+        verified_explicit_ids = [
+            known.get(plugin_id.lower(), "") for plugin_id in explicit_ids
+        ]
+        explicit_owners = {
+            self.plugin_owner(plugin_id)
+            for plugin_id in verified_explicit_ids
+            if plugin_id
+        }
+
+        # Canonical Omarchy source roots take precedence over incidental plugin
+        # names, but not over competing source evidence. An explicit, verified
+        # Omarchy ID is compatible; any other or unverified evidence is not.
+        omarchy_is_unambiguous = (
+            not plugin_candidates
+            and not unverified_plugin_paths
+            and not competing_unrelated_paths
+            and (
+                not explicit_ids
+                or (
+                    all(verified_explicit_ids)
+                    and explicit_owners == {OWNER_OMARCHY}
+                )
+            )
+        )
+        if omarchy_paths and omarchy_is_unambiguous:
+            source_lowered = omarchy_paths[0].lower()
+            plugin_id = ""
+            if "activewindow.qml" in source_lowered:
+                plugin_id = "omarchy.active-window"
+            elif "/shell/" + "plugins/" in source_lowered:
+                plugin_id = "omarchy.shell"
+            return self.attributed(
+                OWNER_OMARCHY,
+                omarchy_paths,
+                [plugin_id] if plugin_id else [],
+            )
+        if omarchy_paths:
+            return self.attributed(
+                OWNER_UNKNOWN,
+                all_evidence_paths,
+                [plugin_id for _, plugin_id in unverified_plugin_paths]
+                + [plugin_id for _, plugin_id in plugin_candidates]
+                + explicit_ids,
+            )
+
+        if (
+            unverified_plugin_paths
+            or unrelated_paths
+            or (explicit_ids and not all(verified_explicit_ids))
+        ):
+            return self.attributed(
+                OWNER_UNKNOWN,
+                all_evidence_paths,
+                [
+                    plugin_id
+                    for _, plugin_id in unverified_plugin_paths
+                ] + explicit_ids,
+            )
+
+        evidence_ids = [
+            *[plugin_id for _, plugin_id in plugin_candidates],
+            *verified_explicit_ids,
+        ]
+        if not evidence_ids:
+            return self.attributed(OWNER_UNKNOWN, all_evidence_paths, [])
+        owners = {self.plugin_owner(plugin_id) for plugin_id in evidence_ids}
+        if len(owners) != 1:
+            return self.attributed(OWNER_UNKNOWN, all_evidence_paths, evidence_ids)
+        return self.attributed(owners.pop(), all_evidence_paths, evidence_ids)
 
     def load_state_and_config(self) -> None:
         state_path = self.state_dir / "install.json"
@@ -698,9 +957,7 @@ class Probe:
                 if result.returncode != 0:
                     raw_detail = (result.stderr or result.stdout).strip()
                     if raw_detail and not SENSITIVE_PATTERNS.search(raw_detail):
-                        detail = self.redact_home_paths(
-                            safe_text(raw_detail, 280)
-                        )
+                        detail = self.redact_home_paths(safe_text(raw_detail, 280))
                     else:
                         detail = f"qs log exited with {result.returncode}"
                     self.add(
@@ -711,6 +968,8 @@ class Probe:
                         "Log unavailable",
                         detail,
                         "current Quickshell configuration",
+                        "Copy the bounded detail and inspect the affected component.",
+                        owner=OWNER_UNKNOWN,
                     )
                     return
                 raw = result.stdout
@@ -721,25 +980,81 @@ class Probe:
                 if "Configuration Loaded" in lines[index]:
                     lines = lines[index + 1 :]
                     break
-            matches = []
+            matches: list[tuple[str, dict[str, str]]] = []
+            suppressed_sensitive = False
             for line in lines:
-                if not ERROR_PATTERNS.search(line) or SENSITIVE_PATTERNS.search(line):
+                if not ERROR_PATTERNS.search(line):
                     continue
-                line = self.redact_home_paths(line)
-                matches.append(safe_text(line, 280))
+                if SENSITIVE_PATTERNS.search(line):
+                    suppressed_sensitive = True
+                    continue
+                attribution = self.attribute_source(line)
+                matches.append((safe_text(self.redact_home_paths(line), 280), attribution))
             matches = matches[-8:]
-            self.add(
-                "runtime-errors",
-                "Runtime",
-                "Recent runtime errors",
-                "error" if matches else "ok",
-                f"{len(matches)} relevant error(s)" if matches else "None detected",
-                " | ".join(matches) if matches
-                else "No recent Shibumi loader, type, reference, binding-loop, or provider failure was found.",
-                "current Quickshell configuration",
-                "Copy the bounded detail and inspect the affected component."
-                if matches else "",
-            )
+            if suppressed_sensitive:
+                self.add(
+                    "runtime-errors-sensitive",
+                    "Runtime",
+                    "Sensitive runtime findings",
+                    "warning",
+                    "Details redacted",
+                    "One or more relevant runtime findings contained sensitive terms and were omitted from the Health report.",
+                    "current Quickshell configuration",
+                    "Review the local shell log using a trusted terminal; Health will not expose the sensitive detail.",
+                    owner=OWNER_UNKNOWN,
+                )
+            if not matches:
+                if suppressed_sensitive:
+                    return
+                self.add(
+                    "runtime-errors",
+                    "Runtime",
+                    "Recent runtime errors",
+                    "ok",
+                    "None detected",
+                    "No recent Shibumi loader, type, reference, binding-loop, or provider failure was found.",
+                    "current Quickshell configuration",
+                    owner=OWNER_UNKNOWN,
+                )
+                return
+
+            grouped: dict[str, list[tuple[str, dict[str, str]]]] = {}
+            for match in matches:
+                grouped.setdefault(match[1]["owner"], []).append(match)
+            for owner in sorted(grouped, key=lambda item: OWNER_ORDER[item]):
+                findings = grouped[owner]
+                plugin_ids = sorted({item["pluginId"] for _, item in findings if item["pluginId"]})
+                source_paths = sorted({item["sourcePath"] for _, item in findings if item["sourcePath"]})
+                if owner == OWNER_SHIBUMI:
+                    check_id = "runtime-errors"
+                    label = "Recent Shibumi runtime errors"
+                    action = "Copy the sanitized report or prepare a Shibumi issue draft for review."
+                elif owner == OWNER_OMARCHY:
+                    check_id = "runtime-errors-omarchy"
+                    label = "Omarchy runtime errors"
+                    action = "Inspect the Omarchy source or report this finding upstream; Shibumi cannot file it."
+                elif owner == OWNER_THIRD_PARTY:
+                    check_id = "runtime-errors-third-party"
+                    label = "Third-party runtime errors"
+                    action = "Inspect the named third-party plugin and use its upstream support channel; Shibumi cannot file it."
+                else:
+                    check_id = "runtime-errors" if len(grouped) == 1 else "runtime-errors-unknown"
+                    label = "Recent runtime errors" if len(grouped) == 1 else "Unattributed runtime errors"
+                    action = "Confirm the source before assigning ownership; Shibumi will not file an unattributed issue."
+                self.add(
+                    check_id,
+                    "Runtime",
+                    label,
+                    "error",
+                    f"{len(findings)} relevant error(s)",
+                    " | ".join(line for line, _ in findings),
+                    "; ".join(plugin_ids) or "current Quickshell configuration",
+                    action,
+                    owner=owner,
+                    source_path="; ".join(source_paths),
+                    plugin_id="; ".join(plugin_ids),
+                    issue_eligible=owner == OWNER_SHIBUMI,
+                )
         except (OSError, subprocess.TimeoutExpired) as error:
             self.add(
                 "runtime-errors",
@@ -749,6 +1064,7 @@ class Probe:
                 "Log unavailable",
                 str(error),
                 "current Quickshell configuration",
+                owner=OWNER_UNKNOWN,
             )
 
     def source_root(self) -> Path:
@@ -1176,7 +1492,7 @@ def main() -> int:
                         "Health runner",
                         "error",
                         "Failed",
-                        safe_text(error, 500),
+                        safe_public_text(error, 500),
                     )
                 )
             ],
