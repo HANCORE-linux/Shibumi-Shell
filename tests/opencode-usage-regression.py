@@ -13,10 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = [
-    REPO_ROOT / "scripts" / "opencode-usage",
-    REPO_ROOT / "hancore.shibumi.ai" / "scripts" / "opencode-usage",
-]
+SCRIPT = REPO_ROOT / "hancore.shibumi.ai" / "scripts" / "opencode-usage"
 
 
 class OpenCodeUsageRegressionTests(unittest.TestCase):
@@ -72,24 +69,15 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
     def run_scripts(self) -> dict:
         environment = os.environ.copy()
         environment["OPENCODE_DATA_DIR"] = str(self.data_dir)
-        outputs = []
-        for script in SCRIPTS:
-            result = subprocess.run(
-                [str(script)],
-                check=True,
-                capture_output=True,
-                text=True,
-                env=environment,
-                timeout=10,
-            )
-            outputs.append(json.loads(result.stdout))
-        stable_outputs = []
-        for output in outputs:
-            stable = dict(output)
-            stable.pop("updated_at", None)
-            stable_outputs.append(stable)
-        self.assertEqual(stable_outputs[0], stable_outputs[1])
-        return outputs[0]
+        result = subprocess.run(
+            [str(SCRIPT)],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=10,
+        )
+        return json.loads(result.stdout)
 
     def test_models_and_latest_model_use_positive_today_scope(self) -> None:
         now = datetime.now()
@@ -173,7 +161,7 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
             os.environ["TZ"] = "Europe/Berlin"
             time.tzset()
             loader = importlib.machinery.SourceFileLoader(
-                "shibumi_opencode_usage", str(SCRIPTS[0])
+                "shibumi_opencode_usage", str(SCRIPT)
             )
             spec = importlib.util.spec_from_loader(loader.name, loader)
             self.assertIsNotNone(spec)

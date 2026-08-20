@@ -18,7 +18,8 @@ jq -e '
   and (.features | length) == 36
   and (.features | all(
     (.implementation | type) == "array" and (.implementation | length) > 0
-    and (.tests | type) == "array" and (.tests | length) > 0))
+    and (.tests | type) == "array" and (.tests | length) > 0
+    and (.tests | length) == (.tests | unique | length)))
 ' "$evidence_contract" >/dev/null || fail "evidence schema is incomplete"
 
 port_baseline=$(jq -r '.referenceBaseline' "$port_contract")

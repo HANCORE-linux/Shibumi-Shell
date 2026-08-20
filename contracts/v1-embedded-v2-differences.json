@@ -47,7 +47,7 @@
       "impact": "cava-process-lifecycle",
       "decision": "adapt-safer",
       "implementation": ["hancore.shibumi.media/Service.qml", "hancore.shibumi.media/BarWidget.qml"],
-      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/media-widget-smoke.qml"]
+      "evidence": ["tests/audio-media-plugins-regression.sh", "tests/media-plugin-smoke.qml"]
     },
     {
       "source": "modules/WorkspaceWidget.qml",

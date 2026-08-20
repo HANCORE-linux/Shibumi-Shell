@@ -150,7 +150,9 @@ bounded retry and cleanup, Top/Bottom rendering, and the focused
 single-output resource slice. Multiple-real-player source switching, remaining
 media-panel states, and physical multi-output remain acceptance gates.
 
-`tests/shibumi-presentation-smoke.qml` proves at component-load time that:
+`tests/group-renderer-regression.qml` and
+`tests/style-contract-regression.sh` prove at component-load and contract time
+that:
 
 - the 35/38/32/24 px geometry contract is active;
 - CPU and memory follow the Shibumi bar height;

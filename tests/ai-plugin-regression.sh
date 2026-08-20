@@ -293,9 +293,6 @@ fi
 if rg -q 'CACHE_FILE|stale_last' "$repo_root/hancore.shibumi.ai/scripts/opencode-usage"; then
   fail "OpenCode provider persists a usage cache"
 fi
-cmp -s "$repo_root/scripts/opencode-usage" \
-  "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
-  || fail "canonical and vendored OpenCode scanners drifted"
 rg -Fq 'Qt.resolvedUrl("scripts/opencode-usage")' \
   "$repo_root/hancore.shibumi.ai/OpenCodeProvider.qml" \
   || fail "OpenCode provider does not resolve its shipped scanner"

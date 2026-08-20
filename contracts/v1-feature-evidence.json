@@ -37,7 +37,7 @@
       "strategy": "adapt",
       "sources": ["IconMap.js"],
       "implementation": ["shared/presentation/IconText.qml", "hancore.shibumi.control-center/ControlSettings.qml"],
-      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/control-center-smoke.qml"]
+      "evidence": ["tests/group-renderer-regression.qml", "tests/control-center-smoke.qml"]
     },
     {
       "id": "power-actions",
@@ -86,7 +86,7 @@
       "strategy": "port",
       "sources": ["modules/BatteryWidget.qml", "panels/BatteryPanel.qml"],
       "implementation": ["hancore.shibumi.battery/BarWidget.qml", "hancore.shibumi.battery/BatteryPanel.qml"],
-      "evidence": ["tests/power-plugins-regression.sh", "tests/power-widgets-smoke.qml"]
+      "evidence": ["tests/power-plugins-regression.sh", "tests/power-plugins-smoke.qml"]
     },
     {
       "id": "bluetooth",
@@ -107,7 +107,7 @@
       "strategy": "port",
       "sources": ["modules/ClockWidget.qml", "panels/CalendarPopup.qml"],
       "implementation": ["hancore.shibumi.center/ClockWidget.qml", "hancore.shibumi.center/CalendarPanel.qml"],
-      "evidence": ["tests/center-plugin-regression.sh", "tests/clock-widget-smoke.qml"]
+      "evidence": ["tests/center-plugin-regression.sh", "tests/center-plugin-smoke.qml"]
     },
     {
       "id": "ai-usage",
@@ -128,7 +128,7 @@
       "strategy": "port",
       "sources": ["modules/IconText.qml", "modules/UiText.qml"],
       "implementation": ["shared/presentation/IconText.qml"],
-      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/style-contract-regression.sh"]
+      "evidence": ["tests/group-renderer-regression.qml", "tests/style-contract-regression.sh"]
     },
     {
       "id": "status-indicators",
@@ -191,7 +191,7 @@
       "strategy": "port",
       "sources": ["modules/PillShadow.qml"],
       "implementation": ["shared/presentation/PillSurface.qml", "styles/shibumi/RunChrome.qml"],
-      "evidence": ["tests/shibumi-presentation-smoke.qml", "tests/run-geometry-regression.qml"]
+      "evidence": ["tests/group-renderer-regression.qml", "tests/run-geometry-regression.qml"]
     },
     {
       "id": "power-profile",
@@ -212,7 +212,7 @@
       "strategy": "port",
       "sources": ["modules/TooltipMixin.qml", "panels/TooltipOverlay.qml"],
       "implementation": ["shared/presentation/ShibumiPanelToolTip.qml", "hancore.shibumi.bar/Bar.qml"],
-      "evidence": ["tests/panel-surface-smoke.qml", "tests/shibumi-presentation-smoke.qml"]
+      "evidence": ["tests/panel-surface-smoke.qml", "tests/group-renderer-regression.qml"]
     },
     {
       "id": "tray",

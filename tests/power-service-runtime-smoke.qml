@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import "services" as Services
+import "powerState" as PowerState
 
 ShellRoot {
   id: root
@@ -10,7 +10,7 @@ ShellRoot {
   property int phase: 0
   property int attempts: 0
 
-  Services.PowerService { id: power }
+  PowerState.Service { id: power }
 
   function fail(message) {
     console.error("power-service-runtime-smoke:", message)

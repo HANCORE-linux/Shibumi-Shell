@@ -23,8 +23,6 @@ chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.network" "$tmpdir/network"
 cp -a -- "$repo_root/hancore.shibumi.network" \
   "$tmpdir/hancore.shibumi.network"
-cp -a -- "$repo_root/services" "$tmpdir/services"
-cp -a -- "$repo_root/adapters" "$tmpdir/adapters"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/network-plugin-smoke.qml" "$tmpdir/shell.qml"
@@ -107,36 +105,30 @@ fi
 
 install -m 0644 "$repo_root/tests/network-scanner-lifecycle-smoke.qml" \
   "$tmpdir/shell.qml"
-for scanner_mode in plugin canonical; do
-  mkdir -p "$tmpdir/scanner-$scanner_mode-runtime" \
-    "$tmpdir/scanner-$scanner_mode-home"
-  chmod 700 "$tmpdir/scanner-$scanner_mode-runtime"
-  canonical_flag=0
-  [[ $scanner_mode == canonical ]] && canonical_flag=1
-  set +e
-  scanner_output=$(timeout 12 env \
-    HOME="$tmpdir/scanner-$scanner_mode-home" \
-    PATH="$tmpdir/bin:$PATH" \
-    SHIBUMI_TEST_CANONICAL_NETWORK="$canonical_flag" \
-    QT_QPA_PLATFORM=offscreen \
-    WAYLAND_DISPLAY= \
-    XDG_RUNTIME_DIR="$tmpdir/scanner-$scanner_mode-runtime" \
-    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
-    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
-    "$quickshell_bin" -p "$tmpdir" 2>&1)
-  scanner_rc=$?
-  set -e
-  printf '%s\n' "$scanner_output"
-  [[ $scanner_rc -eq 0 ]] \
-    || fail "$scanner_mode scanner lifecycle smoke exited $scanner_rc"
-  grep -F 'network scanner lifecycle smoke passed' \
-    <<<"$scanner_output" >/dev/null \
-    || fail "$scanner_mode scanner lifecycle success marker missing"
-  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
-      <<<"$scanner_output"; then
-    fail "$scanner_mode scanner lifecycle produced a QML runtime error"
-  fi
-done
+mkdir -p "$tmpdir/scanner-runtime" "$tmpdir/scanner-home"
+chmod 700 "$tmpdir/scanner-runtime"
+set +e
+scanner_output=$(timeout 12 env \
+  HOME="$tmpdir/scanner-home" \
+  PATH="$tmpdir/bin:$PATH" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/scanner-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+scanner_rc=$?
+set -e
+printf '%s\n' "$scanner_output"
+[[ $scanner_rc -eq 0 ]] \
+  || fail "scanner lifecycle smoke exited $scanner_rc"
+grep -F 'network scanner lifecycle smoke passed' \
+  <<<"$scanner_output" >/dev/null \
+  || fail "scanner lifecycle success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$scanner_output"; then
+  fail "scanner lifecycle produced a QML runtime error"
+fi
 
 normal_pid_log="$tmpdir/bounded-parent-pid"
 normal_child_pid_log="$tmpdir/bounded-child-pid"
