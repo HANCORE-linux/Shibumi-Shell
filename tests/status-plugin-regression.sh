@@ -58,8 +58,11 @@ rg -q 'registered(Source|Component)\("omarchy\.tray"\)' "$status_widget" \
 rg -q 'registered(Source|Component)\("hancore\.shibumi\.update-center"\)' \
   "$status_widget" \
   || fail "status view does not resolve the Shibumi update center"
-rg -q 'firstPartyServiceFor\("omarchy\.notifications"\)' "$status_widget" \
-  || fail "status view does not resolve the official notification service"
+rg -q 'serviceFor\("hancore\.shibumi\.status"\)' "$status_widget" \
+  || fail "status view does not resolve the Shibumi notification adapter"
+if rg -q 'firstPartyServiceFor\("omarchy\.notifications"\)' "$status_widget"; then
+  fail "status view bypasses the Shibumi notification adapter"
+fi
 if rg -q 'notification(Source|Component|Loader|Widget)' "$status_widget"; then
   fail "status view retained the removed Quattro notification bar widget"
 fi
@@ -171,14 +174,46 @@ rg -Fq 'notificationService.dismissPast(index)' \
 rg -Fq 'notificationService.clearPast()' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification panel cannot clear recent notifications"
+rg -Fq 'notificationService.showHistory()' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel cannot open host-owned notification history"
+rg -Fq 'text: "Recent"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel has no recent-history action"
+rg -Fq 'notificationRow.bucket === "past" ? "RECENT" : "LIVE"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification rows do not label live versus recent entries"
+rg -Fq 'paletteColor("color03"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification live highlight does not use color03"
+rg -Fq 'paletteColor("color04"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification recent highlight does not use color04"
+rg -Fq 'text: "Live"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel has no live tab"
+rg -Fq 'function selectTab(tab)' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "V1 notification panel has no live/recent tab selection"
+recent_tab_line=$(rg -n 'text: "Recent"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" | head -1 | cut -d: -f1)
+live_tab_line=$(rg -n 'text: "Live"' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" | head -1 | cut -d: -f1)
+(( recent_tab_line < live_tab_line )) \
+  || fail "V1 notification tabs are not ordered Recent then Live"
 if rg -q 'PopupCard|Quickshell\.Services\.Notifications|makoctl' \
     "$repo_root/hancore.shibumi.status/NotificationPanel.qml"; then
   fail "V1 notification presentation duplicates stock chrome or backend ownership"
 fi
 rg -q 'firstPartyServiceFor\("omarchy\.idle"\)' "$status_service" \
   || fail "status service bypasses the official idle service"
-rg -q 'firstPartyServiceFor\("omarchy\.notifications"\)' "$status_service" \
-  || fail "status service bypasses the official notification service"
+rg -q 'firstPartyServiceFor\("omarchy\.notifications"\)' \
+  "$repo_root/hancore.shibumi.status/NotificationAdapter.qml" \
+  || fail "notification adapter does not resolve the official service"
+rg -Fq 'NotificationAdapter' "$status_service" \
+  || fail "status service does not expose the notification adapter"
+rg -Fq 'popupModel' "$repo_root/hancore.shibumi.status/NotificationAdapter.qml" \
+  || fail "notification adapter does not support the current host model"
 if rg -U -q 'onLoaded: \{[^}]*root\.scheduleChildSync' "$status_widget"; then
   fail "loaded status children recursively reschedule their own loaders"
 fi

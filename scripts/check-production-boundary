@@ -78,14 +78,17 @@ TOKEN_ALLOWANCES = {
     }),
     "hancore.shibumi.status/BarWidget.qml": Counter({
         "entryPointUrl": 2,
-        "firstPartyServiceFor": 5,
+        "firstPartyServiceFor": 3,
         "registeredComponent": 3,
         "registeredSource": 3,
         "registeredWidgetComponent": 2,
         "registeredWidgetSource": 2,
     }),
+    "hancore.shibumi.status/NotificationAdapter.qml": Counter({
+        "firstPartyServiceFor": 2,
+    }),
     "hancore.shibumi.status/Service.qml": Counter({
-        "firstPartyServiceFor": 4,
+        "firstPartyServiceFor": 2,
     }),
 }
 
@@ -108,9 +111,11 @@ FIRST_PARTY_ALLOWANCES = {
     "hancore.shibumi.media/BarWidget.qml": {"omarchy.media"},
     "hancore.shibumi.media/Service.qml": {"omarchy.media"},
     "hancore.shibumi.reactor/ReactorService.qml": {"omarchy.media"},
-    "hancore.shibumi.status/BarWidget.qml": {"omarchy.notifications"},
+    "hancore.shibumi.status/NotificationAdapter.qml": {
+        "omarchy.notifications",
+    },
     "hancore.shibumi.status/Service.qml": {
-        "omarchy.idle", "omarchy.notifications",
+        "omarchy.idle",
     },
 }
 

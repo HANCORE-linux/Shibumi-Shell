@@ -9,6 +9,21 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var notificationService
+  property bool showingRecent: false
+  readonly property bool historyAvailable: notificationService
+    && notificationService.historyAvailable === true
+  function paletteColor(id, fallback) {
+    const shell = panel.bar && panel.bar.shell
+    const state = shell && typeof shell.serviceFor === "function"
+      ? shell.serviceFor("hancore.shibumi.state") : null
+    return state && typeof state.paletteColor === "function"
+      ? state.paletteColor(id) : fallback
+  }
+
+  readonly property color liveHighlight: paletteColor("color03",
+    panel.controlAccent)
+  readonly property color recentHighlight: paletteColor("color04",
+    panel.controlAccent)
   readonly property int pendingCount: notificationService
     && notificationService.pendingModel
     ? notificationService.pendingModel.count : 0
@@ -16,6 +31,12 @@ ShibumiPanel {
     && notificationService.pastModel
     ? notificationService.pastModel.count : 0
   readonly property int activeCount: pendingCount + recentCount
+  readonly property int displayedCount: showingRecent
+    ? recentCount : pendingCount
+  // The current host contract exposes live popupModel rows but no public
+  // recent-history model. The Recent tab asks the host to replay its
+  // host-owned history; the adapter then exposes that replay as recent rows.
+  // History is never reconstructed from private host files.
   readonly property var activeRows: {
     const rows = []
     function append(model, bucket) {
@@ -33,10 +54,10 @@ ShibumiPanel {
         })
       }
     }
-    append(notificationService ? notificationService.pendingModel : null,
-      "pending")
-    append(notificationService ? notificationService.pastModel : null,
-      "past")
+    const model = showingRecent
+      ? (notificationService ? notificationService.pastModel : null)
+      : (notificationService ? notificationService.pendingModel : null)
+    append(model, showingRecent ? "past" : "pending")
     return rows
   }
 
@@ -50,6 +71,22 @@ ShibumiPanel {
 
   function closePanel() {
     ownerWidget.closeNotificationPanel()
+  }
+
+  function selectTab(tab) {
+    const recent = String(tab || "") === "recent"
+    if (recent) {
+      if (!historyAvailable || !showHistory()) return false
+    }
+    showingRecent = recent
+    return true
+  }
+
+  function showHistory() {
+    if (!notificationService || !historyAvailable
+        || typeof notificationService.showHistory !== "function")
+      return false
+    return notificationService.showHistory() !== false
   }
 
   function setDnd(value) {
@@ -133,8 +170,13 @@ ShibumiPanel {
             ? closeText.left : closeAction.left
           anchors.rightMargin: 8
           anchors.verticalCenter: parent.verticalCenter
-          text: panel.activeCount > 0
-            ? "Notifications · " + panel.activeCount : "Notifications"
+          text: panel.showingRecent
+            ? (panel.displayedCount > 0
+              ? "Recent notifications · " + panel.displayedCount
+              : "Recent notifications")
+            : panel.displayedCount > 0
+              ? "Live notifications · " + panel.displayedCount
+              : "Live notifications"
           color: panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily
             : Commons.Style.font.family
@@ -185,11 +227,78 @@ ShibumiPanel {
         color: panel.dividerColor
       }
 
+      Row {
+        id: tabRow
+        width: parent.width
+        height: 28
+        spacing: 6
+
+        Rectangle {
+          width: (parent.width - parent.spacing) / 2
+          height: parent.height
+          radius: panel.controlRadius
+          color: panel.showingRecent
+            ? Commons.Util.alpha(panel.recentHighlight, 0.16)
+            : panel.controlFillColor
+          border.width: panel.controlBorderWidth
+          border.color: panel.showingRecent
+            ? panel.recentHighlight : panel.controlBorderColor
+
+          Text {
+            anchors.centerIn: parent
+            text: "Recent"
+            color: panel.recentHighlight
+            font.family: panel.bar ? panel.bar.fontFamily
+              : Commons.Style.font.family
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            renderType: Text.NativeRendering
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: panel.selectTab("recent")
+          }
+        }
+
+        Rectangle {
+          width: (parent.width - parent.spacing) / 2
+          height: parent.height
+          radius: panel.controlRadius
+          color: !panel.showingRecent
+            ? Commons.Util.alpha(panel.liveHighlight, 0.16)
+            : panel.controlFillColor
+          border.width: panel.controlBorderWidth
+          border.color: !panel.showingRecent
+            ? panel.liveHighlight : panel.controlBorderColor
+
+          Text {
+            anchors.centerIn: parent
+            text: "Live"
+            color: panel.liveHighlight
+            font.family: panel.bar ? panel.bar.fontFamily
+              : Commons.Style.font.family
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            renderType: Text.NativeRendering
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: panel.selectTab("live")
+          }
+        }
+      }
+
       Item {
         id: listViewport
         width: parent.width
         height: notificationList.count > 0
-          ? Math.min(notificationList.contentHeight, 420)
+          ? Math.min(notificationList.contentHeight, 384)
           : emptyLabel.implicitHeight
 
         ListView {
@@ -240,6 +349,19 @@ ShibumiPanel {
               anchors.margins: 8
               anchors.rightMargin: 26
               spacing: 3
+
+              Text {
+                width: parent.width
+                text: notificationRow.bucket === "past" ? "RECENT" : "LIVE"
+                color: notificationRow.bucket === "past"
+                  ? panel.recentHighlight : panel.liveHighlight
+                font.family: panel.bar ? panel.bar.fontFamily
+                  : Commons.Style.font.family
+                font.pixelSize: 9
+                font.letterSpacing: 1.2
+                font.weight: Font.Medium
+                renderType: Text.NativeRendering
+              }
 
               Text {
                 width: parent.width
@@ -297,7 +419,7 @@ ShibumiPanel {
                   : Commons.Util.alpha(panel.controlForeground, 0.45)
                 font.family: panel.bar ? panel.bar.fontFamily
                   : Commons.Style.font.family
-                font.pixelSize: 10
+                font.pixelSize: 12
                 renderType: Text.NativeRendering
               }
 

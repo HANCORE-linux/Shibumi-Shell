@@ -58,9 +58,11 @@ Item {
     : bar ? bar.background : Commons.Color.background
   readonly property var updateWidget: updateLoader.item
   readonly property var trayWidget: trayLoader.item
-  readonly property var notificationService: bar && bar.shell
-    && typeof bar.shell.firstPartyServiceFor === "function"
-    ? bar.shell.firstPartyServiceFor("omarchy.notifications") : null
+  readonly property var statusService: bar && bar.shell
+    && typeof bar.shell.serviceFor === "function"
+    ? bar.shell.serviceFor("hancore.shibumi.status") : null
+  readonly property var notificationService: statusService
+    ? statusService.notificationService : null
   readonly property var trayDrawerItem: trayDrawerLoader.item
   readonly property var trayAppMenuPanelItem: trayAppMenuLoader.item
   readonly property var notificationPanelItem: notificationPanelLoader.item
