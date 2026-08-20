@@ -40,11 +40,11 @@ until the revision-bound release collector reruns them:
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Pinned package baseline blocked by installed shell content drift; parity and forward axes require exact baseline checkouts |
+| Quattro compatibility | Installed-package baseline blocked by shell content drift; source-parity and forward axes pass |
 | Plugin validation and self-containment | Passed for all 24 plugins |
 | Complete installed-package contract | Blocked: shell expected `36dfa90...`, installed content is `f365399...` |
-| Complete installed-source-parity contract | Pending: required immutable checkout is not available in the current session |
-| Complete forward-compatibility contract | Pending: required immutable checkout is not available in the current session |
+| Complete installed-source-parity contract | Passed against the available immutable `b99fd91` checkout |
+| Complete forward-compatibility contract | Passed against the available immutable `d6b21f80` checkout |
 | Agents integration contract | Pending: required immutable checkout is not available in the current session |
 | Suite lifecycle unit tests | Passed: 99 of 99 |
 | Control Center manager tests | Passed: 29 of 29 |
