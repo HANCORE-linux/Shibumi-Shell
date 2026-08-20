@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.1-beta.9: Host-owned Notifications compatibility
+
+Release candidate for 2026-08-20.
+
+### Added
+
+- Added a narrow Omarchy Notifications adapter supporting current and legacy host model contracts
+- Added explicit `Recent` and `Live` notification tabs with host-owned history replay
+- Added DND, dismiss, clear, stale-replay, host-replacement, and unavailable-state coverage
+
+### Changed
+
+- Kept Omarchy as the sole Notifications owner; Shibumi exposes only primitive rows and typed actions
+- Added `color04` highlighting for Recent and `color03` highlighting for Live
+- Preserved Clear all and per-notification dismiss actions on both tabs
+
+### Fixed
+
+- Restored Shibumi notification presentation for Omarchy's current `popupModel` contract
+- Preserved late live notifications during history replay and filtered stale replay results after Clear all
+- Confirmed real Vesktop notifications arrive through the host service and appear in host history
+
+### Known limits
+
+- Physical multi-output, mixed-scale, hardware, final Machine 2 UI, and full visual-freeze acceptance remain explicit release gates
+- The pinned Omarchy host gate remains blocked by the recorded baseline content drift
+- AUR publication remains unavailable until the package name can be registered
+
 This changelog records user-visible Shibumi changes.
 
 ## 0.1.1-beta.8: Layout protection and update hardening

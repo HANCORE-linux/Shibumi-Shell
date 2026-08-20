@@ -1,14 +1,15 @@
-# Is Shibumi 0.1.1-beta.8 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.9 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.8` is an automated prerelease candidate. Its complete
-contract is revision-bound across the installed-package, installed-source-parity,
-and forward-compatibility proof axes. Destructive live Wayland acceptance is
+Shibumi `0.1.1-beta.9` is the host-owned Notifications compatibility
+prerelease candidate, merged as `6e963f0`. Its complete contract remains
+revision-bound across the installed-package, installed-source-parity, and
+forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
 must record fresh checksummed evidence for the tagged candidate. Physical
-multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
-block a stable public release.
+multi-monitor, enterprise Wi-Fi, the remaining Bluetooth workflows, and the
+pinned Omarchy baseline drift still block a stable public release.
 
 ## Current test target
 
@@ -30,8 +31,8 @@ no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 
-The beta.8 source candidate plus explicitly retained prior acceptance currently
-provides these results. Rows marked historical do not become beta.8 evidence
+The beta.9 source candidate plus explicitly retained prior acceptance currently
+provides these results. Rows marked historical do not become beta.9 evidence
 until the revision-bound release collector reruns them:
 
 | Gate | Result |
@@ -39,25 +40,27 @@ until the revision-bound release collector reruns them:
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Passed against package and source-parity `b99fd91`, plus forward snapshot `d6b21f80` |
+| Quattro compatibility | Pinned package baseline blocked by installed shell content drift; parity and forward axes require exact baseline checkouts |
 | Plugin validation and self-containment | Passed for all 24 plugins |
-| Complete installed-package contract | Passed against `omarchy-dev 4.0.0.r1664.gb99fd91-1` with 214 bound shell entries |
-| Complete installed-source-parity contract | Passed against immutable `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
-| Complete forward-compatibility contract | Passed against immutable `d6b21f80750ccaf488373973f1ee25db21de7d26` |
-| Agents integration contract | Passed against immutable `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
+| Complete installed-package contract | Blocked: shell expected `36dfa90...`, installed content is `f365399...` |
+| Complete installed-source-parity contract | Pending: required immutable checkout is not available in the current session |
+| Complete forward-compatibility contract | Pending: required immutable checkout is not available in the current session |
+| Agents integration contract | Pending: required immutable checkout is not available in the current session |
 | Suite lifecycle unit tests | Passed: 99 of 99 |
 | Control Center manager tests | Passed: 29 of 29 |
-| Health tests | Passed: 31 of 31 |
+| Health tests | Passed: 44 of 44 |
+| Notifications adapter contract | Passed: current/legacy models, replay races, DND, dismiss, clear, host reload, and unavailable states |
+| Real Vesktop notification path | Passed: authoritative host history records `app: "vesktop"` and `appIcon: "vesktop"` |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Beta.7 to beta.8 sandbox pass; exact final-commit live acceptance and clean-commit collector still required |
+| Transactional live update | Beta.8 to beta.9 exact final-commit update and clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
 | Configuration continuity | Passed: `shell.json` returned semantically unchanged after repeated transitions |
 | Runtime process count | Passed: one Quickshell process after each switch |
 | Network label runtime | Passed on Ethernet and Wi-Fi across repeated V1, V2, Omarchy, and V2-return transitions |
-| Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error |
+| Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error in the final unpinned status smoke |
 | Control Center **Bars** view | Passed on the physical Wayland session |
 | Bluetooth connection and panel | Passed with a live connected phone |
 | Idle/screensaver panel cleanup | Passed in the bar-host regression and deployed live |
@@ -113,7 +116,7 @@ The V1 and V2 shell-update interface is adapted to `shibumi-suite`. The Update C
 
 ## Private alpha limits
 
-The alpha may be committed and pushed to the private repository with these limits:
+The beta.9 prerelease may be committed, tagged, and pushed to the private repository with these limits:
 
 - The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
 - the validation system has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
@@ -121,6 +124,11 @@ The alpha may be committed and pushed to the private repository with these limit
 - A live Bluetooth phone connection and panel pass; pairing, audio routing,
   disconnect, and forget still need complete physical acceptance
 - A Shibumi update starts from a trusted repository checkout
+- Step 1D's final tab/layout deployment was validated locally; Machine 2 has the
+  initial host-notification probe but not the final post-layout visual pass
+- The installed Omarchy pinned baseline currently differs from the recorded
+  content digest and must be resolved or explicitly accepted as an environment
+  blocker
 
 Fixtures cover unavailable and error behavior, but they don't replace the physical gates.
 The predecessor's multi-monitor and mixed-scale implementation is mapped into
