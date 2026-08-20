@@ -17,10 +17,6 @@ fail() {
 
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
-cmp -s "$repo_root/services/WorkspaceModel.js" \
-  "$repo_root/hancore.shibumi.workspaces/WorkspaceModel.js" \
-  || fail "standalone and plugin workspace models drifted"
-
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.workspaces" "$tmpdir/workspaces"

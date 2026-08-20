@@ -1,6 +1,6 @@
 import QtQuick
-import "../widgets/CenterLayout.js" as CenterLayout
-import "../widgets/CalendarModel.js" as CalendarModel
+import "../hancore.shibumi.center/CenterLayout.js" as CenterLayout
+import "../hancore.shibumi.center/CalendarModel.js" as CalendarModel
 import "../hancore.shibumi.center/WeatherLocationModel.js" as WeatherLocationModel
 
 QtObject {

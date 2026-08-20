@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../services/WorkspaceModel.js" as WorkspaceModel
+import "../hancore.shibumi.workspaces/WorkspaceModel.js" as WorkspaceModel
 
 TestCase {
   name: "WorkspaceModel"

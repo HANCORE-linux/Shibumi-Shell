@@ -109,25 +109,21 @@ if rg -q 'Quickshell\.Services\.(Pipewire|Mpris)|MprisPlayer' \
 fi
 
 audio_widget="$repo_root/hancore.shibumi.audio/BarWidget.qml"
-embedded_audio_widget="$repo_root/widgets/AudioWidget.qml"
 audio_panel="$repo_root/hancore.shibumi.audio/AudioPanel.qml"
 audio_bridge="$repo_root/hancore.shibumi.audio/AudioPanelBridge.qml"
-for volume_widget in "$audio_widget" "$embedded_audio_widget"; do
-  full_content=$(sed -n \
-    '/id: fullHorizontalContent/,/id: compactHorizontalContent/p' \
-    "$volume_widget")
-  compact_content=$(sed -n \
-    '/id: compactHorizontalContent/,/id: verticalContent/p' \
-    "$volume_widget")
-  grep -Fq 'horizontalAlignment: Text.AlignRight' <<<"$full_content" \
-    || fail "full audio value does not preserve its fixed right edge"
-  grep -Fq 'horizontalAlignment: Text.AlignLeft' <<<"$compact_content" \
-    || fail "compact audio value does not keep a fixed icon gap"
-  if grep -Fq 'horizontalAlignment: Text.AlignRight' \
-      <<<"$compact_content"; then
-    fail "compact audio value still shifts inside its fixed-width field"
-  fi
-done
+full_content=$(sed -n \
+  '/id: fullHorizontalContent/,/id: compactHorizontalContent/p' \
+  "$audio_widget")
+compact_content=$(sed -n \
+  '/id: compactHorizontalContent/,/id: verticalContent/p' \
+  "$audio_widget")
+grep -Fq 'horizontalAlignment: Text.AlignRight' <<<"$full_content" \
+  || fail "full audio value does not preserve its fixed right edge"
+grep -Fq 'horizontalAlignment: Text.AlignLeft' <<<"$compact_content" \
+  || fail "compact audio value does not keep a fixed icon gap"
+if grep -Fq 'horizontalAlignment: Text.AlignRight' <<<"$compact_content"; then
+  fail "compact audio value still shifts inside its fixed-width field"
+fi
 rg -q 'registeredWidgetSource' "$audio_widget" \
   || fail "audio bridge does not resolve the official Omarchy source"
 rg -q 'registeredWidgetComponent' "$audio_widget" \
@@ -234,12 +230,9 @@ fi
 rg -q 'readonly property bool spectrumRequested: open && active && spectrumEnabled' \
   "$repo_root/hancore.shibumi.media/MediaPanel.qml" \
   || fail "media spectrum work is not panel-lifecycle bounded"
-for media_panel in \
-    "$repo_root/hancore.shibumi.media/MediaPanel.qml" \
-    "$repo_root/widgets/MediaPanel.qml"; do
-  rg -q 'property Timer positionTimer: Timer \{' "$media_panel" \
-    || fail "$(basename "$media_panel") assigns a non-visual Timer to ShibumiPanel content"
-done
+rg -q 'property Timer positionTimer: Timer \{' \
+  "$repo_root/hancore.shibumi.media/MediaPanel.qml" \
+  || fail "MediaPanel.qml assigns a non-visual Timer to ShibumiPanel content"
 rg -q 'current/theme/cava_theme' \
   "$repo_root/hancore.shibumi.media/Service.qml" \
   || fail "media spectrum does not consume the active Cava theme"

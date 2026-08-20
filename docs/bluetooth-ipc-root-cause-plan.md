@@ -269,24 +269,21 @@ ein Modellmodul begrenzt.
 ### Phase 4 – Implementierung ausschließlich in Shibumi
 
 Abhängig von Phase 3 werden nur die betroffenen Shibumi-Quellen geändert.
-Wegen der parallelen V1-/Plugin-Struktur sind mindestens diese Spiegel zu
-prüfen und konsistent zu halten:
+Die Implementierung wurde in diesen ausgelieferten Plugin-Quellen geprüft:
 
 - `hancore.shibumi.bluetooth/Service.qml`
 - `hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml`
 - `hancore.shibumi.bluetooth/BluetoothModel.js`
 - `hancore.shibumi.bluetooth/BarWidget.qml`
-- `services/BluetoothService.qml`
-- `adapters/BluetoothBackendAdapter.qml`
-- `adapters/BluetoothModel.js`
-- `widgets/BluetoothWidget.qml`
+
+Die damaligen parallelen Root-Spiegel wurden in Step 0 nach dem Retargeting der
+Assertions entfernt und sind keine aktuelle Autorenquelle mehr.
 
 Außerdem werden die falschen Verträge und Dokumentationsaussagen korrigiert:
 
 - `tests/contract-regression.sh`
 - `tests/bluetooth-plugin-regression.sh`
 - `tests/bluetooth-plugin-smoke.qml`
-- `tests/bluetooth-widget-smoke.qml`
 - Bluetooth-Fixtures unter `tests/fixtures/`
 - `docs/phase2-validation.md`
 - `docs/phase2-ownership-map.md`
@@ -294,7 +291,8 @@ Außerdem werden die falschen Verträge und Dokumentationsaussagen korrigiert:
 - [x] Keine Datei unter `/usr/share/omarchy` verändern.
 - [x] Keine Runtime-Warnung unterdrücken.
 - [x] Keine reale Bluetooth-Funkmutation in automatischen Produktionstests.
-- [x] Quell- und Plugin-Spiegel über denselben Contract und denselben Smoke prüfen.
+- [x] Ausgelieferte Pluginquellen und isolierte Fixtures über denselben Contract
+      und denselben Smoke prüfen.
 
 ### Phase 5 – Testpyramide
 

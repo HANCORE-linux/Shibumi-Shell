@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "network" as Network
-import "services" as Services
 import "fixtures" as Fixtures
 
 ShellRoot {
@@ -14,8 +13,6 @@ ShellRoot {
   property int activationBaseline: 0
   property int legacyActivationBaseline: 0
   property var clickTargets: []
-  readonly property bool canonicalService:
-    Quickshell.env("SHIBUMI_TEST_CANONICAL_NETWORK") === "1"
   readonly property var networkService: networkServiceLoader.item
   readonly property var legacyService: legacyServiceLoader.item
   readonly property var destructionService: destructionServiceLoader.item
@@ -102,45 +99,24 @@ ShellRoot {
   }
 
   Component {
-    id: canonicalScannerService
-    Services.NetworkService { bar: fakeBar; panelComponent: scannerGatePanel }
-  }
-
-  Component {
-    id: canonicalLegacyService
-    Services.NetworkService { bar: fakeBar; panelComponent: legacyScannerPanel }
-  }
-
-  Component {
     id: pluginDestructionService
     Network.Service { bar: fakeBar; panelComponent: destructionScannerPanel }
   }
 
-  Component {
-    id: canonicalDestructionService
-    Services.NetworkService {
-      bar: fakeBar
-      panelComponent: destructionScannerPanel
-    }
-  }
-
   Loader {
     id: networkServiceLoader
-    sourceComponent: root.canonicalService
-      ? canonicalScannerService : pluginScannerService
+    sourceComponent: pluginScannerService
   }
 
   Loader {
     id: legacyServiceLoader
-    sourceComponent: root.canonicalService
-      ? canonicalLegacyService : pluginLegacyService
+    sourceComponent: pluginLegacyService
   }
 
   Loader {
     id: destructionServiceLoader
     active: false
-    sourceComponent: root.canonicalService
-      ? canonicalDestructionService : pluginDestructionService
+    sourceComponent: pluginDestructionService
   }
 
   Item { id: firstOwner }

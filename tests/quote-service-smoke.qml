@@ -6,14 +6,9 @@ ShellRoot {
   id: root
   property var receivedEvent: null
 
-  QtObject {
-    id: fakeBar
-    property int reactorMode: 8
-  }
-
   Services.QuoteService {
     id: quoteService
-    bar: fakeBar
+    backendEnabled: true
   }
 
   Connections {

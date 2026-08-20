@@ -374,26 +374,25 @@ These are small host-neutral helpers used by several feature plugins. Reviewed
 copies are vendored into each consuming plugin and checked byte-for-byte by the
 sync test. They are not runtime plugins and are never imported from `shared/`.
 
-### Transitional files
+### Resolved transitional files
 
-```text
-manifest.json                              combined root manifest; delete after
-                                          independent manifests exist
-widgets/WidgetRegistry.qml                 internal component switch; replace
-                                          with Omarchy's BarWidgetRegistry
-```
+The combined root manifest and `widgets/WidgetRegistry.qml` were retired after
+the independent manifests and Quattro registry integration became authoritative.
+Step 0 later removed the remaining unguarded historical root implementations.
 
 The root `README.md`, `ARCHITECTURE.md`, `LICENSE`, `config/`, `docs/`, and
 repository scripts remain repository-level development and distribution files.
 `styles/README.md` moves into the bar plugin's developer documentation; it is
 not installed as a runtime dependency.
 
-## Test Ownership
+## Historical Test Ownership
 
-Tests move with their owning plugin while repository-wide contract tests stay at
-the root. Paths in the table are relative to `tests/`.
+This table freezes extraction-era test ownership; its filenames are historical
+and are not the current executable inventory. Current plugin regressions,
+machine-readable evidence contracts, and `tests/contract-regression.sh` are
+authoritative. Paths in the table are relative to `tests/`.
 
-| Owner | Current tests |
+| Owner | Extraction-era tests |
 | --- | --- |
 | Repository/installer | `contract-regression.sh`, future manifest/dependency/self-containment/install/rollback tests |
 | Bar | `group-interaction-regression.qml`, `group-registry-regression.qml`, `group-renderer-regression.qml`, `host-widget-resolver-regression.qml`, `layout-controller-regression.qml`, `layout-model-regression.qml`, `panel-routing-regression.qml`, `qsrise-presentation-smoke.qml`, `reactor-renderer-regression.qml`, `run-geometry-regression.qml`, `style-contract-regression.sh`, `fixtures/ResolverTestWidget.qml` |

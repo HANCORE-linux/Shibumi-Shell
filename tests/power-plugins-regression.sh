@@ -22,6 +22,7 @@ mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.battery" "$tmpdir/battery"
 cp -a -- "$repo_root/hancore.shibumi.power-profile" "$tmpdir/powerProfile"
+cp -a -- "$repo_root/hancore.shibumi.power-state" "$tmpdir/powerState"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
@@ -45,6 +46,31 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'power plugins smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+
+mkdir -p "$tmpdir/power-runtime" "$tmpdir/power-bin"
+chmod 700 "$tmpdir/power-runtime"
+install -m 0755 "$repo_root"/tests/fixtures/power-bin/* "$tmpdir/power-bin/"
+printf 'balanced\n' >"$tmpdir/power-state"
+install -m 0644 "$repo_root/tests/power-service-runtime-smoke.qml" \
+  "$tmpdir/shell.qml"
+set +e
+service_output=$(timeout 8 env \
+  PATH="$tmpdir/power-bin:$PATH" \
+  SHIBUMI_POWER_FIXTURE_STATE="$tmpdir/power-state" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/power-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+service_rc=$?
+set -e
+printf '%s\n' "$service_output"
+[[ $service_rc -eq 0 ]] || fail "power-state service smoke exited $service_rc"
+grep -F 'power service runtime smoke passed' <<<"$service_output" >/dev/null \
+  || fail "power-state service success marker missing"
+[[ $(<"$tmpdir/power-state") == performance ]] \
+  || fail "power-state service did not execute the validated profile action"
 
 for plugin in battery power-profile; do
   widget="$repo_root/hancore.shibumi.$plugin/BarWidget.qml"
