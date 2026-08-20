@@ -823,7 +823,8 @@ Item {
       ? pluginRegistry.isEnabled(id) : null
     const desiredSpecs = v1PluginSpecs(replacedProviderIds,
       installed === true ? { id: id, region: targetRegion } : null)
-    if (!layoutStateController.reconcileV1PluginGroups(desiredSpecs))
+    if (!layoutStateController.v2Mode
+        && !layoutStateController.reconcileV1PluginGroups(desiredSpecs))
       return false
 
     if (installed === true && pluginRegistry
@@ -860,7 +861,8 @@ Item {
         if (!Util.isPlainObject(config.bar)) config.bar = {}
         config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
       })
-      layoutStateController.reconcileV1PluginGroups(previousSpecs)
+      if (!layoutStateController.v2Mode)
+        layoutStateController.reconcileV1PluginGroups(previousSpecs)
       if (registryWasEnabled === false && pluginRegistry
           && typeof pluginRegistry.setEnabled === "function")
         pluginRegistry.setEnabled(id, false)
@@ -880,7 +882,8 @@ Item {
       ? Object.keys(stateValues) : []
     const previousStates = groups.length > 0
       ? widgetGroupVariantStates(groups) : null
-    if (!layoutStateController.reconcileV1PluginGroups(desiredSpecs))
+    if (!layoutStateController.v2Mode
+        && !layoutStateController.reconcileV1PluginGroups(desiredSpecs))
       return false
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
@@ -892,7 +895,8 @@ Item {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
     })
-    layoutStateController.reconcileV1PluginGroups(previousSpecs)
+    if (!layoutStateController.v2Mode)
+      layoutStateController.reconcileV1PluginGroups(previousSpecs)
     if (previousStates) setWidgetGroupVariantStates(previousStates)
     return false
   }
