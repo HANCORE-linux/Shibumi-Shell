@@ -1,0 +1,2 @@
+INFO Configuration Loaded
+TypeError: failed to load /usr/share/omarchy/shell/plugins/bar/widgets/ActiveWindow.qml:42; plugin: hancore.shibumi.control-center

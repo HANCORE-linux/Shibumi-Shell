@@ -1,0 +1,4 @@
+INFO Configuration Loaded
+TypeError: failed to create /usr/share/omarchy/shell/plugins/bar/widgets/ActiveWindow.qml:42
+ReferenceError: OmaConnect failed in /home/test/.config/omarchy/plugins/OmaConnect/Main.qml:18
+Binding loop: /home/test/.config/omarchy/plugins/hancore.shibumi.control-center/ControlMainPage.qml:123

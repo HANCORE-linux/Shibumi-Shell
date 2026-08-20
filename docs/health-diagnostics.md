@@ -24,7 +24,8 @@ No underlying capability is silently removed:
 Checks are read-only. Opening Health refreshes a missing or older-than-five-
 minutes result once; no background timer polls the system. **Run checks** is
 the explicit refresh action. A result has a stable identifier, group, label,
-status, value, bounded detail, affected component, and an optional next action.
+status, value, bounded detail, affected component, owner attribution, sanitized
+source path, and an optional next action.
 Check status is one of `ok`, `warning`, `error`, or `info`; report state is
 `healthy`, `warning`, or `error`. The UI adds transient `checking` and initial
 `not checked` states.
@@ -53,12 +54,30 @@ and recent runtime errors remain as quiet icon-and-text rows. Other successful
 implementation checks stay hidden: they provide no user action and surface
 automatically if their state becomes abnormal.
 
-An expanded error exposes a stable `SHIBUMI-HEALTH/<CHECK-ID>` code and two
-explicit actions. **Copy** places the bounded code, result, version,
-component, evidence, and suggested action on the clipboard. **Open issue**
-opens this repository's GitHub issue form with the same report prefilled; it
-does not submit anything. The Copy action briefly changes to **Copied** as
-feedback. Warnings remain review-only and do not encourage a
+### Ownership attribution
+
+Every check carries an `owner` of `shibumi`, `omarchy`, `third-party`, or
+`unknown`, plus a sanitized `sourcePath` and optional `pluginId`. Runtime log
+findings are grouped by this attribution instead of being presented as one
+Shibumi error. `/usr/share/omarchy/**` findings are Omarchy-owned; installed
+`hancore.shibumi.*` roots are Shibumi-owned; and unrelated user plugin roots,
+including OmaConnect, are third-party-owned only when the local install state
+or plugin registry verifies the ID. Bare names and unverified explicit plugin
+fields remain `unknown`. Competing Shibumi and non-Shibumi sources on one line
+also remain `unknown`; a canonical Omarchy path with a competing local path or
+explicit foreign plugin ID is likewise ambiguous. An Omarchy path may still
+outvote an incidental, unanchored plugin name. Ownership must not be assigned
+by guesswork.
+
+An expanded error exposes a stable `SHIBUMI-HEALTH/<CHECK-ID>` code and a
+**Copy** action. Copy places only the bounded, sanitized code, result, owner,
+version, plugin/source identity, evidence, and suggested action on the
+clipboard. A Shibumi-owned error with `issueEligible: true` additionally gets
+**Open issue**, which opens this repository's GitHub issue form with the same
+report prefilled; it does not submit anything. Omarchy, third-party, and
+unknown findings never receive a Shibumi issue action; their next step points
+to the relevant owner or upstream support path. The Copy action briefly changes
+to **Copied** as feedback. Warnings remain review-only and do not encourage a
 bug report without evidence of an actual failure.
 
 The collapsed report fits without a scrollbar. Expanding an Attention detail
