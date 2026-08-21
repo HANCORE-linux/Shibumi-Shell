@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
-  "id": "forward-compat-d6b21f80",
-  "profile": "forward-compat",
+  "id": "installed-source-parity-v4.0.0",
+  "profile": "installed-source-parity",
   "repository": "https://github.com/basecamp/omarchy",
-  "sourceRevision": "d6b21f80750ccaf488373973f1ee25db21de7d26",
+  "sourceRevision": "f0020448ca87329199de7cb12f2015ebc4a3e5e7",
   "provenance": {
     "kind": "git",
-    "revision": "d6b21f80750ccaf488373973f1ee25db21de7d26"
+    "revision": "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
   },
   "quickshellPackage": {
     "name": "quickshell-git",
@@ -19,15 +19,15 @@
       "entryCount": 214,
       "inventorySha256": "d03767cfce65baa92ec914a957a7f17db86f00de44e08e60cb567486d29bffa4",
       "structureSha256": "1195a3c90397866984a4340cca1905ca7d18a0e3b49ae699785a8e9530651b1e",
-      "contentSha256": "36dfa90b7ff88c61a76fd3bd52a80f8714313a79484a6ae93aaa581329441d42"
+      "contentSha256": "f36539985f6d32250547c71b50e14837c125d31b7023f343d4007f6e294a79ab"
     },
     {
       "path": "bin",
       "entryPolicy": "regular-files",
-      "entryCount": 416,
-      "inventorySha256": "a003c53d5293563d433574198c4a1043368b9375d00a9cffb9a65f31562c4423",
-      "structureSha256": "bccaabdba4b4084ac4b0ec7fc4c2495d6d5ca4e069be119c17e533935914b2f6",
-      "contentSha256": "4384bb2fce7dbb38714512e4eb7e91269a17080d2bf675f513464f500c0c1066"
+      "entryCount": 425,
+      "inventorySha256": "c8159612b3fc53b45b9b84755a850b0ab54a4c67db5b93d2939807d56bda9e5f",
+      "structureSha256": "33a922b744804ad41f92c8ad8bafaa9dd69fb409f44b76b319a5b9ec36c0608d",
+      "contentSha256": "c5105474108c22cad02bc301e6c65cf553a0e31dba9b4d7d2225de57d3019719"
     },
     {
       "path": "config",
@@ -35,7 +35,7 @@
       "entryCount": 73,
       "inventorySha256": "576674b5731e0832d3f9704de876ec85b0ad37d9bed7fc6493d2192a80506dcb",
       "structureSha256": "295fd338df3aa39e640b09e044ce7e62509bccda90ac7ff2cfd56373fd1f44e5",
-      "contentSha256": "5e2daf079c3eef168c3b586b868a70ff9354e4d488d549749d853ee0bb30c352"
+      "contentSha256": "456765db6ccaeb7a4a770226d623a0d77d0a48f9c38722cbb7cbfaa36560fbab"
     }
   ]
 }

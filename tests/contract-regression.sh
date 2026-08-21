@@ -1130,10 +1130,13 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   [[ -s $official_network_panel ]] || fail "official Quattro network panel is missing"
   for network_contract in networkManagerAvailable kind signalStrength \
     connectedWifiNetwork info wifiNetworks wifiDevice dnsProvider refresh \
-    connectKnown connectWithPassphrase disconnect forget setDns; do
+    connectWithPassphrase disconnect forget setDns; do
     rg -q "${network_contract}" "$official_network_panel" \
       || fail "official network panel contract changed: $network_contract"
   done
+  if ! rg -q 'connectKnown|connectDirectly' "$official_network_panel"; then
+    fail "official network panel has no compatible connect action"
+  fi
   official_network_speedtest=${OMARCHY_PATH}/bin/omarchy-network-speedtest
   [[ -x $official_network_speedtest ]] \
     || fail "official network speed-test command is missing"

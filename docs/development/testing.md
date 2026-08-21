@@ -22,18 +22,18 @@ For a Bluetooth change:
 OMARCHY_PATH=/usr/share/omarchy ./tests/bluetooth-plugin-regression.sh
 ```
 
-Before handing off or releasing any source change, run all three complete
+Before handing off or releasing any source change, run all four complete
 baseline jobs. The installed-package job defaults to the package-managed host:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
 ```
 
-The installed-source-parity job requires an explicit Git checkout of the same
-`b99fd91` revision as the installed package:
+The installed-source-parity job requires an explicit Git checkout of the
+official `v4.0.0` source revision used by the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 ```
 
@@ -41,15 +41,15 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
 The AI Agents integration retains its own narrower revision-bound host
-contract in addition to the complete `b99fd91` baseline:
+contract against the official `v4.0.0` source baseline:
 
 ```bash
-SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
 ```
 
@@ -57,15 +57,15 @@ This gate binds the consumed Agents manifest, record reader, updater, and
 Claude/Codex collectors independently of the complete host inventory.
 
 Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
-loader. The jobs select three repository-owned manifests with non-overlapping
-claims:
+loader. The complete-host jobs select three repository-owned manifests with
+non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-b99fd91.json` validates the
-  package-managed layout;
-- `contracts/baselines/omarchy-installed-source-parity-b99fd91.json` proves that
-  the source form of the installed revision satisfies the same complete suite;
-- `contracts/baselines/omarchy-forward-compat-d6b21f80.json` proves forward
-  compatibility with the audit's pinned upstream snapshot.
+- `contracts/baselines/omarchy-installed-package-v4.0.0.json` validates the
+  package-managed `omarchy 4.0.0-1` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.0.0.json` proves that
+  the official `v4.0.0` source form satisfies the same complete suite;
+- `contracts/baselines/omarchy-forward-compat-ed7bae4a.json` proves forward
+  compatibility with the recorded upstream snapshot.
 
 All three manifests bind the complete consumed `shell`, `bin`, and `config`
 subtrees by entry count, path inventory, entry type, executable state, symlink

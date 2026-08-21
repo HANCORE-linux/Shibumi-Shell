@@ -1,6 +1,6 @@
 # Shibumi host compatibility record
 
-Status: beta-candidate reference (updated 2026-08-20)
+Status: beta-candidate reference (updated 2026-08-21)
 
 Shibumi Shell is built exclusively for Omarchy Quattro. This record ties each
 Shibumi candidate to a measured host baseline. Versions not listed here have
@@ -8,21 +8,22 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.9` candidate is reviewed against this internal validation
-baseline:
+The `0.1.1-beta.10` candidate is reviewed against the current official
+Omarchy Quattro baseline:
 
 | Component | Observed value |
 | --- | --- |
-| Omarchy package reference | `omarchy-dev 4.0.0.r1664.gb99fd91-1` |
-| Immutable source-parity revision | `b99fd91cf11db92b03bbd69e4fff908662bd74a3` |
-| Immutable forward-compatibility revision | `d6b21f80750ccaf488373973f1ee25db21de7d26` |
+| Omarchy package reference | `omarchy 4.0.0-1` |
+| Official Omarchy source tag | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
+| Immutable source-parity revision | `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
+| Immutable forward-compatibility revision | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 | Quickshell package | `quickshell-git 0.3.0.r20.g28771c7-1` |
-| Validation date | 2026-08-13 |
+| Validation date | 2026-08-21 |
 
-The package reference declares `provides = omarchy` and remains the accepted
-host-build identity. The complete immutable source-parity checkout is pinned to
-the same `b99fd91` revision; the separate `d6b21f80` snapshot proves bounded
-forward compatibility without following a moving branch.
+The stable package is the accepted host-build identity. The complete immutable
+source-parity checkout is pinned to the official `v4.0.0` tag; the separate
+`ed7bae4a` snapshot proves bounded forward compatibility without following a
+moving branch.
 
 The package-managed baseline records these authoritative production anchors:
 
@@ -38,13 +39,13 @@ The table is a human-readable set of important anchors, not the complete
 machine identity. Three separate manifests bind every file or symlink below the
 consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 
-- [`omarchy-installed-package-b99fd91.json`](../../contracts/baselines/omarchy-installed-package-b99fd91.json)
-  records the package-managed layout at `b99fd91`;
-- [`omarchy-installed-source-parity-b99fd91.json`](../../contracts/baselines/omarchy-installed-source-parity-b99fd91.json)
-  records the full Git checkout of that same installed revision;
-- [`omarchy-forward-compat-d6b21f80.json`](../../contracts/baselines/omarchy-forward-compat-d6b21f80.json)
-  records the immutable forward-compatibility snapshot from the engineering
-  audit. It does not follow the moving remote branch.
+- [`omarchy-installed-package-v4.0.0.json`](../../contracts/baselines/omarchy-installed-package-v4.0.0.json)
+  records the package-managed `omarchy 4.0.0-1` layout;
+- [`omarchy-installed-source-parity-v4.0.0.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.0.json)
+  records the full Git checkout of the official `v4.0.0` source tag;
+- [`omarchy-forward-compat-ed7bae4a.json`](../../contracts/baselines/omarchy-forward-compat-ed7bae4a.json)
+  records the immutable forward-compatibility snapshot at the recorded upstream
+  revision. It does not follow the moving remote branch.
 
 `tests/lib/baselines.sh` validates subtree counts, all path inventories,
 directory, regular-file, and symlink structure, executable state, declared
@@ -74,13 +75,15 @@ An Omarchy update is accepted only after these areas have been reviewed:
 5. the complete source contract suite and live lifecycle/switch
    matrix.
 
-Run the repository contract suite separately against all three host proof axes:
+Run the repository contract suite separately against all four host proof gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
+  ./tests/omarchy-agents-contract-regression.sh
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

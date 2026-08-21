@@ -460,10 +460,17 @@ Item {
     if (entry.profileUuid)
       return runProfileAction("connect", entry.profileUuid)
     if (hasUnambiguousVisibleSsid(entry)
-        && (entry.known || entry.securityKind === "open")
-        && typeof backend.connectKnown === "function") {
-      backend.connectKnown(String(entry.ssid || ""))
-      return true
+        && (entry.known || entry.securityKind === "open")) {
+      if (typeof backend.connectKnown === "function") {
+        backend.connectKnown(String(entry.ssid || ""))
+        return true
+      }
+      // Omarchy's forward-compatible network panel renamed this action to
+      // connectDirectly while retaining the same public behavior.
+      if (typeof backend.connectDirectly === "function") {
+        backend.connectDirectly(String(entry.ssid || ""))
+        return true
+      }
     }
     return false
   }

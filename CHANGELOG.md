@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.1-beta.10: Official Omarchy baseline and forward compatibility
+
+Release candidate for 2026-08-21.
+
+### Added
+
+- Added permanent regression coverage for Omarchy's `connectDirectly()` Network action
+- Added official Omarchy `4.0.0-1`/`v4.0.0` compatibility evidence and forward baseline metadata
+
+### Changed
+
+- Preserved `connectKnown()` on stable Omarchy while accepting `connectDirectly()` on the forward host
+- Kept `omarchy-dev` as a diagnostic-only development-host fallback without changing the official release baseline
+
+### Known limits
+
+- Physical multi-output, mixed-scale, hardware, and full visual-freeze acceptance remain explicit release gates
+- AUR publication remains unavailable until the package name can be registered
+
 ## 0.1.1-beta.9: Host-owned Notifications compatibility
 
 Release candidate for 2026-08-20.
@@ -25,7 +44,7 @@ Release candidate for 2026-08-20.
 ### Known limits
 
 - Physical multi-output, mixed-scale, hardware, final Machine 2 UI, and full visual-freeze acceptance remain explicit release gates
-- The pinned Omarchy host gate remains blocked by the recorded baseline content drift
+- The compatibility baseline is pinned to official Omarchy `4.0.0-1` (`v4.0.0`)
 - AUR publication remains unavailable until the package name can be registered
 
 This changelog records user-visible Shibumi changes.

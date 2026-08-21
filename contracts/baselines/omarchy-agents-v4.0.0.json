@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "omarchy-agents-v4.0.0",
+  "profile": "agents-current",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "f0020448ca87329199de7cb12f2015ebc4a3e5e7",
+  "provenance": {
+    "kind": "git",
+    "revision": "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+  },
+  "files": {
+    "bin/omarchy-agent-usage-claude": "88938e35170a5ef8da30b665114740440eb3bd68dba9579a818e8b02c4a0ffc3",
+    "bin/omarchy-agent-usage-codex": "0d36d856439f17749dc8a25c56607e8462de72fde91f384abc370fbc78113b14",
+    "bin/omarchy-agent-usage-update": "cd7d08e3f3cc56d3bbcdf0dbaef753b771bf16a5c5e49a8f45b59e976ac684fd",
+    "shell/plugins/agents/Agent.qml": "9fa9a8650ecbc2f2f691b01da7419fa0620b6066c423eea8d50f6253ddf6f4e3",
+    "shell/plugins/agents/Main.qml": "fc61e5e06325dd6eb3d100b1f3eead4c6ed8b62b58bda209c70a82084e23f3c7",
+    "shell/plugins/agents/manifest.json": "11bbc83df813fc5862a2ca34399486f19772ebdffe56ee1fe5dde9265a40703f"
+  }
+}

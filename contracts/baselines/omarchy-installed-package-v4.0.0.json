@@ -1,12 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "installed-source-parity-b99fd91",
-  "profile": "installed-source-parity",
+  "id": "installed-package-v4.0.0",
+  "profile": "installed-package",
   "repository": "https://github.com/basecamp/omarchy",
-  "sourceRevision": "b99fd91cf11db92b03bbd69e4fff908662bd74a3",
+  "sourceRevision": "f0020448ca87329199de7cb12f2015ebc4a3e5e7",
   "provenance": {
-    "kind": "git",
-    "revision": "b99fd91cf11db92b03bbd69e4fff908662bd74a3"
+    "kind": "package"
   },
   "quickshellPackage": {
     "name": "quickshell-git",
@@ -19,15 +18,15 @@
       "entryCount": 214,
       "inventorySha256": "d03767cfce65baa92ec914a957a7f17db86f00de44e08e60cb567486d29bffa4",
       "structureSha256": "1195a3c90397866984a4340cca1905ca7d18a0e3b49ae699785a8e9530651b1e",
-      "contentSha256": "36dfa90b7ff88c61a76fd3bd52a80f8714313a79484a6ae93aaa581329441d42"
+      "contentSha256": "f36539985f6d32250547c71b50e14837c125d31b7023f343d4007f6e294a79ab"
     },
     {
       "path": "bin",
-      "entryPolicy": "regular-files",
-      "entryCount": 416,
-      "inventorySha256": "a003c53d5293563d433574198c4a1043368b9375d00a9cffb9a65f31562c4423",
-      "structureSha256": "bccaabdba4b4084ac4b0ec7fc4c2495d6d5ca4e069be119c17e533935914b2f6",
-      "contentSha256": "bd35e89f33e2cad5a24f16a1d2781631a0fd24ed878090193a18f69fe3212320"
+      "entryPolicy": "absolute-symlinks",
+      "entryCount": 422,
+      "inventorySha256": "5269ce9212e740031de16c64980622fdc28c61585e88472afbdb4f6d44d11c27",
+      "structureSha256": "f167c93db905105ccca97cfb1ea91fe878d0f17cc6b48fa8bac77b1098bcb78e",
+      "contentSha256": "70bdcf3032cbf0f45d1bf5c0edf9497f2f697f80279700b532a448268506b8a7"
     },
     {
       "path": "config",
@@ -35,7 +34,11 @@
       "entryCount": 73,
       "inventorySha256": "576674b5731e0832d3f9704de876ec85b0ad37d9bed7fc6493d2192a80506dcb",
       "structureSha256": "295fd338df3aa39e640b09e044ce7e62509bccda90ac7ff2cfd56373fd1f44e5",
-      "contentSha256": "5e2daf079c3eef168c3b586b868a70ff9354e4d488d549749d853ee0bb30c352"
+      "contentSha256": "456765db6ccaeb7a4a770226d623a0d77d0a48f9c38722cbb7cbfaa36560fbab"
     }
-  ]
+  ],
+  "package": {
+    "name": "omarchy",
+    "version": "4.0.0-1"
+  }
 }

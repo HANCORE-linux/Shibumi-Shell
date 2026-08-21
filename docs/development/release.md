@@ -54,17 +54,17 @@ This is a read-only source review, not runtime acceptance.
 
 ## Validate on the internal validation system
 
-Run the complete contract against all three pinned Quattro proof axes:
+Run the complete contract against all four pinned Quattro proof axes:
 
 ```bash
 cd /path/to/shibumi
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-d6b21f80 \
-  ./tests/omarchy-forward-compat-contract-regression.sh
-SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-b99fd91 \
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
+  ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
 Preview and perform the exact suite update:

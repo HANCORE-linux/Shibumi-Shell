@@ -53,6 +53,7 @@ jobs:
       - name: Run the revision-bound lifecycle and host gate
         env:
           SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH: ${{ vars.SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH }}
+          SHIBUMI_AGENTS_OMARCHY_PATH: ${{ vars.SHIBUMI_AGENTS_OMARCHY_PATH }}
           SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH: ${{ vars.SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH }}
         run: |
           set -euo pipefail

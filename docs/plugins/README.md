@@ -2,7 +2,7 @@
 
 Status: reference
 
-Shibumi `0.1.1-beta.9` contains 24 independently registered Omarchy plugins. The
+Shibumi `0.1.1-beta.10` contains 24 independently registered Omarchy plugins. The
 default suite profile installs all of them as one verified transaction.
 
 The authoritative inventory is

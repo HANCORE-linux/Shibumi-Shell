@@ -167,9 +167,9 @@ def main() -> None:
 
     testing_guide = current_content["docs/development/testing.md"]
     for marker in (
-        "contracts/baselines/omarchy-installed-package-b99fd91.json",
-        "contracts/baselines/omarchy-installed-source-parity-b99fd91.json",
-        "contracts/baselines/omarchy-forward-compat-d6b21f80.json",
+        "contracts/baselines/omarchy-installed-package-v4.0.0.json",
+        "contracts/baselines/omarchy-installed-source-parity-v4.0.0.json",
+        "contracts/baselines/omarchy-forward-compat-ed7bae4a.json",
         "./tests/omarchy-installed-package-contract-regression.sh",
         "./tests/omarchy-installed-source-parity-contract-regression.sh",
         "./tests/omarchy-forward-compat-contract-regression.sh",

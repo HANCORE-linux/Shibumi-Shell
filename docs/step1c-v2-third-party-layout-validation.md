@@ -34,7 +34,7 @@ region changes, same-region reorder, cross-region movement, removal, settings
 entry preservation, and all four V2 styles (`full`, `fit`, `dock`, `notch`).
 
 Validated against the pinned installed-source Omarchy baseline
-`b99fd91cf11db92b03bbd69e4fff908662bd74a3`:
+`f0020448ca87329199de7cb12f2015ebc4a3e5e7` (`v4.0.0`):
 
 - `./tests/bar-host-registry-regression.sh` — passed
 - `./tests/state-service-regression.sh` — passed

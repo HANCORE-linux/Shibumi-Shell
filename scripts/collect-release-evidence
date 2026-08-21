@@ -17,7 +17,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("omarchyPackage", ("pacman", "-Q", "omarchy-dev"), "omarchy-dev "),
+    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy "),
     ("quickshellPackage", ("pacman", "-Q", "quickshell-git"), "quickshell-git "),
     ("quickshellVersion", ("quickshell", "--version"), "Quickshell "),
 )
@@ -37,6 +37,10 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "installed-source-parity-contract",
         ("tests/omarchy-installed-source-parity-contract-regression.sh",),
+    ),
+    (
+        "agents-contract",
+        ("tests/omarchy-agents-contract-regression.sh",),
     ),
     (
         "forward-compat-contract",
@@ -115,6 +119,33 @@ def probe_host_identity(
     }
 
 
+def probe_omarchy_package() -> dict[str, Any]:
+    stable = probe_host_identity(
+        "omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy "
+    )
+    if stable["valid"]:
+        return stable
+
+    development = probe_host_identity(
+        "omarchyDevPackage", ("pacman", "-Q", "omarchy-dev"), "omarchy-dev "
+    )
+    if development["valid"]:
+        # This is useful diagnostic evidence for development hosts, but it is
+        # deliberately not a release-valid substitute for stable Omarchy.
+        development["fallbackFor"] = "omarchyPackage"
+        return development
+    return stable
+
+
+def release_host_probes_pass(probes: list[dict[str, Any]]) -> bool:
+    return bool(
+        probes
+        and probes[0].get("name") == "omarchyPackage"
+        and probes[0].get("valid") is True
+        and all(probe.get("valid") is True for probe in probes[1:])
+    )
+
+
 def redact_log(payload: bytes, baseline_paths: list[str]) -> bytes:
     replacements = [
         (str(ROOT), "<repository>"),
@@ -156,6 +187,7 @@ def main() -> int:
 
     required_environment = (
         "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
+        "SHIBUMI_AGENTS_OMARCHY_PATH",
         "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
     )
     missing_environment = [
@@ -179,11 +211,13 @@ def main() -> int:
     candidate_digest, candidate_file_count = candidate_inventory()
     started = int(time.time())
     results: list[dict[str, Any]] = []
-    host_probes = [
+    host_probes = [probe_omarchy_package()]
+    host_probes.extend(
         probe_host_identity(name, command, prefix)
         for name, command, prefix in HOST_PROBES
-    ]
-    all_passed = all(probe["valid"] for probe in host_probes)
+        if name != "omarchyPackage"
+    )
+    all_passed = release_host_probes_pass(host_probes)
     baseline_paths = [os.environ[name] for name in required_environment]
 
     for gate_id, command in GATES:

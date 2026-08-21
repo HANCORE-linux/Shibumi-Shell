@@ -71,7 +71,7 @@ Item {
     refreshCount++
     lastScanRequest = scanWifi === true
     // scannerRequiresOpened models the compatibility boundary introduced by
-    // Omarchy 5f74a996; false retains the accepted b99fd91 behavior.
+    // Omarchy 5f74a996; false retains the accepted v4.0.0 behavior.
     if ((opened || !scannerRequiresOpened) && wifiDevice) {
       if (scanWifi === true) {
         scanning = true

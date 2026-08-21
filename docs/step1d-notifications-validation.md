@@ -1,8 +1,8 @@
 # Step 1D Notifications compatibility validation
 
-Status: implementation in progress on the Step 1D worktree. This slice keeps
-Omarchy as the sole Notifications owner and adds only a Shibumi primitive-row
-adapter; it does not create a second notification daemon or server.
+Status: complete for the beta.10 candidate. This slice keeps Omarchy as the
+sole Notifications owner and adds only a Shibumi primitive-row adapter; it does
+not create a second notification daemon or server.
 
 ## Reproduced failure
 
@@ -63,9 +63,11 @@ Passed:
   tab showed all 10 normal rows and the 5 DND rows remain available through
   Recent.
 
-The pinned status/contract gate remains blocked by the known installed Omarchy
-shell-content baseline drift. This is an environment validation limitation,
-not a runtime error in this slice.
+The installed-package and source-parity gates now use the official Omarchy
+`4.0.0-1`/`v4.0.0` baseline; the forward and Agents gates use their immutable
+revision-bound snapshots. This slice remains separate from the final physical
+multi-output, mixed-scale, hardware, and visual-freeze release gates.
 
-Step 1D remains open until the complete applicable contract gate, independent
-review, and final user visual/interaction acceptance are recorded.
+Step 1D remains complete. The beta.10 release checkpoint still requires clean
+final-commit evidence, independent review, and explicit recording of any
+unavailable physical visual or interaction gates.

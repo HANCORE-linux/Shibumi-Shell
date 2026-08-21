@@ -40,16 +40,16 @@ python3 tests/test_shibumi_manager.py
 ./scripts/check-aur-package
 ```
 
-For host-facing changes, run all three pinned compatibility axes:
+For host-facing changes, run all four pinned compatibility gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-baseline-20260806 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-upstream-engineering-audit-20260806 \
-  ./tests/omarchy-forward-compat-contract-regression.sh
-SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-agents-b99fd91 \
+SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-ed7bae4a \
+  ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.

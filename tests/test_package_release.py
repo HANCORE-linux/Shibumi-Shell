@@ -26,7 +26,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.9")
+        self.assertEqual(version, "0.1.1-beta.10")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -152,6 +152,7 @@ class PackageReleaseTests(unittest.TestCase):
             "tests/shibumi-suite-quattro-runtime.sh",
             "omarchy-installed-package-contract-regression.sh",
             "omarchy-installed-source-parity-contract-regression.sh",
+            "omarchy-agents-contract-regression.sh",
             "omarchy-forward-compat-contract-regression.sh",
         ):
             self.assertIn(gate, collector)
@@ -227,6 +228,7 @@ class PackageReleaseTests(unittest.TestCase):
                 "quattro-dry-run",
                 "installed-package-contract",
                 "installed-source-parity-contract",
+                "agents-contract",
                 "forward-compat-contract",
                 "quattro-runtime",
             },
@@ -276,6 +278,40 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertNotIn(str(ROOT), redacted)
         self.assertNotIn(str(Path.home()), redacted)
         self.assertNotIn(private_root, redacted)
+
+    def test_release_evidence_accepts_omarchy_dev_as_diagnostic_fallback(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_fallback", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        stable = {
+            "name": "omarchyPackage",
+            "command": ["pacman", "-Q", "omarchy"],
+            "exitCode": 1,
+            "output": "",
+            "valid": False,
+        }
+        development = {
+            "name": "omarchyDevPackage",
+            "command": ["pacman", "-Q", "omarchy-dev"],
+            "exitCode": 0,
+            "output": "omarchy-dev 4.0.0.r1-1",
+            "valid": True,
+        }
+        with patch.object(
+            module, "probe_host_identity", side_effect=[stable, development]
+        ):
+            result = module.probe_omarchy_package()
+
+        self.assertTrue(result["valid"])
+        self.assertEqual(result["name"], "omarchyDevPackage")
+        self.assertEqual(result["fallbackFor"], "omarchyPackage")
+        self.assertFalse(module.release_host_probes_pass([result]))
 
     def test_dependency_contract_matches_pkgbuild(self) -> None:
         contract = json.loads(

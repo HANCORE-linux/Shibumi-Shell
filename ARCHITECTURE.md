@@ -632,8 +632,9 @@ Current Phase 2 foundation:
   Quattro contract suite remain the acceptance boundary. Real Claude/Codex
   account-data on the current Agents host and multi-output acceptance remain
   gates. The consumed Agents manifest, update command, collectors, and record
-  schema are revision-bound to Omarchy `b99fd91` by a repository-owned
-  compatibility contract rather than inferred from mutable installed files.
+  schema are revision-bound to Omarchy `v4.0.0` (`f0020448`) by a
+  repository-owned compatibility contract rather than inferred from mutable
+  installed files.
 - G9 replaces only the official media presentation. The keep-loaded
   `omarchy.media` service remains the sole MPRIS/PipeWire selection and action
   owner while Shibumi views supply the default row, FULL/muse row, lazy panel,

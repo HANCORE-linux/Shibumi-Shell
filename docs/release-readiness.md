@@ -1,15 +1,16 @@
-# Is Shibumi 0.1.1-beta.9 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.10 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.9` is the host-owned Notifications compatibility
-prerelease candidate, merged as `6e963f0`. Its complete contract remains
+Shibumi `0.1.1-beta.10` carries the host-owned Notifications compatibility
+result merged as `6e963f0` plus the current baseline and forward-compatibility
+follow-up. Its complete contract remains
 revision-bound across the installed-package, installed-source-parity, and
 forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
 must record fresh checksummed evidence for the tagged candidate. Physical
-multi-monitor, enterprise Wi-Fi, the remaining Bluetooth workflows, and the
-pinned Omarchy baseline drift still block a stable public release.
+multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
+block a stable public release.
 
 ## Current test target
 
@@ -17,7 +18,7 @@ The current acceptance target is an internal validation system. Its hostname,
 account, and network address are intentionally not part of the public product
 documentation and are not required by Shibumi users.
 
-- **Omarchy**: `4.0.0.r1664.gb99fd91-1`
+- **Omarchy**: `4.0.0-1` (`v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7`)
 - **Runtime**: `/usr/share/omarchy/shell`
 - **Display**: `DP-1`, `2560x1440`, scale `1.0`
 - **Candidate**: 24 plugins under `hancore.shibumi.*`
@@ -31,8 +32,8 @@ no maintainer-local checkout path is part of the acceptance contract.
 
 ## Prerelease acceptance summary
 
-The beta.9 source candidate plus explicitly retained prior acceptance currently
-provides these results. Rows marked historical do not become beta.9 evidence
+The beta.10 source candidate plus explicitly retained prior acceptance currently
+provides these results. Rows marked historical do not become beta.10 evidence
 until the revision-bound release collector reruns them:
 
 | Gate | Result |
@@ -40,12 +41,12 @@ until the revision-bound release collector reruns them:
 | V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
 | Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
 | Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Installed-package baseline blocked by shell content drift; source-parity and forward axes pass |
+| Quattro compatibility | Passed against official `omarchy 4.0.0-1`, source tag `v4.0.0`, and recorded forward snapshot |
 | Plugin validation and self-containment | Passed for all 24 plugins |
-| Complete installed-package contract | Blocked: shell expected `36dfa90...`, installed content is `f365399...` |
-| Complete installed-source-parity contract | Passed against the available immutable `b99fd91` checkout |
-| Complete forward-compatibility contract | Passed against the available immutable `d6b21f80` checkout |
-| Agents integration contract | Pending: required immutable checkout is not available in the current session |
+| Complete installed-package contract | Passed against `omarchy 4.0.0-1` with the v4.0.0 package manifest |
+| Complete installed-source-parity contract | Passed against immutable `v4.0.0` (`f0020448`) |
+| Complete forward-compatibility contract | Passed against immutable `ed7bae4a` |
+| Agents integration contract | Passed against immutable `v4.0.0` (`f0020448`) |
 | Suite lifecycle unit tests | Passed: 99 of 99 |
 | Control Center manager tests | Passed: 29 of 29 |
 | Health tests | Passed: 44 of 44 |
@@ -53,7 +54,7 @@ until the revision-bound release collector reruns them:
 | Real Vesktop notification path | Passed: authoritative host history records `app: "vesktop"` and `appIcon: "vesktop"` |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Beta.8 to beta.9 exact final-commit update and clean-commit collector still required |
+| Transactional live update | Beta.9 to beta.10 exact final-commit update and clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
@@ -116,7 +117,7 @@ The V1 and V2 shell-update interface is adapted to `shibumi-suite`. The Update C
 
 ## Private alpha limits
 
-The beta.9 prerelease may be committed, tagged, and pushed to the private repository with these limits:
+The beta.10 prerelease may be committed, tagged, and pushed to the private repository with these limits:
 
 - The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
 - the validation system has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
@@ -124,12 +125,9 @@ The beta.9 prerelease may be committed, tagged, and pushed to the private reposi
 - A live Bluetooth phone connection and panel pass; pairing, audio routing,
   disconnect, and forget still need complete physical acceptance
 - A Shibumi update starts from a trusted repository checkout
-- Step 1D's final tab/layout deployment was validated locally; Machine 2 has the
-  initial host-notification probe but not the final post-layout visual pass
-- The installed Omarchy pinned baseline currently differs from the recorded
-  content digest and must be resolved or explicitly accepted as an environment
-  blocker
-
+- Step 1D's final tab/layout deployment and Machine 2 bar-continuity transition
+  were validated; a final physical Machine 2 visual-freeze comparison remains
+  unclaimed
 Fixtures cover unavailable and error behavior, but they don't replace the physical gates.
 The predecessor's multi-monitor and mixed-scale implementation is mapped into
 the Shibumi source and automated contracts, but inherited behavior does not
@@ -148,7 +146,7 @@ Before making the repository public:
 ## Release evidence
 
 `scripts/collect-release-evidence` runs the manager, suite, health, package,
-INC-013, mutation, dry-run, three complete host-contract jobs, and isolated
+INC-013, mutation, dry-run, four complete host-contract jobs, and isolated
 Quattro runtime gate. It records the exact candidate identity, commands, exit
 codes, host versions, baseline identities, bounded log paths, and SHA-256 log
 digests. The tag workflow runs this collector on the isolated validation runner

@@ -1398,15 +1398,20 @@ class Probe:
 
     def check_versions(self) -> None:
         values = []
-        for package in ("omarchy-dev", "quickshell-git"):
-            try:
-                result = run(["pacman", "-Q", package], timeout=3)
-                if result.returncode == 0:
-                    fields = result.stdout.strip().split(maxsplit=1)
-                    if len(fields) == 2:
-                        values.append(fields[1])
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+        # Stable Omarchy is authoritative for release baselines. Keep the
+        # development package as a diagnostic-only fallback for engineering
+        # hosts that intentionally provide omarchy-dev instead.
+        for package_group in (("omarchy", "omarchy-dev"), ("quickshell-git",)):
+            for package in package_group:
+                try:
+                    result = run(["pacman", "-Q", package], timeout=3)
+                    if result.returncode == 0:
+                        fields = result.stdout.strip().split(maxsplit=1)
+                        if len(fields) == 2:
+                            values.append(fields[1])
+                            break
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
         suite = safe_text(self.state.get("suiteVersion") or "unknown", 40)
         detail = "Omarchy · Quickshell" if len(values) == 2 else "Package metadata is partial."
         self.add(

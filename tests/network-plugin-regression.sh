@@ -130,6 +130,28 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "scanner lifecycle produced a QML runtime error"
 fi
 
+install -m 0644 "$repo_root/tests/network-direct-connect-smoke.qml" \
+  "$tmpdir/shell.qml"
+set +e
+direct_output=$(timeout 12 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+direct_rc=$?
+set -e
+printf '%s\n' "$direct_output"
+[[ $direct_rc -eq 0 ]] \
+  || fail "network direct-connect smoke exited $direct_rc"
+grep -F 'network direct connect smoke passed' <<<"$direct_output" >/dev/null \
+  || fail "network direct-connect success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$direct_output"; then
+  fail "network direct-connect smoke produced a QML runtime error"
+fi
+
 normal_pid_log="$tmpdir/bounded-parent-pid"
 normal_child_pid_log="$tmpdir/bounded-child-pid"
 PATH="$tmpdir/bin:$PATH" \

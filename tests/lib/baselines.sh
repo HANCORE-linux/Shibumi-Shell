@@ -292,10 +292,10 @@ shibumi_validate_agents_baseline_schema() {
 
   jq -e '
     .schemaVersion == 1
-    and .id == "omarchy-agents-b99fd91"
+    and .id == "omarchy-agents-v4.0.0"
     and .profile == "agents-current"
     and .repository == "https://github.com/basecamp/omarchy"
-    and .sourceRevision == "b99fd91cf11db92b03bbd69e4fff908662bd74a3"
+    and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
     and .provenance.kind == "git"
     and .provenance.revision == .sourceRevision
     and (.files | type == "object" and length == 6)
@@ -377,28 +377,28 @@ shibumi_load_omarchy_baseline() {
   case $profile in
     installed-package)
       requested_path=${OMARCHY_PATH:-/usr/share/omarchy}
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-b99fd91.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
       ;;
     installed-source-parity)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-b99fd91.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
       ;;
     forward-compat)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for forward-compat' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-d6b21f80.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-ed7bae4a.json"
       ;;
     agents-current)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for agents-current' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-b99fd91.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
       shibumi_validate_agents_baseline "$requested_path" "$manifest" || return
       ;;
     *)

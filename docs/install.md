@@ -20,7 +20,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> AUR registration is currently unavailable, so `0.1.1-beta.9` is not
+> AUR registration is currently unavailable, so `0.1.1-beta.10` is not
 > published there yet. This is the supported flow once AUR access returns and
 > the package is released.
 
