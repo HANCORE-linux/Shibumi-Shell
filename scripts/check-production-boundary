@@ -3,143 +3,73 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import posixpath
 import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 
-CODE_SUFFIXES = {"", ".bash", ".js", ".mjs", ".py", ".qml", ".sh"}
-
-# Exact, reviewed compatibility debt. A capability cutover removes entries; it
-# must not broaden them. This is a repository policy gate, not a hostile-code
-# sandbox: deliberate lexical obfuscation is outside its threat model.
-TOKEN_ALLOWANCES = {
-    "hancore.shibumi.ai/Service.qml": Counter({
-        "entryPointUrl": 2,
-        "registeredWidgetSource": 2,
-        "standardWidgetSource": 3,
-    }),
-    "hancore.shibumi.audio/BarWidget.qml": Counter({
-        "entryPointUrl": 2,
-        "registeredComponent": 2,
-        "registeredSource": 2,
-        "registeredWidgetComponent": 2,
-        "registeredWidgetSource": 2,
-    }),
-    "hancore.shibumi.bar/Bar.qml": Counter({
-        "entryPointUrl": 3,
-        "firstPartyServiceFor": 2,
-        "registeredWidgetComponent": 1,
-        "registeredWidgetSource": 1,
-    }),
-    "hancore.shibumi.bar/core/WidgetSlot.qml": Counter({
-        "registeredWidgetComponent": 4,
-    }),
-    "hancore.shibumi.bar/services/HostWidgetResolver.qml": Counter({
-        "Qt.createComponent": 1,
-        "entryPointUrl": 5,
-    }),
-    "hancore.shibumi.brightness/Service.qml": Counter({
-        "entryPointUrl": 2,
-        "registeredComponent": 2,
-        "registeredSource": 2,
-        "registeredWidgetComponent": 2,
-        "registeredWidgetSource": 2,
-    }),
-    "hancore.shibumi.center/BarWidget.qml": Counter({
-        "entryPointUrl": 2,
-        "registeredComponent": 2,
-        "registeredSource": 2,
-        "registeredWidgetComponent": 2,
-        "registeredWidgetSource": 2,
-    }),
-    "hancore.shibumi.center/SystemUpdateWidget.qml": Counter({
-        "firstPartyServiceFor": 2,
-    }),
-    "hancore.shibumi.media/BarWidget.qml": Counter({
-        "firstPartyServiceFor": 2,
-    }),
-    "hancore.shibumi.media/Service.qml": Counter({
-        "firstPartyServiceFor": 2,
-    }),
-    "hancore.shibumi.network/Service.qml": Counter({
-        "entryPointUrl": 2,
-        "registeredComponent": 2,
-        "registeredSource": 2,
-        "registeredWidgetComponent": 2,
-        "registeredWidgetSource": 2,
-    }),
-    "hancore.shibumi.reactor/ReactorService.qml": Counter({
-        "firstPartyService": 2,
-        "firstPartyServiceFor": 2,
-    }),
-    "hancore.shibumi.status/BarWidget.qml": Counter({
-        "entryPointUrl": 2,
-        "firstPartyServiceFor": 3,
-        "registeredComponent": 3,
-        "registeredSource": 3,
-        "registeredWidgetComponent": 2,
-        "registeredWidgetSource": 2,
-    }),
-    "hancore.shibumi.status/NotificationAdapter.qml": Counter({
-        "firstPartyServiceFor": 2,
-    }),
-    "hancore.shibumi.status/Service.qml": Counter({
-        "firstPartyServiceFor": 2,
-    }),
+CODE_SUFFIXES = {"", ".bash", ".js", ".json", ".mjs", ".py", ".qml", ".sh"}
+CATEGORIES = {
+    "hostIntegration",
+    "nativeApi",
+    "omarchyBackend",
+    "omarchyAction",
+    "hostOwnedProvider",
 }
-
-PROVIDER_ALLOWANCES = {
-    "hancore.shibumi.ai/Service.qml": {
-        "omarchy.agents", "omarchy.model-usage",
-    },
-    "hancore.shibumi.audio/BarWidget.qml": {"omarchy.audio"},
-    "hancore.shibumi.brightness/Service.qml": {"omarchy.monitor"},
-    "hancore.shibumi.center/BarWidget.qml": {"omarchy.system-update"},
-    "hancore.shibumi.network/Service.qml": {"omarchy.network"},
-    "hancore.shibumi.status/BarWidget.qml": {"omarchy.tray"},
+CARDINALITIES = {"process-wide", "output-local"}
+WORKER_POLICIES = {
+    "none",
+    "shared-demand-driven",
+    "surface-bound",
+    "host-owned",
+    "action-only",
+    "output-local-ui-only",
 }
-
-FIRST_PARTY_ALLOWANCES = {
-    "hancore.shibumi.bar/Bar.qml": {"omarchy.idle"},
-    "hancore.shibumi.center/SystemUpdateWidget.qml": {
-        "omarchy.system-update",
-    },
-    "hancore.shibumi.media/BarWidget.qml": {"omarchy.media"},
-    "hancore.shibumi.media/Service.qml": {"omarchy.media"},
-    "hancore.shibumi.reactor/ReactorService.qml": {"omarchy.media"},
-    "hancore.shibumi.status/NotificationAdapter.qml": {
-        "omarchy.notifications",
-    },
-    "hancore.shibumi.status/Service.qml": {
-        "omarchy.idle",
-    },
+RULE_KINDS = {"token", "provider", "firstPartyService", "helper"}
+TOKEN_NAMES = {
+    "entryPointUrl",
+    "firstPartyService",
+    "firstPartyServiceFor",
+    "registeredComponent",
+    "registeredSource",
+    "registeredWidgetComponent",
+    "registeredWidgetSource",
+    "standardWidgetSource",
+    "Qt.createComponent",
 }
-
-HELPER_ALLOWANCES = {
-    "hancore.shibumi.network/Service.qml": Counter({
-        "omarchy-network-status": 1,
-    }),
-    "hancore.shibumi.power-state/Service.qml": Counter({
-        "omarchy-battery-status": 1,
-        "omarchy-powerprofiles-list": 1,
-    }),
-    "hancore.shibumi.status/Service.qml": Counter({
-        "/tmp/omarchy-screenrecord-filename": 1,
-        "omarchy-voxtype-status": 1,
-        "pgrep": 1,
-    }),
-    "hancore.shibumi.quick-access/scripts/shibumi-picker": Counter({
-        "pgrep": 1,
-    }),
+REQUIRED_CAPABILITIES = {
+    "bar-host-routing",
+    "settings",
+    "telemetry",
+    "workspaces",
+    "audio",
+    "bluetooth",
+    "network",
+    "displays",
+    "battery-ac",
+    "power-profile",
+    "media",
+    "system-tray",
+    "system-update-state",
+    "omarchy-update-action",
+    "ai-usage",
+    "weather",
+    "recording-voxtype",
+    "quick-access",
+    "theme-background-selection",
+    "surface-idle-inhibition",
 }
-
-PROTECTED_TOKENS = {
-    token for allowance in TOKEN_ALLOWANCES.values() for token in allowance
+HOST_EXCEPTIONS = {
+    "notifications": "omarchy.notifications",
+    "osd": "omarchy.osd",
+    "idle": "omarchy.idle",
 }
+FIXED_OWNERS = {"quattro.host", *HOST_EXCEPTIONS.values()}
 PRIVATE_PATHS = (
     re.compile(r"/usr/share/omarchy/(?:plugins|shell)(?:/|$)"),
     re.compile(r"(?:^|[/\"'\s])shell/plugins/", re.MULTILINE),
@@ -159,7 +89,13 @@ HELPER_MARKER = re.compile(
     r"\bomarchy-[A-Za-z0-9-]*(?:status|state|list)\b|"
     r"\b(?:pgrep|pidof)\b"
 )
+HOST_ID = re.compile(r"[\"'](omarchy\.[A-Za-z0-9_-]+)[\"']")
+OMARCHY_COMMAND = re.compile(r"\bomarchy-[A-Za-z0-9_.-]+")
 RELATIVE_LITERAL = re.compile(r"[\"']([^\"']*\.\.[^\"']*)[\"']")
+
+
+class ManifestError(ValueError):
+    pass
 
 
 def add(findings: list[str], path: str, kind: str, detail: str) -> None:
@@ -183,38 +119,296 @@ def production_files(root: Path) -> list[tuple[Path, Path]]:
     return files
 
 
-def compare_exact(
-    findings: list[str], relative: str, kind: str,
-    observed: Counter[str], allowed: Counter[str],
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ManifestError(message)
+
+
+def string_field(value: Any, name: str) -> str:
+    require(isinstance(value, str) and value != "", f"{name} must be a non-empty string")
+    return value
+
+
+def load_suite_owners(root: Path) -> set[str]:
+    suite_path = root / "contracts/plugin-suite-v1.json"
+    require(suite_path.is_file(), "plugin suite contract is required")
+    try:
+        suite = json.loads(suite_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ManifestError(f"cannot read plugin suite contract: {error}") from error
+    plugins = suite.get("plugins")
+    require(
+        isinstance(plugins, list) and len(plugins) > 0,
+        "plugin suite plugins must be a non-empty array",
+    )
+    owners: set[str] = set()
+    for plugin in plugins:
+        require(isinstance(plugin, dict), "plugin suite plugin must be an object")
+        owners.add(string_field(plugin.get("id"), "plugin id"))
+    return owners
+
+
+def validate_transition(
+    entry: dict[str, Any],
+    context: str,
+    transitional_backends: set[str],
 ) -> None:
-    for token, count in sorted((observed - allowed).items()):
-        add(findings, relative, kind, f"{token} occurs {count} unapproved time(s)")
-    for token, count in sorted((allowed - observed).items()):
-        add(
-            findings,
-            relative,
-            kind,
-            f"approved {token} occurrence disappeared {count} time(s); "
-            "remove or update its narrow allowance",
+    category = entry.get("category", entry.get("backendBoundary"))
+    if category != "omarchyBackend":
+        require("removalStep" not in entry, f"{context}: removalStep is only valid for omarchyBackend")
+        require("backend" not in entry, f"{context}: backend is only valid for omarchyBackend")
+        return
+    backend = string_field(entry.get("backend"), f"{context}.backend")
+    require(
+        backend in transitional_backends,
+        f"{context}: unknown transitional backend {backend}",
+    )
+    removal_step = string_field(entry.get("removalStep"), f"{context}.removalStep")
+    require(
+        re.fullmatch(r"Step (?:4A|4B|5|6|7|8)", removal_step) is not None,
+        f"{context}: invalid removalStep {removal_step}",
+    )
+    reason = string_field(entry.get("reason"), f"{context}.reason")
+    require(len(reason) >= 12, f"{context}: transition reason is too short")
+
+
+def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], bool]:
+    require(manifest.get("schemaVersion") == 1, "schemaVersion must be 1")
+    require(
+        manifest.get("manifestId") == "hancore.shibumi.backend-boundary",
+        "manifestId is not the Shibumi backend boundary contract",
+    )
+    categories = manifest.get("categories")
+    require(isinstance(categories, list) and set(categories) == CATEGORIES and len(categories) == len(CATEGORIES), "categories are not the exact boundary enum")
+    require(set(manifest.get("outputCardinalities", [])) == CARDINALITIES, "output cardinalities drifted")
+    require(set(manifest.get("workerPolicies", [])) == WORKER_POLICIES, "worker policies drifted")
+    transitional = manifest.get("transitionalBackends")
+    require(isinstance(transitional, list), "transitionalBackends must be an array")
+    require(
+        len(transitional) > 0
+        and len(set(transitional)) == len(transitional)
+        and all(
+            isinstance(backend, str)
+            and re.fullmatch(r"omarchy\.[A-Za-z0-9_.-]+", backend)
+            for backend in transitional
+        ),
+        "transitionalBackends contains an invalid or duplicate backend",
+    )
+    transitional_backends = set(transitional)
+
+    capabilities = manifest.get("capabilities")
+    require(isinstance(capabilities, list), "capabilities must be an array")
+    capability_ids = [string_field(item.get("id"), "capability id") for item in capabilities if isinstance(item, dict)]
+    require(len(capability_ids) == len(capabilities), "each capability must be an object")
+    require(len(set(capability_ids)) == len(capability_ids), "duplicate capability id")
+    require(set(capability_ids) == REQUIRED_CAPABILITIES, "capability inventory is incomplete or unknown")
+
+    suite_owners = load_suite_owners(root)
+    known_owners = set(FIXED_OWNERS)
+    known_owners.update(suite_owners)
+    for capability in capabilities:
+        context = f"capability {capability.get('id', '<unknown>')}"
+        owner = string_field(capability.get("owner"), f"{context}.owner")
+        if suite_owners:
+            require(owner in suite_owners, f"{context}: unknown owner {owner}")
+        else:
+            require(owner in suite_owners, f"{context}: unknown owner {owner}")
+        boundary = string_field(capability.get("backendBoundary"), f"{context}.backendBoundary")
+        require(boundary in CATEGORIES, f"{context}: unknown category {boundary}")
+        require(
+            boundary != "hostOwnedProvider",
+            f"{context}: hostOwnedProvider is reserved for Notifications, OSD, and Idle",
+        )
+        cardinality = string_field(capability.get("outputCardinality"), f"{context}.outputCardinality")
+        require(cardinality in CARDINALITIES, f"{context}: unknown output cardinality {cardinality}")
+        policy = string_field(capability.get("workerPolicy"), f"{context}.workerPolicy")
+        require(policy in WORKER_POLICIES, f"{context}: unknown worker policy {policy}")
+        string_field(capability.get("reason"), f"{context}.reason")
+        if cardinality == "process-wide" and owner not in FIXED_OWNERS:
+            owner_manifest = root / owner / "manifest.json"
+            if owner_manifest.is_file():
+                try:
+                    owner_data = json.loads(owner_manifest.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                    raise ManifestError(f"{context}: cannot read owner manifest: {error}") from error
+                require(
+                    isinstance(owner_data, dict)
+                    and "service" in owner_data.get("kinds", [])
+                    and isinstance(owner_data.get("entryPoints", {}).get("service"), str),
+                    f"{context}: process-wide owner must expose one service entry point",
+                )
+        validate_transition(
+            capability, context, transitional_backends
         )
 
+    providers = manifest.get("hostOwnedProviders")
+    require(isinstance(providers, list), "hostOwnedProviders must be an array")
+    provider_ids = [string_field(item.get("id"), "host provider id") for item in providers if isinstance(item, dict)]
+    require(len(provider_ids) == len(providers), "each host provider must be an object")
+    require(
+        len(provider_ids) == len(HOST_EXCEPTIONS)
+        and len(set(provider_ids)) == len(provider_ids)
+        and set(provider_ids) == set(HOST_EXCEPTIONS),
+        "Notifications, OSD, and Idle must be the only host exceptions",
+    )
+    host_provider_map: dict[str, dict[str, Any]] = {}
+    for provider in providers:
+        context = f"host provider {provider.get('id', '<unknown>')}"
+        provider_id = string_field(provider.get("id"), f"{context}.id")
+        expected = HOST_EXCEPTIONS[provider_id]
+        require(provider.get("provider") == expected, f"{context}: provider identity drifted")
+        require(provider.get("owner") == expected, f"{context}: owner must be {expected}")
+        require(provider.get("category") == "hostOwnedProvider", f"{context}: category must be hostOwnedProvider")
+        require(provider.get("outputCardinality") == "process-wide", f"{context}: host providers must be process-wide")
+        require(provider.get("workerPolicy") == "host-owned", f"{context}: worker policy must be host-owned")
+        forms = provider.get("allowedForms")
+        expected_forms = {
+            "notifications": {"hostId", "firstPartyService"},
+            "osd": {"hostAction"},
+            "idle": {"hostId", "firstPartyService"},
+        }[provider_id]
+        require(
+            isinstance(forms, list)
+            and set(forms) == expected_forms
+            and len(forms) == len(expected_forms),
+            f"{context}: allowedForms drifted",
+        )
+        string_field(provider.get("reason"), f"{context}.reason")
+        validate_transition(provider, context, transitional_backends)
+        host_provider_map[expected] = provider
 
-def check_tree(root: Path) -> list[str]:
+    allowed_capabilities = REQUIRED_CAPABILITIES | {"notifications", "osd", "idle-policy"}
+    allowed_owners = set(known_owners)
+    allowed_owners.update(HOST_EXCEPTIONS.values())
+    allowed_owners.add("quattro.host")
+    rules = manifest.get("rules")
+    require(isinstance(rules, list), "rules must be an array")
+    rule_keys: set[tuple[str, str, str]] = set()
+    for index, rule in enumerate(rules):
+        context = f"rule {index}"
+        require(isinstance(rule, dict), f"{context} must be an object")
+        source = string_field(rule.get("source"), f"{context}.source")
+        require(".." not in Path(source).parts and source.startswith("hancore.shibumi."), f"{context}: invalid production source")
+        kind = string_field(rule.get("kind"), f"{context}.kind")
+        require(kind in RULE_KINDS, f"{context}: unknown rule kind {kind}")
+        value = rule.get("target") if kind in {"provider", "firstPartyService"} else rule.get("value")
+        value = string_field(value, f"{context}.value")
+        key = (source, kind, value)
+        require(key not in rule_keys, f"{context}: duplicate dependency rule")
+        rule_keys.add(key)
+        count = rule.get("count")
+        require(isinstance(count, int) and count > 0, f"{context}: count must be a positive integer")
+        category = string_field(rule.get("category"), f"{context}.category")
+        require(category in CATEGORIES, f"{context}: unknown category {category}")
+        owner = string_field(rule.get("owner"), f"{context}.owner")
+        require(owner in allowed_owners, f"{context}: unknown owner {owner}")
+        capability = string_field(rule.get("capability"), f"{context}.capability")
+        require(capability in allowed_capabilities, f"{context}: unknown capability {capability}")
+        if value in HOST_EXCEPTIONS.values():
+            require(category == "hostOwnedProvider", f"{context}: host exception identity must be hostOwnedProvider")
+            require(owner == value, f"{context}: host exception owner must be {value}")
+        if kind in {"provider", "firstPartyService"}:
+            require(re.fullmatch(r"omarchy\.[A-Za-z0-9_.-]+", value) is not None, f"{context}: invalid provider id")
+        if kind == "firstPartyService" and category == "hostOwnedProvider":
+            require(value in HOST_EXCEPTIONS.values(), f"{context}: undeclared host provider")
+        if category == "hostOwnedProvider":
+            require(
+                value in HOST_EXCEPTIONS.values(),
+                f"{context}: only Notifications, OSD, and Idle may be hostOwnedProvider",
+            )
+            require(
+                kind in {"firstPartyService"}
+                and kind in host_provider_map[value]["allowedForms"],
+                f"{context}: host provider form is not declared",
+            )
+        validate_transition(rule, context, transitional_backends)
+
+    for key, collection_name in (("hostIdRules", "hostIdRules"), ("commandRules", "commandRules")):
+        entries = manifest.get(key)
+        require(isinstance(entries, list), f"{collection_name} must be an array")
+        seen: set[str] = set()
+        for index, entry in enumerate(entries):
+            context = f"{collection_name} {index}"
+            require(isinstance(entry, dict), f"{context} must be an object")
+            value_key = "target" if key == "hostIdRules" else "value"
+            value = string_field(entry.get(value_key), f"{context}.{value_key}")
+            require(value not in seen, f"{context}: duplicate global dependency")
+            seen.add(value)
+            if key == "hostIdRules":
+                require(re.fullmatch(r"omarchy\.[A-Za-z0-9_-]+", value) is not None, f"{context}: invalid host id")
+                kind = "hostId"
+            else:
+                require(re.fullmatch(r"omarchy-[A-Za-z0-9_.-]+", value) is not None, f"{context}: invalid command")
+                kind = "hostAction"
+            count = entry.get("count")
+            require(isinstance(count, int) and count > 0, f"{context}: count must be a positive integer")
+            category = string_field(entry.get("category"), f"{context}.category")
+            require(category in CATEGORIES, f"{context}: unknown category {category}")
+            owner = string_field(entry.get("owner"), f"{context}.owner")
+            require(owner in allowed_owners, f"{context}: unknown owner {owner}")
+            capability = string_field(entry.get("capability"), f"{context}.capability")
+            require(capability in allowed_capabilities, f"{context}: unknown capability {capability}")
+            if value in HOST_EXCEPTIONS.values():
+                require(category == "hostOwnedProvider", f"{context}: host exception identity must be hostOwnedProvider")
+                require(owner == value, f"{context}: host exception owner must be {value}")
+            if category == "hostOwnedProvider":
+                require(
+                    value in HOST_EXCEPTIONS.values(),
+                    f"{context}: only declared host providers may be hostOwnedProvider",
+                )
+                require(
+                    kind == "hostId"
+                    and "hostId" in host_provider_map[value]["allowedForms"],
+                    f"{context}: host provider form is not declared",
+                )
+            validate_transition(entry, context, transitional_backends)
+
+    return allowed_owners, bool(suite_owners)
+
+
+def compare_exact(
+    findings: list[str], path: str, kind: str,
+    observed: Counter[str], allowed: Counter[str],
+    *,
+    report_missing: bool,
+) -> None:
+    for token, count in sorted((observed - allowed).items()):
+        add(findings, path, kind, f"{token} occurs {count} unapproved time(s)")
+    if report_missing:
+        for token, count in sorted((allowed - observed).items()):
+            add(
+                findings,
+                path,
+                kind,
+                f"approved {token} occurrence disappeared {count} time(s); remove or update its narrow manifest rule",
+            )
+
+
+def rules_for(manifest: dict[str, Any], source: str, kind: str) -> list[dict[str, Any]]:
+    return [rule for rule in manifest["rules"] if rule["source"] == source and rule["kind"] == kind]
+
+
+def check_tree(root: Path, manifest_path: Path) -> list[str]:
     root = root.resolve()
     findings: list[str] = []
-    visited: set[str] = set()
-    present_plugins = {
-        path.name for path in root.glob("hancore.shibumi.*") if path.is_dir()
-    }
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            raise ManifestError("manifest root must be an object")
+        _, complete_suite = validate_manifest(root, manifest)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ManifestError) as error:
+        return [f"boundary manifest: invalid: {error}"]
 
-    for path, plugin in production_files(root):
+    files = production_files(root)
+    visited: set[str] = set()
+    present_plugins = {path.name for path in root.glob("hancore.shibumi.*") if path.is_dir()}
+    source_text: dict[str, str] = {}
+    for path, plugin in files:
         relative = path.relative_to(root).as_posix()
         visited.add(relative)
         resolved_plugin = plugin.resolve()
         if path.is_symlink():
-            kind = "package escape" \
-                if not path.resolve().is_relative_to(resolved_plugin) \
-                else "production symlink"
+            kind = "package escape" if not path.resolve().is_relative_to(resolved_plugin) else "production symlink"
             add(findings, relative, kind, "production symlinks are not allowed")
             continue
         try:
@@ -222,55 +416,38 @@ def check_tree(root: Path) -> list[str]:
         except UnicodeDecodeError:
             add(findings, relative, "undecodable production source", "not UTF-8")
             continue
+        source_text[relative] = text
 
         for pattern in PRIVATE_PATHS:
             if pattern.search(text):
                 add(findings, relative, "private component path", pattern.pattern)
 
-        observed_tokens: Counter[str] = Counter()
-        for token in PROTECTED_TOKENS:
+        token_rules = rules_for(manifest, relative, "token")
+        protected_observed: Counter[str] = Counter()
+        for token in TOKEN_NAMES:
             count = text.count(token) if "." in token else len(re.findall(
-                rf"(?<![A-Za-z0-9_$]){re.escape(token)}(?![A-Za-z0-9_$])",
-                text,
+                rf"(?<![A-Za-z0-9_$]){re.escape(token)}(?![A-Za-z0-9_$])", text
             ))
             if count:
-                observed_tokens[token] = count
+                protected_observed[token] = count
+        protected_allowed = Counter({rule["value"]: rule["count"] for rule in token_rules})
         compare_exact(
-            findings,
-            relative,
-            "hidden component loading",
-            observed_tokens,
-            TOKEN_ALLOWANCES.get(relative, Counter()),
+            findings, relative, "hidden component loading",
+            protected_observed, protected_allowed,
+            report_missing=complete_suite or relative.split("/", 1)[0] in present_plugins,
         )
 
-        providers = {match.group(1) for match in PROVIDER_CALL.finditer(text)}
-        allowed_providers = PROVIDER_ALLOWANCES.get(relative, set())
-        if providers != allowed_providers:
-            add(
-                findings,
-                relative,
-                "private provider QML",
-                f"observed {sorted(providers)}, allowed {sorted(allowed_providers)}",
-            )
+        provider_observed = Counter(match.group(1) for match in PROVIDER_CALL.finditer(text))
+        provider_allowed = Counter({rule["target"]: rule["count"] for rule in rules_for(manifest, relative, "provider")})
+        compare_exact(findings, relative, "private provider QML", provider_observed, provider_allowed, report_missing=complete_suite or relative.split("/", 1)[0] in present_plugins)
 
-        first_party = {match.group(1) for match in FIRST_PARTY_CALL.finditer(text)}
-        allowed_first_party = FIRST_PARTY_ALLOWANCES.get(relative, set())
-        if first_party != allowed_first_party:
-            add(
-                findings,
-                relative,
-                "undeclared first-party service",
-                f"observed {sorted(first_party)}, allowed {sorted(allowed_first_party)}",
-            )
+        first_party_observed = Counter(match.group(1) for match in FIRST_PARTY_CALL.finditer(text))
+        first_party_allowed = Counter({rule["target"]: rule["count"] for rule in rules_for(manifest, relative, "firstPartyService")})
+        compare_exact(findings, relative, "undeclared first-party service", first_party_observed, first_party_allowed, report_missing=complete_suite or relative.split("/", 1)[0] in present_plugins)
 
-        helper_counts = Counter(HELPER_MARKER.findall(text))
-        compare_exact(
-            findings,
-            relative,
-            "helper-backed state polling",
-            helper_counts,
-            HELPER_ALLOWANCES.get(relative, Counter()),
-        )
+        helper_observed = Counter(match.group(0) for match in HELPER_MARKER.finditer(text))
+        helper_allowed = Counter({rule["value"]: rule["count"] for rule in rules_for(manifest, relative, "helper")})
+        compare_exact(findings, relative, "helper-backed state polling", helper_observed, helper_allowed, report_missing=complete_suite or relative.split("/", 1)[0] in present_plugins)
 
         for match in RELATIVE_LITERAL.finditer(text):
             value = posixpath.normpath(match.group(1))
@@ -278,41 +455,35 @@ def check_tree(root: Path) -> list[str]:
                 continue
             resolved = (path.parent / value).resolve()
             if not resolved.is_relative_to(resolved_plugin):
-                add(
-                    findings,
-                    relative,
-                    "package escape",
-                    f"relative literal leaves plugin: {match.group(1)}",
-                )
+                add(findings, relative, "package escape", f"relative literal leaves plugin: {match.group(1)}")
 
-    allowed_paths = set(TOKEN_ALLOWANCES) | set(PROVIDER_ALLOWANCES) \
-        | set(FIRST_PARTY_ALLOWANCES) | set(HELPER_ALLOWANCES)
-    complete_suite = (root / "contracts/plugin-suite-v1.json").is_file()
+    allowed_paths = {rule["source"] for rule in manifest["rules"]}
     for allowed_path in sorted(allowed_paths - visited):
         if complete_suite or allowed_path.split("/", 1)[0] in present_plugins:
-            add(
-                findings,
-                allowed_path,
-                "stale boundary allowance",
-                "allowlisted production file is missing",
-            )
+            add(findings, allowed_path, "stale boundary rule", "declared production source is missing")
+
+    observed_host_ids: Counter[str] = Counter()
+    observed_commands: Counter[str] = Counter()
+    for text in source_text.values():
+        observed_host_ids.update(match.group(1) for match in HOST_ID.finditer(text))
+        observed_commands.update(match.group(0) for match in OMARCHY_COMMAND.finditer(text))
+    allowed_host_ids = Counter({entry["target"]: entry["count"] for entry in manifest["hostIdRules"]})
+    allowed_commands = Counter({entry["value"]: entry["count"] for entry in manifest["commandRules"]})
+    compare_exact(findings, "<production tree>", "undeclared host dependency", observed_host_ids, allowed_host_ids, report_missing=complete_suite)
+    compare_exact(findings, "<production tree>", "undeclared Omarchy command", observed_commands, allowed_commands, report_missing=complete_suite)
     return sorted(set(findings))
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Reject undeclared private backends in shipped Shibumi plugins."
-    )
-    parser.add_argument(
-        "--root",
-        type=Path,
-        default=Path(__file__).resolve().parents[1],
-        help="tree containing hancore.shibumi.* plugin directories",
-    )
+    parser = argparse.ArgumentParser(description="Reject undeclared private backends in shipped Shibumi plugins.")
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1], help="tree containing hancore.shibumi.* plugin directories")
+    parser.add_argument("--manifest", type=Path, help="boundary manifest; defaults to <root>/contracts/backend-boundary-v1.json")
     args = parser.parse_args()
-    if not args.root.is_dir():
-        parser.error(f"production root is not a directory: {args.root}")
-    findings = check_tree(args.root)
+    root = args.root
+    if not root.is_dir():
+        parser.error(f"production root is not a directory: {root}")
+    manifest = args.manifest or root / "contracts/backend-boundary-v1.json"
+    findings = check_tree(root, manifest)
     if findings:
         for finding in findings:
             print(f"production boundary error: {finding}", file=sys.stderr)

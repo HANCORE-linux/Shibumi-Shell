@@ -227,7 +227,38 @@ Only behavior proven to be host-neutral should move from QS Rise V1 to Shibumi. 
 be adapted to the Shibumi ownership model rather than copied together with QS Rise paths,
 hooks, polling, or lifecycle scripts.
 
-### Why A Full-Bar Plugin
+### Compact Enforceable Backend Boundary
+
+The machine-readable boundary contract is
+[`contracts/backend-boundary-v1.json`](contracts/backend-boundary-v1.json). It is
+the only repository boundary source for production dependency classification;
+it is not a status system and does not replace the suite contract or release
+readiness record. `scripts/check-production-boundary` loads that manifest and
+fails closed on malformed or incomplete declarations.
+
+Every mutable capability declares one owner, its current backend boundary, its
+output cardinality, and its worker policy. Production dependencies are classified
+as exactly one of `hostIntegration`, `nativeApi`, `omarchyBackend`,
+`omarchyAction`, or `hostOwnedProvider`. A transitional `omarchyBackend` must
+name a known backend, an explicit `removalStep`, and a reason. New categories,
+owners, backend identities, host providers, or undeclared occurrences fail the
+lint rather than becoming implicit compatibility debt.
+
+The only host-owned provider exceptions are Omarchy Notifications, OSD, and
+Idle. Their provider identities, owners, allowed forms, process-wide cardinality,
+and host-owned worker policy are declared explicitly in the boundary manifest.
+No other `firstPartyServiceFor`, private provider QML, hidden component, helper
+state poller, or output-duplicated capability owner is permitted. OSD remains an
+explicit host summon/IPC action; it is not a Shibumi provider.
+
+The production lint runs in source and package gates. It checks exact reviewed
+occurrences, private component paths, provider and first-party service calls,
+Omarchy commands, helper-backed state markers, package escapes, symlinks, and
+UTF-8 source. Compatibility debt may be removed by a later migration step, but
+it may not be broadened silently. This boundary slice does not activate Audio,
+Network, Bluetooth, or any other backend cutover.
+
+## Why A Full-Bar Plugin
 
 Replacing individual widgets on Omarchy's built-in bar is the lower-risk choice
 when a product only changes widget content or visual tokens. Whiterose documents

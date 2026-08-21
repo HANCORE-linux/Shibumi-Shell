@@ -30,6 +30,28 @@ digests in
 [`quickshell-dots-d0896fc-v2-deec8103.json`](../contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json);
 no maintainer-local checkout path is part of the acceptance contract.
 
+## Step 2 boundary checkpoint
+
+The compact production boundary is implemented without a backend cutover. The
+single machine-readable source is
+[`backend-boundary-v1.json`](../contracts/backend-boundary-v1.json); it declares
+all capability owners, current boundaries, output cardinality, worker policy,
+explicit transition steps, and only the Notifications, OSD, and Idle host-owned
+exceptions. `scripts/check-production-boundary` is manifest-driven and fails
+closed on unknown categories, owners, transitional backends, private providers,
+hidden components, helper-backed state, undeclared commands, package escapes,
+and output-owner contract drift.
+
+Validation passed on the dedicated Step 2 worktree based on `e92d8ee`:
+
+- production boundary lint and 11 focused boundary regression tests;
+- package (13), suite (99), and health (44) unit gates passed;
+- documentation, plugin-suite, AUR scaffold, `git diff --check`, and the complete
+  pinned contract regression passed.
+
+No Audio, Network, Bluetooth, or other backend cutover was performed. Beta.10,
+its tag, release, and the consumed Omarchy baselines remain unchanged.
+
 ## Prerelease acceptance summary
 
 The beta.10 source candidate plus explicitly retained prior acceptance currently

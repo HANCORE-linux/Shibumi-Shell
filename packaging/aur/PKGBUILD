@@ -48,6 +48,8 @@ package() {
     "$appdir/contracts/host-facade-v1.json"
   install -Dm644 contracts/package-runtime-v1.json \
     "$appdir/contracts/package-runtime-v1.json"
+  install -Dm644 contracts/backend-boundary-v1.json \
+    "$appdir/contracts/backend-boundary-v1.json"
   install -Dm755 scripts/shibumi-suite "$appdir/scripts/shibumi-suite"
   cp -a --no-preserve=ownership scripts/shibumi_suite "$appdir/scripts/"
   install -Dm644 VERSION "$appdir/VERSION"

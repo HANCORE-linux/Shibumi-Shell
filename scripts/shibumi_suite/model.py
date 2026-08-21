@@ -395,6 +395,7 @@ class Suite:
                     "--ignored=matching",
                     "--",
                     "contracts/plugin-suite-v1.json",
+                    "contracts/backend-boundary-v1.json",
                     *(sorted(self.plugins)),
                 ],
                 check=True,
@@ -413,7 +414,10 @@ class Suite:
             except (IndexError, ValueError):
                 dirty = True
                 break
-            if relative.as_posix() == "contracts/plugin-suite-v1.json":
+            if relative.as_posix() in {
+                "contracts/plugin-suite-v1.json",
+                "contracts/backend-boundary-v1.json",
+            }:
                 dirty = True
                 break
             if not relative.parts or relative.parts[0] not in self.plugins:

@@ -116,6 +116,7 @@ def main() -> int:
             "usr/bin/shibumi-shell",
             "usr/share/shibumi-shell/VERSION",
             "usr/share/shibumi-shell/PACKAGE-METADATA.json",
+            "usr/share/shibumi-shell/contracts/backend-boundary-v1.json",
             "usr/share/shibumi-shell/scripts/shibumi-suite",
             "usr/share/licenses/shibumi-shell/LICENSE",
         }

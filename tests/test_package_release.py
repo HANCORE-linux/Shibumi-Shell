@@ -55,6 +55,14 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn('"$pkgdir/usr/bin/shibumi-shell"', pkgbuild)
         self.assertNotIn("$HOME", pkgbuild)
         self.assertNotIn(".config/omarchy", pkgbuild)
+        self.assertIn(
+            'contracts/backend-boundary-v1.json',
+            pkgbuild,
+        )
+        aur_check = (ROOT / "scripts/check-aur-package").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scripts/check-production-boundary", aur_check)
         hooks = list((ROOT / "packaging").rglob("*.install"))
         hooks += list((ROOT / "packaging").rglob("*.hook"))
         self.assertEqual(hooks, [])
