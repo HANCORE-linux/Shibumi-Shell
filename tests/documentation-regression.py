@@ -36,9 +36,9 @@ PLUGIN_COUNT_DOCUMENTS = (
 )
 BLUETOOTH_OWNERSHIP_SURFACES = (
     "ARCHITECTURE.md",
-    "docs/phase2-validation.md",
     "docs/phase2-ownership-map.md",
-    "docs/plugin-suite-inventory.md",
+    "docs/plugins/README.md",
+    "docs/release-readiness.md",
     "docs/v1-widget-parity-audit.md",
     "tests/fixtures/ControlCenterTestPanel.qml",
 )

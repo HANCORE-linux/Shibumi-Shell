@@ -73,7 +73,6 @@ For parity and release evidence:
 | [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
 | [Release workflow](development/release.md) | Beta preparation, immutable assets, and publication gates |
 | [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
-| [Development handoff](project-state-2026-07-30.md) | Resume coordinates, latest implementation slice, open issues, and next work |
 | [Changelog](../CHANGELOG.md) | User-visible changes by version |
 
 Machine-readable contracts under [`../contracts/`](../contracts/) and the
@@ -94,10 +93,10 @@ current source define exact schema fields, plugin IDs, and executable defaults.
 
 ## Validation and historical records
 
-The dated project-state, phase-validation, inventory, migration, and
-predecessor-evidence documents remain in this directory so existing links stay
-valid. Use them for provenance, not for the current release decision. When
-summaries disagree, [release readiness](release-readiness.md) is current.
+Historical audit and predecessor evidence remains available under
+`docs/audits/` and in the explicitly named predecessor-evidence document. It is
+provenance only, not current product guidance. When summaries disagree,
+[release readiness](release-readiness.md) is current.
 
 ## Updating the contract
 

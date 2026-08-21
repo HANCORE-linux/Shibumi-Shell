@@ -383,10 +383,9 @@ presentation.
 
 The normative repository and migration contract is
 [`docs/plugin-suite-migration-plan.md`](docs/plugin-suite-migration-plan.md).
-The current ownership ledger is
-[`docs/plugin-suite-inventory.md`](docs/plugin-suite-inventory.md), and the
-versioned widget-to-bar API is
-[`docs/host-facade-v1.md`](docs/host-facade-v1.md).
+The current plugin inventory is
+[`docs/plugins/README.md`](docs/plugins/README.md), and the versioned
+widget-to-bar API is [`docs/host-facade-v1.md`](docs/host-facade-v1.md).
 Application-menu ownership is an explicit exclusion: Omarchy owns it and
 Shibumi must not ship a `menu` kind or application-menu service.
 

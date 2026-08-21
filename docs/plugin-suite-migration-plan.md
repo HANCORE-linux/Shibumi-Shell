@@ -19,9 +19,9 @@ This boundary is required for three product goals:
    copying their implementations.
 
 The repository root has no installable `manifest.json`. The retired combined
-prototype and its application-menu declaration have been removed. The
-historical extraction ledger in `plugin-suite-inventory.md` explains file
-provenance but is not normative for the current tree.
+prototype and its application-menu declaration have been removed. The current
+plugin inventory is maintained in [`plugins/README.md`](plugins/README.md);
+release status is maintained in [`release-readiness.md`](release-readiness.md).
 
 ## Verified Host Constraint
 

@@ -285,8 +285,8 @@ Außerdem werden die falschen Verträge und Dokumentationsaussagen korrigiert:
 - `tests/bluetooth-plugin-regression.sh`
 - `tests/bluetooth-plugin-smoke.qml`
 - Bluetooth-Fixtures unter `tests/fixtures/`
-- `docs/phase2-validation.md`
 - `docs/phase2-ownership-map.md`
+- `docs/release-readiness.md`
 
 - [x] Keine Datei unter `/usr/share/omarchy` verändern.
 - [x] Keine Runtime-Warnung unterdrücken.
@@ -656,11 +656,11 @@ Medium-Befunde, aber zwei niedrige Nachweislücken:
 - Der erfolgreiche Doppel-Toggle las den wiederhergestellten Fixture-Zustand
   zwar nach einem kurzen Zwischenschritt, jedoch ohne explizit bestätigten
   QML-Event-Loop-Turn.
-- `phase2-validation.md`, `phase2-ownership-map.md` und
-  `plugin-suite-inventory.md` beschrieben noch das entfernte vollständige
-  Omarchy-Bluetooth-Backend. Eine repositoryweite Suche zeigte dieselbe
-  veraltete Eigentumsaussage zusätzlich in `v1-widget-parity-audit.md` sowie
-  eine veraltete Timerzahl in `ARCHITECTURE.md`.
+- Die entfernten historischen Extraktionsdokumente beschrieben noch das
+  vollständige Omarchy-Bluetooth-Backend. Eine repositoryweite Suche zeigte
+  dieselbe veraltete Eigentumsaussage zusätzlich in
+  `v1-widget-parity-audit.md` sowie eine veraltete Timerzahl in
+  `ARCHITECTURE.md`.
 
 Die Korrektur verwendet für Erfolgs- und Abbruchpfad denselben
 generationsgebundenen `Qt.callLater`-Nachweis. Ein Dokumentations-Guard lehnt
