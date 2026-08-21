@@ -37,13 +37,19 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
                 contracts / "plugin-suite-v1.json",
             )
 
+    def copy_production_tree(self, root: Path) -> None:
+        self.copy_contracts(root)
+        for plugin in sorted(ROOT.glob("hancore.shibumi.*")):
+            if plugin.is_dir():
+                shutil.copytree(plugin, root / plugin.name, symlinks=True)
+
     def fixture_result(
         self, source: str, name: str = "Service.qml"
     ) -> subprocess.CompletedProcess[str]:
         temporary = tempfile.TemporaryDirectory(prefix="shibumi-boundary-test.")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
-        self.copy_contracts(root)
+        self.copy_production_tree(root)
         plugin = root / "hancore.shibumi.fixture"
         plugin.mkdir()
         (plugin / name).write_text(source, encoding="utf-8")
@@ -95,7 +101,7 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
+            self.copy_production_tree(root)
             plugin = root / "hancore.shibumi.fixture"
             plugin.mkdir()
             executable = plugin / "probe.bin"
@@ -120,7 +126,7 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
+            self.copy_production_tree(root)
             payload = root / "payload"
             payload.mkdir()
             (payload / "Service.qml").write_text(
@@ -136,7 +142,7 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
+            self.copy_production_tree(root)
             plugin = root / "hancore.shibumi.fixture"
             plugin.mkdir()
             target = plugin / "payload.bin"
@@ -151,9 +157,8 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
+            self.copy_production_tree(root)
             plugin = root / "hancore.shibumi.status"
-            plugin.mkdir()
             source = (
                 ROOT / "hancore.shibumi.status/Service.qml"
             ).read_text(encoding="utf-8")
@@ -170,9 +175,12 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
-            plugin = root / "hancore.shibumi.media"
-            plugin.mkdir()
+            self.copy_production_tree(root)
+            (root / "hancore.shibumi.media/Service.qml").unlink()
+            owner_manifest = root / "hancore.shibumi.media/manifest.json"
+            owner_data = json.loads(owner_manifest.read_text(encoding="utf-8"))
+            owner_data["entryPoints"]["service"] = "BarWidget.qml"
+            owner_manifest.write_text(json.dumps(owner_data), encoding="utf-8")
             result = self.run_linter(root)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn(
@@ -180,12 +188,13 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
                 result.stderr,
             )
 
-    def test_complete_suite_rejects_allowance_for_missing_plugin(self) -> None:
+    def test_complete_suite_rejects_missing_process_wide_owner_plugin(self) -> None:
         with tempfile.TemporaryDirectory(
             prefix="shibumi-boundary-test."
         ) as temporary:
             root = Path(temporary)
-            self.copy_contracts(root)
+            self.copy_production_tree(root)
+            shutil.rmtree(root / "hancore.shibumi.audio")
             contracts = root / "contracts"
             (contracts / "plugin-suite-v1.json").write_text(
                 (ROOT / "contracts/plugin-suite-v1.json").read_text(
@@ -195,10 +204,125 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
             )
             result = self.run_linter(root)
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertIn(
-                "hancore.shibumi.audio/BarWidget.qml: stale boundary rule",
-                result.stderr,
-            )
+            self.assertIn("suite contract invalid", result.stderr)
+
+    def test_transition_ledger_rejects_reclassified_entries(self) -> None:
+        def reclassify(entry: dict[str, object], boundary_key: str) -> None:
+            entry[boundary_key] = "nativeApi"
+            entry.pop("backend", None)
+            entry.pop("removalStep", None)
+
+        mutations = {
+            "capability": lambda data: reclassify(
+                next(item for item in data["capabilities"] if item["id"] == "audio"),
+                "backendBoundary",
+            ),
+            "rule": lambda data: reclassify(
+                next(
+                    item for item in data["rules"]
+                    if item.get("kind") == "provider"
+                    and item.get("target") == "omarchy.audio"
+                ),
+                "category",
+            ),
+            "host-id": lambda data: reclassify(
+                next(item for item in data["hostIdRules"] if item["target"] == "omarchy.audio"),
+                "category",
+            ),
+            "command": lambda data: reclassify(
+                next(item for item in data["commandRules"] if item["value"] == "omarchy-network-status"),
+                "category",
+            ),
+            "capability-owner": lambda data: next(
+                item for item in data["capabilities"] if item["id"] == "audio"
+            ).update({"owner": "hancore.shibumi.state"}),
+            "capability-cardinality": lambda data: next(
+                item for item in data["capabilities"] if item["id"] == "audio"
+            ).update({"outputCardinality": "output-local"}),
+            "capability-worker": lambda data: next(
+                item for item in data["capabilities"] if item["id"] == "audio"
+            ).update({"workerPolicy": "none"}),
+            "rule-owner": lambda data: next(
+                item for item in data["rules"]
+                if item.get("kind") == "provider" and item.get("target") == "omarchy.audio"
+            ).update({"owner": "hancore.shibumi.state"}),
+            "rule-capability": lambda data: next(
+                item for item in data["rules"]
+                if item.get("kind") == "provider" and item.get("target") == "omarchy.audio"
+            ).update({"capability": "settings"}),
+            "rule-count": lambda data: next(
+                item for item in data["rules"]
+                if item.get("kind") == "provider" and item.get("target") == "omarchy.audio"
+            ).update({"count": 99}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory(
+                    prefix="shibumi-boundary-transition-test."
+                ) as temporary:
+                    root = Path(temporary)
+                    self.copy_production_tree(root)
+                    manifest_path = root / "contracts/backend-boundary-v1.json"
+                    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    mutate(data)
+                    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+                    result = self.run_linter(root)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn("transitionLedger must exactly match", result.stderr)
+
+    def test_suite_owner_ids_reject_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-boundary-owner-id-test."
+        ) as temporary:
+            root = Path(temporary)
+            self.copy_production_tree(root)
+            suite_path = root / "contracts/plugin-suite-v1.json"
+            suite = json.loads(suite_path.read_text(encoding="utf-8"))
+            suite["plugins"][0]["id"] = "hancore.shibumi..external-owner"
+            suite_path.write_text(json.dumps(suite), encoding="utf-8")
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("plugin id is not a safe Shibumi plugin id", result.stderr)
+
+            suite = json.loads(suite_path.read_text(encoding="utf-8"))
+            suite["plugins"][0]["id"] = suite["plugins"][1]["id"]
+            suite_path.write_text(json.dumps(suite), encoding="utf-8")
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("duplicate plugin id", result.stderr)
+
+    def test_process_wide_owner_manifest_is_required(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-boundary-owner-test."
+        ) as temporary:
+            root = Path(temporary)
+            self.copy_production_tree(root)
+            (root / "hancore.shibumi.audio/manifest.json").unlink()
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("suite contract invalid", result.stderr)
+
+    def test_process_wide_owner_manifest_is_structurally_valid(self) -> None:
+        mutations = {
+            "entry-points-object": lambda data: data.update({"entryPoints": []}),
+            "missing-service": lambda data: data["entryPoints"].update({"service": "Missing.qml"}),
+            "wrong-id": lambda data: data.update({"id": "hancore.shibumi.other"}),
+            "schema-version": lambda data: data.update({"schemaVersion": 999}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory(
+                    prefix="shibumi-boundary-owner-test."
+                ) as temporary:
+                    root = Path(temporary)
+                    self.copy_production_tree(root)
+                    owner_manifest = root / "hancore.shibumi.audio/manifest.json"
+                    data = json.loads(owner_manifest.read_text(encoding="utf-8"))
+                    mutate(data)
+                    owner_manifest.write_text(json.dumps(data), encoding="utf-8")
+                    result = self.run_linter(root)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn("suite contract invalid", result.stderr)
 
     def test_manifest_rejects_unknown_categories_owners_backends_and_exceptions(self) -> None:
         cases = {
@@ -291,7 +415,7 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
                     prefix="shibumi-boundary-manifest-test."
                 ) as temporary:
                     root = Path(temporary)
-                    self.copy_contracts(root)
+                    self.copy_production_tree(root)
                     manifest_path = root / "contracts/backend-boundary-v1.json"
                     data = json.loads(manifest_path.read_text(encoding="utf-8"))
                     mutate(data)

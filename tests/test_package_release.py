@@ -141,6 +141,20 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertEqual(workflow.count("persist-credentials: false"), 2)
         self.assertNotIn("persist-credentials: true", workflow)
 
+    def test_release_workflow_rehearses_the_installed_aur_package(self) -> None:
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("archlinux:base-devel", workflow)
+        self.assertIn('"$GITHUB_WORKSPACE:/src:ro"', workflow)
+        self.assertIn("scripts/rehearse-aur-package", workflow)
+        rehearsal = (ROOT / "scripts/rehearse-aur-package").read_text(encoding="utf-8")
+        self.assertIn("usr/share/shibumi-shell/contracts/backend-boundary-v1.json", rehearsal)
+        self.assertIn("check-production-boundary", rehearsal)
+        self.assertIn("Suite.load(payload)", rehearsal)
+        self.assertIn('"--root"', rehearsal)
+        self.assertNotIn("chown -R builder:builder /src", workflow)
+
     def test_release_workflow_requires_revision_bound_lifecycle_evidence(self) -> None:
         workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
             encoding="utf-8"

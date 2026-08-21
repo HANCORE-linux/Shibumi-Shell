@@ -240,9 +240,13 @@ Every mutable capability declares one owner, its current backend boundary, its
 output cardinality, and its worker policy. Production dependencies are classified
 as exactly one of `hostIntegration`, `nativeApi`, `omarchyBackend`,
 `omarchyAction`, or `hostOwnedProvider`. A transitional `omarchyBackend` must
-name a known backend, an explicit `removalStep`, and a reason. New categories,
-owners, backend identities, host providers, or undeclared occurrences fail the
-lint rather than becoming implicit compatibility debt.
+name a known backend, an explicit `removalStep`, and a reason. The manifest's
+transition ledger locks every declared transition capability and dependency to
+that classification, so a transition cannot be silently reclassified without a
+boundary-contract change. Process-wide Shibumi owners must also expose a valid
+service manifest. New categories, owners, backend identities, host providers,
+or undeclared occurrences fail the lint rather than becoming implicit
+compatibility debt.
 
 The only host-owned provider exceptions are Omarchy Notifications, OSD, and
 Idle. Their provider identities, owners, allowed forms, process-wide cardinality,
@@ -253,10 +257,13 @@ explicit host summon/IPC action; it is not a Shibumi provider.
 
 The production lint runs in source and package gates. It checks exact reviewed
 occurrences, private component paths, provider and first-party service calls,
-Omarchy commands, helper-backed state markers, package escapes, symlinks, and
-UTF-8 source. Compatibility debt may be removed by a later migration step, but
-it may not be broadened silently. This boundary slice does not activate Audio,
-Network, Bluetooth, or any other backend cutover.
+Omarchy commands, helper-backed state markers, package escapes, symlinks, UTF-8
+source, transition-ledger consistency, and process-wide owner manifests. The
+lint verifies declared output cardinality and worker policy; it does not claim
+to prove runtime process cardinality or live worker behavior. Compatibility debt
+may be removed by a later migration step, but it may not be broadened silently.
+This boundary slice does not activate Audio, Network, Bluetooth, or any other
+backend cutover.
 
 ## Why A Full-Bar Plugin
 

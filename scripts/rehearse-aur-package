@@ -16,6 +16,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.shibumi_suite.model import Suite
 PKGBUILD = ROOT / "packaging/aur/PKGBUILD"
 
 
@@ -131,12 +135,30 @@ def main() -> int:
             ["bsdtar", "-xf", str(package), "-C", str(extract)], check=True
         )
         payload = extract / "usr/share/shibumi-shell"
+        boundary_check = run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/check-production-boundary"),
+                "--root",
+                str(payload),
+            ],
+            extract,
+        )
+        if boundary_check.returncode != 0:
+            print(boundary_check.stdout, file=sys.stderr)
+            print("installed package boundary validation failed", file=sys.stderr)
+            return 1
         contract = json.loads(
             (payload / "contracts/plugin-suite-v1.json").read_text(encoding="utf-8")
         )
-        expected_plugins = {item["id"] for item in contract["plugins"]}
+        try:
+            suite = Suite.load(payload)
+        except Exception as error:
+            print(f"installed package suite validation failed: {error}", file=sys.stderr)
+            return 1
+        expected_plugins = set(suite.plugins)
         packaged_plugins = {
-            path.parent.name for path in payload.glob("hancore.shibumi.*/manifest.json")
+            path.name for path in payload.glob("hancore.shibumi.*") if path.is_dir()
         }
         if packaged_plugins != expected_plugins:
             print(

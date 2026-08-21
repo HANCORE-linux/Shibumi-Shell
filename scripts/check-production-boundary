@@ -13,6 +13,13 @@ from pathlib import Path
 from typing import Any
 
 
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
+from scripts.shibumi_suite.model import ContractError, Suite
+
+
 CODE_SUFFIXES = {"", ".bash", ".js", ".json", ".mjs", ".py", ".qml", ".sh"}
 CATEGORIES = {
     "hostIntegration",
@@ -92,6 +99,7 @@ HELPER_MARKER = re.compile(
 HOST_ID = re.compile(r"[\"'](omarchy\.[A-Za-z0-9_-]+)[\"']")
 OMARCHY_COMMAND = re.compile(r"\bomarchy-[A-Za-z0-9_.-]+")
 RELATIVE_LITERAL = re.compile(r"[\"']([^\"']*\.\.[^\"']*)[\"']")
+PLUGIN_ID = re.compile(r"hancore\.shibumi\.[A-Za-z0-9][A-Za-z0-9_.-]*\Z")
 
 
 class ManifestError(ValueError):
@@ -144,7 +152,13 @@ def load_suite_owners(root: Path) -> set[str]:
     owners: set[str] = set()
     for plugin in plugins:
         require(isinstance(plugin, dict), "plugin suite plugin must be an object")
-        owners.add(string_field(plugin.get("id"), "plugin id"))
+        plugin_id = string_field(plugin.get("id"), "plugin id")
+        require(
+            PLUGIN_ID.fullmatch(plugin_id) is not None and ".." not in plugin_id,
+            f"plugin id is not a safe Shibumi plugin id: {plugin_id}",
+        )
+        require(plugin_id not in owners, f"duplicate plugin id: {plugin_id}")
+        owners.add(plugin_id)
     return owners
 
 
@@ -170,6 +184,103 @@ def validate_transition(
     )
     reason = string_field(entry.get("reason"), f"{context}.reason")
     require(len(reason) >= 12, f"{context}: transition reason is too short")
+
+
+TRANSITION_SCOPES = {"capability", "rule", "hostIdRule", "commandRule"}
+
+
+def transition_record(scope: str, entry: dict[str, Any]) -> dict[str, str]:
+    record: dict[str, str] = {"scope": scope}
+    if scope == "capability":
+        record["id"] = string_field(entry.get("id"), "transition capability id")
+        record["owner"] = string_field(entry.get("owner"), "capability.owner")
+        record["outputCardinality"] = string_field(
+            entry.get("outputCardinality"), "capability.outputCardinality"
+        )
+        record["workerPolicy"] = string_field(
+            entry.get("workerPolicy"), "capability.workerPolicy"
+        )
+    elif scope == "rule":
+        record["source"] = string_field(entry.get("source"), "transition rule source")
+        record["kind"] = string_field(entry.get("kind"), "transition rule kind")
+        value_key = "target" if entry.get("kind") in {"provider", "firstPartyService"} else "value"
+        value = entry.get(value_key, entry.get("kindValue"))
+        record["kindValue"] = string_field(value, f"transition rule {value_key}")
+    elif scope == "hostIdRule":
+        record["target"] = string_field(entry.get("target"), "transition host id target")
+    elif scope == "commandRule":
+        record["value"] = string_field(entry.get("value"), "transition command value")
+    else:
+        raise ManifestError(f"unknown transition scope {scope}")
+    if scope != "capability":
+        record["category"] = string_field(entry.get("category"), f"{scope}.category")
+        record["owner"] = string_field(entry.get("owner"), f"{scope}.owner")
+        record["capability"] = string_field(entry.get("capability"), f"{scope}.capability")
+        count = entry.get("count")
+        require(isinstance(count, int) and count > 0, f"{scope}.count must be a positive integer")
+        record["count"] = str(count)
+    record["backend"] = string_field(entry.get("backend"), f"{scope}.backend")
+    record["removalStep"] = string_field(entry.get("removalStep"), f"{scope}.removalStep")
+    return record
+
+
+def transition_key(record: dict[str, str]) -> str:
+    return json.dumps(record, sort_keys=True, separators=(",", ":"))
+
+
+def validate_transition_ledger(
+    manifest: dict[str, Any], transitional_backends: set[str]
+) -> None:
+    ledger = manifest.get("transitionLedger")
+    require(isinstance(ledger, list) and ledger, "transitionLedger must be a non-empty array")
+
+    actual: list[dict[str, str]] = []
+    for capability in manifest["capabilities"]:
+        if capability.get("backendBoundary") == "omarchyBackend":
+            actual.append(transition_record("capability", capability))
+    for rule in manifest["rules"]:
+        if rule.get("category") == "omarchyBackend":
+            actual.append(transition_record("rule", rule))
+    for rule in manifest["hostIdRules"]:
+        if rule.get("category") == "omarchyBackend":
+            actual.append(transition_record("hostIdRule", rule))
+    for rule in manifest["commandRules"]:
+        if rule.get("category") == "omarchyBackend":
+            actual.append(transition_record("commandRule", rule))
+
+    actual_map = {transition_key(record): record for record in actual}
+    require(len(actual_map) == len(actual), "duplicate transition boundary entry")
+    ledger_map: dict[str, dict[str, str]] = {}
+    for index, entry in enumerate(ledger):
+        context = f"transitionLedger {index}"
+        require(isinstance(entry, dict), f"{context} must be an object")
+        scope = string_field(entry.get("scope"), f"{context}.scope")
+        require(scope in TRANSITION_SCOPES, f"{context}: unknown scope {scope}")
+        record = transition_record(scope, entry)
+        require(
+            set(entry) == set(record),
+            f"{context}: fields must exactly describe the locked transition",
+        )
+        require(
+            record["backend"] in transitional_backends,
+            f"{context}: unknown transitional backend {record['backend']}",
+        )
+        require(
+            re.fullmatch(r"Step (?:4A|4B|5|6|7|8)", record["removalStep"]) is not None,
+            f"{context}: invalid removalStep {record['removalStep']}",
+        )
+        key = transition_key(record)
+        require(key not in ledger_map, f"{context}: duplicate locked transition")
+        ledger_map[key] = record
+
+    require(
+        ledger_map == actual_map,
+        "transitionLedger must exactly match every omarchyBackend capability and rule",
+    )
+    require(
+        {record["backend"] for record in actual} == transitional_backends,
+        "every transitional backend must have a locked omarchyBackend entry",
+    )
 
 
 def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], bool]:
@@ -204,6 +315,10 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], b
     require(set(capability_ids) == REQUIRED_CAPABILITIES, "capability inventory is incomplete or unknown")
 
     suite_owners = load_suite_owners(root)
+    try:
+        Suite.load(root)
+    except ContractError as error:
+        raise ManifestError(f"suite contract invalid: {error}") from error
     known_owners = set(FIXED_OWNERS)
     known_owners.update(suite_owners)
     for capability in capabilities:
@@ -225,18 +340,56 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], b
         require(policy in WORKER_POLICIES, f"{context}: unknown worker policy {policy}")
         string_field(capability.get("reason"), f"{context}.reason")
         if cardinality == "process-wide" and owner not in FIXED_OWNERS:
-            owner_manifest = root / owner / "manifest.json"
-            if owner_manifest.is_file():
-                try:
-                    owner_data = json.loads(owner_manifest.read_text(encoding="utf-8"))
-                except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-                    raise ManifestError(f"{context}: cannot read owner manifest: {error}") from error
-                require(
-                    isinstance(owner_data, dict)
-                    and "service" in owner_data.get("kinds", [])
-                    and isinstance(owner_data.get("entryPoints", {}).get("service"), str),
-                    f"{context}: process-wide owner must expose one service entry point",
-                )
+            root_dir = root.resolve()
+            owner_dir = (root / owner).resolve()
+            require(
+                owner_dir.is_relative_to(root_dir) and owner_dir.is_dir(),
+                f"{context}: process-wide owner must be a Shibumi plugin directory",
+            )
+            owner_manifest = owner_dir / "manifest.json"
+            require(
+                owner_manifest.is_file()
+                and owner_manifest.resolve().is_relative_to(owner_dir),
+                f"{context}: process-wide owner manifest is required inside the owner plugin",
+            )
+            try:
+                owner_data = json.loads(owner_manifest.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise ManifestError(f"{context}: cannot read owner manifest: {error}") from error
+            require(isinstance(owner_data, dict), f"{context}: owner manifest must be an object")
+            require(
+                owner_data.get("schemaVersion") == 1,
+                f"{context}: owner manifest schemaVersion must be 1",
+            )
+            require(
+                owner_data.get("id") == owner,
+                f"{context}: owner manifest id must match {owner}",
+            )
+            require(
+                isinstance(owner_data.get("kinds"), list)
+                and "service" in owner_data["kinds"],
+                f"{context}: process-wide owner must declare a service kind",
+            )
+            entry_points = owner_data.get("entryPoints")
+            require(
+                isinstance(entry_points, dict),
+                f"{context}: owner manifest entryPoints must be an object",
+            )
+            service_entry = string_field(
+                entry_points.get("service"),
+                f"{context}.entryPoints.service",
+            )
+            service_path = Path(service_entry)
+            require(
+                not service_path.is_absolute() and ".." not in service_path.parts,
+                f"{context}: service entry point must stay inside the owner plugin",
+            )
+            service_file = (owner_manifest.parent / service_path).resolve()
+            require(
+                service_file.is_relative_to(owner_manifest.parent.resolve())
+                and service_file.is_file(),
+                f"{context}: service entry point does not exist",
+            )
         validate_transition(
             capability, context, transitional_backends
         )
@@ -363,6 +516,7 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], b
                 )
             validate_transition(entry, context, transitional_backends)
 
+    validate_transition_ledger(manifest, transitional_backends)
     return allowed_owners, bool(suite_owners)
 
 

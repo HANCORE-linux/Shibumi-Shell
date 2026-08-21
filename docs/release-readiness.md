@@ -35,17 +35,23 @@ no maintainer-local checkout path is part of the acceptance contract.
 The compact production boundary is implemented without a backend cutover. The
 single machine-readable source is
 [`backend-boundary-v1.json`](../contracts/backend-boundary-v1.json); it declares
-all capability owners, current boundaries, output cardinality, worker policy,
-explicit transition steps, and only the Notifications, OSD, and Idle host-owned
-exceptions. `scripts/check-production-boundary` is manifest-driven and fails
-closed on unknown categories, owners, transitional backends, private providers,
-hidden components, helper-backed state, undeclared commands, package escapes,
-and output-owner contract drift.
+all capability owners, current boundaries, declared output cardinality, worker
+policy, explicit transition steps, and only the Notifications, OSD, and Idle
+host-owned exceptions. Its transition ledger prevents silent reclassification
+of existing compatibility debt, and every process-wide Shibumi owner must expose
+a valid service manifest. `scripts/check-production-boundary` is
+manifest-driven and fails closed on unknown categories, owners, transitional
+backends, private providers, hidden components, helper-backed state, undeclared
+commands, package escapes, transition-ledger drift, and missing owner manifests.
+The lint verifies these declarations; live process and worker cardinality remain
+runtime gates.
 
 Validation passed on the dedicated Step 2 worktree based on `e92d8ee`:
 
-- production boundary lint and 11 focused boundary regression tests;
-- package (13), suite (99), and health (44) unit gates passed;
+- production boundary lint and 15 focused boundary regression tests;
+- package (14), suite (99), and health (44) unit gates passed;
+- the Arch AUR rehearsal builds and extracts the package, including the installed
+  `contracts/backend-boundary-v1.json` payload;
 - documentation, plugin-suite, AUR scaffold, `git diff --check`, and the complete
   pinned contract regression passed.
 
