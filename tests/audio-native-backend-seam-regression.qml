@@ -234,6 +234,23 @@ ShellRoot {
         const sinkMuted = sinkAudioB.muted
         const streamVolume = streamAudio.volume
         const streamMuted = streamAudio.muted
+        fakeBackend.ready = false
+        const cachedUnavailableOutput = backend.setOutputVolume(0.12)
+        const cachedUnavailableMute = backend.toggleOutputMute()
+        const cachedUnavailableSource = backend.setInputVolume(0.12)
+        const cachedUnavailableStream = backend.setStreamVolume("stream:8", 0.12)
+        const cachedUnavailableRoute = backend.setDefaultSink("sink:2")
+        fakeBackend.ready = true
+        if (cachedUnavailableOutput.ok
+            || cachedUnavailableMute.ok
+            || cachedUnavailableSource.ok
+            || cachedUnavailableStream.ok
+            || cachedUnavailableRoute.ok
+            || sinkAudioB.volume !== sinkVolume
+            || sinkAudioB.muted !== sinkMuted
+            || streamAudio.volume !== streamVolume
+            || streamAudio.muted !== streamMuted)
+          return root.fail("cached nodes were mutated while backend was unavailable")
         sinkB.ready = false
         source.ready = false
         stream.ready = false

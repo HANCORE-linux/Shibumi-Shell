@@ -77,8 +77,7 @@ Item {
     }
 
     function ready() {
-      return root.active && (root.backendOverride === null
-        || backendValue("ready", true) !== false)
+      return backendReady()
     }
 
     function outputVolume() {
@@ -174,9 +173,15 @@ Item {
         ok, code, message, entityId, root.generation)
     }
 
+    function nativeBackendReady() {
+      return Pipewire.nodes !== null && Pipewire.nodes !== undefined
+    }
+
     function backendReady() {
-      return root.active && (root.backendOverride === null
-        || backendValue("ready", true) !== false)
+      if (!root.active) return false
+      return root.backendOverride !== null
+        ? backendValue("ready", true) !== false
+        : nativeBackendReady()
     }
 
     function unresolvedId(id, label) {
@@ -188,7 +193,7 @@ Item {
     }
 
     function mutationError(node, kind, label) {
-      if (!node || node.ready === false)
+      if (!backendReady() || !node || node.ready === false)
         return result(false, "unavailable", label + " is unavailable")
       const entityId = Model.stableNodeId(node, kind)
       if (!entityId)

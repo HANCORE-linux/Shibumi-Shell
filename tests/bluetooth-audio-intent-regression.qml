@@ -166,6 +166,18 @@ ShellRoot {
     audioRouteOverride: routeOverride
   }
 
+  Bluetooth.BluetoothAudioRouteAdapter {
+    id: pipewireNotReadyRoute
+    nodesOverride: []
+    readyOverride: false
+  }
+
+  Bluetooth.BluetoothAudioRouteAdapter {
+    id: pipewireReadyEmptyRoute
+    nodesOverride: []
+    readyOverride: true
+  }
+
   Bluetooth.BluetoothBackendAdapter {
     id: backend
     adapterOverride: nativeAdapter
@@ -186,6 +198,18 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (root.ticks < 2) return
+        const unavailablePipewireRoute =
+          pipewireNotReadyRoute.routeBluetoothDevice({
+            address: deviceA.address,
+            name: deviceA.name,
+            deviceName: deviceA.deviceName
+          })
+        const staleEmptyPipewireRoute =
+          pipewireReadyEmptyRoute.routeBluetoothDevice({
+            address: deviceA.address,
+            name: deviceA.name,
+            deviceName: deviceA.deviceName
+          })
         sinkA.ready = false
         const unavailableRoute = backend.requestBluetoothAudioRoute(deviceA)
         sinkA.ready = true
@@ -207,6 +231,10 @@ ShellRoot {
         const booleanFailure = backend.requestBluetoothAudioRoute(deviceA)
         backend.audioOutputOverride = audioOutput
         if (!seamBackend.requestBluetoothAudioRoute(deviceA).ok
+            || unavailablePipewireRoute.ok
+            || unavailablePipewireRoute.code !== "unavailable"
+            || staleEmptyPipewireRoute.ok
+            || staleEmptyPipewireRoute.code !== "stale-id"
             || routeOverride.count !== 1
             || routeOverride.lastRequest.address !== deviceA.address
             || routeOverride.lastRequest.name !== deviceA.name

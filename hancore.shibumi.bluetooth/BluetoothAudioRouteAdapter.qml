@@ -15,13 +15,18 @@ Item {
   // Tests inject a side-effect-free node list and route sink.
   property var nodesOverride: null
   property var outputOverride: null
+  property var readyOverride: null
 
+  readonly property bool ready: readyOverride !== null
+    ? readyOverride === true
+    : Pipewire.nodes !== null && Pipewire.nodes !== undefined
   readonly property var nodes: nodesOverride !== null
     ? nodesOverride
     : (Pipewire.nodes ? Pipewire.nodes.values : [])
 
   function audioSinks() {
     const sinks = []
+    if (!ready) return sinks
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i]
       if (node && node.isSink && !node.isStream) sinks.push(node)
@@ -49,6 +54,8 @@ Item {
   }
 
   function setDefaultSink(sink) {
+    if (!ready)
+      return actionResult(false, "unavailable", "Bluetooth audio is unavailable")
     if (!sink || sink.ready === false)
       return actionResult(false, "unavailable", "Bluetooth audio sink is unavailable")
     const rawId = sink.id === undefined || sink.id === null
@@ -81,6 +88,8 @@ Item {
   // Narrow cross-capability method. The request contains only stable device
   // identity and labels; PipeWire objects never cross back into Bluetooth.
   function routeBluetoothDevice(request) {
+    if (!ready)
+      return actionResult(false, "unavailable", "Bluetooth audio is unavailable")
     const sink = sinkForDevice(request)
     return sink
       ? setDefaultSink(sink)
