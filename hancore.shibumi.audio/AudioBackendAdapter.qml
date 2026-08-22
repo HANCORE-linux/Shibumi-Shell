@@ -174,7 +174,8 @@ Item {
     }
 
     function nativeBackendReady() {
-      return Pipewire.nodes !== null && Pipewire.nodes !== undefined
+      return Pipewire.ready === true
+        && Pipewire.nodes !== null && Pipewire.nodes !== undefined
     }
 
     function backendReady() {

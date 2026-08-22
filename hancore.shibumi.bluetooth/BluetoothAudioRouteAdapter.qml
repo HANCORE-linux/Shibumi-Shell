@@ -19,7 +19,10 @@ Item {
 
   readonly property bool ready: readyOverride !== null
     ? readyOverride === true
-    : Pipewire.nodes !== null && Pipewire.nodes !== undefined
+    : nodesOverride !== null
+    ? true
+    : Pipewire.ready === true
+      && Pipewire.nodes !== null && Pipewire.nodes !== undefined
   readonly property var nodes: nodesOverride !== null
     ? nodesOverride
     : (Pipewire.nodes ? Pipewire.nodes.values : [])
@@ -76,6 +79,9 @@ Item {
       return actionResult(
         false, "unavailable", "Audio backend action failed", entityId)
     }
+    if (nodesOverride !== null)
+      return actionResult(
+        false, "unsupported", "Fake audio backend action is unavailable", entityId)
     Pipewire.preferredDefaultAudioSink = sink
     Quickshell.execDetached([
       "omarchy-audio-output-set-default",

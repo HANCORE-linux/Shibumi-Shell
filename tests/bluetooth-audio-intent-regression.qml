@@ -178,6 +178,12 @@ ShellRoot {
     readyOverride: true
   }
 
+  Bluetooth.BluetoothAudioRouteAdapter {
+    id: fakeRouteWithoutDelegate
+    nodesOverride: [sinkA]
+    readyOverride: true
+  }
+
   Bluetooth.BluetoothBackendAdapter {
     id: backend
     adapterOverride: nativeAdapter
@@ -210,6 +216,12 @@ ShellRoot {
             name: deviceA.name,
             deviceName: deviceA.deviceName
           })
+        const fakeIsolationRoute =
+          fakeRouteWithoutDelegate.routeBluetoothDevice({
+            address: deviceA.address,
+            name: deviceA.name,
+            deviceName: deviceA.deviceName
+          })
         sinkA.ready = false
         const unavailableRoute = backend.requestBluetoothAudioRoute(deviceA)
         sinkA.ready = true
@@ -235,6 +247,8 @@ ShellRoot {
             || unavailablePipewireRoute.code !== "unavailable"
             || staleEmptyPipewireRoute.ok
             || staleEmptyPipewireRoute.code !== "stale-id"
+            || fakeIsolationRoute.ok
+            || fakeIsolationRoute.code !== "unsupported"
             || routeOverride.count !== 1
             || routeOverride.lastRequest.address !== deviceA.address
             || routeOverride.lastRequest.name !== deviceA.name
