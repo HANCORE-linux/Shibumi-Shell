@@ -111,10 +111,23 @@ ShellRoot {
     function setDefaultSource(node) { defaultAudioSource = node }
   }
 
+  QtObject {
+    id: incompleteBackend
+    property bool ready: true
+    property var nodes: [sinkA]
+    property var defaultAudioSink: sinkA
+  }
+
   Audio.AudioBackendAdapter {
     id: backend
     active: true
     backendOverride: fakeBackend
+  }
+
+  Audio.AudioBackendAdapter {
+    id: incompleteBackendAdapter
+    active: true
+    backendOverride: incompleteBackend
   }
 
   Audio.Service {
@@ -136,7 +149,10 @@ ShellRoot {
             || backend.audioSources.length !== 1
             || backend.audioStreams.length !== 1)
           return root.fail("native backend snapshots")
-        if (backend.currentNodes !== undefined
+        const incompleteResult =
+          incompleteBackendAdapter.setDefaultSink("sink:1")
+        if (incompleteResult.ok || incompleteResult.code !== "unsupported"
+            || backend.currentNodes !== undefined
             || backend.currentSink !== undefined
             || backend.currentSource !== undefined
             || backend.filterSinks !== undefined
@@ -166,10 +182,16 @@ ShellRoot {
           name: "Headset Output",
           deviceName: "Headset Output"
         })
+        const invalidAddressResult = backend.routeBluetoothDevice({
+          address: "ZZ",
+          name: "Headset Output",
+          deviceName: "Headset Output"
+        })
         if (!routeResult.ok || routeResult.entityId !== "sink:2"
             || fakeBackend.defaultAudioSink !== sinkB
             || missingIdResult.ok || missingIdResult.code !== "stale-id"
-            || wrongAddressResult.ok || wrongAddressResult.code !== "stale-id")
+            || wrongAddressResult.ok || wrongAddressResult.code !== "stale-id"
+            || invalidAddressResult.ok || invalidAddressResult.code !== "stale-id")
           return root.fail("Bluetooth route resolution")
         root.phase++
         root.ticks = 0

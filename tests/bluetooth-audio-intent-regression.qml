@@ -97,6 +97,10 @@ ShellRoot {
   }
 
   QtObject {
+    id: incompleteAudioOutput
+  }
+
+  QtObject {
     id: routeOverride
     property int count: 0
     property var lastRequest: null
@@ -144,14 +148,25 @@ ShellRoot {
         sinkA.ready = false
         const unavailableRoute = backend.requestBluetoothAudioRoute(deviceA)
         sinkA.ready = true
-        if (!seamBackend.requestBluetoothAudioRoute(deviceA)
+        const invalidAddressRoute = backend.requestBluetoothAudioRoute({
+          address: "ZZ",
+          name: "Intent A",
+          deviceName: "Intent A"
+        })
+        backend.audioOutputOverride = incompleteAudioOutput
+        const unsupportedRoute = backend.requestBluetoothAudioRoute(deviceA)
+        backend.audioOutputOverride = audioOutput
+        if (!seamBackend.requestBluetoothAudioRoute(deviceA).ok
             || routeOverride.count !== 1
             || routeOverride.lastRequest.address !== deviceA.address
             || routeOverride.lastRequest.name !== deviceA.name
             || "adapter" in routeOverride.lastRequest
             || "connected" in routeOverride.lastRequest
-            || backend.requestBluetoothAudioRoute(deviceWrongAddress)
-            || unavailableRoute)
+            || backend.requestBluetoothAudioRoute(deviceWrongAddress).ok
+            || invalidAddressRoute.ok
+            || unsupportedRoute.ok
+            || unsupportedRoute.code !== "unsupported"
+            || unavailableRoute.ok)
           return root.fail("Bluetooth route seam leaked, misrouted, or mutated an unavailable sink")
         if (!backend.connectDevice(deviceA) || !backend.connectDevice(deviceB))
           return root.fail("could not create ordered connect intents")

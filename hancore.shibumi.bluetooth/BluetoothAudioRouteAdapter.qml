@@ -38,27 +38,45 @@ Item {
     return null
   }
 
+  function actionResult(ok, code, message, entityId) {
+    return {
+      ok: ok === true,
+      code: String(code || (ok ? "ok" : "unavailable")),
+      message: String(message || ""),
+      entityId: String(entityId || ""),
+      generation: 0
+    }
+  }
+
   function setDefaultSink(sink) {
-    if (!sink || sink.ready === false) return false
-    if (outputOverride !== null
-        && typeof outputOverride.setDefaultSink === "function") {
+    if (!sink || sink.ready === false)
+      return actionResult(false, "unavailable", "Bluetooth audio sink is unavailable")
+    const entityId = sink.id === undefined || sink.id === null
+      ? "" : "sink:" + String(sink.id)
+    if (!entityId)
+      return actionResult(false, "stale-id", "Bluetooth audio sink is unavailable")
+    if (outputOverride !== null) {
+      if (typeof outputOverride.setDefaultSink !== "function")
+        return actionResult(
+          false, "unsupported", "Audio backend action is unavailable", entityId)
       outputOverride.setDefaultSink(sink)
-      return true
+      return actionResult(true, "ok", "", entityId)
     }
     Pipewire.preferredDefaultAudioSink = sink
-    if (sink.id === undefined || !sink.name) return true
     Quickshell.execDetached([
       "omarchy-audio-output-set-default",
       String(sink.id),
-      String(sink.name)
+      String(sink.name || "")
     ])
-    return true
+    return actionResult(true, "ok", "", entityId)
   }
 
   // Narrow cross-capability method. The request contains only stable device
   // identity and labels; PipeWire objects never cross back into Bluetooth.
   function routeBluetoothDevice(request) {
     const sink = sinkForDevice(request)
-    return sink ? setDefaultSink(sink) : false
+    return sink
+      ? setDefaultSink(sink)
+      : actionResult(false, "stale-id", "Bluetooth audio sink is unavailable")
   }
 }

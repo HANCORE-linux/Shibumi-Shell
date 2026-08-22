@@ -64,12 +64,16 @@ function normalizedAddress(value) {
 
 function bluetoothSinkMatchesRequest(node, request) {
   if (!node || !node.isSink || node.isStream || !request) return false
-  var address = normalizedAddress(request.address)
+  var rawAddress = text(request.address)
+  var address = normalizedAddress(rawAddress)
   var nodeTextValue = nodeText(node)
   // A supplied Bluetooth address is authoritative. Never route to a same-name
-  // device when its address is absent or different.
-  if (address)
+  // device when its address is absent, invalid, or different.
+  if (rawAddress) {
+    if (!/^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(rawAddress))
+      return false
     return normalizedAddress(nodeTextValue).indexOf(address) !== -1
+  }
   var label = text(request.deviceName || request.name).toLowerCase()
   return !!label && nodeTextValue.indexOf(label) !== -1
 }

@@ -187,8 +187,9 @@ Item {
       const failure = mutationError(node, kind, "Audio node")
       if (failure) return failure
       const entityId = Model.stableNodeId(node, kind)
-      if (root.backendOverride !== null
-          && typeof root.backendOverride[propertyName] === "function") {
+      if (root.backendOverride !== null) {
+        if (typeof root.backendOverride[propertyName] !== "function")
+          return result(false, "unsupported", "Audio backend action is unavailable", entityId)
         root.backendOverride[propertyName](node)
       } else if (propertyName === "setDefaultSink") {
         Pipewire.preferredDefaultAudioSink = node

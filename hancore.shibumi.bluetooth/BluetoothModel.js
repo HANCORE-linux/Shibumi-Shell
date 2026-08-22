@@ -92,12 +92,15 @@ function nodeText(node) {
 function bluetoothSinkMatchesDevice(node, device) {
   if (!node || !node.isSink || node.isStream || !device) return false
 
-  var address = normalizedAddress(device.address)
+  var rawAddress = String(device.address || "").trim()
+  var address = normalizedAddress(rawAddress)
   var text = nodeText(node)
   // A supplied Bluetooth address is authoritative. Never route to a same-name
-  // sink when its address is absent or different.
-  if (address !== "")
+  // sink when its address is absent, invalid, or different.
+  if (rawAddress !== "") {
+    if (!isAddressLike(rawAddress)) return false
     return normalizedAddress(text).indexOf(address) !== -1
+  }
 
   var label = deviceLabel(device).toLowerCase()
   return label !== "" && text.indexOf(label) !== -1

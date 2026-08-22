@@ -324,13 +324,33 @@ Item {
     }
   }
 
+  function audioRouteResult(ok, code, message, entityId, generation) {
+    return {
+      ok: ok === true,
+      code: String(code || (ok ? "ok" : "unavailable")),
+      message: String(message || ""),
+      entityId: String(entityId || ""),
+      generation: Number(generation || 0)
+    }
+  }
+
+  function normalizeAudioRouteResult(value) {
+    if (value && typeof value === "object"
+        && typeof value.ok === "boolean")
+      return value
+    if (value === true) return audioRouteResult(true, "ok", "", "", 0)
+    return audioRouteResult(
+      false, "unavailable", "Bluetooth audio route is unavailable", "", 0)
+  }
+
   function requestBluetoothAudioRoute(device) {
     const request = audioRouteRequest(device)
     if (!request || !audioRoute
         || typeof audioRoute.routeBluetoothDevice !== "function")
-      return false
-    const result = audioRoute.routeBluetoothDevice(request)
-    return result === true || (result && result.ok === true)
+      return audioRouteResult(
+        false, "unavailable", "Bluetooth audio route is unavailable", "", 0)
+    return normalizeAudioRouteResult(
+      audioRoute.routeBluetoothDevice(request))
   }
 
   function scheduleAudioOutputSwitch(device) {
@@ -372,7 +392,15 @@ Item {
   function switchPendingAudioOutput() {
     if (!validatePendingAudioOutput()) return
     const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
-    if (requestBluetoothAudioRoute(device)) {
+    const routeResult = requestBluetoothAudioRoute(device)
+    if (routeResult.ok) {
+      pendingAudioOutputDevice = null
+      audioSwitchTimer.stop()
+      return
+    }
+    // Retry only transient route unavailability. Stale identity, invalid
+    // requests, and unsupported backends must not spin until the attempt cap.
+    if (routeResult.code !== "unavailable") {
       pendingAudioOutputDevice = null
       audioSwitchTimer.stop()
       return
