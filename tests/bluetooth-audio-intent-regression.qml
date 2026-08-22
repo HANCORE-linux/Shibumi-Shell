@@ -82,6 +82,25 @@ ShellRoot {
     function setDefaultSink(sink) { count++; lastSink = sink }
   }
 
+  QtObject {
+    id: routeOverride
+    property int count: 0
+    property var lastRequest: null
+    function routeBluetoothDevice(request) {
+      count++
+      lastRequest = request
+      return true
+    }
+  }
+
+  Bluetooth.BluetoothBackendAdapter {
+    id: seamBackend
+    adapterOverride: nativeAdapter
+    nativeDevicesOverride: []
+    pipewireNodesOverride: []
+    audioRouteOverride: routeOverride
+  }
+
   Bluetooth.BluetoothBackendAdapter {
     id: backend
     adapterOverride: nativeAdapter
@@ -102,6 +121,13 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (root.ticks < 2) return
+        if (!seamBackend.requestBluetoothAudioRoute(deviceA)
+            || routeOverride.count !== 1
+            || routeOverride.lastRequest.address !== deviceA.address
+            || routeOverride.lastRequest.name !== deviceA.name
+            || "adapter" in routeOverride.lastRequest
+            || "connected" in routeOverride.lastRequest)
+          return root.fail("Bluetooth route seam leaked backend state")
         if (!backend.connectDevice(deviceA) || !backend.connectDevice(deviceB))
           return root.fail("could not create ordered connect intents")
         backend.nativePendingActions = ({})

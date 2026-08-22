@@ -719,6 +719,7 @@ jq -e '
   || fail "Shibumi Bluetooth plugin entry points are not declared"
 bluetooth_service=hancore.shibumi.bluetooth/Service.qml
 bluetooth_adapter=hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml
+bluetooth_audio_route=hancore.shibumi.bluetooth/BluetoothAudioRouteAdapter.qml
 bluetooth_widget=hancore.shibumi.bluetooth/BarWidget.qml
 bluetooth_panel=hancore.shibumi.bluetooth/BluetoothPanel.qml
 [[ $(rg -c 'BluetoothBackendAdapter \{' "$bluetooth_service") -eq 1 ]] \
@@ -736,8 +737,14 @@ rg -q 'adapter\.stopDiscovery\(\)' "$bluetooth_service" \
 for bluetooth_adapter in "$bluetooth_adapter"; do
   rg -q '^import Quickshell\.Bluetooth$' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not own the native BlueZ model"
-  rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter does not own Bluetooth audio routing"
+  [[ -f $bluetooth_audio_route ]] \
+    || fail "$bluetooth_audio_route is missing"
+  rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_audio_route" \
+    || fail "$bluetooth_audio_route does not own PipeWire access"
+  rg -q 'BluetoothAudioRouteAdapter' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not use the audio route seam"
+  rg -Fq 'routeBluetoothDevice(request)' "$bluetooth_audio_route" \
+    || fail "$bluetooth_audio_route lacks its narrow route method"
   for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
     rg -U -q "on${device_signal}Changed: \\{[^}]*syncNativePendingActions\\(\\)[^}]*syncNativeAudioHandoffIntents\\(\\)" \
       "$bluetooth_adapter" \
