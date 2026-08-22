@@ -8,9 +8,10 @@ function nodeProperties(node) {
 }
 
 function stableNodeId(node, kind) {
-  if (!node) return ""
-  if (node.id === undefined || node.id === null) return ""
-  return String(kind || "node") + ":" + String(node.id)
+  if (!node || node.id === undefined || node.id === null) return ""
+  var id = String(node.id).trim()
+  if (!/^[0-9]+$/.test(id)) return ""
+  return String(kind || "node") + ":" + id
 }
 
 function nodeLabel(node) {

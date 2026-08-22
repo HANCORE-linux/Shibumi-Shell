@@ -80,8 +80,18 @@ ShellRoot {
   QtObject {
     id: audioOutput
     property int count: 0
-    property var lastSink: null
-    function setDefaultSink(sink) { count++; lastSink = sink }
+    property string lastEntityId: ""
+    function setDefaultSink(entityId) {
+      count++
+      lastEntityId = String(entityId)
+      return {
+        ok: true,
+        code: "ok",
+        message: "",
+        entityId: lastEntityId,
+        generation: 0
+      }
+    }
   }
 
   QtObject {
@@ -217,7 +227,8 @@ ShellRoot {
         root.ticks = 0
       } else if (root.phase === 1) {
         if (root.ticks < 25) return
-        if (audioOutput.count !== 1 || audioOutput.lastSink !== audioSink)
+        if (audioOutput.count !== 1
+            || audioOutput.lastEntityId !== "sink:771")
           return root.fail("late connection lost its audio intent")
         if (!discoveryService.discovering
             || discoveryFixture.discoveryStartAttempts < 2)

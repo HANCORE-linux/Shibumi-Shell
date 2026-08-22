@@ -174,6 +174,19 @@ Item {
         ok, code, message, entityId, root.generation)
     }
 
+    function backendReady() {
+      return root.active && (root.backendOverride === null
+        || backendValue("ready", true) !== false)
+    }
+
+    function unresolvedId(id, label) {
+      return result(
+        false,
+        backendReady() ? "stale-id" : "unavailable",
+        label + " is unavailable",
+        id)
+    }
+
     function mutationError(node, kind, label) {
       if (!node || node.ready === false)
         return result(false, "unavailable", label + " is unavailable")
@@ -201,11 +214,13 @@ Item {
 
     function setDefaultSink(id) {
       const node = resolveNode(id, filterSinks(currentNodes()), "sink")
+      if (!node) return unresolvedId(id, "Audio sink")
       return setNodeDefault(node, "sink", "setDefaultSink")
     }
 
     function setDefaultSource(id) {
       const node = resolveNode(id, filterSources(currentNodes()), "source")
+      if (!node) return unresolvedId(id, "Audio source")
       return setNodeDefault(node, "source", "setDefaultSource")
     }
 
@@ -251,6 +266,7 @@ Item {
 
     function setStreamVolume(id, value) {
       const node = resolveNode(id, filterStreams(currentNodes()), "stream")
+      if (!node) return unresolvedId(id, "Audio stream")
       const failure = mutationError(node, "stream", "Audio stream")
       if (failure) return failure
       if (!node.audio)
@@ -261,6 +277,7 @@ Item {
 
     function toggleStreamMute(id) {
       const node = resolveNode(id, filterStreams(currentNodes()), "stream")
+      if (!node) return unresolvedId(id, "Audio stream")
       const failure = mutationError(node, "stream", "Audio stream")
       if (failure) return failure
       if (!node.audio)
@@ -278,7 +295,10 @@ Item {
         if (!Model.bluetoothSinkMatchesRequest(node, request)) continue
         return setNodeDefault(node, "sink", "setDefaultSink")
       }
-      return result(false, "stale-id", "Bluetooth audio sink is unavailable")
+      return result(
+        false,
+        backendReady() ? "stale-id" : "unavailable",
+        "Bluetooth audio sink is unavailable")
     }
   }
 }

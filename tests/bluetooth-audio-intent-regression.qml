@@ -71,6 +71,19 @@ ShellRoot {
   }
 
   QtObject {
+    id: malformedSinkId
+    property bool isSink: true
+    property bool isStream: false
+    property string id: "abc"
+    property bool ready: true
+    property string name: "bluez_output.DD_00_00_00_00_04.a2dp-sink"
+    property string description: "Malformed ID"
+    property string nickname: ""
+    property string nick: ""
+    property var properties: ({ "api.bluez5.address": "DD:00:00:00:00:04" })
+  }
+
+  QtObject {
     id: sinkB
     property bool isSink: true
     property bool isStream: false
@@ -92,12 +105,40 @@ ShellRoot {
   QtObject {
     id: audioOutput
     property int count: 0
-    property var lastSink: null
-    function setDefaultSink(sink) { count++; lastSink = sink }
+    property string lastEntityId: ""
+    function setDefaultSink(entityId) {
+      count++
+      lastEntityId = String(entityId)
+      return {
+        ok: true,
+        code: "ok",
+        message: "",
+        entityId: lastEntityId,
+        generation: 0
+      }
+    }
   }
 
   QtObject {
     id: incompleteAudioOutput
+  }
+
+  QtObject {
+    id: typedFailingAudioOutput
+    function setDefaultSink(_entityId) {
+      return {
+        ok: false,
+        code: "unavailable",
+        message: "fixture delegate failure",
+        entityId: "sink:801",
+        generation: 7
+      }
+    }
+  }
+
+  QtObject {
+    id: booleanFailingAudioOutput
+    function setDefaultSink(_entityId) { return false }
   }
 
   QtObject {
@@ -129,7 +170,7 @@ ShellRoot {
     id: backend
     adapterOverride: nativeAdapter
     nativeDevicesOverride: [deviceA, deviceB]
-    pipewireNodesOverride: [sinkA, sinkB]
+    pipewireNodesOverride: [sinkA, sinkB, malformedSinkId]
     commandRunnerOverride: commandRunner
     audioOutputOverride: audioOutput
     audioSwitchInterval: 20
@@ -153,8 +194,17 @@ ShellRoot {
           name: "Intent A",
           deviceName: "Intent A"
         })
+        const malformedIdRoute = backend.requestBluetoothAudioRoute({
+          address: "DD:00:00:00:00:04",
+          name: "Malformed ID",
+          deviceName: "Malformed ID"
+        })
         backend.audioOutputOverride = incompleteAudioOutput
         const unsupportedRoute = backend.requestBluetoothAudioRoute(deviceA)
+        backend.audioOutputOverride = typedFailingAudioOutput
+        const typedFailure = backend.requestBluetoothAudioRoute(deviceA)
+        backend.audioOutputOverride = booleanFailingAudioOutput
+        const booleanFailure = backend.requestBluetoothAudioRoute(deviceA)
         backend.audioOutputOverride = audioOutput
         if (!seamBackend.requestBluetoothAudioRoute(deviceA).ok
             || routeOverride.count !== 1
@@ -164,8 +214,17 @@ ShellRoot {
             || "connected" in routeOverride.lastRequest
             || backend.requestBluetoothAudioRoute(deviceWrongAddress).ok
             || invalidAddressRoute.ok
+            || malformedIdRoute.ok
+            || malformedIdRoute.code !== "stale-id"
             || unsupportedRoute.ok
             || unsupportedRoute.code !== "unsupported"
+            || typedFailure.ok
+            || typedFailure.code !== "unavailable"
+            || typedFailure.message !== "fixture delegate failure"
+            || typedFailure.entityId !== "sink:801"
+            || typedFailure.generation !== 7
+            || booleanFailure.ok
+            || booleanFailure.code !== "unavailable"
             || unavailableRoute.ok)
           return root.fail("Bluetooth route seam leaked, misrouted, or mutated an unavailable sink")
         if (!backend.connectDevice(deviceA) || !backend.connectDevice(deviceB))
@@ -183,7 +242,8 @@ ShellRoot {
         root.ticks = 0
       } else if (root.phase === 2) {
         if (root.ticks < 4) return
-        if (audioOutput.count !== 1 || audioOutput.lastSink !== sinkB)
+        if (audioOutput.count !== 1
+            || audioOutput.lastEntityId !== "sink:802")
           return root.fail("latest intent B did not exclusively hand off audio")
         deviceB.connected = false
         if (!backend.connectDevice(deviceB))

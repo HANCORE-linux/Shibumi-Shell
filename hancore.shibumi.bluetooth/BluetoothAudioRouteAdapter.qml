@@ -51,16 +51,23 @@ Item {
   function setDefaultSink(sink) {
     if (!sink || sink.ready === false)
       return actionResult(false, "unavailable", "Bluetooth audio sink is unavailable")
-    const entityId = sink.id === undefined || sink.id === null
-      ? "" : "sink:" + String(sink.id)
-    if (!entityId)
+    const rawId = sink.id === undefined || sink.id === null
+      ? "" : String(sink.id).trim()
+    if (!/^[0-9]+$/.test(rawId))
       return actionResult(false, "stale-id", "Bluetooth audio sink is unavailable")
+    const entityId = "sink:" + rawId
     if (outputOverride !== null) {
       if (typeof outputOverride.setDefaultSink !== "function")
         return actionResult(
           false, "unsupported", "Audio backend action is unavailable", entityId)
-      outputOverride.setDefaultSink(sink)
-      return actionResult(true, "ok", "", entityId)
+      const delegated = outputOverride.setDefaultSink(entityId)
+      if (delegated && typeof delegated === "object"
+          && typeof delegated.ok === "boolean")
+        return delegated
+      if (delegated === true)
+        return actionResult(true, "ok", "", entityId)
+      return actionResult(
+        false, "unavailable", "Audio backend action failed", entityId)
     }
     Pipewire.preferredDefaultAudioSink = sink
     Quickshell.execDetached([

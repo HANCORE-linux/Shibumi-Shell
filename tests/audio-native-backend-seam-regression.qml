@@ -73,6 +73,18 @@ ShellRoot {
   }
 
   QtObject {
+    id: sinkWithEmptyId
+    property string id: ""
+    property bool ready: true
+    property bool isSink: true
+    property bool isStream: false
+    property string name: "bluez_output.DD_00_00_00_00_04.a2dp-sink"
+    property string description: "Empty ID Headset"
+    property var audio: sinkAudioA
+    property var properties: ({ "api.bluez5.address": "DD:00:00:00:00:04" })
+  }
+
+  QtObject {
     id: source
     property int id: 3
     property bool ready: true
@@ -100,7 +112,7 @@ ShellRoot {
   QtObject {
     id: fakeBackend
     property bool ready: true
-    property var nodes: [sinkA, sinkB, sinkWithoutId, source, stream]
+    property var nodes: [sinkA, sinkB, sinkWithoutId, sinkWithEmptyId, source, stream]
     property var defaultAudioSink: sinkA
     property var defaultAudioSource: source
     property int sinkChanges: 0
@@ -187,11 +199,17 @@ ShellRoot {
           name: "Headset Output",
           deviceName: "Headset Output"
         })
+        const emptyIdResult = backend.routeBluetoothDevice({
+          address: "DD:00:00:00:00:04",
+          name: "Empty ID Headset",
+          deviceName: "Empty ID Headset"
+        })
         if (!routeResult.ok || routeResult.entityId !== "sink:2"
             || fakeBackend.defaultAudioSink !== sinkB
             || missingIdResult.ok || missingIdResult.code !== "stale-id"
             || wrongAddressResult.ok || wrongAddressResult.code !== "stale-id"
-            || invalidAddressResult.ok || invalidAddressResult.code !== "stale-id")
+            || invalidAddressResult.ok || invalidAddressResult.code !== "stale-id"
+            || emptyIdResult.ok || emptyIdResult.code !== "stale-id")
           return root.fail("Bluetooth route resolution")
         root.phase++
         root.ticks = 0
@@ -224,9 +242,11 @@ ShellRoot {
         const unavailableSource = backend.setInputVolume(0.12)
         const unavailableStream = backend.setStreamVolume("stream:8", 0.12)
         const unavailableRoute = backend.setDefaultSink("sink:2")
+        const staleIdResult = backend.setDefaultSink("sink:999")
         if (unavailableOutput.ok || unavailableOutput.code !== "unavailable"
             || unavailableMute.ok || unavailableSource.ok
             || unavailableStream.ok || unavailableRoute.ok
+            || staleIdResult.ok || staleIdResult.code !== "stale-id"
             || sinkAudioB.volume !== sinkVolume
             || sinkAudioB.muted !== sinkMuted
             || streamAudio.volume !== streamVolume
