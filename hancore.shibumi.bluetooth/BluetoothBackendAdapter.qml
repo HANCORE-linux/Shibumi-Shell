@@ -329,7 +329,8 @@ Item {
     if (!request || !audioRoute
         || typeof audioRoute.routeBluetoothDevice !== "function")
       return false
-    return audioRoute.routeBluetoothDevice(request) === true
+    const result = audioRoute.routeBluetoothDevice(request)
+    return result === true || (result && result.ok === true)
   }
 
   function scheduleAudioOutputSwitch(device) {

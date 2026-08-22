@@ -55,6 +55,8 @@ run_smoke() {
 }
 
 run_smoke audio audio-plugin-smoke.qml 'audio plugin smoke passed'
+run_smoke audio audio-native-backend-seam-regression.qml \
+  'audio native backend seam regression passed'
 run_smoke media media-plugin-smoke.qml 'media plugin smoke passed'
 
 run_spectrum_smoke() {

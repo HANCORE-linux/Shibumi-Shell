@@ -12,12 +12,27 @@ Item {
   property var shell: null
   property var manifest: null
   property var reports: []
+  // Step 4A preparation remains opt-in until the activation commit makes this
+  // the sole Shibumi PipeWire owner.
+  property bool nativeBackendEnabled: false
+  property var nativeBackendOverride: null
+  readonly property var nativeBackend: nativeBackendLoader.item
   property bool ready: false
   property bool outputMuted: false
 
   visible: false
   width: 0
   height: 0
+
+  Loader {
+    id: nativeBackendLoader
+    active: root.nativeBackendEnabled
+    source: Qt.resolvedUrl("AudioBackendAdapter.qml")
+    onLoaded: {
+      item.active = true
+      item.backendOverride = root.nativeBackendOverride
+    }
+  }
 
   function report(owner, available, muted) {
     if (!owner) return false

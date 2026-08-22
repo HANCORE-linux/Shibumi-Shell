@@ -89,7 +89,13 @@ ShellRoot {
     function routeBluetoothDevice(request) {
       count++
       lastRequest = request
-      return true
+      return {
+        ok: true,
+        code: "ok",
+        message: "",
+        entityId: "",
+        generation: 0
+      }
     }
   }
 
