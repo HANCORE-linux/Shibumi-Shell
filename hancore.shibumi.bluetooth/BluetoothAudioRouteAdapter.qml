@@ -39,7 +39,7 @@ Item {
   }
 
   function setDefaultSink(sink) {
-    if (!sink) return false
+    if (!sink || sink.ready === false) return false
     if (outputOverride !== null
         && typeof outputOverride.setDefaultSink === "function") {
       outputOverride.setDefaultSink(sink)

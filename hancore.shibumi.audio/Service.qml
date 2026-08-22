@@ -29,8 +29,10 @@ Item {
     active: root.nativeBackendEnabled
     source: Qt.resolvedUrl("AudioBackendAdapter.qml")
     onLoaded: {
-      item.active = true
+      // Apply test/native injection before activation so a fake backend never
+      // briefly evaluates the real PipeWire service.
       item.backendOverride = root.nativeBackendOverride
+      item.active = true
     }
   }
 

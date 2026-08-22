@@ -34,6 +34,18 @@ ShellRoot {
   }
 
   QtObject {
+    id: deviceWrongAddress
+    property string address: "CC:00:00:00:00:03"
+    property string name: "Intent A"
+    property string deviceName: name
+    property bool connected: true
+    property bool paired: true
+    property bool bonded: true
+    property bool trusted: true
+    property var adapter: nativeAdapter
+  }
+
+  QtObject {
     id: deviceB
     property string address: "BB:00:00:00:00:02"
     property string name: "Intent B"
@@ -50,6 +62,7 @@ ShellRoot {
     property bool isSink: true
     property bool isStream: false
     property int id: 801
+    property bool ready: true
     property string name: "bluez_output.AA_00_00_00_00_01.a2dp-sink"
     property string description: "Intent A"
     property string nickname: ""
@@ -62,6 +75,7 @@ ShellRoot {
     property bool isSink: true
     property bool isStream: false
     property int id: 802
+    property bool ready: true
     property string name: "bluez_output.BB_00_00_00_00_02.a2dp-sink"
     property string description: "Intent B"
     property string nickname: ""
@@ -127,13 +141,18 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (root.ticks < 2) return
+        sinkA.ready = false
+        const unavailableRoute = backend.requestBluetoothAudioRoute(deviceA)
+        sinkA.ready = true
         if (!seamBackend.requestBluetoothAudioRoute(deviceA)
             || routeOverride.count !== 1
             || routeOverride.lastRequest.address !== deviceA.address
             || routeOverride.lastRequest.name !== deviceA.name
             || "adapter" in routeOverride.lastRequest
-            || "connected" in routeOverride.lastRequest)
-          return root.fail("Bluetooth route seam leaked backend state")
+            || "connected" in routeOverride.lastRequest
+            || backend.requestBluetoothAudioRoute(deviceWrongAddress)
+            || unavailableRoute)
+          return root.fail("Bluetooth route seam leaked, misrouted, or mutated an unavailable sink")
         if (!backend.connectDevice(deviceA) || !backend.connectDevice(deviceB))
           return root.fail("could not create ordered connect intents")
         backend.nativePendingActions = ({})

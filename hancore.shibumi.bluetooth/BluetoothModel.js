@@ -94,7 +94,10 @@ function bluetoothSinkMatchesDevice(node, device) {
 
   var address = normalizedAddress(device.address)
   var text = nodeText(node)
-  if (address !== "" && normalizedAddress(text).indexOf(address) !== -1) return true
+  // A supplied Bluetooth address is authoritative. Never route to a same-name
+  // sink when its address is absent or different.
+  if (address !== "")
+    return normalizedAddress(text).indexOf(address) !== -1
 
   var label = deviceLabel(device).toLowerCase()
   return label !== "" && text.indexOf(label) !== -1

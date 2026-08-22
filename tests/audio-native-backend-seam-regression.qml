@@ -40,6 +40,7 @@ ShellRoot {
   QtObject {
     id: sinkA
     property int id: 1
+    property bool ready: true
     property bool isSink: true
     property bool isStream: false
     property string name: "alsa_output.pci-1"
@@ -51,6 +52,7 @@ ShellRoot {
   QtObject {
     id: sinkB
     property int id: 2
+    property bool ready: true
     property bool isSink: true
     property bool isStream: false
     property string name: "bluez_output.AA_00_00_00_00_01.a2dp-sink"
@@ -61,6 +63,7 @@ ShellRoot {
 
   QtObject {
     id: sinkWithoutId
+    property bool ready: true
     property bool isSink: true
     property bool isStream: false
     property string name: "bluez_output.BB_00_00_00_00_02.a2dp-sink"
@@ -72,6 +75,7 @@ ShellRoot {
   QtObject {
     id: source
     property int id: 3
+    property bool ready: true
     property bool isSink: false
     property bool isStream: false
     property string name: "alsa_input.pci-1"
@@ -83,6 +87,7 @@ ShellRoot {
   QtObject {
     id: stream
     property int id: 8
+    property bool ready: true
     property bool isSink: true
     property bool isStream: true
     property string name: "spotify"
@@ -112,6 +117,12 @@ ShellRoot {
     backendOverride: fakeBackend
   }
 
+  Audio.Service {
+    id: service
+    nativeBackendEnabled: true
+    nativeBackendOverride: fakeBackend
+  }
+
   Timer {
     interval: 30
     repeat: true
@@ -125,8 +136,16 @@ ShellRoot {
             || backend.audioSources.length !== 1
             || backend.audioStreams.length !== 1)
           return root.fail("native backend snapshots")
-        if (backend.rawNodes !== undefined || backend.sink !== undefined
-            || backend.source !== undefined
+        if (backend.currentNodes !== undefined
+            || backend.currentSink !== undefined
+            || backend.currentSource !== undefined
+            || backend.filterSinks !== undefined
+            || backend.filterSources !== undefined
+            || backend.filterStreams !== undefined
+            || service.nativeBackend === null
+            || service.nativeBackend.ready !== true
+            || service.nativeBackend.audioSinks.length !== 2
+            || service.nativeBackend.currentNodes !== undefined
             || backend.audioSinks[0].node !== undefined
             || backend.audioSinks[0].id !== "sink:1"
             || backend.sinkSnapshot.id !== "sink:1"
@@ -142,9 +161,15 @@ ShellRoot {
           name: "Unstable Headset",
           deviceName: "Unstable Headset"
         })
+        const wrongAddressResult = backend.routeBluetoothDevice({
+          address: "CC:00:00:00:00:03",
+          name: "Headset Output",
+          deviceName: "Headset Output"
+        })
         if (!routeResult.ok || routeResult.entityId !== "sink:2"
             || fakeBackend.defaultAudioSink !== sinkB
-            || missingIdResult.ok || missingIdResult.code !== "stale-id")
+            || missingIdResult.ok || missingIdResult.code !== "stale-id"
+            || wrongAddressResult.ok || wrongAddressResult.code !== "stale-id")
           return root.fail("Bluetooth route resolution")
         root.phase++
         root.ticks = 0
@@ -165,6 +190,26 @@ ShellRoot {
         root.ticks = 0
       } else if (root.phase === 2) {
         if (root.ticks < 2) return
+        const sinkVolume = sinkAudioB.volume
+        const sinkMuted = sinkAudioB.muted
+        const streamVolume = streamAudio.volume
+        const streamMuted = streamAudio.muted
+        sinkB.ready = false
+        source.ready = false
+        stream.ready = false
+        const unavailableOutput = backend.setOutputVolume(0.12)
+        const unavailableMute = backend.toggleOutputMute()
+        const unavailableSource = backend.setInputVolume(0.12)
+        const unavailableStream = backend.setStreamVolume("stream:8", 0.12)
+        const unavailableRoute = backend.setDefaultSink("sink:2")
+        if (unavailableOutput.ok || unavailableOutput.code !== "unavailable"
+            || unavailableMute.ok || unavailableSource.ok
+            || unavailableStream.ok || unavailableRoute.ok
+            || sinkAudioB.volume !== sinkVolume
+            || sinkAudioB.muted !== sinkMuted
+            || streamAudio.volume !== streamVolume
+            || streamAudio.muted !== streamMuted)
+          return root.fail("unavailable nodes were mutated")
         backend.active = false
         root.phase++
         root.ticks = 0
