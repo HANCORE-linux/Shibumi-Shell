@@ -220,7 +220,7 @@ ShibumiPanel {
                 ? Commons.Util.alpha(panel.controlAccent, 0.4)
                 : panel.controlAccent
               font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: 11
+              font.pixelSize: Commons.Style.font.body
               font.weight: Font.Medium
               renderType: Text.NativeRendering
             }
@@ -358,7 +358,7 @@ ShibumiPanel {
                     ? Commons.Util.alpha(panel.controlAccent, 0.4)
                     : panel.controlAccent
                   font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-                  font.pixelSize: 11
+                  font.pixelSize: Commons.Style.font.body
                   font.weight: Font.Medium
                   horizontalAlignment: Text.AlignRight
                   renderType: Text.NativeRendering
