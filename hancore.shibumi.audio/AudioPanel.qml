@@ -212,7 +212,7 @@ ShibumiPanel {
             height: Commons.Style.space(30)
 
             Text {
-              anchors.horizontalCenter: parent.horizontalCenter
+              anchors.right: parent.right
               anchors.top: parent.top
               text: panel.outputMuted ? "Muted"
                 : Math.round(panel.outputVolume * 100) + "%"
@@ -222,6 +222,7 @@ ShibumiPanel {
               font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: Commons.Style.font.body
               font.weight: Font.Medium
+              horizontalAlignment: Text.AlignRight
               renderType: Text.NativeRendering
             }
 
