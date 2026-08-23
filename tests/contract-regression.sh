@@ -503,7 +503,7 @@ fi
 rg -U -q 'Timer \{\n[[:space:]]*id: wheelCommitTimer\n[[:space:]]*interval: 70\n' \
   hancore.shibumi.audio/BarWidget.qml \
   || fail "audio wheel commit timer contract changed"
-rg -U -q 'Timer \{\n[[:space:]]*id: wheelSettleTimer\n[[:space:]]*interval: 300\n' \
+rg -U -q 'Timer \{\n[[:space:]]*id: wheelSettleTimer\n[[:space:]]*interval: 1000\n' \
   hancore.shibumi.audio/BarWidget.qml \
   || fail "audio wheel settle timer contract changed"
 if rg -U -q 'Timer \{([^}]|\n)*(repeat:[[:space:]]*true|running:[[:space:]]*true)' \
