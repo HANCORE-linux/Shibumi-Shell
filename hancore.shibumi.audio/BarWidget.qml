@@ -46,6 +46,7 @@ Ui.Panel {
   readonly property bool panelLoaded: panelItem !== null
   readonly property bool audioReady: audioBridge.ready
   property bool wheelAdjustmentPending: false
+  property bool wheelCommitInFlight: false
   property real wheelTargetVolume: 0
   readonly property real displayedOutputVolume: wheelAdjustmentPending
     ? wheelTargetVolume : audioBridge.outputVolume
@@ -117,6 +118,7 @@ Ui.Panel {
     wheelTargetVolume = Math.max(0, Math.min(1,
       Math.round((base + Number(delta)) * 100) / 100))
     wheelAdjustmentPending = true
+    wheelSettleTimer.stop()
     wheelCommitTimer.restart()
     return true
   }
@@ -140,6 +142,7 @@ Ui.Panel {
       wheelCommitTimer.stop()
       wheelSettleTimer.stop()
       wheelAdjustmentPending = false
+      wheelCommitInFlight = false
       popupLoader.source = ""
     }
     reportAudioState()
@@ -185,16 +188,34 @@ Ui.Panel {
       const result = root.setOutputVolume(root.wheelTargetVolume)
       if (!result || result.ok !== true) {
         root.wheelAdjustmentPending = false
+        root.wheelCommitInFlight = false
         return
       }
+      root.wheelCommitInFlight = true
       wheelSettleTimer.restart()
     }
   }
 
   Timer {
     id: wheelSettleTimer
-    interval: 300
-    onTriggered: root.wheelAdjustmentPending = false
+    interval: 1000
+    onTriggered: {
+      root.wheelAdjustmentPending = false
+      root.wheelCommitInFlight = false
+    }
+  }
+
+  Connections {
+    target: audioBridge
+    function onOutputVolumeChanged() {
+      if (!root.wheelAdjustmentPending || !root.wheelCommitInFlight)
+        return
+      if (Math.abs(Number(audioBridge.outputVolume)
+          - root.wheelTargetVolume) > 0.005) return
+      root.wheelAdjustmentPending = false
+      root.wheelCommitInFlight = false
+      wheelSettleTimer.stop()
+    }
   }
 
   Item {

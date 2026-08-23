@@ -235,6 +235,8 @@ ShellRoot {
             || !nativeBridge.ready
             || nativeBridge.audioSinks.length !== 2
             || nativeBridge.audioSinks[0].node !== undefined
+            || Math.abs(service.nativeOutputVolume - 0.42) > 0.001
+            || Math.abs(nativeBridge.outputVolume - 0.42) > 0.001
             || nativeBridge.officialPanelState().present)
           return root.fail("primitive stable sink snapshot")
         const routeResult = backend.routeBluetoothDevice({
@@ -297,6 +299,8 @@ ShellRoot {
         const nativeRelease = nativeBridge.releasePeakMonitoring()
         if (!nativeOutput.ok
             || Math.abs(sinkAudioB.volume - 0.47) > 0.001
+            || Math.abs(service.nativeOutputVolume - 0.47) > 0.001
+            || Math.abs(nativeBridge.outputVolume - 0.47) > 0.001
             || !nativeMute.ok
             || sinkAudioB.muted === nativeMutedBefore
             || !nativeStream.ok

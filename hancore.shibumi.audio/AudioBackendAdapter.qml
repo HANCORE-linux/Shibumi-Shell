@@ -32,6 +32,11 @@ Item {
   property int volumeSinkProcessGeneration: 0
   property bool volumeSinkProcessStarted: false
   property bool volumeSinkProcessDiscarded: false
+  // Keep the last primitive value while the asynchronous volume-sink
+  // resolver is refreshing. Opening the panel acquires peak monitoring,
+  // which can transiently invalidate link-derived sink state.
+  property real lastKnownOutputVolume: 0
+  property bool lastKnownOutputMuted: false
   property int generation: 0
 
   readonly property bool ready: implementation.ready()
@@ -64,8 +69,63 @@ Item {
     volumeSinkResolutionFailed = false
     volumeSinkResolved = backendOverride !== null
   }
-  readonly property real outputVolume: implementation.outputVolume()
-  readonly property bool outputMuted: implementation.outputMuted()
+  readonly property real outputVolume: {
+    // Keep the primitive binding reactive across the asynchronous volume-sink
+    // resolver. The implementation method intentionally hides backend nodes,
+    // so these dependencies must be explicit at the public seam.
+    const active = root.active
+    const resolved = root.volumeSinkResolved
+    const failed = root.volumeSinkResolutionFailed
+    const sinkName = root.volumeSinkName
+    const requestGeneration = root.volumeSinkRequestGeneration
+    const backendReady = root.backendOverride !== null
+      ? root.backendOverride.ready !== false : Pipewire.ready === true
+    void active
+    void resolved
+    void failed
+    void sinkName
+    void requestGeneration
+    void backendReady
+    if (!backendReady) return 0
+    if (!resolved) {
+      const sink = implementation.currentVolumeNode()
+      if (sink && sink.audio && sink.audio.volume !== undefined)
+        return Number(sink.audio.volume)
+      return root.lastKnownOutputVolume
+    }
+    return implementation.outputVolume()
+  }
+  onOutputVolumeChanged: {
+    if (root.volumeSinkResolved && root.ready)
+      root.lastKnownOutputVolume = outputVolume
+  }
+  readonly property bool outputMuted: {
+    const active = root.active
+    const resolved = root.volumeSinkResolved
+    const failed = root.volumeSinkResolutionFailed
+    const sinkName = root.volumeSinkName
+    const requestGeneration = root.volumeSinkRequestGeneration
+    const backendReady = root.backendOverride !== null
+      ? root.backendOverride.ready !== false : Pipewire.ready === true
+    void active
+    void resolved
+    void failed
+    void sinkName
+    void requestGeneration
+    void backendReady
+    if (!backendReady) return false
+    if (!resolved) {
+      const sink = implementation.currentVolumeNode()
+      if (sink && sink.audio && sink.audio.muted !== undefined)
+        return sink.audio.muted === true
+      return root.lastKnownOutputMuted
+    }
+    return implementation.outputMuted()
+  }
+  onOutputMutedChanged: {
+    if (root.volumeSinkResolved && root.ready)
+      root.lastKnownOutputMuted = outputMuted
+  }
   readonly property real inputVolume: implementation.inputVolume()
   readonly property bool inputMuted: implementation.inputMuted()
   readonly property var audioSinks: implementation.audioSinks()
@@ -140,11 +200,13 @@ Item {
     }
 
     function currentVolumeSink() {
-      if (root.backendOverride === null
-          && (root.volumeSinkResolutionFailed || !root.volumeSinkResolved))
-        return null
       const sink = implementation.currentSink()
       if (!sink || sink.ready === false) return null
+      // The default sink is already a stable native object while the helper
+      // resolves the preferred volume sink. Keep live controls usable during
+      // that short refresh window instead of returning an unavailable result.
+      if (root.backendOverride === null && !root.volumeSinkResolved)
+        return sink
       const configuredName = root.backendOverride !== null
         ? String(backendValue("volumeSinkName", ""))
         : String(root.volumeSinkName || "")
