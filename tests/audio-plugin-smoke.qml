@@ -155,8 +155,10 @@ ShellRoot {
         if (root.phaseTicks < 3) return
         const official = audio.officialPanelState()
         if (official.outputVolumeChanges !== root.wheelCallsBefore + 1
-            || Math.abs(official.outputVolume - 0.52) > 0.001)
-          return root.fail("wheel burst was not coalesced into one final write")
+            || Math.abs(official.outputVolume - 0.52) > 0.001
+            || audio.wheelAdjustmentPending
+            || audio.wheelCommitInFlight)
+          return root.fail("wheel burst was not coalesced and acknowledged")
         audio.interactionTarget.triggerPress(Qt.LeftButton)
         const closedOfficial = audio.officialPanelState()
         if (!audio.opened || closedOfficial.opened

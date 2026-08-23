@@ -47,6 +47,9 @@ Ui.Panel {
   readonly property bool audioReady: audioBridge.ready
   property bool wheelAdjustmentPending: false
   property bool wheelCommitInFlight: false
+  property int wheelCommitSerial: 0
+  property int wheelInFlightSerial: 0
+  property real wheelInFlightTarget: 0
   property real wheelTargetVolume: 0
   readonly property real displayedOutputVolume: wheelAdjustmentPending
     ? wheelTargetVolume : audioBridge.outputVolume
@@ -117,6 +120,7 @@ Ui.Panel {
       ? wheelTargetVolume : audioBridge.outputVolume
     wheelTargetVolume = Math.max(0, Math.min(1,
       Math.round((base + Number(delta)) * 100) / 100))
+    wheelCommitSerial++
     wheelAdjustmentPending = true
     wheelSettleTimer.stop()
     wheelCommitTimer.restart()
@@ -141,6 +145,7 @@ Ui.Panel {
     if (!audioReady) {
       wheelCommitTimer.stop()
       wheelSettleTimer.stop()
+      wheelCommitSerial++
       wheelAdjustmentPending = false
       wheelCommitInFlight = false
       popupLoader.source = ""
@@ -185,14 +190,24 @@ Ui.Panel {
     id: wheelCommitTimer
     interval: 70
     onTriggered: {
-      const result = root.setOutputVolume(root.wheelTargetVolume)
+      const serial = root.wheelCommitSerial
+      const target = root.wheelTargetVolume
+      root.wheelCommitInFlight = true
+      root.wheelInFlightSerial = serial
+      root.wheelInFlightTarget = target
+      const result = root.setOutputVolume(target)
+      if (serial !== root.wheelCommitSerial)
+        return
       if (!result || result.ok !== true) {
         root.wheelAdjustmentPending = false
         root.wheelCommitInFlight = false
         return
       }
-      root.wheelCommitInFlight = true
-      wheelSettleTimer.restart()
+      // A native/fixture backend may acknowledge synchronously through the
+      // outputVolume binding. Do not re-arm the fallback after that ack.
+      if (root.wheelCommitInFlight
+          && root.wheelInFlightSerial === serial)
+        wheelSettleTimer.restart()
     }
   }
 
@@ -200,6 +215,8 @@ Ui.Panel {
     id: wheelSettleTimer
     interval: 1000
     onTriggered: {
+      if (!root.wheelAdjustmentPending || !root.wheelCommitInFlight
+          || root.wheelInFlightSerial !== root.wheelCommitSerial) return
       root.wheelAdjustmentPending = false
       root.wheelCommitInFlight = false
     }
@@ -208,10 +225,11 @@ Ui.Panel {
   Connections {
     target: audioBridge
     function onOutputVolumeChanged() {
-      if (!root.wheelAdjustmentPending || !root.wheelCommitInFlight)
+      if (!root.wheelAdjustmentPending || !root.wheelCommitInFlight
+          || root.wheelInFlightSerial !== root.wheelCommitSerial)
         return
       if (Math.abs(Number(audioBridge.outputVolume)
-          - root.wheelTargetVolume) > 0.005) return
+          - root.wheelInFlightTarget) > 0.005) return
       root.wheelAdjustmentPending = false
       root.wheelCommitInFlight = false
       wheelSettleTimer.stop()

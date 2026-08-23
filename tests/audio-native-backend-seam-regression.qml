@@ -319,6 +319,33 @@ ShellRoot {
         root.ticks = 0
       } else if (root.phase === 2) {
         if (root.ticks < 2) return
+        fakeBackend.defaultAudioSink = sinkA
+        sinkB.ready = true
+        backend.volumeSinkName = sinkB.name
+        backend.volumeSinkResolved = false
+        const expectedRetainedVolume = sinkAudioB.volume
+        const retainedVolume = backend.outputVolume
+        const retainedResult = backend.setOutputVolume(0.23)
+        const retainedMute = backend.toggleOutputMute()
+        if (Math.abs(retainedVolume - expectedRetainedVolume) > 0.001
+            || !retainedResult.ok || !retainedMute.ok
+            || Math.abs(sinkAudioB.volume - 0.23) > 0.001
+            || !sinkAudioB.muted
+            || Math.abs(sinkAudioA.volume - 0.42) > 0.001)
+          return root.fail("refresh redirected volume mutation")
+        sinkB.ready = false
+        if (Math.abs(backend.outputVolume - 0.23) > 0.001
+            || !backend.outputMuted)
+          return root.fail("unresolved mutation was not cached")
+        sinkB.ready = true
+        if (!backend.toggleOutputMute().ok)
+          return root.fail("failed to restore effective mute")
+        backend.volumeSinkResolved = true
+        backend.volumeSinkName = ""
+        fakeBackend.defaultAudioSink = sinkB
+        if (!backend.setOutputVolume(0.47).ok
+            || !backend.toggleOutputMute().ok)
+          return root.fail("failed to restore effective volume state")
         const sinkVolume = sinkAudioB.volume
         const sinkMuted = sinkAudioB.muted
         const streamVolume = streamAudio.volume
@@ -360,6 +387,14 @@ ShellRoot {
             || streamAudio.volume !== streamVolume
             || streamAudio.muted !== streamMuted)
           return root.fail("unavailable nodes were mutated")
+        backend.volumeSinkName = sinkB.name
+        if (Math.abs(backend.outputVolume - sinkVolume) > 0.001
+            || backend.outputMuted !== sinkMuted)
+          return root.fail("resolved output cache was not retained")
+        backend.volumeSinkResolved = false
+        if (Math.abs(backend.outputVolume - sinkVolume) > 0.001
+            || backend.outputMuted !== sinkMuted)
+          return root.fail("unresolved output cache was not retained")
         backend.active = false
         root.phase++
         root.ticks = 0
@@ -367,7 +402,9 @@ ShellRoot {
         if (root.ticks < 2) return
         if (backend.ready || backend.audioSinks.length !== 0
             || backend.audioSources.length !== 0
-            || backend.audioStreams.length !== 0)
+            || backend.audioStreams.length !== 0
+            || backend.outputVolume !== 0
+            || backend.outputMuted)
           return root.fail("inactive native backend remained active")
         stop()
         console.log("audio native backend seam regression passed")

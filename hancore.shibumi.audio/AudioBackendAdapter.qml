@@ -64,7 +64,9 @@ Item {
   }
 
   function invalidateVolumeSink() {
-    volumeSinkName = ""
+    // Retain the last confirmed effective sink while the resolver refreshes.
+    // A link update must not redirect a mutation to the default sink merely
+    // because the preferred DSP sink is temporarily unresolved.
     volumeSinkRequestGeneration++
     volumeSinkResolutionFailed = false
     volumeSinkResolved = backendOverride !== null
@@ -86,18 +88,16 @@ Item {
     void sinkName
     void requestGeneration
     void backendReady
-    if (!backendReady) return 0
-    if (!resolved) {
-      const sink = implementation.currentVolumeNode()
-      if (sink && sink.audio && sink.audio.volume !== undefined)
-        return Number(sink.audio.volume)
-      return root.lastKnownOutputVolume
-    }
-    return implementation.outputVolume()
+    if (!active || !backendReady) return 0
+    const sink = implementation.currentVolumeNode()
+    if (sink && sink.audio && sink.audio.volume !== undefined)
+      return Number(sink.audio.volume)
+    return root.lastKnownOutputVolume
   }
   onOutputVolumeChanged: {
-    if (root.volumeSinkResolved && root.ready)
-      root.lastKnownOutputVolume = outputVolume
+    const sink = implementation.currentVolumeNode()
+    if (root.ready && sink && sink.audio && sink.audio.volume !== undefined)
+      root.lastKnownOutputVolume = Number(sink.audio.volume)
   }
   readonly property bool outputMuted: {
     const active = root.active
@@ -113,18 +113,16 @@ Item {
     void sinkName
     void requestGeneration
     void backendReady
-    if (!backendReady) return false
-    if (!resolved) {
-      const sink = implementation.currentVolumeNode()
-      if (sink && sink.audio && sink.audio.muted !== undefined)
-        return sink.audio.muted === true
-      return root.lastKnownOutputMuted
-    }
-    return implementation.outputMuted()
+    if (!active || !backendReady) return false
+    const sink = implementation.currentVolumeNode()
+    if (sink && sink.audio && sink.audio.muted !== undefined)
+      return sink.audio.muted === true
+    return root.lastKnownOutputMuted
   }
   onOutputMutedChanged: {
-    if (root.volumeSinkResolved && root.ready)
-      root.lastKnownOutputMuted = outputMuted
+    const sink = implementation.currentVolumeNode()
+    if (root.ready && sink && sink.audio && sink.audio.muted !== undefined)
+      root.lastKnownOutputMuted = sink.audio.muted === true
   }
   readonly property real inputVolume: implementation.inputVolume()
   readonly property bool inputMuted: implementation.inputMuted()
@@ -202,14 +200,22 @@ Item {
     function currentVolumeSink() {
       const sink = implementation.currentSink()
       if (!sink || sink.ready === false) return null
-      // The default sink is already a stable native object while the helper
-      // resolves the preferred volume sink. Keep live controls usable during
-      // that short refresh window instead of returning an unavailable result.
-      if (root.backendOverride === null && !root.volumeSinkResolved)
-        return sink
       const configuredName = root.backendOverride !== null
-        ? String(backendValue("volumeSinkName", ""))
+        ? String(backendValue("volumeSinkName", root.volumeSinkName || ""))
         : String(root.volumeSinkName || "")
+      if (!root.volumeSinkResolved) {
+        if (!configuredName) return sink
+        if (String(sink.name || "") === configuredName) return sink
+        const nodes = implementation.currentNodes()
+        for (let index = 0; index < nodes.length; index++) {
+          const node = nodes[index]
+          if (node && node.isSink && !node.isStream
+              && String(node.name || "") === configuredName
+              && node.ready !== false && node.audio)
+            return node
+        }
+        return null
+      }
       if (!configuredName || String(sink.name || "") === configuredName)
         return sink
       const nodes = implementation.currentNodes()
