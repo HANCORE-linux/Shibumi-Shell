@@ -14,6 +14,10 @@ Ui.Panel {
   readonly property url backendPanelSource: registeredSource("omarchy.audio")
   property Component panelComponent: String(backendPanelSource) ? null
     : registeredComponent("omarchy.audio")
+  property var backendReadyOverride: null
+  readonly property bool nativeBackendAccessEnabled:
+    backendReadyOverride === null
+    && (String(backendPanelSource) !== "" || panelComponent !== null)
 
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
@@ -30,7 +34,6 @@ Ui.Panel {
   readonly property bool compact: displayMode === "icon"
   readonly property bool horizontalValueVisible: displayMode !== "icon"
     || tokens.v2Shell !== true
-  readonly property var audioPanel: audioBridge.panel
   readonly property var panelItem: popupLoader.item
   readonly property bool panelLoaded: panelItem !== null
   readonly property bool audioReady: audioBridge.ready
@@ -90,8 +93,12 @@ Ui.Panel {
   }
 
   function ownsPanelWidget(owner) {
-    return !!owner && (owner === root || owner === audioPanel)
+    return !!owner && owner === root
   }
+
+  function officialPanelState() { return audioBridge.officialPanelState() }
+  function openOfficialPanel() { return audioBridge.openOfficialPanel() }
+  function closeOfficialPanel() { return audioBridge.closeOfficialPanel() }
 
   function toggleOutputMute() { return audioBridge.toggleOutputMute() }
   function setOutputVolume(value) { return audioBridge.setOutputVolume(value) }
@@ -119,11 +126,13 @@ Ui.Panel {
 
   onOpenedChanged: syncPanelLoader()
   onAudioReadyChanged: {
+    if (!audioReady && opened) close()
     if (opened) syncPanelLoader()
     if (!audioReady) {
       wheelCommitTimer.stop()
       wheelSettleTimer.stop()
       wheelAdjustmentPending = false
+      popupLoader.source = ""
     }
     reportAudioState()
   }
@@ -144,6 +153,15 @@ Ui.Panel {
     panelComponent: root.panelComponent
     panelSource: root.backendPanelSource
     panelSettings: root.officialSettings()
+    backendReadyOverride: root.backendReadyOverride
+    nativeBackendAccessEnabled: root.nativeBackendAccessEnabled
+    peakValue: root.audioStateService ? root.audioStateService.inputPeak : 0
+    peakAcquire: root.audioStateService
+      ? function() { return root.audioStateService.acquirePeakMonitoring() }
+      : null
+    peakRelease: root.audioStateService
+      ? function() { return root.audioStateService.releasePeakMonitoring() }
+      : null
   }
 
   Loader { id: popupLoader }
@@ -152,7 +170,8 @@ Ui.Panel {
     id: wheelCommitTimer
     interval: 70
     onTriggered: {
-      if (!root.setOutputVolume(root.wheelTargetVolume)) {
+      const result = root.setOutputVolume(root.wheelTargetVolume)
+      if (!result || result.ok !== true) {
         root.wheelAdjustmentPending = false
         return
       }

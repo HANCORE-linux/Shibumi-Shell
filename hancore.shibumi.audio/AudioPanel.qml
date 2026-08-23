@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import Quickshell.Services.Pipewire
 import qs.Commons as Commons
 import qs.Ui as Ui
 
@@ -14,6 +13,7 @@ ShibumiPanel {
   property var displaySinks: []
   property var displaySources: []
   property var displayStreams: []
+  property bool peakLeaseHeld: false
   readonly property real outputVolume: audioBackend
     ? Number(audioBackend.outputVolume || 0) : 0
   readonly property bool outputMuted: audioBackend
@@ -23,7 +23,7 @@ ShibumiPanel {
   readonly property bool inputMuted: audioBackend
     ? audioBackend.inputMuted === true : false
   readonly property real microphoneLevel: inputMuted || !audioBackend
-    ? 0 : peakToMeter(inputPeakMonitor.peak)
+    ? 0 : peakToMeter(audioBackend.inputPeak)
   readonly property int renderedSinkCount: displaySinks.length
   readonly property int renderedSourceCount: displaySources.length
   readonly property int renderedStreamCount: displayStreams.length
@@ -91,12 +91,29 @@ ShibumiPanel {
   }
 
   onOpenChanged: {
+    if (audioBackend
+        && typeof audioBackend.acquirePeakMonitoring === "function") {
+      if (open && !peakLeaseHeld
+          && audioBackend.acquirePeakMonitoring() === true) {
+        peakLeaseHeld = true
+      } else if (!open && peakLeaseHeld) {
+        audioBackend.releasePeakMonitoring()
+        peakLeaseHeld = false
+      }
+    }
     if (open) {
       refreshModels()
       Qt.callLater(refreshModels)
     } else {
       clearModels()
     }
+  }
+
+  Component.onDestruction: {
+    if (peakLeaseHeld && audioBackend
+        && typeof audioBackend.releasePeakMonitoring === "function")
+      audioBackend.releasePeakMonitoring()
+    peakLeaseHeld = false
   }
 
   Item {
@@ -116,12 +133,6 @@ ShibumiPanel {
       interval: 75
       repeat: false
       onTriggered: panel.refreshModels()
-    }
-
-    PwNodePeakMonitor {
-      id: inputPeakMonitor
-      node: panel.audioBackend ? panel.audioBackend.source : null
-      enabled: panel.open && panel.audioBackend && panel.audioBackend.source !== null
     }
   }
 
@@ -228,7 +239,9 @@ ShibumiPanel {
                 : panel.controlAccent
               knobColor: panel.sliderKnobColor(panel.outputMuted,
                 outputSlider.enabled)
-              enabled: panel.audioBackend && panel.audioBackend.sink !== null
+              enabled: panel.audioBackend
+                && panel.audioBackend.volumeSinkSnapshot !== null
+                && panel.audioBackend.volumeSinkSnapshot.available === true
               onMoved: function(value) {
                 panel.audioBackend.setOutputVolume(value)
               }
@@ -297,12 +310,18 @@ ShibumiPanel {
           }
         }
 
-        PanelDivider { visible: panel.audioBackend && panel.audioBackend.source !== null }
+        PanelDivider {
+          visible: panel.audioBackend
+            && panel.audioBackend.sourceSnapshot !== null
+            && panel.audioBackend.sourceSnapshot.available === true
+        }
 
         Column {
           width: parent.width
           spacing: 8
-          visible: panel.audioBackend && panel.audioBackend.source !== null
+          visible: panel.audioBackend
+            && panel.audioBackend.sourceSnapshot !== null
+            && panel.audioBackend.sourceSnapshot.available === true
 
           Column {
             id: inputControl
@@ -361,7 +380,9 @@ ShibumiPanel {
                   : panel.controlAccent
                 knobColor: panel.sliderKnobColor(panel.inputMuted,
                   inputSlider.enabled)
-                enabled: panel.audioBackend && panel.audioBackend.source !== null
+                enabled: panel.audioBackend
+                  && panel.audioBackend.sourceSnapshot !== null
+                  && panel.audioBackend.sourceSnapshot.available === true
                 onMoved: function(value) {
                   panel.audioBackend.setInputVolume(value)
                 }
@@ -493,7 +514,7 @@ ShibumiPanel {
     required property bool sourceDevice
     required property int rowIndex
     readonly property var activeNode: sourceDevice
-      ? panel.audioBackend.source : panel.audioBackend.sink
+      ? panel.audioBackend.sourceSnapshot : panel.audioBackend.sinkSnapshot
     readonly property bool current: panel.sameNode(node, activeNode)
     width: contentColumn.width
     height: 26
@@ -545,8 +566,8 @@ ShibumiPanel {
       cursorShape: Qt.PointingHandCursor
       onClicked: {
         if (deviceRow.sourceDevice)
-          panel.audioBackend.setDefaultSource(deviceRow.node)
-        else panel.audioBackend.setDefaultSink(deviceRow.node)
+          panel.audioBackend.setDefaultSource(deviceRow.node.id)
+        else panel.audioBackend.setDefaultSink(deviceRow.node.id)
       }
     }
   }
@@ -555,7 +576,6 @@ ShibumiPanel {
     id: streamRow
     required property var node
     required property int rowIndex
-    readonly property var audio: node ? node.audio : null
     width: contentColumn.width
     height: Commons.Style.space(32)
 
@@ -564,8 +584,8 @@ ShibumiPanel {
       anchors.left: parent.left
       anchors.top: parent.top
       width: Commons.Style.space(20)
-      text: streamRow.audio && streamRow.audio.muted ? "volume_off" : "volume_up"
-      color: streamRow.audio && streamRow.audio.muted && panel.bar
+      text: streamRow.node && streamRow.node.muted ? "volume_off" : "volume_up"
+      color: streamRow.node && streamRow.node.muted && panel.bar
         ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
           panel.bar.foreground.b, 0.4)
         : panel.bar ? panel.bar.urgent : Commons.Color.accent
@@ -576,7 +596,7 @@ ShibumiPanel {
         anchors.fill: parent
         anchors.margins: -Commons.Style.space(3)
         cursorShape: Qt.PointingHandCursor
-        onClicked: panel.audioBackend.toggleStreamMute(streamRow.node)
+        onClicked: panel.audioBackend.toggleStreamMute(streamRow.node.id)
       }
     }
 
@@ -588,7 +608,7 @@ ShibumiPanel {
       anchors.verticalCenter: muteIcon.verticalCenter
       text: panel.audioBackend.streamLabel(streamRow.node)
       color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-      opacity: streamRow.audio && streamRow.audio.muted ? 0.46 : 1
+      opacity: streamRow.node && streamRow.node.muted ? 0.46 : 1
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: Commons.Style.font.body
       elide: Text.ElideRight
@@ -599,7 +619,7 @@ ShibumiPanel {
       id: streamPercent
       anchors.right: parent.right
       anchors.verticalCenter: muteIcon.verticalCenter
-      text: Math.round(Number(streamRow.audio ? streamRow.audio.volume : 0) * 100) + "%"
+      text: Math.round(Number(streamRow.node ? streamRow.node.volume : 0) * 100) + "%"
       color: panel.bar ? panel.bar.urgent : Commons.Color.accent
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: Commons.Style.font.body
@@ -613,16 +633,16 @@ ShibumiPanel {
       anchors.bottom: parent.bottom
       bar: panel.bar
       maximum: 1
-      value: streamRow.audio ? Number(streamRow.audio.volume || 0) : 0
+      value: streamRow.node ? Number(streamRow.node.volume || 0) : 0
       trackColor: panel.controlActiveFillColor
-      fillColor: streamRow.audio && streamRow.audio.muted
+      fillColor: streamRow.node && streamRow.node.muted
         ? Commons.Util.alpha(panel.controlAccent, 0.4)
         : panel.controlAccent
-      knobColor: streamRow.audio && streamRow.audio.muted
+      knobColor: streamRow.node && streamRow.node.muted
         ? Commons.Util.alpha(panel.controlAccent, 0.55)
         : panel.controlAccent
       onMoved: function(value) {
-        panel.audioBackend.setStreamVolume(streamRow.node, value)
+        panel.audioBackend.setStreamVolume(streamRow.node.id, value)
       }
     }
   }

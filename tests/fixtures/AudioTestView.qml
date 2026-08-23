@@ -21,28 +21,36 @@ Item {
     return audioBackend.nodeLabel(audioBackend.audioSinks[1])
   }
 
+  function actionSucceeded(value) {
+    return value && value.ok === true
+  }
+
   function selectSecondSink() {
-    return audioBackend.setDefaultSink(audioBackend.audioSinks[1])
+    return actionSucceeded(
+      audioBackend.setDefaultSink(audioBackend.audioSinks[1].id))
   }
 
   function selectSecondSource() {
-    return audioBackend.setDefaultSource(audioBackend.audioSources[1])
+    return actionSucceeded(
+      audioBackend.setDefaultSource(audioBackend.audioSources[1].id))
   }
 
   function setFirstStreamVolume(value) {
-    return audioBackend.setStreamVolume(audioBackend.audioStreams[0], value)
+    return actionSucceeded(
+      audioBackend.setStreamVolume(audioBackend.audioStreams[0].id, value))
   }
 
   function toggleFirstStreamMute() {
-    return audioBackend.toggleStreamMute(audioBackend.audioStreams[0])
+    return actionSucceeded(
+      audioBackend.toggleStreamMute(audioBackend.audioStreams[0].id))
   }
 
   function toggleInputMute() {
-    return audioBackend.toggleInputMute()
+    return actionSucceeded(audioBackend.toggleInputMute())
   }
 
   function setInputVolume(value) {
-    return audioBackend.setInputVolume(value)
+    return actionSucceeded(audioBackend.setInputVolume(value))
   }
 
   Component.onCompleted: {

@@ -94,12 +94,20 @@ function bluetoothSinkMatchesDevice(node, device) {
 
   var rawAddress = String(device.address || "").trim()
   var address = normalizedAddress(rawAddress)
+  var properties = nodeProperties(node)
+  var nodeAddress = normalizedAddress(
+    properties["api.bluez5.address"] || properties["bluez5.address"])
   var text = nodeText(node)
   // A supplied Bluetooth address is authoritative. Never route to a same-name
   // sink when its address is absent, invalid, or different.
   if (rawAddress !== "") {
     if (!isAddressLike(rawAddress)) return false
-    return normalizedAddress(text).indexOf(address) !== -1
+    if (node.ready === false) {
+      var nodeName = String(node.name || "").toLowerCase()
+      return nodeName.indexOf("bluez_output.") === 0
+        && normalizedAddress(nodeName).indexOf(address) !== -1
+    }
+    return nodeAddress !== "" && nodeAddress === address
   }
 
   var label = deviceLabel(device).toLowerCase()

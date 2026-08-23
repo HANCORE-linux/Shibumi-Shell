@@ -112,6 +112,7 @@ ShellRoot {
   QtObject {
     id: fakeBackend
     property bool ready: true
+    property real inputPeak: 0.4
     property var nodes: [sinkA, sinkB, sinkWithoutId, sinkWithEmptyId, source, stream]
     property var defaultAudioSink: sinkA
     property var defaultAudioSource: source
@@ -130,9 +131,26 @@ ShellRoot {
     property var defaultAudioSink: sinkA
   }
 
+  QtObject {
+    id: typedFailingBackend
+    property bool ready: true
+    property var nodes: [sinkA]
+    property var defaultAudioSink: sinkA
+    function setDefaultSink(_node) {
+      return {
+        ok: false,
+        code: "unavailable",
+        message: "fixture delegate failure",
+        entityId: "sink:1",
+        generation: 9
+      }
+    }
+  }
+
   Audio.AudioBackendAdapter {
     id: backend
     active: true
+    peakMonitoringClients: 1
     backendOverride: fakeBackend
   }
 
@@ -140,6 +158,12 @@ ShellRoot {
     id: incompleteBackendAdapter
     active: true
     backendOverride: incompleteBackend
+  }
+
+  Audio.AudioBackendAdapter {
+    id: typedFailingAdapter
+    active: true
+    backendOverride: typedFailingBackend
   }
 
   Audio.Service {
@@ -163,17 +187,21 @@ ShellRoot {
           return root.fail("native backend snapshots")
         const incompleteResult =
           incompleteBackendAdapter.setDefaultSink("sink:1")
+        const typedFailure = typedFailingAdapter.setDefaultSink("sink:1")
         if (incompleteResult.ok || incompleteResult.code !== "unsupported"
+            || typedFailure.ok
+            || typedFailure.code !== "unavailable"
+            || typedFailure.message !== "fixture delegate failure"
+            || typedFailure.generation !== 9
             || backend.currentNodes !== undefined
             || backend.currentSink !== undefined
             || backend.currentSource !== undefined
             || backend.filterSinks !== undefined
             || backend.filterSources !== undefined
             || backend.filterStreams !== undefined
-            || service.nativeBackend === null
-            || service.nativeBackend.ready !== true
-            || service.nativeBackend.audioSinks.length !== 2
-            || service.nativeBackend.currentNodes !== undefined
+            || !service.nativeBackendReady
+            || service.nativeAudioSinks.length !== 2
+            || service.nativeAudioSinks[0].node !== undefined
             || backend.audioSinks[0].node !== undefined
             || backend.audioSinks[0].id !== "sink:1"
             || backend.sinkSnapshot.id !== "sink:1"
@@ -215,7 +243,11 @@ ShellRoot {
         root.ticks = 0
       } else if (root.phase === 1) {
         if (root.ticks < 2) return
-        if (!backend.setOutputVolume(0.55).ok
+        const generationBeforeVolume = backend.generation
+        const outputResult = backend.setOutputVolume(0.55)
+        if (Math.abs(backend.inputPeak - 0.4) > 0.001
+            || !outputResult.ok
+            || outputResult.generation <= generationBeforeVolume
             || Math.abs(sinkAudioB.volume - 0.55) > 0.001
             || !backend.toggleOutputMute().ok || !sinkAudioB.muted)
           return root.fail("typed output actions")
@@ -235,13 +267,15 @@ ShellRoot {
         const streamVolume = streamAudio.volume
         const streamMuted = streamAudio.muted
         fakeBackend.ready = false
+        const cachedUnavailablePeak = backend.inputPeak
         const cachedUnavailableOutput = backend.setOutputVolume(0.12)
         const cachedUnavailableMute = backend.toggleOutputMute()
         const cachedUnavailableSource = backend.setInputVolume(0.12)
         const cachedUnavailableStream = backend.setStreamVolume("stream:8", 0.12)
         const cachedUnavailableRoute = backend.setDefaultSink("sink:2")
         fakeBackend.ready = true
-        if (cachedUnavailableOutput.ok
+        if (cachedUnavailablePeak !== 0
+            || cachedUnavailableOutput.ok
             || cachedUnavailableMute.ok
             || cachedUnavailableSource.ok
             || cachedUnavailableStream.ok

@@ -644,13 +644,15 @@ Current Phase 2 foundation:
   Shibumi full/compact widget and lazy mixer panel own the visible V1
   presentation, while every volume, mute, device, and stream mutation delegates
   to that same official instance. It does not create or trigger a second OSD;
-- the bridge contains no PipeWire import, process, timer, or file watcher. The
-  local mixer snapshots exposed lists through one 75 ms settle timer and owns
-  one `PwNodePeakMonitor` only while open; the official stock panel and its
-  workers remain closed. Component regressions cover missing-backend behavior,
-  settings, screen-aware alias routing, action forwarding, unique click
-  registration, model release, and teardown. Real Wayland panel mapping remains
-  an acceptance gate.
+- during the Step 4A transition, the bridge reads the authoritative
+  `Pipewire.ready` signal and owns one bounded `PwNodePeakMonitor` only while
+  the visible mixer is open; it exposes primitive snapshots and typed stable-ID
+  actions while the official stock panel and its workers remain closed. The
+  native `AudioBackendAdapter` provides the replacement primitive peak seam and
+  is lifecycle-gated for activation. Component regressions cover missing-backend
+  behavior, readiness, settings, screen-aware alias routing, action forwarding,
+  unique click registration, model release, and teardown. Real Wayland panel
+  mapping remains an acceptance gate.
 - G7 replaces the stock AI presentation with one selected-provider Shibumi
   pill and one lazy local panel. The process-wide `hancore.shibumi.ai` service consumes
   the primitive schema-v1 records produced by current `omarchy.agents`; it

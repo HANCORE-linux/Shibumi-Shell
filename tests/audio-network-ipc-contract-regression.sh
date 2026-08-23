@@ -33,12 +33,19 @@ rg -Fq 'manageIpc: false' "$audio_widget" \
 rg -Fq 'manageIpc = false' "$audio_bridge" \
   || fail 'hidden official Audio backend can duplicate direct IPC ownership'
 for bridge in "$audio_bridge" "$network_bridge"; do
-  rg -Fq 'function suppressBackendKeyboardPanel()' "$bridge" \
-    || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
+  if [[ "$bridge" == "$audio_bridge" ]]; then
+    rg -Fq 'function suppressKeyboardPanel()' "$bridge" \
+      || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
+    rg -Fq 'candidate.owner !== item' "$bridge" \
+      || fail "hidden backend suppression can match a foreign window: $bridge"
+  else
+    rg -Fq 'function suppressBackendKeyboardPanel()' "$bridge" \
+      || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
+    rg -Fq 'candidate.owner !== panel' "$bridge" \
+      || fail "hidden backend suppression can match a foreign window: $bridge"
+  fi
   rg -Fq 'typeof candidate.beginFocusPrime !== "function"' "$bridge" \
     || fail "hidden backend suppression is not limited to KeyboardPanel: $bridge"
-  rg -Fq 'candidate.owner !== panel' "$bridge" \
-    || fail "hidden backend suppression can match a foreign window: $bridge"
   rg -Fq 'candidate.open = false' "$bridge" \
     || fail "hidden official KeyboardPanel can retain dismissal surfaces: $bridge"
   rg -Fq 'candidate.visible = false' "$bridge" \

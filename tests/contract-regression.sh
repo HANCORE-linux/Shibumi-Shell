@@ -478,10 +478,11 @@ rg -q 'return String\(pluginId \|\| ""\) === "omarchy\.audio" \? root : null' \
   || fail "official audio routing is not redirected to the Shibumi owner"
 rg -q 'manageIpc: false' hancore.shibumi.audio/BarWidget.qml \
   || fail "audio aliases must use screen-aware host routing, not duplicate IPC handlers"
-if rg -q 'Quickshell\.Services\.Pipewire|Pipewire\.' hancore.shibumi.audio/BarWidget.qml \
-  hancore.shibumi.audio/AudioPanelBridge.qml; then
+if rg -q 'Quickshell\.Services\.Pipewire|Pipewire\.' hancore.shibumi.audio/BarWidget.qml; then
   fail "Shibumi audio presentation must not create a second PipeWire owner"
 fi
+rg -q 'Pipewire\.ready === true' hancore.shibumi.audio/AudioPanelBridge.qml \
+  || fail "transitional audio bridge does not use the authoritative PipeWire readiness signal"
 if rg -q 'Process \{|FileView \{' hancore.shibumi.audio/BarWidget.qml \
   hancore.shibumi.audio/AudioPanelBridge.qml; then
   fail "audio presentation bridge must remain event-driven and worker-free"
@@ -503,10 +504,17 @@ if rg -U -q 'Timer \{([^}]|\n)*(repeat:[[:space:]]*true|running:[[:space:]]*true
   hancore.shibumi.audio/BarWidget.qml; then
   fail "audio wheel timers must remain dormant, non-repeating interaction timers"
 fi
-[[ $(rg -c 'PwNodePeakMonitor \{' hancore.shibumi.audio/AudioPanel.qml) -eq 1 ]] \
-  || fail "audio panel must own exactly one lifecycle-bound microphone meter"
-rg -q 'enabled: panel\.open' hancore.shibumi.audio/AudioPanel.qml \
-  || fail "microphone meter is not bounded to the open mixer lifecycle"
+[[ $(rg -c 'PwNodePeakMonitor \{' hancore.shibumi.audio/AudioBackendAdapter.qml) -eq 1 ]] \
+  || fail "native audio backend must own exactly one microphone meter"
+rg -q 'audioBackend\.inputPeak' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not consume the primitive microphone peak"
+rg -q 'audioBackend\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not acquire microphone peak monitoring"
+rg -q 'audioBackend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not release microphone peak monitoring"
+rg -q 'enabled: root\.active && root\.peakMonitoringEnabled' \
+  hancore.shibumi.audio/AudioBackendAdapter.qml \
+  || fail "microphone meter is not bounded to the native backend lifecycle"
 if rg -q 'Pipewire\.|Process \{|FileView \{' hancore.shibumi.audio/AudioPanel.qml; then
   fail "Shibumi audio panel duplicates Quattro audio ownership or shell workers"
 fi

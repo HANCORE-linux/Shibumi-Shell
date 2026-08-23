@@ -185,9 +185,18 @@ rg -q 'readonly property bool museMode: fullMode' \
 rg -q 'readonly property int bandCount: 24' \
   "$repo_root/hancore.shibumi.media/MediaMuse.qml" \
   || fail "G9 FULL presentation does not render 24 bands"
-rg -q 'enabled: panel\.open && panel\.audioBackend' \
-  "$audio_panel" \
-  || fail "microphone metering is not panel-lifecycle bounded"
+rg -q 'audioBackend\.inputPeak' "$audio_panel" \
+  || fail "audio panel does not consume the primitive microphone peak"
+rg -q 'audioBackend\.acquirePeakMonitoring\(\)' "$audio_panel" \
+  || fail "audio panel does not acquire microphone peak monitoring"
+rg -q 'audioBackend\.releasePeakMonitoring\(\)' "$audio_panel" \
+  || fail "audio panel does not release microphone peak monitoring"
+rg -q 'PwNodePeakMonitor \{' \
+  "$repo_root/hancore.shibumi.audio/AudioBackendAdapter.qml" \
+  || fail "native audio backend does not own microphone peak monitoring"
+rg -q 'enabled: root\.active && root\.peakMonitoringEnabled' \
+  "$repo_root/hancore.shibumi.audio/AudioBackendAdapter.qml" \
+  || fail "microphone peak monitoring is not native-backend bounded"
 if rg -q 'ShibumiSlider \{' "$audio_panel"; then
   fail "audio panel still exposes the thick legacy slider presentation"
 fi
@@ -215,8 +224,10 @@ fi
 if rg -q 'tickCount:' "$audio_panel"; then
   fail "volume sliders must remain continuous and unsegmented"
 fi
-rg -q 'function descriptiveNodeLabel\(node\)' "$audio_bridge" \
-  || fail "audio bridge does not restore descriptive device labels"
+rg -q 'Model\.snapshotList\(' "$audio_bridge" \
+  || fail "audio bridge does not expose primitive audio snapshots"
+rg -q 'function nodeLabel\(snapshot\)' "$audio_bridge" \
+  || fail "audio bridge does not label primitive snapshots"
 if rg -q 'wiremix|Open audio|openMixer' "$audio_panel"; then
   fail "audio panel exposes the retired external mixer action"
 fi
