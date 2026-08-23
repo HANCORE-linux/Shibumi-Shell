@@ -158,6 +158,36 @@ ShellRoot {
     }
   }
 
+  QtObject {
+    id: serviceBackend
+    property var adapter: nativeAdapter
+    property var connectedDevices: []
+    property var knownDevices: []
+    property var discoveredDevices: []
+    property var pendingActions: ({})
+  }
+
+  QtObject {
+    id: fakeShell
+    property var bar: null
+    function serviceFor(id) {
+      return id === "hancore.shibumi.audio" ? routeOverride : null
+    }
+  }
+
+  Bluetooth.Service {
+    id: activatedService
+    shell: fakeShell
+    backendOverride: serviceBackend
+    audioRouteOverride: routeOverride
+  }
+
+  Bluetooth.Service {
+    id: isolatedFakeService
+    shell: fakeShell
+    backendOverride: serviceBackend
+  }
+
   Bluetooth.BluetoothBackendAdapter {
     id: seamBackend
     adapterOverride: nativeAdapter
@@ -204,6 +234,16 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (root.ticks < 2) return
+        const activatedRoute = activatedService.routeBluetoothDevice({
+          address: deviceA.address,
+          name: deviceA.name,
+          deviceName: deviceA.deviceName
+        })
+        const isolatedFakeRoute = isolatedFakeService.routeBluetoothDevice({
+          address: deviceA.address,
+          name: deviceA.name,
+          deviceName: deviceA.deviceName
+        })
         const unavailablePipewireRoute =
           pipewireNotReadyRoute.routeBluetoothDevice({
             address: deviceA.address,
@@ -242,14 +282,17 @@ ShellRoot {
         backend.audioOutputOverride = booleanFailingAudioOutput
         const booleanFailure = backend.requestBluetoothAudioRoute(deviceA)
         backend.audioOutputOverride = audioOutput
-        if (!seamBackend.requestBluetoothAudioRoute(deviceA).ok
+        if (!activatedRoute.ok
+            || isolatedFakeRoute.ok
+            || isolatedFakeRoute.code !== "unavailable"
+            || !seamBackend.requestBluetoothAudioRoute(deviceA).ok
             || unavailablePipewireRoute.ok
             || unavailablePipewireRoute.code !== "unavailable"
             || staleEmptyPipewireRoute.ok
             || staleEmptyPipewireRoute.code !== "stale-id"
             || fakeIsolationRoute.ok
             || fakeIsolationRoute.code !== "unsupported"
-            || routeOverride.count !== 1
+            || routeOverride.count !== 2
             || routeOverride.lastRequest.address !== deviceA.address
             || routeOverride.lastRequest.name !== deviceA.name
             || "adapter" in routeOverride.lastRequest

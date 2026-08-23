@@ -22,6 +22,7 @@ Item {
   property var commandRunnerOverride: null
   property var audioOutputOverride: null
   property var audioRouteOverride: null
+  property bool audioRouteHandoffReady: true
   property int audioSwitchInterval: 500
   property int audioIntentTimeoutInterval: 60000
   property int discoveryRequestTimeoutInterval: 1500
@@ -69,6 +70,8 @@ Item {
 
   Local.BluetoothAudioRouteAdapter {
     id: nativeAudioRoute
+    enabled: root.audioRouteHandoffReady
+      && root.audioRouteOverride === null && root.backendOverride === null
     nodesOverride: root.pipewireNodesOverride
     outputOverride: root.audioOutputOverride
   }
@@ -361,6 +364,7 @@ Item {
       deviceName: device && device.deviceName ? device.deviceName : ""
     }
     pendingAudioOutputAttempts = 0
+    audioIntentTimeout.restart()
     audioSwitchTimer.restart()
   }
 
@@ -396,20 +400,18 @@ Item {
     if (routeResult.ok) {
       pendingAudioOutputDevice = null
       audioSwitchTimer.stop()
+      audioIntentTimeout.stop()
       return
     }
-    // Retry only transient route unavailability. Stale identity, invalid
-    // requests, and unsupported backends must not spin until the attempt cap.
+    // Retry only transient route unavailability. The handoff timeout bounds
+    // the wait while allowing slow BlueZ/PipeWire graph creation to settle.
     if (routeResult.code !== "unavailable") {
       pendingAudioOutputDevice = null
       audioSwitchTimer.stop()
+      audioIntentTimeout.stop()
       return
     }
     pendingAudioOutputAttempts++
-    if (pendingAudioOutputAttempts >= 8) {
-      pendingAudioOutputDevice = null
-      return
-    }
     audioSwitchTimer.restart()
   }
 
@@ -421,7 +423,6 @@ Item {
       if (device && device.connected && deviceUsesCurrentAdapter(device)) {
         scheduleAudioOutputSwitch(device)
         audioHandoffIntent = null
-        audioIntentTimeout.stop()
       }
     }
     validatePendingAudioOutput()
@@ -508,7 +509,10 @@ Item {
     id: audioIntentTimeout
     interval: root.audioIntentTimeoutInterval
     repeat: false
-    onTriggered: root.audioHandoffIntent = null
+    onTriggered: {
+      root.audioHandoffIntent = null
+      root.cancelPendingAudioOutput("")
+    }
   }
 
   Timer {

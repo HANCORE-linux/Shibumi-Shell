@@ -13,6 +13,14 @@ Item {
   property var manifest: null
   property var bar: shell ? shell.bar : null
   property var backendOverride: null
+  property var audioRouteOverride: null
+  readonly property bool audioServiceLookupAvailable: shell !== null
+    && typeof shell.serviceFor === "function"
+  readonly property var audioService: audioServiceLookupAvailable
+    ? (shell.serviceFor("hancore.shibumi.audio") || null) : null
+  readonly property bool audioServiceUsable: audioService !== null
+    && audioService.nativeBackendEnabled === true
+    && typeof audioService.routeBluetoothDevice === "function"
   property var sessionOwners: []
   property int discoveryRetryInterval: 1000
   property int discoveryRequestTimeoutInterval: 1500
@@ -69,6 +77,9 @@ Item {
   function toggleBluetooth() {
     return adapter.toggleBluetooth()
   }
+  function routeBluetoothDevice(request) {
+    return adapter.requestBluetoothAudioRoute(request)
+  }
   function connectDevice(device) { return adapter.connectDevice(device) }
   function disconnectDevice(device) { return adapter.disconnectDevice(device) }
   function forgetDevice(device) { return adapter.forgetDevice(device) }
@@ -96,6 +107,13 @@ Item {
   BluetoothBackendAdapter {
     id: adapter
     backendOverride: root.backendOverride
+    audioRouteOverride: root.audioRouteOverride !== null
+      ? root.audioRouteOverride
+      : root.backendOverride === null && root.audioServiceUsable
+      ? root.audioService : null
+    audioRouteHandoffReady: root.audioRouteOverride !== null
+      || (root.backendOverride === null
+        && (!root.audioServiceLookupAvailable || root.audioServiceUsable))
     discoveryDesired: root.sessionCount > 0
     discoveryRequestTimeoutInterval: root.discoveryRequestTimeoutInterval
   }

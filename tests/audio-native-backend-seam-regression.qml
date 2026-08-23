@@ -172,6 +172,32 @@ ShellRoot {
     nativeBackendOverride: fakeBackend
   }
 
+  QtObject {
+    id: fakeBar
+    property bool vertical: false
+    property int barSize: 35
+    property int sizeHorizontal: 35
+    property string position: "top"
+    property string fontFamily: "monospace"
+    property color background: "#111111"
+    property color foreground: "#eeeeee"
+    property color urgent: "#88bbee"
+    property bool foregroundAnimationEnabled: false
+    property var shell: null
+    property var activePopout: null
+    property var clickTargets: []
+  }
+
+  Item { id: ownerWidget }
+
+  Audio.AudioPanelBridge {
+    id: nativeBridge
+    bar: fakeBar
+    ownerWidget: ownerWidget
+    nativeBackendAccessEnabled: true
+    nativeAudioService: service
+  }
+
   Timer {
     interval: 30
     repeat: true
@@ -205,7 +231,11 @@ ShellRoot {
             || backend.audioSinks[0].node !== undefined
             || backend.audioSinks[0].id !== "sink:1"
             || backend.sinkSnapshot.id !== "sink:1"
-            || backend.sinkSnapshot.volume !== 0.42)
+            || backend.sinkSnapshot.volume !== 0.42
+            || !nativeBridge.ready
+            || nativeBridge.audioSinks.length !== 2
+            || nativeBridge.audioSinks[0].node !== undefined
+            || nativeBridge.officialPanelState().present)
           return root.fail("primitive stable sink snapshot")
         const routeResult = backend.routeBluetoothDevice({
           address: "AA:00:00:00:00:01",
@@ -258,6 +288,29 @@ ShellRoot {
             || !backend.toggleStreamMute("stream:8").ok
             || !streamAudio.muted)
           return root.fail("typed source/stream actions")
+        const nativeOutput = nativeBridge.setOutputVolume(0.47)
+        const nativeMutedBefore = sinkAudioB.muted
+        const nativeMute = nativeBridge.toggleOutputMute()
+        const nativeStream = nativeBridge.setStreamVolume("stream:8", 0.58)
+        const nativeLease = nativeBridge.acquirePeakMonitoring()
+        const nativePeak = nativeBridge.inputPeak
+        const nativeRelease = nativeBridge.releasePeakMonitoring()
+        if (!nativeOutput.ok
+            || Math.abs(sinkAudioB.volume - 0.47) > 0.001
+            || !nativeMute.ok
+            || sinkAudioB.muted === nativeMutedBefore
+            || !nativeStream.ok
+            || Math.abs(streamAudio.volume - 0.58) > 0.001
+            || !nativeLease
+            || Math.abs(nativePeak - 0.4) > 0.001
+            || !nativeRelease)
+          return root.fail("native service facade handoff: "+ JSON.stringify({
+            output: nativeOutput, mute: nativeMute, stream: nativeStream,
+            sinkVolume: sinkAudioB.volume, sinkMuted: sinkAudioB.muted,
+            sinkMutedBefore: nativeMutedBefore,
+            streamVolume: streamAudio.volume, lease: nativeLease,
+            peak: nativePeak, release: nativeRelease
+          }))
         root.phase++
         root.ticks = 0
       } else if (root.phase === 2) {

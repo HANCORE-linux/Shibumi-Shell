@@ -12,9 +12,8 @@ Item {
   property var shell: null
   property var manifest: null
   property var reports: []
-  // Step 4A preparation remains opt-in until the activation commit makes this
-  // the sole Shibumi PipeWire owner.
-  property bool nativeBackendEnabled: false
+  // Native AudioBackendAdapter is now the sole Shibumi PipeWire owner.
+  property bool nativeBackendEnabled: true
   property var nativeBackendOverride: null
   readonly property bool nativeBackendReady: root.nativeBackendEnabled
     && nativeBackendLoader.item ? nativeBackendLoader.item.ready === true : false
@@ -77,6 +76,13 @@ Item {
     } else if (nativeBackendLoader.item) {
       nativeBackendLoader.item.peakMonitoringClients = 0
     }
+  }
+
+  onNativeBackendOverrideChanged: {
+    if (!nativeBackendLoader.item) return
+    nativeBackendLoader.item.active = false
+    nativeBackendLoader.item.backendOverride = root.nativeBackendOverride
+    nativeBackendLoader.item.active = root.nativeBackendEnabled
   }
 
   function acquirePeakMonitoring() {
@@ -142,6 +148,27 @@ Item {
   function nativeToggleInputMute() {
     return nativeBackendLoader.item
       ? nativeBackendLoader.item.toggleInputMute() : ({
+        ok: false, code: "unavailable", message: "Audio backend is unavailable",
+        entityId: "", generation: 0
+      })
+  }
+  function nativeSetStreamVolume(id, value) {
+    return nativeBackendLoader.item
+      ? nativeBackendLoader.item.setStreamVolume(id, value) : ({
+        ok: false, code: "unavailable", message: "Audio backend is unavailable",
+        entityId: String(id || ""), generation: 0
+      })
+  }
+  function nativeToggleStreamMute(id) {
+    return nativeBackendLoader.item
+      ? nativeBackendLoader.item.toggleStreamMute(id) : ({
+        ok: false, code: "unavailable", message: "Audio backend is unavailable",
+        entityId: String(id || ""), generation: 0
+      })
+  }
+  function routeBluetoothDevice(request) {
+    return nativeBackendLoader.item
+      ? nativeBackendLoader.item.routeBluetoothDevice(request) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })

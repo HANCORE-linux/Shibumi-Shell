@@ -21,63 +21,103 @@ Item {
   property var peakAcquire: null
   property var peakRelease: null
   property bool nativeBackendAccessEnabled: false
+  property var nativeAudioService: null
 
   readonly property bool backendReady: backendReadyOverride !== null
     ? backendReadyOverride === true
+    : nativeAudioService !== null
+    ? nativeAudioService.nativeBackendReady === true
     : nativeBackendAccessEnabled ? Pipewire.ready === true : true
-  readonly property bool ready: panel.item !== null && backendReady
+  readonly property bool ready: nativeAudioService !== null
+    ? nativeAudioService.nativeBackendReady === true
+    : panel.item !== null && backendReady
   readonly property var sinkSnapshot: {
     const version = generation
     void version
-    return ready && panel.sink !== undefined
+    if (!ready) return null
+    if (nativeAudioService !== null) return nativeAudioService.nativeSinkSnapshot
+    return panel.sink !== undefined
       ? Model.snapshot(panel.sink, "sink", true) : null
   }
   readonly property var sourceSnapshot: {
     const version = generation
     void version
-    return ready && panel.source !== undefined
+    if (!ready) return null
+    if (nativeAudioService !== null) return nativeAudioService.nativeSourceSnapshot
+    return panel.source !== undefined
       ? Model.snapshot(panel.source, "source", true) : null
   }
   readonly property var volumeSinkSnapshot: {
     const version = generation
     void version
-    return ready && panel.volumeSink !== undefined
+    if (!ready) return null
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeVolumeSinkSnapshot
+    return panel.volumeSink !== undefined
       ? Model.snapshot(panel.volumeSink, "sink", true) : null
   }
   readonly property var audioSinks: {
     const version = generation
     void version
-    return ready && panel.audioSinks !== undefined
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioSinks || []
+    return panel.audioSinks !== undefined
       ? Model.snapshotList(Model.groupedDeviceNodes(panel.audioSinks), "sink", panel.sink)
       : []
   }
   readonly property var audioSources: {
     const version = generation
     void version
-    return ready && panel.audioSources !== undefined
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioSources || []
+    return panel.audioSources !== undefined
       ? Model.snapshotList(panel.audioSources, "source", panel.source) : []
   }
   readonly property var audioStreams: {
     const version = generation
     void version
-    if (!ready || panel.audioStreams === undefined) return []
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioStreams || []
+    if (panel.audioStreams === undefined) return []
     const streams = panel.audioStreams
     const players = root.nativeBackendAccessEnabled
       ? (Mpris.players ? Mpris.players.values : []) : []
     return Model.snapshotList(streams, "stream", null,
       function(node) { return Model.streamLabel(node, players, streams) })
   }
-  readonly property real outputVolume: ready
-    && panel.outputVolume !== undefined ? Number(panel.outputVolume) : 0
-  readonly property bool outputMuted: ready
-    && panel.outputMuted !== undefined ? panel.outputMuted === true : false
-  readonly property real inputVolume: ready
-    && panel.inputVolume !== undefined ? Number(panel.inputVolume) : 0
-  readonly property bool inputMuted: ready
-    && panel.inputMuted !== undefined ? panel.inputMuted === true : false
-  // The native AudioBackendAdapter owns peak monitoring after activation. The
-  // transitional official owner keeps the same primitive surface until then.
-  readonly property real inputPeak: !ready ? 0 : Number(peakValue || 0)
+  readonly property real outputVolume: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.nativeOutputVolume || 0)
+    return panel.outputVolume !== undefined ? Number(panel.outputVolume) : 0
+  }
+  readonly property bool outputMuted: {
+    if (!ready) return false
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeOutputMuted === true
+    return panel.outputMuted !== undefined && panel.outputMuted === true
+  }
+  readonly property real inputVolume: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.nativeInputVolume || 0)
+    return panel.inputVolume !== undefined ? Number(panel.inputVolume) : 0
+  }
+  readonly property bool inputMuted: {
+    if (!ready) return false
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeInputMuted === true
+    return panel.inputMuted !== undefined && panel.inputMuted === true
+  }
+  readonly property real inputPeak: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.inputPeak || 0)
+    return Number(peakValue || 0)
+  }
   property int generation: 0
 
   // Internal-only facade around the loaded official component. It is a child
@@ -196,10 +236,16 @@ Item {
   }
 
   function acquirePeakMonitoring() {
+    if (nativeAudioService !== null
+        && typeof nativeAudioService.acquirePeakMonitoring === "function")
+      return nativeAudioService.acquirePeakMonitoring() === true
     return typeof peakAcquire === "function" ? peakAcquire() === true : false
   }
 
   function releasePeakMonitoring() {
+    if (nativeAudioService !== null
+        && typeof nativeAudioService.releasePeakMonitoring === "function")
+      return nativeAudioService.releasePeakMonitoring() === true
     return typeof peakRelease === "function" ? peakRelease() === true : false
   }
 
@@ -224,6 +270,18 @@ Item {
 
   function refreshedDelegatedSuccess(value, entityId) {
     return actionResult(true, value.code || "ok", value.message || "", entityId)
+  }
+
+  function nativeAction(method, args, entityId) {
+    if (!nativeAudioService || typeof nativeAudioService[method] !== "function")
+      return actionResult(false, "unsupported",
+        "Audio backend action is unavailable", entityId)
+    const value = nativeAudioService[method].apply(nativeAudioService, args || [])
+    const delegated = delegatedResult(value, entityId)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, entityId)
+      : actionResult(true, "ok", "", entityId)
   }
 
   function advanceGeneration() {
@@ -251,6 +309,8 @@ Item {
   function toggleOutputMute() {
     const id = volumeSinkSnapshot ? volumeSinkSnapshot.id
       : sinkSnapshot ? sinkSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleOutputMute", [], id)
     if (!ready || !panel.volumeSink || panel.volumeSink.ready === false
         || !panel.volumeSink.audio)
       return actionResult(false, "unavailable", "Output is unavailable", id)
@@ -266,6 +326,9 @@ Item {
   function setOutputVolume(value) {
     const id = volumeSinkSnapshot ? volumeSinkSnapshot.id
       : sinkSnapshot ? sinkSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetOutputVolume",
+        [Math.max(0, Math.min(1, Number(value) || 0))], id)
     if (!ready || !panel.volumeSink || panel.volumeSink.ready === false
         || !panel.volumeSink.audio)
       return actionResult(false, "unavailable", "Output is unavailable", id)
@@ -281,6 +344,8 @@ Item {
 
   function toggleInputMute() {
     const id = sourceSnapshot ? sourceSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleInputMute", [], id)
     if (!ready || !panel.source || panel.source.ready === false
         || !panel.source.audio)
       return actionResult(false, "unavailable", "Input is unavailable", id)
@@ -295,6 +360,9 @@ Item {
 
   function setInputVolume(value) {
     const id = sourceSnapshot ? sourceSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetInputVolume",
+        [Math.max(0, Math.min(1, Number(value) || 0))], id)
     if (!ready || !panel.source || panel.source.ready === false
         || !panel.source.audio)
       return actionResult(false, "unavailable", "Input is unavailable", id)
@@ -309,8 +377,10 @@ Item {
   }
 
   function setDefaultSink(entity) {
-    const node = ready ? liveNode(entity, "sink") : null
     const id = entityId(entity, "sink")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetDefaultSink", [id], id)
+    const node = ready ? liveNode(entity, "sink") : null
     if (!ready) return actionResult(false, "unavailable", "Audio sink is unavailable", id)
     if (!node)
       return actionResult(false, "stale-id", "Audio sink is unavailable", id)
@@ -329,8 +399,10 @@ Item {
   }
 
   function setDefaultSource(entity) {
-    const node = ready ? liveNode(entity, "source") : null
     const id = entityId(entity, "source")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetDefaultSource", [id], id)
+    const node = ready ? liveNode(entity, "source") : null
     if (!ready) return actionResult(false, "unavailable", "Audio source is unavailable", id)
     if (!node)
       return actionResult(false, "stale-id", "Audio source is unavailable", id)
@@ -346,8 +418,11 @@ Item {
   }
 
   function setStreamVolume(entity, value) {
-    const node = ready ? liveNode(entity, "stream") : null
     const id = entityId(entity, "stream")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetStreamVolume",
+        [id, Math.max(0, Math.min(1.5, Number(value) || 0))], id)
+    const node = ready ? liveNode(entity, "stream") : null
     if (!ready) return actionResult(false, "unavailable", "Audio stream is unavailable", id)
     if (!node)
       return actionResult(false, "stale-id", "Audio stream is unavailable", id)
@@ -363,8 +438,10 @@ Item {
   }
 
   function toggleStreamMute(entity) {
-    const node = ready ? liveNode(entity, "stream") : null
     const id = entityId(entity, "stream")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleStreamMute", [id], id)
+    const node = ready ? liveNode(entity, "stream") : null
     if (!ready) return actionResult(false, "unavailable", "Audio stream is unavailable", id)
     if (!node)
       return actionResult(false, "stale-id", "Audio stream is unavailable", id)

@@ -470,7 +470,13 @@ rg -q 'G6: \["hancore.shibumi.audio"\]' core/GroupRegistry.js \
 rg -q 'hancore\.shibumi\.audio' contracts/plugin-suite-v1.json \
   || fail "Shibumi audio composite is not registered"
 rg -q 'AudioPanelBridge' hancore.shibumi.audio/BarWidget.qml \
-  || fail "audio view does not preserve the official panel owner"
+  || fail "audio view does not use the primitive backend bridge"
+rg -q 'nativeAudioService: root\.nativeBackendAccessEnabled' \
+  hancore.shibumi.audio/BarWidget.qml \
+  || fail "audio view is not wired to the native process-wide service"
+rg -q 'property bool nativeBackendEnabled: true' \
+  hancore.shibumi.audio/Service.qml \
+  || fail "native audio ownership is not atomically enabled"
 rg -q 'popupSource: Qt\.resolvedUrl\("AudioPanel\.qml"\)' hancore.shibumi.audio/BarWidget.qml \
   || fail "audio widget does not lazy-load the Shibumi mixer panel"
 rg -q 'return String\(pluginId \|\| ""\) === "omarchy\.audio" \? root : null' \
@@ -749,8 +755,13 @@ for bluetooth_adapter in "$bluetooth_adapter"; do
     || fail "$bluetooth_audio_route is missing"
   rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_audio_route" \
     || fail "$bluetooth_audio_route does not own PipeWire access"
-  rg -q 'BluetoothAudioRouteAdapter' "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter does not use the audio route seam"
+  rg -q 'audioRouteOverride' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not expose the process-wide audio route seam"
+  rg -q 'enabled: root\.audioRouteHandoffReady' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not gate its legacy PipeWire route"
+  rg -q 'root\.audioRouteOverride === null && root\.backendOverride === null' \
+    "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not disable its legacy PipeWire route after cutover"
   rg -Fq 'routeBluetoothDevice(request)' "$bluetooth_audio_route" \
     || fail "$bluetooth_audio_route lacks its narrow route method"
   for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
@@ -785,6 +796,10 @@ if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|pane
     "$bluetooth_service"; then
   fail "Bluetooth service still resolves or loads the complete Omarchy panel"
 fi
+rg -q 'serviceFor\("hancore\.shibumi\.audio"\)' "$bluetooth_service" \
+  || fail "Bluetooth service does not resolve the process-wide audio owner"
+rg -q 'audioRouteOverride: root\.audioRouteOverride' "$bluetooth_service" \
+  || fail "Bluetooth service does not hand off audio routing atomically"
 if rg -q 'Quickshell\.Bluetooth|Quickshell\.Services\.Pipewire|Bluetooth\.|Pipewire\.' \
     "$bluetooth_widget" "$bluetooth_panel"; then
   fail "Bluetooth presentation bypasses the process-wide native adapter"

@@ -12,12 +12,20 @@ Ui.Panel {
   HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("AudioPanel.qml")
   readonly property url backendPanelSource: registeredSource("omarchy.audio")
-  property Component panelComponent: String(backendPanelSource) ? null
-    : registeredComponent("omarchy.audio")
+  property Component panelComponent: !audioServiceResolved
+    || nativeBackendAccessEnabled ? null
+    : String(backendPanelSource) ? null : registeredComponent("omarchy.audio")
   property var backendReadyOverride: null
+  readonly property bool audioServiceLookupAvailable:
+    backendReadyOverride !== null
+    || (bar !== null && bar.shell !== null
+      && typeof bar.shell.serviceFor === "function")
+  readonly property bool audioServiceResolved:
+    backendReadyOverride !== null
+    || (audioServiceLookupAvailable && audioStateService !== null)
   readonly property bool nativeBackendAccessEnabled:
-    backendReadyOverride === null
-    && (String(backendPanelSource) !== "" || panelComponent !== null)
+    backendReadyOverride === null && audioServiceResolved
+    && audioStateService.nativeBackendEnabled === true
 
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
@@ -150,11 +158,15 @@ Ui.Panel {
     anchors.fill: audioSurface
     bar: root.bar
     ownerWidget: root
-    panelComponent: root.panelComponent
-    panelSource: root.backendPanelSource
+    panelComponent: !root.audioServiceResolved
+      || root.nativeBackendAccessEnabled ? null : root.panelComponent
+    panelSource: !root.audioServiceResolved || root.nativeBackendAccessEnabled
+      ? "" : root.backendPanelSource
     panelSettings: root.officialSettings()
     backendReadyOverride: root.backendReadyOverride
     nativeBackendAccessEnabled: root.nativeBackendAccessEnabled
+    nativeAudioService: root.nativeBackendAccessEnabled
+      ? root.audioStateService : null
     peakValue: root.audioStateService ? root.audioStateService.inputPeak : 0
     peakAcquire: root.audioStateService
       ? function() { return root.audioStateService.acquirePeakMonitoring() }

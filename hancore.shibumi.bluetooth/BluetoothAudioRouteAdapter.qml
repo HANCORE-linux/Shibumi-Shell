@@ -13,17 +13,20 @@ Item {
   id: root
 
   // Tests inject a side-effect-free node list and route sink.
+  property bool enabled: true
   property var nodesOverride: null
   property var outputOverride: null
   property var readyOverride: null
 
-  readonly property bool ready: readyOverride !== null
+  readonly property bool ready: !enabled ? false
+    : readyOverride !== null
     ? readyOverride === true
     : nodesOverride !== null
     ? true
     : Pipewire.ready === true
       && Pipewire.nodes !== null && Pipewire.nodes !== undefined
-  readonly property var nodes: nodesOverride !== null
+  readonly property var nodes: !enabled ? []
+    : nodesOverride !== null
     ? nodesOverride
     : (Pipewire.nodes ? Pipewire.nodes.values : [])
 
