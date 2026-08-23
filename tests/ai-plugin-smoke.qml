@@ -14,6 +14,10 @@ ShellRoot {
   property bool waitingBackendTransition: false
   property bool waitingExpiryProbe: false
   property var expiryProbeRecord: null
+  property int codexStatusProbeStage: 0
+  property var codexStatusOriginalRecord: null
+  property string codexStatusOriginalTool: ""
+  property bool codexStatusProbePassed: false
   property bool midnightRacePassed: false
   property int midnightRaceStage: 0
   property int midnightRaceTicks: 0
@@ -81,6 +85,7 @@ ShellRoot {
       && codex.todayTotalTokens === 1031649
       && codex.latestModel === ""
       && claude.ready && codex.ready
+      && agentsService.providerStatusText(codex) === "live"
       && !agentsService.providerHasCurrentData(claude)
       && agentsService.providerCurrentDataMessage(claude)
         === "Run `claude auth login` to restore authoritative usage."
@@ -90,6 +95,86 @@ ShellRoot {
       && agentsService.resetText(claude, claude.rateLimitResetAt) === ""
       && typeof claude.refresh !== "function"
       && typeof codex.refresh !== "function"
+  }
+
+  function codexStatusRecord(ready, withLimits) {
+    return JSON.stringify({
+      schemaVersion: 1,
+      id: "codex",
+      name: "Codex",
+      ready: ready,
+      updatedAt: new Date().toISOString(),
+      limits: withLimits
+        ? [{ label: "Weekly (7-day)", percent: 0.24, resetsAt: "" }] : [],
+      tierLabel: "",
+      usageStatusText: withLimits ? "" : "Codex limits unavailable",
+      authHelpText: withLimits ? "" : "initialize",
+      todayPrompts: 14,
+      todaySessions: 2,
+      todayTotalTokens: 1031649,
+      totalPrompts: 69089,
+      totalSessions: 136,
+      activeDays: 31,
+      modelUsage: { "gpt-test": { inputTokens: 700000 } }
+    })
+  }
+
+  function advanceCodexStatusProbe() {
+    if (codexStatusProbeStage === 0) {
+      codexStatusOriginalRecord = agentsService.agentsCodexRecord
+      codexStatusOriginalTool = fakeState.selectedTool
+      fakeState.selectedTool = "codex"
+      fakeState.revision++
+      agentsState.revision++
+      agentsService.applyAgentRecord("codex",
+        codexStatusRecord(true, false))
+      codexStatusProbeStage = 1
+      return false
+    }
+
+    const provider = agentsService.providerFor("codex")
+    if (!provider) {
+      fail("Codex status probe lost its schema-v1 record")
+      return false
+    }
+    if (codexStatusProbeStage === 1) {
+      if (agentsService.providerStatusText(provider) !== "partial"
+          || emptyAgentsPanel.providerStatusLabel !== "partial"
+          || agentsService.tooltipText().indexOf("Codex · partial") < 0) {
+        fail("Codex partial status did not propagate")
+        return false
+      }
+      agentsService.applyAgentRecord("codex",
+        codexStatusRecord(true, true))
+      codexStatusProbeStage = 2
+      return false
+    }
+    if (codexStatusProbeStage === 2) {
+      if (agentsService.providerStatusText(provider) !== "live"
+          || emptyAgentsPanel.providerStatusLabel !== "live"
+          || agentsService.tooltipText().indexOf("Codex · partial") >= 0) {
+        fail("Codex live status did not replace partial")
+        return false
+      }
+      agentsService.applyAgentRecord("codex",
+        codexStatusRecord(false, true))
+      codexStatusProbeStage = 3
+      return false
+    }
+    if (agentsService.providerStatusText(provider) !== "stale"
+        || emptyAgentsPanel.providerStatusLabel !== "stale"
+        || agentsService.tooltipText().indexOf("Codex · stale") < 0) {
+      fail("Codex stale status did not take precedence")
+      return false
+    }
+
+    agentsService.agentsCodexRecord = codexStatusOriginalRecord
+    agentsService.providerRevision++
+    fakeState.selectedTool = codexStatusOriginalTool
+    fakeState.revision++
+    agentsState.revision++
+    codexStatusProbePassed = true
+    return true
   }
 
   function readyRecordWithoutCurrentDataAccepted() {
@@ -899,6 +984,11 @@ ShellRoot {
         if (first.panelLoaded || secondLoader.item !== null
             || root.clickTargets.length !== 1)
           return root.fail("panel/widget teardown")
+        if (!root.codexStatusProbePassed) {
+          root.advanceCodexStatusProbe()
+          root.ticks = 0
+          return
+        }
         if (!root.waitingExpiryProbe) {
           if (!root.readyRecordWithoutCurrentDataAccepted())
             return root.fail("ready empty/stale agents record contract")
@@ -925,6 +1015,8 @@ ShellRoot {
         agentsService.providerRevision++
         if (agentsService.providerFor("claude").ready
             || agentsService.providerFor("codex").ready
+            || agentsService.providerStatusText(
+              agentsService.providerFor("codex")) !== "stale"
             || agentsService.usagePercent(
               agentsService.providerFor("claude")) !== -1
             || agentsService.usagePercent(

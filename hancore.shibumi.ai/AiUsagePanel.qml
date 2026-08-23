@@ -18,6 +18,10 @@ ShibumiPanel {
   readonly property int renderedModelCount: modelRepeater.count
   readonly property bool providerReady: provider && provider.ready !== undefined
     ? provider.ready === true : true
+  readonly property string providerStatusLabel: provider && aiService
+    && typeof aiService.providerStatusText === "function"
+    ? aiService.providerStatusText(provider)
+    : providerReady ? "live" : "stale"
   readonly property bool providerHasUsage: provider
     && (Number(provider.rateLimitPercent) >= 0
       || Number(provider.secondaryRateLimitPercent) >= 0)
@@ -223,8 +227,8 @@ ShibumiPanel {
           Text {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: panel.providerReady ? "live" : "stale"
-            color: panel.providerReady ? panel.controlMuted
+            text: panel.providerStatusLabel
+            color: panel.providerStatusLabel === "live" ? panel.controlMuted
               : panel.controlAccent
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
