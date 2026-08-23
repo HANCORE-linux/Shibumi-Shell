@@ -1,22 +1,32 @@
 # Changelog
 
-## 0.1.1-beta.10: Official Omarchy baseline and forward compatibility
+## 0.1.1-beta.11: Native Audio and Bluetooth cutover
 
-Release candidate for 2026-08-21.
+Public beta candidate for 2026-08-23.
 
 ### Added
 
-- Added permanent regression coverage for Omarchy's `connectDirectly()` Network action
-- Added official Omarchy `4.0.0-1`/`v4.0.0` compatibility evidence and forward baseline metadata
+- Completed the Step 2 compact production-boundary transition and Step 3 Bluetooth audio-route seam
+- Activated native PipeWire Audio and BlueZ/Bluetooth owners without duplicating backend ownership
+- Added primitive Audio panel snapshots, stable IDs, typed action results, and live app-stream controls
+- Added local physical acceptance for Audio and a Jabra Evolve2 55 Bluetooth output
 
 ### Changed
 
-- Preserved `connectKnown()` on stable Omarchy while accepting `connectDirectly()` on the forward host
-- Kept `omarchy-dev` as a diagnostic-only development-host fallback without changing the official release baseline
+- Kept the 24-plugin contract and one production Quickshell process
+- Coalesced mouse-wheel volume bursts and retained the effective audio sink during asynchronous refresh
+- Aligned output, microphone, and app percentage typography and right-aligned the output value
+
+### Fixed
+
+- Prevented stale resolver updates from redirecting volume mutations to the default sink
+- Preserved last-known output volume/mute state across temporary sink loss and reconnects
+- Completed Bluetooth remove, fresh-pair, reconnect, route, and restore validation
 
 ### Known limits
 
-- Physical multi-output, mixed-scale, hardware, and full visual-freeze acceptance remain explicit release gates
+- Physical second-display, mixed-scale/hotplug, and enterprise-Wi-Fi acceptance remain stable-release gates
+- Machine2 validation is intentionally out of scope for this public beta
 - AUR publication remains unavailable until the package name can be registered
 
 ## 0.1.1-beta.9: Host-owned Notifications compatibility

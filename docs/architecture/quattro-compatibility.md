@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.10` candidate is reviewed against the current official
+The `0.1.1-beta.11` candidate is reviewed against the current official
 Omarchy Quattro baseline:
 
 | Component | Observed value |
