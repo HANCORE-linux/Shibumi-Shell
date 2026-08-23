@@ -227,7 +227,45 @@ Only behavior proven to be host-neutral should move from QS Rise V1 to Shibumi. 
 be adapted to the Shibumi ownership model rather than copied together with QS Rise paths,
 hooks, polling, or lifecycle scripts.
 
-### Why A Full-Bar Plugin
+### Compact Enforceable Backend Boundary
+
+The machine-readable boundary contract is
+[`contracts/backend-boundary-v1.json`](contracts/backend-boundary-v1.json). It is
+the only repository boundary source for production dependency classification;
+it is not a status system and does not replace the suite contract or release
+readiness record. `scripts/check-production-boundary` loads that manifest and
+fails closed on malformed or incomplete declarations.
+
+Every mutable capability declares one owner, its current backend boundary, its
+output cardinality, and its worker policy. Production dependencies are classified
+as exactly one of `hostIntegration`, `nativeApi`, `omarchyBackend`,
+`omarchyAction`, or `hostOwnedProvider`. A transitional `omarchyBackend` must
+name a known backend, an explicit `removalStep`, and a reason. The manifest's
+transition ledger locks every declared transition capability and dependency to
+that classification, so a transition cannot be silently reclassified without a
+boundary-contract change. Process-wide Shibumi owners must also expose a valid
+service manifest. New categories, owners, backend identities, host providers,
+or undeclared occurrences fail the lint rather than becoming implicit
+compatibility debt.
+
+The only host-owned provider exceptions are Omarchy Notifications, OSD, and
+Idle. Their provider identities, owners, allowed forms, process-wide cardinality,
+and host-owned worker policy are declared explicitly in the boundary manifest.
+No other `firstPartyServiceFor`, private provider QML, hidden component, helper
+state poller, or output-duplicated capability owner is permitted. OSD remains an
+explicit host summon/IPC action; it is not a Shibumi provider.
+
+The production lint runs in source and package gates. It checks exact reviewed
+occurrences, private component paths, provider and first-party service calls,
+Omarchy commands, helper-backed state markers, package escapes, symlinks, UTF-8
+source, transition-ledger consistency, and process-wide owner manifests. The
+lint verifies declared output cardinality and worker policy; it does not claim
+to prove runtime process cardinality or live worker behavior. Compatibility debt
+may be removed by a later migration step, but it may not be broadened silently.
+This boundary slice does not activate Audio, Network, Bluetooth, or any other
+backend cutover.
+
+## Why A Full-Bar Plugin
 
 Replacing individual widgets on Omarchy's built-in bar is the lower-risk choice
 when a product only changes widget content or visual tokens. Whiterose documents
@@ -606,13 +644,15 @@ Current Phase 2 foundation:
   Shibumi full/compact widget and lazy mixer panel own the visible V1
   presentation, while every volume, mute, device, and stream mutation delegates
   to that same official instance. It does not create or trigger a second OSD;
-- the bridge contains no PipeWire import, process, timer, or file watcher. The
-  local mixer snapshots exposed lists through one 75 ms settle timer and owns
-  one `PwNodePeakMonitor` only while open; the official stock panel and its
-  workers remain closed. Component regressions cover missing-backend behavior,
-  settings, screen-aware alias routing, action forwarding, unique click
-  registration, model release, and teardown. Real Wayland panel mapping remains
-  an acceptance gate.
+- during the Step 4A transition, the bridge reads the authoritative
+  `Pipewire.ready` signal and owns one bounded `PwNodePeakMonitor` only while
+  the visible mixer is open; it exposes primitive snapshots and typed stable-ID
+  actions while the official stock panel and its workers remain closed. The
+  native `AudioBackendAdapter` provides the replacement primitive peak seam and
+  is lifecycle-gated for activation. Component regressions cover missing-backend
+  behavior, readiness, settings, screen-aware alias routing, action forwarding,
+  unique click registration, model release, and teardown. Real Wayland panel
+  mapping remains an acceptance gate.
 - G7 replaces the stock AI presentation with one selected-provider Shibumi
   pill and one lazy local panel. The process-wide `hancore.shibumi.ai` service consumes
   the primitive schema-v1 records produced by current `omarchy.agents`; it

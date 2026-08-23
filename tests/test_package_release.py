@@ -26,7 +26,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.10")
+        self.assertEqual(version, "0.1.1-beta.11")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -55,6 +55,14 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn('"$pkgdir/usr/bin/shibumi-shell"', pkgbuild)
         self.assertNotIn("$HOME", pkgbuild)
         self.assertNotIn(".config/omarchy", pkgbuild)
+        self.assertIn(
+            'contracts/backend-boundary-v1.json',
+            pkgbuild,
+        )
+        aur_check = (ROOT / "scripts/check-aur-package").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scripts/check-production-boundary", aur_check)
         hooks = list((ROOT / "packaging").rglob("*.install"))
         hooks += list((ROOT / "packaging").rglob("*.hook"))
         self.assertEqual(hooks, [])
@@ -132,6 +140,20 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertEqual(checkout_uses, [expected, expected])
         self.assertEqual(workflow.count("persist-credentials: false"), 2)
         self.assertNotIn("persist-credentials: true", workflow)
+
+    def test_release_workflow_rehearses_the_installed_aur_package(self) -> None:
+        workflow = (ROOT / ".github/workflows/package-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("archlinux:base-devel", workflow)
+        self.assertIn('"$GITHUB_WORKSPACE:/src:ro"', workflow)
+        self.assertIn("scripts/rehearse-aur-package", workflow)
+        rehearsal = (ROOT / "scripts/rehearse-aur-package").read_text(encoding="utf-8")
+        self.assertIn("usr/share/shibumi-shell/contracts/backend-boundary-v1.json", rehearsal)
+        self.assertIn("check-production-boundary", rehearsal)
+        self.assertIn("Suite.load(payload)", rehearsal)
+        self.assertIn('"--root"', rehearsal)
+        self.assertNotIn("chown -R builder:builder /src", workflow)
 
     def test_release_workflow_requires_revision_bound_lifecycle_evidence(self) -> None:
         workflow = (ROOT / ".github/workflows/package-release.yml").read_text(

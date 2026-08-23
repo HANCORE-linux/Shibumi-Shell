@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Bluetooth
-import Quickshell.Services.Pipewire
 import "." as Local
 import "BluetoothModel.js" as Model
 
@@ -22,6 +21,8 @@ Item {
   property var pipewireNodesOverride: null
   property var commandRunnerOverride: null
   property var audioOutputOverride: null
+  property var audioRouteOverride: null
+  property bool audioRouteHandoffReady: true
   property int audioSwitchInterval: 500
   property int audioIntentTimeoutInterval: 60000
   property int discoveryRequestTimeoutInterval: 1500
@@ -49,9 +50,9 @@ Item {
   readonly property var nativeDevices: nativeDevicesOverride !== null
     ? nativeDevicesOverride
     : (backendOverride === null && Bluetooth.devices ? Bluetooth.devices.values : [])
-  readonly property var pipewireNodes: pipewireNodesOverride !== null
-    ? pipewireNodesOverride
-    : (backendOverride === null && Pipewire.nodes ? Pipewire.nodes.values : [])
+  readonly property var audioRoute: audioRouteOverride !== null
+    ? audioRouteOverride : nativeAudioRoute
+  readonly property var pipewireNodes: nativeAudioRoute.nodes
   readonly property var nativeDeviceGroups: Model.deviceLists(nativeDevices)
   readonly property var connectedDevices: backendOverride !== null
     ? backendList("connectedDevices") : nativeDeviceGroups.connected
@@ -66,6 +67,14 @@ Item {
   visible: false
   width: 0
   height: 0
+
+  Local.BluetoothAudioRouteAdapter {
+    id: nativeAudioRoute
+    enabled: root.audioRouteHandoffReady
+      && root.audioRouteOverride === null && root.backendOverride === null
+    nodesOverride: root.pipewireNodesOverride
+    outputOverride: root.audioOutputOverride
+  }
 
   function backendList(name) {
     if (backendOverride === null || !(name in backendOverride)) return []
@@ -309,36 +318,42 @@ Item {
     return runNativeDeviceAction(device, "forget", "forgetting")
   }
 
-  function audioSinks() {
-    const sinks = []
-    for (let i = 0; i < pipewireNodes.length; i++) {
-      const node = pipewireNodes[i]
-      if (node && node.isSink && !node.isStream) sinks.push(node)
+  function audioRouteRequest(device) {
+    if (!device || !device.address) return null
+    return {
+      address: String(device.address).trim(),
+      name: device.name ? String(device.name) : "",
+      deviceName: device.deviceName ? String(device.deviceName) : ""
     }
-    return sinks
   }
 
-  function bluetoothAudioSink(device) {
-    const sinks = audioSinks()
-    for (let i = 0; i < sinks.length; i++)
-      if (Model.bluetoothSinkMatchesDevice(sinks[i], device)) return sinks[i]
-    return null
+  function audioRouteResult(ok, code, message, entityId, generation) {
+    return {
+      ok: ok === true,
+      code: String(code || (ok ? "ok" : "unavailable")),
+      message: String(message || ""),
+      entityId: String(entityId || ""),
+      generation: Number(generation || 0)
+    }
   }
 
-  function setDefaultAudioSink(sink) {
-    if (!sink) return
-    if (audioOutputOverride !== null
-        && typeof audioOutputOverride.setDefaultSink === "function") {
-      audioOutputOverride.setDefaultSink(sink)
-      return
-    }
-    Pipewire.preferredDefaultAudioSink = sink
-    if (sink.id === undefined || !sink.name) return
-    Quickshell.execDetached([
-      "omarchy-audio-output-set-default",
-      String(sink.id),
-      String(sink.name)
-    ])
+  function normalizeAudioRouteResult(value) {
+    if (value && typeof value === "object"
+        && typeof value.ok === "boolean")
+      return value
+    if (value === true) return audioRouteResult(true, "ok", "", "", 0)
+    return audioRouteResult(
+      false, "unavailable", "Bluetooth audio route is unavailable", "", 0)
+  }
+
+  function requestBluetoothAudioRoute(device) {
+    const request = audioRouteRequest(device)
+    if (!request || !audioRoute
+        || typeof audioRoute.routeBluetoothDevice !== "function")
+      return audioRouteResult(
+        false, "unavailable", "Bluetooth audio route is unavailable", "", 0)
+    return normalizeAudioRouteResult(
+      audioRoute.routeBluetoothDevice(request))
   }
 
   function scheduleAudioOutputSwitch(device) {
@@ -349,6 +364,7 @@ Item {
       deviceName: device && device.deviceName ? device.deviceName : ""
     }
     pendingAudioOutputAttempts = 0
+    audioIntentTimeout.restart()
     audioSwitchTimer.restart()
   }
 
@@ -380,18 +396,22 @@ Item {
   function switchPendingAudioOutput() {
     if (!validatePendingAudioOutput()) return
     const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
-    const sink = bluetoothAudioSink(device)
-    if (sink) {
-      setDefaultAudioSink(sink)
+    const routeResult = requestBluetoothAudioRoute(device)
+    if (routeResult.ok) {
       pendingAudioOutputDevice = null
       audioSwitchTimer.stop()
+      audioIntentTimeout.stop()
+      return
+    }
+    // Retry only transient route unavailability. The handoff timeout bounds
+    // the wait while allowing slow BlueZ/PipeWire graph creation to settle.
+    if (routeResult.code !== "unavailable") {
+      pendingAudioOutputDevice = null
+      audioSwitchTimer.stop()
+      audioIntentTimeout.stop()
       return
     }
     pendingAudioOutputAttempts++
-    if (pendingAudioOutputAttempts >= 8) {
-      pendingAudioOutputDevice = null
-      return
-    }
     audioSwitchTimer.restart()
   }
 
@@ -403,7 +423,6 @@ Item {
       if (device && device.connected && deviceUsesCurrentAdapter(device)) {
         scheduleAudioOutputSwitch(device)
         audioHandoffIntent = null
-        audioIntentTimeout.stop()
       }
     }
     validatePendingAudioOutput()
@@ -490,7 +509,10 @@ Item {
     id: audioIntentTimeout
     interval: root.audioIntentTimeoutInterval
     repeat: false
-    onTriggered: root.audioHandoffIntent = null
+    onTriggered: {
+      root.audioHandoffIntent = null
+      root.cancelPendingAudioOutput("")
+    }
   }
 
   Timer {

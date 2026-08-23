@@ -16,10 +16,17 @@ Item {
   property real inputVolume: 0.64
   property bool inputMuted: false
   property var sink: sinkA
+  property var volumeSink: sinkA
   property var source: sourceA
   property var audioSinks: [sinkA, sinkC, sinkB]
   property var audioSources: [sourceA, sourceB]
   property var audioStreams: [streamA, streamB]
+  property var nodes: [sinkA, sinkC, sinkB, sourceA, sourceB, streamA, streamB]
+  property var candidateSinks: [sinkA, sinkC, sinkB]
+  property var candidateSources: [sourceA, sourceB]
+  property var candidateStreams: [streamA, streamB]
+  property var sinkAvailability: ({})
+  property bool sinkAvailabilityLoaded: false
   property int defaultSinkChanges: 0
   property int defaultSourceChanges: 0
   property int outputVolumeChanges: 0
@@ -127,6 +134,8 @@ Item {
   QtObject {
     id: sinkA
     property int id: 1
+    property bool isSink: true
+    property bool isStream: false
     property string name: "sink-a"
     property bool ready: true
     property string nickname: "SteelSeries Arctis 7"
@@ -142,6 +151,8 @@ Item {
   QtObject {
     id: sinkB
     property int id: 2
+    property bool isSink: true
+    property bool isStream: false
     property string name: "sink-b"
     property bool ready: true
     property string nickname: "USB Audio #1"
@@ -157,6 +168,8 @@ Item {
   QtObject {
     id: sinkC
     property int id: 7
+    property bool isSink: true
+    property bool isStream: false
     property string name: "sink-hdmi"
     property bool ready: true
     property string nickname: "27GL850"
@@ -171,6 +184,8 @@ Item {
   QtObject {
     id: sourceA
     property int id: 3
+    property bool isSink: false
+    property bool isStream: false
     property string name: "source-a"
     property string description: "Internal Microphone"
     property var audio: sourceAudioA
@@ -179,6 +194,8 @@ Item {
   QtObject {
     id: sourceB
     property int id: 4
+    property bool isSink: false
+    property bool isStream: false
     property string name: "source-b"
     property string description: "USB Microphone"
     property var audio: sourceAudioB
@@ -187,6 +204,9 @@ Item {
   QtObject {
     id: streamA
     property int id: 5
+    property bool isSink: true
+    property bool isStream: true
+    property string type: "Stream/Output/Audio"
     property string description: "Browser"
     property var audio: streamAudioA
   }
@@ -194,6 +214,9 @@ Item {
   QtObject {
     id: streamB
     property int id: 6
+    property bool isSink: true
+    property bool isStream: true
+    property string type: "Stream/Output/Audio"
     property string description: "Music"
     property var audio: streamAudioB
   }

@@ -470,7 +470,13 @@ rg -q 'G6: \["hancore.shibumi.audio"\]' core/GroupRegistry.js \
 rg -q 'hancore\.shibumi\.audio' contracts/plugin-suite-v1.json \
   || fail "Shibumi audio composite is not registered"
 rg -q 'AudioPanelBridge' hancore.shibumi.audio/BarWidget.qml \
-  || fail "audio view does not preserve the official panel owner"
+  || fail "audio view does not use the primitive backend bridge"
+rg -q 'nativeAudioService: root\.nativeBackendAccessEnabled' \
+  hancore.shibumi.audio/BarWidget.qml \
+  || fail "audio view is not wired to the native process-wide service"
+rg -q 'property bool nativeBackendEnabled: true' \
+  hancore.shibumi.audio/Service.qml \
+  || fail "native audio ownership is not atomically enabled"
 rg -q 'popupSource: Qt\.resolvedUrl\("AudioPanel\.qml"\)' hancore.shibumi.audio/BarWidget.qml \
   || fail "audio widget does not lazy-load the Shibumi mixer panel"
 rg -q 'return String\(pluginId \|\| ""\) === "omarchy\.audio" \? root : null' \
@@ -478,10 +484,11 @@ rg -q 'return String\(pluginId \|\| ""\) === "omarchy\.audio" \? root : null' \
   || fail "official audio routing is not redirected to the Shibumi owner"
 rg -q 'manageIpc: false' hancore.shibumi.audio/BarWidget.qml \
   || fail "audio aliases must use screen-aware host routing, not duplicate IPC handlers"
-if rg -q 'Quickshell\.Services\.Pipewire|Pipewire\.' hancore.shibumi.audio/BarWidget.qml \
-  hancore.shibumi.audio/AudioPanelBridge.qml; then
+if rg -q 'Quickshell\.Services\.Pipewire|Pipewire\.' hancore.shibumi.audio/BarWidget.qml; then
   fail "Shibumi audio presentation must not create a second PipeWire owner"
 fi
+rg -q 'Pipewire\.ready === true' hancore.shibumi.audio/AudioPanelBridge.qml \
+  || fail "transitional audio bridge does not use the authoritative PipeWire readiness signal"
 if rg -q 'Process \{|FileView \{' hancore.shibumi.audio/BarWidget.qml \
   hancore.shibumi.audio/AudioPanelBridge.qml; then
   fail "audio presentation bridge must remain event-driven and worker-free"
@@ -496,17 +503,24 @@ fi
 rg -U -q 'Timer \{\n[[:space:]]*id: wheelCommitTimer\n[[:space:]]*interval: 70\n' \
   hancore.shibumi.audio/BarWidget.qml \
   || fail "audio wheel commit timer contract changed"
-rg -U -q 'Timer \{\n[[:space:]]*id: wheelSettleTimer\n[[:space:]]*interval: 300\n' \
+rg -U -q 'Timer \{\n[[:space:]]*id: wheelSettleTimer\n[[:space:]]*interval: 1000\n' \
   hancore.shibumi.audio/BarWidget.qml \
   || fail "audio wheel settle timer contract changed"
 if rg -U -q 'Timer \{([^}]|\n)*(repeat:[[:space:]]*true|running:[[:space:]]*true)' \
   hancore.shibumi.audio/BarWidget.qml; then
   fail "audio wheel timers must remain dormant, non-repeating interaction timers"
 fi
-[[ $(rg -c 'PwNodePeakMonitor \{' hancore.shibumi.audio/AudioPanel.qml) -eq 1 ]] \
-  || fail "audio panel must own exactly one lifecycle-bound microphone meter"
-rg -q 'enabled: panel\.open' hancore.shibumi.audio/AudioPanel.qml \
-  || fail "microphone meter is not bounded to the open mixer lifecycle"
+[[ $(rg -c 'PwNodePeakMonitor \{' hancore.shibumi.audio/AudioBackendAdapter.qml) -eq 1 ]] \
+  || fail "native audio backend must own exactly one microphone meter"
+rg -q 'audioBackend\.inputPeak' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not consume the primitive microphone peak"
+rg -q 'audioBackend\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not acquire microphone peak monitoring"
+rg -q 'audioBackend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+  || fail "audio panel does not release microphone peak monitoring"
+rg -q 'enabled: root\.active && root\.peakMonitoringEnabled' \
+  hancore.shibumi.audio/AudioBackendAdapter.qml \
+  || fail "microphone meter is not bounded to the native backend lifecycle"
 if rg -q 'Pipewire\.|Process \{|FileView \{' hancore.shibumi.audio/AudioPanel.qml; then
   fail "Shibumi audio panel duplicates Quattro audio ownership or shell workers"
 fi
@@ -719,6 +733,7 @@ jq -e '
   || fail "Shibumi Bluetooth plugin entry points are not declared"
 bluetooth_service=hancore.shibumi.bluetooth/Service.qml
 bluetooth_adapter=hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml
+bluetooth_audio_route=hancore.shibumi.bluetooth/BluetoothAudioRouteAdapter.qml
 bluetooth_widget=hancore.shibumi.bluetooth/BarWidget.qml
 bluetooth_panel=hancore.shibumi.bluetooth/BluetoothPanel.qml
 [[ $(rg -c 'BluetoothBackendAdapter \{' "$bluetooth_service") -eq 1 ]] \
@@ -736,8 +751,19 @@ rg -q 'adapter\.stopDiscovery\(\)' "$bluetooth_service" \
 for bluetooth_adapter in "$bluetooth_adapter"; do
   rg -q '^import Quickshell\.Bluetooth$' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not own the native BlueZ model"
-  rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter does not own Bluetooth audio routing"
+  [[ -f $bluetooth_audio_route ]] \
+    || fail "$bluetooth_audio_route is missing"
+  rg -q '^import Quickshell\.Services\.Pipewire$' "$bluetooth_audio_route" \
+    || fail "$bluetooth_audio_route does not own PipeWire access"
+  rg -q 'audioRouteOverride' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not expose the process-wide audio route seam"
+  rg -q 'enabled: root\.audioRouteHandoffReady' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not gate its legacy PipeWire route"
+  rg -q 'root\.audioRouteOverride === null && root\.backendOverride === null' \
+    "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not disable its legacy PipeWire route after cutover"
+  rg -Fq 'routeBluetoothDevice(request)' "$bluetooth_audio_route" \
+    || fail "$bluetooth_audio_route lacks its narrow route method"
   for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
     rg -U -q "on${device_signal}Changed: \\{[^}]*syncNativePendingActions\\(\\)[^}]*syncNativeAudioHandoffIntents\\(\\)" \
       "$bluetooth_adapter" \
@@ -770,6 +796,10 @@ if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|pane
     "$bluetooth_service"; then
   fail "Bluetooth service still resolves or loads the complete Omarchy panel"
 fi
+rg -q 'serviceFor\("hancore\.shibumi\.audio"\)' "$bluetooth_service" \
+  || fail "Bluetooth service does not resolve the process-wide audio owner"
+rg -q 'audioRouteOverride: root\.audioRouteOverride' "$bluetooth_service" \
+  || fail "Bluetooth service does not hand off audio routing atomically"
 if rg -q 'Quickshell\.Bluetooth|Quickshell\.Services\.Pipewire|Bluetooth\.|Pipewire\.' \
     "$bluetooth_widget" "$bluetooth_panel"; then
   fail "Bluetooth presentation bypasses the process-wide native adapter"

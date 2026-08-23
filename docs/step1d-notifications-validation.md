@@ -1,6 +1,6 @@
 # Step 1D Notifications compatibility validation
 
-Status: complete for the beta.10 candidate. This slice keeps Omarchy as the
+Status: complete for the beta.11 candidate. This slice keeps Omarchy as the
 sole Notifications owner and adds only a Shibumi primitive-row adapter; it does
 not create a second notification daemon or server.
 
@@ -68,6 +68,6 @@ The installed-package and source-parity gates now use the official Omarchy
 revision-bound snapshots. This slice remains separate from the final physical
 multi-output, mixed-scale, hardware, and visual-freeze release gates.
 
-Step 1D remains complete. The beta.10 release checkpoint still requires clean
+Step 1D remains complete. The beta.11 release checkpoint still requires clean
 final-commit evidence, independent review, and explicit recording of any
 unavailable physical visual or interaction gates.

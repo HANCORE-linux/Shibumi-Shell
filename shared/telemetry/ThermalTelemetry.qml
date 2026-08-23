@@ -6,6 +6,8 @@ Scope {
   id: root
 
   property int consumers: 0
+  // Tests can disable the host probe while retaining the parser/model seam.
+  property bool probeEnabled: true
   property var gpuTelemetry: null
   property var acquiredGpuTelemetry: null
   property int cpuTemperatureC: 0
@@ -60,7 +62,8 @@ Scope {
   }
 
   function refresh() {
-    if (consumers > 0 && !probe.running) probe.running = true
+    if (probeEnabled && consumers > 0 && !probe.running)
+      probe.running = true
   }
 
   function validTemperature(value) {

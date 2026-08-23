@@ -1,6 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Services.Mpris
+import Quickshell.Services.Pipewire
+import "AudioModel.js" as Model
 
 // Keeps Quattro's audio component as the single PipeWire/device/action owner.
 // Shibumi renders its own bar and popup presentation, while this bridge exposes
@@ -13,207 +16,519 @@ Item {
   property Component panelComponent: null
   property url panelSource: ""
   property var panelSettings: ({})
+  property var backendReadyOverride: null
+  property real peakValue: 0
+  property var peakAcquire: null
+  property var peakRelease: null
+  property bool nativeBackendAccessEnabled: false
+  property var nativeAudioService: null
 
-  readonly property var panel: panelLoader.item
-  readonly property bool ready: panel !== null
-  readonly property var sink: ready && panel.sink !== undefined ? panel.sink : null
-  readonly property var source: ready && panel.source !== undefined ? panel.source : null
-  readonly property var audioSinks: ready && panel.audioSinks !== undefined
-    ? groupedDeviceNodes(panel.audioSinks) : []
-  readonly property var audioSources: ready && panel.audioSources !== undefined
-    ? panel.audioSources : []
-  readonly property var audioStreams: ready && panel.audioStreams !== undefined
-    ? panel.audioStreams : []
-  readonly property real outputVolume: ready
-    && panel.outputVolume !== undefined ? Number(panel.outputVolume) : 0
-  readonly property bool outputMuted: ready
-    && panel.outputMuted !== undefined ? panel.outputMuted === true : false
-  readonly property real inputVolume: ready
-    && panel.inputVolume !== undefined ? Number(panel.inputVolume) : 0
-  readonly property bool inputMuted: ready
-    && panel.inputMuted !== undefined ? panel.inputMuted === true : false
+  readonly property bool backendReady: backendReadyOverride !== null
+    ? backendReadyOverride === true
+    : nativeAudioService !== null
+    ? nativeAudioService.nativeBackendReady === true
+    : nativeBackendAccessEnabled ? Pipewire.ready === true : true
+  readonly property bool ready: nativeAudioService !== null
+    ? nativeAudioService.nativeBackendReady === true
+    : panel.item !== null && backendReady
+  readonly property var sinkSnapshot: {
+    const version = generation
+    void version
+    if (!ready) return null
+    if (nativeAudioService !== null) return nativeAudioService.nativeSinkSnapshot
+    return panel.sink !== undefined
+      ? Model.snapshot(panel.sink, "sink", true) : null
+  }
+  readonly property var sourceSnapshot: {
+    const version = generation
+    void version
+    if (!ready) return null
+    if (nativeAudioService !== null) return nativeAudioService.nativeSourceSnapshot
+    return panel.source !== undefined
+      ? Model.snapshot(panel.source, "source", true) : null
+  }
+  readonly property var volumeSinkSnapshot: {
+    const version = generation
+    void version
+    if (!ready) return null
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeVolumeSinkSnapshot
+    return panel.volumeSink !== undefined
+      ? Model.snapshot(panel.volumeSink, "sink", true) : null
+  }
+  readonly property var audioSinks: {
+    const version = generation
+    void version
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioSinks || []
+    return panel.audioSinks !== undefined
+      ? Model.snapshotList(Model.groupedDeviceNodes(panel.audioSinks), "sink", panel.sink)
+      : []
+  }
+  readonly property var audioSources: {
+    const version = generation
+    void version
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioSources || []
+    return panel.audioSources !== undefined
+      ? Model.snapshotList(panel.audioSources, "source", panel.source) : []
+  }
+  readonly property var audioStreams: {
+    const version = generation
+    void version
+    if (!ready) return []
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeAudioStreams || []
+    if (panel.audioStreams === undefined) return []
+    const streams = panel.audioStreams
+    const players = root.nativeBackendAccessEnabled
+      ? (Mpris.players ? Mpris.players.values : []) : []
+    return Model.snapshotList(streams, "stream", null,
+      function(node) { return Model.streamLabel(node, players, streams) })
+  }
+  readonly property real outputVolume: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.nativeOutputVolume || 0)
+    return panel.outputVolume !== undefined ? Number(panel.outputVolume) : 0
+  }
+  readonly property bool outputMuted: {
+    if (!ready) return false
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeOutputMuted === true
+    return panel.outputMuted !== undefined && panel.outputMuted === true
+  }
+  readonly property real inputVolume: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.nativeInputVolume || 0)
+    return panel.inputVolume !== undefined ? Number(panel.inputVolume) : 0
+  }
+  readonly property bool inputMuted: {
+    if (!ready) return false
+    if (nativeAudioService !== null)
+      return nativeAudioService.nativeInputMuted === true
+    return panel.inputMuted !== undefined && panel.inputMuted === true
+  }
+  readonly property real inputPeak: {
+    if (!ready) return 0
+    if (nativeAudioService !== null)
+      return Number(nativeAudioService.inputPeak || 0)
+    return Number(peakValue || 0)
+  }
+  property int generation: 0
+
+  // Internal-only facade around the loaded official component. It is a child
+  // id, not a root property, so callers cannot obtain the raw panel object.
+  QtObject {
+    id: panel
+
+    readonly property var item: panelLoader.item
+    readonly property var sink: item && item.sink !== undefined ? item.sink : null
+    readonly property var volumeSink: item && item.volumeSink !== undefined
+      ? item.volumeSink : sink
+    readonly property var source: item && item.source !== undefined ? item.source : null
+    readonly property var audioSinks: item && item.audioSinks !== undefined
+      ? item.audioSinks : []
+    readonly property var audioSources: item && item.audioSources !== undefined
+      ? item.audioSources : []
+    readonly property var audioStreams: item && item.audioStreams !== undefined
+      ? item.audioStreams : []
+    readonly property var nodes: item && item.nodes !== undefined
+      ? item.nodes : []
+    readonly property var candidateSinks: item && item.candidateSinks !== undefined
+      ? item.candidateSinks : null
+    readonly property var candidateSources: item && item.candidateSources !== undefined
+      ? item.candidateSources : null
+    readonly property var candidateStreams: item && item.candidateStreams !== undefined
+      ? item.candidateStreams : null
+    readonly property var sinkAvailability: item && item.sinkAvailability !== undefined
+      ? item.sinkAvailability : ({})
+    readonly property bool sinkAvailabilityLoaded:
+      item && item.sinkAvailabilityLoaded === true
+    readonly property var outputVolume: item && item.outputVolume !== undefined
+      ? item.outputVolume : 0
+    readonly property bool outputMuted: item && item.outputMuted === true
+    readonly property var inputVolume: item && item.inputVolume !== undefined
+      ? item.inputVolume : 0
+    readonly property bool inputMuted: item && item.inputMuted === true
+    readonly property var inputPeak: item && item.inputPeak !== undefined
+      ? item.inputPeak : undefined
+    readonly property bool opened: item && item.opened === true
+
+    function unsupported() {
+      return {
+        ok: false,
+        code: "unsupported",
+        message: "Audio backend action is unavailable",
+        entityId: "",
+        generation: root.generation
+      }
+    }
+    function toggleOutputMute() {
+      if (!item || typeof item.toggleOutputMute !== "function") return unsupported()
+      return item.toggleOutputMute()
+    }
+    function setOutputVolume(value) {
+      if (!item || typeof item.setOutputVolume !== "function") return unsupported()
+      return item.setOutputVolume(value)
+    }
+    function toggleInputMute() {
+      if (!item || typeof item.toggleInputMute !== "function") return unsupported()
+      return item.toggleInputMute()
+    }
+    function setInputVolume(value) {
+      if (!item || typeof item.setInputVolume !== "function") return unsupported()
+      return item.setInputVolume(value)
+    }
+    function setDefaultSink(node) {
+      if (!item || typeof item.setDefaultSink !== "function") return unsupported()
+      return item.setDefaultSink(node)
+    }
+    function setDefaultSource(node) {
+      if (!item || typeof item.setDefaultSource !== "function") return unsupported()
+      return item.setDefaultSource(node)
+    }
+    function setStreamVolume(node, value) {
+      if (!item || !node || !node.audio) return unsupported()
+      node.audio.volume = Math.max(0, Math.min(1.5, Number(value) || 0))
+      return true
+    }
+    function toggleStreamMute(node) {
+      if (!item || !node || !node.audio) return unsupported()
+      node.audio.muted = !node.audio.muted
+      return true
+    }
+    function streamLabel(node) {
+      return item && typeof item.streamLabel === "function"
+        ? item.streamLabel(node) : ""
+    }
+    function close() {
+      if (item && typeof item.close === "function") item.close()
+    }
+    function suppressKeyboardPanel() {
+      if (!item || !item.data || item.data.length === undefined) return false
+      let suppressed = false
+      for (let index = 0; index < item.data.length; index++) {
+        const candidate = item.data[index]
+        if (!candidate || typeof candidate.beginFocusPrime !== "function"
+            || !("anchorItem" in candidate) || !("open" in candidate)
+            || !("visible" in candidate) || !("owner" in candidate)
+            || candidate.owner !== item) continue
+        candidate.open = false
+        candidate.visible = false
+        suppressed = true
+      }
+      return suppressed
+    }
+    function inject(host, settings) {
+      if (!item) return
+      suppressKeyboardPanel()
+      if ("bar" in item) item.bar = host
+      if ("moduleName" in item) item.moduleName = "omarchy.audio"
+      if ("settings" in item) item.settings = settings
+      if ("manageIpc" in item) item.manageIpc = false
+      if (item.opened === true && typeof item.close === "function") item.close()
+      item.opacity = 0
+    }
+  }
+
+  function acquirePeakMonitoring() {
+    if (nativeAudioService !== null
+        && typeof nativeAudioService.acquirePeakMonitoring === "function")
+      return nativeAudioService.acquirePeakMonitoring() === true
+    return typeof peakAcquire === "function" ? peakAcquire() === true : false
+  }
+
+  function releasePeakMonitoring() {
+    if (nativeAudioService !== null
+        && typeof nativeAudioService.releasePeakMonitoring === "function")
+      return nativeAudioService.releasePeakMonitoring() === true
+    return typeof peakRelease === "function" ? peakRelease() === true : false
+  }
+
+  function actionResult(ok, code, message, entityId) {
+    return Model.actionResult(ok, code, message, entityId, generation)
+  }
+
+  function delegatedResult(value, entityId) {
+    if (value && typeof value === "object"
+        && typeof value.ok === "boolean") {
+      value.entityId = entityId
+      if (value.code === undefined)
+        value.code = value.ok ? "ok" : "unavailable"
+      if (value.message === undefined) value.message = ""
+      if (value.generation === undefined) value.generation = generation
+      return value
+    }
+    if (value === false)
+      return actionResult(false, "unavailable", "Audio backend action failed", entityId)
+    return null
+  }
+
+  function refreshedDelegatedSuccess(value, entityId) {
+    return actionResult(true, value.code || "ok", value.message || "", entityId)
+  }
+
+  function nativeAction(method, args, entityId) {
+    if (!nativeAudioService || typeof nativeAudioService[method] !== "function")
+      return actionResult(false, "unsupported",
+        "Audio backend action is unavailable", entityId)
+    const value = nativeAudioService[method].apply(nativeAudioService, args || [])
+    const delegated = delegatedResult(value, entityId)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, entityId)
+      : actionResult(true, "ok", "", entityId)
+  }
+
+  function advanceGeneration() {
+    generation++
+  }
+
+  function entityId(entity, kind) {
+    return entity && entity.id !== undefined
+      ? String(entity.id) : String(entity || "")
+  }
+
+  function liveNode(entity, kind) {
+    const id = entityId(entity, kind)
+    const nodes = kind === "sink" ? panel.candidateSinks
+      : kind === "source" ? panel.candidateSources : panel.candidateStreams
+    if (!nodes) return null
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index]
+      if (!node || Model.stableNodeId(node, kind) !== id) continue
+      return node
+    }
+    return null
+  }
 
   function toggleOutputMute() {
-    if (!ready || typeof panel.toggleOutputMute !== "function") return false
-    panel.toggleOutputMute()
-    return true
+    const id = volumeSinkSnapshot ? volumeSinkSnapshot.id
+      : sinkSnapshot ? sinkSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleOutputMute", [], id)
+    if (!ready || !panel.volumeSink || panel.volumeSink.ready === false
+        || !panel.volumeSink.audio)
+      return actionResult(false, "unavailable", "Output is unavailable", id)
+    if (typeof panel.toggleOutputMute !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(panel.toggleOutputMute(), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
   function setOutputVolume(value) {
-    if (!ready || typeof panel.setOutputVolume !== "function") return false
-    panel.setOutputVolume(Math.max(0, Math.min(1, Number(value) || 0)))
-    return true
+    const id = volumeSinkSnapshot ? volumeSinkSnapshot.id
+      : sinkSnapshot ? sinkSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetOutputVolume",
+        [Math.max(0, Math.min(1, Number(value) || 0))], id)
+    if (!ready || !panel.volumeSink || panel.volumeSink.ready === false
+        || !panel.volumeSink.audio)
+      return actionResult(false, "unavailable", "Output is unavailable", id)
+    if (typeof panel.setOutputVolume !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(
+      panel.setOutputVolume(Math.max(0, Math.min(1, Number(value) || 0))), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
   function toggleInputMute() {
-    if (!ready || typeof panel.toggleInputMute !== "function") return false
-    panel.toggleInputMute()
-    return true
+    const id = sourceSnapshot ? sourceSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleInputMute", [], id)
+    if (!ready || !panel.source || panel.source.ready === false
+        || !panel.source.audio)
+      return actionResult(false, "unavailable", "Input is unavailable", id)
+    if (typeof panel.toggleInputMute !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(panel.toggleInputMute(), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
   function setInputVolume(value) {
-    if (!ready || typeof panel.setInputVolume !== "function") return false
-    panel.setInputVolume(Math.max(0, Math.min(1, Number(value) || 0)))
-    return true
+    const id = sourceSnapshot ? sourceSnapshot.id : ""
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetInputVolume",
+        [Math.max(0, Math.min(1, Number(value) || 0))], id)
+    if (!ready || !panel.source || panel.source.ready === false
+        || !panel.source.audio)
+      return actionResult(false, "unavailable", "Input is unavailable", id)
+    if (typeof panel.setInputVolume !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(
+      panel.setInputVolume(Math.max(0, Math.min(1, Number(value) || 0))), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
-  function setDefaultSink(node) {
-    if (!ready || !node || typeof panel.setDefaultSink !== "function") return false
-    panel.setDefaultSink(node)
-    return true
+  function setDefaultSink(entity) {
+    const id = entityId(entity, "sink")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetDefaultSink", [id], id)
+    const node = ready ? liveNode(entity, "sink") : null
+    if (!ready) return actionResult(false, "unavailable", "Audio sink is unavailable", id)
+    if (!node)
+      return actionResult(false, "stale-id", "Audio sink is unavailable", id)
+    if (node.ready === false)
+      return actionResult(false, "unavailable", "Audio sink is unavailable", id)
+    if (panel.sinkAvailabilityLoaded
+        && panel.sinkAvailability[String(node.name || "")] === false)
+      return actionResult(false, "unavailable", "Audio sink is unavailable", id)
+    if (typeof panel.setDefaultSink !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(panel.setDefaultSink(node), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
-  function setDefaultSource(node) {
-    if (!ready || !node || typeof panel.setDefaultSource !== "function") return false
-    panel.setDefaultSource(node)
-    return true
+  function setDefaultSource(entity) {
+    const id = entityId(entity, "source")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetDefaultSource", [id], id)
+    const node = ready ? liveNode(entity, "source") : null
+    if (!ready) return actionResult(false, "unavailable", "Audio source is unavailable", id)
+    if (!node)
+      return actionResult(false, "stale-id", "Audio source is unavailable", id)
+    if (node.ready === false)
+      return actionResult(false, "unavailable", "Audio source is unavailable", id)
+    if (typeof panel.setDefaultSource !== "function")
+      return actionResult(false, "unsupported", "Audio backend action is unavailable", id)
+    const delegated = delegatedResult(panel.setDefaultSource(node), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
-  function setStreamVolume(node, value) {
-    if (!node || !node.audio) return false
-    node.audio.volume = Math.max(0, Math.min(1.5, Number(value) || 0))
-    return true
+  function setStreamVolume(entity, value) {
+    const id = entityId(entity, "stream")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeSetStreamVolume",
+        [id, Math.max(0, Math.min(1.5, Number(value) || 0))], id)
+    const node = ready ? liveNode(entity, "stream") : null
+    if (!ready) return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    if (!node)
+      return actionResult(false, "stale-id", "Audio stream is unavailable", id)
+    if (node.ready === false)
+      return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    if (!node.audio)
+      return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    const delegated = delegatedResult(panel.setStreamVolume(node, value), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
-  function toggleStreamMute(node) {
-    if (!node || !node.audio) return false
-    node.audio.muted = !node.audio.muted
-    return true
+  function toggleStreamMute(entity) {
+    const id = entityId(entity, "stream")
+    if (nativeAudioService !== null)
+      return nativeAction("nativeToggleStreamMute", [id], id)
+    const node = ready ? liveNode(entity, "stream") : null
+    if (!ready) return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    if (!node)
+      return actionResult(false, "stale-id", "Audio stream is unavailable", id)
+    if (node.ready === false)
+      return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    if (!node.audio)
+      return actionResult(false, "unavailable", "Audio stream is unavailable", id)
+    const delegated = delegatedResult(panel.toggleStreamMute(node), id)
+    if (delegated && !delegated.ok) return delegated
+    advanceGeneration()
+    return delegated ? refreshedDelegatedSuccess(delegated, id)
+      : actionResult(true, "ok", "", id)
   }
 
-  function callLabelHelper(name, node, fallback) {
-    if (!ready || typeof panel[name] !== "function") return String(fallback || "")
-    return String(panel[name](node) || fallback || "")
+  function nodeLabel(snapshot) {
+    return snapshot && snapshot.label ? String(snapshot.label) : "Audio device"
   }
 
-  function usableDeviceLabel(value) {
-    const label = String(value || "").trim()
-    return !label || label === "(null)" ? "" : label
+  function streamLabel(snapshot) {
+    return snapshot && snapshot.label ? String(snapshot.label) : "Application"
   }
 
-  function nodeProperties(node) {
-    return node && node.ready !== false && node.properties
-      ? node.properties : ({})
-  }
 
-  function nodeDeviceKey(node) {
-    const properties = nodeProperties(node)
-    const deviceId = usableDeviceLabel(properties["device.id"])
-    if (deviceId) return "id:" + deviceId
-
-    const deviceName = usableDeviceLabel(properties["device.name"])
-    if (deviceName) return "device:" + deviceName.toLowerCase()
-
-    const nodeName = usableDeviceLabel(node && node.name)
-    const profileSeparator = nodeName.lastIndexOf(".")
-    return "node:" + (profileSeparator > 0
-      ? nodeName.slice(0, profileSeparator) : nodeName).toLowerCase()
-  }
-
-  function nodeProfileKey(node) {
-    const properties = nodeProperties(node)
-    return usableDeviceLabel(
-      properties["device.profile.description"]).toLowerCase()
-  }
-
-  function groupedDeviceNodes(values) {
-    const groups = []
-    if (!values) return []
-
-    for (let i = 0; i < values.length; i++) {
-      const node = values[i]
-      if (!node) continue
-      const key = nodeDeviceKey(node) || "index:" + i
-      let group = null
-      for (let j = 0; j < groups.length; j++) {
-        if (groups[j].key === key) {
-          group = groups[j]
-          break
-        }
-      }
-      if (!group) {
-        group = { key: key, nodes: [] }
-        groups.push(group)
-      }
-      group.nodes.push(node)
-    }
-
-    const result = []
-    for (let i = 0; i < groups.length; i++) {
-      groups[i].nodes.sort(function(left, right) {
-        const leftProfile = nodeProfileKey(left)
-        const rightProfile = nodeProfileKey(right)
-        return leftProfile < rightProfile ? -1
-          : leftProfile > rightProfile ? 1 : 0
-      })
-      for (let j = 0; j < groups[i].nodes.length; j++)
-        result.push(groups[i].nodes[j])
-    }
-    return result
-  }
-
-  function descriptiveNodeLabel(node) {
-    if (!node) return ""
-    const properties = nodeProperties(node)
-    const profile = usableDeviceLabel(properties["device.profile.description"])
-    let label = usableDeviceLabel(node.description)
-    if (label && profile
-        && label.toLowerCase().indexOf(profile.toLowerCase()) < 0)
-      return label + " " + profile
-    if (label) return label
-
-    label = usableDeviceLabel(properties["node.description"])
-    if (label && profile
-        && label.toLowerCase().indexOf(profile.toLowerCase()) < 0)
-      return label + " " + profile
-    if (label) return label
-
-    const device = usableDeviceLabel(properties["device.description"])
-    if (device && profile
-        && device.toLowerCase().indexOf(profile.toLowerCase()) < 0)
-      return device + " " + profile
-    return device || profile
-  }
-
-  function nodeLabel(node) {
-    return descriptiveNodeLabel(node)
-      || callLabelHelper("nodeLabel", node, "Audio device")
-  }
-  function sinkGlyph(node) { return callLabelHelper("sinkGlyph", node, "speaker") }
-  function sourceGlyph(node) { return callLabelHelper("sourceGlyph", node, "mic") }
-  function streamLabel(node) { return callLabelHelper("streamLabel", node, "Application") }
-
-  function suppressBackendKeyboardPanel() {
-    if (!panel || !panel.data || panel.data.length === undefined) return false
-    let suppressed = false
-    for (let index = 0; index < panel.data.length; index++) {
-      const candidate = panel.data[index]
+  function officialKeyboardState() {
+    const item = panel.item
+    if (!item || !item.data || item.data.length === undefined)
+      return ({ open: false, visible: false })
+    for (let index = 0; index < item.data.length; index++) {
+      const candidate = item.data[index]
       if (!candidate || typeof candidate.beginFocusPrime !== "function"
           || !("anchorItem" in candidate) || !("open" in candidate)
           || !("visible" in candidate) || !("owner" in candidate)
-          || candidate.owner !== panel) continue
-      // The official backend's KeyboardPanel is a separate PanelWindow, so
-      // hiding the backend Item after Loader.onLoaded cannot hide that window.
-      // Break only the KeyboardPanel visibility binding; centered authoritative
-      // overlays (which do not expose beginFocusPrime) remain available.
-      candidate.open = false
-      candidate.visible = false
-      suppressed = true
+          || candidate.owner !== item) continue
+      return ({ open: candidate.open === true, visible: candidate.visible === true })
     }
-    return suppressed
+    return ({ open: false, visible: false })
+  }
+
+  function officialPanelState() {
+    const item = panel.item
+    if (!item) return ({ present: false })
+    const keyboard = officialKeyboardState()
+    const firstStream = item.audioStreams && item.audioStreams.length > 0
+      ? item.audioStreams[0] : null
+    return {
+      present: true,
+      opacity: Number(item.opacity || 0),
+      settings: item.settings || ({}),
+      manageIpc: item.manageIpc === true,
+      opened: item.opened === true,
+      openCount: Number(item.openCount || 0),
+      backendKeyboardPanelOpen: keyboard.open,
+      backendKeyboardPanelVisible: keyboard.visible,
+      clickTargetRegistered: !!(item.internalButton
+        && item.internalButton.registeredBar !== undefined
+        && item.internalButton.registeredBar === root.bar),
+      defaultSinkChanges: Number(item.defaultSinkChanges || 0),
+      sinkId: item.sink && item.sink.id !== undefined ? Number(item.sink.id) : -1,
+      defaultSourceChanges: Number(item.defaultSourceChanges || 0),
+      sourceId: item.source && item.source.id !== undefined ? Number(item.source.id) : -1,
+      outputVolumeChanges: Number(item.outputVolumeChanges || 0),
+      outputVolume: Number(item.outputVolume || 0),
+      inputVolumeChanges: Number(item.inputVolumeChanges || 0),
+      inputVolume: Number(item.inputVolume || 0),
+      inputMuted: item.inputMuted === true,
+      streamVolume: firstStream && firstStream.audio
+        ? Number(firstStream.audio.volume || 0) : 0,
+      streamMuted: !!(firstStream && firstStream.audio && firstStream.audio.muted)
+    }
+  }
+
+  function openOfficialPanel() {
+    if (!panel.item || typeof panel.item.open !== "function") return false
+    panel.item.open()
+    return true
+  }
+
+  function closeOfficialPanel() {
+    panel.close()
+    return true
   }
 
   function injectPanel() {
-    if (!panel) return
-    suppressBackendKeyboardPanel()
-    if ("bar" in panel) panel.bar = hostProxy
-    if ("moduleName" in panel) panel.moduleName = "omarchy.audio"
-    if ("settings" in panel) panel.settings = panelSettings
-    if ("manageIpc" in panel) panel.manageIpc = false
-    if (panel.opened === true && typeof panel.close === "function") panel.close()
+    if (!panel.item) return
     // The official button and popup remain instantiated for their backend
     // state, but Shibumi owns the only visible presentation and click target.
-    panel.opacity = 0
+    panel.inject(hostProxy, panelSettings)
   }
 
   function syncPanelSource() {
@@ -237,11 +552,8 @@ Item {
   onPanelSourceChanged: Qt.callLater(syncPanelSource)
   Component.onCompleted: Qt.callLater(syncPanelSource)
   Component.onDestruction: {
-    const currentPanel = panel
-    if (currentPanel && currentPanel.opened === true
-        && typeof currentPanel.close === "function") currentPanel.close()
-    // Destroy the official panel while its host facade is still valid. Setting
-    // panel.bar to null first reevaluates unguarded upstream bindings.
+    panel.close()
+    // Destroy the official panel while its host facade is still valid.
     panelLoader.active = false
   }
 

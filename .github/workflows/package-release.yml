@@ -37,6 +37,22 @@ jobs:
           set -euo pipefail
           scripts/build-release-archive --check-reproducible
 
+      - name: Rehearse the built AUR package in Arch
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/src:ro" \
+            archlinux:base-devel \
+            bash -ceu '
+              pacman -Syu --noconfirm --needed git python
+              useradd --create-home builder
+              mkdir /work
+              cp -a /src/. /work/
+              chown -R builder:builder /work
+              cd /work
+              su builder -c ./scripts/rehearse-aur-package
+            '
+
   github-release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package-contract

@@ -106,6 +106,7 @@ OMARCHY_PATH="$omarchy_path" \
 widget="$repo_root/hancore.shibumi.bluetooth/BarWidget.qml"
 service="$repo_root/hancore.shibumi.bluetooth/Service.qml"
 adapter="$repo_root/hancore.shibumi.bluetooth/BluetoothBackendAdapter.qml"
+audio_route="$repo_root/hancore.shibumi.bluetooth/BluetoothAudioRouteAdapter.qml"
 model="$repo_root/hancore.shibumi.bluetooth/BluetoothModel.js"
 discovery_guard="$repo_root/hancore.shibumi.bluetooth/BluetoothDiscoveryGuard.qml"
 panel="$repo_root/hancore.shibumi.bluetooth/BluetoothPanel.qml"
@@ -133,8 +134,13 @@ jq -e '
   || fail "Bluetooth suite metadata still declares a host backend contract"
 rg -q '^import Quickshell\.Bluetooth$' "$adapter" \
   || fail "Bluetooth adapter does not own the native BlueZ model"
-rg -q '^import Quickshell\.Services\.Pipewire$' "$adapter" \
-  || fail "Bluetooth adapter does not own Bluetooth audio routing"
+[[ -f $audio_route ]] || fail "Bluetooth audio route seam is missing"
+rg -q '^import Quickshell\.Services\.Pipewire$' "$audio_route" \
+  || fail "Bluetooth audio route seam does not own PipeWire access"
+rg -q 'BluetoothAudioRouteAdapter' "$adapter" \
+  || fail "Bluetooth adapter does not use the audio route seam"
+rg -Fq 'routeBluetoothDevice(request)' "$audio_route" \
+  || fail "Bluetooth audio route seam lacks its narrow route method"
 rg -Fq 'executeDeviceCommand(deviceCommand(action, device.address))' "$adapter" \
   || fail "Bluetooth adapter does not preserve the device helper contract"
 rg -Fq 'Model.deviceLists(nativeDevices)' "$adapter" \

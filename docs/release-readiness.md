@@ -1,16 +1,16 @@
-# Is Shibumi 0.1.1-beta.10 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.11 ready for prerelease testing?
 
 > **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.10` carries the host-owned Notifications compatibility
-result merged as `6e963f0` plus the current baseline and forward-compatibility
-follow-up. Its complete contract remains
+Shibumi `0.1.1-beta.11` carries the Step 2, Step 3, Step 4A, and Step 4B
+integration on the exact clean candidate. Its complete contract remains
 revision-bound across the installed-package, installed-source-parity, and
 forward-compatibility proof axes. Destructive live Wayland acceptance is
 retained only for the exact revisions that produced it; the release workflow
-must record fresh checksummed evidence for the tagged candidate. Physical
-multi-monitor, enterprise Wi-Fi, and the remaining Bluetooth workflows still
-block a stable public release.
+must record fresh checksummed evidence for the tagged candidate. Local physical
+Audio and Bluetooth acceptance passed. Physical second-display, mixed-scale,
+hotplug, and enterprise-Wi-Fi gates remain stable-release gates; Machine2 is
+intentionally outside this candidate's scope.
 
 ## Current test target
 
@@ -30,10 +30,39 @@ digests in
 [`quickshell-dots-d0896fc-v2-deec8103.json`](../contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json);
 no maintainer-local checkout path is part of the acceptance contract.
 
+## Step 2 boundary checkpoint
+
+The compact production boundary is implemented without a backend cutover. The
+single machine-readable source is
+[`backend-boundary-v1.json`](../contracts/backend-boundary-v1.json); it declares
+all capability owners, current boundaries, declared output cardinality, worker
+policy, explicit transition steps, and only the Notifications, OSD, and Idle
+host-owned exceptions. Its transition ledger prevents silent reclassification
+of existing compatibility debt, and every process-wide Shibumi owner must expose
+a valid service manifest. `scripts/check-production-boundary` is
+manifest-driven and fails closed on unknown categories, owners, transitional
+backends, private providers, hidden components, helper-backed state, undeclared
+commands, package escapes, transition-ledger drift, and missing owner manifests.
+The lint verifies these declarations; live process and worker cardinality remain
+runtime gates.
+
+Validation passed on the dedicated Step 2 worktree based on `e92d8ee`:
+
+- production boundary lint and 15 focused boundary regression tests;
+- package (14), suite (99), and health (44) unit gates passed;
+- the Arch AUR rehearsal builds and extracts the package, including the installed
+  `contracts/backend-boundary-v1.json` payload;
+- documentation, plugin-suite, AUR scaffold, `git diff --check`, and the complete
+  pinned contract regression passed.
+
+The Step 2 boundary remains the base contract. Step 3's Bluetooth audio-route
+seam and Step 4A/4B native Audio/Bluetooth cutover are integrated in this
+candidate; the consumed Omarchy baselines remain unchanged.
+
 ## Prerelease acceptance summary
 
-The beta.10 source candidate plus explicitly retained prior acceptance currently
-provides these results. Rows marked historical do not become beta.10 evidence
+The beta.11 source candidate plus explicitly retained prior acceptance currently
+provides these results. Rows marked historical do not become beta.11 evidence
 until the revision-bound release collector reruns them:
 
 | Gate | Result |
@@ -54,7 +83,7 @@ until the revision-bound release collector reruns them:
 | Real Vesktop notification path | Passed: authoritative host history records `app: "vesktop"` and `appIcon: "vesktop"` |
 | INC-013 convergence contract | Passed: 14 of 14 |
 | Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Beta.9 to beta.10 exact final-commit update and clean-commit collector still required |
+| Transactional live update | Beta.10 to beta.11 exact final-commit update and clean-commit collector still required |
 | Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
 | Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
@@ -63,7 +92,7 @@ until the revision-bound release collector reruns them:
 | Network label runtime | Passed on Ethernet and Wi-Fi across repeated V1, V2, Omarchy, and V2-return transitions |
 | Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error in the final unpinned status smoke |
 | Control Center **Bars** view | Passed on the physical Wayland session |
-| Bluetooth connection and panel | Passed with a live connected phone |
+| Bluetooth connection and panel | Passed with a live Jabra Evolve2 55: fresh remove/pair/trust/connect, native audio route, disconnect/reconnect, and restored state |
 | Idle/screensaver panel cleanup | Passed in the bar-host regression and deployed live |
 | Temperature sources | Passed: CPU and core live; absent sources disabled |
 | Workspace styles | Passed: seven supported styles and geometry checks |
@@ -115,19 +144,18 @@ The theme updater disables Git hooks, executable filters, prompts, and external 
 
 The V1 and V2 shell-update interface is adapted to `shibumi-suite`. The Update Center checks Arch packages and installed Git themes. It doesn't fetch a new Shibumi source revision.
 
-## Private alpha limits
+## Public beta limits
 
-The beta.10 prerelease may be committed, tagged, and pushed to the private repository with these limits:
+The beta.11 public beta may be committed, tagged, and pushed with these limits:
 
 - The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
 - the validation system has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
 - No enterprise Wi-Fi credentials were supplied for a real authentication test
-- A live Bluetooth phone connection and panel pass; pairing, audio routing,
-  disconnect, and forget still need complete physical acceptance
+- Local Bluetooth pairing, audio routing, disconnect/reconnect, and forget
+  passed with the Jabra Evolve2 55
 - A Shibumi update starts from a trusted repository checkout
-- Step 1D's final tab/layout deployment and Machine 2 bar-continuity transition
-  were validated; a final physical Machine 2 visual-freeze comparison remains
-  unclaimed
+- Machine2 validation is intentionally excluded from the beta.11 acceptance
+  target
 Fixtures cover unavailable and error behavior, but they don't replace the physical gates.
 The predecessor's multi-monitor and mixed-scale implementation is mapped into
 the Shibumi source and automated contracts, but inherited behavior does not
@@ -135,12 +163,13 @@ replace a physical Shibumi run on the target Quattro release.
 
 ## Public release blockers
 
-Before making the repository public:
+Before making a stable `v0.1.1` repository release:
 
 1. Complete the remaining rows in [`../contracts/v1-state-matrix.json`](../contracts/v1-state-matrix.json)
 2. Test a physical second display, mixed scale, hotplug, and unplug during drag
 3. Test a real enterprise Wi-Fi authentication failure and reconnect
-4. Test Bluetooth pairing, audio routing, disconnect, and forget
+4. Repeat physical Bluetooth pairing, audio routing, disconnect, and forget
+   on the stable-release target if the beta.11 local evidence is not adopted
 5. Repeat the complete validation contract on the exact public-release commit
 
 ## Release evidence

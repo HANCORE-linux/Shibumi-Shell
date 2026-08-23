@@ -26,6 +26,8 @@ ShellRoot {
 
   Telemetry.Service {
     id: telemetryService
+    // Keep this fixture isolated from machine-specific hwmon inventory.
+    thermalProbeEnabled: false
   }
 
   Cpu.Service {

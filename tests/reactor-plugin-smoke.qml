@@ -72,7 +72,10 @@ ShellRoot {
 
   QtObject { id: fakeNetwork; property string kind: "wifi" }
 
-  Audio.Service { id: fakeAudio }
+  Audio.Service {
+    id: fakeAudio
+    nativeBackendEnabled: false
+  }
 
   QtObject {
     id: fakeUpdate

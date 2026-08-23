@@ -75,6 +75,7 @@ ShellRoot {
         bar: fakeBar
         settings: ({ compact: false })
         panelComponent: audioPanelComponent
+        backendReadyOverride: true
         popupSource: Qt.resolvedUrl("fixtures/AudioTestView.qml")
       }
     }
@@ -100,30 +101,31 @@ ShellRoot {
       const audio = audioLoader.item
       if (root.phase === 0) {
         if (!audio || !audio.audioReady || root.phaseTicks < 3) return
+        const official = audio ? audio.officialPanelState() : ({ present: false })
         if (!audio || !audio.audioReady || audio.volume !== 42 || audio.muted
             || audio.implicitHeight !== 35 || unavailableAudio.visible)
           return root.fail("backend readiness/state/geometry")
         if (audio.compact)
           return root.fail("explicit full presentation resolved compact")
-        if (!audio.audioPanel || audio.audioPanel.opacity !== 0
-            || audio.audioPanel.settings.testSetting !== "retained"
-            || audio.audioPanel.manageIpc
-            || audio.audioPanel.opened || audio.audioPanel.openCount !== 0
-            || audio.audioPanel.backendKeyboardPanelOpen
-            || audio.audioPanel.backendKeyboardPanelVisible
+        if (!official.present || official.opacity !== 0
+            || official.settings.testSetting !== "retained"
+            || official.manageIpc
+            || official.opened || official.openCount !== 0
+            || official.backendKeyboardPanelOpen
+            || official.backendKeyboardPanelVisible
             || audio.childPanelWidget("omarchy.audio") !== audio
-            || !audio.ownsPanelWidget(audio)
-            || !audio.ownsPanelWidget(audio.audioPanel))
+            || !audio.ownsPanelWidget(audio))
           return root.fail("official panel bridge/routing/settings")
-        if (root.clickTargets.length !== 1
-            || audio.audioPanel.internalButton.registeredBar === fakeBar)
+        if (root.clickTargets.length !== 1 || official.clickTargetRegistered)
           return root.fail("duplicate official click target")
-        audio.audioPanel.open()
-        if (!audio.audioPanel.opened
-            || audio.audioPanel.backendKeyboardPanelOpen
-            || audio.audioPanel.backendKeyboardPanelVisible)
+        if (!audio.openOfficialPanel())
+          return root.fail("official panel test action unavailable")
+        const openedOfficial = audio.officialPanelState()
+        if (!openedOfficial.opened
+            || openedOfficial.backendKeyboardPanelOpen
+            || openedOfficial.backendKeyboardPanelVisible)
           return root.fail("hidden official KeyboardPanel became visible")
-        audio.audioPanel.close()
+        audio.closeOfficialPanel()
 
         root.fullWidth = audio.implicitWidth
         audio.settings = ({ compact: true })
@@ -139,24 +141,28 @@ ShellRoot {
 
         audio.interactionTarget.triggerPress(Qt.RightButton)
         if (!audio.muted) return root.fail("right-click mute forwarding")
-        root.wheelCallsBefore = audio.audioPanel.outputVolumeChanges
+        root.wheelCallsBefore = audio.officialPanelState().outputVolumeChanges
         audio.interactionTarget.wheelMoved(120)
         audio.interactionTarget.wheelMoved(120)
         audio.interactionTarget.wheelMoved(0)
         if (audio.volume !== 52)
           return root.fail("wheel target did not accumulate immediately")
-        if (audio.audioPanel.outputVolumeChanges !== root.wheelCallsBefore)
+        if (audio.officialPanelState().outputVolumeChanges !== root.wheelCallsBefore)
           return root.fail("wheel burst wrote the backend before settling")
         root.phase++
         root.phaseTicks = 0
       } else if (root.phase === 2) {
         if (root.phaseTicks < 3) return
-        if (audio.audioPanel.outputVolumeChanges !== root.wheelCallsBefore + 1
-            || Math.abs(audio.audioPanel.outputVolume - 0.52) > 0.001)
-          return root.fail("wheel burst was not coalesced into one final write")
+        const official = audio.officialPanelState()
+        if (official.outputVolumeChanges !== root.wheelCallsBefore + 1
+            || Math.abs(official.outputVolume - 0.52) > 0.001
+            || audio.wheelAdjustmentPending
+            || audio.wheelCommitInFlight)
+          return root.fail("wheel burst was not coalesced and acknowledged")
         audio.interactionTarget.triggerPress(Qt.LeftButton)
-        if (!audio.opened || audio.audioPanel.opened
-            || audio.audioPanel.openCount !== 1)
+        const closedOfficial = audio.officialPanelState()
+        if (!audio.opened || closedOfficial.opened
+            || closedOfficial.openCount !== 1)
           return root.fail("local mixer lifecycle/official panel isolation")
         root.phase++
         root.phaseTicks = 0
@@ -173,24 +179,25 @@ ShellRoot {
               !== "SteelSeries Arctis 7 Game")
           return root.fail("description-first output device labels")
         if (!audio.panelItem.selectSecondSink()
-            || audio.audioPanel.defaultSinkChanges !== 1
-            || audio.audioPanel.sink.id !== 2)
+            || audio.officialPanelState().defaultSinkChanges !== 1
+            || audio.officialPanelState().sinkId !== 2)
           return root.fail("output device forwarding")
         if (!audio.panelItem.selectSecondSource()
-            || audio.audioPanel.defaultSourceChanges !== 1
-            || audio.audioPanel.source.id !== 4)
+            || audio.officialPanelState().defaultSourceChanges !== 1
+            || audio.officialPanelState().sourceId !== 4)
           return root.fail("input device forwarding")
         if (!audio.panelItem.setFirstStreamVolume(0.75)
-            || audio.audioPanel.audioStreams[0].audio.volume !== 0.75)
+            || Math.abs(audio.officialPanelState().streamVolume - 0.75) > 0.001)
           return root.fail("stream volume forwarding")
         if (!audio.panelItem.toggleFirstStreamMute()
-            || !audio.audioPanel.audioStreams[0].audio.muted)
+            || !audio.officialPanelState().streamMuted)
           return root.fail("stream mute forwarding")
         if (!audio.panelItem.setInputVolume(0.35)
-            || audio.audioPanel.inputVolumeChanges !== 1
-            || Math.abs(audio.audioPanel.inputVolume - 0.35) > 0.001)
+            || audio.officialPanelState().inputVolumeChanges !== 1
+            || Math.abs(audio.officialPanelState().inputVolume - 0.35) > 0.001)
           return root.fail("input volume forwarding")
-        if (!audio.panelItem.toggleInputMute() || !audio.audioPanel.inputMuted)
+        if (!audio.panelItem.toggleInputMute()
+            || !audio.officialPanelState().inputMuted)
           return root.fail("input mute forwarding fixture")
         audio.close()
         root.phase++
