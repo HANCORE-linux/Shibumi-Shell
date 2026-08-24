@@ -152,6 +152,33 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "network direct-connect smoke produced a QML runtime error"
 fi
 
+install -m 0644 "$repo_root/tests/network-native-backend-seam-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/native-runtime" "$tmpdir/native-home"
+chmod 700 "$tmpdir/native-runtime"
+set +e
+native_output=$(timeout 12 env \
+  HOME="$tmpdir/native-home" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/native-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+native_rc=$?
+set -e
+printf '%s\n' "$native_output"
+[[ $native_rc -eq 0 ]] \
+  || fail "network native backend seam smoke exited $native_rc"
+grep -F 'network native backend seam regression passed' \
+  <<<"$native_output" >/dev/null \
+  || fail "network native backend seam success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$native_output"; then
+  fail "native seam produced a QML runtime error"
+fi
+
 normal_pid_log="$tmpdir/bounded-parent-pid"
 normal_child_pid_log="$tmpdir/bounded-child-pid"
 PATH="$tmpdir/bin:$PATH" \
@@ -188,6 +215,43 @@ widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 service="$repo_root/hancore.shibumi.network/Service.qml"
 bridge="$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml"
 runner="$repo_root/hancore.shibumi.network/InlineSpeedTestRunner.py"
+native_adapter="$repo_root/hancore.shibumi.network/NetworkBackendAdapter.qml"
+native_gateway="$repo_root/hancore.shibumi.network/NetworkNativeGateway.qml"
+native_model="$repo_root/hancore.shibumi.network/NetworkModel.js"
+[[ -f $native_adapter && -f $native_gateway && -f $native_model ]] \
+  || fail "Step 5A native Network seam inventory is incomplete"
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway' "$service"; then
+  fail "Step 5A native Network seam was activated in production"
+fi
+rg -Fq 'active: root.active && root.backendOverride === null' \
+  "$native_adapter" \
+  || fail "native Network gateway is not isolated behind the activation Loader"
+rg -Fq 'property bool nativeServiceAvailable: false' "$native_adapter" \
+  || fail "native Network availability lacks a reactive service-liveness gate"
+rg -Fq 'gateway.backendInitialized === true' "$native_adapter" \
+  || fail "native Network availability trusts singleton initialization alone"
+if rg -q '^import Quickshell\.Networking$|Networking\.' "$native_adapter"; then
+  fail "outer Network adapter can bypass fake isolation"
+fi
+rg -Fq 'import Quickshell.Networking' "$native_gateway" \
+  || fail "native Network gateway does not use the public Quickshell API"
+rg -Fq 'return IdPrefix + JSON.stringify(values)' "$native_model" \
+  || fail "Network entity IDs are not collision-safe versioned tuples"
+rg -Fq 'return root.result(false, "unsupported",' "$native_adapter" \
+  || fail "native Network aggregate forget is not rejected"
+if rg -q '(target|network)\.forget\(' "$native_adapter" "$native_gateway"; then
+  fail "Step 5A can invoke Quickshell aggregate network forget"
+fi
+rg -Fq 'function networkResolution(entityId)' "$native_adapter" \
+  || fail "native actions do not resolve current raw Network objects"
+rg -Fq 'if (resolved.count > 1 || resolved.row && resolved.row.ambiguous)' \
+  "$native_adapter" \
+  || fail "duplicate native Network identities do not fail closed"
+rg -Fq 'if (request.generation !== root.generation)' "$native_adapter" \
+  || fail "native Network actions do not enforce topology generations"
+rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
+  "$repo_root/tests/network-plugin-regression.sh" \
+  || fail "fake Network seam is not tested without the system bus"
 rg -Fq 'property string speedTestExecutable: "omarchy-network-speedtest"' \
   "$service" || fail "network service does not use the host speed-test command"
 rg -Fq 'Qt.resolvedUrl("InlineSpeedTestRunner.py")' "$service" \
