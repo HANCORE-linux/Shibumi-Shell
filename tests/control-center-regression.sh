@@ -1764,7 +1764,7 @@ for profile_icon_contract in \
     'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Icon + text" }' \
     'WidgetAppearanceWorkbench.qml:{ value: "text", label: "Text" }' \
     'WidgetAppearanceWorkbench.qml:readonly property var mediaStyleOptions:' \
-    'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Full" }' \
+    'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Compact" }' \
     'WidgetAppearanceWorkbench.qml:readonly property var v1CompactGroupIds:' \
     'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G9") return mediaStyleOptions' \
     'WidgetAppearanceWorkbench.qml:if (controller.v2LayoutActive === true) return displayModeOptions' \
