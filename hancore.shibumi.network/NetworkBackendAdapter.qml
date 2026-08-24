@@ -4,6 +4,7 @@ import QtQuick
 import "NetworkModel.js" as Model
 import "NetworkProfileCatalogModel.js" as CatalogModel
 import "NetworkTelemetryModel.js" as TelemetryModel
+import "NetworkReachabilityModel.js" as ReachabilityModel
 
 // Source-only Step 5A capability seam. Production Service.qml does not load
 // this adapter yet. Native access is isolated behind an inactive Loader, raw
@@ -19,6 +20,7 @@ Item {
   property var nativeLiveness: null
   property var savedProfileCatalog: null
   property var networkTelemetry: null
+  property var networkReachability: null
   readonly property bool nativeServiceAvailable:
     root.nativeLiveness !== null
       && root.nativeLiveness.serviceUsable === true
@@ -128,6 +130,22 @@ Item {
     connected: root.networkTelemetryConnected,
     generation: root.generation
   })
+  readonly property var reachabilityProjection:
+    implementation.reachabilityProjection()
+  readonly property bool networkReachabilityAvailable:
+    root.reachabilityProjection.available
+  readonly property bool networkReachabilityDegraded:
+    root.reachabilityProjection.degraded
+  readonly property var reachabilitySnapshot:
+    root.networkReachabilityAvailable
+      ? implementation.reachabilityPublic(root.reachabilityProjection.row)
+      : null
+  readonly property var networkReachabilitySnapshot: ({
+    schemaVersion: root.schemaVersion,
+    available: root.networkReachabilityAvailable,
+    degraded: root.networkReachabilityDegraded,
+    generation: root.generation
+  })
 
   visible: false
   width: 0
@@ -138,6 +156,7 @@ Item {
   onNativeLivenessChanged: generation++
   onSavedProfileCatalogChanged: generation++
   onNetworkTelemetryChanged: generation++
+  onNetworkReachabilityChanged: generation++
   onNativeServiceAvailableChanged: generation++
   onNativeServiceEpochChanged: generation++
   onTopologyFingerprintChanged: generation++
@@ -467,6 +486,51 @@ Item {
         return { available: false, degraded: true, connected: false,
           row: null }
       }
+    }
+
+    function telemetryGateway(row) {
+      if (!row || !Array.isArray(row.gateways)) return ""
+      for (let index = 0; index < row.gateways.length; index++) {
+        if (row.gateways[index].family === "ipv4")
+          return row.gateways[index].address
+      }
+      return row.gateways.length > 0 ? row.gateways[0].address : ""
+    }
+
+    function reachabilityProjection() {
+      if (!root.active || root.networkReachability === null)
+        return { available: false, degraded: false, row: null }
+      if (root.networkReachability.available !== true)
+        return { available: false,
+          degraded: root.networkReachability.phase === "error", row: null }
+      if (!root.networkTelemetryConnected || root.telemetryProjection.row === null)
+        return { available: false, degraded: true, row: null }
+      try {
+        const source = root.networkReachability.reachabilitySnapshot
+        if (!ReachabilityModel.validPublicSnapshot(source)
+            || source.generation !== root.networkReachability.generation)
+          return { available: false, degraded: true, row: null }
+        const telemetry = root.telemetryProjection.row
+        if (source.connectionId !== telemetry.id
+            || source.deviceId !== telemetry.deviceId
+            || source.interfaceName !== telemetry.interfaceName
+            || source.gateway !== telemetryGateway(telemetry))
+          return { available: false, degraded: true, row: null }
+        const row = ReachabilityModel.clonePublicSnapshot(source)
+        return row ? { available: true, degraded: false, row: row }
+          : { available: false, degraded: true, row: null }
+      } catch (error) {
+        return { available: false, degraded: true, row: null }
+      }
+    }
+
+    function reachabilityPublic(row) {
+      if (!row) return null
+      const snapshot = ReachabilityModel.clonePublicSnapshot(row)
+      if (!snapshot) return null
+      snapshot.schemaVersion = root.schemaVersion
+      snapshot.generation = root.generation
+      return snapshot
     }
 
     function telemetryDetails(row) {

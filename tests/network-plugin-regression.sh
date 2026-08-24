@@ -41,6 +41,7 @@ install -m 0755 "$repo_root/tests/fixtures/network-bin/omarchy-network-status" \
 install -m 0755 \
   "$repo_root/tests/fixtures/network-profile-catalog-fixture.py" \
   "$repo_root/tests/fixtures/network-telemetry-fixture.py" \
+  "$repo_root/tests/fixtures/network-reachability-fixture.py" \
   "$tmpdir/fixtures/"
 
 set +e
@@ -324,6 +325,62 @@ for telemetry_case in destruction start-failure rate-boundary deferred-launch; d
   fi
 done
 
+"$repo_root/tests/network-reachability-helper-regression.py" \
+  || fail "network reachability helper regression failed"
+for reachability_case in main model lifecycle destruction prestart stream route-race; do
+  reachability_test="$repo_root/tests/network-reachability-regression.qml"
+  if [[ $reachability_case != main ]]; then
+    reachability_test="$repo_root/tests/network-reachability-${reachability_case}-regression.qml"
+  fi
+  install -m 0644 "$reachability_test" "$tmpdir/shell.qml"
+  mkdir -p "$tmpdir/reachability-${reachability_case}-runtime"
+  chmod 700 "$tmpdir/reachability-${reachability_case}-runtime"
+  set +e
+  reachability_output=$(timeout 15 env \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/reachability-${reachability_case}-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  reachability_rc=$?
+  set -e
+  printf '%s\n' "$reachability_output"
+  [[ $reachability_rc -eq 0 ]] \
+    || fail "network reachability $reachability_case smoke exited $reachability_rc"
+  reachability_marker="network reachability regression passed"
+  if [[ $reachability_case != main ]]; then
+    reachability_marker="network reachability ${reachability_case//-/ } regression passed"
+  fi
+  grep -F "$reachability_marker" <<<"$reachability_output" >/dev/null \
+    || fail "network reachability $reachability_case success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$reachability_output"; then
+    fail "network reachability $reachability_case produced a QML runtime error"
+  fi
+  reachability_pid_file=""
+  if [[ $reachability_case == lifecycle ]]; then
+    reachability_pid_file="$tmpdir/fixtures/network-reachability-slow-invocations.pid"
+  elif [[ $reachability_case == destruction ]]; then
+    reachability_pid_file="$tmpdir/fixtures/network-reachability-destruction-invocations.pid"
+  elif [[ $reachability_case == stream ]]; then
+    reachability_pid_file="$tmpdir/fixtures/network-reachability-stream-invocations.pid"
+  elif [[ $reachability_case == route-race ]]; then
+    reachability_pid_file="$tmpdir/fixtures/network-reachability-route-race-invocations.pid"
+  fi
+  if [[ -n $reachability_pid_file ]]; then
+    [[ -s $reachability_pid_file ]] \
+      || fail "network reachability $reachability_case fixture recorded no PID"
+    reachability_pid=$(<"$reachability_pid_file")
+    for _ in {1..50}; do
+      kill -0 "$reachability_pid" 2>/dev/null || break
+      sleep 0.02
+    done
+    kill -0 "$reachability_pid" 2>/dev/null \
+      && fail "network reachability $reachability_case left process $reachability_pid alive"
+  fi
+done
+
 install -m 0644 \
   "$repo_root/tests/network-native-scanner-lease-regression.qml" \
   "$tmpdir/shell.qml"
@@ -407,6 +464,10 @@ telemetry="$repo_root/hancore.shibumi.network/NetworkTelemetry.qml"
 telemetry_model="$repo_root/hancore.shibumi.network/NetworkTelemetryModel.js"
 telemetry_authority="$repo_root/hancore.shibumi.network/NetworkTelemetryAuthority.js"
 telemetry_helper="$repo_root/hancore.shibumi.network/scripts/network-telemetry-snapshot"
+reachability="$repo_root/hancore.shibumi.network/NetworkReachability.qml"
+reachability_model="$repo_root/hancore.shibumi.network/NetworkReachabilityModel.js"
+reachability_authority="$repo_root/hancore.shibumi.network/NetworkReachabilityAuthority.js"
+reachability_helper="$repo_root/hancore.shibumi.network/scripts/network-reachability-probe"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
@@ -415,9 +476,11 @@ telemetry_helper="$repo_root/hancore.shibumi.network/scripts/network-telemetry-s
     && -f $profile_catalog && -f $profile_catalog_model \
     && -f $profile_catalog_authority && -x $profile_catalog_helper \
     && -f $telemetry && -f $telemetry_model \
-    && -f $telemetry_authority && -x $telemetry_helper ]] \
+    && -f $telemetry_authority && -x $telemetry_helper \
+    && -f $reachability && -f $reachability_model \
+    && -f $reachability_authority && -x $reachability_helper ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -575,6 +638,28 @@ rg -Fq 'os.O_NOFOLLOW' "$telemetry_helper" \
 if rg -q 'GetSecrets|nmcli|omarchy|/usr/bin/(ip|ping|resolvectl)' \
     "$telemetry_helper"; then
   fail "network telemetry crosses its bounded NetworkManager/sysfs boundary"
+fi
+rg -Fq 'currentClaim = token' "$reachability_authority" \
+  || fail "network reachability worker is not process-wide"
+rg -Fq 'permanentlyBlocked = true' "$reachability_authority" \
+  || fail "destroyed reachability workers do not block fail-closed"
+rg -Fq 'leaseTokenComponent.createObject(owner' "$reachability" \
+  || fail "network reachability is not demand-driven by owner leases"
+rg -Fq 'function reachabilityProjection()' "$native_adapter" \
+  || fail "native adapter does not validate reachability snapshots"
+rg -Fq 'PING = "/usr/bin/ping"' "$reachability_helper" \
+  || fail "network reachability does not pin its ICMP probe"
+rg -Fq 'INTERNET_TARGET = "1.1.1.1"' "$reachability_helper" \
+  || fail "network reachability internet identity is not fixed"
+rg -Fq 'MAX_OUTPUT_BYTES = 8192' "$reachability_helper" \
+  || fail "network reachability output has no byte bound"
+rg -Fq 'MAX_RUNTIME_SECONDS = 4.0' "$reachability_helper" \
+  || fail "network reachability has no aggregate runtime bound"
+rg -Fq 'signal.SIGKILL' "$reachability_helper" \
+  || fail "reachability probe children lack parent-death cleanup"
+if rg -q 'GetSecrets|nmcli|omarchy|shell=True|/bin/(sh|bash)' \
+    "$reachability_helper"; then
+  fail "network reachability crosses its fixed process boundary"
 fi
 rg -Fq 'currentClaim = token' "$scanner_authority" \
   || fail "scanner mutation authority is not process-wide"
