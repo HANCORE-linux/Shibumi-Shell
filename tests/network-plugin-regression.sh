@@ -179,6 +179,34 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "native seam produced a QML runtime error"
 fi
 
+install -m 0644 \
+  "$repo_root/tests/network-native-scanner-lease-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/scanner-native-runtime" "$tmpdir/scanner-native-home"
+chmod 700 "$tmpdir/scanner-native-runtime"
+set +e
+scanner_native_output=$(timeout 15 env \
+  HOME="$tmpdir/scanner-native-home" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-scanner-system-bus" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/scanner-native-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+scanner_native_rc=$?
+set -e
+printf '%s\n' "$scanner_native_output"
+[[ $scanner_native_rc -eq 0 ]] \
+  || fail "network native scanner smoke exited $scanner_native_rc"
+grep -F 'network native scanner lease regression passed' \
+  <<<"$scanner_native_output" >/dev/null \
+  || fail "network native scanner success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$scanner_native_output"; then
+  fail "native scanner seam produced a QML runtime error"
+fi
+
 normal_pid_log="$tmpdir/bounded-parent-pid"
 normal_child_pid_log="$tmpdir/bounded-child-pid"
 PATH="$tmpdir/bin:$PATH" \
@@ -218,10 +246,16 @@ runner="$repo_root/hancore.shibumi.network/InlineSpeedTestRunner.py"
 native_adapter="$repo_root/hancore.shibumi.network/NetworkBackendAdapter.qml"
 native_gateway="$repo_root/hancore.shibumi.network/NetworkNativeGateway.qml"
 native_model="$repo_root/hancore.shibumi.network/NetworkModel.js"
-[[ -f $native_adapter && -f $native_gateway && -f $native_model ]] \
-  || fail "Step 5A native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway' "$service"; then
-  fail "Step 5A native Network seam was activated in production"
+scanner_lease="$repo_root/hancore.shibumi.network/NetworkScannerLease.qml"
+scanner_gateway="$repo_root/hancore.shibumi.network/NetworkScannerNativeGateway.qml"
+scanner_authority="$repo_root/hancore.shibumi.network/NetworkScannerAuthority.js"
+[[ -f $native_adapter && -f $native_gateway && -f $native_model \
+    && -f $scanner_lease && -f $scanner_gateway \
+    && -f $scanner_authority ]] \
+  || fail "native Network seam inventory is incomplete"
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway' \
+    "$service"; then
+  fail "native Network seams were activated in production"
 fi
 rg -Fq 'active: root.active && root.backendOverride === null' \
   "$native_adapter" \
@@ -273,6 +307,34 @@ rg -Fq 'Saved-profile removal dispatch accepted.' "$native_gateway" \
 rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
   "$repo_root/tests/network-plugin-regression.sh" \
   || fail "fake Network seam is not tested without the system bus"
+rg -Fq 'active: root.authorized && root.backendOverride === null' \
+  "$scanner_lease" \
+  || fail "native scanner gateway is not isolated behind exclusive authority"
+rg -Fq 'currentClaim = token' "$scanner_authority" \
+  || fail "scanner mutation authority is not process-wide"
+rg -Fq 'function onObjectRemovedPre(object, _index)' "$scanner_gateway" \
+  || fail "native scanner does not close removed devices before deletion"
+rg -Fq 'tombstonedDevices' "$scanner_gateway" \
+  || fail "native scanner removal has no private tombstone phase"
+rg -Fq 'Component.onDestruction: closeScanner()' "$scanner_gateway" \
+  || fail "native scanner gateway lacks owned-device teardown"
+rg -Fq 'property int pendingEpoch: 0' "$scanner_lease" \
+  || fail "scanner delay callbacks are not epoch guarded"
+rg -Fq 'phase = "delay-pending"' "$scanner_lease" \
+  || fail "scanner rescan lacks an explicit closed delay phase"
+rg -Fq 'phase = "cleanup-pending"' "$scanner_lease" \
+  || fail "failed scanner cleanup does not block backend replacement"
+rg -Fq 'readonly property bool snapshotDegraded:' "$scanner_lease" \
+  || fail "malformed scanner snapshots are not rejected as a whole"
+rg -Fq 'Scanner device is owned by another provider.' "$scanner_gateway" \
+  || fail "native scanner gateway can claim a foreign scanner"
+rg -Fq 'function onScannerEnabledChanged()' "$scanner_gateway" \
+  || fail "hot-reload scanner handoff cannot observe foreign release"
+rg -Fq 'leaseTokenComponent.createObject(owner' "$scanner_lease" \
+  || fail "scanner clients are not lifetime-bound by owner-parented tokens"
+if rg -q 'ownedDevices|tombstonedDevices|leaseBackend|records' "$service"; then
+  fail "production Network service exposes private scanner ownership objects"
+fi
 rg -Fq 'property string speedTestExecutable: "omarchy-network-speedtest"' \
   "$service" || fail "network service does not use the host speed-test command"
 rg -Fq 'Qt.resolvedUrl("InlineSpeedTestRunner.py")' "$service" \
