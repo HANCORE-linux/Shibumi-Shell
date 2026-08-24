@@ -30,7 +30,7 @@ Column {
   ]
   readonly property var mediaStyleOptions: [
     { value: "default", label: "Default" },
-    { value: "full", label: "Full" }
+    { value: "full", label: "Compact" }
   ]
   readonly property var v1CompactGroupIds: [
     "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15", "G18"
