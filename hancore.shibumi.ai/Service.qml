@@ -382,6 +382,15 @@ Item {
     return authHelp || "No current usage or limit data."
   }
 
+  function providerStatusText(provider) {
+    if (!provider || provider.ready === false) return "stale"
+    if (String(provider.providerId || "") === "codex"
+        && Number(provider.rateLimitPercent) < 0
+        && Number(provider.secondaryRateLimitPercent) < 0)
+      return "partial"
+    return "live"
+  }
+
   function displayPercent(provider, value) {
     const number = Number(value)
     if (!isFinite(number) || number < 0) return -1
@@ -431,7 +440,8 @@ Item {
       let heading = String(provider.providerName || provider.providerId || "AI")
       if (displayTierLabel(provider.tierLabel))
         heading += " (" + displayTierLabel(provider.tierLabel) + ")"
-      if (provider.ready === false) heading += " · stale"
+      const status = providerStatusText(provider)
+      if (status !== "live") heading += " · " + status
       lines.push(heading)
       if (Number(provider.rateLimitPercent) >= 0) {
         const reset = resetText(provider, provider.rateLimitResetAt)

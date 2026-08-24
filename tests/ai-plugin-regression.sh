@@ -222,6 +222,51 @@ set -e
 [[ $missing_collector_rc -ne 0 ]] \
   || fail "missing requested agent collector was accepted"
 
+compat_root="$tmpdir/compat-omarchy"
+compat_real_bin="$tmpdir/home/.local/bin"
+compat_base_bin="$tmpdir/compat-base-bin"
+compat_log="$tmpdir/state/codex-compat-args"
+mkdir -p "$compat_root/bin" "$compat_real_bin" "$compat_base_bin"
+for utility in bash dirname env setsid sleep; do
+  ln -s "$(command -v "$utility")" "$compat_base_bin/$utility"
+done
+cat >"$compat_root/bin/omarchy-agent-usage-update" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+env codex -a untrusted exec
+env codex -s read-only -a untrusted app-server
+EOF
+install -m 0755 /usr/bin/true \
+  "$compat_root/bin/omarchy-agent-usage-codex"
+cat >"$compat_real_bin/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${XDG_STATE_HOME:?}/codex-compat-args"
+EOF
+chmod 0755 "$compat_root/bin/omarchy-agent-usage-update" \
+  "$compat_real_bin/codex"
+run_codex_compat_case() {
+  local label=$1
+  shift
+  : >"$compat_log"
+  PATH="$compat_base_bin" \
+    HOME="$tmpdir/home" XDG_STATE_HOME="$tmpdir/state" \
+    "$wrapper" "$compat_root" "$@" >/dev/null
+  [[ $(wc -l <"$compat_log") -eq 2 ]] \
+    || fail "Codex compatibility shim changed the $label invocation count"
+  grep -Fx -- '-a untrusted exec' "$compat_log" >/dev/null \
+    || fail "Codex compatibility shim changed a non-app-server $label invocation"
+  grep -Fx -- '-s read-only -a never app-server' "$compat_log" >/dev/null \
+    || fail "Codex compatibility shim did not translate the $label policy"
+}
+# shellcheck disable=SC2329 # Exported to prove PATH-only lookup ignores it.
+codex() { return 97; }
+export -f codex
+run_codex_compat_case explicit codex
+run_codex_compat_case all-agents
+run_codex_compat_case forced-all --force
+unset -f codex
+
 widget="$repo_root/hancore.shibumi.ai/BarWidget.qml"
 service="$repo_root/hancore.shibumi.ai/Service.qml"
 rg -q 'serviceFor\("hancore\.shibumi\.ai"\)' "$widget" \
@@ -312,7 +357,8 @@ rg -q 'newest_model\(messages, today_ms, tomorrow_ms\)' \
   "$repo_root/hancore.shibumi.ai/scripts/opencode-usage" \
   || fail "OpenCode latest model does not share the today scope"
 [[ -x $repo_root/hancore.shibumi.ai/scripts/opencode-usage \
-  && -x $repo_root/hancore.shibumi.ai/scripts/agents-update ]] \
+  && -x $repo_root/hancore.shibumi.ai/scripts/agents-update \
+  && -x $repo_root/hancore.shibumi.ai/scripts/compat-bin/codex ]] \
   || fail "AI provider scripts are not executable"
 [[ -s $repo_root/hancore.shibumi.ai/assets/codex.svg \
   && -s $repo_root/hancore.shibumi.ai/assets/opencode-mark.svg ]] \

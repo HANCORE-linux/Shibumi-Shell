@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+real_codex=${SHIBUMI_AI_REAL_CODEX:-}
+if [[ $real_codex != /* || ! -x $real_codex \
+    || $real_codex -ef "${BASH_SOURCE[0]}" ]]; then
+  printf 'shibumi-ai codex compatibility: real Codex command is unavailable\n' >&2
+  exit 127
+fi
+
+arguments=("$@")
+app_server=false
+for argument in "${arguments[@]}"; do
+  if [[ $argument == app-server ]]; then
+    app_server=true
+    break
+  fi
+done
+
+# Omarchy v4.0.0 requests the former `untrusted` approval policy. Codex 0.149
+# removed that spelling in favor of `never`, so its app-server exits before
+# initialize and the otherwise authoritative host collector publishes no
+# limits. Translate only this removed app-server argument; every other Codex
+# invocation and argument passes through unchanged.
+if $app_server; then
+  for ((index = 0; index < ${#arguments[@]}; index++)); do
+    case ${arguments[index]} in
+      -a|--ask-for-approval)
+        if (( index + 1 < ${#arguments[@]} )) \
+            && [[ ${arguments[index + 1]} == untrusted ]]; then
+          arguments[index + 1]=never
+        fi
+        ;;
+      -a=untrusted)
+        arguments[index]=-a=never
+        ;;
+      --ask-for-approval=untrusted)
+        arguments[index]=--ask-for-approval=never
+        ;;
+    esac
+  done
+fi
+
+exec "$real_codex" "${arguments[@]}"

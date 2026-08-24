@@ -5,8 +5,11 @@ set -euo pipefail
 omarchy_path=${1:-}
 shift || true
 timeout_seconds=${SHIBUMI_AI_UPDATE_TIMEOUT:-120}
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+compat_bin="$script_dir/compat-bin"
 child_pid=""
 watchdog_pid=""
+unset SHIBUMI_AI_REAL_CODEX
 
 fail() {
   printf 'shibumi-ai agents update: %s\n' "$*" >&2
@@ -88,6 +91,8 @@ if [[ ${1:-} == --probe-only ]]; then
   exit 0
 fi
 
+codex_requested=false
+agent_id_count=0
 for argument in "$@"; do
   case $argument in
     --force | --limits-only) continue ;;
@@ -97,9 +102,38 @@ for argument in "$@"; do
     || fail "invalid agent id: $argument"
   collector="$omarchy_path/bin/omarchy-agent-usage-$argument"
   [[ -x $collector ]] || fail "agent collector is missing: $collector"
+  agent_id_count=$((agent_id_count + 1))
+  [[ $argument != codex ]] || codex_requested=true
 done
+if (( agent_id_count == 0 )) \
+    && [[ -x $omarchy_path/bin/omarchy-agent-usage-codex ]]; then
+  codex_requested=true
+fi
 
-setsid env OMARCHY_PATH="$omarchy_path" "$updater" "$@" &
+compat_environment=()
+if $codex_requested; then
+  codex_search_path=${PATH:-/usr/bin:/bin}
+  for candidate_dir in \
+      "${HOME:?}/.local/bin" \
+      "$HOME/.npm-global/bin" \
+      "$HOME/.local/share/mise/shims"; do
+    case :$codex_search_path: in
+      *:"$candidate_dir":*) ;;
+      *) codex_search_path+=":$candidate_dir" ;;
+    esac
+  done
+  real_codex=$(PATH="$codex_search_path" type -P codex 2>/dev/null || true)
+  if [[ $real_codex == /* && -x $real_codex \
+      && ! $real_codex -ef "$compat_bin/codex" ]]; then
+    compat_environment+=(
+      "PATH=$compat_bin:$codex_search_path"
+      "SHIBUMI_AI_REAL_CODEX=$real_codex"
+    )
+  fi
+fi
+
+setsid env OMARCHY_PATH="$omarchy_path" \
+  "${compat_environment[@]}" "$updater" "$@" &
 child_pid=$!
 watch_parent "$$" "$child_pid" &
 watchdog_pid=$!

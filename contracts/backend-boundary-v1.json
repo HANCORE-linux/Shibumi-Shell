@@ -61,6 +61,7 @@
     {"scope":"hostIdRule","target":"omarchy.weather","category":"omarchyBackend","owner":"hancore.shibumi.center","capability":"weather","count":6,"backend":"omarchy.weather","removalStep":"Step 8"},
     {"scope":"hostIdRule","target":"omarchy.wifiqr","category":"omarchyBackend","owner":"hancore.shibumi.network","capability":"network","count":3,"backend":"omarchy.network","removalStep":"Step 5"},
     {"scope":"commandRule","value":"omarchy-agent-usage-","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
+    {"scope":"commandRule","value":"omarchy-agent-usage-codex","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-agent-usage-update","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-audio-output-set-default","category":"omarchyBackend","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","count":2,"backend":"omarchy.audio","removalStep":"Step 4A"},
     {"scope":"commandRule","value":"omarchy-audio-output-sink","category":"omarchyBackend","owner":"hancore.shibumi.audio","capability":"audio","count":1,"backend":"omarchy.audio","removalStep":"Step 4A"},
@@ -396,6 +397,7 @@
   ],
   "commandRules": [
     {"value": "omarchy-agent-usage-", "count": 1, "category": "omarchyBackend", "owner": "hancore.shibumi.ai", "capability": "ai-usage", "backend": "omarchy.agents", "removalStep": "Step 8", "reason": "Remove the host Agents collector command after the Shibumi provider adapter is authoritative."},
+    {"value": "omarchy-agent-usage-codex", "count": 1, "category": "omarchyBackend", "owner": "hancore.shibumi.ai", "capability": "ai-usage", "backend": "omarchy.agents", "removalStep": "Step 8", "reason": "Remove the revision-bound Codex collector compatibility probe with the complete Step 8 provider migration."},
     {"value": "omarchy-agent-usage-update", "count": 1, "category": "omarchyBackend", "owner": "hancore.shibumi.ai", "capability": "ai-usage", "backend": "omarchy.agents", "removalStep": "Step 8", "reason": "Remove the host Agents update command after the Shibumi provider adapter is authoritative."},
     {"value": "omarchy-audio-output-set-default", "count": 2, "category": "omarchyBackend", "owner": "hancore.shibumi.bluetooth", "capability": "bluetooth", "backend": "omarchy.audio", "removalStep": "Step 4A", "reason": "The transitional Bluetooth route and native Audio seam both use this helper until the atomic cutover removes the former."},
     {"value": "omarchy-audio-input-set-default", "count": 1, "category": "omarchyBackend", "owner": "hancore.shibumi.audio", "capability": "audio", "backend": "omarchy.audio", "removalStep": "Step 4A", "reason": "Native Audio must preserve the official input-route handoff until the atomic cutover is complete."},
