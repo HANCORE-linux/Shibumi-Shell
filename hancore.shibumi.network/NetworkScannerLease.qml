@@ -12,7 +12,18 @@ Item {
 
   property bool active: false
   property var backendOverride: null
-  property bool nativeServiceAvailable: false
+  property var nativeLiveness: null
+  readonly property bool nativeServiceAvailable:
+    root.nativeLiveness !== null
+      && root.nativeLiveness.serviceUsable === true
+  readonly property real nativeServiceEpoch:
+    root.nativeLiveness !== null
+      && typeof root.nativeLiveness.generation === "number"
+      && isFinite(root.nativeLiveness.generation)
+      && root.nativeLiveness.generation >= 0
+      && Math.floor(root.nativeLiveness.generation)
+        === root.nativeLiveness.generation
+      ? root.nativeLiveness.generation : 0
   property int scanDelayMs: 100
   property int scanWindowMs: 1500
 
@@ -63,7 +74,9 @@ Item {
     else implementation.shutdown(true, false)
   }
   onBackendOverrideChanged: implementation.reconcile()
-  onNativeServiceAvailableChanged: implementation.reconcile()
+  onNativeLivenessChanged: implementation.updateNativeAdmission()
+  onNativeServiceAvailableChanged: implementation.updateNativeAdmission()
+  onNativeServiceEpochChanged: implementation.reconcile()
   onTopologyFingerprintChanged: implementation.reconcile()
 
   Loader {
@@ -72,6 +85,7 @@ Item {
     // Deactivation may enter cleanup-pending and must retry against the same
     // private ownedDevices set before releasing authority.
     active: root.authorized && root.backendOverride === null
+      && implementation.nativeGatewayAdmitted
     source: Qt.resolvedUrl("NetworkScannerNativeGateway.qml")
   }
 
@@ -122,6 +136,7 @@ Item {
     id: implementation
 
     property bool authorized: false
+    property bool nativeGatewayAdmitted: false
     property int authorityClaim: 0
     property string phase: "idle"
     property int epoch: 0
@@ -130,6 +145,13 @@ Item {
     property var records: []
     property var leasedIds: []
     property var leaseBackend: null
+
+    function updateNativeAdmission() {
+      if (authorized && root.backendOverride === null
+          && root.nativeServiceAvailable)
+        nativeGatewayAdmitted = true
+      reconcile()
+    }
 
     function currentBackend() {
       return root.backendOverride !== null
@@ -236,6 +258,9 @@ Item {
       authorityClaim = Authority.claim(root.authorityGuard)
       root.authorityGuard.claim = authorityClaim
       authorized = authorityClaim > 0
+      if (authorized && root.backendOverride === null
+          && root.nativeServiceAvailable)
+        nativeGatewayAdmitted = true
       phase = authorized ? "idle" : "unauthorized"
       if (authorized) reconcile()
       return authorized
@@ -477,6 +502,7 @@ Item {
         root.authorityGuard.blockOnDestruction = false
         root.authorityGuard.claim = 0
         authorized = false
+        nativeGatewayAdmitted = false
       }
       phase = authorized ? "idle" : "unauthorized"
       return true

@@ -239,11 +239,17 @@ ShellRoot {
     }
   }
 
+  QtObject {
+    id: admittedNativeLiveness
+    property bool serviceUsable: true
+    property real generation: 1
+  }
+
   Component {
     id: nativeScannerComponent
     Network.NetworkScannerLease {
       active: true
-      nativeServiceAvailable: true
+      nativeLiveness: admittedNativeLiveness
       scanDelayMs: 50
       scanWindowMs: 80
     }

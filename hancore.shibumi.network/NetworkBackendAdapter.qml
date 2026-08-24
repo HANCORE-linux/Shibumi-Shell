@@ -12,10 +12,20 @@ Item {
 
   property bool active: false
   property var backendOverride: null
-  // Quickshell 0.3.0 cannot detect NetworkManager loss after singleton
-  // initialization. A later activation slice must drive this from a reactive
-  // D-Bus service-owner watcher; false keeps native snapshots/actions closed.
-  property bool nativeServiceAvailable: false
+  // One process-wide NetworkManagerLiveness instance is supplied by the final
+  // owning Service. Fake backends never derive readiness from this host seam.
+  property var nativeLiveness: null
+  readonly property bool nativeServiceAvailable:
+    root.nativeLiveness !== null
+      && root.nativeLiveness.serviceUsable === true
+  readonly property real nativeServiceEpoch:
+    root.nativeLiveness !== null
+      && typeof root.nativeLiveness.generation === "number"
+      && isFinite(root.nativeLiveness.generation)
+      && root.nativeLiveness.generation >= 0
+      && Math.floor(root.nativeLiveness.generation)
+        === root.nativeLiveness.generation
+      ? root.nativeLiveness.generation : 0
   // `real` avoids a 32-bit wrapping counter. This is an action-precondition
   // generation, not a signal-strength or presentation revision.
   property real generation: 0
@@ -68,7 +78,9 @@ Item {
 
   onActiveChanged: generation++
   onBackendOverrideChanged: generation++
+  onNativeLivenessChanged: generation++
   onNativeServiceAvailableChanged: generation++
+  onNativeServiceEpochChanged: generation++
   onTopologyFingerprintChanged: generation++
 
   function result(ok, code, message, entityId, resultGeneration) {
@@ -178,7 +190,10 @@ Item {
 
   Loader {
     id: nativeGateway
+    // Do not construct Quickshell's process-static Networking singleton until
+    // the D-Bus owner monitor has published its first trusted present state.
     active: root.active && root.backendOverride === null
+      && root.nativeServiceAvailable
     source: Qt.resolvedUrl("NetworkNativeGateway.qml")
   }
 

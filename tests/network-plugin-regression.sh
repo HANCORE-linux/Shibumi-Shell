@@ -179,6 +179,63 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "native seam produced a QML runtime error"
 fi
 
+"$repo_root/tests/network-manager-owner-watch-regression.py" \
+  || fail "NetworkManager owner watcher regression failed"
+
+install -m 0644 \
+  "$repo_root/tests/network-manager-liveness-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/liveness-runtime" "$tmpdir/liveness-home"
+chmod 700 "$tmpdir/liveness-runtime"
+set +e
+liveness_output=$(timeout 12 env \
+  HOME="$tmpdir/liveness-home" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-liveness-system-bus" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/liveness-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+liveness_rc=$?
+set -e
+printf '%s\n' "$liveness_output"
+[[ $liveness_rc -eq 0 ]] \
+  || fail "NetworkManager liveness smoke exited $liveness_rc"
+grep -F 'network manager liveness regression passed' \
+  <<<"$liveness_output" >/dev/null \
+  || fail "NetworkManager liveness success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$liveness_output"; then
+  fail "NetworkManager liveness seam produced a QML runtime error"
+fi
+
+install -m 0644 \
+  "$repo_root/tests/network-manager-liveness-reload-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/liveness-reload-runtime"
+chmod 700 "$tmpdir/liveness-reload-runtime"
+set +e
+liveness_reload_output=$(timeout 15 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/liveness-reload-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+liveness_reload_rc=$?
+set -e
+printf '%s\n' "$liveness_reload_output"
+[[ $liveness_reload_rc -eq 0 ]] \
+  || fail "NetworkManager soft-reload smoke exited $liveness_reload_rc"
+grep -F 'network manager liveness reload regression passed' \
+  <<<"$liveness_reload_output" >/dev/null \
+  || fail "NetworkManager soft-reload success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$liveness_reload_output"; then
+  fail "NetworkManager soft-reload seam produced a QML runtime error"
+fi
+
 install -m 0644 \
   "$repo_root/tests/network-native-scanner-lease-regression.qml" \
   "$tmpdir/shell.qml"
@@ -249,19 +306,32 @@ native_model="$repo_root/hancore.shibumi.network/NetworkModel.js"
 scanner_lease="$repo_root/hancore.shibumi.network/NetworkScannerLease.qml"
 scanner_gateway="$repo_root/hancore.shibumi.network/NetworkScannerNativeGateway.qml"
 scanner_authority="$repo_root/hancore.shibumi.network/NetworkScannerAuthority.js"
+liveness="$repo_root/hancore.shibumi.network/NetworkManagerLiveness.qml"
+liveness_continuity="$repo_root/hancore.shibumi.network/NetworkLivenessContinuity.qml"
+liveness_model="$repo_root/hancore.shibumi.network/NetworkLivenessModel.js"
+liveness_authority="$repo_root/hancore.shibumi.network/NetworkLivenessAuthority.js"
+liveness_helper="$repo_root/hancore.shibumi.network/scripts/network-manager-owner-watch"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
-    && -f $scanner_authority ]] \
+    && -f $scanner_authority && -f $liveness \
+    && -f $liveness_continuity && -f $liveness_model \
+    && -f $liveness_authority && -x $liveness_helper ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
 rg -Fq 'active: root.active && root.backendOverride === null' \
   "$native_adapter" \
   || fail "native Network gateway is not isolated behind the activation Loader"
-rg -Fq 'property bool nativeServiceAvailable: false' "$native_adapter" \
-  || fail "native Network availability lacks a reactive service-liveness gate"
+rg -Fq '&& root.nativeServiceAvailable' "$native_adapter" \
+  || fail "native Network gateway can initialize before owner monitoring"
+rg -Fq 'property var nativeLiveness: null' "$native_adapter" \
+  || fail "native Network availability lacks the shared liveness seam"
+rg -Fq 'root.nativeLiveness.serviceUsable === true' "$native_adapter" \
+  || fail "native Network availability bypasses reactive owner liveness"
+rg -Fq 'onNativeServiceEpochChanged: generation++' "$native_adapter" \
+  || fail "owner transitions do not invalidate Network action generations"
 rg -Fq 'gateway.backendInitialized === true' "$native_adapter" \
   || fail "native Network availability trusts singleton initialization alone"
 if rg -q '^import Quickshell\.Networking$|Networking\.' "$native_adapter"; then
@@ -310,6 +380,42 @@ rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
 rg -Fq 'active: root.authorized && root.backendOverride === null' \
   "$scanner_lease" \
   || fail "native scanner gateway is not isolated behind exclusive authority"
+rg -Fq 'root.nativeLiveness.serviceUsable === true' "$scanner_lease" \
+  || fail "native scanner bypasses shared NetworkManager liveness"
+rg -Fq 'property bool nativeGatewayAdmitted: false' "$scanner_lease" \
+  || fail "native scanner gateway has no monitored admission latch"
+rg -Fq '&& implementation.nativeGatewayAdmitted' "$scanner_lease" \
+  || fail "native scanner gateway can initialize before owner monitoring"
+rg -Fq 'onNativeServiceEpochChanged: implementation.reconcile()' \
+  "$scanner_lease" \
+  || fail "scanner does not close on NetworkManager owner transitions"
+rg -Fq 'A monitoring gap or owner loss' "$liveness" \
+  || fail "NetworkManager recovery policy is undocumented"
+rg -Fq 'record.sequence !== root.lastSequence + 1' "$liveness" \
+  || fail "NetworkManager owner protocol does not reject sequence gaps"
+rg -Fq 'currentClaim = token' "$liveness_authority" \
+  || fail "NetworkManager owner watcher is not process-wide"
+rg -Fq 'continuityBlocked = true' "$liveness_authority" \
+  || fail "liveness authority handoff forgets monitoring gaps"
+rg -Fq 'if (root.monitorEstablished) blockRecovery()' "$liveness" \
+  || fail "NetworkManager monitoring gaps do not block stale recovery"
+rg -Fq 'property bool processRestartRequired: false' \
+  "$liveness_continuity" \
+  || fail "NetworkManager recovery block does not survive soft reloads"
+rg -Fq 'property var continuityState: null' "$liveness" \
+  || fail "NetworkManager watcher can hide its reload-continuity owner"
+rg -Fq 'if (JSON.stringify(parsed) !== value)' "$liveness_model" \
+  || fail "NetworkManager owner protocol does not reject duplicate keys"
+rg -Fq '"/usr/bin/gdbus"' "$liveness_helper" \
+  || fail "NetworkManager watcher does not use the declared GLib D-Bus boundary"
+rg -Fq 'OBJECT_PATH = "/org/hancore/Shibumi/NetworkManagerOwnerWatch"' \
+  "$liveness_helper" \
+  || fail "NetworkManager watcher observes an unbounded D-Bus object scope"
+rg -Fq 'PR_SET_PDEATHSIG = 1' "$liveness_helper" \
+  || fail "NetworkManager monitor child lacks parent-death supervision"
+if rg -q 'omarchy|nmcli' "$liveness" "$liveness_model" "$liveness_helper"; then
+  fail "NetworkManager liveness watcher depends on a feature helper or CLI poller"
+fi
 rg -Fq 'currentClaim = token' "$scanner_authority" \
   || fail "scanner mutation authority is not process-wide"
 rg -Fq 'function onObjectRemovedPre(object, _index)' "$scanner_gateway" \

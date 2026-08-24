@@ -1,0 +1,172 @@
+#!/usr/bin/python3
+"""Watch the NetworkManager system-bus owner and emit a bounded JSON protocol."""
+
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+
+SERVICE = "org.freedesktop.NetworkManager"
+OBJECT_PATH = "/org/hancore/Shibumi/NetworkManagerOwnerWatch"
+INTRO = f"Monitoring signals on object {OBJECT_PATH} owned by {SERVICE}"
+OWNED_PREFIX = f"The name {SERVICE} is owned by "
+ABSENT = f"The name {SERVICE} does not have an owner"
+UNIQUE_NAME = re.compile(r"^:[0-9]+(?:\.[0-9]+)+$")
+MAX_INPUT_LINE = 512
+MAX_OUTPUT_LINE = 256
+PR_SET_PDEATHSIG = 1
+
+
+def arm_parent_death(parent_pid: int) -> None:
+    """Ask Linux to terminate gdbus if this Python supervisor disappears."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+def emit(payload: dict[str, object]) -> None:
+    line = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
+    if len(line) > MAX_OUTPUT_LINE:
+        raise RuntimeError("owner-watch protocol record exceeded its bound")
+    print(line, flush=True)
+
+
+class OwnerProtocol:
+    """Convert gdbus lifecycle lines into strict primitive records."""
+
+    def __init__(self) -> None:
+        self.initialized = False
+        self.intro_seen = False
+        self.present = False
+        self.sequence = 0
+
+    def ingest(self, line: str) -> dict[str, object] | None:
+        if line == INTRO and not self.intro_seen and not self.initialized:
+            self.intro_seen = True
+            return None
+        next_present: bool
+        if line == ABSENT:
+            next_present = False
+        elif line.startswith(OWNED_PREFIX):
+            owner = line[len(OWNED_PREFIX):]
+            if not UNIQUE_NAME.fullmatch(owner):
+                raise RuntimeError("monitor emitted an invalid unique owner")
+            next_present = True
+        else:
+            raise RuntimeError("monitor emitted an unexpected record")
+        if not self.intro_seen:
+            raise RuntimeError("monitor status arrived before readiness")
+
+        self.sequence += 1
+        if not self.initialized:
+            self.initialized = True
+            self.present = next_present
+            return {
+                "schemaVersion": 1,
+                "event": "snapshot",
+                "sequence": self.sequence,
+                "present": self.present,
+            }
+
+        replacement = self.present and next_present
+        if not replacement and self.present == next_present:
+            raise RuntimeError("monitor emitted a duplicate owner state")
+        self.present = next_present
+        return {
+            "schemaVersion": 1,
+            "event": "owner",
+            "sequence": self.sequence,
+            "present": self.present,
+            "replacement": replacement,
+        }
+
+
+def main() -> int:
+    environment = dict(os.environ)
+    environment["LC_ALL"] = "C"
+    supervisor_pid = os.getpid()
+    try:
+        monitor = subprocess.Popen(
+            [
+                "/usr/bin/gdbus",
+                "monitor",
+                "--system",
+                "--dest",
+                SERVICE,
+                "--object-path",
+                OBJECT_PATH,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+            preexec_fn=lambda: arm_parent_death(supervisor_pid),
+        )
+    except OSError as error:
+        print(
+            f"network-manager-owner-watch: monitor unavailable ({error.errno})",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 2
+
+    stopping = False
+
+    def stop(_signum: int, _frame: object) -> None:
+        nonlocal stopping
+        stopping = True
+        monitor.terminate()
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+
+    protocol = OwnerProtocol()
+    assert monitor.stdout is not None
+
+    result = 2
+    try:
+        while True:
+            raw = monitor.stdout.readline(MAX_INPUT_LINE + 1)
+            if not raw:
+                break
+            if len(raw) > MAX_INPUT_LINE or not raw.endswith(b"\n"):
+                raise RuntimeError("monitor line exceeded its bound")
+            try:
+                line = raw[:-1].decode("utf-8", errors="strict")
+            except UnicodeDecodeError as error:
+                raise RuntimeError("monitor emitted invalid UTF-8") from error
+
+            payload = protocol.ingest(line)
+            if payload is not None:
+                emit(payload)
+        return_code = monitor.wait()
+        if stopping:
+            result = 0
+        else:
+            print(
+                f"network-manager-owner-watch: monitor exited ({return_code})",
+                file=sys.stderr,
+                flush=True,
+            )
+    except RuntimeError as error:
+        print(f"network-manager-owner-watch: {error}", file=sys.stderr, flush=True)
+    finally:
+        if monitor.poll() is None:
+            monitor.terminate()
+            try:
+                monitor.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                monitor.kill()
+                monitor.wait(timeout=1)
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

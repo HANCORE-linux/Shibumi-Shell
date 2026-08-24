@@ -715,10 +715,21 @@ ShellRoot {
     active: false
   }
 
+  QtObject {
+    id: admittedNativeLiveness
+    property bool serviceUsable: true
+    property real generation: 1
+  }
+
   Network.NetworkBackendAdapter {
-    id: unavailableNativeAdapter
+    id: admittedNativeAdapter
     active: true
-    nativeServiceAvailable: true
+    nativeLiveness: admittedNativeLiveness
+  }
+
+  Network.NetworkBackendAdapter {
+    id: unmonitoredNativeAdapter
+    active: true
   }
 
   Timer {
@@ -730,12 +741,14 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (root.ticks < 4) return
-        if (!unavailableNativeAdapter.nativeGatewayLoaded) {
+        if (!admittedNativeAdapter.nativeGatewayLoaded) {
           if (root.ticks < 20) return
-          return root.fail("active native gateway did not compile and load")
+          return root.fail("admitted native gateway did not compile and load")
         }
-        if (unavailableNativeAdapter.backendAvailable
-            || unavailableNativeAdapter.deviceSnapshots.length !== 0)
+        if (unmonitoredNativeAdapter.nativeGatewayLoaded)
+          return root.fail("native gateway loaded before liveness admission")
+        if (admittedNativeAdapter.backendAvailable
+            || admittedNativeAdapter.deviceSnapshots.length !== 0)
           return root.fail("missing system bus did not stay unavailable")
         if (adapter.nativeGatewayLoaded || sequenceAdapter.nativeGatewayLoaded
             || inactiveNativeAdapter.nativeGatewayLoaded
