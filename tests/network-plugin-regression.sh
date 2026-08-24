@@ -17,6 +17,10 @@ fail() {
 
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
+command -v zbarimg >/dev/null 2>&1 \
+  || fail "zbarimg is required for exact Wi-Fi QR decode gates"
+command -v magick >/dev/null 2>&1 \
+  || fail "ImageMagick is required for Wi-Fi QR render gates"
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
@@ -381,6 +385,81 @@ for reachability_case in main model lifecycle destruction prestart stream route-
   fi
 done
 
+python3 "$repo_root/tests/network-qr-encoder-regression.py"
+install -m 0644 "$repo_root/tests/network-qr-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/qr-runtime"
+chmod 700 "$tmpdir/qr-runtime"
+set +e
+qr_output=$(timeout 20 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/qr-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+qr_rc=$?
+set -e
+printf '%s\n' "$qr_output"
+[[ $qr_rc -eq 0 ]] || fail "network QR smoke exited $qr_rc"
+grep -F 'network QR regression passed' <<<"$qr_output" >/dev/null \
+  || fail "network QR success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error' \
+    <<<"$qr_output"; then
+  fail "network QR smoke produced a QML runtime error"
+fi
+
+install -m 0644 "$repo_root/tests/network-qr-render-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/qr-render-runtime"
+chmod 700 "$tmpdir/qr-render-runtime"
+qr_render_path="$tmpdir/qr-render.png"
+set +e
+qr_render_output=$(timeout 20 env \
+  SHIBUMI_QR_RENDER_PATH="$qr_render_path" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/qr-render-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+qr_render_rc=$?
+set -e
+printf '%s\n' "$qr_render_output"
+[[ $qr_render_rc -eq 0 ]] || fail "network QR render smoke exited $qr_render_rc"
+grep -F 'network QR render regression passed' \
+  <<<"$qr_render_output" >/dev/null \
+  || fail "network QR render success marker missing"
+qr_secured_render_path="$qr_render_path.secured.png"
+[[ -s $qr_render_path && -s $qr_secured_render_path ]] \
+  || fail "network QR render produced no image"
+qr_decoded=$(zbarimg --quiet --raw "$qr_render_path") \
+  || fail "replacement Wi-Fi QR render did not decode"
+[[ $qr_decoded == 'WIFI:T:nopass;S:Bravo;H:false;;' ]] \
+  || fail "replacement Wi-Fi QR render retained the previous matrix"
+qr_secured_decoded=$(zbarimg --quiet --raw "$qr_secured_render_path") \
+  || fail "secured Wi-Fi QR render did not decode"
+[[ $qr_secured_decoded == 'WIFI:T:WPA;S:Private;P:correct horse;H:false;;' ]] \
+  || fail "secured Wi-Fi QR render retained stale presentation state"
+for qr_image in "$qr_render_path" "$qr_secured_render_path"; do
+  qr_render_dimensions=$(magick identify -format '%wx%h' "$qr_image")
+  qr_render_width=${qr_render_dimensions%x*}
+  qr_render_height=${qr_render_dimensions#*x}
+  [[ $qr_render_width == "$qr_render_height" ]] \
+    || fail "Wi-Fi QR render is not square"
+  qr_render_last=$((qr_render_width - 1))
+  for qr_corner in 0,0 "$qr_render_last",0 \
+      0,"$qr_render_last" "$qr_render_last","$qr_render_last"; do
+    qr_x=${qr_corner%,*}
+    qr_y=${qr_corner#*,}
+    qr_pixel=$(magick "$qr_image" \
+      -crop "1x1+$qr_x+$qr_y" +repage \
+      -format '%[fx:int(255*r)],%[fx:int(255*g)],%[fx:int(255*b)],%[fx:int(255*a)]' info:)
+    [[ $qr_pixel == 255,255,255,255 ]] \
+      || fail "Wi-Fi QR quiet-zone corner is not opaque white"
+  done
+done
+
 for action_case in coordinator model lifecycle destruction shutdown-completion generation-replay throwing-result profile-name-boundary; do
   action_test="$repo_root/tests/network-action-${action_case}-regression.qml"
   install -m 0644 "$action_test" "$tmpdir/shell.qml"
@@ -498,6 +577,11 @@ reachability_helper="$repo_root/hancore.shibumi.network/scripts/network-reachabi
 action_coordinator="$repo_root/hancore.shibumi.network/NetworkActionCoordinator.qml"
 action_model="$repo_root/hancore.shibumi.network/NetworkActionModel.js"
 action_authority="$repo_root/hancore.shibumi.network/NetworkActionAuthority.js"
+qr_encoder="$repo_root/hancore.shibumi.network/NetworkQrEncoder.js"
+qr_model="$repo_root/hancore.shibumi.network/NetworkQrModel.js"
+qr_session="$repo_root/hancore.shibumi.network/NetworkQrSession.qml"
+qr_button="$repo_root/hancore.shibumi.network/NetworkQrButton.qml"
+qr_dialog="$repo_root/hancore.shibumi.network/NetworkQrDialog.qml"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
@@ -510,9 +594,10 @@ action_authority="$repo_root/hancore.shibumi.network/NetworkActionAuthority.js"
     && -f $reachability && -f $reachability_model \
     && -f $reachability_authority && -x $reachability_helper \
     && -f $action_coordinator && -f $action_model \
-    && -f $action_authority ]] \
+    && -f $action_authority && -f $qr_encoder && -f $qr_model \
+    && -f $qr_session && -f $qr_button && -f $qr_dialog ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkActionCoordinator' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkActionCoordinator|NetworkQr(Session|Button|Dialog)' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -701,6 +786,23 @@ if rg -q 'GetSecrets|nmcli|omarchy|shell=True|/bin/(sh|bash)' \
 fi
 rg -Fq 'currentClaim = token' "$action_authority" \
   || fail "network action completion authority is not process-wide"
+rg -Fq 'appendBits(bits, 26, 8)' "$qr_encoder" \
+  || fail "Wi-Fi QR byte mode does not declare UTF-8 ECI"
+rg -Fq 'Copyright (c) Project Nayuki. (MIT License)' "$repo_root/LICENSE" \
+  || fail "Wi-Fi QR encoder attribution is missing from the shipped license"
+rg -Fq 'var MaxInputBytes = 240' "$qr_encoder" \
+  || fail "Wi-Fi QR encoder has no fixed input bound"
+rg -Fq 'NetworkModel.validPsk(passphrase, network.security)' "$qr_model" \
+  || fail "Wi-Fi QR passphrases bypass the native credential contract"
+rg -Fq 'left.network.generation === right.network.generation' "$qr_session" \
+  || fail "Wi-Fi QR passphrase submission is not generation-bound"
+if rg -q '[Oo]marchy|nmcli|GetSecrets|Quickshell\.Io|\bProcess\b' \
+    "$qr_encoder" "$qr_model" "$qr_session" "$qr_button" "$qr_dialog"; then
+  fail "Shibumi Wi-Fi QR surface depends on an external feature backend"
+fi
+if rg -q 'property [^:]*\b(passphrase|password|secret)\b' "$qr_session"; then
+  fail "Wi-Fi QR session retains a credential property"
+fi
 rg -Fq 'permanentlyBlocked = true' "$action_authority" \
   || fail "uncertain action destruction does not block fail-closed"
 rg -Fq 'actionTimeout.restart()' "$action_coordinator" \

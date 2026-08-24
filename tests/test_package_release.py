@@ -15,9 +15,44 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+NAYUKI_NOTICE = """Third-party notice: QR Code generator library
+
+Copyright (c) Project Nayuki. (MIT License)
+https://www.nayuki.io/page/qr-code-generator-library
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+- The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+- The Software is provided "as is", without warranty of any kind, express or
+  implied, including but not limited to the warranties of merchantability,
+  fitness for a particular purpose and noninfringement. In no event shall the
+  authors or copyright holders be liable for any claim, damages or other
+  liability, whether in an action of contract, tort or otherwise, arising from,
+  out of or in connection with the Software or the use or other dealings in the
+  Software."""
+
+
+def has_complete_nayuki_notice(text: str) -> bool:
+    marker = "Third-party notice: QR Code generator library"
+    return marker in text and text.split(marker, 1)[1].strip() == (
+        NAYUKI_NOTICE.split(marker, 1)[1].strip()
+    )
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_nayuki_notice_is_complete_and_truncation_fails(self) -> None:
+        license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(has_complete_nayuki_notice(license_text))
+        truncated = license_text.split(
+            "Permission is hereby granted", 1
+        )[0].rstrip()
+        self.assertFalse(has_complete_nayuki_notice(truncated))
+
     def test_versions_and_all_plugin_manifests_agree(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         suite = json.loads(
@@ -392,6 +427,11 @@ class PackageReleaseTests(unittest.TestCase):
                 payload.extractall(extracted, filter="data")
             roots = {name.split("/", 1)[0] for name in names}
             self.assertEqual(roots, {f"shibumi-shell-{inventory['version']}"})
+            archive_root = extracted / next(iter(roots))
+            shipped_license = (archive_root / "LICENSE").read_text(
+                encoding="utf-8"
+            )
+            self.assertTrue(has_complete_nayuki_notice(shipped_license))
             self.assertFalse(
                 any(
                     "__pycache__" in name
@@ -408,7 +448,7 @@ class PackageReleaseTests(unittest.TestCase):
                 [
                     str(ROOT / "scripts/check-production-boundary"),
                     "--root",
-                    str(extracted / next(iter(roots))),
+                    str(archive_root),
                 ],
                 cwd=ROOT,
                 check=False,
