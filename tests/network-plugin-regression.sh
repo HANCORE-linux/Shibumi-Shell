@@ -38,6 +38,9 @@ install -m 0755 "$repo_root/tests/fixtures/omarchy-network-speedtest" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-resistant" "$tmpdir/bin/"
 install -m 0755 "$repo_root/tests/fixtures/network-bin/omarchy-network-status" \
   "$repo_root/tests/fixtures/network-bin/nmcli" "$tmpdir/bin/"
+install -m 0755 \
+  "$repo_root/tests/fixtures/network-profile-catalog-fixture.py" \
+  "$tmpdir/fixtures/"
 
 set +e
 output=$(timeout 12 env \
@@ -236,6 +239,34 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "NetworkManager soft-reload seam produced a QML runtime error"
 fi
 
+"$repo_root/tests/network-profile-catalog-helper-regression.py" \
+  || fail "saved-profile helper regression failed"
+install -m 0644 \
+  "$repo_root/tests/network-profile-catalog-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/profile-catalog-runtime"
+chmod 700 "$tmpdir/profile-catalog-runtime"
+set +e
+profile_catalog_output=$(timeout 15 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/profile-catalog-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+profile_catalog_rc=$?
+set -e
+printf '%s\n' "$profile_catalog_output"
+[[ $profile_catalog_rc -eq 0 ]] \
+  || fail "saved-profile catalog smoke exited $profile_catalog_rc"
+grep -F 'network profile catalog regression passed' \
+  <<<"$profile_catalog_output" >/dev/null \
+  || fail "saved-profile catalog success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$profile_catalog_output"; then
+  fail "saved-profile catalog produced a QML runtime error"
+fi
+
 install -m 0644 \
   "$repo_root/tests/network-native-scanner-lease-regression.qml" \
   "$tmpdir/shell.qml"
@@ -311,13 +342,19 @@ liveness_continuity="$repo_root/hancore.shibumi.network/NetworkLivenessContinuit
 liveness_model="$repo_root/hancore.shibumi.network/NetworkLivenessModel.js"
 liveness_authority="$repo_root/hancore.shibumi.network/NetworkLivenessAuthority.js"
 liveness_helper="$repo_root/hancore.shibumi.network/scripts/network-manager-owner-watch"
+profile_catalog="$repo_root/hancore.shibumi.network/NetworkProfileCatalog.qml"
+profile_catalog_model="$repo_root/hancore.shibumi.network/NetworkProfileCatalogModel.js"
+profile_catalog_authority="$repo_root/hancore.shibumi.network/NetworkProfileCatalogAuthority.js"
+profile_catalog_helper="$repo_root/hancore.shibumi.network/scripts/network-profile-catalog"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
     && -f $liveness_continuity && -f $liveness_model \
-    && -f $liveness_authority && -x $liveness_helper ]] \
+    && -f $liveness_authority && -x $liveness_helper \
+    && -f $profile_catalog && -f $profile_catalog_model \
+    && -f $profile_catalog_authority && -x $profile_catalog_helper ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -415,6 +452,37 @@ rg -Fq 'PR_SET_PDEATHSIG = 1' "$liveness_helper" \
   || fail "NetworkManager monitor child lacks parent-death supervision"
 if rg -q 'omarchy|nmcli' "$liveness" "$liveness_model" "$liveness_helper"; then
   fail "NetworkManager liveness watcher depends on a feature helper or CLI poller"
+fi
+rg -Fq 'currentClaim = token' "$profile_catalog_authority" \
+  || fail "saved-profile catalog worker is not process-wide"
+rg -Fq 'leaseTokenComponent.createObject(owner' "$profile_catalog" \
+  || fail "saved-profile catalog work is not demand-driven by owner leases"
+rg -Fq 'if (records.length === 1) refresh()' "$profile_catalog" \
+  || fail "first saved-profile consumer does not request a snapshot"
+rg -Fq 'if (records.length === 0) {' "$profile_catalog" \
+  || fail "last saved-profile consumer does not release state and work"
+rg -Fq 'if (JSON.stringify(parsed) !== value)' "$profile_catalog_model" \
+  || fail "saved-profile protocol does not reject duplicate JSON keys"
+rg -Fq 'function catalogProfileId(uuidValue)' "$native_model" \
+  || fail "global saved-profile catalog lacks a stable UUID identity"
+rg -Fq 'function savedProfileProjection()' "$native_adapter" \
+  || fail "native adapter does not validate the saved-profile catalog"
+rg -Fq 'savedProfileCatalog.available === true' "$native_adapter" \
+  || fail "native adapter can publish an incomplete saved-profile catalog"
+rg -Fq 'MAX_SETTINGS_BYTES = 256 * 1024' "$profile_catalog_helper" \
+  || fail "saved-profile settings reads have no per-profile byte bound"
+rg -Fq 'MAX_RUNTIME_SECONDS = 20.0' "$profile_catalog_helper" \
+  || fail "saved-profile catalog has no aggregate runtime bound"
+rg -Fq 'def bounded_command(' "$profile_catalog_helper" \
+  || fail "saved-profile D-Bus reads buffer before enforcing bounds"
+rg -Fq '"Unsaved", "VersionId"' "$profile_catalog_helper" \
+  || fail "saved-profile catalog cannot reject unsaved or racing settings"
+rg -Fq 'if list_connections(deadline) != initial_paths:' \
+  "$profile_catalog_helper" \
+  || fail "saved-profile catalog does not close on topology races"
+if rg -q 'GetSecrets|identity|password|ca-cert|nmcli|omarchy' \
+    "$profile_catalog_helper"; then
+  fail "saved-profile helper crosses the bounded non-secret metadata boundary"
 fi
 rg -Fq 'currentClaim = token' "$scanner_authority" \
   || fail "scanner mutation authority is not process-wide"

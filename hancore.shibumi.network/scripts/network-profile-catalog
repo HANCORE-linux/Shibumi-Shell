@@ -1,0 +1,438 @@
+#!/usr/bin/python3
+"""Emit a bounded primitive catalog of persisted NetworkManager profiles."""
+
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import time
+import unicodedata
+from typing import Any, BinaryIO
+
+BUSCTL = "/usr/bin/busctl"
+SERVICE = "org.freedesktop.NetworkManager"
+SETTINGS_PATH = "/org/freedesktop/NetworkManager/Settings"
+SETTINGS_INTERFACE = "org.freedesktop.NetworkManager.Settings"
+CONNECTION_INTERFACE = "org.freedesktop.NetworkManager.Settings.Connection"
+PATH_PATTERN = re.compile(r"^/org/freedesktop/NetworkManager/Settings/[0-9]+$")
+UUID_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+MAX_CONNECTIONS = 4096
+MAX_LIST_BYTES = 1024 * 1024
+MAX_SETTINGS_BYTES = 256 * 1024
+MAX_PROPERTY_BYTES = 4096
+MAX_RUNTIME_SECONDS = 20.0
+MAX_SAFE_INTEGER = 9007199254740991
+MAX_PROTOCOL_LINE = 2048
+PR_SET_PDEATHSIG = 1
+
+
+class CatalogError(RuntimeError):
+    pass
+
+
+class DuplicateKeyError(CatalogError):
+    pass
+
+
+def no_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateKeyError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def parse_json(value: bytes) -> Any:
+    try:
+        text = value.decode("utf-8", errors="strict").strip()
+        return json.loads(text, object_pairs_hook=no_duplicate_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CatalogError("invalid busctl JSON") from error
+
+
+def arm_parent_death(parent_pid: int) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+def terminate(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=0.5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=0.5)
+
+
+def bounded_command(arguments: list[str], limit: int, deadline: float) -> bytes:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise CatalogError("catalog deadline exceeded")
+    parent_pid = os.getpid()
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=lambda: arm_parent_death(parent_pid),
+        )
+    except OSError as error:
+        raise CatalogError("busctl unavailable") from error
+    assert process.stdout is not None
+    output = bytearray()
+    descriptor = process.stdout.fileno()
+    os.set_blocking(descriptor, False)
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CatalogError("catalog deadline exceeded")
+            ready, _, _ = select.select([descriptor], [], [], min(remaining, 0.25))
+            if ready:
+                chunk = os.read(descriptor, 65536)
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > limit:
+                    raise CatalogError("busctl response exceeded bound")
+            elif process.poll() is not None:
+                chunk = os.read(descriptor, 65536)
+                if chunk:
+                    output.extend(chunk)
+                    if len(output) > limit:
+                        raise CatalogError("busctl response exceeded bound")
+                    continue
+                break
+        code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        if code != 0:
+            raise CatalogError("busctl request failed")
+        return bytes(output)
+    finally:
+        terminate(process)
+
+
+def busctl_json(arguments: list[str], limit: int, deadline: float) -> Any:
+    return parse_json(bounded_command([
+        BUSCTL, "--system", "--json=short", *arguments
+    ], limit, deadline))
+
+
+def exact_object(value: Any, keys: set[str]) -> bool:
+    return isinstance(value, dict) and set(value) == keys
+
+
+def list_connections(deadline: float) -> list[str]:
+    value = busctl_json([
+        "call", SERVICE, SETTINGS_PATH, SETTINGS_INTERFACE, "ListConnections"
+    ], MAX_LIST_BYTES, deadline)
+    if not exact_object(value, {"type", "data"}) or value["type"] != "ao":
+        raise CatalogError("invalid connection list")
+    data = value["data"]
+    if not isinstance(data, list) or len(data) != 1 or not isinstance(data[0], list):
+        raise CatalogError("invalid connection list shape")
+    if len(data[0]) > MAX_CONNECTIONS:
+        raise CatalogError("connection list exceeded bound")
+    paths: list[str] = []
+    seen: set[str] = set()
+    for path in data[0]:
+        if not isinstance(path, str) or not PATH_PATTERN.fullmatch(path) or path in seen:
+            raise CatalogError("invalid connection path")
+        seen.add(path)
+        paths.append(path)
+    return sorted(paths)
+
+
+def property_state(path: str, deadline: float) -> tuple[bool, int, int]:
+    # VersionId and Flags are per Settings.Connection properties on the pinned
+    # NetworkManager API, alongside Unsaved.
+    raw = bounded_command([
+        BUSCTL, "--system", "--json=short", "get-property", SERVICE, path,
+        CONNECTION_INTERFACE, "Unsaved", "VersionId", "Flags"
+    ], MAX_PROPERTY_BYTES, deadline)
+    lines = raw.splitlines()
+    if len(lines) != 3:
+        raise CatalogError("invalid connection properties")
+    unsaved = parse_json(lines[0])
+    version = parse_json(lines[1])
+    flags = parse_json(lines[2])
+    if not exact_object(unsaved, {"type", "data"}) \
+            or unsaved["type"] != "b" or not isinstance(unsaved["data"], bool):
+        raise CatalogError("invalid unsaved property")
+    if not exact_object(version, {"type", "data"}) \
+            or version["type"] != "t" or not isinstance(version["data"], int) \
+            or isinstance(version["data"], bool) or version["data"] < 0 \
+            or version["data"] > MAX_SAFE_INTEGER:
+        raise CatalogError("invalid version property")
+    if not exact_object(flags, {"type", "data"}) \
+            or flags["type"] != "u" or not isinstance(flags["data"], int) \
+            or isinstance(flags["data"], bool) or flags["data"] < 0 \
+            or flags["data"] > 0xFFFFFFFF:
+        raise CatalogError("invalid flags property")
+    return unsaved["data"], version["data"], flags["data"]
+
+
+def settings_for(path: str, deadline: float) -> dict[str, Any]:
+    value = busctl_json([
+        "call", SERVICE, path, CONNECTION_INTERFACE, "GetSettings"
+    ], MAX_SETTINGS_BYTES, deadline)
+    if not exact_object(value, {"type", "data"}) \
+            or value["type"] != "a{sa{sv}}" \
+            or not isinstance(value["data"], list) or len(value["data"]) != 1 \
+            or not isinstance(value["data"][0], dict):
+        raise CatalogError("invalid settings response")
+    return value["data"][0]
+
+
+def variant(group: Any, key: str, expected_type: str, required: bool = False) -> Any:
+    if not isinstance(group, dict):
+        if required:
+            raise CatalogError("required settings group missing")
+        return None
+    if key not in group:
+        if required:
+            raise CatalogError("required setting missing")
+        return None
+    value = group[key]
+    if not exact_object(value, {"type", "data"}) or value["type"] != expected_type:
+        raise CatalogError("setting type mismatch")
+    return value["data"]
+
+
+def bounded_text(value: Any, maximum: int) -> str:
+    if not isinstance(value, str) or len(value.encode("utf-8")) > maximum:
+        raise CatalogError("text setting exceeded bound")
+    if any(unicodedata.category(character) == "Cc" for character in value):
+        raise CatalogError("text setting contained controls")
+    return value
+
+
+def ssid_fields(group: Any) -> tuple[str, str]:
+    data = variant(group, "ssid", "ay", required=True)
+    if not isinstance(data, list) or not 1 <= len(data) <= 32 \
+            or any(not isinstance(byte, int) or isinstance(byte, bool)
+                   or not 0 <= byte <= 255 for byte in data):
+        raise CatalogError("invalid wireless SSID")
+    raw = bytes(data)
+    display = ""
+    try:
+        candidate = raw.decode("utf-8", errors="strict")
+        if not any(unicodedata.category(character) == "Cc" for character in candidate):
+            display = candidate
+    except UnicodeDecodeError:
+        pass
+    return display, raw.hex().upper()
+
+
+def security_token(settings: dict[str, Any]) -> tuple[str, bool]:
+    group = settings.get("802-11-wireless-security")
+    enterprise = "802-1x" in settings
+    if group is None:
+        return "open", enterprise
+    if not isinstance(group, dict):
+        raise CatalogError("invalid wireless security group")
+    key_management = variant(group, "key-mgmt", "s")
+    if key_management is None:
+        return "unknown", enterprise
+    if not isinstance(key_management, str) or len(key_management) > 64 \
+            or any(unicodedata.category(character) == "Cc"
+                   for character in key_management):
+        raise CatalogError("invalid key management setting")
+    protocols = variant(group, "proto", "as")
+    if protocols is None:
+        protocols = []
+    if not isinstance(protocols, list) or len(protocols) > 8 \
+            or any(not isinstance(protocol, str) or protocol not in {"wpa", "rsn"}
+                   for protocol in protocols):
+        raise CatalogError("invalid wireless protocol setting")
+    authentication = variant(group, "auth-alg", "s")
+    if authentication is not None \
+            and (not isinstance(authentication, str)
+                 or authentication not in {"open", "shared", "leap"}):
+        raise CatalogError("invalid authentication setting")
+    rsn_only = protocols == ["rsn"]
+    if key_management == "wpa-psk":
+        token = "wpa2-psk" if rsn_only else "wpa-psk"
+    elif key_management == "wpa-eap":
+        token = "wpa2-eap" if rsn_only else "wpa-eap"
+    elif key_management == "ieee8021x":
+        token = "leap" if authentication == "leap" else "dynamic-wep"
+    else:
+        token = {
+            "sae": "sae",
+            "wpa-eap-suite-b-192": "wpa3-suite-b-192",
+            "owe": "owe",
+            "none": "static-wep",
+        }.get(key_management, "unknown")
+    return token, enterprise or token in {
+        "wpa-eap", "wpa2-eap", "wpa3-suite-b-192", "dynamic-wep", "leap"
+    }
+
+
+def profile_from_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    connection = settings.get("connection")
+    name = bounded_text(variant(connection, "id", "s", required=True), 256)
+    if name == "":
+        raise CatalogError("empty connection name")
+    uuid_value = variant(connection, "uuid", "s", required=True)
+    if not isinstance(uuid_value, str) or not UUID_PATTERN.fullmatch(uuid_value):
+        raise CatalogError("invalid connection UUID")
+    uuid_value = uuid_value.lower()
+    raw_type = bounded_text(variant(connection, "type", "s", required=True), 64)
+    profile_type = {
+        "802-11-wireless": "wifi",
+        "802-3-ethernet": "wired",
+    }.get(raw_type, "other")
+    autoconnect = variant(connection, "autoconnect", "b")
+    if autoconnect is None:
+        autoconnect = True
+    if not isinstance(autoconnect, bool):
+        raise CatalogError("invalid autoconnect setting")
+    timestamp = variant(connection, "timestamp", "t")
+    if timestamp is None:
+        timestamp = 0
+    if not isinstance(timestamp, int) or isinstance(timestamp, bool) \
+            or timestamp < 0 or timestamp > MAX_SAFE_INTEGER:
+        raise CatalogError("invalid timestamp setting")
+
+    ssid = ""
+    ssid_hex = ""
+    security = "unknown"
+    enterprise = False
+    hidden = False
+    if profile_type == "wifi":
+        wireless = settings.get("802-11-wireless")
+        ssid, ssid_hex = ssid_fields(wireless)
+        hidden_value = variant(wireless, "hidden", "b")
+        hidden = hidden_value is True
+        if hidden_value is not None and not isinstance(hidden_value, bool):
+            raise CatalogError("invalid hidden setting")
+        security, enterprise = security_token(settings)
+
+    return {
+        "schemaVersion": 1,
+        "uuid": uuid_value,
+        "name": name,
+        "profileType": profile_type,
+        "ssid": ssid,
+        "ssidHex": ssid_hex,
+        "security": security,
+        "enterprise": enterprise,
+        "hidden": hidden,
+        "autoconnect": autoconnect,
+        "timestamp": timestamp,
+    }
+
+
+def transient_unsaved(flags: int) -> bool:
+    return bool(flags & 0x0E)
+
+
+def revalidate_states(
+    paths: list[str], observed: dict[str, tuple[bool, int, int]], deadline: float
+) -> None:
+    for path in paths:
+        if path not in observed or property_state(path, deadline) != observed[path]:
+            raise CatalogError("profile state changed after snapshot")
+
+
+def collect_profiles() -> list[dict[str, Any]]:
+    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
+    initial_paths = list_connections(deadline)
+    profiles: list[dict[str, Any]] = []
+    observed_states: dict[str, tuple[bool, int, int]] = {}
+    seen_uuids: set[str] = set()
+    for path in initial_paths:
+        unsaved_before, version_before, flags_before = property_state(path, deadline)
+        if unsaved_before:
+            unsaved_after, version_after, flags_after = property_state(path, deadline)
+            if not unsaved_after or version_after != version_before \
+                    or flags_after != flags_before:
+                raise CatalogError("unsaved profile changed during snapshot")
+            # Generated, volatile, and externally owned connections have no
+            # persisted baseline. A dirty ordinary profile does, so omitting it
+            # would make the catalog falsely complete and must fail closed.
+            if transient_unsaved(flags_before):
+                observed_states[path] = (
+                    unsaved_after, version_after, flags_after
+                )
+                continue
+            raise CatalogError("persisted profile has unsaved changes")
+        settings = settings_for(path, deadline)
+        unsaved_after, version_after, flags_after = property_state(path, deadline)
+        if unsaved_after or version_after != version_before \
+                or flags_after != flags_before:
+            raise CatalogError("profile changed during snapshot")
+        observed_states[path] = (unsaved_after, version_after, flags_after)
+        profile = profile_from_settings(settings)
+        uuid_value = profile["uuid"]
+        if uuid_value in seen_uuids:
+            raise CatalogError("duplicate profile UUID")
+        seen_uuids.add(uuid_value)
+        profiles.append(profile)
+    if list_connections(deadline) != initial_paths:
+        raise CatalogError("profile topology changed during snapshot")
+    revalidate_states(initial_paths, observed_states, deadline)
+    profiles.sort(key=lambda row: row["uuid"])
+    return profiles
+
+
+def emit_catalog(
+    profiles: list[dict[str, Any]], stream: BinaryIO | None = None
+) -> None:
+    records: list[dict[str, Any]] = [{
+        "schemaVersion": 1,
+        "event": "begin",
+        "sequence": 1,
+        "count": len(profiles),
+    }]
+    for index, profile in enumerate(profiles):
+        records.append({
+            "schemaVersion": 1,
+            "event": "profile",
+            "sequence": index + 2,
+            "index": index,
+            "profile": profile,
+        })
+    records.append({
+        "schemaVersion": 1,
+        "event": "end",
+        "sequence": len(profiles) + 2,
+        "count": len(profiles),
+    })
+    target = stream if stream is not None else sys.stdout.buffer
+    for record in records:
+        line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+        encoded = line.encode("utf-8")
+        if len(encoded) > MAX_PROTOCOL_LINE:
+            raise CatalogError("catalog protocol record exceeded bound")
+        target.write(encoded + b"\n")
+        target.flush()
+
+
+def main() -> int:
+    try:
+        emit_catalog(collect_profiles())
+        return 0
+    except CatalogError as error:
+        print(f"network-profile-catalog: unavailable ({error})", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

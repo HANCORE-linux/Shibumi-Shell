@@ -121,6 +121,11 @@ function profileId(deviceEntityId, uuidValue) {
   return tupleId("profile", [device, uuid])
 }
 
+function catalogProfileId(uuidValue) {
+  var uuid = canonicalUuid(uuidValue)
+  return uuid === "" ? "" : tupleId("saved-profile", [uuid])
+}
+
 function boundedDisplayName(value) {
   return typeof value === "string" && value.length <= 256
     && !/[\u0000\r\n]/.test(value) ? value : ""

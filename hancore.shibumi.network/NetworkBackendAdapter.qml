@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "NetworkModel.js" as Model
+import "NetworkProfileCatalogModel.js" as CatalogModel
 
 // Source-only Step 5A capability seam. Production Service.qml does not load
 // this adapter yet. Native access is isolated behind an inactive Loader, raw
@@ -15,6 +16,7 @@ Item {
   // One process-wide NetworkManagerLiveness instance is supplied by the final
   // owning Service. Fake backends never derive readiness from this host seam.
   property var nativeLiveness: null
+  property var savedProfileCatalog: null
   readonly property bool nativeServiceAvailable:
     root.nativeLiveness !== null
       && root.nativeLiveness.serviceUsable === true
@@ -71,6 +73,24 @@ Item {
     root.baseNetworkSnapshots, root.generation)
   readonly property var profileSnapshots: Model.cloneWithGeneration(
     root.baseProfileSnapshots, root.generation)
+  readonly property var savedProfileProjection:
+    implementation.savedProfileProjection()
+  readonly property bool savedProfileCatalogAvailable:
+    root.savedProfileCatalog !== null
+      && root.savedProfileCatalog.available === true
+      && root.backendAvailable && !root.savedProfileProjection.overflow
+  readonly property bool savedProfileCatalogDegraded:
+    root.savedProfileProjection.overflow
+  readonly property var savedProfileSnapshots: Model.cloneWithGeneration(
+    root.savedProfileCatalogAvailable ? root.savedProfileProjection.rows : [],
+    root.generation)
+  readonly property var savedProfileCatalogSnapshot: ({
+    schemaVersion: root.schemaVersion,
+    available: root.savedProfileCatalogAvailable,
+    degraded: root.savedProfileCatalogDegraded,
+    count: root.savedProfileSnapshots.length,
+    generation: root.generation
+  })
 
   visible: false
   width: 0
@@ -79,6 +99,7 @@ Item {
   onActiveChanged: generation++
   onBackendOverrideChanged: generation++
   onNativeLivenessChanged: generation++
+  onSavedProfileCatalogChanged: generation++
   onNativeServiceAvailableChanged: generation++
   onNativeServiceEpochChanged: generation++
   onTopologyFingerprintChanged: generation++
@@ -188,6 +209,12 @@ Item {
       context.profile, request.entityId)
   }
 
+  Connections {
+    target: root.savedProfileCatalog
+    ignoreUnknownSignals: true
+    function onGenerationChanged() { root.generation++ }
+  }
+
   Loader {
     id: nativeGateway
     // Do not construct Quickshell's process-static Networking singleton until
@@ -237,6 +264,59 @@ Item {
         return { values: [], overflow: true }
       }
       return { values: result, overflow: false }
+    }
+
+    function savedProfileProjection() {
+      if (!root.active || root.savedProfileCatalog === null
+          || root.savedProfileCatalog.available !== true)
+        return { rows: [], overflow: false }
+      try {
+        const info = sequenceInfo(root.savedProfileCatalog.profileSnapshots)
+        if (info.overflow) return { rows: [], overflow: true }
+        const rows = []
+        let previousUuid = ""
+        for (let index = 0; index < info.values.length; index++) {
+          const source = info.values[index]
+          if (!source || typeof source !== "object")
+            return { rows: [], overflow: true }
+          const keys = Object.keys(source)
+          const expected = [
+            "schemaVersion", "id", "uuid", "name", "profileType", "ssid",
+            "ssidHex", "security", "enterprise", "hidden", "autoconnect",
+            "timestamp"
+          ]
+          if (keys.length !== expected.length)
+            return { rows: [], overflow: true }
+          for (let field = 0; field < expected.length; field++) {
+            if (!Object.prototype.hasOwnProperty.call(source, expected[field]))
+              return { rows: [], overflow: true }
+          }
+          const profile = {
+            schemaVersion: source.schemaVersion,
+            uuid: source.uuid,
+            name: source.name,
+            profileType: source.profileType,
+            ssid: source.ssid,
+            ssidHex: source.ssidHex,
+            security: source.security,
+            enterprise: source.enterprise,
+            hidden: source.hidden,
+            autoconnect: source.autoconnect,
+            timestamp: source.timestamp
+          }
+          if (!CatalogModel.validProfile(profile)
+              || source.id !== Model.catalogProfileId(source.uuid)
+              || previousUuid !== "" && previousUuid >= source.uuid)
+            return { rows: [], overflow: true }
+          previousUuid = source.uuid
+          const row = { id: source.id }
+          for (const key in profile) row[key] = profile[key]
+          rows.push(row)
+        }
+        return { rows: rows, overflow: false }
+      } catch (error) {
+        return { rows: [], overflow: true }
+      }
     }
 
     function deviceSequence() {
