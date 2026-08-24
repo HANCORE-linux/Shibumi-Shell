@@ -28,14 +28,22 @@ Item {
     ? Model.connectivityToken(
       implementation.backendValue("connectivity", "unknown")) : "unknown"
   readonly property var baseRadioSnapshot: implementation.radioSnapshot()
-  readonly property var baseDeviceSnapshots: implementation.deviceSnapshots()
-  readonly property var baseNetworkSnapshots: implementation.networkSnapshots()
+  readonly property var deviceProjection: implementation.deviceProjection()
+  readonly property var networkProjection: implementation.networkProjection()
+  readonly property var profileProjection: implementation.profileProjection()
+  readonly property var baseDeviceSnapshots: root.deviceProjection.rows
+  readonly property var baseNetworkSnapshots: root.networkProjection.rows
+  readonly property var baseProfileSnapshots: root.profileProjection.rows
+  readonly property bool snapshotDegraded: root.deviceProjection.overflow
+    || root.networkProjection.overflow || root.profileProjection.overflow
   readonly property string topologyFingerprint: Model.topologyFingerprint(
-    root.backendAvailable, root.baseRadioSnapshot,
-    root.baseDeviceSnapshots, root.baseNetworkSnapshots)
+    root.backendAvailable, root.snapshotDegraded, root.baseRadioSnapshot,
+    root.baseDeviceSnapshots, root.baseNetworkSnapshots,
+    root.baseProfileSnapshots)
   readonly property var backendSnapshot: ({
     schemaVersion: root.schemaVersion,
     available: root.backendAvailable,
+    degraded: root.snapshotDegraded,
     connectivity: root.connectivity,
     generation: root.generation
   })
@@ -51,6 +59,8 @@ Item {
     root.baseDeviceSnapshots, root.generation)
   readonly property var networkSnapshots: Model.cloneWithGeneration(
     root.baseNetworkSnapshots, root.generation)
+  readonly property var profileSnapshots: Model.cloneWithGeneration(
+    root.baseProfileSnapshots, root.generation)
 
   visible: false
   width: 0
@@ -137,10 +147,33 @@ Item {
     if (context.error) return context.error
     // Quickshell 0.3.0 aggregates every saved setting for an SSID. Calling
     // WifiNetwork.forget() can therefore delete unrelated personal and
-    // enterprise profiles. Step 5 will forget only an exact profile UUID.
+    // enterprise profiles. Only the exact profile path below may forget.
     return result(false, "unsupported",
       "Exact saved-profile identity is required before forgetting a network.",
       request.entityId, root.generation)
+  }
+
+  function connectProfile(request) {
+    const context = implementation.profileActionContext(request)
+    if (context.error) return context.error
+    if (!context.row.canConnect || context.network.connected === true
+        || context.network.stateChanging === true)
+      return result(false, "unsupported",
+        "This saved profile is not connectable on its current device.",
+        request.entityId, root.generation)
+    return implementation.dispatchProfile("connect", context.network,
+      context.profile, request.entityId)
+  }
+
+  function forgetProfile(request) {
+    const context = implementation.profileActionContext(request)
+    if (context.error) return context.error
+    if (!context.row.canForget)
+      return result(false, "unsupported",
+        "This saved profile cannot be forgotten.", request.entityId,
+        root.generation)
+    return implementation.dispatchProfile("forget", context.network,
+      context.profile, request.entityId)
   }
 
   Loader {
@@ -174,29 +207,80 @@ Item {
         ? gateway.backendInitialized === true : false
     }
 
-    function objectSequence(value) {
+    function sequenceInfo(value) {
       const result = []
-      if (!value || typeof value.length !== "number"
-          || !isFinite(value.length) || value.length < 0) return result
-      const length = Math.min(4096, Math.floor(value.length))
-      for (let index = 0; index < length; index++) result.push(value[index])
-      return result
+      if (value === null || value === undefined)
+        return { values: result, overflow: false }
+      try {
+        const length = value.length
+        if (typeof length !== "number" || !isFinite(length) || length < 0
+            || Math.floor(length) !== length
+            || length > Model.MaxSnapshotRows)
+          return { values: [], overflow: true }
+        for (let index = 0; index < length; index++) result.push(value[index])
+      } catch (error) {
+        return { values: [], overflow: true }
+      }
+      return { values: result, overflow: false }
     }
 
-    function deviceObjects() {
-      if (!backendAvailable()) return []
-      if (root.backendOverride !== null)
-        return objectSequence(root.backendOverride.devices)
-      const gateway = nativeBackend()
-      return gateway ? objectSequence(gateway.deviceObjects) : []
+    function deviceSequence() {
+      if (!backendAvailable()) return { values: [], overflow: false }
+      try {
+        if (root.backendOverride !== null)
+          return sequenceInfo(root.backendOverride.devices)
+        const gateway = nativeBackend()
+        return sequenceInfo(gateway ? gateway.deviceObjects : [])
+      } catch (error) {
+        return { values: [], overflow: true }
+      }
     }
 
-    function networkObjects(device) {
-      if (!device) return []
-      if (root.backendOverride !== null)
-        return objectSequence(device.networks)
-      const gateway = nativeBackend()
-      return gateway ? objectSequence(gateway.networkObjects(device)) : []
+    function networkSequence(device) {
+      if (!device) return { values: [], overflow: false }
+      try {
+        if (root.backendOverride !== null) return sequenceInfo(device.networks)
+        const gateway = nativeBackend()
+        return sequenceInfo(gateway ? gateway.networkObjects(device) : [])
+      } catch (error) {
+        return { values: [], overflow: true }
+      }
+    }
+
+    function profileSequence(network) {
+      if (!network) return { values: [], overflow: false }
+      try {
+        if (root.backendOverride !== null)
+          return sequenceInfo(network.nmSettings)
+        const gateway = nativeBackend()
+        return sequenceInfo(gateway ? gateway.profileObjects(network) : [])
+      } catch (error) {
+        return { values: [], overflow: true }
+      }
+    }
+
+    function profileUuid(profile) {
+      if (!profile) return ""
+      try {
+        if (root.backendOverride !== null)
+          return Model.canonicalUuid(profile.uuid)
+        const gateway = nativeBackend()
+        return gateway
+          ? Model.canonicalUuid(gateway.profileUuid(profile)) : ""
+      } catch (error) {
+        return ""
+      }
+    }
+
+    function profileName(profile) {
+      if (!profile) return ""
+      try {
+        const value = root.backendOverride !== null
+          ? profile.profileName : nativeBackend().profileName(profile)
+        return Model.boundedDisplayName(value)
+      } catch (error) {
+        return ""
+      }
     }
 
     function deviceType(device) {
@@ -254,11 +338,6 @@ Item {
         ? device.managed !== false : device.nmManaged !== false
     }
 
-    function networkProfileCount(network) {
-      if (!network) return 0
-      return objectSequence(network.nmSettings).length
-    }
-
     function signalPercent(network) {
       if (!network) return 0
       const raw = root.backendOverride !== null
@@ -280,6 +359,19 @@ Item {
       return gateway ? gateway.supportsNetworkAction(action, target) : false
     }
 
+    function supportsProfileAction(action, network, profile) {
+      if (!network || !profile) return false
+      if (root.backendOverride !== null) {
+        const delegateName = action === "connect" ? "connectProfile"
+          : action === "forget" ? "forgetProfile" : ""
+        return delegateName !== ""
+          && typeof root.backendOverride[delegateName] === "function"
+      }
+      const gateway = nativeBackend()
+      return gateway
+        ? gateway.supportsProfileAction(action, network, profile) : false
+    }
+
     function radioSnapshot() {
       return {
         schemaVersion: root.schemaVersion,
@@ -293,17 +385,22 @@ Item {
       }
     }
 
-    function deviceSnapshots() {
+    function deviceProjection() {
       const rows = []
-      const devices = deviceObjects()
+      const deviceInfo = deviceSequence()
+      if (deviceInfo.overflow) return { rows: [], overflow: true }
+      const devices = deviceInfo.values
       const idCounts = ({})
+      if (devices.length > Model.MaxBackendObjects)
+        return { rows: [], overflow: true }
       for (let index = 0; index < devices.length; index++) {
         const device = devices[index]
         if (!device) continue
         const type = deviceType(device)
-        const name = deviceName(device)
+        const rawName = deviceName(device)
+        const name = Model.usableInterfaceName(rawName) ? rawName : ""
         const address = Model.normalizeHardwareAddress(deviceAddress(device))
-        const id = Model.deviceId(type, deviceAddress(device), name)
+        const id = Model.deviceId(type, deviceAddress(device), rawName)
         if (!id) continue
         idCounts[id] = Number(idCounts[id] || 0) + 1
         rows.push({
@@ -318,23 +415,70 @@ Item {
           autoconnect: device.autoconnect !== false,
           ambiguous: false
         })
+        if (rows.length > Model.MaxSnapshotRows)
+          return { rows: [], overflow: true }
       }
       for (let rowIndex = 0; rowIndex < rows.length; rowIndex++)
         rows[rowIndex].ambiguous = idCounts[rows[rowIndex].id] !== 1
-      return rows
+      return { rows: rows, overflow: false }
     }
 
-    function networkSnapshots() {
+    function profileDescriptor(deviceEntityId, network, profile) {
+      const uuid = profileUuid(profile)
+      const id = Model.profileId(deviceEntityId, uuid)
+      const ssidValue = networkSsid(network)
+      const ssid = Model.validSsid(ssidValue) ? ssidValue : ""
+      const networkEntityId = Model.networkId(deviceEntityId, ssid,
+        networkSecurity(network))
+      return {
+        valid: id !== "" && networkEntityId !== "" && ssid !== "",
+        id: id,
+        uuid: uuid,
+        deviceId: deviceEntityId,
+        networkId: networkEntityId,
+        ssid: ssid,
+        name: profileName(profile),
+        security: "unknown",
+        lastSuccessful: 0
+      }
+    }
+
+    function networkProfileStats(deviceEntityId, network) {
+      const profileInfo = profileSequence(network)
+      if (profileInfo.overflow)
+        return { count: 0, validCount: 0, overflow: true }
+      const profiles = profileInfo.values
+      let validCount = 0
+      for (let index = 0; index < profiles.length; index++) {
+        const descriptor = profileDescriptor(deviceEntityId, network,
+          profiles[index])
+        if (descriptor.valid) validCount++
+      }
+      return { count: profiles.length, validCount: validCount,
+        overflow: false }
+    }
+
+    function networkProjection() {
       const rows = []
-      const devices = deviceObjects()
+      const deviceInfo = deviceSequence()
+      if (deviceInfo.overflow) return { rows: [], overflow: true }
+      const devices = deviceInfo.values
       const idCounts = ({})
+      let visited = devices.length
+      if (visited > Model.MaxBackendObjects)
+        return { rows: [], overflow: true }
       for (let deviceIndex = 0; deviceIndex < devices.length; deviceIndex++) {
         const device = devices[deviceIndex]
         if (!device || deviceType(device) !== "wifi") continue
         const deviceEntityId = Model.deviceId(
           deviceType(device), deviceAddress(device), deviceName(device))
         if (!deviceEntityId) continue
-        const networks = networkObjects(device)
+        const networkInfo = networkSequence(device)
+        if (networkInfo.overflow) return { rows: [], overflow: true }
+        const networks = networkInfo.values
+        visited += networks.length
+        if (visited > Model.MaxBackendObjects)
+          return { rows: [], overflow: true }
         for (let networkIndex = 0; networkIndex < networks.length; networkIndex++) {
           const network = networks[networkIndex]
           if (!network) continue
@@ -344,16 +488,21 @@ Item {
           if (!id) continue
           const connected = network.connected === true
           const known = network.known === true
-          const profileCount = networkProfileCount(network)
-          const profileAmbiguous = profileCount > 1
+          const stats = networkProfileStats(deviceEntityId, network)
+          if (stats.overflow) return { rows: [], overflow: true }
+          visited += stats.count
+          if (visited > Model.MaxBackendObjects)
+            return { rows: [], overflow: true }
+          const profileAmbiguous = stats.count > 1
+            || stats.validCount !== stats.count
           const canConnect = !connected && !profileAmbiguous
-            && ((known && profileCount === 1)
+            && ((known && stats.count === 1)
               || (!known && Model.knownConnectKind(security)))
             && supportsNetworkAction("connect", network)
           const canConnectWithPsk = !connected && !profileAmbiguous
-            && (!known || profileCount === 1) && Model.pskKind(security)
+            && (!known || stats.count === 1) && Model.pskKind(security)
             && supportsNetworkAction("connectWithPsk", network)
-          const canDisconnect = connected
+          const canDisconnect = connected && !profileAmbiguous
             && supportsNetworkAction("disconnect", network)
           idCounts[id] = Number(idCounts[id] || 0) + 1
           rows.push({
@@ -367,18 +516,22 @@ Item {
             state: networkState(network),
             stateChanging: network.stateChanging === true,
             signal: signalPercent(network),
-            profileCount: profileCount,
+            profileCount: stats.count,
+            validProfileCount: stats.validCount,
             canConnect: canConnect,
             canConnectWithPsk: canConnectWithPsk,
             canDisconnect: canDisconnect,
             canForget: false,
             ambiguous: false
           })
+          if (rows.length > Model.MaxSnapshotRows)
+            return { rows: [], overflow: true }
         }
       }
       for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
         const row = rows[rowIndex]
         row.ambiguous = idCounts[row.id] !== 1 || row.profileCount > 1
+          || row.validProfileCount !== row.profileCount
         if (row.ambiguous) {
           row.canConnect = false
           row.canConnectWithPsk = false
@@ -386,7 +539,76 @@ Item {
           row.canForget = false
         }
       }
-      return rows
+      return { rows: rows, overflow: false }
+    }
+
+    function profileProjection() {
+      const rows = []
+      const deviceInfo = deviceSequence()
+      if (deviceInfo.overflow) return { rows: [], overflow: true }
+      const devices = deviceInfo.values
+      const idCounts = ({})
+      let visited = devices.length
+      if (visited > Model.MaxBackendObjects)
+        return { rows: [], overflow: true }
+      for (let deviceIndex = 0; deviceIndex < devices.length; deviceIndex++) {
+        const device = devices[deviceIndex]
+        if (!device || deviceType(device) !== "wifi") continue
+        const deviceEntityId = Model.deviceId(
+          deviceType(device), deviceAddress(device), deviceName(device))
+        if (!deviceEntityId) continue
+        const networkInfo = networkSequence(device)
+        if (networkInfo.overflow) return { rows: [], overflow: true }
+        const networks = networkInfo.values
+        visited += networks.length
+        if (visited > Model.MaxBackendObjects)
+          return { rows: [], overflow: true }
+        for (let networkIndex = 0; networkIndex < networks.length; networkIndex++) {
+          const network = networks[networkIndex]
+          if (!network) continue
+          const profileInfo = profileSequence(network)
+          if (profileInfo.overflow) return { rows: [], overflow: true }
+          const profiles = profileInfo.values
+          visited += profiles.length
+          if (visited > Model.MaxBackendObjects)
+            return { rows: [], overflow: true }
+          for (let profileIndex = 0; profileIndex < profiles.length;
+              profileIndex++) {
+            const profile = profiles[profileIndex]
+            const descriptor = profileDescriptor(deviceEntityId, network,
+              profile)
+            if (!descriptor.valid) continue
+            idCounts[descriptor.id] = Number(idCounts[descriptor.id] || 0) + 1
+            rows.push({
+              schemaVersion: root.schemaVersion,
+              id: descriptor.id,
+              uuid: descriptor.uuid,
+              deviceId: descriptor.deviceId,
+              networkId: descriptor.networkId,
+              ssid: descriptor.ssid,
+              name: descriptor.name,
+              security: descriptor.security,
+              lastSuccessful: descriptor.lastSuccessful,
+              canConnect: network.connected !== true
+                && network.stateChanging !== true
+                && supportsProfileAction("connect", network, profile),
+              canForget: supportsProfileAction("forget", network, profile),
+              ambiguous: false
+            })
+            if (rows.length > Model.MaxSnapshotRows)
+              return { rows: [], overflow: true }
+          }
+        }
+      }
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+        const row = rows[rowIndex]
+        row.ambiguous = idCounts[row.id] !== 1
+        if (row.ambiguous) {
+          row.canConnect = false
+          row.canForget = false
+        }
+      }
+      return { rows: rows, overflow: false }
     }
 
     function validGeneration(value) {
@@ -404,6 +626,10 @@ Item {
       if (!root.backendAvailable)
         return root.result(false, "unavailable",
           "NetworkManager backend is unavailable.", entityId, root.generation)
+      if (root.snapshotDegraded)
+        return root.result(false, "unavailable",
+          "Network topology exceeds the safe snapshot budget.", entityId,
+          root.generation)
       if (request.generation !== root.generation)
         return root.result(false, "stale-generation",
           "Network state changed before the action was dispatched.",
@@ -415,14 +641,26 @@ Item {
       let target = null
       let row = null
       let count = 0
-      const devices = deviceObjects()
+      const deviceInfo = deviceSequence()
+      if (deviceInfo.overflow)
+        return { target: null, row: null, count: 0, overflow: true }
+      const devices = deviceInfo.values
+      let visited = devices.length
+      if (visited > Model.MaxBackendObjects)
+        return { target: null, row: null, count: 0, overflow: true }
       for (let deviceIndex = 0; deviceIndex < devices.length; deviceIndex++) {
         const device = devices[deviceIndex]
         if (!device || deviceType(device) !== "wifi") continue
         const deviceEntityId = Model.deviceId(
           deviceType(device), deviceAddress(device), deviceName(device))
         if (!deviceEntityId) continue
-        const networks = networkObjects(device)
+        const networkInfo = networkSequence(device)
+        if (networkInfo.overflow)
+          return { target: null, row: null, count: 0, overflow: true }
+        const networks = networkInfo.values
+        visited += networks.length
+        if (visited > Model.MaxBackendObjects)
+          return { target: null, row: null, count: 0, overflow: true }
         for (let networkIndex = 0; networkIndex < networks.length; networkIndex++) {
           const candidate = networks[networkIndex]
           if (!candidate) continue
@@ -434,7 +672,7 @@ Item {
         }
       }
       if (count === 1) {
-        const snapshots = networkSnapshots()
+        const snapshots = root.baseNetworkSnapshots
         for (let index = 0; index < snapshots.length; index++) {
           if (snapshots[index].id === entityId) {
             row = snapshots[index]
@@ -442,13 +680,17 @@ Item {
           }
         }
       }
-      return { target: target, row: row, count: count }
+      return { target: target, row: row, count: count, overflow: false }
     }
 
     function networkActionContext(request) {
       const requestError = validateRequest(request)
       if (requestError) return { error: requestError, target: null, row: null }
       const resolved = networkResolution(request.entityId)
+      if (resolved.overflow)
+        return { error: root.result(false, "unavailable",
+          "Network topology exceeds the safe action budget.",
+          request.entityId, root.generation), target: null, row: null }
       if (resolved.count === 0)
         return { error: root.result(false, "stale-id",
           "Network identity is no longer present.", request.entityId,
@@ -457,7 +699,106 @@ Item {
         return { error: root.result(false, "ambiguous",
           "Network identity or saved-profile selection is ambiguous.",
           request.entityId, root.generation), target: null, row: null }
+      if (!resolved.row)
+        return { error: root.result(false, "stale-id",
+          "Network snapshot changed before dispatch.", request.entityId,
+          root.generation), target: null, row: null }
       return { error: null, target: resolved.target, row: resolved.row }
+    }
+
+    function profileResolution(entityId) {
+      let network = null
+      let profile = null
+      let row = null
+      let count = 0
+      const deviceInfo = deviceSequence()
+      if (deviceInfo.overflow)
+        return { network: null, profile: null, row: null, count: 0,
+          overflow: true }
+      const devices = deviceInfo.values
+      let visited = devices.length
+      if (visited > Model.MaxBackendObjects)
+        return { network: null, profile: null, row: null, count: 0,
+          overflow: true }
+      for (let deviceIndex = 0; deviceIndex < devices.length; deviceIndex++) {
+        const device = devices[deviceIndex]
+        if (!device || deviceType(device) !== "wifi") continue
+        const deviceEntityId = Model.deviceId(deviceType(device),
+          deviceAddress(device), deviceName(device))
+        if (!deviceEntityId) continue
+        const networkInfo = networkSequence(device)
+        if (networkInfo.overflow)
+          return { network: null, profile: null, row: null, count: 0,
+            overflow: true }
+        const networks = networkInfo.values
+        visited += networks.length
+        if (visited > Model.MaxBackendObjects)
+          return { network: null, profile: null, row: null, count: 0,
+            overflow: true }
+        for (let networkIndex = 0; networkIndex < networks.length;
+            networkIndex++) {
+          const candidateNetwork = networks[networkIndex]
+          if (!candidateNetwork) continue
+          const profileInfo = profileSequence(candidateNetwork)
+          if (profileInfo.overflow)
+            return { network: null, profile: null, row: null, count: 0,
+              overflow: true }
+          const profiles = profileInfo.values
+          visited += profiles.length
+          if (visited > Model.MaxBackendObjects)
+            return { network: null, profile: null, row: null, count: 0,
+              overflow: true }
+          for (let profileIndex = 0; profileIndex < profiles.length;
+              profileIndex++) {
+            const candidateProfile = profiles[profileIndex]
+            const candidateId = Model.profileId(deviceEntityId,
+              profileUuid(candidateProfile))
+            if (candidateId !== entityId) continue
+            network = candidateNetwork
+            profile = candidateProfile
+            count++
+          }
+        }
+      }
+      if (count === 1) {
+        const snapshots = root.baseProfileSnapshots
+        for (let index = 0; index < snapshots.length; index++) {
+          if (snapshots[index].id === entityId) {
+            row = snapshots[index]
+            break
+          }
+        }
+      }
+      return { network: network, profile: profile, row: row, count: count,
+        overflow: false }
+    }
+
+    function profileActionContext(request) {
+      const requestError = validateRequest(request)
+      if (requestError)
+        return { error: requestError, network: null, profile: null, row: null }
+      const resolved = profileResolution(request.entityId)
+      if (resolved.overflow)
+        return { error: root.result(false, "unavailable",
+          "Network topology exceeds the safe action budget.",
+          request.entityId, root.generation), network: null, profile: null,
+          row: null }
+      if (resolved.count === 0)
+        return { error: root.result(false, "stale-id",
+          "Saved profile identity is no longer present.", request.entityId,
+          root.generation), network: null, profile: null, row: null }
+      if (resolved.count > 1 || resolved.row && resolved.row.ambiguous)
+        return { error: root.result(false, "ambiguous",
+          "Saved profile identity is ambiguous on this device.",
+          request.entityId, root.generation), network: null, profile: null,
+          row: null }
+      if (!resolved.row)
+        return { error: root.result(false, "stale-id",
+          "Saved profile snapshot changed before dispatch.",
+          request.entityId, root.generation), network: null, profile: null,
+          row: null }
+      return { error: null, network: resolved.network,
+        profile: resolved.profile, row: resolved.row }
     }
 
     function allowedResultCode(code) {
@@ -496,57 +837,108 @@ Item {
     }
 
     function dispatchRadio(enabled, entityId) {
-      if (root.backendOverride !== null) {
-        if (typeof root.backendOverride.setWifiEnabled !== "function")
+      try {
+        if (root.backendOverride !== null) {
+          if (typeof root.backendOverride.setWifiEnabled !== "function")
+            return root.result(false, "unsupported",
+              "Fake backend does not implement the Wi-Fi radio action.",
+              entityId, root.generation)
+          return delegateResult(root.backendOverride.setWifiEnabled(enabled),
+            entityId)
+        }
+        const gateway = nativeBackend()
+        if (!gateway || typeof gateway.setWifiEnabled !== "function")
           return root.result(false, "unsupported",
-            "Fake backend does not implement the Wi-Fi radio action.",
-            entityId, root.generation)
-        return delegateResult(root.backendOverride.setWifiEnabled(enabled),
-          entityId)
-      }
-      const gateway = nativeBackend()
-      if (!gateway || typeof gateway.setWifiEnabled !== "function")
-        return root.result(false, "unsupported",
-          "Native Wi-Fi radio action is unavailable.", entityId,
+            "Native Wi-Fi radio action is unavailable.", entityId,
+            root.generation)
+        return delegateResult(gateway.setWifiEnabled(enabled), entityId)
+      } catch (error) {
+        return root.result(false, "unavailable",
+          "Network backend rejected the Wi-Fi radio dispatch.", entityId,
           root.generation)
-      return delegateResult(gateway.setWifiEnabled(enabled), entityId)
+      }
     }
 
     function dispatchNetwork(action, target, secret, entityId) {
-      let value = false
-      if (root.backendOverride !== null) {
-        const backend = root.backendOverride
-        if (action === "connect"
-            && typeof backend.connectNetwork === "function")
-          value = backend.connectNetwork(target)
-        else if (action === "connectWithPsk"
-            && typeof backend.connectNetworkWithPsk === "function")
-          value = backend.connectNetworkWithPsk(target, secret)
-        else if (action === "disconnect"
-            && typeof backend.disconnectNetwork === "function")
-          value = backend.disconnectNetwork(target)
+      try {
+        let value = false
+        if (root.backendOverride !== null) {
+          const backend = root.backendOverride
+          if (action === "connect"
+              && typeof backend.connectNetwork === "function")
+            value = backend.connectNetwork(target)
+          else if (action === "connectWithPsk"
+              && typeof backend.connectNetworkWithPsk === "function")
+            value = backend.connectNetworkWithPsk(target, secret)
+          else if (action === "disconnect"
+              && typeof backend.disconnectNetwork === "function")
+            value = backend.disconnectNetwork(target)
+          else
+            return root.result(false, "unsupported",
+              "Fake backend does not implement this network action.",
+              entityId, root.generation)
+          return delegateResult(value, entityId)
+        }
+
+        const gateway = nativeBackend()
+        if (!gateway)
+          return root.result(false, "unavailable",
+            "Native Network gateway is unavailable.", entityId,
+            root.generation)
+        if (action === "connect") value = gateway.connectNetwork(target)
+        else if (action === "connectWithPsk")
+          value = gateway.connectNetworkWithPsk(target, secret)
+        else if (action === "disconnect")
+          value = gateway.disconnectNetwork(target)
         else
           return root.result(false, "unsupported",
-            "Fake backend does not implement this network action.",
-            entityId, root.generation)
+            "Native network action is unsupported.", entityId,
+            root.generation)
         return delegateResult(value, entityId)
-      }
-
-      const gateway = nativeBackend()
-      if (!gateway)
+      } catch (error) {
         return root.result(false, "unavailable",
-          "Native Network gateway is unavailable.", entityId,
+          "Network backend rejected the network dispatch.", entityId,
           root.generation)
-      if (action === "connect") value = gateway.connectNetwork(target)
-      else if (action === "connectWithPsk")
-        value = gateway.connectNetworkWithPsk(target, secret)
-      else if (action === "disconnect")
-        value = gateway.disconnectNetwork(target)
-      else
-        return root.result(false, "unsupported",
-          "Native network action is unsupported.", entityId,
+      }
+    }
+
+    function dispatchProfile(action, network, profile, entityId) {
+      try {
+        let value = false
+        if (root.backendOverride !== null) {
+          const backend = root.backendOverride
+          if (action === "connect"
+              && typeof backend.connectProfile === "function")
+            value = backend.connectProfile(network, profile)
+          else if (action === "forget"
+              && typeof backend.forgetProfile === "function")
+            value = backend.forgetProfile(profile)
+          else
+            return root.result(false, "unsupported",
+              "Fake backend does not implement this profile action.",
+              entityId, root.generation)
+          return delegateResult(value, entityId)
+        }
+
+        const gateway = nativeBackend()
+        if (!gateway)
+          return root.result(false, "unavailable",
+            "Native Network gateway is unavailable.", entityId,
+            root.generation)
+        if (action === "connect")
+          value = gateway.connectProfile(network, profile)
+        else if (action === "forget")
+          value = gateway.forgetProfile(profile)
+        else
+          return root.result(false, "unsupported",
+            "Native saved-profile action is unsupported.", entityId,
+            root.generation)
+        return delegateResult(value, entityId)
+      } catch (error) {
+        return root.result(false, "unavailable",
+          "Network backend rejected the saved-profile dispatch.", entityId,
           root.generation)
-      return delegateResult(value, entityId)
+      }
     }
   }
 }

@@ -69,6 +69,18 @@ Item {
     return device && device.networks ? device.networks.values : []
   }
 
+  function profileObjects(network) {
+    return network && network.nmSettings ? network.nmSettings : []
+  }
+
+  function profileUuid(profile) {
+    return profile && typeof profile.uuid === "string" ? profile.uuid : ""
+  }
+
+  function profileName(profile) {
+    return profile && typeof profile.id === "string" ? profile.id : ""
+  }
+
   function supportsNetworkAction(action, target) {
     if (!target) return false
     if (action === "connect") return typeof target.connect === "function"
@@ -76,6 +88,15 @@ Item {
       return typeof target.connectWithPsk === "function"
     if (action === "disconnect")
       return typeof target.disconnect === "function"
+    return false
+  }
+
+  function supportsProfileAction(action, network, profile) {
+    if (!network || !profile) return false
+    if (action === "connect")
+      return network.connected !== true && network.stateChanging !== true
+        && typeof network.connectWithSettings === "function"
+    if (action === "forget") return typeof profile.forget === "function"
     return false
   }
 
@@ -101,5 +122,25 @@ Item {
     if (!supportsNetworkAction("disconnect", target)) return false
     target.disconnect()
     return true
+  }
+
+  function connectProfile(network, profile) {
+    if (!supportsProfileAction("connect", network, profile)) return false
+    network.connectWithSettings(profile)
+    return {
+      ok: true,
+      code: "accepted",
+      message: "Saved-profile connection dispatch accepted."
+    }
+  }
+
+  function forgetProfile(profile) {
+    if (!profile || typeof profile.forget !== "function") return false
+    profile.forget()
+    return {
+      ok: true,
+      code: "accepted",
+      message: "Saved-profile removal dispatch accepted."
+    }
   }
 }

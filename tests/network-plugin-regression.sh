@@ -237,6 +237,10 @@ rg -Fq 'import Quickshell.Networking' "$native_gateway" \
   || fail "native Network gateway does not use the public Quickshell API"
 rg -Fq 'return IdPrefix + JSON.stringify(values)' "$native_model" \
   || fail "Network entity IDs are not collision-safe versioned tuples"
+rg -Fq 'return tupleId("profile", [device, uuid])' "$native_model" \
+  || fail "saved-profile identity is not scoped to its current device"
+rg -Fq 'var MaxBackendObjects = 8192' "$native_model" \
+  || fail "native Network traversal has no aggregate object budget"
 rg -Fq 'return root.result(false, "unsupported",' "$native_adapter" \
   || fail "native Network aggregate forget is not rejected"
 if rg -q '(target|network)\.forget\(' "$native_adapter" "$native_gateway"; then
@@ -244,11 +248,28 @@ if rg -q '(target|network)\.forget\(' "$native_adapter" "$native_gateway"; then
 fi
 rg -Fq 'function networkResolution(entityId)' "$native_adapter" \
   || fail "native actions do not resolve current raw Network objects"
+rg -Fq 'function profileResolution(entityId)' "$native_adapter" \
+  || fail "saved-profile actions do not resolve current NMSettings objects"
+rg -Fq 'readonly property bool snapshotDegraded:' "$native_adapter" \
+  || fail "oversized native Network snapshots do not fail closed"
 rg -Fq 'if (resolved.count > 1 || resolved.row && resolved.row.ambiguous)' \
   "$native_adapter" \
   || fail "duplicate native Network identities do not fail closed"
 rg -Fq 'if (request.generation !== root.generation)' "$native_adapter" \
   || fail "native Network actions do not enforce topology generations"
+rg -Fq 'value = gateway.connectProfile(network, profile)' "$native_adapter" \
+  || fail "saved-profile connect bypasses the private native gateway"
+rg -Fq 'value = gateway.forgetProfile(profile)' "$native_adapter" \
+  || fail "exact saved-profile removal bypasses the private native gateway"
+rg -Fq 'network.connectWithSettings(profile)' "$native_gateway" \
+  || fail "saved-profile connect does not use exact Quickshell NMSettings"
+rg -Fq 'profile.forget()' "$native_gateway" \
+  || fail "saved-profile removal does not use exact NMSettings"
+if rg -q 'profileSettings|\.read\(' "$native_adapter" "$native_gateway"; then
+  fail "native profile projection materializes unbounded NMSettings maps"
+fi
+rg -Fq 'Saved-profile removal dispatch accepted.' "$native_gateway" \
+  || fail "profile removal acceptance is presented as synchronous completion"
 rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
   "$repo_root/tests/network-plugin-regression.sh" \
   || fail "fake Network seam is not tested without the system bus"

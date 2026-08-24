@@ -13,6 +13,8 @@ ShellRoot {
   property real signalGeneration: -1
   property real replacementGeneration: -1
   property string personalId: ""
+  property string exactProfileId: ""
+  property real profileReplacementGeneration: -1
   property var replacementRequest: null
 
   function fail(message) {
@@ -26,6 +28,24 @@ ShellRoot {
       if (rows[index].ssid === ssid) return rows[index]
     }
     return null
+  }
+
+  function profileFor(adapter, deviceId, uuid) {
+    const rows = adapter.profileSnapshots
+    for (let index = 0; index < rows.length; index++) {
+      if (rows[index].deviceId === deviceId && rows[index].uuid === uuid)
+        return rows[index]
+    }
+    return null
+  }
+
+  function sparseProfiles(length, duplicate) {
+    const rows = new Array(length)
+    if (duplicate && length > 0) {
+      rows[0] = duplicate
+      rows[length - 1] = duplicate
+    }
+    return rows
   }
 
   QtObject {
@@ -105,8 +125,127 @@ ShellRoot {
     property real signal: 20
   }
 
-  QtObject { id: savedSettingA }
-  QtObject { id: savedSettingB }
+  QtObject {
+    id: savedSettingA
+    property string uuid: "11111111-1111-4111-8111-111111111111"
+    property string profileId: "Shared personal A"
+    property string profileName: profileId
+    property int forgetCalls: 0
+    property int readCalls: 0
+    function read() {
+      readCalls++
+      return {
+        "connection": { id: profileId, timestamp: 101 },
+        "802-11-wireless": { ssid: "Shared profile SSID" },
+        "802-11-wireless-security": {
+          "key-mgmt": "wpa-psk", "auth-alg": "open"
+        }
+      }
+    }
+    function forget() { forgetCalls++ }
+  }
+
+  QtObject {
+    id: savedSettingB
+    property string uuid: "22222222-2222-4222-8222-222222222222"
+    property string profileId: "Shared enterprise B"
+    property string profileName: profileId
+    property int forgetCalls: 0
+    property int readCalls: 0
+    function read() {
+      readCalls++
+      return {
+        "connection": { id: profileId, timestamp: 102 },
+        "802-11-wireless": { ssid: "Shared profile SSID" },
+        "802-11-wireless-security": {
+          "key-mgmt": "wpa-eap", "auth-alg": "open"
+        },
+        "802-1x": {
+          identity: "must-not-leak@example.invalid",
+          "ca-cert": "/private/certificate/path"
+        }
+      }
+    }
+    function forget() { forgetCalls++ }
+  }
+
+  QtObject {
+    id: exactProfileSetting
+    property string uuid: "33333333-3333-4333-8333-333333333333"
+    property string profileId: "Exact profile"
+    property string profileName: profileId
+    property int readCalls: 0
+    function read() {
+      readCalls++
+      return {
+        "connection": { id: profileId, timestamp: 303 },
+        "802-11-wireless": { ssid: "Exact saved network" },
+        "802-11-wireless-security": { "key-mgmt": "sae" }
+      }
+    }
+  }
+
+  QtObject {
+    id: mixedValidProfileSetting
+    property string uuid: "55555555-5555-4555-8555-555555555555"
+    property string profileId: "Mixed valid profile"
+    property string profileName: profileId
+    function read() {
+      return {
+        "connection": { id: profileId, timestamp: 505 },
+        "802-11-wireless": { ssid: "Mixed profile network" },
+        "802-11-wireless-security": { "key-mgmt": "wpa-psk" }
+      }
+    }
+  }
+
+  QtObject {
+    id: malformedProfileSetting
+    property string uuid: "{66666666-6666-4666-8666-666666666666}"
+    property string profileId: "Malformed profile"
+    property string profileName: profileId
+    function read() {
+      return {
+        "connection": { id: profileId, timestamp: 606 },
+        "802-11-wireless": { ssid: "Mixed profile network" },
+        "802-11-wireless-security": { "key-mgmt": ["wpa-psk"] }
+      }
+    }
+  }
+
+  QtObject {
+    id: replacementProfileSetting
+    property string uuid: "44444444-4444-4444-8444-444444444444"
+    property string profileId: "Replacement profile"
+    property string profileName: profileId
+    function read() {
+      return {
+        "connection": { id: profileId, timestamp: 404 },
+        "802-11-wireless": { ssid: "Exact saved network" },
+        "802-11-wireless-security": { "key-mgmt": "sae" }
+      }
+    }
+  }
+
+  QtObject {
+    id: connectedExactProfileSetting
+    property string uuid: "77777777-7777-4777-8777-777777777777"
+    property string profileName: "Connected exact profile"
+  }
+
+  QtObject {
+    id: secondaryProfileSetting
+    property string uuid: "33333333-3333-4333-8333-333333333333"
+    property string profileId: "Exact profile on second adapter"
+    property string profileName: profileId
+    function read() {
+      return {
+        "connection": { id: profileId, timestamp: 305 },
+        "802-11-wireless": { ssid: "Exact saved network" },
+        "802-11-wireless-security": { "key-mgmt": "sae" }
+      }
+    }
+  }
 
   QtObject {
     id: multiProfileNetwork
@@ -121,6 +260,44 @@ ShellRoot {
   }
 
   QtObject {
+    id: exactProfileNetwork
+    property string ssid: "Exact saved network"
+    property string securityToken: "sae"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 73
+    property var nmSettings: [exactProfileSetting]
+  }
+
+  QtObject {
+    id: mixedProfileNetwork
+    property string ssid: "Mixed profile network"
+    property string securityToken: "wpa2-psk"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 61
+    property list<QtObject> nmSettings: [
+      mixedValidProfileSetting, malformedProfileSetting
+    ]
+  }
+
+  QtObject {
+    id: connectedExactProfileNetwork
+    property string ssid: "Connected exact network"
+    property string securityToken: "wpa2-psk"
+    property bool connected: true
+    property bool known: true
+    property string stateToken: "connected"
+    property bool stateChanging: false
+    property real signal: 80
+    property list<QtObject> nmSettings: [connectedExactProfileSetting]
+  }
+
+  QtObject {
     id: connectedMultiProfileNetwork
     property string ssid: "Connected shared profile"
     property string securityToken: "wpa2-psk"
@@ -130,6 +307,18 @@ ShellRoot {
     property bool stateChanging: false
     property real signal: 68
     property list<QtObject> nmSettings: [savedSettingA, savedSettingB]
+  }
+
+  QtObject {
+    id: secondaryProfileNetwork
+    property string ssid: "Exact saved network"
+    property string securityToken: "sae"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 49
+    property var nmSettings: [secondaryProfileSetting]
   }
 
   QtObject {
@@ -156,8 +345,21 @@ ShellRoot {
     property bool managed: true
     property bool autoconnect: true
     property list<QtObject> networks: [
-      multiProfileNetwork, connectedMultiProfileNetwork
+      multiProfileNetwork, connectedMultiProfileNetwork, exactProfileNetwork,
+      mixedProfileNetwork, connectedExactProfileNetwork
     ]
+  }
+
+  QtObject {
+    id: secondarySequenceDevice
+    property string typeToken: "wifi"
+    property string name: "wlan-sequence-secondary"
+    property string address: "AA:BB:CC:DD:EE:88"
+    property bool connected: false
+    property string stateToken: "disconnected"
+    property bool managed: true
+    property bool autoconnect: true
+    property list<QtObject> networks: [secondaryProfileNetwork]
   }
 
   QtObject {
@@ -208,9 +410,15 @@ ShellRoot {
     property bool wifiEnabled: true
     property bool wifiHardwareEnabled: true
     property string connectivity: "full"
-    property list<QtObject> devices: [sequenceDevice]
+    property list<QtObject> devices: [
+      sequenceDevice, secondarySequenceDevice
+    ]
     property int pskCalls: 0
     property int disconnectCalls: 0
+    property int profileConnectCalls: 0
+    property int profileForgetCalls: 0
+    property var lastProfile: null
+    property var lastProfileNetwork: null
     function setWifiEnabled(_enabled) { return true }
     function connectNetwork(_target) { return true }
     function connectNetworkWithPsk(_target, _secret) {
@@ -221,6 +429,142 @@ ShellRoot {
       disconnectCalls++
       return true
     }
+    function connectProfile(network, profile) {
+      profileConnectCalls++
+      lastProfileNetwork = network
+      lastProfile = profile
+      return {
+        ok: true,
+        code: "accepted",
+        message: "fixture profile dispatch accepted"
+      }
+    }
+    function forgetProfile(profile) {
+      profileForgetCalls++
+      lastProfile = profile
+      return true
+    }
+  }
+
+  QtObject {
+    id: incompleteProfileBackend
+    property bool backendAvailable: true
+    property bool wifiEnabled: true
+    property bool wifiHardwareEnabled: true
+    property string connectivity: "full"
+    property list<QtObject> devices: [sequenceDevice]
+    function setWifiEnabled(_enabled) { return true }
+    function connectNetwork(_target) { return true }
+    function connectNetworkWithPsk(_target, _secret) { return true }
+    function disconnectNetwork(_target) { return true }
+  }
+
+  QtObject {
+    id: boundaryProfileSetting
+    property string uuid: "88888888-8888-4888-8888-888888888888"
+    property string profileName: "Boundary profile"
+  }
+
+  QtObject {
+    id: boundary4095Network
+    property string ssid: "Boundary 4095"
+    property string securityToken: "open"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 1
+    property var nmSettings: root.sparseProfiles(4095, null)
+  }
+
+  QtObject {
+    id: boundary4096Network
+    property string ssid: "Boundary 4096"
+    property string securityToken: "open"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 1
+    property var nmSettings: root.sparseProfiles(4096, null)
+  }
+
+  QtObject {
+    id: overflowNetwork
+    property string ssid: "Overflow 4097"
+    property string securityToken: "open"
+    property bool connected: false
+    property bool known: true
+    property string stateToken: "disconnected"
+    property bool stateChanging: false
+    property real signal: 1
+    property var nmSettings: root.sparseProfiles(
+      4097, boundaryProfileSetting)
+  }
+
+  QtObject {
+    id: boundary4095Device
+    property string typeToken: "wifi"
+    property string name: "wlan-boundary-4095"
+    property string address: "AA:BB:CC:DD:EE:95"
+    property bool connected: false
+    property string stateToken: "disconnected"
+    property bool managed: true
+    property bool autoconnect: true
+    property list<QtObject> networks: [boundary4095Network]
+  }
+
+  QtObject {
+    id: boundary4096Device
+    property string typeToken: "wifi"
+    property string name: "wlan-boundary-4096"
+    property string address: "AA:BB:CC:DD:EE:96"
+    property bool connected: false
+    property string stateToken: "disconnected"
+    property bool managed: true
+    property bool autoconnect: true
+    property list<QtObject> networks: [boundary4096Network]
+  }
+
+  QtObject {
+    id: overflowDevice
+    property string typeToken: "wifi"
+    property string name: "wlan-overflow-4097"
+    property string address: "AA:BB:CC:DD:EE:97"
+    property bool connected: false
+    property string stateToken: "disconnected"
+    property bool managed: true
+    property bool autoconnect: true
+    property list<QtObject> networks: [overflowNetwork]
+  }
+
+  QtObject {
+    id: boundary4095Backend
+    property bool backendAvailable: true
+    property bool wifiEnabled: true
+    property bool wifiHardwareEnabled: true
+    property string connectivity: "full"
+    property list<QtObject> devices: [boundary4095Device]
+  }
+
+  QtObject {
+    id: boundary4096Backend
+    property bool backendAvailable: true
+    property bool wifiEnabled: true
+    property bool wifiHardwareEnabled: true
+    property string connectivity: "full"
+    property list<QtObject> devices: [boundary4096Device]
+  }
+
+  QtObject {
+    id: overflowBackend
+    property bool backendAvailable: true
+    property bool wifiEnabled: true
+    property bool wifiHardwareEnabled: true
+    property string connectivity: "full"
+    property list<QtObject> devices: [overflowDevice]
+    property int radioCalls: 0
+    function setWifiEnabled(_enabled) { radioCalls++; return true }
   }
 
   QtObject {
@@ -313,6 +657,30 @@ ShellRoot {
   }
 
   Network.NetworkBackendAdapter {
+    id: incompleteProfileAdapter
+    active: true
+    backendOverride: incompleteProfileBackend
+  }
+
+  Network.NetworkBackendAdapter {
+    id: boundary4095Adapter
+    active: true
+    backendOverride: boundary4095Backend
+  }
+
+  Network.NetworkBackendAdapter {
+    id: boundary4096Adapter
+    active: true
+    backendOverride: boundary4096Backend
+  }
+
+  Network.NetworkBackendAdapter {
+    id: overflowAdapter
+    active: true
+    backendOverride: overflowBackend
+  }
+
+  Network.NetworkBackendAdapter {
     id: unavailableAdapter
     active: true
     backendOverride: unavailableBackend
@@ -372,7 +740,11 @@ ShellRoot {
         if (adapter.nativeGatewayLoaded || sequenceAdapter.nativeGatewayLoaded
             || inactiveNativeAdapter.nativeGatewayLoaded
             || unavailableAdapter.nativeGatewayLoaded
-            || incompleteAdapter.nativeGatewayLoaded)
+            || incompleteAdapter.nativeGatewayLoaded
+            || incompleteProfileAdapter.nativeGatewayLoaded
+            || boundary4095Adapter.nativeGatewayLoaded
+            || boundary4096Adapter.nativeGatewayLoaded
+            || overflowAdapter.nativeGatewayLoaded)
           return root.fail("fake or inactive adapter loaded the native gateway")
         if (!adapter.backendAvailable
             || adapter.deviceSnapshots.length !== 1
@@ -384,15 +756,32 @@ ShellRoot {
             || !availableEmptyAdapter.backendAvailable
             || availableEmptyAdapter.deviceSnapshots.length !== 0)
           return root.fail("unavailable and available-empty were conflated")
+        const overflowRadio = overflowAdapter.setWifiEnabled({
+          entityId: overflowAdapter.radioSnapshot.id,
+          generation: overflowAdapter.generation
+        }, false)
+        if (boundary4095Adapter.snapshotDegraded
+            || boundary4096Adapter.snapshotDegraded
+            || !overflowAdapter.snapshotDegraded
+            || overflowAdapter.backendSnapshot.degraded !== true
+            || overflowAdapter.networkSnapshots.length !== 0
+            || overflowAdapter.profileSnapshots.length !== 0
+            || overflowRadio.ok || overflowRadio.code !== "unavailable"
+            || overflowBackend.radioCalls !== 0)
+          return root.fail("oversized backend topology did not fail closed")
         if (!sequenceAdapter.backendAvailable
-            || sequenceAdapter.deviceSnapshots.length !== 1
-            || sequenceAdapter.networkSnapshots.length !== 2)
-          return root.fail("QML list sequences were discarded")
+            || sequenceAdapter.deviceSnapshots.length !== 2
+            || sequenceAdapter.networkSnapshots.length !== 6
+            || sequenceAdapter.profileSnapshots.length !== 8
+            || sequenceAdapter.snapshotDegraded)
+          return root.fail("QML list sequences or profile rows were discarded")
         const multiProfileRow = root.rowFor(
           sequenceAdapter, multiProfileNetwork.ssid)
         const connectedMultiProfileRow = root.rowFor(
           sequenceAdapter, connectedMultiProfileNetwork.ssid)
-        if (!multiProfileRow || !connectedMultiProfileRow
+        const mixedProfileRow = root.rowFor(
+          sequenceAdapter, mixedProfileNetwork.ssid)
+        if (!multiProfileRow || !connectedMultiProfileRow || !mixedProfileRow
             || !multiProfileRow.ambiguous || multiProfileRow.profileCount !== 2
             || multiProfileRow.canConnect || multiProfileRow.canConnectWithPsk
             || multiProfileRow.canDisconnect || multiProfileRow.canForget
@@ -401,7 +790,13 @@ ShellRoot {
             || connectedMultiProfileRow.canConnect
             || connectedMultiProfileRow.canConnectWithPsk
             || connectedMultiProfileRow.canDisconnect
-            || connectedMultiProfileRow.canForget)
+            || connectedMultiProfileRow.canForget
+            || !mixedProfileRow.ambiguous
+            || mixedProfileRow.profileCount !== 2
+            || mixedProfileRow.validProfileCount !== 1
+            || mixedProfileRow.canConnect
+            || mixedProfileRow.canConnectWithPsk
+            || mixedProfileRow.canDisconnect || mixedProfileRow.canForget)
           return root.fail("multi-profile SSID was published as actionable")
         const multiProfileResult = sequenceAdapter.connectNetworkWithPsk({
           entityId: multiProfileRow.id,
@@ -417,6 +812,61 @@ ShellRoot {
             || sequenceBackend.pskCalls !== 0
             || sequenceBackend.disconnectCalls !== 0)
           return root.fail("multi-profile action did not fail closed")
+
+        const primaryDeviceId = Model.deviceId("wifi",
+          sequenceDevice.address, sequenceDevice.name)
+        const secondaryDeviceId = Model.deviceId("wifi",
+          secondarySequenceDevice.address, secondarySequenceDevice.name)
+        const exactProfile = root.profileFor(sequenceAdapter,
+          primaryDeviceId, exactProfileSetting.uuid)
+        const secondaryProfile = root.profileFor(sequenceAdapter,
+          secondaryDeviceId, secondaryProfileSetting.uuid)
+        const connectedExactProfile = root.profileFor(sequenceAdapter,
+          primaryDeviceId, connectedExactProfileSetting.uuid)
+        if (!exactProfile || !secondaryProfile || !connectedExactProfile
+            || exactProfile.id === secondaryProfile.id
+            || exactProfile.uuid !== secondaryProfile.uuid
+            || !exactProfile.canConnect || !exactProfile.canForget
+            || exactProfile.ambiguous || secondaryProfile.ambiguous
+            || connectedExactProfile.canConnect
+            || !connectedExactProfile.canForget)
+          return root.fail("saved-profile identity is not device scoped")
+        for (let profileIndex = 0;
+            profileIndex < sequenceAdapter.profileSnapshots.length;
+            profileIndex++) {
+          const profileRow = sequenceAdapter.profileSnapshots[profileIndex]
+          if (profileRow.deviceId === primaryDeviceId
+              && (profileRow.uuid === savedSettingA.uuid
+                || profileRow.uuid === savedSettingB.uuid)
+              && (!profileRow.ambiguous || profileRow.canConnect
+                || profileRow.canForget))
+            return root.fail("duplicate exact profile was actionable")
+        }
+        const profileRequest = {
+          entityId: exactProfile.id,
+          generation: sequenceAdapter.generation
+        }
+        const profileConnect = sequenceAdapter.connectProfile(profileRequest)
+        const profileForget = sequenceAdapter.forgetProfile(profileRequest)
+        const connectedProfileConnect = sequenceAdapter.connectProfile({
+          entityId: connectedExactProfile.id,
+          generation: sequenceAdapter.generation
+        })
+        if (!profileConnect.ok || profileConnect.code !== "accepted"
+            || profileConnect.message
+              !== "fixture profile dispatch accepted"
+            || !profileForget.ok || profileForget.code !== "accepted"
+            || connectedProfileConnect.ok
+            || connectedProfileConnect.code !== "unsupported"
+            || sequenceBackend.profileConnectCalls !== 1
+            || sequenceBackend.profileForgetCalls !== 1
+            || sequenceBackend.lastProfile !== exactProfileSetting
+            || sequenceBackend.lastProfileNetwork !== exactProfileNetwork
+            || exactProfileSetting.readCalls !== 0
+            || savedSettingA.readCalls !== 0 || savedSettingB.readCalls !== 0)
+          return root.fail("exact saved-profile dispatch contract")
+        root.exactProfileId = exactProfile.id
+        root.profileReplacementGeneration = sequenceAdapter.generation
 
         const normalizedDevice = Model.deviceId(
           "wifi", "AA:BB:CC:DD:EE:01", "ignored")
@@ -437,12 +887,22 @@ ShellRoot {
           normalizedDevice, "Cafe\u0301", "open")
         const spacedId = Model.networkId(
           normalizedDevice, " Office ", "open")
+        const canonicalProfileId = Model.profileId(normalizedDevice,
+          "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")
         if (!delimiterId.startsWith("shibumi-network-v1:")
             || delimiterId === delimiterNeighbor || nfcId === nfdId
             || spacedId === Model.networkId(
               normalizedDevice, "Office", "open")
-            || Model.networkId(normalizedDevice, "", "open") !== "")
-          return root.fail("collision-safe exact SSID identity contract")
+            || Model.networkId(normalizedDevice, "", "open") !== ""
+            || Model.networkId(normalizedDevice,
+              "123456789012345678901234567890123", "open") !== ""
+            || canonicalProfileId !== Model.profileId(normalizedDevice,
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            || Model.profileId(normalizedDevice,
+              "{aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}") !== ""
+            || Model.profileId(normalizedDevice,
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa\n") !== "")
+          return root.fail("collision-safe exact identity contract")
         const expectedSecurity = [
           "wpa3-suite-b-192", "sae", "wpa2-eap", "wpa2-psk",
           "wpa-eap", "wpa-psk", "static-wep", "dynamic-wep",
@@ -469,9 +929,12 @@ ShellRoot {
           backend: adapter.backendSnapshot,
           radio: adapter.radioSnapshot,
           devices: adapter.deviceSnapshots,
-          networks: adapter.networkSnapshots
+          networks: adapter.networkSnapshots,
+          profiles: sequenceAdapter.profileSnapshots
         })
-        if (!serialized || serialized.indexOf("correct horse") >= 0)
+        if (!serialized || serialized.indexOf("correct horse") >= 0
+            || serialized.indexOf("must-not-leak") >= 0
+            || serialized.indexOf("/private/certificate") >= 0)
           return root.fail("primitive snapshots are not safely serializable")
 
         const personalRow = root.rowFor(adapter, personal.ssid)
@@ -482,6 +945,7 @@ ShellRoot {
         root.personalId = personalRow.id
         root.signalGeneration = adapter.generation
         personal.signal = 74
+        exactProfileNetwork.nmSettings = [replacementProfileSetting]
         root.phase = 1
         root.ticks = 0
         return
@@ -493,6 +957,32 @@ ShellRoot {
         if (!personalRow || personalRow.signal !== 74
             || adapter.generation !== root.signalGeneration)
           return root.fail("signal update invalidated the action generation")
+        const replacementProfile = root.profileFor(sequenceAdapter,
+          Model.deviceId("wifi", sequenceDevice.address,
+            sequenceDevice.name), replacementProfileSetting.uuid)
+        const staleProfile = sequenceAdapter.connectProfile({
+          entityId: root.exactProfileId,
+          generation: root.profileReplacementGeneration
+        })
+        if (!replacementProfile
+            || sequenceAdapter.generation
+              <= root.profileReplacementGeneration
+            || staleProfile.ok
+            || staleProfile.code !== "stale-generation")
+          return root.fail("profile replacement did not advance generation")
+        const incompleteProfile = root.profileFor(incompleteProfileAdapter,
+          Model.deviceId("wifi", sequenceDevice.address,
+            sequenceDevice.name), replacementProfileSetting.uuid)
+        if (!incompleteProfile)
+          return root.fail("incomplete fake profile snapshot disappeared")
+        const unsupportedProfile = incompleteProfileAdapter.connectProfile({
+          entityId: incompleteProfile.id,
+          generation: incompleteProfileAdapter.generation
+        })
+        if (incompleteProfile.canConnect || incompleteProfile.canForget
+            || unsupportedProfile.ok
+            || unsupportedProfile.code !== "unsupported")
+          return root.fail("missing fake profile delegate fell through")
 
         const invalidRequest = adapter.connectNetworkWithPsk({
           entityId: personalRow.id,

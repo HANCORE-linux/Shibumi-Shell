@@ -12,6 +12,8 @@ var ConnectionStateTokens = [
   "unknown", "connecting", "connected", "disconnecting", "disconnected"
 ]
 var ConnectivityTokens = ["unknown", "none", "portal", "limited", "full"]
+var MaxBackendObjects = 8192
+var MaxSnapshotRows = 4096
 
 function tupleId(kind, fields) {
   var values = [String(kind || "")]
@@ -84,6 +86,18 @@ function securityToken(value) {
     && Math.floor(value) === value ? SecurityTokens[value] : "unknown"
 }
 
+function validSsid(value) {
+  return typeof value === "string" && utf8Length(value) >= 1
+    && utf8Length(value) <= 32 && !/[\u0000\r\n]/.test(value)
+}
+
+function canonicalUuid(value) {
+  if (typeof value !== "string"
+      || !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value))
+    return ""
+  return value.toLowerCase()
+}
+
 function deviceId(typeValue, addressValue, nameValue) {
   var type = deviceTypeToken(typeValue)
   if (type !== "wifi" && type !== "wired") return ""
@@ -96,8 +110,20 @@ function deviceId(typeValue, addressValue, nameValue) {
 function networkId(deviceEntityId, ssidValue, securityValue) {
   var device = typeof deviceEntityId === "string" ? deviceEntityId : ""
   var ssid = typeof ssidValue === "string" ? ssidValue : ""
-  if (device.indexOf(IdPrefix) !== 0 || ssid.length === 0) return ""
+  if (device.indexOf(IdPrefix) !== 0 || !validSsid(ssid)) return ""
   return tupleId("network", [device, ssid, securityToken(securityValue)])
+}
+
+function profileId(deviceEntityId, uuidValue) {
+  var device = typeof deviceEntityId === "string" ? deviceEntityId : ""
+  var uuid = canonicalUuid(uuidValue)
+  if (device.indexOf(IdPrefix) !== 0 || uuid === "") return ""
+  return tupleId("profile", [device, uuid])
+}
+
+function boundedDisplayName(value) {
+  return typeof value === "string" && value.length <= 256
+    && !/[\u0000\r\n]/.test(value) ? value : ""
 }
 
 function pskKind(token) {
@@ -159,10 +185,12 @@ function sortedTopologyRows(rows, fields) {
   return result
 }
 
-function topologyFingerprint(backendAvailable, radio, devices, networks) {
+function topologyFingerprint(backendAvailable, degraded, radio, devices,
+    networks, profiles) {
   return JSON.stringify({
     schemaVersion: SchemaVersion,
     backendAvailable: backendAvailable === true,
+    degraded: degraded === true,
     radio: {
       id: radio && radio.id || "",
       available: radio && radio.available === true,
@@ -175,8 +203,14 @@ function topologyFingerprint(backendAvailable, radio, devices, networks) {
     ]),
     networks: sortedTopologyRows(networks, [
       "id", "deviceId", "ssid", "security", "connected", "known",
-      "state", "stateChanging", "profileCount", "canConnect",
-      "canConnectWithPsk", "canDisconnect", "canForget", "ambiguous"
+      "state", "stateChanging", "profileCount", "validProfileCount",
+      "canConnect", "canConnectWithPsk", "canDisconnect", "canForget",
+      "ambiguous"
+    ]),
+    profiles: sortedTopologyRows(profiles, [
+      "id", "uuid", "deviceId", "networkId", "ssid", "name",
+      "security", "lastSuccessful", "canConnect", "canForget",
+      "ambiguous"
     ])
   })
 }
