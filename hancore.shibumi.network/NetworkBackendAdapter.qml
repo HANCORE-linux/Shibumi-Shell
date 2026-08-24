@@ -175,95 +175,116 @@ Item {
   }
 
   function setWifiEnabled(request, enabled) {
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
     if (typeof enabled !== "boolean")
       return result(false, "invalid", "Wi-Fi state must be boolean.",
-        request && request.entityId, root.generation)
-    const error = implementation.validateRequest(request)
+        safeRequest.entityId, root.generation)
+    const error = implementation.validateRequest(safeRequest)
     if (error) return error
-    if (request.entityId !== Model.radioId())
+    if (safeRequest.entityId !== Model.radioId())
       return result(false, "stale-id", "Wi-Fi radio identity is stale.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     if (!root.radioSnapshot.available)
       return result(false, "unavailable", "Wi-Fi radio is unavailable.",
-        request.entityId, root.generation)
-    return implementation.dispatchRadio(enabled, request.entityId)
+        safeRequest.entityId, root.generation)
+    return implementation.dispatchRadio(enabled, safeRequest.entityId)
   }
 
   function connectNetwork(request) {
-    const context = implementation.networkActionContext(request)
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
+    const context = implementation.networkActionContext(safeRequest)
     if (context.error) return context.error
     const row = context.row
     if (row.connected)
       return result(false, "invalid", "Network is already connected.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     if (!row.canConnect)
       return result(false, "unsupported",
         "This network cannot be connected without a dedicated credential path.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     return implementation.dispatchNetwork(
-      "connect", context.target, "", request.entityId)
+      "connect", context.target, "", safeRequest.entityId)
   }
 
   function connectNetworkWithPsk(request, passphrase) {
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
     if (typeof passphrase !== "string" || passphrase.length > 64
         || /[\u0000\r\n]/.test(passphrase))
       return result(false, "invalid", "Passphrase is malformed.",
-        request && request.entityId, root.generation)
-    const context = implementation.networkActionContext(request)
+        safeRequest.entityId, root.generation)
+    const context = implementation.networkActionContext(safeRequest)
     if (context.error) return context.error
     if (!Model.validPsk(passphrase, context.row.security))
       return result(false, "invalid", "Passphrase is invalid for this network.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     if (!context.row.canConnectWithPsk)
       return result(false, "unsupported",
         "This network does not support the native PSK action.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     return implementation.dispatchNetwork(
-      "connectWithPsk", context.target, passphrase, request.entityId)
+      "connectWithPsk", context.target, passphrase, safeRequest.entityId)
   }
 
   function disconnectNetwork(request) {
-    const context = implementation.networkActionContext(request)
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
+    const context = implementation.networkActionContext(safeRequest)
     if (context.error) return context.error
     if (!context.row.canDisconnect)
       return result(false, "unsupported", "Network is not disconnectable.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     return implementation.dispatchNetwork(
-      "disconnect", context.target, "", request.entityId)
+      "disconnect", context.target, "", safeRequest.entityId)
   }
 
   function forgetNetwork(request) {
-    const context = implementation.networkActionContext(request)
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
+    const context = implementation.networkActionContext(safeRequest)
     if (context.error) return context.error
     // Quickshell 0.3.0 aggregates every saved setting for an SSID. Calling
     // WifiNetwork.forget() can therefore delete unrelated personal and
     // enterprise profiles. Only the exact profile path below may forget.
     return result(false, "unsupported",
       "Exact saved-profile identity is required before forgetting a network.",
-      request.entityId, root.generation)
+      safeRequest.entityId, root.generation)
   }
 
   function connectProfile(request) {
-    const context = implementation.profileActionContext(request)
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
+    const context = implementation.profileActionContext(safeRequest)
     if (context.error) return context.error
     if (!context.row.canConnect || context.network.connected === true
         || context.network.stateChanging === true)
       return result(false, "unsupported",
         "This saved profile is not connectable on its current device.",
-        request.entityId, root.generation)
+        safeRequest.entityId, root.generation)
     return implementation.dispatchProfile("connect", context.network,
-      context.profile, request.entityId)
+      context.profile, safeRequest.entityId)
   }
 
   function forgetProfile(request) {
-    const context = implementation.profileActionContext(request)
+    const parsed = implementation.requestData(request)
+    if (parsed.error) return parsed.error
+    const safeRequest = parsed.request
+    const context = implementation.profileActionContext(safeRequest)
     if (context.error) return context.error
     if (!context.row.canForget)
       return result(false, "unsupported",
-        "This saved profile cannot be forgotten.", request.entityId,
+        "This saved profile cannot be forgotten.", safeRequest.entityId,
         root.generation)
     return implementation.dispatchProfile("forget", context.network,
-      context.profile, request.entityId)
+      context.profile, safeRequest.entityId)
   }
 
   Connections {
@@ -954,11 +975,43 @@ Item {
         && value >= 0 && Math.floor(value) === value
     }
 
+    function requestData(request) {
+      let entityId = ""
+      let generation = -1
+      try {
+        if (!request || typeof request !== "object" || Array.isArray(request))
+          throw new Error("invalid request type")
+        const keys = Reflect.ownKeys(request)
+        if (keys.length !== 2 || keys.indexOf("entityId") < 0
+            || keys.indexOf("generation") < 0)
+          throw new Error("invalid request schema")
+        const entityDescriptor = Object.getOwnPropertyDescriptor(
+          request, "entityId")
+        const generationDescriptor = Object.getOwnPropertyDescriptor(
+          request, "generation")
+        entityId = "value" in entityDescriptor
+          ? entityDescriptor.value : entityDescriptor.get.call(request)
+        generation = "value" in generationDescriptor
+          ? generationDescriptor.value : generationDescriptor.get.call(request)
+      } catch (error) {
+        return { request: { entityId: "", generation: -1 },
+          error: root.result(false, "invalid",
+            "Action request is malformed.", "", root.generation) }
+      }
+      const size = typeof entityId === "string"
+        && entityId.length <= 4096 ? Model.utf8Length(entityId) : -1
+      if (entityId === "" || size < 1 || size > 4096
+          || !validGeneration(generation))
+        return { request: { entityId: "", generation: -1 },
+          error: root.result(false, "invalid",
+            "Action request is malformed.", "", root.generation) }
+      return { request: { entityId: entityId, generation: generation },
+        error: null }
+    }
+
     function validateRequest(request) {
-      const entityId = request && typeof request.entityId === "string"
-        ? request.entityId : ""
-      if (!request || typeof request !== "object" || Array.isArray(request)
-          || entityId === "" || !validGeneration(request.generation))
+      const entityId = request.entityId
+      if (entityId === "" || !validGeneration(request.generation))
         return root.result(false, "invalid", "Action request is malformed.",
           entityId, root.generation)
       if (!root.backendAvailable)
@@ -1147,29 +1200,31 @@ Item {
     }
 
     function delegateResult(value, entityId) {
-      try {
-        if (value && typeof value === "object"
-            && typeof value.ok === "boolean"
-            && allowedResultCode(value.code)) {
-          const code = value.code
-          const messageValid = value.message === undefined
-            || typeof value.message === "string"
-          const statusConsistent = value.ok === (code === "accepted")
-          const generationValid = value.generation === undefined
-            || validGeneration(value.generation)
-          if (messageValid && statusConsistent && generationValid)
-            return root.result(value.ok, code,
-              value.message === undefined ? "" : value.message,
-              entityId, value.generation === undefined
-                ? root.generation : value.generation)
-        }
-      } catch (error) {}
       if (value === true)
         return root.result(true, "accepted", "", entityId, root.generation)
-      if (value && typeof value === "object")
+      if (value && typeof value === "object") {
+        try {
+          const ok = value.ok
+          const code = value.code
+          const message = value.message
+          const generation = value.generation
+          const messageValid = message === undefined
+            || typeof message === "string"
+          const statusConsistent = typeof ok === "boolean"
+            && ok === (code === "accepted")
+          const generationValid = generation === undefined
+            || validGeneration(generation)
+          if (allowedResultCode(code) && messageValid
+              && statusConsistent && generationValid)
+            return root.result(ok, code,
+              message === undefined ? "" : message,
+              entityId, generation === undefined
+                ? root.generation : generation)
+        } catch (error) {}
         return root.result(false, "invalid",
           "Backend returned a malformed action result.", entityId,
           root.generation)
+      }
       return root.result(false, "unavailable",
         "Backend declined the network action.", entityId, root.generation)
     }

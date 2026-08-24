@@ -381,6 +381,33 @@ for reachability_case in main model lifecycle destruction prestart stream route-
   fi
 done
 
+for action_case in coordinator model lifecycle destruction shutdown-completion generation-replay throwing-result profile-name-boundary; do
+  action_test="$repo_root/tests/network-action-${action_case}-regression.qml"
+  install -m 0644 "$action_test" "$tmpdir/shell.qml"
+  mkdir -p "$tmpdir/action-${action_case}-runtime"
+  chmod 700 "$tmpdir/action-${action_case}-runtime"
+  set +e
+  action_output=$(timeout 15 env \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/action-${action_case}-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  action_rc=$?
+  set -e
+  printf '%s\n' "$action_output"
+  [[ $action_rc -eq 0 ]] \
+    || fail "network action $action_case smoke exited $action_rc"
+  action_marker="network action ${action_case//-/ } regression passed"
+  grep -F "$action_marker" <<<"$action_output" >/dev/null \
+    || fail "network action $action_case success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error' \
+      <<<"$action_output"; then
+    fail "network action $action_case produced a QML runtime error"
+  fi
+done
+
 install -m 0644 \
   "$repo_root/tests/network-native-scanner-lease-regression.qml" \
   "$tmpdir/shell.qml"
@@ -468,6 +495,9 @@ reachability="$repo_root/hancore.shibumi.network/NetworkReachability.qml"
 reachability_model="$repo_root/hancore.shibumi.network/NetworkReachabilityModel.js"
 reachability_authority="$repo_root/hancore.shibumi.network/NetworkReachabilityAuthority.js"
 reachability_helper="$repo_root/hancore.shibumi.network/scripts/network-reachability-probe"
+action_coordinator="$repo_root/hancore.shibumi.network/NetworkActionCoordinator.qml"
+action_model="$repo_root/hancore.shibumi.network/NetworkActionModel.js"
+action_authority="$repo_root/hancore.shibumi.network/NetworkActionAuthority.js"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
@@ -478,9 +508,11 @@ reachability_helper="$repo_root/hancore.shibumi.network/scripts/network-reachabi
     && -f $telemetry && -f $telemetry_model \
     && -f $telemetry_authority && -x $telemetry_helper \
     && -f $reachability && -f $reachability_model \
-    && -f $reachability_authority && -x $reachability_helper ]] \
+    && -f $reachability_authority && -x $reachability_helper \
+    && -f $action_coordinator && -f $action_model \
+    && -f $action_authority ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkActionCoordinator' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -524,8 +556,14 @@ rg -Fq 'if (resolved.count > 1 || resolved.row && resolved.row.ambiguous)' \
   || fail "duplicate native Network identities do not fail closed"
 rg -Fq 'if (request.generation !== root.generation)' "$native_adapter" \
   || fail "native Network actions do not enforce topology generations"
+rg -Fq 'const keys = Reflect.ownKeys(request)' "$native_adapter" \
+  || fail "native Network actions repeatedly evaluate untrusted request getters"
+rg -Fq 'const safeRequest = parsed.request' "$native_adapter" \
+  || fail "native Network actions do not dispatch from primitive request copies"
 rg -Fq 'value = gateway.connectProfile(network, profile)' "$native_adapter" \
   || fail "saved-profile connect bypasses the private native gateway"
+rg -Fq 'const ok = value.ok' "$native_adapter" \
+  || fail "native Network adapter repeatedly evaluates delegate result getters"
 rg -Fq 'value = gateway.forgetProfile(profile)' "$native_adapter" \
   || fail "exact saved-profile removal bypasses the private native gateway"
 rg -Fq 'network.connectWithSettings(profile)' "$native_gateway" \
@@ -660,6 +698,34 @@ rg -Fq 'signal.SIGKILL' "$reachability_helper" \
 if rg -q 'GetSecrets|nmcli|omarchy|shell=True|/bin/(sh|bash)' \
     "$reachability_helper"; then
   fail "network reachability crosses its fixed process boundary"
+fi
+rg -Fq 'currentClaim = token' "$action_authority" \
+  || fail "network action completion authority is not process-wide"
+rg -Fq 'permanentlyBlocked = true' "$action_authority" \
+  || fail "uncertain action destruction does not block fail-closed"
+rg -Fq 'actionTimeout.restart()' "$action_coordinator" \
+  || fail "accepted network actions have no completion timeout"
+rg -Fq 'deferredReconcile.restart()' "$action_coordinator" \
+  || fail "network action completion can miss settled snapshot bindings"
+rg -Fq 'result.generation !== currentGeneration' "$action_coordinator" \
+  || fail "network action dispatch acceptance is not generation-bound"
+rg -Fq 'if (!result.ok) {' "$action_coordinator" \
+  || fail "negative post-dispatch results can release the action barrier"
+rg -Fq 'dispatchInProgress = true' "$action_coordinator" \
+  || fail "network action delegates can re-enter before the busy barrier"
+rg -Fq 'const keys = Reflect.ownKeys(request)' "$action_coordinator" \
+  || fail "network action coordinator accepts hidden request fields"
+rg -Fq '"Network dispatch outcome is uncertain.", id, safeRequest' \
+  "$action_coordinator" \
+  || fail "network action state can expose raw backend messages"
+rg -Fq 'probe.sampleMonotonicMs <= previous.sampleMonotonicMs' \
+  "$reachability_model" \
+  || fail "network reachability accepts replayed samples"
+rg -Fq 'view.generation > pending.dispatchGeneration' "$action_model" \
+  || fail "destructive action completion accepts its dispatch snapshot"
+if rg -q 'property [^:]*\b(secret|passphrase|password)\b' \
+    "$action_coordinator"; then
+  fail "network action coordinator retains credential state"
 fi
 rg -Fq 'currentClaim = token' "$scanner_authority" \
   || fail "scanner mutation authority is not process-wide"

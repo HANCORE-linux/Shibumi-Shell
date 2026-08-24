@@ -623,6 +623,57 @@ ShellRoot {
     property var connectivity: ["full"]
     property var devices: [wifiDevice]
     property int resultMode: 0
+    property int okReads: 0
+    property int codeReads: 0
+    property int messageReads: 0
+    property int generationReads: 0
+    function resetReads() {
+      okReads = 0
+      codeReads = 0
+      messageReads = 0
+      generationReads = 0
+    }
+    function accessorResult(throwImmediately) {
+      resetReads()
+      const value = {}
+      Object.defineProperty(value, "ok", {
+        enumerable: true,
+        get: function() {
+          malformedResultBackend.okReads++
+          if (throwImmediately || malformedResultBackend.okReads > 1)
+            throw new Error("fixture ok getter failure")
+          return true
+        }
+      })
+      Object.defineProperty(value, "code", {
+        enumerable: true,
+        get: function() {
+          malformedResultBackend.codeReads++
+          if (malformedResultBackend.codeReads > 1)
+            throw new Error("fixture code getter failure")
+          return "accepted"
+        }
+      })
+      Object.defineProperty(value, "message", {
+        enumerable: true,
+        get: function() {
+          malformedResultBackend.messageReads++
+          if (malformedResultBackend.messageReads > 1)
+            throw new Error("fixture message getter failure")
+          return ""
+        }
+      })
+      Object.defineProperty(value, "generation", {
+        enumerable: true,
+        get: function() {
+          malformedResultBackend.generationReads++
+          if (malformedResultBackend.generationReads > 1)
+            throw new Error("fixture generation getter failure")
+          return malformedResultAdapter.generation
+        }
+      })
+      return value
+    }
     function setWifiEnabled(_enabled) { return true }
     function connectNetwork(_target) {
       if (resultMode === 0) {
@@ -633,12 +684,13 @@ ShellRoot {
           generation: -0.5
         }
       }
-      return {
+      if (resultMode === 1) return {
         ok: true,
         code: ["accepted"],
         message: "array code",
         generation: 0
       }
+      return accessorResult(resultMode === 3)
     }
     function connectNetworkWithPsk(_target, _secret) { return true }
     function disconnectNetwork(_target) { return true }
@@ -1003,15 +1055,63 @@ ShellRoot {
         }, "short")
         if (invalidRequest.ok || invalidRequest.code !== "invalid")
           return root.fail("malformed PSK did not fail closed")
-        const accepted = adapter.connectNetworkWithPsk({
+        let throwingEntityReads = 0
+        const throwingRequest = {}
+        Object.defineProperty(throwingRequest, "entityId", {
+          enumerable: true,
+          get: function() {
+            throwingEntityReads++
+            throw new Error("fixture entity getter failure")
+          }
+        })
+        Object.defineProperty(throwingRequest, "generation", {
+          enumerable: true,
+          get: function() { return adapter.generation }
+        })
+        const throwingResult = adapter.connectNetworkWithPsk(
+          throwingRequest, "correct horse")
+        const extraPropertyResult = adapter.connectNetworkWithPsk({
           entityId: personalRow.id,
-          generation: adapter.generation
+          generation: adapter.generation,
+          extra: true
         }, "correct horse")
+        if (throwingResult.ok || throwingResult.code !== "invalid"
+            || extraPropertyResult.ok || extraPropertyResult.code !== "invalid"
+            || throwingEntityReads !== 1 || fakeBackend.pskCalls !== 0)
+          return root.fail("untrusted direct adapter request did not fail closed")
+
+        let entityReads = 0
+        let generationReads = 0
+        const statefulRequest = {}
+        Object.defineProperty(statefulRequest, "entityId", {
+          enumerable: true,
+          get: function() {
+            entityReads++
+            if (entityReads > 1) return root.rowFor(adapter, openNetwork.ssid).id
+            return personalRow.id
+          }
+        })
+        Object.defineProperty(statefulRequest, "generation", {
+          enumerable: true,
+          get: function() {
+            generationReads++
+            if (generationReads > 1)
+              throw new Error("second generation read")
+            return adapter.generation
+          }
+        })
+        const accepted = adapter.connectNetworkWithPsk(
+          statefulRequest, "correct horse")
         if (!accepted.ok || accepted.code !== "accepted"
+            || entityReads !== 1 || generationReads !== 1
             || fakeBackend.pskCalls !== 1
             || fakeBackend.lastTarget !== personal
             || fakeBackend.lastSecret !== "correct horse")
-          return root.fail("PSK dispatch did not resolve the current object")
+          return root.fail("PSK dispatch did not resolve one parsed identity: "
+            + JSON.stringify({ accepted: accepted, entityReads: entityReads,
+              generationReads: generationReads, calls: fakeBackend.pskCalls,
+              targetPersonal: fakeBackend.lastTarget === personal,
+              secret: fakeBackend.lastSecret }))
         const forgetResult = adapter.forgetNetwork({
           entityId: personalRow.id,
           generation: adapter.generation
@@ -1058,11 +1158,31 @@ ShellRoot {
         malformedResultBackend.resultMode = 1
         const arrayCodeResult = malformedResultAdapter.connectNetwork(
           malformedRequest)
+        malformedResultBackend.resultMode = 2
+        const accessorResult = malformedResultAdapter.connectNetwork(
+          malformedRequest)
+        const accessorReads = [
+          malformedResultBackend.okReads,
+          malformedResultBackend.codeReads,
+          malformedResultBackend.messageReads,
+          malformedResultBackend.generationReads
+        ]
+        malformedResultBackend.resultMode = 3
+        const throwingAccessorResult = malformedResultAdapter.connectNetwork(
+          malformedRequest)
         if (malformedResultAdapter.connectivity !== "unknown"
             || malformedResult.ok || malformedResult.code !== "invalid"
             || malformedResult.generation
               !== malformedResultAdapter.generation
-            || arrayCodeResult.ok || arrayCodeResult.code !== "invalid")
+            || arrayCodeResult.ok || arrayCodeResult.code !== "invalid"
+            || !accessorResult.ok || accessorResult.code !== "accepted"
+            || accessorReads.some(function(reads) { return reads !== 1 })
+            || throwingAccessorResult.ok
+            || throwingAccessorResult.code !== "invalid"
+            || malformedResultBackend.okReads !== 1
+            || malformedResultBackend.codeReads !== 0
+            || malformedResultBackend.messageReads !== 0
+            || malformedResultBackend.generationReads !== 0)
           return root.fail("malformed typed result did not fail closed")
 
         root.replacementRequest = {

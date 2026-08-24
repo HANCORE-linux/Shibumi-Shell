@@ -132,8 +132,10 @@ function connectionId(uuidValue) {
 }
 
 function boundedDisplayName(value) {
-  return typeof value === "string" && value.length <= 256
-    && !/[\u0000\r\n]/.test(value) ? value : ""
+  if (typeof value !== "string" || value.length > 256
+      || /[\u0000-\u001f\u007f-\u009f]/.test(value)) return ""
+  var size = utf8Length(value)
+  return size >= 0 && size <= 256 ? value : ""
 }
 
 function pskKind(token) {
