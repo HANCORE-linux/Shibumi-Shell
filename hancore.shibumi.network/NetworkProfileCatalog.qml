@@ -39,6 +39,8 @@ Item {
   readonly property string errorCode: implementation.lastError
   readonly property var profileSnapshots: implementation.publicRows()
   readonly property bool workerRunning: catalogProcess.running
+  readonly property bool workerOutputComplete:
+    implementation.runState === "complete"
   readonly property bool available: root.active && root.authorized
     && root.nativeServiceAvailable && root.phase === "live"
   readonly property var catalogSnapshot: ({

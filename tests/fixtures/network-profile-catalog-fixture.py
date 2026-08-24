@@ -115,8 +115,8 @@ def main() -> int:
         malformed(invocation)
         return 0
     if mode == "slow":
-        time.sleep(30)
         normal(invocation)
+        time.sleep(30)
         return 0
     if mode == "failed":
         return 2

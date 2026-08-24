@@ -1,0 +1,594 @@
+#!/usr/bin/python3
+"""Emit one bounded primitive NetworkManager connection telemetry snapshot."""
+
+from __future__ import annotations
+
+import ctypes
+import ipaddress
+import json
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import time
+import unicodedata
+from typing import Any
+
+BUSCTL = "/usr/bin/busctl"
+DBUS_SERVICE = "org.freedesktop.DBus"
+DBUS_PATH = "/org/freedesktop/DBus"
+DBUS_INTERFACE = "org.freedesktop.DBus"
+SERVICE = "org.freedesktop.NetworkManager"
+ROOT_PATH = "/org/freedesktop/NetworkManager"
+ROOT_INTERFACE = "org.freedesktop.NetworkManager"
+ACTIVE_INTERFACE = "org.freedesktop.NetworkManager.Connection.Active"
+DEVICE_INTERFACE = "org.freedesktop.NetworkManager.Device"
+WIRELESS_INTERFACE = "org.freedesktop.NetworkManager.Device.Wireless"
+WIRED_INTERFACE = "org.freedesktop.NetworkManager.Device.Wired"
+ACCESS_POINT_INTERFACE = "org.freedesktop.NetworkManager.AccessPoint"
+IP4_INTERFACE = "org.freedesktop.NetworkManager.IP4Config"
+IP6_INTERFACE = "org.freedesktop.NetworkManager.IP6Config"
+ACTIVE_PATH = re.compile(
+    r"^/org/freedesktop/NetworkManager/ActiveConnection/[0-9]+$"
+)
+DEVICE_PATH = re.compile(r"^/org/freedesktop/NetworkManager/Devices/[0-9]+$")
+IP4_PATH = re.compile(r"^/org/freedesktop/NetworkManager/IP4Config/[0-9]+$")
+IP6_PATH = re.compile(r"^/org/freedesktop/NetworkManager/IP6Config/[0-9]+$")
+ACCESS_POINT_PATH = re.compile(
+    r"^/org/freedesktop/NetworkManager/AccessPoint/[0-9]+$"
+)
+UNIQUE_OWNER = re.compile(r"^:[0-9]+\.[0-9]+$")
+UUID_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+INTERFACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
+HARDWARE_ADDRESS = re.compile(
+    r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$"
+)
+MAX_PROPERTY_BYTES = 64 * 1024
+MAX_PROTOCOL_LINE = 16384
+MAX_RUNTIME_SECONDS = 10.0
+MAX_SAFE_INTEGER = 9007199254740991
+MAX_ADDRESSES = 32
+MAX_DNS_SERVERS = 32
+MAX_DNS_DOMAINS = 64
+PR_SET_PDEATHSIG = 1
+
+
+class TelemetryError(RuntimeError):
+    pass
+
+
+class DuplicateKeyError(TelemetryError):
+    pass
+
+
+def no_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateKeyError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def parse_json(value: bytes) -> Any:
+    try:
+        text = value.decode("utf-8", errors="strict").strip()
+        return json.loads(text, object_pairs_hook=no_duplicate_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise TelemetryError("invalid busctl JSON") from error
+
+
+def arm_parent_death(parent_pid: int) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+def terminate(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=0.5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=0.5)
+
+
+def bounded_command(arguments: list[str], limit: int, deadline: float) -> bytes:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TelemetryError("telemetry deadline exceeded")
+    parent_pid = os.getpid()
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=lambda: arm_parent_death(parent_pid),
+        )
+    except OSError as error:
+        raise TelemetryError("busctl unavailable") from error
+    assert process.stdout is not None
+    output = bytearray()
+    descriptor = process.stdout.fileno()
+    os.set_blocking(descriptor, False)
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TelemetryError("telemetry deadline exceeded")
+            ready, _, _ = select.select([descriptor], [], [], min(remaining, 0.25))
+            if ready:
+                chunk = os.read(descriptor, 65536)
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > limit:
+                    raise TelemetryError("busctl response exceeded bound")
+            elif process.poll() is not None:
+                chunk = os.read(descriptor, 65536)
+                if chunk:
+                    output.extend(chunk)
+                    if len(output) > limit:
+                        raise TelemetryError("busctl response exceeded bound")
+                    continue
+                break
+        code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
+        if code != 0:
+            raise TelemetryError("busctl request failed")
+        return bytes(output)
+    finally:
+        terminate(process)
+
+
+def exact_object(value: Any, keys: set[str]) -> bool:
+    return isinstance(value, dict) and set(value) == keys
+
+
+def typed_data(value: Any, expected_type: str) -> Any:
+    if not exact_object(value, {"type", "data"}) \
+            or value["type"] != expected_type:
+        raise TelemetryError("D-Bus property type mismatch")
+    return value["data"]
+
+
+def get_properties(
+    path: str, interface: str, properties: list[tuple[str, str]],
+    deadline: float, destination: str = SERVICE
+) -> dict[str, Any]:
+    raw = bounded_command([
+        BUSCTL, "--system", "--json=short", "get-property", destination,
+        path, interface, *[name for name, _type in properties]
+    ], MAX_PROPERTY_BYTES, deadline)
+    lines = raw.splitlines()
+    if len(lines) != len(properties):
+        raise TelemetryError("invalid property response count")
+    result: dict[str, Any] = {}
+    for index, (name, expected_type) in enumerate(properties):
+        result[name] = typed_data(parse_json(lines[index]), expected_type)
+    return result
+
+
+def get_name_owner(deadline: float) -> str:
+    value = parse_json(bounded_command([
+        BUSCTL, "--system", "--json=short", "call", DBUS_SERVICE,
+        DBUS_PATH, DBUS_INTERFACE, "GetNameOwner", "s", SERVICE
+    ], 4096, deadline))
+    data = typed_data(value, "s")
+    if not isinstance(data, list) or len(data) != 1 \
+            or not isinstance(data[0], str) \
+            or not UNIQUE_OWNER.fullmatch(data[0]):
+        raise TelemetryError("invalid NetworkManager owner")
+    return data[0]
+
+
+def bounded_text(value: Any, maximum: int, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise TelemetryError("invalid text property")
+    encoded = value.encode("utf-8")
+    if (not allow_empty and not encoded) or len(encoded) > maximum \
+            or any(unicodedata.category(character) == "Cc" for character in value):
+        raise TelemetryError("text property exceeded bound")
+    return value
+
+
+def canonical_uuid(value: Any) -> str:
+    if not isinstance(value, str) or not UUID_PATTERN.fullmatch(value):
+        raise TelemetryError("invalid active connection UUID")
+    return value.lower()
+
+
+def interface_name(value: Any) -> str:
+    if not isinstance(value, str) or not INTERFACE_PATTERN.fullmatch(value):
+        raise TelemetryError("invalid interface name")
+    return value
+
+
+def hardware_address(value: Any) -> str:
+    if not isinstance(value, str) or not HARDWARE_ADDRESS.fullmatch(value):
+        raise TelemetryError("invalid hardware address")
+    normalized = value.upper()
+    if normalized in {"00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"}:
+        raise TelemetryError("invalid hardware address")
+    return normalized
+
+
+def safe_integer(value: Any, maximum: int = MAX_SAFE_INTEGER) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) \
+            or value < 0 or value > maximum:
+        raise TelemetryError("integer property exceeded bound")
+    return value
+
+
+def variant(group: Any, key: str, expected_type: str) -> Any:
+    if not isinstance(group, dict) or key not in group:
+        raise TelemetryError("required variant missing")
+    return typed_data(group[key], expected_type)
+
+
+def ip_value(value: Any, family: int) -> str:
+    if not isinstance(value, str):
+        raise TelemetryError("invalid IP address")
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError as error:
+        raise TelemetryError("invalid IP address") from error
+    if address.version != family:
+        raise TelemetryError("IP address family mismatch")
+    return str(address)
+
+
+def parse_addresses(value: Any, family: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > MAX_ADDRESSES:
+        raise TelemetryError("address list exceeded bound")
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    maximum_prefix = 32 if family == 4 else 128
+    for group in value:
+        address = ip_value(variant(group, "address", "s"), family)
+        prefix = safe_integer(variant(group, "prefix", "u"), maximum_prefix)
+        identity = (address, prefix)
+        if identity in seen:
+            raise TelemetryError("duplicate IP address")
+        seen.add(identity)
+        rows.append({
+            "family": "ipv4" if family == 4 else "ipv6",
+            "address": address,
+            "prefix": prefix,
+        })
+    return rows
+
+
+def parse_ipv4_nameservers(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) > MAX_DNS_SERVERS:
+        raise TelemetryError("DNS server list exceeded bound")
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for group in value:
+        address = ip_value(variant(group, "address", "s"), 4)
+        if address in seen:
+            continue
+        seen.add(address)
+        rows.append({"family": "ipv4", "address": address})
+    return rows
+
+
+def parse_ipv6_nameservers(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) > MAX_DNS_SERVERS:
+        raise TelemetryError("DNS server list exceeded bound")
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, list) or len(raw) != 16 \
+                or any(not isinstance(byte, int) or isinstance(byte, bool)
+                       or not 0 <= byte <= 255 for byte in raw):
+            raise TelemetryError("invalid IPv6 DNS server")
+        address = str(ipaddress.IPv6Address(bytes(raw)))
+        if address in seen:
+            continue
+        seen.add(address)
+        rows.append({"family": "ipv6", "address": address})
+    return rows
+
+
+def parse_domains(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, list):
+            raise TelemetryError("invalid DNS domain list")
+        for domain_value in value:
+            domain = bounded_text(domain_value, 253)
+            if domain not in seen:
+                seen.add(domain)
+                result.append(domain)
+            if len(result) > MAX_DNS_DOMAINS:
+                raise TelemetryError("DNS domain list exceeded bound")
+    return result
+
+
+def ip_snapshot(
+    path: str, family: int, deadline: float, destination: str = SERVICE
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[str], str]:
+    if path == "/":
+        return [], [], [], ""
+    pattern = IP4_PATH if family == 4 else IP6_PATH
+    interface = IP4_INTERFACE if family == 4 else IP6_INTERFACE
+    if not isinstance(path, str) or not pattern.fullmatch(path):
+        raise TelemetryError("invalid IP configuration path")
+    nameserver_name = "NameserverData" if family == 4 else "Nameservers"
+    nameserver_type = "aa{sv}" if family == 4 else "aay"
+    properties = get_properties(path, interface, [
+        ("AddressData", "aa{sv}"), ("Gateway", "s"),
+        (nameserver_name, nameserver_type), ("Domains", "as"),
+        ("Searches", "as")
+    ], deadline, destination)
+    addresses = parse_addresses(properties["AddressData"], family)
+    gateway_raw = properties["Gateway"]
+    gateway = "" if gateway_raw == "" else ip_value(gateway_raw, family)
+    nameservers = parse_ipv4_nameservers(properties[nameserver_name]) \
+        if family == 4 else parse_ipv6_nameservers(properties[nameserver_name])
+    domains = parse_domains([properties["Domains"], properties["Searches"]])
+    return addresses, nameservers, domains, gateway
+
+
+def ssid_fields(value: Any) -> tuple[str, str]:
+    if not isinstance(value, list) or not 1 <= len(value) <= 32 \
+            or any(not isinstance(byte, int) or isinstance(byte, bool)
+                   or not 0 <= byte <= 255 for byte in value):
+        raise TelemetryError("invalid access-point SSID")
+    raw = bytes(value)
+    display = ""
+    try:
+        candidate = raw.decode("utf-8", errors="strict")
+        if not any(unicodedata.category(character) == "Cc" for character in candidate):
+            display = candidate
+    except UnicodeDecodeError:
+        pass
+    return display, raw.hex().upper()
+
+
+def read_counter(name: str, counter: str) -> int:
+    path = f"/sys/class/net/{name}/statistics/{counter}"
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        try:
+            data = os.read(descriptor, 64)
+            if os.read(descriptor, 1):
+                raise TelemetryError("network counter exceeded bound")
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        raise TelemetryError("network counter unavailable") from error
+    if not re.fullmatch(rb"[0-9]{1,20}\n?", data):
+        raise TelemetryError("invalid network counter")
+    return safe_integer(int(data))
+
+
+def disconnected_snapshot(sample_ms: int) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "connected": False,
+        "connectionUuid": "",
+        "connectionName": "",
+        "kind": "none",
+        "interfaceName": "",
+        "hardwareAddress": "",
+        "metered": "unknown",
+        "addresses": [],
+        "gateways": [],
+        "dnsServers": [],
+        "dnsDomains": [],
+        "rxBytes": 0,
+        "txBytes": 0,
+        "sampleMonotonicMs": sample_ms,
+        "wifi": {
+            "ssid": "", "ssidHex": "", "signal": 0,
+            "frequencyMhz": 0, "bitrateKbps": 0,
+        },
+        "wired": {"speedMbps": 0, "carrier": False},
+    }
+
+
+def collect_snapshot() -> dict[str, Any]:
+    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
+    owner_before = get_name_owner(deadline)
+    primary_before = get_properties(
+        ROOT_PATH, ROOT_INTERFACE, [("PrimaryConnection", "o")], deadline,
+        owner_before
+    )["PrimaryConnection"]
+    sample_ms = safe_integer(time.monotonic_ns() // 1_000_000)
+    if primary_before == "/":
+        if get_properties(ROOT_PATH, ROOT_INTERFACE,
+                    [("PrimaryConnection", "o")], deadline, owner_before
+                    )["PrimaryConnection"] != primary_before \
+                or get_name_owner(deadline) != owner_before:
+            raise TelemetryError("NetworkManager changed during snapshot")
+        return disconnected_snapshot(sample_ms)
+    if not isinstance(primary_before, str) or not ACTIVE_PATH.fullmatch(primary_before):
+        raise TelemetryError("invalid primary connection path")
+
+    active_properties = [
+        ("Id", "s"), ("Uuid", "s"), ("Type", "s"), ("Devices", "ao"),
+        ("State", "u"), ("Ip4Config", "o"), ("Ip6Config", "o"),
+        ("SpecificObject", "o"),
+    ]
+    active = get_properties(
+        primary_before, ACTIVE_INTERFACE, active_properties, deadline,
+        owner_before
+    )
+    if safe_integer(active["State"], 4) != 2:
+        raise TelemetryError("primary connection is not activated")
+    devices = active["Devices"]
+    if not isinstance(devices, list) or len(devices) != 1 \
+            or not isinstance(devices[0], str) \
+            or not DEVICE_PATH.fullmatch(devices[0]):
+        raise TelemetryError("primary connection device is ambiguous")
+    device_path = devices[0]
+    device_properties = [
+        ("Interface", "s"), ("IpInterface", "s"), ("DeviceType", "u"),
+        ("State", "u"), ("HwAddress", "s"), ("Metered", "u"),
+        ("ActiveConnection", "o"),
+    ]
+    device = get_properties(
+        device_path, DEVICE_INTERFACE, device_properties, deadline,
+        owner_before
+    )
+    if safe_integer(device["State"], 120) != 100 \
+            or device["ActiveConnection"] != primary_before:
+        raise TelemetryError("primary device is not activated")
+    iface = interface_name(device["Interface"])
+    ip_iface = device["IpInterface"]
+    if ip_iface not in {"", iface}:
+        raise TelemetryError("IP interface identity is ambiguous")
+    address = hardware_address(device["HwAddress"])
+    device_type = safe_integer(device["DeviceType"], 32)
+    active_type = bounded_text(active["Type"], 64)
+    kind = "wifi" if device_type == 2 and active_type == "802-11-wireless" \
+        else "wired" if device_type == 1 and active_type == "802-3-ethernet" \
+        else ""
+    if kind == "":
+        raise TelemetryError("unsupported primary connection type")
+
+    ip4_addresses, ip4_dns, ip4_domains, ip4_gateway = ip_snapshot(
+        active["Ip4Config"], 4, deadline, owner_before
+    )
+    ip6_addresses, ip6_dns, ip6_domains, ip6_gateway = ip_snapshot(
+        active["Ip6Config"], 6, deadline, owner_before
+    )
+    addresses = ip4_addresses + ip6_addresses
+    dns_servers = ip4_dns + ip6_dns
+    dns_domains = parse_domains([ip4_domains, ip6_domains])
+    gateways: list[dict[str, str]] = []
+    if ip4_gateway:
+        gateways.append({"family": "ipv4", "address": ip4_gateway})
+    if ip6_gateway:
+        gateways.append({"family": "ipv6", "address": ip6_gateway})
+
+    wifi = {
+        "ssid": "", "ssidHex": "", "signal": 0,
+        "frequencyMhz": 0, "bitrateKbps": 0,
+    }
+    wired = {"speedMbps": 0, "carrier": False}
+    if kind == "wifi":
+        wireless_properties = [
+            ("ActiveAccessPoint", "o"), ("Bitrate", "u")
+        ]
+        wireless = get_properties(
+            device_path, WIRELESS_INTERFACE, wireless_properties, deadline,
+            owner_before
+        )
+        access_point_path = wireless["ActiveAccessPoint"]
+        if not isinstance(access_point_path, str) \
+                or not ACCESS_POINT_PATH.fullmatch(access_point_path) \
+                or active["SpecificObject"] != access_point_path:
+            raise TelemetryError("active access point is unavailable")
+        access_point = get_properties(access_point_path, ACCESS_POINT_INTERFACE, [
+            ("Ssid", "ay"), ("Frequency", "u"), ("Strength", "y")
+        ], deadline, owner_before)
+        ssid, ssid_hex = ssid_fields(access_point["Ssid"])
+        wifi = {
+            "ssid": ssid,
+            "ssidHex": ssid_hex,
+            "signal": safe_integer(access_point["Strength"], 100),
+            "frequencyMhz": safe_integer(access_point["Frequency"], 1_000_000),
+            "bitrateKbps": safe_integer(wireless["Bitrate"], 100_000_000),
+        }
+    else:
+        wired_properties = [("Speed", "u"), ("Carrier", "b")]
+        wired_state = get_properties(
+            device_path, WIRED_INTERFACE, wired_properties, deadline,
+            owner_before
+        )
+        if not isinstance(wired_state["Carrier"], bool):
+            raise TelemetryError("invalid wired carrier state")
+        wired = {
+            "speedMbps": safe_integer(wired_state["Speed"], 100_000_000),
+            "carrier": wired_state["Carrier"],
+        }
+
+    rx_bytes = read_counter(iface, "rx_bytes")
+    tx_bytes = read_counter(iface, "tx_bytes")
+    sample_ms = safe_integer(time.monotonic_ns() // 1_000_000)
+
+    if ip_snapshot(active["Ip6Config"], 6, deadline, owner_before) \
+                != (ip6_addresses, ip6_dns, ip6_domains, ip6_gateway) \
+            or ip_snapshot(active["Ip4Config"], 4, deadline, owner_before) \
+                != (ip4_addresses, ip4_dns, ip4_domains, ip4_gateway):
+        raise TelemetryError("IP configuration changed during snapshot")
+    if kind == "wifi" and get_properties(
+            device_path, WIRELESS_INTERFACE,
+            [("ActiveAccessPoint", "o"), ("Bitrate", "u")], deadline,
+            owner_before)["ActiveAccessPoint"] != active["SpecificObject"]:
+        raise TelemetryError("access point changed during snapshot")
+    if get_properties(device_path, DEVICE_INTERFACE,
+                device_properties, deadline, owner_before) != device \
+            or get_properties(primary_before, ACTIVE_INTERFACE,
+                active_properties, deadline, owner_before) != active \
+            or get_properties(ROOT_PATH, ROOT_INTERFACE,
+                [("PrimaryConnection", "o")], deadline, owner_before
+                )["PrimaryConnection"] != primary_before:
+        raise TelemetryError("NetworkManager changed during snapshot")
+    if get_name_owner(deadline) != owner_before:
+        raise TelemetryError("NetworkManager owner changed during snapshot")
+
+    metered = {
+        0: "unknown", 1: "yes", 2: "no", 3: "guess-yes", 4: "guess-no"
+    }.get(safe_integer(device["Metered"], 4), "unknown")
+    return {
+        "schemaVersion": 1,
+        "connected": True,
+        "connectionUuid": canonical_uuid(active["Uuid"]),
+        "connectionName": bounded_text(active["Id"], 256),
+        "kind": kind,
+        "interfaceName": iface,
+        "hardwareAddress": address,
+        "metered": metered,
+        "addresses": addresses,
+        "gateways": gateways,
+        "dnsServers": dns_servers,
+        "dnsDomains": dns_domains,
+        "rxBytes": rx_bytes,
+        "txBytes": tx_bytes,
+        "sampleMonotonicMs": sample_ms,
+        "wifi": wifi,
+        "wired": wired,
+    }
+
+
+def emit_snapshot(snapshot: dict[str, Any]) -> None:
+    record = {
+        "schemaVersion": 1,
+        "event": "snapshot",
+        "sequence": 1,
+        "snapshot": snapshot,
+    }
+    encoded = json.dumps(
+        record, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    if len(encoded) > MAX_PROTOCOL_LINE:
+        raise TelemetryError("telemetry protocol record exceeded bound")
+    sys.stdout.buffer.write(encoded + b"\n")
+    sys.stdout.buffer.flush()
+
+
+def main() -> int:
+    try:
+        emit_snapshot(collect_snapshot())
+        return 0
+    except TelemetryError as error:
+        print(f"network-telemetry-snapshot: unavailable ({error})", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

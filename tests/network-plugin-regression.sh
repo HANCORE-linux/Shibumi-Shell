@@ -40,6 +40,7 @@ install -m 0755 "$repo_root/tests/fixtures/network-bin/omarchy-network-status" \
   "$repo_root/tests/fixtures/network-bin/nmcli" "$tmpdir/bin/"
 install -m 0755 \
   "$repo_root/tests/fixtures/network-profile-catalog-fixture.py" \
+  "$repo_root/tests/fixtures/network-telemetry-fixture.py" \
   "$tmpdir/fixtures/"
 
 set +e
@@ -267,6 +268,62 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "saved-profile catalog produced a QML runtime error"
 fi
 
+"$repo_root/tests/network-telemetry-helper-regression.py" \
+  || fail "network telemetry helper regression failed"
+install -m 0644 \
+  "$repo_root/tests/network-telemetry-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/telemetry-runtime"
+chmod 700 "$tmpdir/telemetry-runtime"
+set +e
+telemetry_output=$(timeout 15 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/telemetry-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+telemetry_rc=$?
+set -e
+printf '%s\n' "$telemetry_output"
+[[ $telemetry_rc -eq 0 ]] \
+  || fail "network telemetry smoke exited $telemetry_rc"
+grep -F 'network telemetry regression passed' \
+  <<<"$telemetry_output" >/dev/null \
+  || fail "network telemetry success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$telemetry_output"; then
+  fail "network telemetry produced a QML runtime error"
+fi
+
+for telemetry_case in destruction start-failure rate-boundary deferred-launch; do
+  install -m 0644 \
+    "$repo_root/tests/network-telemetry-${telemetry_case}-regression.qml" \
+    "$tmpdir/shell.qml"
+  mkdir -p "$tmpdir/telemetry-${telemetry_case}-runtime"
+  chmod 700 "$tmpdir/telemetry-${telemetry_case}-runtime"
+  set +e
+  telemetry_case_output=$(timeout 15 env \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/telemetry-${telemetry_case}-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  telemetry_case_rc=$?
+  set -e
+  printf '%s\n' "$telemetry_case_output"
+  [[ $telemetry_case_rc -eq 0 ]] \
+    || fail "network telemetry $telemetry_case smoke exited $telemetry_case_rc"
+  telemetry_case_marker="network telemetry ${telemetry_case//-/ } regression passed"
+  grep -F "$telemetry_case_marker" <<<"$telemetry_case_output" >/dev/null \
+    || fail "network telemetry $telemetry_case success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$telemetry_case_output"; then
+    fail "network telemetry $telemetry_case produced a QML runtime error"
+  fi
+done
+
 install -m 0644 \
   "$repo_root/tests/network-native-scanner-lease-regression.qml" \
   "$tmpdir/shell.qml"
@@ -346,15 +403,21 @@ profile_catalog="$repo_root/hancore.shibumi.network/NetworkProfileCatalog.qml"
 profile_catalog_model="$repo_root/hancore.shibumi.network/NetworkProfileCatalogModel.js"
 profile_catalog_authority="$repo_root/hancore.shibumi.network/NetworkProfileCatalogAuthority.js"
 profile_catalog_helper="$repo_root/hancore.shibumi.network/scripts/network-profile-catalog"
+telemetry="$repo_root/hancore.shibumi.network/NetworkTelemetry.qml"
+telemetry_model="$repo_root/hancore.shibumi.network/NetworkTelemetryModel.js"
+telemetry_authority="$repo_root/hancore.shibumi.network/NetworkTelemetryAuthority.js"
+telemetry_helper="$repo_root/hancore.shibumi.network/scripts/network-telemetry-snapshot"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
     && -f $liveness_continuity && -f $liveness_model \
     && -f $liveness_authority && -x $liveness_helper \
     && -f $profile_catalog && -f $profile_catalog_model \
-    && -f $profile_catalog_authority && -x $profile_catalog_helper ]] \
+    && -f $profile_catalog_authority && -x $profile_catalog_helper \
+    && -f $telemetry && -f $telemetry_model \
+    && -f $telemetry_authority && -x $telemetry_helper ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -483,6 +546,35 @@ rg -Fq 'if list_connections(deadline) != initial_paths:' \
 if rg -q 'GetSecrets|identity|password|ca-cert|nmcli|omarchy' \
     "$profile_catalog_helper"; then
   fail "saved-profile helper crosses the bounded non-secret metadata boundary"
+fi
+rg -Fq 'currentClaim = token' "$telemetry_authority" \
+  || fail "network telemetry worker is not process-wide"
+rg -Fq 'permanentlyBlocked = true' "$telemetry_authority" \
+  || fail "destroyed telemetry workers do not block fail-closed"
+rg -Fq 'leaseTokenComponent.createObject(owner' "$telemetry" \
+  || fail "network telemetry is not demand-driven by owner leases"
+rg -Fq 'pollIntervalMs: 2000' "$telemetry" \
+  || fail "network telemetry lacks a bounded central polling cadence"
+rg -Fq 'if (implementation.shutdownRequested)' "$telemetry" \
+  || fail "failed process starts can retain telemetry authority"
+rg -Fq 'if (JSON.stringify(parsed) !== value)' "$telemetry_model" \
+  || fail "network telemetry protocol does not reject duplicate JSON keys"
+rg -Fq 'function telemetryProjection()' "$native_adapter" \
+  || fail "native adapter does not validate active connection telemetry"
+rg -Fq 'get_name_owner(deadline)' "$telemetry_helper" \
+  || fail "network telemetry does not bind snapshots to one D-Bus owner"
+rg -Fq 'MAX_PROPERTY_BYTES = 64 * 1024' "$telemetry_helper" \
+  || fail "network telemetry D-Bus reads have no byte bound"
+rg -Fq 'MAX_RUNTIME_SECONDS = 10.0' "$telemetry_helper" \
+  || fail "network telemetry has no aggregate runtime bound"
+rg -Fq 'ip_snapshot(active["Ip4Config"], 4, deadline, owner_before)' \
+  "$telemetry_helper" \
+  || fail "network telemetry does not revalidate IP and DNS state"
+rg -Fq 'os.O_NOFOLLOW' "$telemetry_helper" \
+  || fail "network telemetry counter reads can follow a forged final symlink"
+if rg -q 'GetSecrets|nmcli|omarchy|/usr/bin/(ip|ping|resolvectl)' \
+    "$telemetry_helper"; then
+  fail "network telemetry crosses its bounded NetworkManager/sysfs boundary"
 fi
 rg -Fq 'currentClaim = token' "$scanner_authority" \
   || fail "scanner mutation authority is not process-wide"

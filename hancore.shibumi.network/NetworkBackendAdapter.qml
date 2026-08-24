@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "NetworkModel.js" as Model
 import "NetworkProfileCatalogModel.js" as CatalogModel
+import "NetworkTelemetryModel.js" as TelemetryModel
 
 // Source-only Step 5A capability seam. Production Service.qml does not load
 // this adapter yet. Native access is isolated behind an inactive Loader, raw
@@ -17,6 +18,7 @@ Item {
   // owning Service. Fake backends never derive readiness from this host seam.
   property var nativeLiveness: null
   property var savedProfileCatalog: null
+  property var networkTelemetry: null
   readonly property bool nativeServiceAvailable:
     root.nativeLiveness !== null
       && root.nativeLiveness.serviceUsable === true
@@ -91,6 +93,41 @@ Item {
     count: root.savedProfileSnapshots.length,
     generation: root.generation
   })
+  readonly property var telemetryProjection: implementation.telemetryProjection()
+  readonly property bool networkTelemetryAvailable:
+    root.telemetryProjection.available
+  readonly property bool networkTelemetryDegraded:
+    root.telemetryProjection.degraded
+  readonly property bool networkTelemetryConnected:
+    root.networkTelemetryAvailable && root.telemetryProjection.connected
+  readonly property var connectionDetailsSnapshot:
+    root.networkTelemetryConnected
+      ? implementation.telemetryDetails(root.telemetryProjection.row) : null
+  readonly property var dnsSnapshot: root.networkTelemetryConnected ? ({
+    schemaVersion: root.schemaVersion,
+    deviceId: root.telemetryProjection.row.deviceId,
+    servers: TelemetryModel.cloneRows(root.telemetryProjection.row.dnsServers),
+    domains: root.telemetryProjection.row.dnsDomains.slice(),
+    generation: root.generation
+  }) : null
+  readonly property var throughputSnapshot: root.networkTelemetryConnected ? ({
+    schemaVersion: root.schemaVersion,
+    deviceId: root.telemetryProjection.row.deviceId,
+    rxBytes: root.telemetryProjection.row.rxBytes,
+    txBytes: root.telemetryProjection.row.txBytes,
+    downloadBytesPerSecond:
+      root.telemetryProjection.row.downloadBytesPerSecond,
+    uploadBytesPerSecond: root.telemetryProjection.row.uploadBytesPerSecond,
+    sampleMonotonicMs: root.telemetryProjection.row.sampleMonotonicMs,
+    generation: root.generation
+  }) : null
+  readonly property var networkTelemetrySnapshot: ({
+    schemaVersion: root.schemaVersion,
+    available: root.networkTelemetryAvailable,
+    degraded: root.networkTelemetryDegraded,
+    connected: root.networkTelemetryConnected,
+    generation: root.generation
+  })
 
   visible: false
   width: 0
@@ -100,6 +137,7 @@ Item {
   onBackendOverrideChanged: generation++
   onNativeLivenessChanged: generation++
   onSavedProfileCatalogChanged: generation++
+  onNetworkTelemetryChanged: generation++
   onNativeServiceAvailableChanged: generation++
   onNativeServiceEpochChanged: generation++
   onTopologyFingerprintChanged: generation++
@@ -215,6 +253,12 @@ Item {
     function onGenerationChanged() { root.generation++ }
   }
 
+  Connections {
+    target: root.networkTelemetry
+    ignoreUnknownSignals: true
+    function onIdentityGenerationChanged() { root.generation++ }
+  }
+
   Loader {
     id: nativeGateway
     // Do not construct Quickshell's process-static Networking singleton until
@@ -316,6 +360,141 @@ Item {
         return { rows: rows, overflow: false }
       } catch (error) {
         return { rows: [], overflow: true }
+      }
+    }
+
+    function telemetryProjection() {
+      if (!root.active || root.networkTelemetry === null
+          || root.networkTelemetry.available !== true)
+        return { available: false, degraded: false, connected: false,
+          row: null }
+      if (!root.backendAvailable || root.snapshotDegraded)
+        return { available: false, degraded: root.snapshotDegraded,
+          connected: false, row: null }
+      try {
+        const source = root.networkTelemetry.telemetrySnapshot
+        const expected = [
+          "schemaVersion", "connected", "connectionUuid", "connectionName",
+          "kind", "interfaceName", "hardwareAddress", "metered",
+          "addresses", "gateways", "dnsServers", "dnsDomains", "rxBytes",
+          "txBytes", "sampleMonotonicMs", "wifi", "wired", "id",
+          "deviceId", "downloadBytesPerSecond", "uploadBytesPerSecond",
+          "generation"
+        ]
+        if (!source || typeof source !== "object" || Array.isArray(source)
+            || Object.keys(source).length !== expected.length)
+          return { available: false, degraded: true, connected: false,
+            row: null }
+        for (let index = 0; index < expected.length; index++) {
+          if (!Object.prototype.hasOwnProperty.call(source, expected[index]))
+            return { available: false, degraded: true, connected: false,
+              row: null }
+        }
+        const raw = {
+          schemaVersion: source.schemaVersion,
+          connected: source.connected,
+          connectionUuid: source.connectionUuid,
+          connectionName: source.connectionName,
+          kind: source.kind,
+          interfaceName: source.interfaceName,
+          hardwareAddress: source.hardwareAddress,
+          metered: source.metered,
+          addresses: source.addresses,
+          gateways: source.gateways,
+          dnsServers: source.dnsServers,
+          dnsDomains: source.dnsDomains,
+          rxBytes: source.rxBytes,
+          txBytes: source.txBytes,
+          sampleMonotonicMs: source.sampleMonotonicMs,
+          wifi: source.wifi,
+          wired: source.wired
+        }
+        const validRate = function(value) {
+          return typeof value === "number" && isFinite(value)
+            && value >= 0 && value <= TelemetryModel.MaxSafeInteger
+        }
+        if (!TelemetryModel.validSnapshot(raw)
+            || !validRate(source.downloadBytesPerSecond)
+            || !validRate(source.uploadBytesPerSecond)
+            || typeof source.generation !== "number"
+            || !isFinite(source.generation) || source.generation < 0
+            || Math.floor(source.generation) !== source.generation
+            || source.generation !== root.networkTelemetry.generation
+            || root.networkTelemetry.connected !== source.connected)
+          return { available: false, degraded: true, connected: false,
+            row: null }
+        if (!source.connected) {
+          if (source.id !== "" || source.deviceId !== ""
+              || root.networkTelemetry.connectionSnapshot !== null)
+            return { available: false, degraded: true, connected: false,
+              row: null }
+          for (let index = 0; index < root.baseDeviceSnapshots.length; index++) {
+            if (root.baseDeviceSnapshots[index].connected === true)
+              return { available: false, degraded: true, connected: false,
+                row: null }
+          }
+          return { available: true, degraded: false, connected: false,
+            row: null }
+        }
+        if (source.id !== Model.connectionId(source.connectionUuid)
+            || source.deviceId !== Model.deviceId(source.kind,
+              source.hardwareAddress, source.interfaceName)
+            || root.networkTelemetry.connectionSnapshot === null)
+          return { available: false, degraded: true, connected: false,
+            row: null }
+        let matches = 0
+        for (let index = 0; index < root.baseDeviceSnapshots.length; index++) {
+          const device = root.baseDeviceSnapshots[index]
+          if (device.id !== source.deviceId) continue
+          if (device.ambiguous || !device.connected
+              || device.type !== source.kind
+              || device.name !== source.interfaceName
+              || device.address !== source.hardwareAddress)
+            return { available: false, degraded: true, connected: false,
+              row: null }
+          matches++
+        }
+        if (matches !== 1)
+          return { available: false, degraded: true, connected: false,
+            row: null }
+        const row = TelemetryModel.cloneSnapshot(raw)
+        row.id = source.id
+        row.deviceId = source.deviceId
+        row.downloadBytesPerSecond = source.downloadBytesPerSecond
+        row.uploadBytesPerSecond = source.uploadBytesPerSecond
+        return { available: true, degraded: false, connected: true, row: row }
+      } catch (error) {
+        return { available: false, degraded: true, connected: false,
+          row: null }
+      }
+    }
+
+    function telemetryDetails(row) {
+      if (!row) return null
+      return {
+        schemaVersion: root.schemaVersion,
+        id: row.id,
+        uuid: row.connectionUuid,
+        name: row.connectionName,
+        deviceId: row.deviceId,
+        kind: row.kind,
+        interfaceName: row.interfaceName,
+        hardwareAddress: row.hardwareAddress,
+        metered: row.metered,
+        addresses: TelemetryModel.cloneRows(row.addresses),
+        gateways: TelemetryModel.cloneRows(row.gateways),
+        wifi: {
+          ssid: row.wifi.ssid,
+          ssidHex: row.wifi.ssidHex,
+          signal: row.wifi.signal,
+          frequencyMhz: row.wifi.frequencyMhz,
+          bitrateKbps: row.wifi.bitrateKbps
+        },
+        wired: {
+          speedMbps: row.wired.speedMbps,
+          carrier: row.wired.carrier
+        },
+        generation: root.generation
       }
     }
 

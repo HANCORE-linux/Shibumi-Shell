@@ -126,6 +126,11 @@ function catalogProfileId(uuidValue) {
   return uuid === "" ? "" : tupleId("saved-profile", [uuid])
 }
 
+function connectionId(uuidValue) {
+  var uuid = canonicalUuid(uuidValue)
+  return uuid === "" ? "" : tupleId("active-connection", [uuid])
+}
+
 function boundedDisplayName(value) {
   return typeof value === "string" && value.length <= 256
     && !/[\u0000\r\n]/.test(value) ? value : ""

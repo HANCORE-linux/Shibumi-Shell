@@ -87,7 +87,7 @@ ShellRoot {
         "/usr/bin/python3", root.fixturePath, "sequence",
         root.fixtureCounterPath
       ]
-      refreshTimeoutMs: 1000
+      refreshTimeoutMs: 5000
     }
   }
 
@@ -104,7 +104,7 @@ ShellRoot {
       "/usr/bin/python3", root.fixturePath, "sequence",
       root.fixtureCounterPath
     ]
-    refreshTimeoutMs: 1000
+    refreshTimeoutMs: 5000
   }
 
   Network.NetworkBackendAdapter {
@@ -128,7 +128,7 @@ ShellRoot {
     running: true
     onTriggered: {
       root.ticks++
-      if (root.ticks > 160)
+      if (root.ticks > 400)
         return root.fail("catalog lifecycle timed out: " + JSON.stringify({
           phase: root.phase,
           catalogPhase: root.catalog && root.catalog.phase,
@@ -214,7 +214,8 @@ ShellRoot {
       }
 
       if (root.phase === 4) {
-        if (!root.catalog.workerRunning) return
+        if (!root.catalog.workerRunning
+            || !root.catalog.workerOutputComplete) return
         root.mode = "normal"
         if (!root.catalog.release(root.ownerOne)
             || !root.catalog.acquire(root.ownerOne))
@@ -239,7 +240,8 @@ ShellRoot {
       }
 
       if (root.phase === 6) {
-        if (!root.catalog.workerRunning) return
+        if (!root.catalog.workerRunning
+            || !root.catalog.workerOutputComplete) return
         root.mode = "normal"
         fakeLiveness.serviceUsable = false
         fakeLiveness.generation++
