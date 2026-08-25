@@ -1,0 +1,441 @@
+#!/usr/bin/python3
+"""Run one bounded Shibumi internet speed-test phase."""
+
+from __future__ import annotations
+
+import ctypes
+import http.client
+import ipaddress
+import json
+import os
+import re
+import signal
+import socket
+import ssl
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Any
+
+SCHEMA_VERSION = 1
+HOST = "speed.cloudflare.com"
+PORT = 443
+DOWNLOAD_PATH = "/__down?bytes=8388608"
+UPLOAD_PATH = "/__up"
+ENDPOINT = HOST
+WORKERS = 4
+DOWNLOAD_OBJECT_BYTES = 8 * 1024 * 1024
+UPLOAD_OBJECT_BYTES = 2 * 1024 * 1024
+DOWNLOAD_LIMIT_BYTES = 1024 * 1024 * 1024
+UPLOAD_LIMIT_BYTES = 512 * 1024 * 1024
+CHUNK_BYTES = 64 * 1024
+MAX_REQUESTS_PER_WORKER = 64
+MAX_RESPONSE_BYTES = 64 * 1024
+MAX_DNS_ADDRESSES = 16
+MIN_RESULT_BYTES = 64 * 1024
+MIN_DURATION_MS = 1000
+MAX_DURATION_MS = 8000
+SOCKET_TIMEOUT_SECONDS = 2.0
+MAX_PROTOCOL_BYTES = 2048
+PR_SET_PDEATHSIG = 1
+INTERFACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$")
+RUN_TOKEN_PATTERN = re.compile(
+    r"^[1-9][0-9]{0,9}:[1-9][0-9]{0,15}:[0-9]{1,16}$"
+)
+STOP = threading.Event()
+UPLOAD_CHUNK = bytes(CHUNK_BYTES)
+
+
+class SpeedTestError(RuntimeError):
+    pass
+
+
+class TrafficBudget:
+    def __init__(self, maximum: int) -> None:
+        self._remaining = maximum
+        self._successful = 0
+        self._lock = threading.Lock()
+
+    def reserve(self, requested: int) -> int:
+        with self._lock:
+            amount = min(max(0, requested), self._remaining)
+            self._remaining -= amount
+            return amount
+
+    def refund(self, amount: int) -> None:
+        with self._lock:
+            self._remaining += max(0, amount)
+
+    def commit(self, amount: int) -> None:
+        with self._lock:
+            self._successful += max(0, amount)
+
+    def exhausted(self) -> bool:
+        with self._lock:
+            return self._remaining <= 0
+
+    def successful(self) -> int:
+        with self._lock:
+            return self._successful
+
+
+def arm_parent_death() -> None:
+    parent_pid = os.getppid()
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
+        raise SpeedTestError("parent supervision unavailable")
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def request_stop(_signum: int, _frame: object) -> None:
+    STOP.set()
+
+
+def valid_source(value: str) -> str:
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError as error:
+        raise SpeedTestError("invalid source address") from error
+    if "%" in value or str(address) != value \
+            or address.is_unspecified or address.is_loopback \
+            or address.is_multicast or address.is_link_local:
+        raise SpeedTestError("unsafe source address")
+    if address.version == 4 and address.is_reserved:
+        raise SpeedTestError("unsafe source address")
+    if address.version == 6 and address.ipv4_mapped is not None:
+        raise SpeedTestError("unsafe source address")
+    return value
+
+
+def parse_arguments(
+    arguments: list[str],
+) -> tuple[str, str, str, int, str, int | None]:
+    if len(arguments) != 12 or arguments[0] != "--direction" \
+            or arguments[2] != "--interface" \
+            or arguments[4] != "--source-address" \
+            or arguments[6] != "--duration-ms" \
+            or arguments[8] != "--run-token" \
+            or arguments[10] != "--expected-interface-index":
+        raise SpeedTestError("usage")
+    direction = arguments[1]
+    if direction not in {"down", "up"}:
+        raise SpeedTestError("invalid direction")
+    interface_name = arguments[3]
+    if not INTERFACE_PATTERN.fullmatch(interface_name):
+        raise SpeedTestError("invalid interface")
+    source_address = valid_source(arguments[5])
+    if not re.fullmatch(r"[1-9][0-9]{3}", arguments[7]):
+        raise SpeedTestError("invalid duration")
+    duration_ms = int(arguments[7])
+    if duration_ms < MIN_DURATION_MS or duration_ms > MAX_DURATION_MS:
+        raise SpeedTestError("invalid duration")
+    run_token = arguments[9]
+    if not RUN_TOKEN_PATTERN.fullmatch(run_token):
+        raise SpeedTestError("invalid run token")
+    expected_text = arguments[11]
+    expected_interface_index: int | None = None
+    if expected_text != "any":
+        if not re.fullmatch(r"[1-9][0-9]{0,9}", expected_text):
+            raise SpeedTestError("invalid expected interface identity")
+        expected_interface_index = int(expected_text)
+        if expected_interface_index > 2_147_483_647:
+            raise SpeedTestError("invalid expected interface identity")
+    interface_path = Path("/sys/class/net") / interface_name
+    if not interface_path.is_dir():
+        raise SpeedTestError("interface unavailable")
+    return (
+        direction, interface_name, source_address, duration_ms, run_token,
+        expected_interface_index,
+    )
+
+
+def interface_index(interface_name: str) -> int:
+    path = f"/sys/class/net/{interface_name}/ifindex"
+    try:
+        descriptor = os.open(
+            path, os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+        )
+    except OSError as error:
+        raise SpeedTestError("interface identity unavailable") from error
+    try:
+        value = os.read(descriptor, 32)
+        if os.read(descriptor, 1):
+            raise SpeedTestError("interface identity exceeded bound")
+    finally:
+        os.close(descriptor)
+    try:
+        text = value.decode("ascii", errors="strict").strip()
+    except UnicodeDecodeError as error:
+        raise SpeedTestError("invalid interface identity") from error
+    if not re.fullmatch(r"[1-9][0-9]{0,9}", text):
+        raise SpeedTestError("invalid interface identity")
+    result = int(text)
+    if result > 2_147_483_647:
+        raise SpeedTestError("invalid interface identity")
+    return result
+
+
+def tls_context() -> ssl.SSLContext:
+    context = ssl.create_default_context()
+    if hasattr(ssl, "TLSVersion"):
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
+
+
+def create_bound_socket() -> socket.socket:
+    if interface_index(INTERFACE_NAME) != INTERFACE_INDEX:
+        raise SpeedTestError("interface identity changed")
+    source = ipaddress.ip_address(SOURCE_ADDRESS)
+    family = socket.AF_INET if source.version == 4 else socket.AF_INET6
+    try:
+        addresses = socket.getaddrinfo(
+            HOST, PORT, family, socket.SOCK_STREAM, socket.IPPROTO_TCP
+        )
+    except socket.gaierror as error:
+        raise SpeedTestError("endpoint resolution failed") from error
+    if not addresses or len(addresses) > MAX_DNS_ADDRESSES:
+        raise SpeedTestError("endpoint resolution exceeded bound")
+    for resolved_family, socktype, protocol, _name, destination in addresses:
+        try:
+            remote = ipaddress.ip_address(destination[0])
+        except ValueError:
+            continue
+        if not remote.is_global:
+            continue
+        candidate: socket.socket | None = None
+        try:
+            candidate = socket.socket(resolved_family, socktype, protocol)
+            candidate.settimeout(SOCKET_TIMEOUT_SECONDS)
+            candidate.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_BINDTODEVICE,
+                INTERFACE_NAME.encode("ascii", errors="strict") + b"\0",
+            )
+            candidate.bind((SOURCE_ADDRESS, 0))
+            candidate.connect(destination)
+            bound_device = candidate.getsockopt(
+                socket.SOL_SOCKET, socket.SO_BINDTODEVICE, 256
+            ).rstrip(b"\0").decode("ascii", errors="strict")
+            local_address = ipaddress.ip_address(candidate.getsockname()[0])
+            if bound_device != INTERFACE_NAME or local_address != source \
+                    or interface_index(INTERFACE_NAME) != INTERFACE_INDEX:
+                raise SpeedTestError("socket route identity changed")
+            return candidate
+        except (OSError, UnicodeError, SpeedTestError):
+            if candidate is not None:
+                candidate.close()
+    raise SpeedTestError("no endpoint route on requested interface")
+
+
+class BoundHTTPSConnection(http.client.HTTPSConnection):
+    def connect(self) -> None:
+        if self._tunnel_host is not None:
+            raise SpeedTestError("tunnels are unsupported")
+        self.sock = create_bound_socket()
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=HOST)
+
+
+def connection(source_address: str, context: ssl.SSLContext) \
+        -> http.client.HTTPSConnection:
+    if source_address != SOURCE_ADDRESS:
+        raise SpeedTestError("source identity changed")
+    return BoundHTTPSConnection(
+        HOST, PORT, timeout=SOCKET_TIMEOUT_SECONDS, context=context
+    )
+
+
+def request_headers() -> dict[str, str]:
+    return {
+        "Accept": "application/octet-stream",
+        "Connection": "close",
+        "User-Agent": "Shibumi-Network-SpeedTest/1",
+    }
+
+
+def download_worker(
+    budget: TrafficBudget, deadline: float, context: ssl.SSLContext
+) -> None:
+    requests = 0
+    while not STOP.is_set() and time.monotonic() < deadline \
+            and not budget.exhausted() and requests < MAX_REQUESTS_PER_WORKER:
+        requests += 1
+        current: http.client.HTTPSConnection | None = None
+        try:
+            current = connection(SOURCE_ADDRESS, context)
+            current.request("GET", DOWNLOAD_PATH, headers=request_headers())
+            response = current.getresponse()
+            if response.status != 200:
+                continue
+            while not STOP.is_set() and time.monotonic() < deadline:
+                reserved = budget.reserve(CHUNK_BYTES)
+                if reserved <= 0:
+                    return
+                try:
+                    data = response.read(reserved)
+                except (OSError, http.client.HTTPException):
+                    budget.refund(reserved)
+                    break
+                if not data:
+                    budget.refund(reserved)
+                    break
+                budget.commit(len(data))
+                if len(data) < reserved:
+                    budget.refund(reserved - len(data))
+                    break
+        except SpeedTestError:
+            STOP.set()
+        except (OSError, ssl.SSLError, http.client.HTTPException):
+            pass
+        finally:
+            if current is not None:
+                current.close()
+
+
+def upload_worker(
+    budget: TrafficBudget, deadline: float, context: ssl.SSLContext
+) -> None:
+    requests = 0
+    while not STOP.is_set() and time.monotonic() < deadline \
+            and not budget.exhausted() and requests < MAX_REQUESTS_PER_WORKER:
+        requests += 1
+        reserved = budget.reserve(UPLOAD_OBJECT_BYTES)
+        if reserved <= 0:
+            return
+        current: http.client.HTTPSConnection | None = None
+        try:
+            current = connection(SOURCE_ADDRESS, context)
+            current.putrequest("POST", UPLOAD_PATH, skip_accept_encoding=True)
+            for name, value in request_headers().items():
+                current.putheader(name, value)
+            current.putheader("Content-Type", "application/octet-stream")
+            current.putheader("Content-Length", str(reserved))
+            current.endheaders()
+            remaining = reserved
+            while remaining > 0 and not STOP.is_set():
+                amount = min(remaining, len(UPLOAD_CHUNK))
+                current.send(UPLOAD_CHUNK[:amount])
+                remaining -= amount
+            if remaining != 0:
+                continue
+            response = current.getresponse()
+            body = response.read(MAX_RESPONSE_BYTES + 1)
+            if response.status == 200 and len(body) <= MAX_RESPONSE_BYTES:
+                budget.commit(reserved)
+        except SpeedTestError:
+            STOP.set()
+        except (OSError, ssl.SSLError, http.client.HTTPException):
+            pass
+        finally:
+            if current is not None:
+                current.close()
+
+
+def run_phase(direction: str, duration_ms: int) -> tuple[int, int]:
+    maximum = DOWNLOAD_LIMIT_BYTES if direction == "down" \
+        else UPLOAD_LIMIT_BYTES
+    budget = TrafficBudget(maximum)
+    context = tls_context()
+    started = time.monotonic()
+    deadline = started + duration_ms / 1000
+    target = download_worker if direction == "down" else upload_worker
+    workers = [
+        threading.Thread(
+            target=target,
+            args=(budget, deadline, context),
+            name=f"shibumi-speed-{direction}-{index}",
+            daemon=True,
+        )
+        for index in range(WORKERS)
+    ]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        remaining = max(0.0, deadline + SOCKET_TIMEOUT_SECONDS + 0.5
+                        - time.monotonic())
+        worker.join(remaining)
+    if any(worker.is_alive() for worker in workers):
+        raise SpeedTestError("worker drain timeout")
+    elapsed_ms = max(1, int((time.monotonic() - started) * 1000))
+    transferred = budget.successful()
+    if STOP.is_set():
+        raise SpeedTestError("cancelled")
+    if transferred < MIN_RESULT_BYTES:
+        raise SpeedTestError("no measurement")
+    return transferred, min(elapsed_ms, MAX_DURATION_MS + 2500)
+
+
+def emit(
+    direction: str,
+    interface_name: str,
+    interface_index_value: int,
+    source_address: str,
+    run_token: str,
+    transferred: int,
+    elapsed_ms: int,
+) -> None:
+    record: dict[str, Any] = {
+        "event": "result",
+        "schemaVersion": SCHEMA_VERSION,
+        "sequence": 1,
+        "snapshot": {
+            "bytesTransferred": transferred,
+            "direction": direction,
+            "elapsedMs": elapsed_ms,
+            "endpoint": ENDPOINT,
+            "interfaceIndex": interface_index_value,
+            "interfaceName": interface_name,
+            "runToken": run_token,
+            "sampleMonotonicMs": int(time.monotonic() * 1000),
+            "schemaVersion": SCHEMA_VERSION,
+            "sourceAddress": source_address,
+        },
+    }
+    encoded = json.dumps(
+        record, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8", errors="strict")
+    if len(encoded) > MAX_PROTOCOL_BYTES or b"\n" in encoded:
+        raise SpeedTestError("protocol bound exceeded")
+    sys.stdout.buffer.write(encoded + b"\n")
+    sys.stdout.buffer.flush()
+
+
+def run(arguments: list[str]) -> int:
+    global INTERFACE_INDEX, INTERFACE_NAME, RUN_TOKEN, SOURCE_ADDRESS
+    try:
+        (
+            direction, interface_name, SOURCE_ADDRESS, duration_ms,
+            RUN_TOKEN, expected_interface_index,
+        ) = parse_arguments(arguments)
+        INTERFACE_NAME = interface_name
+        INTERFACE_INDEX = interface_index(interface_name)
+        if expected_interface_index is not None \
+                and expected_interface_index != INTERFACE_INDEX:
+            raise SpeedTestError("interface identity changed between phases")
+        transferred, elapsed_ms = run_phase(direction, duration_ms)
+        if interface_index(interface_name) != INTERFACE_INDEX:
+            raise SpeedTestError("interface identity changed")
+        emit(
+            direction, interface_name, INTERFACE_INDEX, SOURCE_ADDRESS,
+            RUN_TOKEN, transferred, elapsed_ms,
+        )
+        return 0
+    except (BrokenPipeError, SpeedTestError):
+        return 2
+
+
+def main() -> int:
+    arm_parent_death()
+    signal.signal(signal.SIGTERM, request_stop)
+    signal.signal(signal.SIGINT, request_stop)
+    return run(sys.argv[1:])
+
+
+INTERFACE_INDEX = 0
+INTERFACE_NAME = ""
+RUN_TOKEN = ""
+SOURCE_ADDRESS = ""
+
+if __name__ == "__main__":
+    raise SystemExit(main())

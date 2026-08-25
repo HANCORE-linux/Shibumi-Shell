@@ -46,6 +46,7 @@ install -m 0755 \
   "$repo_root/tests/fixtures/network-profile-catalog-fixture.py" \
   "$repo_root/tests/fixtures/network-telemetry-fixture.py" \
   "$repo_root/tests/fixtures/network-reachability-fixture.py" \
+  "$repo_root/tests/fixtures/network-speed-test-fixture.py" \
   "$tmpdir/fixtures/"
 
 set +e
@@ -385,6 +386,72 @@ for reachability_case in main model lifecycle destruction prestart stream route-
   fi
 done
 
+"$repo_root/tests/network-speed-test-helper-regression.py" \
+  || fail "network speed-test helper regression failed"
+for speed_case in main model failure destruction transition; do
+  speed_test="$repo_root/tests/network-speed-test-regression.qml"
+  if [[ $speed_case != main ]]; then
+    speed_test="$repo_root/tests/network-speed-test-${speed_case}-regression.qml"
+  fi
+  install -m 0644 "$speed_test" "$tmpdir/shell.qml"
+  mkdir -p "$tmpdir/speed-${speed_case}-runtime"
+  chmod 700 "$tmpdir/speed-${speed_case}-runtime"
+  set +e
+  speed_output=$(timeout 18 env \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/speed-${speed_case}-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  speed_rc=$?
+  set -e
+  printf '%s\n' "$speed_output"
+  [[ $speed_rc -eq 0 ]] \
+    || fail "network speed-test $speed_case smoke exited $speed_rc"
+  speed_marker="network speed-test regression passed"
+  if [[ $speed_case != main ]]; then
+    speed_marker="network speed-test ${speed_case//-/ } regression passed"
+  fi
+  grep -F "$speed_marker" <<<"$speed_output" >/dev/null \
+    || fail "network speed-test $speed_case success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$speed_output"; then
+    fail "network speed-test $speed_case produced a QML runtime error"
+  fi
+  speed_pid_file=""
+  if [[ $speed_case == main ]]; then
+    speed_pid_file="$tmpdir/fixtures/network-speed-test-invocations.pid"
+  elif [[ $speed_case == failure ]]; then
+    speed_pid_file="$tmpdir/fixtures/network-speed-test-failure-invocations.pid"
+  elif [[ $speed_case == destruction ]]; then
+    speed_pid_file="$tmpdir/fixtures/network-speed-test-destruction-invocations.pid"
+  fi
+  if [[ -n $speed_pid_file ]]; then
+    [[ -s $speed_pid_file ]] \
+      || fail "network speed-test $speed_case fixture recorded no PID"
+    speed_pid=$(<"$speed_pid_file")
+    for _ in {1..100}; do
+      kill -0 "$speed_pid" 2>/dev/null || break
+      sleep 0.02
+    done
+    kill -0 "$speed_pid" 2>/dev/null \
+      && fail "network speed-test $speed_case left process $speed_pid alive"
+  fi
+  if [[ $speed_case == failure ]]; then
+    speed_flood_pid_file="$tmpdir/fixtures/network-speed-test-failure-invocations.flood.pid"
+    [[ -s $speed_flood_pid_file ]] \
+      || fail "network speed-test stdout flood fixture recorded no PID"
+    speed_flood_pid=$(<"$speed_flood_pid_file")
+    for _ in {1..100}; do
+      kill -0 "$speed_flood_pid" 2>/dev/null || break
+      sleep 0.02
+    done
+    kill -0 "$speed_flood_pid" 2>/dev/null \
+      && fail "network speed-test stdout flood left process $speed_flood_pid alive"
+  fi
+done
+
 python3 "$repo_root/tests/network-qr-encoder-regression.py"
 install -m 0644 "$repo_root/tests/network-qr-regression.qml" \
   "$tmpdir/shell.qml"
@@ -574,6 +641,10 @@ reachability="$repo_root/hancore.shibumi.network/NetworkReachability.qml"
 reachability_model="$repo_root/hancore.shibumi.network/NetworkReachabilityModel.js"
 reachability_authority="$repo_root/hancore.shibumi.network/NetworkReachabilityAuthority.js"
 reachability_helper="$repo_root/hancore.shibumi.network/scripts/network-reachability-probe"
+speed_test="$repo_root/hancore.shibumi.network/NetworkSpeedTest.qml"
+speed_test_model="$repo_root/hancore.shibumi.network/NetworkSpeedTestModel.js"
+speed_test_authority="$repo_root/hancore.shibumi.network/NetworkSpeedTestAuthority.js"
+speed_test_helper="$repo_root/hancore.shibumi.network/scripts/network-speed-test"
 action_coordinator="$repo_root/hancore.shibumi.network/NetworkActionCoordinator.qml"
 action_model="$repo_root/hancore.shibumi.network/NetworkActionModel.js"
 action_authority="$repo_root/hancore.shibumi.network/NetworkActionAuthority.js"
@@ -593,11 +664,13 @@ qr_dialog="$repo_root/hancore.shibumi.network/NetworkQrDialog.qml"
     && -f $telemetry_authority && -x $telemetry_helper \
     && -f $reachability && -f $reachability_model \
     && -f $reachability_authority && -x $reachability_helper \
+    && -f $speed_test && -f $speed_test_model \
+    && -f $speed_test_authority && -x $speed_test_helper \
     && -f $action_coordinator && -f $action_model \
     && -f $action_authority && -f $qr_encoder && -f $qr_model \
     && -f $qr_session && -f $qr_button && -f $qr_dialog ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkActionCoordinator|NetworkQr(Session|Button|Dialog)' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkSpeedTest|NetworkActionCoordinator|NetworkQr(Session|Button|Dialog)' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -783,6 +856,45 @@ rg -Fq 'signal.SIGKILL' "$reachability_helper" \
 if rg -q 'GetSecrets|nmcli|omarchy|shell=True|/bin/(sh|bash)' \
     "$reachability_helper"; then
   fail "network reachability crosses its fixed process boundary"
+fi
+rg -Fq 'currentClaim = token' "$speed_test_authority" \
+  || fail "network speed-test worker is not process-wide"
+rg -Fq 'permanentlyBlocked = true' "$speed_test_authority" \
+  || fail "destroyed speed-test workers do not block fail-closed"
+rg -Fq 'ownerTokenComponent.createObject(owner' "$speed_test" \
+  || fail "network speed tests are not bound to requesting owners"
+rg -Fq 'function canSignalProcess()' "$speed_test" \
+  || fail "network speed-test cancellation can signal an unstarted process"
+rg -Fq 'if (canSignalProcess()) speedProcess.signal(15)' "$speed_test" \
+  || fail "network speed-test termination bypasses positive PID validation"
+rg -Fq 'if (JSON.stringify(parsed) !== value)' "$speed_test_model" \
+  || fail "network speed-test protocol does not reject duplicate JSON keys"
+rg -Fq 'up.sampleMonotonicMs <= down.sampleMonotonicMs' "$speed_test_model" \
+  || fail "network speed-test phases accept replayed timestamps"
+rg -Fq 'measurement.runToken === runToken' "$speed_test_model" \
+  || fail "network speed-test results are not bound to the current run"
+rg -Fq 'up.interfaceIndex !== down.interfaceIndex' "$speed_test_model" \
+  || fail "network speed-test phases can cross interface identities"
+rg -Fq '"--expected-interface-index", expectedInterfaceIndex' "$speed_test" \
+  || fail "upload speed tests do not pin the download interface identity"
+rg -Fq 'HOST = "speed.cloudflare.com"' "$speed_test_helper" \
+  || fail "network speed-test endpoint is not fixed"
+rg -Fq 'DOWNLOAD_LIMIT_BYTES = 1024 * 1024 * 1024' "$speed_test_helper" \
+  || fail "network speed-test download traffic is unbounded"
+rg -Fq 'UPLOAD_LIMIT_BYTES = 512 * 1024 * 1024' "$speed_test_helper" \
+  || fail "network speed-test upload traffic is unbounded"
+rg -Fq 'MAX_REQUESTS_PER_WORKER = 64' "$speed_test_helper" \
+  || fail "network speed-test request count is unbounded"
+rg -Fq 'PR_SET_PDEATHSIG = 1' "$speed_test_helper" \
+  || fail "network speed-test helper lacks parent-death supervision"
+rg -Fq 'socket.SO_BINDTODEVICE' "$speed_test_helper" \
+  || fail "network speed-test traffic is not bound to its telemetry interface"
+rg -Fq 'interface_index(INTERFACE_NAME) != INTERFACE_INDEX' \
+  "$speed_test_helper" \
+  || fail "network speed-test does not revalidate interface identity"
+if rg -q 'GetSecrets|nmcli|omarchy|subprocess|urllib|import requests|curl|shell=True|/bin/(sh|bash)' \
+    "$speed_test_helper"; then
+  fail "network speed test crosses its fixed TLS worker boundary"
 fi
 rg -Fq 'currentClaim = token' "$action_authority" \
   || fail "network action completion authority is not process-wide"
