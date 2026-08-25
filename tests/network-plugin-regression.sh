@@ -21,6 +21,8 @@ command -v zbarimg >/dev/null 2>&1 \
   || fail "zbarimg is required for exact Wi-Fi QR decode gates"
 command -v magick >/dev/null 2>&1 \
   || fail "ImageMagick is required for Wi-Fi QR render gates"
+python3 -c 'import dbus' >/dev/null 2>&1 \
+  || fail "python-dbus is required for Enterprise source gates"
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
@@ -47,6 +49,7 @@ install -m 0755 \
   "$repo_root/tests/fixtures/network-telemetry-fixture.py" \
   "$repo_root/tests/fixtures/network-reachability-fixture.py" \
   "$repo_root/tests/fixtures/network-speed-test-fixture.py" \
+  "$repo_root/tests/fixtures/network-enterprise-fixture.py" \
   "$tmpdir/fixtures/"
 
 set +e
@@ -452,6 +455,58 @@ for speed_case in main model failure destruction transition; do
   fi
 done
 
+"$repo_root/tests/network-enterprise-helper-regression.py" \
+  || fail "network Enterprise helper regression failed"
+for enterprise_case in model adapter dispatcher destruction; do
+  enterprise_test="$repo_root/tests/network-enterprise-${enterprise_case}-regression.qml"
+  install -m 0644 "$enterprise_test" "$tmpdir/shell.qml"
+  mkdir -p "$tmpdir/enterprise-${enterprise_case}-runtime"
+  chmod 700 "$tmpdir/enterprise-${enterprise_case}-runtime"
+  set +e
+  enterprise_output=$(timeout 18 env \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/enterprise-${enterprise_case}-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+    QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  enterprise_rc=$?
+  set -e
+  printf '%s\n' "$enterprise_output"
+  [[ $enterprise_rc -eq 0 ]] \
+    || fail "network Enterprise $enterprise_case smoke exited $enterprise_rc"
+  enterprise_marker="network enterprise ${enterprise_case//-/ } regression passed"
+  grep -F "$enterprise_marker" <<<"$enterprise_output" >/dev/null \
+    || fail "network Enterprise $enterprise_case success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$enterprise_output"; then
+    fail "network Enterprise $enterprise_case produced a QML runtime error"
+  fi
+  if [[ $enterprise_case == dispatcher ]]; then
+    enterprise_capture="$tmpdir/fixtures/network-enterprise-capture.json"
+    [[ -s $enterprise_capture ]] \
+      || fail "network Enterprise dispatcher fixture captured no request"
+    jq -e '
+      .hasIdentity == true and .hasPassword == true and
+      .method == "peap-mschapv2" and
+      (has("identity") | not) and (has("password") | not) and
+      (has("serverDomain") | not)
+    ' "$enterprise_capture" >/dev/null \
+      || fail "network Enterprise fixture persisted credential values"
+  elif [[ $enterprise_case == destruction ]]; then
+    enterprise_pid_file="$tmpdir/fixtures/network-enterprise-destruction.pid"
+    [[ -s $enterprise_pid_file ]] \
+      || fail "network Enterprise destruction fixture recorded no PID"
+    enterprise_pid=$(<"$enterprise_pid_file")
+    for _ in {1..100}; do
+      kill -0 "$enterprise_pid" 2>/dev/null || break
+      sleep 0.02
+    done
+    kill -0 "$enterprise_pid" 2>/dev/null \
+      && fail "network Enterprise destruction left process $enterprise_pid alive"
+  fi
+done
+
 python3 "$repo_root/tests/network-qr-encoder-regression.py"
 install -m 0644 "$repo_root/tests/network-qr-regression.qml" \
   "$tmpdir/shell.qml"
@@ -645,6 +700,10 @@ speed_test="$repo_root/hancore.shibumi.network/NetworkSpeedTest.qml"
 speed_test_model="$repo_root/hancore.shibumi.network/NetworkSpeedTestModel.js"
 speed_test_authority="$repo_root/hancore.shibumi.network/NetworkSpeedTestAuthority.js"
 speed_test_helper="$repo_root/hancore.shibumi.network/scripts/network-speed-test"
+enterprise_dispatcher="$repo_root/hancore.shibumi.network/NetworkEnterpriseDispatcher.qml"
+enterprise_model="$repo_root/hancore.shibumi.network/NetworkEnterpriseModel.js"
+enterprise_authority="$repo_root/hancore.shibumi.network/NetworkEnterpriseAuthority.js"
+enterprise_helper="$repo_root/hancore.shibumi.network/scripts/network-enterprise-connect"
 action_coordinator="$repo_root/hancore.shibumi.network/NetworkActionCoordinator.qml"
 action_model="$repo_root/hancore.shibumi.network/NetworkActionModel.js"
 action_authority="$repo_root/hancore.shibumi.network/NetworkActionAuthority.js"
@@ -666,11 +725,13 @@ qr_dialog="$repo_root/hancore.shibumi.network/NetworkQrDialog.qml"
     && -f $reachability_authority && -x $reachability_helper \
     && -f $speed_test && -f $speed_test_model \
     && -f $speed_test_authority && -x $speed_test_helper \
+    && -f $enterprise_dispatcher && -f $enterprise_model \
+    && -f $enterprise_authority && -x $enterprise_helper \
     && -f $action_coordinator && -f $action_model \
     && -f $action_authority && -f $qr_encoder && -f $qr_model \
     && -f $qr_session && -f $qr_button && -f $qr_dialog ]] \
   || fail "native Network seam inventory is incomplete"
-if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkSpeedTest|NetworkActionCoordinator|NetworkQr(Session|Button|Dialog)' \
+if rg -q 'NetworkBackendAdapter|NetworkNativeGateway|NetworkScannerLease|NetworkScannerNativeGateway|NetworkManagerLiveness|NetworkLivenessContinuity|NetworkProfileCatalog|NetworkTelemetry|NetworkReachability|NetworkSpeedTest|NetworkEnterprise(Dispatcher|Model)|NetworkActionCoordinator|NetworkQr(Session|Button|Dialog)' \
     "$service"; then
   fail "native Network seams were activated in production"
 fi
@@ -895,6 +956,53 @@ rg -Fq 'interface_index(INTERFACE_NAME) != INTERFACE_INDEX' \
 if rg -q 'GetSecrets|nmcli|omarchy|subprocess|urllib|import requests|curl|shell=True|/bin/(sh|bash)' \
     "$speed_test_helper"; then
   fail "network speed test crosses its fixed TLS worker boundary"
+fi
+rg -Fq 'currentClaim = token' "$enterprise_authority" \
+  || fail "network Enterprise dispatcher is not process-wide"
+rg -Fq 'permanentlyBlocked = true' "$enterprise_authority" \
+  || fail "uncertain Enterprise destruction does not block fail-closed"
+rg -Fq 'inputLine = ""' "$enterprise_dispatcher" \
+  || fail "network Enterprise dispatcher does not clear its stdin frame"
+rg -Fq 'clearEnvironment: true' "$enterprise_dispatcher" \
+  || fail "network Enterprise helper inherits an injectable Python environment"
+rg -Fq 'return ["/usr/bin/python3", "-I", root.helperPath]' "$enterprise_dispatcher" \
+  || fail "network Enterprise helper can import user-site Python modules"
+rg -Fq 'if (canSignalProcess()) enterpriseProcess.signal(15)' \
+  "$enterprise_dispatcher" \
+  || fail "network Enterprise cancellation bypasses positive PID validation"
+rg -Fq '"persist": dbus.String("volatile")' "$enterprise_helper" \
+  || fail "network Enterprise credentials can persist in NetworkManager"
+rg -Fq '"system-ca-certs": dbus.Boolean(True)' "$enterprise_helper" \
+  || fail "network Enterprise server trust does not use system CAs"
+rg -Fq '"domain-suffix-match": dbus.String(request["serverDomain"])' \
+  "$enterprise_helper" \
+  || fail "network Enterprise server certificate identity is not pinned"
+rg -Fq 'if name_owner(bus, deadline) != owner:' "$enterprise_helper" \
+  || fail "network Enterprise mutation is not owner-race protected"
+rg -Fq '"HwAddress", deadline' "$enterprise_helper" \
+  || fail "network Enterprise mutation is not hardware-identity bound"
+rg -Fq 'MAX_INPUT_BYTES = 8192' "$enterprise_helper" \
+  || fail "network Enterprise credential input is unbounded"
+rg -Fq 'function enterpriseConnectionDescriptor(request)' "$native_adapter" \
+  || fail "network Enterprise actions lack a primitive topology descriptor"
+rg -Fq 'function connectNetworkEnterprise(request, credentials)' \
+  "$action_coordinator" \
+  || fail "network action authority does not own Enterprise completion"
+rg -Fq '"connect-enterprise"' "$action_model" \
+  || fail "network action model cannot reconcile Enterprise connections"
+rg -Fq 'EnterpriseModel.completionMatches(completion,' "$action_coordinator" \
+  || fail "network Enterprise completion lacks exact helper evidence"
+rg -Fq 'Model.enterpriseConnected(state, view)' "$action_coordinator" \
+  || fail "network Enterprise completion accepts a disconnected target"
+rg -Fq '"id": dbus.String(request["requestToken"])' "$enterprise_helper" \
+  || fail "network Enterprise activation lacks an exact connection identity"
+if rg -q 'GetSecrets|nmcli|omarchy|subprocess|shell=True|/bin/(sh|bash)' \
+    "$enterprise_helper"; then
+  fail "network Enterprise helper crosses its direct D-Bus boundary"
+fi
+if rg -q 'property [^:]*\b(secret|passphrase|password|identity)\b' \
+    "$enterprise_dispatcher" "$action_coordinator"; then
+  fail "network Enterprise action owners retain named credential properties"
 fi
 rg -Fq 'currentClaim = token' "$action_authority" \
   || fail "network action completion authority is not process-wide"

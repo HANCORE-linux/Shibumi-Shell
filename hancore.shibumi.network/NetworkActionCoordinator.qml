@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "NetworkActionModel.js" as Model
 import "NetworkActionAuthority.js" as Authority
+import "NetworkEnterpriseModel.js" as EnterpriseModel
 
 // Process-wide native action completion coordinator. Dispatch acceptance comes
 // from NetworkBackendAdapter; completion is derived only from later primitive
@@ -13,6 +14,7 @@ Item {
 
   property bool active: false
   property var networkAdapter: null
+  property var enterpriseDispatcher: null
   property int actionTimeoutMs: 30000
   property real generation: 0
 
@@ -52,6 +54,14 @@ Item {
   function connectNetworkWithPsk(request, passphrase) {
     return implementation.dispatch("connect-with-psk", request, passphrase)
   }
+  function connectNetworkEnterprise(request, credentials) {
+    const parsed = EnterpriseModel.credentialsData(credentials)
+    if (!parsed.ok)
+      return implementation.localResult(false, "invalid",
+        "Enterprise credentials are invalid.", "", request)
+    return implementation.dispatch(
+      "connect-enterprise", request, parsed.credentials)
+  }
   function disconnectNetwork(request) {
     return implementation.dispatch("disconnect", request, null)
   }
@@ -68,6 +78,7 @@ Item {
     else implementation.shutdown()
   }
   onNetworkAdapterChanged: implementation.adapterChanged()
+  onEnterpriseDispatcherChanged: implementation.dispatcherChanged()
 
   Timer {
     interval: 250
@@ -100,6 +111,18 @@ Item {
     }
   }
 
+  Connections {
+    target: root.enterpriseDispatcher
+    ignoreUnknownSignals: true
+    function onLaunchFailed(entityId, dispatchGeneration) {
+      implementation.enterpriseLaunchFailed(entityId, dispatchGeneration)
+    }
+    function onCompletionGenerationChanged() {
+      implementation.reconcile()
+      if (root.busy) deferredReconcile.restart()
+    }
+  }
+
   QtObject {
     id: implementation
 
@@ -115,7 +138,9 @@ Item {
         phase: "idle", actionId: "", kind: "", entityId: "",
         relatedEntityId: "", targetEnabled: null, code: "idle", message: "",
         dispatchGeneration: 0, observedGeneration: 0,
-        deviceId: ""
+        deviceId: "", enterpriseToken: "", enterpriseSsidHex: "",
+        enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
+        enterpriseSecurity: ""
       }
     }
 
@@ -241,6 +266,11 @@ Item {
       if (kind === "connect") return adapter.connectNetwork(request)
       if (kind === "connect-with-psk")
         return adapter.connectNetworkWithPsk(request, secret)
+      if (kind === "connect-enterprise") {
+        const dispatcher = root.enterpriseDispatcher
+        return dispatcher
+          ? dispatcher.connectNetworkEnterprise(request, secret) : null
+      }
       if (kind === "disconnect") return adapter.disconnectNetwork(request)
       if (kind === "connect-profile") return adapter.connectProfile(request)
       if (kind === "forget-profile") return adapter.forgetProfile(request)
@@ -256,6 +286,15 @@ Item {
 
     function setTerminal(source, success, code, observedGeneration) {
       actionTimeout.stop()
+      if (source.kind === "connect-enterprise"
+          && EnterpriseModel.validRequestToken(source.enterpriseToken)) {
+        try {
+          if (root.enterpriseDispatcher
+              && typeof root.enterpriseDispatcher.releaseCompletion
+                === "function")
+            root.enterpriseDispatcher.releaseCompletion(source.enterpriseToken)
+        } catch (error) {}
+      }
       state = {
         phase: success ? "succeeded" : "failed",
         actionId: source.actionId,
@@ -270,7 +309,10 @@ Item {
           && observedGeneration >= source.dispatchGeneration
           && observedGeneration >= source.observedGeneration
             ? observedGeneration : source.observedGeneration,
-        deviceId: source.deviceId
+        deviceId: source.deviceId,
+        enterpriseToken: "", enterpriseSsidHex: "",
+        enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
+        enterpriseSecurity: ""
       }
       bumpGeneration()
       if (shutdownRequested) finishShutdown()
@@ -303,6 +345,19 @@ Item {
         return localResult(false, "busy",
           "Another network action is still pending.", state.actionId,
           safeRequest)
+      if (kind === "connect-enterprise") {
+        try {
+          if (!root.enterpriseDispatcher
+              || root.enterpriseDispatcher.available !== true)
+            return localResult(false, "unavailable",
+              "Enterprise connection dispatcher is unavailable.", "",
+              safeRequest)
+        } catch (error) {
+          return localResult(false, "unavailable",
+            "Enterprise connection dispatcher is unavailable.", "",
+            safeRequest)
+        }
+      }
       const viewBefore = adapterView()
       if (!viewBefore || viewBefore.available !== true
           || viewBefore.degraded === true || !parsedRequest.ok
@@ -323,25 +378,63 @@ Item {
         targetEnabled: context.targetEnabled, code: "pending", message: "",
         dispatchGeneration: viewBefore.generation,
         observedGeneration: viewBefore.generation,
-        deviceId: context.deviceId
+        deviceId: context.deviceId,
+        enterpriseToken: "", enterpriseSsidHex: "",
+        enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
+        enterpriseSecurity: ""
       }
       const adapterBefore = root.networkAdapter
+      const dispatcherBefore = kind === "connect-enterprise"
+        ? root.enterpriseDispatcher : null
       dispatchInProgress = true
       try {
         const result = dispatchMethod(kind, {
           entityId: entityId, generation: viewBefore.generation
         }, secret)
         const adapterUnchanged = root.networkAdapter === adapterBefore
+        const dispatcherUnchanged = kind !== "connect-enterprise"
+          || root.enterpriseDispatcher === dispatcherBefore
+        let enterpriseEvidenceValid = kind !== "connect-enterprise"
+        if (kind === "connect-enterprise" && dispatcherUnchanged) {
+          try {
+            const evidence = {
+              deviceId: dispatcherBefore.lastDispatchDeviceId,
+              entityId: dispatcherBefore.lastDispatchEntityId,
+              generation: dispatcherBefore.lastDispatchGeneration,
+              hardwareAddress: dispatcherBefore.lastDispatchHardwareAddress,
+              interfaceName: dispatcherBefore.lastDispatchInterfaceName,
+              security: dispatcherBefore.lastDispatchSecurity,
+              ssidHex: dispatcherBefore.lastDispatchSsidHex
+            }
+            const token = dispatcherBefore.lastDispatchToken
+            if (EnterpriseModel.validRequestToken(token)
+                && EnterpriseModel.validDescriptor(evidence)
+                && evidence.deviceId === context.deviceId
+                && evidence.entityId === entityId
+                && evidence.generation === viewBefore.generation) {
+              action.enterpriseToken = token
+              action.enterpriseSsidHex = evidence.ssidHex
+              action.enterpriseHardwareAddress = evidence.hardwareAddress
+              action.enterpriseInterfaceName = evidence.interfaceName
+              action.enterpriseSecurity = evidence.security
+              enterpriseEvidenceValid = true
+            }
+          } catch (error) {}
+        }
         const currentGeneration = root.networkAdapter
           && root.networkAdapter.generation
         const currentValid = Model.validGeneration(currentGeneration)
           && currentGeneration >= viewBefore.generation
         if (!Model.validDispatchResult(result, entityId)
-            || !adapterUnchanged || !currentValid
+            || !adapterUnchanged || !dispatcherUnchanged
+            || !enterpriseEvidenceValid || !currentValid
             || result.generation !== currentGeneration) {
           beginPending(action, currentValid ? currentGeneration
-            : viewBefore.generation, !adapterUnchanged || !currentValid,
-            !adapterUnchanged ? "adapter-replaced" : "timeout")
+            : viewBefore.generation,
+            !adapterUnchanged || !dispatcherUnchanged
+              || !enterpriseEvidenceValid || !currentValid,
+            !adapterUnchanged || !dispatcherUnchanged
+              ? "adapter-replaced" : "timeout")
           return localResult(false, "uncertain",
             "Network dispatch outcome is uncertain.", id, safeRequest)
         }
@@ -386,9 +479,31 @@ Item {
       const view = adapterView()
       if (!view || view.generation < state.observedGeneration) return
       const result = Model.reconcile(state, view)
+      if (state.kind === "connect-enterprise" && !result.terminal) {
+        let completion = null
+        try { completion = root.enterpriseDispatcher.completionSnapshot }
+        catch (error) { return }
+        if (view.generation > state.dispatchGeneration
+            && Model.enterpriseConnected(state, view)
+            && EnterpriseModel.completionMatches(completion,
+              state.enterpriseToken, state.enterpriseSsidHex,
+              state.deviceId, state.entityId, state.dispatchGeneration,
+              state.enterpriseHardwareAddress, state.enterpriseInterfaceName,
+              state.enterpriseSecurity))
+          setTerminal(state, true, "completed", view.generation)
+        return
+      }
       if (!result.terminal) return
       setTerminal(state, result.success, result.code,
         view ? view.generation : state.observedGeneration)
+    }
+
+    function enterpriseLaunchFailed(entityId, dispatchGeneration) {
+      if (state.phase !== "pending" || state.kind !== "connect-enterprise"
+          || state.entityId !== entityId
+          || state.dispatchGeneration !== dispatchGeneration) return false
+      setTerminal(state, false, "unavailable", state.observedGeneration)
+      return true
     }
 
     function failPending(code) {
@@ -407,6 +522,16 @@ Item {
       state = idleState()
       bumpGeneration()
       return true
+    }
+
+    function dispatcherChanged() {
+      if (root.busy && state.kind === "connect-enterprise") {
+        const next = Object.assign({}, state)
+        next.completionBlocked = true
+        next.timeoutCode = "adapter-replaced"
+        state = next
+        bumpGeneration()
+      }
     }
 
     function adapterChanged() {

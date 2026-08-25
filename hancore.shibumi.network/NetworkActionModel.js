@@ -8,7 +8,7 @@ var MaxRows = 4096
 var MaxMessageBytes = 512
 var Kinds = [
   "wifi-enable", "wifi-disable", "connect", "connect-with-psk",
-  "disconnect", "connect-profile", "forget-profile"
+  "connect-enterprise", "disconnect", "connect-profile", "forget-profile"
 ]
 var DispatchCodes = [
   "accepted", "unavailable", "stale-generation", "stale-id",
@@ -264,7 +264,7 @@ function actionContext(kind, entityId, radio, networks, profiles) {
     }
   }
   if (kind === "connect" || kind === "connect-with-psk"
-      || kind === "disconnect") {
+      || kind === "connect-enterprise" || kind === "disconnect") {
     const resolved = rowResolution(networks, entityId)
     if (!resolved.ok || resolved.count !== 1 || !resolved.row
         || resolved.row.ambiguous === true
@@ -276,6 +276,11 @@ function actionContext(kind, entityId, radio, networks, profiles) {
     if (kind === "connect-with-psk" && (resolved.row.connected === true
         || resolved.row.state !== "disconnected"
         || resolved.row.canConnectWithPsk !== true)) return null
+    if (kind === "connect-enterprise" && (resolved.row.connected === true
+        || resolved.row.state !== "disconnected"
+        || resolved.row.known === true || resolved.row.profileCount !== 0
+        || resolved.row.validProfileCount !== 0
+        || resolved.row.security !== "wpa2-eap")) return null
     if (kind === "disconnect" && (resolved.row.connected !== true
         || resolved.row.state !== "connected"
         || resolved.row.canDisconnect !== true)) return null
@@ -303,6 +308,19 @@ function actionContext(kind, entityId, radio, networks, profiles) {
     relatedEntityId: resolved.row.networkId,
     targetEnabled: null
   }
+}
+
+function enterpriseConnected(pending, view) {
+  if (!pending || pending.kind !== "connect-enterprise" || !validView(view))
+    return false
+  const device = deviceUsable(view.devices, pending.deviceId)
+  const network = rowResolution(view.networks, pending.entityId)
+  return device.ok && device.row.connected === true
+    && network.ok && network.count === 1 && network.row
+    && network.row.ambiguous === false
+    && network.row.deviceId === pending.deviceId
+    && network.row.connected === true && network.row.state === "connected"
+    && network.row.stateChanging === false
 }
 
 function deviceUsable(devices, entityId) {
@@ -351,6 +369,8 @@ function reconcile(pending, view) {
   const device = deviceUsable(view.devices, pending.deviceId)
   if (!device.ok)
     return terminal(false, device.removed ? "device-removed" : "invalid")
+
+  if (pending.kind === "connect-enterprise") return pendingResult()
 
   if (pending.kind === "connect" || pending.kind === "connect-with-psk") {
     const network = rowResolution(view.networks, pending.entityId)

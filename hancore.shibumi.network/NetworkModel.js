@@ -146,6 +146,28 @@ function knownConnectKind(token) {
   return token === "open" || token === "owe"
 }
 
+function utf8Bytes(value) {
+  try {
+    const encoded = unescape(encodeURIComponent(value))
+    const bytes = []
+    for (let index = 0; index < encoded.length; index++)
+      bytes.push(encoded.charCodeAt(index))
+    return bytes
+  } catch (error) {
+    return null
+  }
+}
+
+function ssidHex(value) {
+  if (!validSsid(value)) return ""
+  const bytes = utf8Bytes(value)
+  if (!bytes || bytes.length < 1 || bytes.length > 32) return ""
+  let result = ""
+  for (let index = 0; index < bytes.length; index++)
+    result += ("0" + bytes[index].toString(16)).slice(-2).toUpperCase()
+  return result
+}
+
 function utf8Length(value) {
   try {
     return unescape(encodeURIComponent(value)).length

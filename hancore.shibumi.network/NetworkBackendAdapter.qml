@@ -231,6 +231,59 @@ Item {
       "connectWithPsk", context.target, passphrase, safeRequest.entityId)
   }
 
+  function enterpriseConnectionDescriptor(request) {
+    const parsed = implementation.requestData(request)
+    const safeRequest = parsed.request
+    function response(ok, code, message, descriptor) {
+      return {
+        ok: ok === true,
+        code: String(code || "invalid"),
+        message: String(message || ""),
+        entityId: safeRequest.entityId,
+        generation: root.generation,
+        descriptor: descriptor || null
+      }
+    }
+    if (parsed.error)
+      return response(false, parsed.error.code, parsed.error.message, null)
+    const context = implementation.networkActionContext(safeRequest)
+    if (context.error)
+      return response(false, context.error.code, context.error.message, null)
+    const row = context.row
+    if (row.security !== "wpa2-eap" || row.connected === true
+        || row.state !== "disconnected" || row.stateChanging === true
+        || row.known === true || row.profileCount !== 0
+        || row.validProfileCount !== 0)
+      return response(false, "unsupported",
+        "Enterprise credentials require one new visible network.", null)
+    let device = null
+    let deviceCount = 0
+    const devices = root.deviceSnapshots
+    for (let index = 0; index < devices.length; index++) {
+      if (devices[index].id !== row.deviceId) continue
+      device = devices[index]
+      deviceCount++
+    }
+    const hex = Model.ssidHex(row.ssid)
+    if (deviceCount !== 1 || !device || device.type !== "wifi"
+        || device.ambiguous === true || device.managed !== true
+        || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$/.test(device.name)
+        || !/^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(device.address)
+        || device.address === "00:00:00:00:00:00"
+        || device.address === "FF:FF:FF:FF:FF:FF" || hex === "")
+      return response(false, "unavailable",
+        "Enterprise network device identity is unavailable.", null)
+    return response(true, "accepted", "", {
+      deviceId: row.deviceId,
+      entityId: row.id,
+      generation: root.generation,
+      hardwareAddress: device.address,
+      interfaceName: device.name,
+      security: row.security,
+      ssidHex: hex
+    })
+  }
+
   function disconnectNetwork(request) {
     const parsed = implementation.requestData(request)
     if (parsed.error) return parsed.error
