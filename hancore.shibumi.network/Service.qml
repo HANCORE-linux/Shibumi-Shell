@@ -18,7 +18,10 @@ Item {
   readonly property bool backendAvailable: adapter.backendAvailable
   readonly property bool processRestartRequired:
     liveness.processRestartRequired
+  readonly property bool recoveryBlocked: liveness.recoveryBlocked
   readonly property string livenessPhase: liveness.phase
+  readonly property bool mutationBlocked: root.processRestartRequired
+    || root.recoveryBlocked || root.livenessPhase === "recovery-blocked"
   readonly property bool busy: actions.busy || profileActions.busy
   readonly property bool wifiEnabled: adapter.radioSnapshot.enabled
   readonly property bool wifiAvailable: adapter.radioSnapshot.available
@@ -99,10 +102,15 @@ Item {
   function endTrafficConsumer(owner) {
     return implementation.endTrafficConsumer(owner)
   }
-  function refresh(scanWifi) { return implementation.refresh(scanWifi) }
+  function refresh(scanWifi) {
+    return root.mutationBlocked && scanWifi === true
+      ? false : implementation.refresh(scanWifi)
+  }
   function refreshProfiles() { return catalog.requestRefresh() }
 
   function toggleWifi() {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     if (root.busy) return implementation.invalidAction("busy")
     implementation.prepareAction()
     return actions.setWifiEnabled({
@@ -112,6 +120,8 @@ Item {
   }
 
   function connect(entry) {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     const row = implementation.entryData(entry)
     if (!row || root.busy)
       return implementation.invalidAction(!row ? "invalid" : "busy")
@@ -132,6 +142,8 @@ Item {
   }
 
   function connectWithPassphrase(entry, passphrase) {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     const row = implementation.entryData(entry)
     if (!row || row.entityKind !== "network" || root.busy)
       return implementation.invalidAction(root.busy ? "busy" : "invalid")
@@ -142,6 +154,8 @@ Item {
   }
 
   function connectEnterprise(entry, identity, passphrase, serverDomain) {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     const row = implementation.entryData(entry)
     if (!row || row.entityKind !== "network" || root.busy
         || row.security !== "wpa2-eap")
@@ -158,6 +172,8 @@ Item {
   }
 
   function disconnect(entry) {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     const row = implementation.entryData(entry)
     if (!row || !row.networkId || root.busy)
       return implementation.invalidAction(root.busy ? "busy" : "invalid")
@@ -168,6 +184,8 @@ Item {
   }
 
   function forget(entry) {
+    if (root.mutationBlocked)
+      return implementation.invalidAction("restart-required")
     const row = implementation.entryData(entry)
     if (!row || root.busy)
       return implementation.invalidAction(!row ? "invalid" : "busy")
@@ -183,6 +201,7 @@ Item {
   }
 
   function runSpeedTest(owner) {
+    if (root.mutationBlocked) return false
     const target = owner || implementation.firstSessionOwner()
     return target ? speedTest.requestRun(target) : false
   }
@@ -220,6 +239,7 @@ Item {
 
   NetworkManagerLiveness {
     id: liveness
+    objectName: "shibumiNetworkManagerLiveness"
     active: root.active
     continuityState: continuity
   }
@@ -459,6 +479,8 @@ Item {
         code: String(code || "invalid"),
         message: code === "unsupported"
           ? "This exact network action is unsupported."
+          : code === "restart-required"
+            ? "Restart the shell to restore NetworkManager."
           : code === "unavailable"
             ? "Network action completion evidence is unavailable."
             : code === "busy"

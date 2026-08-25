@@ -84,6 +84,32 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
   fail "native Network panel produced a QML runtime error"
 fi
 
+install -m 0644 \
+  "$repo_root/tests/network-service-recovery-barrier-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/recovery-barrier-runtime"
+chmod 700 "$tmpdir/recovery-barrier-runtime"
+set +e
+recovery_barrier_output=$(timeout 12 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/recovery-barrier-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+recovery_barrier_rc=$?
+set -e
+printf '%s\n' "$recovery_barrier_output"
+[[ $recovery_barrier_rc -eq 0 ]] \
+  || fail "network recovery barrier smoke exited $recovery_barrier_rc"
+grep -F 'network service recovery barrier regression passed' \
+  <<<"$recovery_barrier_output" >/dev/null \
+  || fail "network recovery barrier success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$recovery_barrier_output"; then
+  fail "network recovery barrier produced a QML runtime error"
+fi
+
 install -m 0644 "$repo_root/tests/network-native-backend-seam-regression.qml" \
   "$tmpdir/shell.qml"
 mkdir -p "$tmpdir/native-runtime" "$tmpdir/native-home"
@@ -790,6 +816,17 @@ rg -Fq 'if (root.monitorEstablished) blockRecovery()' "$liveness" \
 rg -Fq 'property bool processRestartRequired: false' \
   "$liveness_continuity" \
   || fail "NetworkManager recovery block does not survive soft reloads"
+rg -Fq 'readonly property bool recoveryBlocked: liveness.recoveryBlocked' \
+  "$service" \
+  || fail "native service does not publish the live recovery block"
+rg -Fq 'readonly property bool mutationBlocked: root.processRestartRequired' \
+  "$service" \
+  || fail "native service does not centralize the restart mutation barrier"
+[[ $(grep -Fc 'invalidAction("restart-required")' "$service") -ge 6 ]] \
+  || fail "native service does not reject every stale public mutation route"
+rg -Fq 'networkService.livenessPhase === "recovery-blocked"' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "native panel cannot explain a live NetworkManager recovery block"
 rg -Fq 'property var continuityState: null' "$liveness" \
   || fail "NetworkManager watcher can hide its reload-continuity owner"
 rg -Fq 'if (JSON.stringify(parsed) !== value)' "$liveness_model" \
@@ -1080,8 +1117,18 @@ rg -Fq 'endTrafficConsumer(root)' "$widget" \
   || fail "Ethernet bar does not release demand-driven telemetry"
 rg -Fq 'id: trafficRetry' "$widget" \
   || fail "Ethernet telemetry has no transient authority retry"
-rg -Fq 'NetworkQrButton {' "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
-  || fail "native connected row has no Shibumi QR action"
+rg -Fq 'objectName: "networkQrAction:" + networkRow.key' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "native connected row has no adjacent Shibumi QR action"
+rg -Fq 'label: "QR Code"' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "native connected row does not label its adjacent QR action"
+rg -Fq 'Accessible.onPressAction: button.activate()' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "native panel actions have no assistive press route"
+rg -Fq 'onTextKey: function(text) { panel.handleTextKey(text) }' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "native Network keyboard dispatcher cannot route QR sharing"
 rg -Fq 'NetworkQrDialog {' "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
   || fail "native panel has no Shibumi QR presentation"
 rg -Fq 'placeholderText: "Authentication server domain"' \

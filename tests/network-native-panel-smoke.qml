@@ -17,10 +17,23 @@ ShellRoot {
   readonly property string profileId: "shibumi-network-v1:"
     + JSON.stringify(["profile", root.deviceId,
       "11111111-1111-4111-8111-111111111111"])
+  property int phase: 0
+  property var connectedForLayout: null
 
   function fail(message) {
     console.error("network-native-panel-smoke:", message)
     Qt.exit(1)
+  }
+
+  function findNamed(item, name) {
+    if (!item) return null
+    if (item.objectName === name) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++) {
+      const found = findNamed(children[index], name)
+      if (found) return found
+    }
+    return null
   }
 
   Item {
@@ -48,6 +61,8 @@ ShellRoot {
     property bool ready: true
     property bool backendAvailable: true
     property bool processRestartRequired: false
+    property bool recoveryBlocked: false
+    property string livenessPhase: "available"
     property bool wifiAvailable: true
     property bool wifiEnabled: true
     property bool scanning: false
@@ -137,6 +152,10 @@ ShellRoot {
     property string enterpriseDomain: ""
     property int forgetCalls: 0
     property int catalogConnectCalls: 0
+    property int disconnectCalls: 0
+    property int passphraseCalls: 0
+    property int enterpriseCalls: 0
+    property int speedCalls: 0
 
     function refresh(_scan) { return true }
     function toggleWifi() { return { accepted: true } }
@@ -144,18 +163,23 @@ ShellRoot {
       if (entry.entityKind === "catalog") catalogConnectCalls++
       return { accepted: true }
     }
-    function disconnect(_entry) { return { accepted: true } }
+    function disconnect(_entry) {
+      disconnectCalls++
+      return { accepted: true }
+    }
     function connectWithPassphrase(_entry, _password) {
+      passphraseCalls++
       return { accepted: true }
     }
     function connectEnterprise(_entry, identity, password, domain) {
+      enterpriseCalls++
       enterpriseIdentity = identity
       enterprisePassword = password
       enterpriseDomain = domain
       return { accepted: true }
     }
     function forget(_entry) { forgetCalls++; return { accepted: true } }
-    function runSpeedTest(_owner) { return true }
+    function runSpeedTest(_owner) { speedCalls++; return true }
     function formatRate(value) { return String(value) }
     function formatPing(value) { return String(value) }
     function formatSpeed(value) { return String(value) }
@@ -172,7 +196,77 @@ ShellRoot {
   Timer {
     interval: 100
     running: true
+    repeat: true
     onTriggered: {
+      if (root.phase === 1) {
+        const connected = root.connectedForLayout
+        const primary = root.findNamed(panel,
+          "networkPrimaryAction:" + connected.entryKey)
+        const qr = root.findNamed(panel,
+          "networkQrAction:" + connected.entryKey)
+        if (!primary || !qr || qr.parent !== primary.parent
+            || primary.parent.children.indexOf(primary)
+              >= primary.parent.children.indexOf(qr)
+            || qr.visible !== true || qr.label !== "QR Code")
+          return root.fail("QR Code was not placed beside Disconnect"
+            + " primary=" + !!primary + " qr=" + !!qr
+            + " sibling=" + !!(primary && qr && qr.parent === primary.parent)
+            + " ordered=" + !!(primary && qr
+              && primary.parent.children.indexOf(primary)
+                < primary.parent.children.indexOf(qr))
+            + " visible=" + !!(qr && qr.visible)
+            + " label=" + (qr ? qr.label : "missing"))
+        const keyCatcher = root.findNamed(
+          panel, "shibumiNetworkPanelKeyCatcher")
+        if (!qr.activeFocusOnTab || !keyCatcher
+            || !panel.focusQrAction(1))
+          return root.fail("QR Code action lost keyboard reachability")
+        keyCatcher.textKey("q")
+        const qrCanvas = root.findNamed(panel, "shibumiNetworkQrCanvas")
+        if (!qrCanvas || !qrCanvas.visible)
+          return root.fail("QR Code keyboard route did not open its presentation")
+        if (panel.openPassword(service.networks[1]) === false)
+          return root.fail("credential cleanup setup was rejected")
+        panel.passwordText = "clear-on-recovery"
+        panel.identityText = "clear@example.test"
+        panel.serverDomainText = "radius.example.test"
+        panel.requestForget(service.networks[2])
+        if (panel.passwordKey === "" || panel.pendingForgetKey === "")
+          return root.fail("recovery cleanup fixtures were not active")
+        const forgetBefore = service.forgetCalls
+        const enterpriseBefore = service.enterpriseCalls
+        service.recoveryBlocked = true
+        service.livenessPhase = "recovery-blocked"
+        if (panel.passwordKey !== "" || panel.passwordText !== ""
+            || panel.identityText !== "" || panel.serverDomainText !== ""
+            || panel.pendingForgetKey !== "" || qrCanvas.visible)
+          return root.fail("recovery transition retained transient state")
+        panel.runPrimary(connected)
+        panel.requestForget(service.networks[2])
+        panel.requestForget(service.networks[2])
+        panel.passwordText = "blocked-secret"
+        panel.identityText = "blocked@example.test"
+        panel.serverDomainText = "radius.example.test"
+        const submitted = panel.submitPassword(service.networks[1])
+        const submittedPsk = panel.submitPassword(service.networks[3])
+        const opened = panel.openPassword(service.networks[1])
+        const shared = panel.showQr(connected)
+        if (panel.statusText() !== "Restart the shell to restore NetworkManager"
+            || panel.canRunPrimary(connected) || submitted || submittedPsk
+            || opened || shared
+            || service.disconnectCalls !== 0
+            || service.forgetCalls !== forgetBefore
+            || service.enterpriseCalls !== enterpriseBefore
+            || panel.passwordKey !== "" || qrCanvas.visible)
+          return root.fail("recovery block did not stop every panel mutation")
+        service.recoveryBlocked = false
+        service.livenessPhase = "available"
+        if (!panel.showQrForConnected())
+          return root.fail("connected native open network did not open QR")
+        console.log("network native panel smoke passed")
+        Qt.exit(0)
+        return
+      }
       const available = panel.filteredNetworks()
       if (!panel.open || available.length !== 2 || panel.savedCount !== 2
           || panel.dnsText() !== "1.1.1.1 · 2606:4700:4700::1111")
@@ -205,10 +299,9 @@ ShellRoot {
       if (service.forgetCalls !== 2)
         return root.fail("exact saved profile confirmation was not routed")
       panel.savedOnly = false
-      if (!panel.showQrForConnected())
-        return root.fail("connected native open network did not open QR")
-      console.log("network native panel smoke passed")
-      Qt.exit(0)
+      root.connectedForLayout = available[0]
+      panel.toggleExpanded(root.connectedForLayout)
+      root.phase = 1
     }
   }
 }
