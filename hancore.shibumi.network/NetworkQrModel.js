@@ -131,8 +131,11 @@ function fixedMessage(code) {
   case "ambiguous": return "This Wi-Fi identity is ambiguous."
   case "enterprise": return "Enterprise Wi-Fi sharing is not available yet."
   case "unsupported": return "This Wi-Fi security type cannot be shared yet."
-  case "passphrase-required": return "Enter the Wi-Fi passphrase to create the QR code."
-  case "invalid-passphrase": return "The Wi-Fi passphrase is invalid."
+  case "passphrase-required": return "Loading the saved Wi-Fi QR code."
+  case "secret-unavailable": return "The saved Wi-Fi password is unavailable."
+  case "stale": return "The Wi-Fi connection changed. Open QR Code again."
+  case "timeout": return "The saved Wi-Fi password request timed out."
+  case "invalid-passphrase": return "The saved Wi-Fi password is invalid."
   case "encode": return "Could not create the Wi-Fi QR code."
   default: return "The Wi-Fi network changed. Select it again."
   }

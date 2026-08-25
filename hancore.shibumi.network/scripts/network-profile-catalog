@@ -288,11 +288,11 @@ def security_token(settings: dict[str, Any]) -> tuple[str, bool]:
             and (not isinstance(authentication, str)
                  or authentication not in {"open", "shared", "leap"}):
         raise CatalogError("invalid authentication setting")
-    rsn_only = protocols == ["rsn"]
+    mixed_wpa_rsn = "wpa" in protocols and "rsn" in protocols
     if key_management == "wpa-psk":
-        token = "wpa2-psk" if rsn_only else "wpa-psk"
+        token = "wpa-psk" if mixed_wpa_rsn else "wpa2-psk"
     elif key_management == "wpa-eap":
-        token = "wpa2-eap" if rsn_only else "wpa-eap"
+        token = "wpa-eap" if mixed_wpa_rsn else "wpa2-eap"
     elif key_management == "ieee8021x":
         token = "leap" if authentication == "leap" else "dynamic-wep"
     else:

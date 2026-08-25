@@ -14,8 +14,11 @@ FocusScope {
   readonly property bool opened: session.opened
   readonly property bool needsPassphrase: session.needsPassphrase
   readonly property bool qrReady: session.ready
+  property bool secretPending: false
+  property string secretRequestToken: ""
 
   signal dismissed()
+  signal secretCancelRequested(string requestToken)
 
   visible: root.opened
   z: 1000
@@ -23,47 +26,91 @@ FocusScope {
 
   function openNetwork(network) {
     root.network = network
-    passwordField.text = ""
+    root.secretPending = false
+    root.secretRequestToken = ""
     const result = session.openNetwork(network)
     Qt.callLater(function() {
-      if (!root.opened) return
-      if (session.needsPassphrase) passwordField.forceActiveFocus()
-      else closeButton.forceActiveFocus()
+      if (root.opened) closeButton.forceActiveFocus()
     })
     return result
+  }
+
+  function beginSecretRequest(requestToken) {
+    if (!root.opened || !session.needsPassphrase
+        || typeof requestToken !== "string" || requestToken === "")
+      return false
+    const result = session.awaitSavedSecret()
+    if (!result.ok) return false
+    root.secretRequestToken = requestToken
+    root.secretPending = true
+    return true
+  }
+
+  function rejectSecretRequest(code) {
+    if (!root.opened || !session.needsPassphrase) return false
+    root.secretPending = false
+    root.secretRequestToken = ""
+    session.rejectSavedSecret(code === "timeout" ? "timeout"
+      : code === "stale" ? "stale" : "secret-unavailable")
+    closeButton.forceActiveFocus()
+    return true
+  }
+
+  function stageSavedSecret(evidence, passphrase) {
+    if (!root.opened || !root.secretPending || !evidence
+        || evidence.requestToken !== root.secretRequestToken) return false
+    const result = session.stagePassphrase(root.network, passphrase)
+    if (!result.ok || result.code !== "staged") {
+      root.secretPending = false
+      root.secretRequestToken = ""
+      closeButton.forceActiveFocus()
+      return false
+    }
+    return !root.qrReady
+  }
+
+  function commitSavedSecret(requestToken) {
+    if (!root.opened || !root.secretPending
+        || requestToken !== root.secretRequestToken) return false
+    const result = session.commitSavedSecret()
+    if (!result.ok || result.code !== "ready") return false
+    root.secretPending = false
+    root.secretRequestToken = ""
+    closeButton.forceActiveFocus()
+    return true
+  }
+
+  function rejectSavedSecret(requestToken, code) {
+    if (!root.opened || !root.secretPending
+        || requestToken !== root.secretRequestToken) return false
+    root.secretPending = false
+    root.secretRequestToken = ""
+    session.rejectSavedSecret(code === "timeout" ? "timeout"
+      : code === "stale" ? "stale" : "secret-unavailable")
+    closeButton.forceActiveFocus()
+    return true
   }
 
   function updateNetwork(network) {
     root.network = network
     const result = session.updateNetwork(network)
-    if (!result.ok) {
-      passwordField.text = ""
-      Qt.callLater(function() {
-        if (!root.opened) return
-        if (session.needsPassphrase) passwordField.forceActiveFocus()
-        else closeButton.forceActiveFocus()
-      })
+    if (!result.ok && root.secretPending) {
+      const token = root.secretRequestToken
+      root.secretPending = false
+      root.secretRequestToken = ""
+      root.secretCancelRequested(token)
     }
     return result
   }
 
   function close() {
-    passwordField.text = ""
+    const token = root.secretRequestToken
+    root.secretPending = false
+    root.secretRequestToken = ""
+    if (token !== "") root.secretCancelRequested(token)
     root.network = null
     session.close()
     root.dismissed()
-  }
-
-  function submitPassphrase() {
-    const result = session.submitPassphrase(
-      root.network, passwordField.text)
-    passwordField.text = ""
-    if (result.ok && result.code === "ready")
-      closeButton.forceActiveFocus()
-    else if (session.needsPassphrase)
-      passwordField.forceActiveFocus()
-    else closeButton.forceActiveFocus()
-    return result
   }
 
   Keys.onEscapePressed: function(event) {
@@ -123,8 +170,8 @@ FocusScope {
 
       Text {
         width: parent.width
-        visible: session.needsPassphrase
-        text: "Enter the passphrase used in this session. Shibumi does not read saved Wi-Fi secrets."
+        visible: root.secretPending
+        text: "Loading saved Wi-Fi QR code…"
         color: root.visualTokens ? root.visualTokens.mutedInk
           : Commons.Color.muted
         font.family: root.visualTokens ? root.visualTokens.fontFamily
@@ -132,60 +179,6 @@ FocusScope {
         font.pixelSize: Commons.Style.font.caption
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.Wrap
-      }
-
-      Rectangle {
-        id: passwordFrame
-        width: parent.width
-        height: Commons.Style.space(38)
-        visible: session.needsPassphrase
-        radius: root.visualTokens ? root.visualTokens.tileRadius
-          : Commons.Style.space(7)
-        color: root.visualTokens ? root.visualTokens.fillIdle
-          : Qt.rgba(0, 0, 0, 0.12)
-        border.width: passwordField.activeFocus ? 2 : 1
-        border.color: passwordField.activeFocus
-          ? (root.visualTokens ? root.visualTokens.seal
-            : Commons.Color.bar.active)
-          : (root.visualTokens ? root.visualTokens.panelBorder
-            : Qt.rgba(1, 1, 1, 0.18))
-
-        TextInput {
-          id: passwordField
-          objectName: "shibumiNetworkQrPasswordField"
-          anchors.fill: parent
-          anchors.leftMargin: Commons.Style.space(10)
-          anchors.rightMargin: Commons.Style.space(10)
-          verticalAlignment: TextInput.AlignVCenter
-          color: root.visualTokens ? root.visualTokens.ink
-            : Commons.Color.foreground
-          font.family: root.visualTokens ? root.visualTokens.fontFamily
-            : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.body
-          echoMode: TextInput.Password
-          passwordCharacter: "•"
-          selectByMouse: true
-          clip: true
-          Accessible.role: Accessible.EditableText
-          Accessible.name: "Wi-Fi passphrase"
-          Keys.onReturnPressed: function(event) {
-            event.accepted = true
-            root.submitPassphrase()
-          }
-          Keys.onEnterPressed: function(event) {
-            event.accepted = true
-            root.submitPassphrase()
-          }
-        }
-      }
-
-      ActionButton {
-        visible: session.needsPassphrase
-        width: parent.width
-        label: "Create QR code"
-        primary: true
-        enabled: passwordField.text.length > 0
-        onActivated: root.submitPassphrase()
       }
 
       Rectangle {
@@ -324,7 +317,8 @@ FocusScope {
   }
 
   Component.onDestruction: {
-    passwordField.text = ""
+    secretPending = false
+    secretRequestToken = ""
     session.close()
   }
 }

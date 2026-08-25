@@ -4,9 +4,9 @@ import QtQuick
 import "NetworkQrModel.js" as Model
 
 // Screen-local, ephemeral QR presentation state. It retains only validated
-// primitive network identity and the rendered module matrix. Passphrases and
-// Wi-Fi payload strings are never properties and are discarded in the submit
-// call before control returns to the event loop.
+// primitive network identity and rendered/staged module matrices. Passphrases
+// and Wi-Fi payload strings are never properties and are discarded in the
+// encoder callback before control returns to the event loop.
 Item {
   id: root
 
@@ -27,8 +27,16 @@ Item {
 
   function openNetwork(network) { return implementation.openNetwork(network) }
   function updateNetwork(network) { return implementation.updateNetwork(network) }
+  function awaitSavedSecret() { return implementation.awaitSavedSecret() }
+  function stagePassphrase(network, passphrase) {
+    return implementation.stagePassphrase(network, passphrase)
+  }
+  function commitSavedSecret() { return implementation.commitSavedSecret() }
   function submitPassphrase(network, passphrase) {
     return implementation.submitPassphrase(network, passphrase)
+  }
+  function rejectSavedSecret(code) {
+    return implementation.rejectSavedSecret(code)
   }
   function close() { implementation.close() }
 
@@ -41,6 +49,8 @@ Item {
     property string errorCode: ""
     property int size: 0
     property var rows: []
+    property int stagedSize: 0
+    property var stagedRows: []
 
     function publicResult(ok, code) {
       return { ok: ok === true, code: String(code || "invalid-network") }
@@ -51,20 +61,39 @@ Item {
       rows = []
     }
 
-    function acceptMatrix(result) {
+    function clearStagedMatrix() {
+      stagedSize = 0
+      stagedRows = []
+    }
+
+    function validatedRows(result) {
       if (!result || result.ok !== true || result.code !== "ready"
           || typeof result.size !== "number" || result.size < 29
           || result.size > 69 || !Array.isArray(result.rows)
-          || result.rows.length !== result.size) return false
+          || result.rows.length !== result.size) return null
       const nextRows = []
       for (let index = 0; index < result.rows.length; index++) {
         const row = result.rows[index]
         if (typeof row !== "string" || row.length !== result.size
-            || !/^[01]+$/.test(row)) return false
+            || !/^[01]+$/.test(row)) return null
         nextRows.push(row)
       }
+      return nextRows
+    }
+
+    function acceptMatrix(result) {
+      const nextRows = validatedRows(result)
+      if (!nextRows) return false
       size = result.size
       rows = nextRows
+      return true
+    }
+
+    function stageMatrix(result) {
+      const nextRows = validatedRows(result)
+      if (!nextRows) return false
+      stagedSize = result.size
+      stagedRows = nextRows
       return true
     }
 
@@ -109,6 +138,7 @@ Item {
       const current = Model.prepare(network)
       if (!current.ok || !sameIdentity(prepared, current)) {
         clearMatrix()
+        clearStagedMatrix()
         prepared = null
         needsPassphrase = false
         errorCode = current.ok ? "invalid-network" : current.code
@@ -119,27 +149,64 @@ Item {
         : needsPassphrase ? "passphrase-required" : "invalid-network")
     }
 
-    function submitPassphrase(network, passphrase) {
+    function awaitSavedSecret() {
+      if (!root.opened || !needsPassphrase || !prepared)
+        return publicResult(false, "invalid-network")
+      clearStagedMatrix()
+      errorCode = ""
+      return publicResult(true, "pending")
+    }
+
+    function rejectSavedSecret(code) {
+      if (!root.opened || !needsPassphrase || !prepared)
+        return publicResult(false, "invalid-network")
+      clearMatrix()
+      clearStagedMatrix()
+      prepared = null
+      needsPassphrase = false
+      errorCode = String(code || "secret-unavailable")
+      return publicResult(false, errorCode)
+    }
+
+    function stagePassphrase(network, passphrase) {
       if (!root.opened || !needsPassphrase || !prepared)
         return publicResult(false, "invalid-network")
       const current = Model.prepare(network)
       if (!current.ok || !sameIdentity(prepared, current)) {
         clearMatrix()
+        clearStagedMatrix()
         prepared = null
         needsPassphrase = false
         errorCode = current.ok ? "invalid-network" : current.code
         return publicResult(false, errorCode)
       }
       const encoded = Model.encode(current, passphrase)
-      if (!acceptMatrix(encoded)) {
+      if (!stageMatrix(encoded)) {
         clearMatrix()
+        clearStagedMatrix()
         errorCode = encoded && encoded.code ? encoded.code : "encode"
         return publicResult(false, errorCode)
       }
       prepared = current
+      errorCode = ""
+      return publicResult(true, "staged")
+    }
+
+    function commitSavedSecret() {
+      if (!root.opened || !needsPassphrase || !prepared
+          || stagedSize < 29 || stagedRows.length !== stagedSize)
+        return publicResult(false, "invalid-network")
+      size = stagedSize
+      rows = stagedRows.slice()
+      clearStagedMatrix()
       needsPassphrase = false
       errorCode = ""
       return publicResult(true, "ready")
+    }
+
+    function submitPassphrase(network, passphrase) {
+      const staged = stagePassphrase(network, passphrase)
+      return staged.ok ? commitSavedSecret() : staged
     }
 
     function close() {
@@ -149,6 +216,7 @@ Item {
       needsPassphrase = false
       errorCode = ""
       clearMatrix()
+      clearStagedMatrix()
     }
   }
 

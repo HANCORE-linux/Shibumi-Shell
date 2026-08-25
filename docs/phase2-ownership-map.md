@@ -182,7 +182,11 @@ order; Ethernet bar surfaces acquire only telemetry. Exact UUID profiles use
 current `NMSettings` objects, Wi-Fi failures carry generation-bound native
 evidence, and the Shibumi-owned TLS speed test binds both phases to the same
 interface, source address, interface index, route, and run token. QR state is
-screen-local and never reads saved secrets. The only retained host identity is
+screen-local. Only an explicit QR click may request the single `psk` field from
+the exact active saved WPA/WPA2/SAE profile; the bounded process-wide reader
+revalidates owner and topology and discards the value immediately after QR
+encoding. It never publishes, caches, logs, or persists the secret. The only
+retained host identity is
 the documented `omarchy.network` IPC/widget-family compatibility alias; no host
 Network/QR component or Network feature helper is loaded.
 

@@ -11,8 +11,8 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
-  property var passwordControl: null
   property var closeControl: null
+  property string cancelledToken: ""
   property string deviceId: NetworkModel.deviceId(
     "wifi", "AA:BB:CC:DD:EE:54", "wlan-qr-render")
   readonly property string outputPath:
@@ -55,6 +55,8 @@ ShellRoot {
     }
   }
 
+  function evidence(token) { return { requestToken: token } }
+
   function findNamed(item, name) {
     if (!item) return null
     if (item.objectName === name) return item
@@ -66,13 +68,18 @@ ShellRoot {
     return null
   }
 
+  function requestStarted(token) {
+    const opened = dialog.openNetwork(root.pskRow(1, true))
+    return opened.ok && opened.code === "passphrase-required"
+      && dialog.beginSecretRequest(token) && dialog.secretPending
+      && dialog.secretRequestToken === token
+  }
+
   function controlsCleared(label) {
-    if (!root.passwordControl || !root.closeControl
-        || root.passwordControl.text !== ""
-        || dialog.needsPassphrase
-        || !root.closeControl.visible
-        || !root.closeControl.activeFocus)
-      return root.fail(label + " did not restore visible close focus")
+    if (!root.closeControl || dialog.secretPending
+        || dialog.secretRequestToken !== "" || dialog.needsPassphrase
+        || !root.closeControl.visible || !root.closeControl.activeFocus)
+      return root.fail(label + " did not clear automatic secret state")
     return true
   }
 
@@ -85,6 +92,9 @@ ShellRoot {
     Network.NetworkQrDialog {
       id: dialog
       anchors.fill: parent
+      onSecretCancelRequested: function(requestToken) {
+        root.cancelledToken = requestToken
+      }
     }
   }
 
@@ -124,15 +134,10 @@ ShellRoot {
         canvas.grabToImage(function(result) {
           if (!result.saveToFile(root.outputPath))
             return root.fail("could not save rendered QR canvas")
-          const opened = dialog.openNetwork(root.pskRow(1, true))
-          root.passwordControl = root.findNamed(
-            surface.contentItem, "shibumiNetworkQrPasswordField")
           root.closeControl = root.findNamed(
             surface.contentItem, "shibumiNetworkQrCloseButton")
-          if (!opened.ok || !root.passwordControl || !root.closeControl)
-            return root.fail("secured focus controls were not found")
-          root.passwordControl.text = "correct horse"
-          root.passwordControl.forceActiveFocus()
+          if (!root.closeControl || !root.requestStarted("request-identity"))
+            return root.fail("automatic saved-secret request did not start")
           dialog.updateNetwork(root.row("Other"))
           root.phase = 3
           root.ticks = 0
@@ -141,10 +146,11 @@ ShellRoot {
       }
       if (root.phase === 3) {
         if (root.ticks < 2) return
-        if (!root.controlsCleared("identity change")) return
-        dialog.openNetwork(root.pskRow(1, true))
-        root.passwordControl.text = "correct horse"
-        root.passwordControl.forceActiveFocus()
+        if (!root.controlsCleared("identity change")
+            || root.cancelledToken !== "request-identity") return
+        root.cancelledToken = ""
+        if (!root.requestStarted("request-disconnect"))
+          return root.fail("disconnect request setup failed")
         dialog.updateNetwork(root.pskRow(1, false))
         root.phase = 4
         root.ticks = 0
@@ -152,10 +158,11 @@ ShellRoot {
       }
       if (root.phase === 4) {
         if (root.ticks < 2) return
-        if (!root.controlsCleared("disconnect")) return
-        dialog.openNetwork(root.pskRow(1, true))
-        root.passwordControl.text = "correct horse"
-        root.passwordControl.forceActiveFocus()
+        if (!root.controlsCleared("disconnect")
+            || root.cancelledToken !== "request-disconnect") return
+        root.cancelledToken = ""
+        if (!root.requestStarted("request-generation"))
+          return root.fail("generation request setup failed")
         dialog.updateNetwork(root.pskRow(2, true))
         root.phase = 5
         root.ticks = 0
@@ -163,29 +170,33 @@ ShellRoot {
       }
       if (root.phase === 5) {
         if (root.ticks < 2) return
-        if (!root.controlsCleared("generation change")) return
-        dialog.openNetwork(root.pskRow(1, true))
-        root.passwordControl.text = "correct horse"
-        root.passwordControl.forceActiveFocus()
+        if (!root.controlsCleared("generation change")
+            || root.cancelledToken !== "request-generation") return
+        root.cancelledToken = ""
+        if (!root.requestStarted("request-stale"))
+          return root.fail("stale request setup failed")
         dialog.network = root.pskRow(2, true)
-        const submitted = dialog.submitPassphrase()
-        if (submitted.ok || dialog.needsPassphrase)
-          return root.fail("stale secured submit did not fail closed")
+        if (dialog.stageSavedSecret(
+            root.evidence("request-stale"), "correct horse")
+            || dialog.needsPassphrase || dialog.qrReady)
+          return root.fail("stale automatic secret did not fail closed")
         root.phase = 6
         root.ticks = 0
         return
       }
       if (root.phase === 6) {
         if (root.ticks < 2) return
-        if (!root.controlsCleared("stale submit")) return
-        dialog.openNetwork(root.pskRow(1, true))
-        root.passwordControl.text = "correct horse"
-        root.passwordControl.forceActiveFocus()
-        const submitted = dialog.submitPassphrase()
-        if (!submitted.ok || submitted.code !== "ready"
-            || dialog.needsPassphrase || !dialog.qrReady
-            || root.passwordControl.text !== "")
-          return root.fail("valid secured submit did not settle QR state")
+        if (!root.controlsCleared("stale secret")) return
+        if (!root.requestStarted("request-valid"))
+          return root.fail("valid request setup failed")
+        if (!dialog.stageSavedSecret(
+            root.evidence("request-valid"), "correct horse")
+            || !dialog.needsPassphrase || !dialog.secretPending
+            || dialog.qrReady
+            || !dialog.commitSavedSecret("request-valid")
+            || dialog.needsPassphrase || dialog.secretPending
+            || !dialog.qrReady)
+          return root.fail("valid automatic secret did not settle QR state")
         root.phase = 7
         root.ticks = 0
         return
@@ -193,7 +204,7 @@ ShellRoot {
       if (root.phase === 7) {
         if (root.ticks < 2) return
         if (!root.closeControl.activeFocus)
-          return root.fail("valid secured submit did not restore close focus")
+          return root.fail("valid secured QR did not restore close focus")
         const canvas = root.findNamed(
           surface.contentItem, "shibumiNetworkQrCanvas")
         if (!canvas || !canvas.visible)

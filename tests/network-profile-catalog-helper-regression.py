@@ -168,7 +168,7 @@ def main() -> int:
         "profileType": "wifi",
         "ssid": "Café",
         "ssidHex": "436166C3A9",
-        "security": "wpa-eap",
+        "security": "wpa2-eap",
         "enterprise": True,
         "hidden": False,
         "autoconnect": True,
@@ -183,6 +183,19 @@ def main() -> int:
     }
     if profile_from_settings(wpa2)["security"] != "wpa2-psk":
         raise AssertionError("RSN-only PSK was not classified as WPA2")
+    absent_proto = wifi_settings()
+    absent_proto["802-11-wireless-security"] = {
+        "key-mgmt": variant("s", "wpa-psk"),
+    }
+    if profile_from_settings(absent_proto)["security"] != "wpa2-psk":
+        raise AssertionError("absent PSK proto diverged from Quickshell WPA2")
+    wpa_only = wifi_settings()
+    wpa_only["802-11-wireless-security"] = {
+        "key-mgmt": variant("s", "wpa-psk"),
+        "proto": variant("as", ["wpa"]),
+    }
+    if profile_from_settings(wpa_only)["security"] != "wpa2-psk":
+        raise AssertionError("WPA-only proto diverged from Quickshell WPA2")
     mixed = wifi_settings()
     mixed["802-11-wireless-security"] = {
         "key-mgmt": variant("s", "wpa-psk"),

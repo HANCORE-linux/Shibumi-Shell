@@ -91,6 +91,24 @@ ShellRoot {
           || session.qrRows.length !== 0 || session.ssid !== "")
         return root.fail("closing QR session retained presentation state")
 
+      const persisted = {
+        uuid: "11111111-2222-4333-8444-555555555555",
+        profileType: "wifi",
+        ssid: "Private;Office",
+        security: "wpa2-psk"
+      }
+      if (!NetworkModel.qrShareEligible(true, false, "wpa2-psk",
+          "Private;Office", persisted.uuid, 1, persisted)
+          || NetworkModel.qrShareEligible(true, false, "wpa2-psk",
+            "Private;Office", persisted.uuid, 1, null)
+          || NetworkModel.qrShareEligible(true, false, "wpa2-psk",
+            "Private;Office", persisted.uuid, 0, persisted)
+          || NetworkModel.qrShareEligible(true, false, "wpa2-psk",
+            "Private;Office", persisted.uuid, 2, persisted)
+          || NetworkModel.qrShareEligible(true, false, "wpa2-psk",
+            "Other", persisted.uuid, 1, persisted))
+        return root.fail("secured QR persisted-profile eligibility failed")
+
       const psk = root.networkRow("Private;Office", "wpa2-psk", 4)
       result = session.openNetwork(psk)
       if (!result.ok || result.code !== "passphrase-required"

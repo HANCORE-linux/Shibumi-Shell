@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "NetworkModel.js" as NetworkModel
+import "NetworkQrSecretModel.js" as QrSecretModel
 
 // One process-wide native Network owner. Raw Quickshell Networking objects are
 // confined to NetworkBackendAdapter/NetworkScannerLease; this facade publishes
@@ -23,6 +25,9 @@ Item {
   readonly property bool mutationBlocked: root.processRestartRequired
     || root.recoveryBlocked || root.livenessPhase === "recovery-blocked"
   readonly property bool busy: actions.busy || profileActions.busy
+    || qrSecrets.busy
+  readonly property bool qrSecretBusy: qrSecrets.busy
+  readonly property string qrSecretError: qrSecrets.errorCode
   readonly property bool wifiEnabled: adapter.radioSnapshot.enabled
   readonly property bool wifiAvailable: adapter.radioSnapshot.available
   readonly property bool scanning: scanner.scanning || scanner.scannerEnabled
@@ -211,6 +216,36 @@ Item {
     return target ? speedTest.cancel(target) : false
   }
 
+  function beginQrGesture(owner, entry) {
+    return implementation.beginQrGesture(owner, entry)
+  }
+
+  function cancelQrGesture(owner, gestureToken) {
+    return implementation.cancelQrGesture(owner, gestureToken)
+  }
+
+  function requestQrSecret(owner, entry, gestureToken) {
+    if (root.mutationBlocked) return {
+      accepted: false, code: "restart-required", requestToken: ""
+    }
+    const row = implementation.entryData(entry)
+    const descriptor = implementation.qrSecretDescriptor(row)
+    if (!descriptor
+        || !implementation.consumeQrGesture(
+          owner, descriptor, gestureToken)) return {
+      accepted: false, code: "unauthorized", requestToken: ""
+    }
+    return qrSecrets.request(owner, descriptor)
+  }
+
+  function cancelQrSecret(owner, requestToken) {
+    return qrSecrets.cancel(owner, requestToken)
+  }
+
+  function qrSecretRequestCurrent(descriptor) {
+    return implementation.qrSecretRequestCurrent(descriptor)
+  }
+
   function formatRate(value) {
     const bytes = Math.max(0, Number(value) || 0)
     if (bytes >= 1024 * 1024 * 1024)
@@ -233,6 +268,12 @@ Item {
     if (!isFinite(measured) || measured < 0) return "—"
     return (measured >= 100 ? measured.toFixed(0) : measured.toFixed(1))
       + " Mbps"
+  }
+
+  Timer {
+    id: qrGestureTimeout
+    interval: 750
+    onTriggered: implementation.clearQrGesture()
   }
 
   NetworkLivenessContinuity { id: continuity }
@@ -304,6 +345,13 @@ Item {
     networkTelemetry: telemetry
   }
 
+  NetworkQrSecretDispatcher {
+    id: qrSecrets
+    active: root.active
+    networkService: root
+    nativeLiveness: liveness
+  }
+
   NetworkProfileActionLease {
     id: profileActionLease
     active: root.active
@@ -323,6 +371,10 @@ Item {
 
     property var ownerRecords: []
     property string catalogRefreshActionId: ""
+    property int qrGestureSequence: 1
+    property string qrGestureToken: ""
+    property var qrGestureOwner: null
+    property var qrGestureDescriptor: null
 
     function sessionCount() {
       let count = 0
@@ -457,6 +509,134 @@ Item {
       return row
     }
 
+    function clearQrGesture() {
+      qrGestureTimeout.stop()
+      qrGestureToken = ""
+      qrGestureOwner = null
+      qrGestureDescriptor = null
+    }
+
+    function beginQrGesture(owner, entry) {
+      clearQrGesture()
+      if (!owner || root.mutationBlocked) return {
+        accepted: false, gestureToken: ""
+      }
+      const row = entryData(entry)
+      const descriptor = qrSecretDescriptor(row)
+      if (!descriptor) return { accepted: false, gestureToken: "" }
+      const token = "shibumi-qr-gesture-v1:" + JSON.stringify([
+        qrGestureSequence
+      ])
+      qrGestureSequence++
+      if (qrGestureSequence > 2147483646) qrGestureSequence = 1
+      qrGestureToken = token
+      qrGestureOwner = owner
+      qrGestureDescriptor = descriptor
+      qrGestureTimeout.restart()
+      return { accepted: true, gestureToken: token }
+    }
+
+    function cancelQrGesture(owner, token) {
+      if (owner !== qrGestureOwner || token !== qrGestureToken) return false
+      clearQrGesture()
+      return true
+    }
+
+    function consumeQrGesture(owner, descriptor, token) {
+      const accepted = owner === qrGestureOwner && token === qrGestureToken
+        && QrSecretModel.sameDescriptor(descriptor, qrGestureDescriptor)
+      clearQrGesture()
+      return accepted
+    }
+
+    function qrSecretDescriptor(source) {
+      if (!source || source.entityKind !== "network"
+          || source.connected !== true || source.state !== "connected"
+          || source.stateChanging === true || source.ambiguous === true
+          || !NetworkModel.pskKind(source.security)
+          || typeof source.profileUuid !== "string"
+          || source.profileUuid === ""
+          || source.generation !== adapter.generation
+          || activeUuid(source.deviceId) !== source.profileUuid
+          || adapter.savedProfileCatalogAvailable !== true) return null
+      const nativeProfiles = adapter.profileSnapshots
+      let nativeProfileCount = 0
+      for (let index = 0; index < nativeProfiles.length; index++) {
+        const profile = nativeProfiles[index]
+        if (profile && profile.networkId === source.networkId
+            && profile.uuid === source.profileUuid
+            && profile.ambiguous !== true) nativeProfileCount++
+      }
+      const catalogRows = adapter.savedProfileSnapshots
+      let catalogProfile = null
+      let catalogCount = 0
+      for (let index = 0; index < catalogRows.length; index++) {
+        if (catalogRows[index]
+            && catalogRows[index].uuid === source.profileUuid) {
+          catalogProfile = catalogRows[index]
+          catalogCount++
+        }
+      }
+      if (catalogCount !== 1 || !NetworkModel.qrShareEligible(
+          source.connected, source.ambiguous, source.security, source.ssid,
+          source.profileUuid, nativeProfileCount, catalogProfile)) return null
+      const rows = networkRows()
+      let current = null
+      let currentCount = 0
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.entityKind === "network"
+            && row.networkId === source.networkId) {
+          current = row
+          currentCount++
+        }
+      }
+      if (currentCount !== 1 || !current || current.connected !== true
+          || current.canShare !== true
+          || current.profileUuid !== source.profileUuid
+          || current.deviceId !== source.deviceId
+          || current.ssid !== source.ssid
+          || current.security !== source.security
+          || current.generation !== source.generation) return null
+      const devices = adapter.deviceSnapshots
+      let device = null
+      let deviceCount = 0
+      for (let index = 0; index < devices.length; index++) {
+        if (devices[index] && devices[index].id === source.deviceId) {
+          device = devices[index]
+          deviceCount++
+        }
+      }
+      if (deviceCount !== 1 || !device || device.type !== "wifi"
+          || device.managed !== true || device.ambiguous === true
+          || device.connected !== true) return null
+      return QrSecretModel.descriptor({
+        networkId: source.networkId,
+        profileUuid: source.profileUuid,
+        deviceId: source.deviceId,
+        interfaceName: device.name,
+        hardwareAddress: device.address,
+        ssid: source.ssid,
+        ssidHex: NetworkModel.ssidHex(source.ssid),
+        security: source.security,
+        generation: source.generation
+      })
+    }
+
+    function qrSecretRequestCurrent(descriptor) {
+      const safe = QrSecretModel.descriptor(descriptor)
+      if (!safe || root.mutationBlocked) return false
+      const rows = networkRows()
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (!row || row.entityKind !== "network"
+            || row.networkId !== safe.networkId) continue
+        const current = qrSecretDescriptor(row)
+        return QrSecretModel.sameDescriptor(current, safe)
+      }
+      return false
+    }
+
     function prepareAction() {
       if (root.busy) return false
       actions.clearResult()
@@ -583,7 +763,21 @@ Item {
         const network = networks[index]
         if (!network) continue
         const related = grouped[network.id] || []
-        const oneProfile = related.length === 1 ? related[0] : null
+        const connectedUuid = network.connected === true
+          ? activeUuid(network.deviceId) : ""
+        let activeProfile = null
+        let activeProfileCount = 0
+        for (let profileIndex = 0; profileIndex < related.length;
+            profileIndex++) {
+          if (related[profileIndex].uuid !== connectedUuid) continue
+          activeProfile = related[profileIndex]
+          activeProfileCount++
+        }
+        const oneProfile = activeProfileCount === 1 ? activeProfile
+          : related.length === 1 ? related[0] : null
+        const qrActiveProfileCount = activeProfileCount === 1
+            && activeProfile && activeProfile.ambiguous !== true
+          ? 1 : 0
         const visible = networkVisible(network)
         result.push({
           entryKey: "network:" + network.id,
@@ -613,12 +807,10 @@ Item {
           canConnectWithPsk: network.canConnectWithPsk,
           canDisconnect: network.canDisconnect,
           canForget: false,
-          canShare: network.connected === true
-            && network.ambiguous === false
-            && (network.security === "open"
-              || network.security === "wpa-psk"
-              || network.security === "wpa2-psk"
-              || network.security === "sae")
+          canShare: NetworkModel.qrShareEligible(
+            network.connected, network.ambiguous, network.security,
+            network.ssid, connectedUuid, qrActiveProfileCount,
+            catalogs[connectedUuid] || null)
         })
       }
 

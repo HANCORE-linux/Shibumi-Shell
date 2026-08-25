@@ -150,6 +150,21 @@ function knownConnectKind(token) {
   return token === "open" || token === "owe"
 }
 
+function qrShareEligible(connected, ambiguous, securityValue, ssidValue,
+    activeUuid, activeProfileCount, catalogProfile) {
+  var security = securityToken(securityValue)
+  if (connected !== true || ambiguous === true) return false
+  if (security === "open") return true
+  if (!pskKind(security) || canonicalUuid(activeUuid) !== activeUuid
+      || activeProfileCount !== 1 || !catalogProfile
+      || typeof catalogProfile !== "object"
+      || catalogProfile.profileType !== "wifi"
+      || canonicalUuid(catalogProfile.uuid) !== activeUuid
+      || catalogProfile.ssid !== ssidValue
+      || securityToken(catalogProfile.security) !== security) return false
+  return true
+}
+
 function utf8Bytes(value) {
   try {
     const encoded = unescape(encodeURIComponent(value))

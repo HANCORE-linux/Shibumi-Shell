@@ -14,6 +14,8 @@ ShellRoot {
   ])
   readonly property string enterpriseId: "shibumi-network-v1:"
     + JSON.stringify(["network", root.deviceId, "Corp", "wpa2-eap"])
+  readonly property string securedId: "shibumi-network-v1:"
+    + JSON.stringify(["network", root.deviceId, "Private", "wpa2-psk"])
   readonly property string profileId: "shibumi-network-v1:"
     + JSON.stringify(["profile", root.deviceId,
       "11111111-1111-4111-8111-111111111111"])
@@ -156,6 +158,10 @@ ShellRoot {
     property int passphraseCalls: 0
     property int enterpriseCalls: 0
     property int speedCalls: 0
+    property int qrGestureCalls: 0
+    property int qrSecretCalls: 0
+    property var qrOwner: null
+    property string qrRequestToken: ""
 
     function refresh(_scan) { return true }
     function toggleWifi() { return { accepted: true } }
@@ -180,6 +186,21 @@ ShellRoot {
     }
     function forget(_entry) { forgetCalls++; return { accepted: true } }
     function runSpeedTest(_owner) { speedCalls++; return true }
+    function beginQrGesture(_owner, _entry) {
+      qrGestureCalls++
+      return { accepted: true, gestureToken: "gesture" }
+    }
+    function requestQrSecret(owner, _entry, gestureToken) {
+      if (gestureToken !== "gesture")
+        return { accepted: false, code: "unauthorized", requestToken: "" }
+      qrSecretCalls++
+      qrOwner = owner
+      qrRequestToken = "request-token"
+      return { accepted: true, code: "accepted",
+        requestToken: qrRequestToken }
+    }
+    function cancelQrGesture(_owner, _token) { return true }
+    function cancelQrSecret(_owner, _token) { return true }
     function formatRate(value) { return String(value) }
     function formatPing(value) { return String(value) }
     function formatSpeed(value) { return String(value) }
@@ -198,6 +219,34 @@ ShellRoot {
     running: true
     repeat: true
     onTriggered: {
+      if (root.phase === 2) {
+        const secure = service.networks[0]
+        panel.expandedKey = secure.entryKey
+        const qr = root.findNamed(panel,
+          "networkQrAction:" + secure.entryKey)
+        const keyCatcher = root.findNamed(
+          panel, "shibumiNetworkPanelKeyCatcher")
+        const qrCanvas = root.findNamed(panel, "shibumiNetworkQrCanvas")
+        if (!qr || !keyCatcher || !qrCanvas)
+          return root.fail("secured QR click fixture was not presented")
+        keyCatcher.textKey("q")
+        panel.showQrForConnected()
+        if (service.qrGestureCalls !== 0 || service.qrSecretCalls !== 0
+            || qrCanvas.visible)
+          return root.fail("presentation route authorized a saved-secret read")
+        if (!qr.activate() || service.qrGestureCalls !== 1
+            || service.qrSecretCalls !== 1 || !service.qrOwner)
+          return root.fail("explicit QR button did not authorize one secret read")
+        const evidence = { requestToken: service.qrRequestToken }
+        if (!service.qrOwner.stageSavedSecret(evidence, "correct horse")
+            || qrCanvas.visible
+            || !service.qrOwner.commitSavedSecret(service.qrRequestToken)
+            || !qrCanvas.visible)
+          return root.fail("explicit QR secret did not commit after clean result")
+        console.log("network native panel smoke passed")
+        Qt.exit(0)
+        return
+      }
       if (root.phase === 1) {
         const connected = root.connectedForLayout
         const primary = root.findNamed(panel,
@@ -223,8 +272,10 @@ ShellRoot {
           return root.fail("QR Code action lost keyboard reachability")
         keyCatcher.textKey("q")
         const qrCanvas = root.findNamed(panel, "shibumiNetworkQrCanvas")
-        if (!qrCanvas || !qrCanvas.visible)
-          return root.fail("QR Code keyboard route did not open its presentation")
+        if (!qrCanvas || qrCanvas.visible || service.qrSecretCalls !== 0)
+          return root.fail("QR shortcut read a secret without button activation")
+        if (!qr.activate() || !qrCanvas.visible)
+          return root.fail("explicit QR Code button did not open presentation")
         if (panel.openPassword(service.networks[1]) === false)
           return root.fail("credential cleanup setup was rejected")
         panel.passwordText = "clear-on-recovery"
@@ -261,10 +312,22 @@ ShellRoot {
           return root.fail("recovery block did not stop every panel mutation")
         service.recoveryBlocked = false
         service.livenessPhase = "available"
-        if (!panel.showQrForConnected())
-          return root.fail("connected native open network did not open QR")
-        console.log("network native panel smoke passed")
-        Qt.exit(0)
+        if (!panel.showQrForConnected() || qrCanvas.visible
+            || service.qrSecretCalls !== 0)
+          return root.fail("presentation-only QR route read a secret")
+        const rows = service.networks.slice()
+        rows[0] = Object.assign({}, rows[0], {
+          entryKey: "network:" + root.securedId,
+          id: root.securedId,
+          networkId: root.securedId,
+          profileUuid: "33333333-3333-4333-8333-333333333333",
+          ssid: "Private",
+          security: "wpa2-psk",
+          securityKind: "psk",
+          securityLabel: "WPA2 Personal"
+        })
+        service.networks = rows
+        root.phase = 2
         return
       }
       const available = panel.filteredNetworks()

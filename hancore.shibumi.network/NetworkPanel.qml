@@ -282,22 +282,67 @@ ShibumiPanel {
     return true
   }
 
+  function revealQrAction() {
+    if (restartRequired()) return false
+    const row = connectedShareableNetwork()
+    if (!row) return false
+    savedOnly = false
+    expandedKey = entryKey(row)
+    Qt.callLater(function() { panel.focusQrAction(1) })
+    return true
+  }
+
   function handleTextKey(text) {
     if (String(text || "").toLowerCase() === "q")
-      return showQrForConnected()
+      return revealQrAction()
     return false
   }
 
-  function showQrForConnected() {
-    if (restartRequired()) return false
-    const row = connectedShareableNetwork()
-    return row ? qrDialog.openNetwork(row).ok === true : false
+  function activateQrButton(entry) {
+    if (restartRequired() || !entry || entry.connected !== true
+        || entry.canShare !== true) return false
+    let gesture = null
+    if (entry.securityKind === "psk") {
+      if (!networkService
+          || typeof networkService.beginQrGesture !== "function"
+          || typeof networkService.requestQrSecret !== "function") return false
+      gesture = networkService.beginQrGesture(qrDialog, entry)
+      if (!gesture || gesture.accepted !== true
+          || typeof gesture.gestureToken !== "string"
+          || gesture.gestureToken === "") return false
+    }
+    const opened = qrDialog.openNetwork(entry)
+    if (!opened.ok) {
+      if (gesture && typeof networkService.cancelQrGesture === "function")
+        networkService.cancelQrGesture(qrDialog, gesture.gestureToken)
+      return false
+    }
+    if (opened.code !== "passphrase-required") return opened.code === "ready"
+    if (!gesture) {
+      qrDialog.rejectSecretRequest("secret-unavailable")
+      return true
+    }
+    const request = networkService.requestQrSecret(
+      qrDialog, entry, gesture.gestureToken)
+    if (!request || request.accepted !== true
+        || typeof request.requestToken !== "string"
+        || request.requestToken === "") {
+      qrDialog.rejectSecretRequest(request ? request.code : "secret-unavailable")
+      return true
+    }
+    if (!qrDialog.beginSecretRequest(request.requestToken)) {
+      if (typeof networkService.cancelQrSecret === "function")
+        networkService.cancelQrSecret(qrDialog, request.requestToken)
+      qrDialog.rejectSecretRequest("secret-unavailable")
+    }
+    return true
   }
 
+  function showQrForConnected() { return revealQrAction() }
+
   function showQr(entry) {
-    return !restartRequired()
-      && entry && entry.connected === true && entry.canShare === true
-      ? qrDialog.openNetwork(entry).ok === true : false
+    return entry && entry.connected === true && entry.canShare === true
+      ? revealQrAction() : false
   }
 
   function updateQrNetwork() {
@@ -965,7 +1010,7 @@ ShibumiPanel {
                     label: "QR Code"
                     enabled: !panel.networkService.busy
                       && !panel.restartRequired()
-                    onClicked: panel.showQr(networkRow.modelData)
+                    onClicked: panel.activateQrButton(networkRow.modelData)
                   }
 
                   PanelButton {
@@ -1196,7 +1241,17 @@ ShibumiPanel {
     id: qrDialog
     anchors.fill: parent
     visualTokens: panel.shibumiTokens
+    onSecretCancelRequested: function(requestToken) {
+      if (panel.networkService
+          && typeof panel.networkService.cancelQrSecret === "function")
+        panel.networkService.cancelQrSecret(qrDialog, requestToken)
+    }
     onDismissed: panel.requestPanelKeyboardFocus(keyCatcher)
+    Component.onDestruction: {
+      if (secretRequestToken !== "" && panel.networkService
+          && typeof panel.networkService.cancelQrSecret === "function")
+        panel.networkService.cancelQrSecret(qrDialog, secretRequestToken)
+    }
   }
 
   component SectionLabel: Text {

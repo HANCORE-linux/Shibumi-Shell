@@ -698,8 +698,12 @@ Current Phase 2 foundation:
   loading the host Network or QR components. Its own scanner lease, bounded
   profile catalog, telemetry, reachability, Enterprise dispatcher, Wi-Fi QR
   surface, and route-bound TLS speed-test workers are process-wide and
-  demand-driven. No Network feature state comes from an Omarchy helper or
-  `nmcli`;
+  demand-driven. An explicit QR click may read only the `psk` field from the
+  exact active saved WPA/WPA2/SAE profile through a bounded, owner- and
+  topology-revalidated `GetSecrets("802-11-wireless-security")` request. The
+  passphrase crosses no snapshot, property, argument, environment, cache, log,
+  or persistence boundary and is discarded immediately after QR encoding. No
+  Network feature state comes from an Omarchy helper or `nmcli`;
 - each output owns only its bar presentation, telemetry consumer lease, lazy
   Shibumi popup, and ephemeral QR session. WPA2-Enterprise is conservatively
   limited to PEAP/MSCHAPv2 with system CAs and a mandatory server domain;

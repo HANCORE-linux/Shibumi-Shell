@@ -41,6 +41,7 @@ install -m 0755 \
   "$repo_root/tests/fixtures/network-speed-test-fixture.py" \
   "$repo_root/tests/fixtures/network-enterprise-fixture.py" \
   "$repo_root/tests/fixtures/network-profile-action-fixture.py" \
+  "$repo_root/tests/fixtures/network-qr-secret-fixture.py" \
   "$tmpdir/fixtures/"
 
 set +e
@@ -483,6 +484,29 @@ for enterprise_case in model adapter dispatcher destruction; do
 done
 
 python3 "$repo_root/tests/network-qr-encoder-regression.py"
+python3 "$repo_root/tests/network-qr-secret-helper-regression.py"
+install -m 0644 "$repo_root/tests/network-qr-secret-dispatcher-regression.qml" \
+  "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/qr-secret-runtime"
+chmod 700 "$tmpdir/qr-secret-runtime"
+set +e
+qr_secret_output=$(timeout 20 env \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/qr-secret-runtime" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+qr_secret_rc=$?
+set -e
+printf '%s\n' "$qr_secret_output"
+[[ $qr_secret_rc -eq 0 ]] || fail "network QR secret dispatcher exited $qr_secret_rc"
+grep -F 'network QR secret dispatcher regression passed' \
+  <<<"$qr_secret_output" >/dev/null \
+  || fail "network QR secret dispatcher success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$qr_secret_output"; then
+  fail "network QR secret dispatcher produced a QML runtime error"
+fi
+
 install -m 0644 "$repo_root/tests/network-qr-regression.qml" \
   "$tmpdir/shell.qml"
 mkdir -p "$tmpdir/qr-runtime"
@@ -708,6 +732,10 @@ qr_model="$repo_root/hancore.shibumi.network/NetworkQrModel.js"
 qr_session="$repo_root/hancore.shibumi.network/NetworkQrSession.qml"
 qr_button="$repo_root/hancore.shibumi.network/NetworkQrButton.qml"
 qr_dialog="$repo_root/hancore.shibumi.network/NetworkQrDialog.qml"
+qr_secret_model="$repo_root/hancore.shibumi.network/NetworkQrSecretModel.js"
+qr_secret_dispatcher="$repo_root/hancore.shibumi.network/NetworkQrSecretDispatcher.qml"
+qr_secret_authority="$repo_root/hancore.shibumi.network/NetworkQrSecretAuthority.js"
+qr_secret_helper="$repo_root/hancore.shibumi.network/scripts/network-qr-secret"
 [[ -f $native_adapter && -f $native_gateway && -f $native_model \
     && -f $scanner_lease && -f $scanner_gateway \
     && -f $scanner_authority && -f $liveness \
@@ -727,7 +755,9 @@ qr_dialog="$repo_root/hancore.shibumi.network/NetworkQrDialog.qml"
     && -f $enterprise_authority && -x $enterprise_helper \
     && -f $action_coordinator && -f $action_model \
     && -f $action_authority && -f $qr_encoder && -f $qr_model \
-    && -f $qr_session && -f $qr_button && -f $qr_dialog ]] \
+    && -f $qr_session && -f $qr_button && -f $qr_dialog \
+    && -f $qr_secret_model && -f $qr_secret_dispatcher \
+    && -f $qr_secret_authority && -f $qr_secret_helper ]] \
   || fail "native Network seam inventory is incomplete"
 rg -Fq 'active: root.active && root.backendOverride === null' \
   "$native_adapter" \
@@ -1025,8 +1055,55 @@ if rg -q '[Oo]marchy|nmcli|GetSecrets|Quickshell\.Io|\bProcess\b' \
     "$qr_encoder" "$qr_model" "$qr_session" "$qr_button" "$qr_dialog"; then
   fail "Shibumi Wi-Fi QR surface depends on an external feature backend"
 fi
-if rg -q 'property [^:]*\b(passphrase|password|secret)\b' "$qr_session"; then
-  fail "Wi-Fi QR session retains a credential property"
+if rg -q 'property [^:]*\b(passphrase|password|psk)\b' \
+    "$qr_session" "$qr_dialog" "$qr_secret_dispatcher"; then
+  fail "Wi-Fi QR owners retain a credential property"
+fi
+rg -Fq 'GetSecrets("802-11-wireless-security")' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper does not scope its explicit secret read"
+rg -Fq 'MAX_SETTINGS_BYTES = 256 * 1024' "$qr_secret_helper" \
+  || fail "Wi-Fi QR profile settings revalidation is unbounded"
+rg -Fq 'MAX_ADDRESS_SPACE_BYTES = 128 * 1024 * 1024' \
+  "$qr_secret_helper" \
+  || fail "Wi-Fi QR D-Bus worker lacks a pre-acquisition memory ceiling"
+rg -Fq 'resource.setrlimit(resource.RLIMIT_AS' "$qr_secret_helper" \
+  || fail "Wi-Fi QR D-Bus worker does not apply its memory ceiling"
+rg -Fq ').GetSettings()' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper does not revalidate current persisted settings"
+rg -Fq 'CONNECTION_INTERFACE, "VersionId"' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper does not bind the saved profile version"
+rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts a profile race around GetSecrets"
+[[ $(grep -Fc 'owner_unchanged(bus, destination)' "$qr_secret_helper") -ge 2 ]] \
+  || fail "Wi-Fi QR helper omits final NetworkManager owner revalidation"
+rg -Fq 'set(str(key) for key in setting) != {"psk"}' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts an unbounded secret field map"
+rg -Fq 'clearEnvironment: true' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR secret worker inherits an injectable environment"
+rg -Fq '["/usr/bin/python3", "-I", root.helperPath]' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR secret worker can import user-site modules"
+rg -Fq 'completion.psk = ""' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR secret completion is not cleared before staging returns"
+if rg -q 'property [^:]*stdoutBuffer' "$qr_secret_dispatcher"; then
+  fail "Wi-Fi QR secret worker retains partial stdout in a QML property"
+fi
+rg -Fq 'splitMarker: ""' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR secret stderr does not use chunk-discard framing"
+rg -Fq 'print("network-qr-secret: unavailable", file=sys.stderr)' \
+  "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper exposes variable exception text"
+rg -Fq 'function beginQrGesture(owner, entry)' "$service" \
+  || fail "Wi-Fi QR secret reads lack a one-shot gesture boundary"
+rg -Fq 'function qrShareEligible(' "$native_model" \
+  || fail "secured QR action lacks persisted-profile eligibility"
+rg -Fq 'adapter.savedProfileCatalogAvailable !== true' "$service" \
+  || fail "secured QR secret dispatch accepts an incomplete profile catalog"
+rg -Fq 'onClicked: panel.activateQrButton(networkRow.modelData)' \
+  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
+  || fail "adjacent QR button bypasses explicit gesture activation"
+if rg -q 'nmcli|omarchy|subprocess|shell=True|/bin/(sh|bash)' \
+    "$qr_secret_helper"; then
+  fail "Wi-Fi QR secret helper crosses its exact D-Bus boundary"
 fi
 rg -Fq 'permanentlyBlocked = true' "$action_authority" \
   || fail "uncertain action destruction does not block fail-closed"
