@@ -230,7 +230,7 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
                 "category",
             ),
             "command": lambda data: reclassify(
-                next(item for item in data["commandRules"] if item["value"] == "omarchy-network-status"),
+                next(item for item in data["commandRules"] if item["value"] == "omarchy-battery-status"),
                 "category",
             ),
             "capability-owner": lambda data: next(

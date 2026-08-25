@@ -7,8 +7,8 @@ import "NetworkSpeedTestAuthority.js" as Authority
 
 // Process-wide, demand-driven speed-test action seam. It consumes only a
 // validated primitive NetworkTelemetry connection snapshot and runs one
-// bounded Shibumi worker at a time. Production Service.qml does not instantiate
-// this source-only seam.
+// bounded Shibumi worker at a time. Service.qml owns the single process-wide
+// demand-driven instance.
 Item {
   id: root
 
@@ -19,6 +19,9 @@ Item {
   property int phaseTimeoutMs: 12000
   property int drainTimeoutMs: 2500
   property int interPhaseDelayMs: 1
+  readonly property string helperPath:
+    String(Qt.resolvedUrl("scripts/network-speed-test"))
+      .replace(/^file:\/\//, "")
 
   property real generation: 0
   property real runId: 0
@@ -283,7 +286,7 @@ Item {
     function workerCommand(direction) {
       const base = Array.isArray(root.commandOverride)
         ? root.commandOverride.slice()
-        : [Qt.resolvedUrl("scripts/network-speed-test")]
+        : ["/usr/bin/python3", "-I", root.helperPath]
       const expectedInterfaceIndex = direction === "up"
         && downloadMeasurement !== null
         ? String(downloadMeasurement.interfaceIndex) : "any"

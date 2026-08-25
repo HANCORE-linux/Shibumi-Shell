@@ -5,7 +5,7 @@ import Quickshell.Io
 import "NetworkEnterpriseModel.js" as Model
 import "NetworkEnterpriseAuthority.js" as Authority
 
-// Process-wide, source-only Enterprise Wi-Fi mutation seam. Credentials cross
+// Process-wide Enterprise Wi-Fi mutation seam. Credentials cross
 // only one bounded stdin frame and are cleared when the worker starts. The
 // helper creates a volatile PEAP/MSCHAPv2 NetworkManager activation; Shibumi
 // does not persist, publish, or log credentials.

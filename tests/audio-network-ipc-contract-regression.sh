@@ -17,7 +17,6 @@ audio_bridge="$repo_root/hancore.shibumi.audio/AudioPanelBridge.qml"
 network_service="$repo_root/hancore.shibumi.network/Service.qml"
 network_widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 network_bridge="$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml"
-host_network="$OMARCHY_PATH/shell/plugins/panels/network/Panel.qml"
 
 [[ $(rg -l 'target: "omarchy\.audio"' \
   "$audio_service" "$audio_widget" "$audio_bridge" | wc -l) -eq 1 ]] \
@@ -32,50 +31,41 @@ rg -Fq 'manageIpc: false' "$audio_widget" \
   || fail 'visible Audio widget can duplicate direct IPC ownership'
 rg -Fq 'manageIpc = false' "$audio_bridge" \
   || fail 'hidden official Audio backend can duplicate direct IPC ownership'
-for bridge in "$audio_bridge" "$network_bridge"; do
-  if [[ "$bridge" == "$audio_bridge" ]]; then
-    rg -Fq 'function suppressKeyboardPanel()' "$bridge" \
-      || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
-    rg -Fq 'candidate.owner !== item' "$bridge" \
-      || fail "hidden backend suppression can match a foreign window: $bridge"
-  else
-    rg -Fq 'function suppressBackendKeyboardPanel()' "$bridge" \
-      || fail "hidden official backend lacks KeyboardPanel suppression: $bridge"
-    rg -Fq 'candidate.owner !== panel' "$bridge" \
-      || fail "hidden backend suppression can match a foreign window: $bridge"
-  fi
-  rg -Fq 'typeof candidate.beginFocusPrime !== "function"' "$bridge" \
-    || fail "hidden backend suppression is not limited to KeyboardPanel: $bridge"
-  rg -Fq 'candidate.open = false' "$bridge" \
-    || fail "hidden official KeyboardPanel can retain dismissal surfaces: $bridge"
-  rg -Fq 'candidate.visible = false' "$bridge" \
-    || fail "hidden official KeyboardPanel can flash before redirect: $bridge"
-done
+rg -Fq 'function suppressKeyboardPanel()' "$audio_bridge" \
+  || fail 'hidden official Audio backend lacks KeyboardPanel suppression'
+rg -Fq 'candidate.owner !== item' "$audio_bridge" \
+  || fail 'hidden Audio suppression can match a foreign window'
+rg -Fq 'typeof candidate.beginFocusPrime !== "function"' "$audio_bridge" \
+  || fail 'hidden Audio suppression is not limited to KeyboardPanel'
+rg -Fq 'candidate.open = false' "$audio_bridge" \
+  || fail 'hidden Audio KeyboardPanel can retain dismissal surfaces'
+rg -Fq 'candidate.visible = false' "$audio_bridge" \
+  || fail 'hidden Audio KeyboardPanel can flash before redirect'
 
-rg -Fq 'target: "omarchy.network"' "$host_network" \
-  || fail 'Network host backend no longer exposes its compatibility target'
+[[ $(rg -l 'target: "omarchy\.network"' \
+  "$network_service" "$network_widget" "$network_bridge" | wc -l) -eq 1 ]] \
+  || fail 'Network does not expose exactly one compatibility target'
 rg -Fq 'target: "omarchy.network"' "$network_bridge" \
-  || fail 'Shibumi bridge does not own the intercepted compatibility target'
+  || fail 'native Network bridge does not own the compatibility target'
 if rg -q 'IpcHandler[[:space:]]*\{' \
     "$network_service" "$network_widget"; then
   fail 'screen-local Network state duplicates the compatibility IpcHandler'
 fi
+if rg -q 'Loader|panelSource|panelComponent|backendIpcSuppressed' \
+    "$network_bridge"; then
+  fail 'native Network compatibility route still loads a host backend'
+fi
 for contract in \
-  'function suppressBackendIpc()' \
-  'candidate.enabled = false' \
-  'enabled: root.backendIpcSuppressed' \
-  'function onOpenedChanged()' \
-  'function onQrVisibleChanged()' \
   'property var presentationOwner: null' \
   'const owner = focusedPresentationWidget()' \
-  'if (owner.opened !== true) owner.open()' \
   'owner.close()' \
-  'if (panel && panel.opened === true && typeof panel.close === "function")' \
-  'speedDetailsVisible = true' \
+  'function showQr(): void { root.summonNetworkPresentation("qr") }' \
   'function speedTest(): void { root.summonNetworkPresentation("speed") }' \
-  'networkService.runSpeedTest()'; do
+  'networkService.toggleWifi()'; do
   rg -Fq "$contract" "$network_bridge" \
     || fail "Network direct IPC redirect is incomplete: $contract"
 done
+rg -Fq 'function openNetworkPresentation(modeValue)' "$network_widget" \
+  || fail 'Network output widget cannot receive compatibility presentations'
 
 printf 'audio/network IPC contract regression passed\n'

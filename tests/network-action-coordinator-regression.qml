@@ -102,10 +102,12 @@ ShellRoot {
 
   QtObject {
     id: fakeBackend
+    signal connectionFailure(var deviceObject, var networkObject, string reason)
     property bool backendAvailable: true
     property bool wifiEnabled: true
     property bool wifiHardwareEnabled: true
     property string connectivity: "full"
+    property string activeConnectionUuid: ""
     property var devices: [wifiDevice]
     property int resultMode: 0
     property int radioCalls: 0
@@ -116,6 +118,11 @@ ShellRoot {
     property int profileForgetCalls: 0
     property string lastSecret: ""
     property var nestedResult: null
+
+    function activeConnectionUuidForDevice(deviceId) {
+      return deviceId === adapter.deviceSnapshots[0].id
+        ? activeConnectionUuid : ""
+    }
 
     function result() {
       if (resultMode === 1) {
@@ -152,10 +159,33 @@ ShellRoot {
     function forgetProfile(_profile) { profileForgetCalls++; return result() }
   }
 
+  QtObject {
+    id: fakeCatalog
+    property bool available: true
+    property real generation: 1
+    property var profileSnapshots: [{
+      schemaVersion: 1,
+      id: "shibumi-network-v1:" + JSON.stringify([
+        "saved-profile", profileSetting.uuid
+      ]),
+      uuid: profileSetting.uuid,
+      name: "Saved office",
+      profileType: "wifi",
+      ssid: "Saved",
+      ssidHex: "5361766564",
+      security: "wpa2-psk",
+      enterprise: false,
+      hidden: false,
+      autoconnect: true,
+      timestamp: 1
+    }]
+  }
+
   Network.NetworkBackendAdapter {
     id: adapter
     active: true
     backendOverride: fakeBackend
+    savedProfileCatalog: fakeCatalog
   }
 
   Network.NetworkActionCoordinator {
@@ -277,6 +307,7 @@ ShellRoot {
         wifiDevice.stateToken = "disconnected"
         const result = coordinator.connectProfile(root.request(root.profileId))
         if (!result.accepted) return root.fail("saved profile dispatch was rejected")
+        fakeBackend.activeConnectionUuid = profileSetting.uuid
         savedNetwork.connected = true
         savedNetwork.stateToken = "connected"
         wifiDevice.connected = true
@@ -288,6 +319,7 @@ ShellRoot {
       if (root.phase === 7) {
         if (coordinator.phase !== "succeeded") return
         coordinator.clearResult()
+        fakeBackend.activeConnectionUuid = ""
         savedNetwork.connected = false
         savedNetwork.stateToken = "disconnected"
         wifiDevice.connected = false
@@ -295,6 +327,17 @@ ShellRoot {
         const result = coordinator.forgetProfile(root.request(root.profileId))
         if (!result.accepted) return root.fail("forget profile was rejected")
         savedNetwork.nmSettings = []
+        root.phase = 70
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 70) {
+        if (root.ticks < 3) return
+        if (coordinator.phase !== "pending")
+          return root.fail("native removal completed before catalog absence")
+        fakeCatalog.profileSnapshots = []
+        fakeCatalog.generation++
         root.phase = 8
         return
       }
@@ -392,6 +435,24 @@ ShellRoot {
         if (coordinator.failureCode !== "timeout")
           return root.fail("malformed result did not remain bounded")
         root.assertNoSecret("malformed backend result")
+        coordinator.clearResult()
+        fakeBackend.resultMode = 0
+        const failed = coordinator.connectNetworkWithPsk(
+          root.request(root.pskId), root.secretMarker)
+        if (!failed.accepted) return root.fail("failure action was rejected")
+        fakeBackend.connectionFailure(
+          wifiDevice, pskNetwork, "no-secrets")
+        root.phase = 140
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 140) {
+        if (coordinator.phase !== "failed") return
+        if (coordinator.failureCode !== "connection-no-secrets"
+            || coordinator.failureMessage !== "Network credentials were rejected.")
+          return root.fail("native connection failure was not attributed")
+        root.assertNoSecret("native connection failure")
         coordinator.clearResult()
         const symbolRequest = root.request(root.openId)
         symbolRequest[Symbol("extra")] = true

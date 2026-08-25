@@ -7,8 +7,8 @@ import "NetworkEnterpriseModel.js" as EnterpriseModel
 
 // Process-wide native action completion coordinator. Dispatch acceptance comes
 // from NetworkBackendAdapter; completion is derived only from later primitive
-// snapshots. No credential is retained or published. Production Service.qml
-// does not instantiate this source-only Step 5 seam.
+// snapshots. No credential is retained or published; Service.qml owns exactly
+// one coordinator for all output-local panels.
 Item {
   id: root
 
@@ -109,6 +109,9 @@ Item {
       implementation.reconcile()
       if (root.busy) deferredReconcile.restart()
     }
+    function onConnectionFailureGenerationChanged() {
+      implementation.failureObserved()
+    }
   }
 
   Connections {
@@ -138,7 +141,9 @@ Item {
         phase: "idle", actionId: "", kind: "", entityId: "",
         relatedEntityId: "", targetEnabled: null, code: "idle", message: "",
         dispatchGeneration: 0, observedGeneration: 0,
-        deviceId: "", enterpriseToken: "", enterpriseSsidHex: "",
+        deviceId: "", profileUuid: "", profileSsid: "",
+        enterpriseToken: "",
+        enterpriseSsidHex: "",
         enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
         enterpriseSecurity: ""
       }
@@ -310,6 +315,8 @@ Item {
           && observedGeneration >= source.observedGeneration
             ? observedGeneration : source.observedGeneration,
         deviceId: source.deviceId,
+        profileUuid: source.profileUuid,
+        profileSsid: source.profileSsid,
         enterpriseToken: "", enterpriseSsidHex: "",
         enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
         enterpriseSecurity: ""
@@ -379,6 +386,8 @@ Item {
         dispatchGeneration: viewBefore.generation,
         observedGeneration: viewBefore.generation,
         deviceId: context.deviceId,
+        profileUuid: context.profileUuid,
+        profileSsid: context.profileSsid,
         enterpriseToken: "", enterpriseSsidHex: "",
         enterpriseHardwareAddress: "", enterpriseInterfaceName: "",
         enterpriseSecurity: ""
@@ -458,6 +467,39 @@ Item {
       }
     }
 
+    function savedCatalogAbsent(uuidValue) {
+      try {
+        const adapter = root.networkAdapter
+        if (!adapter || adapter.savedProfileCatalogAvailable !== true
+            || !Array.isArray(adapter.savedProfileSnapshots)
+            || adapter.savedProfileSnapshots.length > Model.MaxRows)
+          return false
+        const uuid = String(uuidValue || "")
+        let count = 0
+        for (let index = 0;
+            index < adapter.savedProfileSnapshots.length; index++) {
+          const row = adapter.savedProfileSnapshots[index]
+          if (!row || typeof row.uuid !== "string") return false
+          if (row.uuid === uuid) count++
+        }
+        return uuid !== "" && count === 0
+      } catch (error) {
+        return false
+      }
+    }
+
+    function activeConnectionUuid() {
+      try {
+        const adapter = root.networkAdapter
+        const value = adapter
+          && typeof adapter.activeConnectionUuidForDevice === "function"
+          ? adapter.activeConnectionUuidForDevice(state.deviceId) : ""
+        return typeof value === "string" ? value : ""
+      } catch (error) {
+        return ""
+      }
+    }
+
     function reconcile() {
       if (dispatchInProgress || state.phase !== "pending"
           || state.completionBlocked === true) return
@@ -478,7 +520,8 @@ Item {
       }
       const view = adapterView()
       if (!view || view.generation < state.observedGeneration) return
-      const result = Model.reconcile(state, view)
+      const result = Model.reconcile(
+        state, view, activeConnectionUuid())
       if (state.kind === "connect-enterprise" && !result.terminal) {
         let completion = null
         try { completion = root.enterpriseDispatcher.completionSnapshot }
@@ -494,8 +537,30 @@ Item {
         return
       }
       if (!result.terminal) return
+      if (result.success && state.kind === "forget-profile"
+          && !savedCatalogAbsent(state.profileUuid)) return
       setTerminal(state, result.success, result.code,
         view ? view.generation : state.observedGeneration)
+    }
+
+    function failureObserved() {
+      if (dispatchInProgress || state.phase !== "pending"
+          || state.completionBlocked === true) return false
+      let snapshot = null
+      let observed = state.observedGeneration
+      try {
+        const adapter = root.networkAdapter
+        if (!adapter || !Model.validGeneration(adapter.generation))
+          return false
+        snapshot = adapter.connectionFailureSnapshot
+        observed = adapter.generation
+      } catch (error) {
+        return false
+      }
+      const result = Model.connectionFailure(state, snapshot, observed)
+      if (!result || !result.terminal) return false
+      setTerminal(state, false, result.code, observed)
+      return true
     }
 
     function enterpriseLaunchFailed(entityId, dispatchGeneration) {

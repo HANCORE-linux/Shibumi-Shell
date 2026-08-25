@@ -7,7 +7,7 @@ import "NetworkReachabilityAuthority.js" as Authority
 
 // Demand-driven, process-wide ICMP reachability history. It consumes only the
 // primitive NetworkTelemetry connection snapshot and publishes primitive rows.
-// Production Service.qml does not instantiate this source-only seam.
+// Service.qml owns one demand-driven instance process-wide.
 Item {
   id: root
 
@@ -17,6 +17,9 @@ Item {
   property int pollIntervalMs: 2500
   property int refreshTimeoutMs: 5000
   property int drainTimeoutMs: 1000
+  readonly property string helperPath:
+    String(Qt.resolvedUrl("scripts/network-reachability-probe"))
+      .replace(/^file:\/\//, "")
 
   property real generation: 0
   property string phase: "inactive"
@@ -247,7 +250,7 @@ Item {
     function workerCommand(route) {
       const base = Array.isArray(root.commandOverride)
         ? root.commandOverride.slice()
-        : [Qt.resolvedUrl("scripts/network-reachability-probe")]
+        : ["/usr/bin/python3", "-I", root.helperPath]
       return base.concat([
         "--interface", route.interfaceName,
         "--gateway", route.gateway === "" ? "none" : route.gateway

@@ -39,6 +39,8 @@ ShellRoot {
       gateways: [{ family: "ipv4", address: "192.0.2.1" }],
       dnsServers: [], dnsDomains: [], rxBytes: 1, txBytes: 2,
       sampleMonotonicMs: 1,
+      activeConnections: [{ uuid: uuid, kind: "wired",
+        interfaceName: "eth0", hardwareAddress: hardware }],
       wifi: {
         ssid: "", ssidHex: "", signal: 0,
         frequencyMhz: 0, bitrateKbps: 0

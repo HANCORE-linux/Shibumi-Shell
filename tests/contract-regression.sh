@@ -182,8 +182,10 @@ rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' services/HostWi
 [[ $(rg -l 'bar\.registeredWidgetComponent' \
   hancore.shibumi.{audio,status,center}/BarWidget.qml | wc -l) -eq 3 ]] \
   || fail "host-backed composites bypass the stable widget resolver"
-rg -q 'registeredComponent\("omarchy\.network"\)' hancore.shibumi.network/Service.qml \
-  || fail "shipped network owner bypasses the stable widget resolver"
+if rg -q 'registered(Component|Source)|registeredWidget(Component|Source)' \
+    hancore.shibumi.network/Service.qml; then
+  fail "native Network owner still resolves a host feature component"
+fi
 rg -q 'registeredComponent\("omarchy\.monitor"\)' hancore.shibumi.brightness/Service.qml \
   || fail "shipped monitor owner bypasses the stable widget resolver"
 if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' \
@@ -611,10 +613,16 @@ rg -q 'G11: \["hancore.shibumi.network"\]' core/GroupRegistry.js \
   || fail "G11 is not owned by the Shibumi network presentation"
 rg -q 'hancore\.shibumi\.network' contracts/plugin-suite-v1.json \
   || fail "Shibumi network presentation is not registered"
-[[ $(rg -c 'NetworkPanelBridge \{' hancore.shibumi.network/Service.qml) -eq 1 ]] \
-  || fail "network backend must be process-wide"
-rg -q 'NetworkPanelBridge' hancore.shibumi.network/Service.qml \
-  || fail "process-wide network service does not preserve the official panel owner"
+for owner in NetworkLivenessContinuity NetworkManagerLiveness \
+    NetworkProfileCatalog NetworkTelemetry NetworkReachability \
+    NetworkBackendAdapter NetworkScannerLease NetworkEnterpriseDispatcher \
+    NetworkActionCoordinator NetworkSpeedTest NetworkProfileActionDispatcher \
+    NetworkProfileActionLease \
+    NetworkPanelBridge; do
+  [[ $(rg -c "^[[:space:]]*$owner \\{" \
+    hancore.shibumi.network/Service.qml) -eq 1 ]] \
+    || fail "network service must own exactly one native $owner"
+done
 if rg -q 'NetworkPanelBridge|Quickshell\.Networking|Networking\.' \
   hancore.shibumi.network/BarWidget.qml hancore.shibumi.network/NetworkPanel.qml; then
   fail "screen-local network presentation must not own NetworkManager"
@@ -623,30 +631,19 @@ if rg -q 'Process \{|FileView \{' hancore.shibumi.network/BarWidget.qml \
   hancore.shibumi.network/NetworkPanel.qml hancore.shibumi.network/NetworkPanelBridge.qml; then
   fail "screen-local network presentation must not own backend workers"
 fi
-[[ $(rg -c 'NetworkPanelBridge \{' hancore.shibumi.network/Service.qml) -eq 1 ]] \
-  || fail "process-wide network service must own exactly one official backend"
-rg -q 'property var sessionOwners: \[\]' hancore.shibumi.network/Service.qml \
-  || fail "network service lacks multi-output session accounting"
-rg -q 'profileList\.running = false' hancore.shibumi.network/Service.qml \
-  || fail "network service does not stop saved-profile discovery on final close"
-rg -q 'detailsProc\.running = false' hancore.shibumi.network/Service.qml \
-  || fail "network service does not stop detail sampling on final close"
-rg -q 'property var scannerDevice: null' hancore.shibumi.network/Service.qml \
-  || fail "network service does not track its scanner lease"
-rg -q 'if \(scannerDevice && scannerDevice !== nextDevice\)' \
-  hancore.shibumi.network/Service.qml \
-  || fail "network service does not release replaced scanner devices"
-rg -q 'releaseWifiScanner\(\)' hancore.shibumi.network/Service.qml \
-  || fail "network scanner is not released outside panel sessions"
-if rg -q 'scannerEnabled' hancore.shibumi.network/NetworkPanelBridge.qml; then
-  fail "network bridge competes with the process-wide scanner owner"
-fi
-rg -q 'command: \["omarchy-network-status", "--verbose"\]' \
-  hancore.shibumi.network/Service.qml \
-  || fail "network panel details do not use the shared lifecycle worker"
-if rg -U -q 'id: detailsPoll[\s\S]{0,240}root\.refresh' \
-  hancore.shibumi.network/Service.qml; then
-  fail "network details poll must not restart DNS/profile refresh work"
+rg -q 'property var ownerRecords: \[\]' hancore.shibumi.network/Service.qml \
+  || fail "network service lacks multi-output lease accounting"
+rg -q 'scanner\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network scanner is not released after panel sessions"
+rg -q 'reachability\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network reachability is not released after panel sessions"
+rg -q 'catalog\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "saved-profile catalog is not released after panel sessions"
+rg -q 'telemetry\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network telemetry is not demand-driven"
+if rg -q 'InlineSpeedTestRunner|omarchy-network-|\bnmcli\b' \
+    hancore.shibumi.network; then
+  fail "native Network cutover retained a legacy backend helper"
 fi
 rg -q 'childPanelWidget\("omarchy\.network"\)' tests/network-plugin-smoke.qml \
   || fail "network alias routing is not regression-tested"
@@ -1155,29 +1152,6 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     selectPlayer; do
     rg -q "${media_contract}" "$official_media_service" \
       || fail "official media service contract changed: $media_contract"
-  done
-  official_network_panel=${OMARCHY_PATH}/shell/plugins/panels/network/Panel.qml
-  [[ -s $official_network_panel ]] || fail "official Quattro network panel is missing"
-  for network_contract in networkManagerAvailable kind signalStrength \
-    connectedWifiNetwork info wifiNetworks wifiDevice dnsProvider refresh \
-    connectWithPassphrase disconnect forget setDns; do
-    rg -q "${network_contract}" "$official_network_panel" \
-      || fail "official network panel contract changed: $network_contract"
-  done
-  if ! rg -q 'connectKnown|connectDirectly' "$official_network_panel"; then
-    fail "official network panel has no compatible connect action"
-  fi
-  official_network_speedtest=${OMARCHY_PATH}/bin/omarchy-network-speedtest
-  [[ -x $official_network_speedtest ]] \
-    || fail "official network speed-test command is missing"
-  for speed_contract in \
-    'direction="${1:-}"' \
-    'down | up' \
-    'omarchy-network-speedtest [down|up]' \
-    'format_mbps' \
-    'trap cleanup EXIT'; do
-    rg -Fq "$speed_contract" "$official_network_speedtest" \
-      || fail "network speed-test command changed: $speed_contract"
   done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"

@@ -8,7 +8,7 @@ import "NetworkTelemetryAuthority.js" as Authority
 
 // Demand-driven, process-wide active-connection telemetry. The helper exposes
 // one bounded primitive snapshot; NetworkManager object paths and QObjects stay
-// private. Production Service.qml does not instantiate this source-only seam.
+// private. Service.qml owns one demand-driven instance process-wide.
 Item {
   id: root
 
@@ -18,6 +18,9 @@ Item {
   property int pollIntervalMs: 2000
   property int refreshTimeoutMs: 15000
   property int drainTimeoutMs: 1000
+  readonly property string helperPath:
+    String(Qt.resolvedUrl("scripts/network-telemetry-snapshot"))
+      .replace(/^file:\/\//, "")
 
   property real generation: 0
   property real identityGeneration: 0
@@ -196,7 +199,9 @@ Item {
         connected: source.connected === true,
         id: String(source.id || ""),
         deviceId: String(source.deviceId || ""),
-        kind: String(source.kind || "none")
+        kind: String(source.kind || "none"),
+        activeConnections: Array.isArray(source.activeConnections)
+          ? source.activeConnections : []
       }) : ""
     }
 
@@ -515,7 +520,7 @@ Item {
     id: telemetryProcess
     command: Array.isArray(root.commandOverride)
       ? root.commandOverride
-      : [Qt.resolvedUrl("scripts/network-telemetry-snapshot")]
+      : ["/usr/bin/python3", "-I", root.helperPath]
     stdout: SplitParser {
       onRead: data => implementation.ingestLine(data)
     }

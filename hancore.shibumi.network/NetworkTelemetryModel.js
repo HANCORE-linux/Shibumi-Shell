@@ -6,6 +6,7 @@ var MaxSafeInteger = 9007199254740991
 var MaxAddresses = 64
 var MaxDnsServers = 64
 var MaxDnsDomains = 64
+var MaxActiveConnections = 64
 var MeteredTokens = ["unknown", "yes", "no", "guess-yes", "guess-no"]
 
 function own(value, key) {
@@ -194,6 +195,28 @@ function validDnsDomains(rows) {
   return true
 }
 
+function validActiveConnections(rows) {
+  if (!Array.isArray(rows) || rows.length > MaxActiveConnections) return false
+  let previous = ""
+  const seenDevices = ({})
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index]
+    if (!exactKeys(row,
+        ["uuid", "kind", "interfaceName", "hardwareAddress"])
+        || !validUuid(row.uuid)
+        || (row.kind !== "wifi" && row.kind !== "wired")
+        || !validInterface(row.interfaceName)
+        || !validHardwareAddress(row.hardwareAddress)) return false
+    const identity = row.kind + ":" + row.hardwareAddress
+    const order = identity + ":" + row.interfaceName + ":" + row.uuid
+    if (own(seenDevices, identity) || previous !== "" && previous >= order)
+      return false
+    seenDevices[identity] = true
+    previous = order
+  }
+  return true
+}
+
 function validWifi(value, connected, kind) {
   if (!exactKeys(value,
       ["ssid", "ssidHex", "signal", "frequencyMhz", "bitrateKbps"])
@@ -225,7 +248,7 @@ function validSnapshot(snapshot) {
     "schemaVersion", "connected", "connectionUuid", "connectionName",
     "kind", "interfaceName", "hardwareAddress", "metered", "addresses",
     "gateways", "dnsServers", "dnsDomains", "rxBytes", "txBytes",
-    "sampleMonotonicMs", "wifi", "wired"
+    "sampleMonotonicMs", "activeConnections", "wifi", "wired"
   ]
   if (!exactKeys(snapshot, fields) || snapshot.schemaVersion !== SchemaVersion
       || typeof snapshot.connected !== "boolean"
@@ -237,6 +260,7 @@ function validSnapshot(snapshot) {
       || !validGatewayRows(snapshot.gateways)
       || !validDnsServers(snapshot.dnsServers)
       || !validDnsDomains(snapshot.dnsDomains)
+      || !validActiveConnections(snapshot.activeConnections)
       || !validWifi(snapshot.wifi, snapshot.connected, snapshot.kind)
       || !validWired(snapshot.wired, snapshot.connected, snapshot.kind))
     return false
@@ -249,11 +273,20 @@ function validSnapshot(snapshot) {
       && snapshot.dnsServers.length === 0 && snapshot.dnsDomains.length === 0
       && snapshot.rxBytes === 0 && snapshot.txBytes === 0
 
-  return validUuid(snapshot.connectionUuid)
-    && validText(snapshot.connectionName, 1, 256)
-    && (snapshot.kind === "wifi" || snapshot.kind === "wired")
-    && validInterface(snapshot.interfaceName)
-    && validHardwareAddress(snapshot.hardwareAddress)
+  if (!validUuid(snapshot.connectionUuid)
+      || !validText(snapshot.connectionName, 1, 256)
+      || (snapshot.kind !== "wifi" && snapshot.kind !== "wired")
+      || !validInterface(snapshot.interfaceName)
+      || !validHardwareAddress(snapshot.hardwareAddress)) return false
+  let primaryMatches = 0
+  for (let index = 0; index < snapshot.activeConnections.length; index++) {
+    const row = snapshot.activeConnections[index]
+    if (row.uuid === snapshot.connectionUuid && row.kind === snapshot.kind
+        && row.interfaceName === snapshot.interfaceName
+        && row.hardwareAddress === snapshot.hardwareAddress)
+      primaryMatches++
+  }
+  return primaryMatches === 1
 }
 
 function invalid(code) {
@@ -312,6 +345,7 @@ function cloneSnapshot(snapshot) {
     rxBytes: snapshot.rxBytes,
     txBytes: snapshot.txBytes,
     sampleMonotonicMs: snapshot.sampleMonotonicMs,
+    activeConnections: snapshot.activeConnections,
     wifi: snapshot.wifi,
     wired: snapshot.wired
   }
@@ -332,6 +366,14 @@ function cloneSnapshot(snapshot) {
     rxBytes: raw.rxBytes,
     txBytes: raw.txBytes,
     sampleMonotonicMs: raw.sampleMonotonicMs,
+    activeConnections: raw.activeConnections.map(function(row) {
+      return {
+        uuid: row.uuid,
+        kind: row.kind,
+        interfaceName: row.interfaceName,
+        hardwareAddress: row.hardwareAddress
+      }
+    }),
     wifi: {
       ssid: raw.wifi.ssid,
       ssidHex: raw.wifi.ssidHex,

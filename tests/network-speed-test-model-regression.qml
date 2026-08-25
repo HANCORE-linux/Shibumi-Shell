@@ -30,6 +30,8 @@ ShellRoot {
       rxBytes: 0,
       txBytes: 0,
       sampleMonotonicMs: 1,
+      activeConnections: [{ uuid: uuid, kind: "wired",
+        interfaceName: "eth0", hardwareAddress: hardware }],
       wifi: {
         ssid: "", ssidHex: "", signal: 0,
         frequencyMhz: 0, bitrateKbps: 0

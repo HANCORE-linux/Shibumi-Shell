@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import signal
 import sys
 import time
 
@@ -115,6 +117,15 @@ def main() -> int:
         malformed(invocation)
         return 0
     if mode == "slow":
+        normal(invocation)
+        time.sleep(30)
+        return 0
+    if mode == "resistant":
+        if counter_path is not None:
+            counter_path.with_name(counter_path.name + ".pid").write_text(
+                f"{os.getpid()}\n", encoding="ascii"
+            )
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         normal(invocation)
         time.sleep(30)
         return 0

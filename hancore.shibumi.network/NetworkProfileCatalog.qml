@@ -17,6 +17,10 @@ Item {
   property var nativeLiveness: null
   property var commandOverride: null
   property int refreshTimeoutMs: 25000
+  property int drainTimeoutMs: 1000
+  readonly property string helperPath:
+    String(Qt.resolvedUrl("scripts/network-profile-catalog"))
+      .replace(/^file:\/\//, "")
 
   property real generation: 0
   property string phase: "inactive"
@@ -54,7 +58,11 @@ Item {
   property QtObject authorityGuard: QtObject {
     property bool authorityAlive: true
     property int claim: 0
-    Component.onDestruction: Authority.release(claim)
+    property bool workerUnsettled: false
+    Component.onDestruction: {
+      if (workerUnsettled) Authority.block(claim)
+      else Authority.release(claim)
+    }
   }
 
   visible: false
@@ -87,6 +95,19 @@ Item {
     onTriggered: implementation.failRun("timeout")
   }
 
+  Timer {
+    id: drainWatchdog
+    interval: Math.max(100, root.drainTimeoutMs)
+    repeat: false
+    onTriggered: {
+      if (!catalogProcess.running) return
+      if (implementation.canSignalProcess()) catalogProcess.signal(9)
+      catalogProcess.running = false
+      if (catalogProcess.running && !implementation.canSignalProcess())
+        drainWatchdog.restart()
+    }
+  }
+
   Component {
     id: leaseTokenComponent
     QtObject {
@@ -111,6 +132,14 @@ Item {
     property int expectedCount: 0
     property int lastSequence: 0
     property var pendingRows: []
+    property bool shutdownRequested: false
+    property bool processStarted: false
+
+    function canSignalProcess() {
+      const pid = Number(catalogProcess.processId)
+      return processStarted && isFinite(pid) && pid > 0
+        && Math.floor(pid) === pid
+    }
 
     function bumpGeneration() {
       if (root.generation < CatalogModel.MaxSafeInteger) root.generation++
@@ -141,7 +170,7 @@ Item {
     }
 
     function claimAuthority() {
-      if (!root.active || authorized) return authorized
+      if (!root.active || shutdownRequested || authorized) return authorized
       authorityClaim = Authority.claim(root.authorityGuard)
       root.authorityGuard.claim = authorityClaim
       authorized = authorityClaim > 0
@@ -151,7 +180,8 @@ Item {
     }
 
     function acquire(owner) {
-      if (!owner || !root.active || !authorized) return false
+      if (!owner || !root.active || shutdownRequested || !authorized)
+        return false
       for (let index = 0; index < records.length; index++) {
         if (records[index].owner === owner) return true
       }
@@ -218,17 +248,28 @@ Item {
       runState = "loading"
       root.phase = "loading"
       bumpGeneration()
+      processStarted = false
       root.launchRequested = true
+      root.authorityGuard.workerUnsettled = true
+      catalogProcess.command = workerCommand()
+      catalogProcess.running = true
       return true
     }
 
     function cancelRun(nextPhase) {
+      const hadWorker = catalogProcess.running
       refreshTimeout.stop()
       pendingRefresh = false
-      if (catalogProcess.running) catalogProcess.signal(15)
+      if (hadWorker) {
+        if (canSignalProcess()) catalogProcess.signal(15)
+        drainWatchdog.restart()
+      } else {
+        drainWatchdog.stop()
+      }
+      catalogProcess.running = false
       root.launchRequested = false
       if (runState === "loading" || runState === "complete")
-        runState = "cancelled"
+        runState = hadWorker ? "cancelled" : "idle"
       resetPending()
       root.phase = String(nextPhase || "idle")
     }
@@ -237,7 +278,14 @@ Item {
       refreshTimeout.stop()
       pendingRefresh = false
       lastError = String(reason || "invalid")
-      if (catalogProcess.running) catalogProcess.signal(15)
+      if (catalogProcess.running) {
+        if (canSignalProcess()) catalogProcess.signal(15)
+        drainWatchdog.restart()
+      } else {
+        drainWatchdog.stop()
+        if (!processStarted) root.authorityGuard.workerUnsettled = false
+      }
+      catalogProcess.running = false
       root.launchRequested = false
       runState = "failed"
       resetPending()
@@ -299,14 +347,39 @@ Item {
       return true
     }
 
-    function processStarted() {
-      if (runState !== "loading") return
+    function workerCommand() {
+      return Array.isArray(root.commandOverride)
+        ? root.commandOverride.slice()
+        : ["/usr/bin/python3", "-I", root.helperPath]
+    }
+
+    function processStartedEvent() {
+      processStarted = true
+      if (runState !== "loading") {
+        if (catalogProcess.running) {
+          if (canSignalProcess()) catalogProcess.signal(15)
+          catalogProcess.running = false
+          drainWatchdog.restart()
+        }
+        return
+      }
       refreshTimeout.restart()
     }
 
     function processExited(exitCode) {
+      processStarted = false
+      root.authorityGuard.workerUnsettled = false
+      drainWatchdog.stop()
       refreshTimeout.stop()
+      catalogProcess.running = false
       root.launchRequested = false
+      if (shutdownRequested) {
+        pendingRefresh = false
+        runState = "idle"
+        resetPending()
+        finishShutdown()
+        return
+      }
       if (runState === "cancelled" || runState === "failed") {
         const retry = runState === "cancelled" && pendingRefresh
         pendingRefresh = false
@@ -335,8 +408,7 @@ Item {
       if (retry) refresh()
     }
 
-    function shutdown() {
-      cancelRun("inactive")
+    function destroyLeases() {
       const oldRecords = records.slice()
       records = []
       for (let index = 0; index < oldRecords.length; index++) {
@@ -345,33 +417,75 @@ Item {
         tokenObject.armed = false
         tokenObject.destroy()
       }
+    }
+
+    function finishShutdown() {
+      drainWatchdog.stop()
+      pendingRefresh = false
+      runState = "idle"
+      resetPending()
       Authority.release(authorityClaim)
       authorityClaim = 0
       root.authorityGuard.claim = 0
       authorized = false
-      clearPublished("inactive")
+      shutdownRequested = false
+      root.phase = "inactive"
+      if (root.active) claimAuthority()
+    }
+
+    function shutdown() {
+      if (shutdownRequested) return
+      shutdownRequested = true
+      const hadWorker = catalogProcess.running
+      cancelRun("draining")
+      destroyLeases()
+      clearPublished(hadWorker ? "draining" : "inactive")
+      if (!catalogProcess.running) finishShutdown()
+    }
+
+    function destroying() {
+      const hadWorker = catalogProcess.running
+        || root.authorityGuard.workerUnsettled
+      refreshTimeout.stop()
+      drainWatchdog.stop()
+      destroyLeases()
+      if (hadWorker) {
+        if (canSignalProcess()) catalogProcess.signal(9)
+        catalogProcess.running = false
+        Authority.block(authorityClaim)
+      } else {
+        catalogProcess.running = false
+        Authority.release(authorityClaim)
+      }
+      authorityClaim = 0
+      root.authorityGuard.claim = 0
+      authorized = false
     }
   }
 
   Process {
     id: catalogProcess
-    running: root.launchRequested && root.active && root.authorized
-    command: Array.isArray(root.commandOverride)
-      ? root.commandOverride
-      : [Qt.resolvedUrl("scripts/network-profile-catalog")]
+    command: []
     stdout: SplitParser {
       onRead: data => implementation.ingestLine(data)
     }
     stderr: StdioCollector {}
-    onStarted: implementation.processStarted()
+    onStarted: implementation.processStartedEvent()
     onExited: (exitCode, _exitStatus) => implementation.processExited(exitCode)
     onRunningChanged: {
-      if (root.launchRequested && !catalogProcess.running)
+      if (catalogProcess.running) return
+      implementation.processStarted = false
+      drainWatchdog.stop()
+      if (implementation.shutdownRequested)
+        implementation.finishShutdown()
+      else if (implementation.runState === "cancelled")
+        implementation.processExited(-1)
+      else if (root.launchRequested)
         implementation.failRun("start-failed")
     }
   }
 
   Component.onCompleted: if (root.active)
     implementation.claimAuthority()
-  Component.onDestruction: implementation.shutdown()
+  Component.onDestruction: implementation.destroying()
 }

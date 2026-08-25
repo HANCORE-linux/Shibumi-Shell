@@ -74,14 +74,14 @@ def main() -> int:
     try:
         if property_state(
             "/org/freedesktop/NetworkManager/Settings/7",
-            time.monotonic() + 1,
+            time.monotonic() + 1, ":1.77",
         ) != (True, 7, 15):
             raise AssertionError("per-connection property state changed")
     finally:
         property_globals["bounded_command"] = original_bounded_command
     expected_property_call = [
         module["BUSCTL"], "--system", "--json=short", "get-property",
-        module["SERVICE"], "/org/freedesktop/NetworkManager/Settings/7",
+        ":1.77", "/org/freedesktop/NetworkManager/Settings/7",
         module["CONNECTION_INTERFACE"], "Unsaved", "VersionId", "Flags",
     ]
     if property_calls != [expected_property_call]:
@@ -90,14 +90,16 @@ def main() -> int:
         raise AssertionError("dirty persisted profile was classified as transient")
     revalidate_globals = revalidate_states.__globals__
     original_property_state = revalidate_globals["property_state"]
-    revalidate_globals["property_state"] = lambda _path, _deadline: (False, 8, 0)
+    revalidate_globals["property_state"] = (
+        lambda _path, _deadline, _destination: (False, 8, 0)
+    )
     try:
         expect_error(
             catalog_error,
             lambda: revalidate_states(
                 ["/org/freedesktop/NetworkManager/Settings/7"],
                 {"/org/freedesktop/NetworkManager/Settings/7": (True, 7, 15)},
-                time.monotonic() + 1,
+                time.monotonic() + 1, ":1.77",
             ),
         )
     finally:
@@ -106,28 +108,56 @@ def main() -> int:
     collect_globals = collect_profiles.__globals__
     original_list_connections = collect_globals["list_connections"]
     original_collect_property_state = collect_globals["property_state"]
+    original_get_name_owner = collect_globals["get_name_owner"]
     topology_calls = 0
     state_calls = 0
     test_path = "/org/freedesktop/NetworkManager/Settings/9"
-    def fake_list_connections(_deadline: float) -> list[str]:
+    def fake_list_connections(
+        _deadline: float, destination: str
+    ) -> list[str]:
+        if destination != ":1.9":
+            raise AssertionError("catalog query was not owner-bound")
         nonlocal topology_calls
         topology_calls += 1
         return [test_path]
-    def changing_property_state(_path: str, _deadline: float) -> tuple[bool, int, int]:
+    def changing_property_state(
+        _path: str, _deadline: float, destination: str
+    ) -> tuple[bool, int, int]:
+        if destination != ":1.9":
+            raise AssertionError("profile state was not owner-bound")
         nonlocal state_calls
         state_calls += 1
         return (True, 1, 15) if state_calls < 3 else (False, 2, 0)
     collect_globals["list_connections"] = fake_list_connections
     collect_globals["property_state"] = changing_property_state
+    collect_globals["get_name_owner"] = lambda _deadline: ":1.9"
     try:
         expect_error(catalog_error, collect_profiles)
     finally:
         collect_globals["list_connections"] = original_list_connections
         collect_globals["property_state"] = original_collect_property_state
+        collect_globals["get_name_owner"] = original_get_name_owner
     if topology_calls != 2 or state_calls != 3:
         raise AssertionError(
             f"collect snapshot skipped final state revalidation: "
             f"topology={topology_calls} state={state_calls}"
+        )
+
+    owner_values = iter([":1.7", ":1.8"])
+    owner_destinations: list[str] = []
+    collect_globals["get_name_owner"] = lambda _deadline: next(owner_values)
+    collect_globals["list_connections"] = (
+        lambda _deadline, destination:
+          owner_destinations.append(destination) or []
+    )
+    try:
+        expect_error(catalog_error, collect_profiles)
+    finally:
+        collect_globals["get_name_owner"] = original_get_name_owner
+        collect_globals["list_connections"] = original_list_connections
+    if owner_destinations != [":1.7", ":1.7"]:
+        raise AssertionError(
+            f"catalog crossed owner identity: {owner_destinations!r}"
         )
 
     profile = profile_from_settings(wifi_settings())

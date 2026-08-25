@@ -35,7 +35,18 @@ Item {
     separator: "#404040",
     fillIdle: "#202020",
     fillHover: "#282828",
-    fillActive: "#303030"
+    fillActive: "#303030",
+    fillPrimaryHover: "#383838",
+    panelBackground: "#181818",
+    panelBorder: "#404040",
+    panelBorderWidth: 1,
+    panelRadius: 10,
+    tileRadius: 6,
+    ink: "#eeeeee",
+    mutedInk: "#999999",
+    seal: "#d75f5f",
+    fontFamily: "monospace",
+    captionSize: 11
   })
 
   width: contentWidth

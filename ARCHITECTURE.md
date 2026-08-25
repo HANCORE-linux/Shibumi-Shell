@@ -689,23 +689,26 @@ Current Phase 2 foundation:
   paths per frame. the validation system accepts the real-player, unavailable/crash,
   retry/cleanup, Top/Bottom, single-output visual, and resource slices.
   Multiple real players and physical multi-output acceptance remain gates.
-- G11 uses one process-wide `hancore.shibumi.network` service, regardless of output count. It
-  hosts the registered `omarchy.network` component as the authoritative
-  `Quickshell.Networking`, status, scan, DNS, and visible-network action owner
-  while suppressing its stock button, popup, and IPC handler;
-- Shibumi owns the active `omarchy.network` compatibility handler and the
-  inline speed-test process. Current and legacy host speed-test routes both
-  open the Shibumi Network panel and run bounded `omarchy-network-speedtest`
-  download/upload phases without loading Omarchy's speed-test panel;
-- each output owns only its bar presentation and lazy Shibumi popup. A single
-  panel-lifecycle detail sampler feeds the official parser, and a one-shot
-  `nmcli` adapter supplies saved profiles absent from Quickshell's visible AP
-  model. Speed-test and profile workers stop after the final screen-local panel
-  closes; the shared detail sampler remains active only when an Ethernet bar
-  still consumes its throughput data. V1's separate permanent Ethernet poller
-  is not restored. Top Wayland mapping
-  and cleanup pass on the validation system; the new direct speed-test path,
-  bottom, mutation, and physical multi-output remain runtime gates.
+- G11 uses one process-wide `hancore.shibumi.network` service, regardless of
+  output count. It is the native NetworkManager owner over Quickshell's public
+  Networking API and publishes only generation-bound primitive radio, device,
+  network, exact-profile, connection, DNS, throughput, reachability, action,
+  and failure snapshots. Raw backend wrappers stay private;
+- Shibumi owns the single `omarchy.network` compatibility IPC handler without
+  loading the host Network or QR components. Its own scanner lease, bounded
+  profile catalog, telemetry, reachability, Enterprise dispatcher, Wi-Fi QR
+  surface, and route-bound TLS speed-test workers are process-wide and
+  demand-driven. No Network feature state comes from an Omarchy helper or
+  `nmcli`;
+- each output owns only its bar presentation, telemetry consumer lease, lazy
+  Shibumi popup, and ephemeral QR session. WPA2-Enterprise is conservatively
+  limited to PEAP/MSCHAPv2 with system CAs and a mandatory server domain;
+  unknown EAP/certificate variants fail closed. DNS servers are a read-only
+  diagnostic snapshot in this slice; unsupported DNS mutation is routed to
+  Network settings rather than implemented through an unbounded settings map.
+  Source and fixture gates pass,
+  while real mutation, Enterprise authentication, recovery, bottom, and
+  physical multi-output acceptance remain runtime gates and are not claimed.
 - G13 has one process-wide `hancore.shibumi.brightness` service around the
   registered `omarchy.monitor` component. That hidden component remains the only
   brightness, display, scale, IPC, poller, and command owner;

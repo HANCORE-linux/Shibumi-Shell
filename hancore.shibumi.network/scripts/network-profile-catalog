@@ -16,11 +16,15 @@ import unicodedata
 from typing import Any, BinaryIO
 
 BUSCTL = "/usr/bin/busctl"
+DBUS_SERVICE = "org.freedesktop.DBus"
+DBUS_PATH = "/org/freedesktop/DBus"
+DBUS_INTERFACE = "org.freedesktop.DBus"
 SERVICE = "org.freedesktop.NetworkManager"
 SETTINGS_PATH = "/org/freedesktop/NetworkManager/Settings"
 SETTINGS_INTERFACE = "org.freedesktop.NetworkManager.Settings"
 CONNECTION_INTERFACE = "org.freedesktop.NetworkManager.Settings.Connection"
 PATH_PATTERN = re.compile(r"^/org/freedesktop/NetworkManager/Settings/[0-9]+$")
+UNIQUE_OWNER = re.compile(r"^:[0-9]+\.[0-9]+$")
 UUID_PATTERN = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -137,9 +141,24 @@ def exact_object(value: Any, keys: set[str]) -> bool:
     return isinstance(value, dict) and set(value) == keys
 
 
-def list_connections(deadline: float) -> list[str]:
+def get_name_owner(deadline: float) -> str:
     value = busctl_json([
-        "call", SERVICE, SETTINGS_PATH, SETTINGS_INTERFACE, "ListConnections"
+        "call", DBUS_SERVICE, DBUS_PATH, DBUS_INTERFACE,
+        "GetNameOwner", "s", SERVICE
+    ], MAX_PROPERTY_BYTES, deadline)
+    if not exact_object(value, {"type", "data"}) or value["type"] != "s" \
+            or not isinstance(value["data"], list) \
+            or len(value["data"]) != 1 \
+            or not isinstance(value["data"][0], str) \
+            or not UNIQUE_OWNER.fullmatch(value["data"][0]):
+        raise CatalogError("invalid NetworkManager owner")
+    return value["data"][0]
+
+
+def list_connections(deadline: float, destination: str) -> list[str]:
+    value = busctl_json([
+        "call", destination, SETTINGS_PATH, SETTINGS_INTERFACE,
+        "ListConnections"
     ], MAX_LIST_BYTES, deadline)
     if not exact_object(value, {"type", "data"}) or value["type"] != "ao":
         raise CatalogError("invalid connection list")
@@ -158,11 +177,13 @@ def list_connections(deadline: float) -> list[str]:
     return sorted(paths)
 
 
-def property_state(path: str, deadline: float) -> tuple[bool, int, int]:
+def property_state(
+    path: str, deadline: float, destination: str
+) -> tuple[bool, int, int]:
     # VersionId and Flags are per Settings.Connection properties on the pinned
     # NetworkManager API, alongside Unsaved.
     raw = bounded_command([
-        BUSCTL, "--system", "--json=short", "get-property", SERVICE, path,
+        BUSCTL, "--system", "--json=short", "get-property", destination, path,
         CONNECTION_INTERFACE, "Unsaved", "VersionId", "Flags"
     ], MAX_PROPERTY_BYTES, deadline)
     lines = raw.splitlines()
@@ -187,9 +208,11 @@ def property_state(path: str, deadline: float) -> tuple[bool, int, int]:
     return unsaved["data"], version["data"], flags["data"]
 
 
-def settings_for(path: str, deadline: float) -> dict[str, Any]:
+def settings_for(
+    path: str, deadline: float, destination: str
+) -> dict[str, Any]:
     value = busctl_json([
-        "call", SERVICE, path, CONNECTION_INTERFACE, "GetSettings"
+        "call", destination, path, CONNECTION_INTERFACE, "GetSettings"
     ], MAX_SETTINGS_BYTES, deadline)
     if not exact_object(value, {"type", "data"}) \
             or value["type"] != "a{sa{sv}}" \
@@ -344,23 +367,30 @@ def transient_unsaved(flags: int) -> bool:
 
 
 def revalidate_states(
-    paths: list[str], observed: dict[str, tuple[bool, int, int]], deadline: float
+    paths: list[str], observed: dict[str, tuple[bool, int, int]],
+    deadline: float, destination: str
 ) -> None:
     for path in paths:
-        if path not in observed or property_state(path, deadline) != observed[path]:
+        if path not in observed \
+                or property_state(path, deadline, destination) != observed[path]:
             raise CatalogError("profile state changed after snapshot")
 
 
 def collect_profiles() -> list[dict[str, Any]]:
     deadline = time.monotonic() + MAX_RUNTIME_SECONDS
-    initial_paths = list_connections(deadline)
+    owner_before = get_name_owner(deadline)
+    initial_paths = list_connections(deadline, owner_before)
     profiles: list[dict[str, Any]] = []
     observed_states: dict[str, tuple[bool, int, int]] = {}
     seen_uuids: set[str] = set()
     for path in initial_paths:
-        unsaved_before, version_before, flags_before = property_state(path, deadline)
+        unsaved_before, version_before, flags_before = property_state(
+            path, deadline, owner_before
+        )
         if unsaved_before:
-            unsaved_after, version_after, flags_after = property_state(path, deadline)
+            unsaved_after, version_after, flags_after = property_state(
+                path, deadline, owner_before
+            )
             if not unsaved_after or version_after != version_before \
                     or flags_after != flags_before:
                 raise CatalogError("unsaved profile changed during snapshot")
@@ -373,8 +403,10 @@ def collect_profiles() -> list[dict[str, Any]]:
                 )
                 continue
             raise CatalogError("persisted profile has unsaved changes")
-        settings = settings_for(path, deadline)
-        unsaved_after, version_after, flags_after = property_state(path, deadline)
+        settings = settings_for(path, deadline, owner_before)
+        unsaved_after, version_after, flags_after = property_state(
+            path, deadline, owner_before
+        )
         if unsaved_after or version_after != version_before \
                 or flags_after != flags_before:
             raise CatalogError("profile changed during snapshot")
@@ -385,9 +417,11 @@ def collect_profiles() -> list[dict[str, Any]]:
             raise CatalogError("duplicate profile UUID")
         seen_uuids.add(uuid_value)
         profiles.append(profile)
-    if list_connections(deadline) != initial_paths:
+    if list_connections(deadline, owner_before) != initial_paths:
         raise CatalogError("profile topology changed during snapshot")
-    revalidate_states(initial_paths, observed_states, deadline)
+    revalidate_states(initial_paths, observed_states, deadline, owner_before)
+    if get_name_owner(deadline) != owner_before:
+        raise CatalogError("NetworkManager owner changed during snapshot")
     profiles.sort(key=lambda row: row["uuid"])
     return profiles
 

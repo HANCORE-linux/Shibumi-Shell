@@ -55,6 +55,7 @@ MAX_SAFE_INTEGER = 9007199254740991
 MAX_ADDRESSES = 32
 MAX_DNS_SERVERS = 32
 MAX_DNS_DOMAINS = 64
+MAX_ACTIVE_CONNECTIONS = 64
 PR_SET_PDEATHSIG = 1
 
 
@@ -374,7 +375,81 @@ def read_counter(name: str, counter: str) -> int:
     return safe_integer(int(data))
 
 
-def disconnected_snapshot(sample_ms: int) -> dict[str, Any]:
+def active_connection_paths(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) > MAX_ACTIVE_CONNECTIONS:
+        raise TelemetryError("active connection list exceeded bound")
+    result: list[str] = []
+    seen: set[str] = set()
+    for path in value:
+        if not isinstance(path, str) or not ACTIVE_PATH.fullmatch(path) \
+                or path in seen:
+            raise TelemetryError("invalid active connection path")
+        seen.add(path)
+        result.append(path)
+    return sorted(result)
+
+
+def collect_active_connections(
+    paths: list[str], deadline: float, destination: str
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    seen_devices: set[tuple[str, str]] = set()
+    active_properties = [
+        ("Uuid", "s"), ("Type", "s"), ("Devices", "ao"), ("State", "u")
+    ]
+    device_properties = [
+        ("Interface", "s"), ("DeviceType", "u"), ("State", "u"),
+        ("HwAddress", "s"), ("ActiveConnection", "o"),
+    ]
+    for path in paths:
+        active = get_properties(
+            path, ACTIVE_INTERFACE, active_properties, deadline, destination
+        )
+        if safe_integer(active["State"], 4) != 2:
+            continue
+        active_type = bounded_text(active["Type"], 64)
+        if active_type not in {"802-11-wireless", "802-3-ethernet"}:
+            continue
+        devices = active["Devices"]
+        if not isinstance(devices, list) or len(devices) != 1 \
+                or not isinstance(devices[0], str) \
+                or not DEVICE_PATH.fullmatch(devices[0]):
+            raise TelemetryError("active connection device is ambiguous")
+        device = get_properties(
+            devices[0], DEVICE_INTERFACE, device_properties,
+            deadline, destination
+        )
+        device_type = safe_integer(device["DeviceType"], 32)
+        kind = "wifi" if device_type == 2 \
+            and active_type == "802-11-wireless" \
+            else "wired" if device_type == 1 \
+            and active_type == "802-3-ethernet" else ""
+        if kind == "":
+            raise TelemetryError("active connection type changed")
+        if safe_integer(device["State"], 120) != 100 \
+                or device["ActiveConnection"] != path:
+            raise TelemetryError("active connection device is not activated")
+        interface = interface_name(device["Interface"])
+        address = hardware_address(device["HwAddress"])
+        identity = (kind, address)
+        if identity in seen_devices:
+            raise TelemetryError("duplicate active device identity")
+        seen_devices.add(identity)
+        rows.append({
+            "uuid": canonical_uuid(active["Uuid"]),
+            "kind": kind,
+            "interfaceName": interface,
+            "hardwareAddress": address,
+        })
+    rows.sort(key=lambda row: (
+        row["kind"], row["hardwareAddress"], row["interfaceName"], row["uuid"]
+    ))
+    return rows
+
+
+def disconnected_snapshot(
+    sample_ms: int, active_connections: list[dict[str, str]]
+) -> dict[str, Any]:
     return {
         "schemaVersion": 1,
         "connected": False,
@@ -391,6 +466,7 @@ def disconnected_snapshot(sample_ms: int) -> dict[str, Any]:
         "rxBytes": 0,
         "txBytes": 0,
         "sampleMonotonicMs": sample_ms,
+        "activeConnections": active_connections,
         "wifi": {
             "ssid": "", "ssidHex": "", "signal": 0,
             "frequencyMhz": 0, "bitrateKbps": 0,
@@ -402,18 +478,27 @@ def disconnected_snapshot(sample_ms: int) -> dict[str, Any]:
 def collect_snapshot() -> dict[str, Any]:
     deadline = time.monotonic() + MAX_RUNTIME_SECONDS
     owner_before = get_name_owner(deadline)
-    primary_before = get_properties(
-        ROOT_PATH, ROOT_INTERFACE, [("PrimaryConnection", "o")], deadline,
-        owner_before
-    )["PrimaryConnection"]
+    root_properties = [
+        ("PrimaryConnection", "o"), ("ActiveConnections", "ao")
+    ]
+    root_before = get_properties(
+        ROOT_PATH, ROOT_INTERFACE, root_properties, deadline, owner_before
+    )
+    primary_before = root_before["PrimaryConnection"]
+    active_paths = active_connection_paths(root_before["ActiveConnections"])
+    active_connections = collect_active_connections(
+        active_paths, deadline, owner_before
+    )
     sample_ms = safe_integer(time.monotonic_ns() // 1_000_000)
     if primary_before == "/":
-        if get_properties(ROOT_PATH, ROOT_INTERFACE,
-                    [("PrimaryConnection", "o")], deadline, owner_before
-                    )["PrimaryConnection"] != primary_before \
+        if get_properties(ROOT_PATH, ROOT_INTERFACE, root_properties,
+                    deadline, owner_before) != root_before \
+                or collect_active_connections(
+                    active_paths, deadline, owner_before
+                ) != active_connections \
                 or get_name_owner(deadline) != owner_before:
             raise TelemetryError("NetworkManager changed during snapshot")
-        return disconnected_snapshot(sample_ms)
+        return disconnected_snapshot(sample_ms, active_connections)
     if not isinstance(primary_before, str) or not ACTIVE_PATH.fullmatch(primary_before):
         raise TelemetryError("invalid primary connection path")
 
@@ -535,8 +620,10 @@ def collect_snapshot() -> dict[str, Any]:
             or get_properties(primary_before, ACTIVE_INTERFACE,
                 active_properties, deadline, owner_before) != active \
             or get_properties(ROOT_PATH, ROOT_INTERFACE,
-                [("PrimaryConnection", "o")], deadline, owner_before
-                )["PrimaryConnection"] != primary_before:
+                root_properties, deadline, owner_before) != root_before \
+            or collect_active_connections(
+                active_paths, deadline, owner_before
+                ) != active_connections:
         raise TelemetryError("NetworkManager changed during snapshot")
     if get_name_owner(deadline) != owner_before:
         raise TelemetryError("NetworkManager owner changed during snapshot")
@@ -560,6 +647,7 @@ def collect_snapshot() -> dict[str, Any]:
         "rxBytes": rx_bytes,
         "txBytes": tx_bytes,
         "sampleMonotonicMs": sample_ms,
+        "activeConnections": active_connections,
         "wifi": wifi,
         "wired": wired,
     }

@@ -6,7 +6,7 @@ import "NetworkScannerAuthority.js" as Authority
 
 // Exclusive process-wide scanner owner. Client objects are private lease keys;
 // the public surface contains only counts, phases, primitive device rows, and
-// accepted device IDs. Production Service.qml does not instantiate this seam yet.
+// accepted device IDs. Service.qml owns the single process-wide lease authority.
 Item {
   id: root
 

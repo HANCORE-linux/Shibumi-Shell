@@ -847,22 +847,22 @@ ShellRoot {
         const mixedProfileRow = root.rowFor(
           sequenceAdapter, mixedProfileNetwork.ssid)
         if (!multiProfileRow || !connectedMultiProfileRow || !mixedProfileRow
-            || !multiProfileRow.ambiguous || multiProfileRow.profileCount !== 2
+            || multiProfileRow.ambiguous || multiProfileRow.profileCount !== 2
             || multiProfileRow.canConnect || multiProfileRow.canConnectWithPsk
             || multiProfileRow.canDisconnect || multiProfileRow.canForget
-            || !connectedMultiProfileRow.ambiguous
+            || connectedMultiProfileRow.ambiguous
             || connectedMultiProfileRow.profileCount !== 2
             || connectedMultiProfileRow.canConnect
             || connectedMultiProfileRow.canConnectWithPsk
-            || connectedMultiProfileRow.canDisconnect
+            || !connectedMultiProfileRow.canDisconnect
             || connectedMultiProfileRow.canForget
-            || !mixedProfileRow.ambiguous
+            || mixedProfileRow.ambiguous
             || mixedProfileRow.profileCount !== 2
             || mixedProfileRow.validProfileCount !== 1
             || mixedProfileRow.canConnect
             || mixedProfileRow.canConnectWithPsk
             || mixedProfileRow.canDisconnect || mixedProfileRow.canForget)
-          return root.fail("multi-profile SSID was published as actionable")
+          return root.fail("profile ambiguity crossed an aggregate action")
         const multiProfileResult = sequenceAdapter.connectNetworkWithPsk({
           entityId: multiProfileRow.id,
           generation: sequenceAdapter.generation
@@ -871,12 +871,12 @@ ShellRoot {
           entityId: connectedMultiProfileRow.id,
           generation: sequenceAdapter.generation
         })
-        if (multiProfileResult.ok || multiProfileResult.code !== "ambiguous"
-            || multiProfileDisconnect.ok
-            || multiProfileDisconnect.code !== "ambiguous"
+        if (multiProfileResult.ok || multiProfileResult.code !== "unsupported"
+            || !multiProfileDisconnect.ok
+            || multiProfileDisconnect.code !== "accepted"
             || sequenceBackend.pskCalls !== 0
-            || sequenceBackend.disconnectCalls !== 0)
-          return root.fail("multi-profile action did not fail closed")
+            || sequenceBackend.disconnectCalls !== 1)
+          return root.fail("multi-profile exact action policy was not enforced")
 
         const primaryDeviceId = Model.deviceId("wifi",
           sequenceDevice.address, sequenceDevice.name)

@@ -20,6 +20,9 @@ Item {
   property var continuityState: null
   property int startupTimeoutMs: 3000
   property int restartDelayMs: 1000
+  readonly property string helperPath:
+    String(Qt.resolvedUrl("scripts/network-manager-owner-watch"))
+      .replace(/^file:\/\//, "")
 
   property real generation: 0
   property bool helperReady: false
@@ -279,7 +282,7 @@ Item {
       && root.watcherOverride === null
     command: Array.isArray(root.commandOverride)
       ? root.commandOverride
-      : [Qt.resolvedUrl("scripts/network-manager-owner-watch")]
+      : ["/usr/bin/python3", "-I", root.helperPath]
 
     stdout: SplitParser {
       onRead: data => implementation.ingestProtocolLine(data)

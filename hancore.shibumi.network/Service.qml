@@ -1,844 +1,883 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import Quickshell.Io
-import Quickshell.Networking
 
-// One process-wide NetworkManager owner for every Shibumi output. Quattro's
-// official network component remains authoritative for live status, details,
-// DNS, and visible-network actions. Shibumi owns the session-scoped scanner
-// lease required by its hidden backend, its inline speed-test process, and the
-// saved-profile view missing from the host API.
+// One process-wide native Network owner. Raw Quickshell Networking objects are
+// confined to NetworkBackendAdapter/NetworkScannerLease; this facade publishes
+// primitive snapshots and typed mutations to every output-local bar/panel.
 Item {
   id: root
 
   property var shell: null
   property var manifest: null
   property var bar: shell ? shell.bar : null
-  readonly property url panelSource: registeredSource("omarchy.network")
-  property Component panelComponent: String(panelSource) ? null
-    : registeredComponent("omarchy.network")
-  readonly property var backend: bridge.panel
-  readonly property url speedTestRunnerSource:
-    Qt.resolvedUrl("InlineSpeedTestRunner.py")
-  property string speedTestExecutable: "omarchy-network-speedtest"
-  property int speedTestPhaseDuration: 5000
-  readonly property bool speedTestReady: String(speedTestRunnerSource) !== ""
-    && String(speedTestExecutable || "") !== ""
-  property bool speedTestRunning: false
-  readonly property bool speedTestHasRun: speedTestDownloadMbps !== ""
-    || speedTestUploadMbps !== ""
-  property string speedTestPhase: ""
-  property string speedTestDownloadMbps: ""
-  property string speedTestUploadMbps: ""
-  property string speedTestError: ""
-  property bool speedTestExpectedStop: false
-  property bool speedTestPendingRun: false
-  property bool speedTestProcessStarted: false
-  property string speedTestStderr: ""
-  readonly property bool ready: backend !== null
-  readonly property bool backendAvailable: ready && bridge.backendAvailable
-  readonly property string kind: bridge.kind
-  readonly property string label: bridge.label !== ""
-    ? bridge.label : connectedVisibleLabel(visibleNetworks)
-  readonly property int signalStrength: bridge.signalStrength
-  property bool scanPending: false
-  property var scannerDevice: null
-  readonly property bool scanning: bridge.scanning || scanPending
-  readonly property bool busy: bridge.busy || profileAction.running
-  readonly property bool wifiEnabled: Networking.wifiEnabled
-  readonly property bool wifiAvailable: backend
-    ? backend.wifiStationAvailable === true : false
-  readonly property var info: backend && backend.info ? backend.info : ({})
-  readonly property real downloadRate: backend ? Number(backend.downloadRate || 0) : 0
-  readonly property real uploadRate: backend ? Number(backend.uploadRate || 0) : 0
-  readonly property real routerPingLatency: backend
-    ? Number(backend.routerPingLatency === undefined ? -1 : backend.routerPingLatency) : -1
-  readonly property real internetPingLatency: backend
-    ? Number(backend.internetPingLatency === undefined ? -1 : backend.internetPingLatency) : -1
-  readonly property int internetPingPacketLoss: backend
-    ? Number(backend.internetPingPacketLoss || 0) : 0
-  readonly property string dnsProvider: backend
-    ? String(backend.dnsProvider || "DHCP") : "DHCP"
-  readonly property var dnsProviders: backend && backend.dnsProviders
-    ? backend.dnsProviders : ["DHCP", "Cloudflare", "Google", "Custom"]
-  readonly property string actionSsid: backend ? String(backend.actionSsid || "") : ""
-  readonly property string actionKind: backend ? String(backend.actionKind || "") : ""
-  readonly property string failureSsid: backend ? String(backend.failureSsid || "") : ""
-  readonly property string failureReason: backend ? String(backend.failureReason || "") : ""
-  readonly property var visibleNetworks: backend && backend.wifiNetworks
-    ? backend.wifiNetworks : []
-  property var savedProfiles: []
-  property bool profilesLoaded: false
-  property string profileError: ""
-  property var sessionOwners: []
-  readonly property int sessionCount: sessionOwners.length
-  readonly property var networks: mergedNetworks(visibleNetworks, savedProfiles)
+  property bool active: true
 
-  function registeredSource(id) {
-    if (bar && typeof bar.registeredWidgetSource === "function")
-      return bar.registeredWidgetSource(id)
-    const registry = shell && "pluginRegistry" in shell
-      ? shell.pluginRegistry : null
-    const pluginManifest = registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
-  }
+  readonly property bool ready: root.active
+    && liveness.monitorEstablished
+  readonly property bool backendAvailable: adapter.backendAvailable
+  readonly property bool processRestartRequired:
+    liveness.processRestartRequired
+  readonly property string livenessPhase: liveness.phase
+  readonly property bool busy: actions.busy || profileActions.busy
+  readonly property bool wifiEnabled: adapter.radioSnapshot.enabled
+  readonly property bool wifiAvailable: adapter.radioSnapshot.available
+  readonly property bool scanning: scanner.scanning || scanner.scannerEnabled
+  readonly property var radioSnapshot: adapter.radioSnapshot
+  readonly property var deviceSnapshots: adapter.deviceSnapshots
+  readonly property var visibleNetworkSnapshots: adapter.networkSnapshots
+  readonly property var profileSnapshots: adapter.profileSnapshots
+  readonly property var savedProfileSnapshots: adapter.savedProfileSnapshots
+  readonly property var connectionSnapshot: adapter.connectionDetailsSnapshot
+  readonly property var dnsSnapshot: adapter.dnsSnapshot
+  readonly property var throughputSnapshot: adapter.throughputSnapshot
+  readonly property var reachabilitySnapshot: adapter.reachabilitySnapshot
+  readonly property var actionSnapshot: actions.phase === "pending"
+    ? actions.actionSnapshot
+    : profileActions.phase === "pending" || profileActions.phase === "failed"
+      ? profileActions.actionSnapshot : actions.actionSnapshot
+  readonly property var networks: implementation.networkRows()
+  readonly property int sessionCount: implementation.sessionCount()
+  readonly property int trafficConsumerCount:
+    implementation.trafficConsumerCount()
 
-  function registeredComponent(id) {
-    if (bar && typeof bar.registeredWidgetComponent === "function")
-      return bar.registeredWidgetComponent(id)
-    const registry = bar && "barWidgetRegistry" in bar
-      ? bar.barWidgetRegistry : null
-    if (registry) void(registry.revision)
-    const widgets = registry && registry.widgets ? registry.widgets : ({})
-    const entry = widgets[String(id || "")]
-    return entry && entry.component ? entry.component : null
-  }
+  readonly property string kind: implementation.connectionKind()
+  readonly property string label: implementation.connectionLabel()
+  readonly property int signalStrength: implementation.connectionSignal()
+  readonly property var info: implementation.connectionInfo()
+  readonly property real downloadRate: adapter.throughputSnapshot
+    ? adapter.throughputSnapshot.downloadBytesPerSecond : 0
+  readonly property real uploadRate: adapter.throughputSnapshot
+    ? adapter.throughputSnapshot.uploadBytesPerSecond : 0
+  readonly property real routerPingLatency: adapter.reachabilitySnapshot
+    ? adapter.reachabilitySnapshot.routerLatencyMs : -1
+  readonly property real internetPingLatency: adapter.reachabilitySnapshot
+    ? adapter.reachabilitySnapshot.internetLatencyMs : -1
+  readonly property int internetPingPacketLoss: adapter.reachabilitySnapshot
+    ? adapter.reachabilitySnapshot.internetPacketLossPercent : 0
+  readonly property var dnsServers: adapter.dnsSnapshot
+    ? adapter.dnsSnapshot.servers : []
+  readonly property var dnsDomains: adapter.dnsSnapshot
+    ? adapter.dnsSnapshot.domains : []
+  readonly property string actionKind: profileActions.phase === "pending"
+    ? profileActions.actionKind : actions.phase === "pending"
+      ? actions.actionKind : ""
+  readonly property string actionSsid:
+    implementation.actionSsid(root.actionSnapshot)
+  readonly property string failureSsid: profileActions.phase === "failed"
+    || actions.phase === "failed"
+      ? implementation.actionSsid(root.actionSnapshot) : ""
+  readonly property string failureReason: profileActions.phase === "failed"
+    ? profileActions.failureMessage : actions.failureMessage
+  readonly property string profileError: catalog.errorCode === ""
+    ? "" : implementation.catalogError(catalog.errorCode)
+  readonly property bool profilesLoaded: catalog.available
+  readonly property var savedProfiles: adapter.savedProfileSnapshots
 
-  function connectedVisibleLabel(rows) {
-    const values = Array.isArray(rows) ? rows : []
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] && values[i].connected === true
-          && String(values[i].ssid || "") !== "")
-        return String(values[i].ssid)
-    }
-    return ""
-  }
-
-  function activeWifiDevice() {
-    return ready && backend && backend.wifiDevice
-      ? backend.wifiDevice : null
-  }
-
-  function setSessionScannerEnabled(enabled) {
-    const nextDevice = sessionCount > 0 ? activeWifiDevice() : null
-    if (scannerDevice && scannerDevice !== nextDevice)
-      scannerDevice.scannerEnabled = false
-    scannerDevice = nextDevice
-    if (!scannerDevice) return false
-    scannerDevice.scannerEnabled = enabled === true
-    return true
-  }
-
-  function releaseWifiScanner() {
-    scanRestart.stop()
-    scanDone.stop()
-    scanPending = false
-    const currentDevice = activeWifiDevice()
-    if (scannerDevice) scannerDevice.scannerEnabled = false
-    if (currentDevice && currentDevice !== scannerDevice)
-      currentDevice.scannerEnabled = false
-    scannerDevice = null
-  }
-
-  function requestWifiScan() {
-    scanRestart.stop()
-    scanDone.stop()
-    if (sessionCount <= 0 || !activeWifiDevice()) {
-      releaseWifiScanner()
-      return false
-    }
-    scanPending = true
-    setSessionScannerEnabled(false)
-    scanRestart.restart()
-    return true
-  }
-
-  function completeWifiScan() {
-    scanPending = false
-    if (backend && typeof backend.syncWifiNetworks === "function")
-      backend.syncWifiNetworks()
-  }
+  readonly property bool speedTestReady: speedTest.available
+    && speedTest.testInput !== null
+  readonly property bool speedTestRunning: speedTest.running
+  readonly property bool speedTestHasRun: speedTest.speedTestResult !== null
+  readonly property string speedTestPhase: speedTest.phase === "down"
+    || speedTest.phase === "up" ? speedTest.phase : ""
+  readonly property string speedTestDownloadMbps:
+    speedTest.downloadMbps >= 0 ? String(speedTest.downloadMbps) : ""
+  readonly property string speedTestUploadMbps:
+    speedTest.uploadMbps >= 0 ? String(speedTest.uploadMbps) : ""
+  readonly property string speedTestError: speedTest.errorCode === ""
+    ? "" : implementation.speedError(speedTest.errorCode)
 
   visible: false
   width: 0
   height: 0
 
-  onReadyChanged: {
-    if (!ready || sessionCount === 0) releaseWifiScanner()
-    else requestWifiScan()
+  function beginSession(owner) { return implementation.beginSession(owner) }
+  function endSession(owner) { return implementation.endSession(owner) }
+  function beginTrafficConsumer(owner) {
+    return implementation.beginTrafficConsumer(owner)
   }
-
-  Connections {
-    target: root.backend
-    function onWifiDeviceChanged() {
-      if (root.sessionCount > 0) root.requestWifiScan()
-      else root.releaseWifiScanner()
-    }
+  function endTrafficConsumer(owner) {
+    return implementation.endTrafficConsumer(owner)
   }
-
-  function officialSettings() {
-    return bar && typeof bar.widgetSettings === "function"
-      ? bar.widgetSettings("G11", "omarchy.network") : ({})
-  }
-
-  function beginSession(owner) {
-    if (!owner || sessionOwners.indexOf(owner) >= 0) return
-    const next = sessionOwners.slice()
-    next.push(owner)
-    sessionOwners = next
-    if (sessionCount === 1) {
-      refresh(true)
-    }
-  }
-
-  function endSession(owner) {
-    if (!owner) return
-    const nextOwners = sessionOwners.filter(candidate => candidate !== owner)
-    if (nextOwners.length === 0) stopSpeedTest()
-    sessionOwners = nextOwners
-    if (sessionCount !== 0) return
-    // Ethernet bar presentations consume the same central throughput sample as
-    // the panel. Keep that one worker alive while a wired route is active.
-    if (kind !== "ethernet") {
-      detailsPoll.stop()
-      detailsProc.running = false
-    }
-    profileList.running = false
-    releaseWifiScanner()
-  }
-
-  function refresh(scanWifi) {
-    if (!ready || typeof backend.refresh !== "function") return false
-    const shouldScanWifi = scanWifi === true && activeWifiDevice() !== null
-    // The hidden backend may gate its own scanner on `opened`, while older
-    // hosts enable it synchronously even for refresh(false). A requested scan
-    // therefore defers every backend refresh until our scanner lease starts.
-    if (shouldScanWifi) {
-      requestWifiScan()
-      if (sessionCount > 0 && !profileList.running) refreshProfiles()
-      return true
-    }
-    if (scanPending) return true
-    backend.refresh(false)
-    if (sessionCount > 0) setSessionScannerEnabled(true)
-    else releaseWifiScanner()
-    return true
-  }
+  function refresh(scanWifi) { return implementation.refresh(scanWifi) }
+  function refreshProfiles() { return catalog.requestRefresh() }
 
   function toggleWifi() {
-    if (!backendAvailable || !wifiAvailable) return false
-    Networking.wifiEnabled = !Networking.wifiEnabled
-    if (Networking.wifiEnabled) Qt.callLater(function() { root.refresh(true) })
-    return true
-  }
-
-  function securityKind(security) {
-    switch (security) {
-    case WifiSecurityType.Open: return "open"
-    case WifiSecurityType.WpaPsk:
-    case WifiSecurityType.Wpa2Psk:
-    case WifiSecurityType.Sae: return "psk"
-    case WifiSecurityType.Owe: return "owe"
-    case WifiSecurityType.StaticWep:
-    case WifiSecurityType.DynamicWep: return "wep"
-    case WifiSecurityType.WpaEap:
-    case WifiSecurityType.Wpa2Eap: return "enterprise"
-    case WifiSecurityType.Wpa3SuiteB192:
-    case WifiSecurityType.Leap: return "unsupported"
-    default: return "unknown"
-    }
-  }
-
-  function securityLabel(security) {
-    switch (security) {
-    case WifiSecurityType.Open: return "Open"
-    case WifiSecurityType.WpaPsk: return "WPA Personal"
-    case WifiSecurityType.Wpa2Psk: return "WPA2 Personal"
-    case WifiSecurityType.Sae: return "WPA3 Personal"
-    case WifiSecurityType.Owe: return "Enhanced Open (OWE)"
-    case WifiSecurityType.StaticWep:
-    case WifiSecurityType.DynamicWep: return "WEP"
-    case WifiSecurityType.WpaEap: return "WPA Enterprise"
-    case WifiSecurityType.Wpa2Eap: return "WPA2 Enterprise"
-    case WifiSecurityType.Wpa3SuiteB192: return "WPA3 Enterprise"
-    case WifiSecurityType.Leap: return "LEAP"
-    default: return "Unknown"
-    }
-  }
-
-  function profileSecurityLabel(keyManagement, authAlgorithm) {
-    switch (String(keyManagement || "").toLowerCase()) {
-    case "wpa-psk": return "WPA Personal profile"
-    case "sae": return "WPA3 Personal profile"
-    case "owe": return "Enhanced Open profile"
-    case "wpa-eap": return "WPA Enterprise profile"
-    case "wpa-eap-suite-b-192": return "WPA3 Suite B profile"
-    case "ieee8021x": return String(authAlgorithm || "").toLowerCase()
-      === "leap" ? "LEAP profile" : "802.1X profile"
-    case "open": return "Open profile"
-    case "none": return "WEP profile"
-    default: return "Saved Wi-Fi profile"
-    }
-  }
-
-  function profileMatchesSecurity(profile, security) {
-    const keyManagement = String(profile && profile.keyManagement || "")
-      .toLowerCase()
-    switch (keyManagement) {
-    case "wpa-psk":
-      return security === WifiSecurityType.WpaPsk
-        || security === WifiSecurityType.Wpa2Psk
-    case "sae": return security === WifiSecurityType.Sae
-    case "owe": return security === WifiSecurityType.Owe
-    case "wpa-eap":
-      return security === WifiSecurityType.WpaEap
-        || security === WifiSecurityType.Wpa2Eap
-    case "wpa-eap-suite-b-192":
-      return security === WifiSecurityType.Wpa3SuiteB192
-    case "ieee8021x":
-      return String(profile.authAlgorithm || "").toLowerCase() === "leap"
-        ? security === WifiSecurityType.Leap
-        : security === WifiSecurityType.DynamicWep
-    case "open": return security === WifiSecurityType.Open
-    case "none": return security === WifiSecurityType.StaticWep
-    default: return false
-    }
-  }
-
-  function profileVisibleMatchCount(profile, visible) {
-    if (!profile || !Array.isArray(visible)) return 0
-    let count = 0
-    for (let i = 0; i < visible.length; i++) {
-      const candidate = visible[i]
-      if (candidate && candidate.ssid === profile.ssid
-          && profileMatchesSecurity(profile, candidate.security)) count++
-    }
-    return count
-  }
-
-  function mergedNetworks(visible, profiles) {
-    const rows = []
-    const visibleRows = Array.isArray(visible) ? visible : []
-    const savedRows = Array.isArray(profiles) ? profiles : []
-    const representedProfileUuids = ({})
-
-    for (let i = 0; i < visibleRows.length; i++) {
-      const source = visibleRows[i]
-      if (!source) continue
-      const matchingProfiles = []
-      for (let p = 0; p < savedRows.length; p++) {
-        const candidate = savedRows[p]
-        if (candidate && candidate.ssid === source.ssid
-            && profileMatchesSecurity(candidate, source.security))
-          matchingProfiles.push(candidate)
-      }
-      const profile = matchingProfiles.length === 1
-        && profileVisibleMatchCount(matchingProfiles[0], visibleRows) === 1
-        ? matchingProfiles[0] : null
-      if (profile && String(profile.uuid || ""))
-        representedProfileUuids[String(profile.uuid)] = true
-      rows.push({
-        connected: source.connected === true,
-        known: source.known === true || profile !== null,
-        ssid: String(source.ssid || ""),
-        signal: Math.max(0, Math.min(100, Number(source.signal || 0))),
-        security: source.security,
-        securityKind: securityKind(source.security),
-        securityLabel: securityLabel(source.security),
-        visible: true,
-        profileUuid: profile ? String(profile.uuid || "") : "",
-        lastSuccessful: profile ? Number(profile.lastSuccessful || 0) : 0,
-        entryKey: profile ? "profile:" + profile.uuid
-          : "network:" + String(source.ssid || "") + ":" + securityKind(source.security)
-      })
-    }
-
-    for (let p = 0; p < savedRows.length; p++) {
-      const profile = savedRows[p]
-      if (!profile || representedProfileUuids[String(profile.uuid || "")])
-        continue
-      rows.push({
-        network: null,
-        connected: false,
-        known: true,
-        ssid: String(profile.ssid || ""),
-        signal: 0,
-        security: null,
-        securityKind: "saved",
-        securityLabel: profileSecurityLabel(profile.keyManagement,
-          profile.authAlgorithm),
-        visible: false,
-        profileUuid: String(profile.uuid || ""),
-        lastSuccessful: Number(profile.lastSuccessful || 0),
-        entryKey: "profile:" + String(profile.uuid || "")
-      })
-    }
-
-    rows.sort(function(left, right) {
-      if (left.connected !== right.connected) return left.connected ? -1 : 1
-      if (left.known !== right.known) return left.known ? -1 : 1
-      if (left.visible !== right.visible) return left.visible ? -1 : 1
-      return right.signal - left.signal
-    })
-    return rows
-  }
-
-  function visibleIdentityMatchCount(entry) {
-    if (!entry || entry.visible === false) return 0
-    const ssid = String(entry.ssid || "")
-    if (!ssid) return 0
-    const expectedKind = String(entry.securityKind
-      || securityKind(entry.security))
-    const hasExactSecurity = entry.security !== undefined
-      && entry.security !== null
-    const rows = Array.isArray(visibleNetworks) ? visibleNetworks : []
-    let count = 0
-    for (let i = 0; i < rows.length; i++) {
-      const candidate = rows[i]
-      if (!candidate || String(candidate.ssid || "") !== ssid) continue
-      if (hasExactSecurity && candidate.security !== entry.security) continue
-      if (!hasExactSecurity
-          && securityKind(candidate.security) !== expectedKind) continue
-      count++
-    }
-    return count
-  }
-
-  function hasUniqueVisibleIdentity(entry) {
-    return visibleIdentityMatchCount(entry) === 1
-  }
-
-  function currentVisibleEntry(entry) {
-    if (!entry || entry.visible === false) return null
-    const ssid = String(entry.ssid || "")
-    const hasExactSecurity = entry.security !== undefined
-      && entry.security !== null
-    const expectedKind = String(entry.securityKind
-      || securityKind(entry.security))
-    const rows = mergedNetworks(visibleNetworks, savedProfiles)
-    let result = null
-    let count = 0
-    for (let i = 0; i < rows.length; i++) {
-      const candidate = rows[i]
-      if (!candidate || candidate.visible === false
-          || String(candidate.ssid || "") !== ssid) continue
-      if (hasExactSecurity && candidate.security !== entry.security) continue
-      if (!hasExactSecurity && candidate.securityKind !== expectedKind) continue
-      result = candidate
-      count++
-    }
-    return count === 1 ? result : null
-  }
-
-  function savedProfileMatchCount(entry) {
-    if (!entry || !Array.isArray(savedProfiles)) return 0
-    let count = 0
-    for (let i = 0; i < savedProfiles.length; i++) {
-      const profile = savedProfiles[i]
-      if (profile && profile.ssid === entry.ssid
-          && profileMatchesSecurity(profile, entry.security)) count++
-    }
-    return count
-  }
-
-  function visibleSsidMatchCount(entry) {
-    const ssid = String(entry && entry.ssid || "")
-    if (!ssid || !Array.isArray(visibleNetworks)) return 0
-    let count = 0
-    for (let i = 0; i < visibleNetworks.length; i++) {
-      const candidate = visibleNetworks[i]
-      if (candidate && String(candidate.ssid || "") === ssid) count++
-    }
-    return count
-  }
-
-  function hasUnambiguousVisibleSsid(entry) {
-    return hasUniqueVisibleIdentity(entry)
-      && visibleSsidMatchCount(entry) === 1
+    if (root.busy) return implementation.invalidAction("busy")
+    implementation.prepareAction()
+    return actions.setWifiEnabled({
+      entityId: adapter.radioSnapshot.id,
+      generation: adapter.generation
+    }, !adapter.radioSnapshot.enabled)
   }
 
   function connect(entry) {
-    if (!entry || busy) return false
-    profileError = ""
-    if (entry.profileUuid && entry.visible === false)
-      return runProfileAction("connect", entry.profileUuid)
-    if (!ready || !hasUniqueVisibleIdentity(entry)) return false
-    if (entry.connected) return disconnect(entry)
-    if (entry.profileUuid)
-      return runProfileAction("connect", entry.profileUuid)
-    if (hasUnambiguousVisibleSsid(entry)
-        && (entry.known || entry.securityKind === "open")) {
-      if (typeof backend.connectKnown === "function") {
-        backend.connectKnown(String(entry.ssid || ""))
-        return true
-      }
-      // Omarchy's forward-compatible network panel renamed this action to
-      // connectDirectly while retaining the same public behavior.
-      if (typeof backend.connectDirectly === "function") {
-        backend.connectDirectly(String(entry.ssid || ""))
-        return true
-      }
-    }
-    return false
+    const row = implementation.entryData(entry)
+    if (!row || root.busy)
+      return implementation.invalidAction(!row ? "invalid" : "busy")
+    implementation.prepareAction()
+    if (row.connected) return disconnect(row)
+    if (row.entityKind === "profile")
+      return implementation.dispatchProfileAction(
+        "connect-profile", row.profileId, row.generation)
+    if (row.entityKind === "catalog")
+      return profileActions.connectProfile({
+        entityId: row.id, generation: row.generation
+      }, row.deviceId)
+    if (row.entityKind !== "network")
+      return implementation.invalidAction("unsupported")
+    return actions.connectNetwork({
+      entityId: row.networkId, generation: row.generation
+    })
   }
 
   function connectWithPassphrase(entry, passphrase) {
-    const current = currentVisibleEntry(entry)
-    if (!entry || entry.securityKind !== "psk"
-        || !String(passphrase || "") || !ready || busy
-        || !hasUnambiguousVisibleSsid(entry) || !current
-        || current.connected === true || current.known === true
-        || savedProfileMatchCount(entry) > 0
-        || typeof backend.connectWithPassphrase !== "function") return false
-    profileError = ""
-    backend.connectWithPassphrase(String(entry.ssid || ""), String(passphrase))
-    return true
+    const row = implementation.entryData(entry)
+    if (!row || row.entityKind !== "network" || root.busy)
+      return implementation.invalidAction(root.busy ? "busy" : "invalid")
+    implementation.prepareAction()
+    return actions.connectNetworkWithPsk({
+      entityId: row.networkId, generation: row.generation
+    }, passphrase)
   }
 
-  function connectEnterprise(entry, identity, passphrase) {
-    const current = currentVisibleEntry(entry)
-    if (!entry || entry.securityKind !== "enterprise"
-        || !String(identity || "") || !String(passphrase || "")
-        || !ready || busy || !hasUnambiguousVisibleSsid(entry) || !current
-        || current.connected === true || current.known === true
-        || savedProfileMatchCount(entry) > 0
-        || typeof backend.connectEnterprise !== "function") return false
-    profileError = ""
-    backend.connectEnterprise(String(entry.ssid || ""),
-      String(identity), String(passphrase))
-    return true
+  function connectEnterprise(entry, identity, passphrase, serverDomain) {
+    const row = implementation.entryData(entry)
+    if (!row || row.entityKind !== "network" || root.busy
+        || row.security !== "wpa2-eap")
+      return implementation.invalidAction(root.busy ? "busy" : "unsupported")
+    implementation.prepareAction()
+    return actions.connectNetworkEnterprise({
+      entityId: row.networkId, generation: row.generation
+    }, {
+      method: "peap-mschapv2",
+      identity: identity,
+      password: passphrase,
+      serverDomain: serverDomain
+    })
   }
 
   function disconnect(entry) {
-    if (!entry || entry.connected !== true || !ready || busy
-        || !hasUnambiguousVisibleSsid(entry)
-        || typeof backend.disconnectRow !== "function") return false
-    backend.disconnectRow(String(entry.ssid || ""))
-    return true
+    const row = implementation.entryData(entry)
+    if (!row || !row.networkId || root.busy)
+      return implementation.invalidAction(root.busy ? "busy" : "invalid")
+    implementation.prepareAction()
+    return actions.disconnectNetwork({
+      entityId: row.networkId, generation: row.generation
+    })
   }
 
   function forget(entry) {
-    if (!entry || !entry.known || busy) return false
-    profileError = ""
-    if (entry.profileUuid && entry.visible === false)
-      return runProfileAction("forget", entry.profileUuid)
-    if (!ready || !hasUniqueVisibleIdentity(entry)) return false
-    if (entry.profileUuid)
-      return runProfileAction("forget", entry.profileUuid)
-    if (!hasUnambiguousVisibleSsid(entry)
-        || typeof backend.forget !== "function") return false
-    backend.forget(entry)
-    return true
-  }
-
-  function setDns(provider) {
-    if (!ready || typeof backend.setDns !== "function") return false
-    backend.setDns(provider)
-    return true
-  }
-
-  function speedTestCommandFor(phaseValue) {
-    return [String(speedTestRunnerSource),
-      String(speedTestExecutable || ""), String(phaseValue || "")]
-  }
-
-  function updateSpeedTestLine(line) {
-    const raw = String(line || "").trim()
-    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return
-    const value = Number(raw)
-    if (!isFinite(value) || value < 0) return
-    const normalized = String(value)
-    if (speedTestPhase === "down") speedTestDownloadMbps = normalized
-    else if (speedTestPhase === "up") speedTestUploadMbps = normalized
-  }
-
-  function startSpeedTestPhase(phaseValue) {
-    speedTestExpectedStop = false
-    speedTestProcessStarted = false
-    speedTestPhase = phaseValue
-    speedTestStderr = ""
-    speedTestProc.command = speedTestCommandFor(phaseValue)
-    speedTestProc.running = true
-    speedTestPhaseTimer.restart()
-  }
-
-  function speedTestPhaseHasSample() {
-    return speedTestPhase === "down"
-      ? speedTestDownloadMbps !== "" : speedTestUploadMbps !== ""
-  }
-
-  function failSpeedTest(message) {
-    speedTestPhaseTimer.stop()
-    speedTestError = String(message || "Speed test failed")
-    speedTestPhase = ""
-    speedTestRunning = false
-    speedTestExpectedStop = false
-    speedTestProcessStarted = false
-  }
-
-  function finishSpeedTestPhase() {
-    if (!speedTestRunning) return
-    if (speedTestPhase === "down") {
-      startSpeedTestPhase("up")
-      return
-    }
-    speedTestPhase = ""
-    speedTestRunning = false
-    speedTestExpectedStop = false
-  }
-
-  function stopSpeedTestPhase() {
-    speedTestPhaseTimer.stop()
-    if (!speedTestRunning) return
-    if (speedTestProc.running) {
-      speedTestExpectedStop = true
-      speedTestProc.running = false
-      return
-    }
-    finishSpeedTestPhase()
-  }
-
-  function handleSpeedTestExit(exitCode) {
-    speedTestPhaseTimer.stop()
-    const expected = speedTestExpectedStop
-    speedTestExpectedStop = false
-    speedTestProcessStarted = false
-    if (speedTestPendingRun) {
-      speedTestPendingRun = false
-      speedTestRunning = false
-      if (sessionCount > 0) Qt.callLater(function() {
-        if (root.sessionCount > 0) root.runSpeedTest()
+    const row = implementation.entryData(entry)
+    if (!row || root.busy)
+      return implementation.invalidAction(!row ? "invalid" : "busy")
+    implementation.prepareAction()
+    if (row.entityKind === "catalog")
+      return profileActions.forgetProfile({
+        entityId: row.id, generation: row.generation
       })
-      return
-    }
-    if (!speedTestRunning) return
-    if (!expected && exitCode !== 0) {
-      failSpeedTest(speedTestStderr || "Speed test failed")
-      return
-    }
-    if (!speedTestPhaseHasSample()) {
-      failSpeedTest(speedTestStderr || "Speed test produced no "
-        + speedTestPhase + "load data")
-      return
-    }
-    finishSpeedTestPhase()
+    if (row.entityKind !== "profile" || !row.profileId)
+      return implementation.invalidAction("unsupported")
+    return implementation.dispatchProfileAction(
+      "forget-profile", row.profileId, row.generation)
   }
 
-  function stopSpeedTest() {
-    const active = speedTestRunning || speedTestProc.running
-    speedTestPhaseTimer.stop()
-    speedTestPendingRun = false
-    speedTestPhase = ""
-    speedTestRunning = false
-    if (speedTestProc.running) {
-      speedTestExpectedStop = true
-      speedTestProc.running = false
-    } else {
-      speedTestExpectedStop = false
-      speedTestProcessStarted = false
-    }
-    return active
+  function runSpeedTest(owner) {
+    const target = owner || implementation.firstSessionOwner()
+    return target ? speedTest.requestRun(target) : false
   }
 
-  function runSpeedTest() {
-    if (!ready || !speedTestReady || speedTestRunning) return false
-    speedTestError = ""
-    speedTestDownloadMbps = ""
-    speedTestUploadMbps = ""
-    if (speedTestProc.running) {
-      if (sessionCount <= 0) return false
-      speedTestPendingRun = true
-      speedTestRunning = true
-      speedTestPhase = ""
-      return true
-    }
-    speedTestPendingRun = false
-    speedTestRunning = true
-    startSpeedTestPhase("down")
-    return true
+  function stopSpeedTest(owner) {
+    const target = owner || implementation.firstSessionOwner()
+    return target ? speedTest.cancel(target) : false
   }
 
   function formatRate(value) {
-    return ready && typeof backend.formatRate === "function"
-      ? backend.formatRate(value) : "0 B/s"
+    const bytes = Math.max(0, Number(value) || 0)
+    if (bytes >= 1024 * 1024 * 1024)
+      return (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GiB/s"
+    if (bytes >= 1024 * 1024)
+      return (bytes / (1024 * 1024)).toFixed(1) + " MiB/s"
+    if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KiB/s"
+    return Math.round(bytes) + " B/s"
   }
 
   function formatPing(value) {
-    return ready && typeof backend.formatPingLatency === "function"
-      ? backend.formatPingLatency(value) : "--"
+    const latency = Number(value)
+    return isFinite(latency) && latency >= 0
+      ? (latency < 10 ? latency.toFixed(1) : latency.toFixed(0)) + " ms"
+      : "--"
   }
 
   function formatSpeed(value) {
-    const speed = Number(value)
-    if (!(speed > 0)) return "—"
-    return (speed >= 100 ? speed.toFixed(0) : speed.toFixed(1)) + " Mbps"
+    const measured = Number(value)
+    if (!isFinite(measured) || measured < 0) return "—"
+    return (measured >= 100 ? measured.toFixed(0) : measured.toFixed(1))
+      + " Mbps"
   }
 
-  function refreshProfiles() {
-    if (sessionCount <= 0 || profileList.running) return false
-    profilesLoaded = false
-    profileList.running = true
-    return true
+  NetworkLivenessContinuity { id: continuity }
+
+  NetworkManagerLiveness {
+    id: liveness
+    active: root.active
+    continuityState: continuity
   }
 
-  function runProfileAction(action, uuid) {
-    const id = String(uuid || "")
-    if (!id || profileAction.running) return false
-    profileAction.action = action
-    profileAction.command = action === "connect"
-      ? ["nmcli", "--wait", "20", "connection", "up", "uuid", id]
-      : ["nmcli", "--wait", "20", "connection", "delete", "uuid", id]
-    profileAction.running = true
-    return true
+  NetworkProfileCatalog {
+    id: catalog
+    active: root.active
+    nativeLiveness: liveness
+  }
+
+  NetworkTelemetry {
+    id: telemetry
+    active: root.active
+    nativeLiveness: liveness
+  }
+
+  NetworkReachability {
+    id: reachability
+    active: root.active
+    networkTelemetry: telemetry
+  }
+
+  NetworkBackendAdapter {
+    id: adapter
+    active: root.active
+    nativeLiveness: liveness
+    savedProfileCatalog: catalog
+    networkTelemetry: telemetry
+    networkReachability: reachability
+  }
+
+  NetworkScannerLease {
+    id: scanner
+    active: root.active
+    nativeLiveness: liveness
+  }
+
+  NetworkEnterpriseDispatcher {
+    id: enterprise
+    active: root.active
+    networkAdapter: adapter
+  }
+
+  NetworkActionCoordinator {
+    id: actions
+    active: root.active
+    networkAdapter: adapter
+    enterpriseDispatcher: enterprise
+  }
+
+  NetworkSpeedTest {
+    id: speedTest
+    active: root.active
+    networkTelemetry: telemetry
+  }
+
+  NetworkProfileActionDispatcher {
+    id: profileActions
+    active: root.active
+    networkAdapter: adapter
+    savedProfileCatalog: catalog
+    networkTelemetry: telemetry
+  }
+
+  NetworkProfileActionLease {
+    id: profileActionLease
+    active: root.active
+    networkTelemetry: telemetry
+    savedProfileCatalog: catalog
+    actionCoordinator: actions
   }
 
   NetworkPanelBridge {
     id: bridge
     bar: root.bar
-    ownerWidget: root.bar
     networkService: root
-    panelComponent: root.panelComponent
-    panelSource: root.panelSource
-    panelSettings: root.officialSettings()
   }
 
-  Timer {
-    id: scanRestart
-    interval: 100
-    repeat: false
-    onTriggered: {
-      if (root.sessionCount > 0
-          && root.setSessionScannerEnabled(true)) {
-        if (root.backend && typeof root.backend.refresh === "function")
-          root.backend.refresh(false)
-        scanDone.restart()
-      } else {
-        root.scanPending = false
+  QtObject {
+    id: implementation
+
+    property var ownerRecords: []
+    property string catalogRefreshActionId: ""
+
+    function sessionCount() {
+      let count = 0
+      for (let index = 0; index < ownerRecords.length; index++)
+        if (ownerRecords[index].session) count++
+      return count
+    }
+
+    function trafficConsumerCount() {
+      let count = 0
+      for (let index = 0; index < ownerRecords.length; index++)
+        if (ownerRecords[index].traffic) count++
+      return count
+    }
+
+    function recordIndex(owner) {
+      for (let index = 0; index < ownerRecords.length; index++)
+        if (ownerRecords[index].owner === owner) return index
+      return -1
+    }
+
+    function replaceRecord(index, record) {
+      const next = ownerRecords.slice()
+      if (record.session || record.traffic) next[index] = record
+      else next.splice(index, 1)
+      ownerRecords = next
+    }
+
+    function beginSession(owner) {
+      if (!owner || !root.active) return false
+      let index = recordIndex(owner)
+      let record = index >= 0 ? ownerRecords[index]
+        : { owner: owner, session: false, traffic: false }
+      if (record.session) return true
+      if (!record.traffic && !telemetry.acquire(owner)) return false
+      if (!catalog.acquire(owner)) {
+        if (!record.traffic) telemetry.release(owner)
+        return false
+      }
+      if (!reachability.acquire(owner)) {
+        catalog.release(owner)
+        if (!record.traffic) telemetry.release(owner)
+        return false
+      }
+      if (!scanner.acquire(owner)) {
+        reachability.release(owner)
+        catalog.release(owner)
+        if (!record.traffic) telemetry.release(owner)
+        return false
+      }
+      record = { owner: owner, session: true, traffic: record.traffic }
+      if (index < 0) {
+        const next = ownerRecords.slice()
+        next.push(record)
+        ownerRecords = next
+      } else replaceRecord(index, record)
+      refresh(true)
+      return true
+    }
+
+    function endSession(owner) {
+      const index = recordIndex(owner)
+      if (index < 0 || !ownerRecords[index].session) return false
+      const record = ownerRecords[index]
+      speedTest.cancel(owner)
+      scanner.release(owner)
+      reachability.release(owner)
+      catalog.release(owner)
+      if (!record.traffic) telemetry.release(owner)
+      replaceRecord(index, {
+        owner: owner, session: false, traffic: record.traffic
+      })
+      return true
+    }
+
+    function beginTrafficConsumer(owner) {
+      if (!owner || !root.active) return false
+      let index = recordIndex(owner)
+      let record = index >= 0 ? ownerRecords[index]
+        : { owner: owner, session: false, traffic: false }
+      if (record.traffic) return true
+      if (!record.session && !telemetry.acquire(owner)) return false
+      record = { owner: owner, session: record.session, traffic: true }
+      if (index < 0) {
+        const next = ownerRecords.slice()
+        next.push(record)
+        ownerRecords = next
+      } else replaceRecord(index, record)
+      return true
+    }
+
+    function endTrafficConsumer(owner) {
+      const index = recordIndex(owner)
+      if (index < 0 || !ownerRecords[index].traffic) return false
+      const record = ownerRecords[index]
+      if (!record.session) telemetry.release(owner)
+      replaceRecord(index, {
+        owner: owner, session: record.session, traffic: false
+      })
+      return true
+    }
+
+    function firstSessionOwner() {
+      for (let index = 0; index < ownerRecords.length; index++)
+        if (ownerRecords[index].session) return ownerRecords[index].owner
+      return null
+    }
+
+    function refresh(scanWifi) {
+      if (!root.active) return false
+      telemetry.requestRefresh()
+      catalog.requestRefresh()
+      reachability.requestRefresh()
+      if (scanWifi === true) return scanner.requestScan()
+      return true
+    }
+
+    function cloneEntry(source) {
+      if (!source || typeof source !== "object") return null
+      const row = ({})
+      for (const key in source) row[key] = source[key]
+      return row
+    }
+
+    function entryData(source) {
+      const row = cloneEntry(source)
+      if (!row || typeof row.generation !== "number"
+          || !isFinite(row.generation) || row.generation < 0
+          || Math.floor(row.generation) !== row.generation
+          || ["network", "profile", "catalog"].indexOf(row.entityKind) < 0)
+        return null
+      return row
+    }
+
+    function prepareAction() {
+      if (root.busy) return false
+      actions.clearResult()
+      profileActions.clearResult()
+      return true
+    }
+
+    function dispatchProfileAction(kind, entityId, generation) {
+      if (!profileActionLease.acquire()) return invalidAction("unavailable")
+      const request = { entityId: entityId, generation: generation }
+      const result = kind === "connect-profile"
+        ? actions.connectProfile(request) : actions.forgetProfile(request)
+      profileActionLease.retainIfPending(kind)
+      return result
+    }
+
+    function invalidAction(code) {
+      return {
+        accepted: false,
+        code: String(code || "invalid"),
+        message: code === "unsupported"
+          ? "This exact network action is unsupported."
+          : code === "unavailable"
+            ? "Network action completion evidence is unavailable."
+            : code === "busy"
+              ? "Another network action is still pending."
+              : "Network action request is invalid.",
+        actionId: "",
+        entityId: "",
+        generation: adapter.generation
       }
     }
-  }
 
-  Timer {
-    id: scanDone
-    interval: 1500
-    repeat: false
-    onTriggered: root.completeWifiScan()
-  }
-
-  Timer {
-    id: speedTestPhaseTimer
-    interval: root.speedTestPhaseDuration
-    repeat: false
-    onTriggered: root.stopSpeedTestPhase()
-  }
-
-  Process {
-    id: speedTestProc
-    onStarted: root.speedTestProcessStarted = true
-    onRunningChanged: {
-      if (!running && root.speedTestRunning
-          && !root.speedTestProcessStarted)
-        root.failSpeedTest("Unable to start network speed test")
+    function securityKind(token) {
+      if (token === "open") return "open"
+      if (token === "wpa-psk" || token === "wpa2-psk" || token === "sae")
+        return "psk"
+      if (token === "wpa2-eap") return "enterprise"
+      if (token === "owe") return "owe"
+      return "unsupported"
     }
-    stdout: SplitParser {
-      onRead: function(line) { root.updateSpeedTestLine(line) }
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.speedTestStderr = String(text || "").trim()
-        if (root.speedTestError !== "" && root.speedTestStderr !== "")
-          root.speedTestError = root.speedTestStderr
+
+    function securityLabel(token) {
+      switch (token) {
+      case "open": return "Open"
+      case "wpa-psk": return "WPA Personal"
+      case "wpa2-psk": return "WPA2 Personal"
+      case "sae": return "WPA3 Personal"
+      case "owe": return "Enhanced Open (OWE)"
+      case "static-wep": return "WEP"
+      case "dynamic-wep": return "Dynamic WEP"
+      case "wpa-eap": return "WPA Enterprise"
+      case "wpa2-eap": return "WPA2 Enterprise · PEAP/MSCHAPv2"
+      case "wpa3-suite-b-192": return "WPA3 Enterprise"
+      case "leap": return "LEAP"
+      default: return "Unknown security"
       }
     }
-    onExited: function(exitCode, _exitStatus) {
-      root.handleSpeedTestExit(exitCode)
-    }
-  }
 
-  Timer {
-    id: detailsPoll
-    interval: 2000
-    repeat: true
-    running: root.ready
-      && (root.sessionCount > 0 || root.kind === "ethernet")
-    triggeredOnStart: true
-    onTriggered: {
-      if (!detailsProc.running) detailsProc.running = true
-    }
-  }
-
-  Process {
-    id: detailsProc
-    command: ["omarchy-network-status", "--verbose"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (root.backend && typeof root.backend.updateDetails === "function")
-          root.backend.updateDetails(text)
+    function catalogByUuid() {
+      const result = ({})
+      const rows = adapter.savedProfileSnapshots
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.uuid) result[row.uuid] = row
       }
+      return result
     }
-  }
 
-  Process {
-    id: profileList
-    command: ["bash", "-c",
-      "connections=$(nmcli -t -f UUID,TYPE connection show) || exit 1; "
-      + "printf '__READY__\\n'; "
-      + "while IFS=: read -r uuid type; do "
-      + "case \"$type\" in 802-11-wireless|wifi) ;; *) continue ;; esac; "
-      + "mapfile -t details < <(nmcli --escape no -g 802-11-wireless.ssid,connection.timestamp,802-11-wireless-security.key-mgmt,802-11-wireless-security.auth-alg connection show uuid \"$uuid\"); "
-      + "ssid=${details[0]-}; timestamp=${details[1]:-0}; key_mgmt=${details[2]-}; auth_alg=${details[3]-}; "
-      + "[ -n \"$ssid\" ] || continue; "
-      + "case \"$timestamp\" in ''|*[!0-9]*) timestamp=0 ;; esac; "
-      + "[ -n \"$key_mgmt\" ] || key_mgmt=open; [ -n \"$auth_alg\" ] || auth_alg=unknown; "
-      + "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$uuid\" \"$ssid\" \"$timestamp\" \"$key_mgmt\" \"$auth_alg\"; "
-      + "done <<< \"$connections\""]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        const lines = String(text || "").trim().split("\n")
-        const ready = lines.length > 0 && lines[0] === "__READY__"
-        root.profilesLoaded = ready
-        if (!ready) {
-          root.profileError = "Saved networks unavailable"
-          return
+    function networkById() {
+      const result = ({})
+      const rows = adapter.networkSnapshots
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.id) result[row.id] = row
+      }
+      return result
+    }
+
+    function profilesByNetwork() {
+      const result = ({})
+      const rows = adapter.profileSnapshots
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (!row || !row.networkId) continue
+        if (!result[row.networkId]) result[row.networkId] = []
+        result[row.networkId].push(row)
+      }
+      return result
+    }
+
+    function activeUuid(deviceId) {
+      return adapter.activeConnectionUuidForDevice(String(deviceId || ""))
+    }
+
+    function networkVisible(row) {
+      return row && (row.connected === true || row.known !== true
+        || Number(row.signal || 0) > 0)
+    }
+
+    function hiddenForNetwork(network, profiles, catalogRows) {
+      const uuid = activeUuid(network.deviceId)
+      if (uuid !== "") {
+        for (let index = 0; index < profiles.length; index++) {
+          if (profiles[index].uuid === uuid && catalogRows[uuid])
+            return catalogRows[uuid].hidden === true
         }
-        const profiles = []
-        for (let i = 1; i < lines.length; i++) {
-          if (!lines[i]) continue
-          const fields = lines[i].split("\t")
-          if (fields.length < 5) continue
-          profiles.push({
-            uuid: fields[0],
-            ssid: fields.slice(1, fields.length - 3).join("\t"),
-            lastSuccessful: parseInt(fields[fields.length - 3]) || 0,
-            keyManagement: fields[fields.length - 2],
-            authAlgorithm: fields[fields.length - 1]
-          })
-        }
-        root.profileError = ""
-        root.savedProfiles = profiles
       }
+      return profiles.length === 1 && catalogRows[profiles[0].uuid]
+        ? catalogRows[profiles[0].uuid].hidden === true : false
+    }
+
+    function networkRows() {
+      const result = []
+      const networks = adapter.networkSnapshots
+      const profiles = adapter.profileSnapshots
+      const catalogs = catalogByUuid()
+      const grouped = profilesByNetwork()
+      const representedCatalogs = ({})
+
+      for (let index = 0; index < networks.length; index++) {
+        const network = networks[index]
+        if (!network) continue
+        const related = grouped[network.id] || []
+        const oneProfile = related.length === 1 ? related[0] : null
+        const visible = networkVisible(network)
+        result.push({
+          entryKey: "network:" + network.id,
+          entityKind: "network",
+          id: network.id,
+          networkId: network.id,
+          profileId: oneProfile ? oneProfile.id : "",
+          profileUuid: oneProfile ? oneProfile.uuid : "",
+          profileName: oneProfile && catalogs[oneProfile.uuid]
+            ? catalogs[oneProfile.uuid].name : "",
+          deviceId: network.deviceId,
+          generation: network.generation,
+          connected: network.connected,
+          known: network.known,
+          ssid: network.ssid,
+          signal: network.signal,
+          security: network.security,
+          securityKind: securityKind(network.security),
+          securityLabel: securityLabel(network.security),
+          hidden: hiddenForNetwork(network, related, catalogs),
+          state: network.state,
+          stateChanging: network.stateChanging,
+          ambiguous: network.ambiguous,
+          visible: visible,
+          listKind: "available",
+          canConnect: network.canConnect,
+          canConnectWithPsk: network.canConnectWithPsk,
+          canDisconnect: network.canDisconnect,
+          canForget: false,
+          canShare: network.connected === true
+            && network.ambiguous === false
+            && (network.security === "open"
+              || network.security === "wpa-psk"
+              || network.security === "wpa2-psk"
+              || network.security === "sae")
+        })
+      }
+
+      const networkMap = networkById()
+      for (let index = 0; index < profiles.length; index++) {
+        const profile = profiles[index]
+        if (!profile) continue
+        const network = networkMap[profile.networkId]
+        if (!network) continue
+        const catalogRow = catalogs[profile.uuid] || null
+        representedCatalogs[profile.uuid] = true
+        result.push({
+          entryKey: "profile:" + profile.id,
+          entityKind: "profile",
+          id: profile.id,
+          networkId: profile.networkId,
+          profileId: profile.id,
+          profileUuid: profile.uuid,
+          profileName: catalogRow ? catalogRow.name : profile.name,
+          deviceId: profile.deviceId,
+          generation: profile.generation,
+          connected: network.connected === true
+            && activeUuid(profile.deviceId) === profile.uuid,
+          known: true,
+          ssid: profile.ssid,
+          signal: network.signal,
+          security: catalogRow ? catalogRow.security : "unknown",
+          securityKind: securityKind(
+            catalogRow ? catalogRow.security : "unknown"),
+          securityLabel: securityLabel(
+            catalogRow ? catalogRow.security : "unknown"),
+          hidden: catalogRow ? catalogRow.hidden === true : false,
+          state: network.state,
+          stateChanging: network.stateChanging,
+          ambiguous: profile.ambiguous,
+          visible: networkVisible(network),
+          listKind: "saved",
+          canConnect: profile.canConnect,
+          canConnectWithPsk: false,
+          canDisconnect: network.canDisconnect,
+          canForget: profile.canForget,
+          canShare: false
+        })
+      }
+
+      const catalogRows = adapter.savedProfileSnapshots
+      const catalogDevice = uniqueWifiDevice()
+      for (let index = 0; index < catalogRows.length; index++) {
+        const profile = catalogRows[index]
+        if (!profile || profile.profileType !== "wifi"
+            || representedCatalogs[profile.uuid]) continue
+        result.push({
+          entryKey: "catalog:" + profile.id,
+          entityKind: "catalog",
+          id: profile.id,
+          networkId: "",
+          profileId: "",
+          profileUuid: profile.uuid,
+          profileName: profile.name,
+          deviceId: catalogDevice ? catalogDevice.id : "",
+          generation: profile.generation,
+          connected: false,
+          known: true,
+          ssid: profile.ssid || profile.name,
+          signal: 0,
+          security: profile.security,
+          securityKind: securityKind(profile.security),
+          securityLabel: securityLabel(profile.security),
+          hidden: profile.hidden,
+          state: "disconnected",
+          stateChanging: false,
+          ambiguous: false,
+          visible: false,
+          listKind: "saved",
+          canConnect: catalogDevice !== null,
+          canConnectWithPsk: false,
+          canDisconnect: false,
+          canForget: true,
+          canShare: false
+        })
+      }
+
+      result.sort(function(left, right) {
+        if (left.listKind !== right.listKind)
+          return left.listKind === "available" ? -1 : 1
+        if (left.connected !== right.connected) return left.connected ? -1 : 1
+        if (left.visible !== right.visible) return left.visible ? -1 : 1
+        if (left.signal !== right.signal) return right.signal - left.signal
+        return String(left.ssid).localeCompare(String(right.ssid))
+      })
+      return result
+    }
+
+    function uniqueWifiDevice() {
+      const rows = adapter.deviceSnapshots
+      let result = null
+      let count = 0
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.type === "wifi" && row.managed === true
+            && row.ambiguous === false
+            && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$/.test(row.name)
+            && /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(row.address)) {
+          result = row
+          count++
+        }
+      }
+      return count === 1 ? result : null
+    }
+
+    function connectedDevice(type) {
+      const rows = adapter.deviceSnapshots
+      let result = null
+      let count = 0
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.type === type && row.connected === true
+            && row.ambiguous === false) {
+          result = row
+          count++
+        }
+      }
+      return count === 1 ? result : null
+    }
+
+    function connectedNetwork() {
+      const rows = adapter.networkSnapshots
+      let result = null
+      let count = 0
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row && row.connected === true && row.ambiguous === false) {
+          result = row
+          count++
+        }
+      }
+      return count === 1 ? result : null
+    }
+
+    function connectionKind() {
+      const details = adapter.connectionDetailsSnapshot
+      if (details && (details.kind === "wifi" || details.kind === "wired"))
+        return details.kind === "wired" ? "ethernet" : "wifi"
+      if (connectedNetwork()) return "wifi"
+      if (connectedDevice("wired")) return "ethernet"
+      return "disconnected"
+    }
+
+    function connectionLabel() {
+      if (connectionKind() === "wifi") {
+        const network = connectedNetwork()
+        return network ? network.ssid : ""
+      }
+      if (connectionKind() === "ethernet") {
+        const details = adapter.connectionDetailsSnapshot
+        if (details && details.interfaceName) return details.interfaceName
+        const device = connectedDevice("wired")
+        return device ? device.name : ""
+      }
+      return ""
+    }
+
+    function connectionSignal() {
+      const network = connectedNetwork()
+      return network ? network.signal : 0
+    }
+
+    function firstAddress(details) {
+      if (!details || !Array.isArray(details.addresses)
+          || details.addresses.length < 1) return null
+      for (let index = 0; index < details.addresses.length; index++)
+        if (details.addresses[index].family === "ipv4")
+          return details.addresses[index]
+      return details.addresses[0]
+    }
+
+    function firstGateway(details) {
+      if (!details || !Array.isArray(details.gateways)) return ""
+      for (let index = 0; index < details.gateways.length; index++)
+        if (details.gateways[index].family === "ipv4")
+          return details.gateways[index].address
+      return details.gateways.length > 0 ? details.gateways[0].address : ""
+    }
+
+    function connectionInfo() {
+      const details = adapter.connectionDetailsSnapshot
+      const address = firstAddress(details)
+      return {
+        iface: details ? details.interfaceName : "",
+        ip: address ? address.address : "",
+        prefix: address ? address.prefix : 0,
+        gateway: firstGateway(details),
+        freq: details && details.wifi ? details.wifi.frequencyMhz : 0,
+        bitrate: details && details.wifi && details.wifi.bitrateKbps > 0
+          ? (details.wifi.bitrateKbps / 1000).toFixed(0) + " Mbit/s" : "",
+        speed: details && details.wired ? details.wired.speedMbps : 0,
+        metered: details ? details.metered : "unknown"
+      }
+    }
+
+    function actionSsid(snapshot) {
+      if (!snapshot || !snapshot.entityId) return ""
+      const rows = networkRows()
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index]
+        if (row.id === snapshot.entityId
+            || row.networkId === snapshot.entityId
+            || row.profileId === snapshot.entityId)
+          return row.ssid
+      }
+      return ""
+    }
+
+    function refreshForgottenProfile() {
+      const snapshot = actions.actionSnapshot
+      if (!snapshot || snapshot.phase !== "pending"
+          || snapshot.kind !== "forget-profile") {
+        catalogRefreshActionId = ""
+        return false
+      }
+      if (catalogRefreshActionId === snapshot.actionId) return true
+      const rows = adapter.profileSnapshots
+      for (let index = 0; index < rows.length; index++)
+        if (rows[index] && rows[index].id === snapshot.entityId) return false
+      catalogRefreshActionId = snapshot.actionId
+      return catalog.requestRefresh()
+    }
+
+    function catalogError(code) {
+      if (code === "timeout") return "Saved networks timed out."
+      if (code === "start-failed") return "Saved networks are unavailable."
+      return "Saved network catalog is unavailable."
+    }
+
+    function speedError(code) {
+      switch (code) {
+      case "route-changed": return "Network route changed during the speed test."
+      case "timeout": return "Network speed test timed out."
+      case "cancelled": return "Network speed test was cancelled."
+      default: return "Network speed test failed."
+      }
+    }
+
+    function shutdownOwners() {
+      const records = ownerRecords.slice()
+      for (let index = 0; index < records.length; index++) {
+        const record = records[index]
+        if (record.session) endSession(record.owner)
+        if (record.traffic) endTrafficConsumer(record.owner)
+      }
+      ownerRecords = []
     }
   }
 
-  Process {
-    id: profileAction
-    property string action: ""
-    stderr: StdioCollector {
-      id: profileActionError
-      waitForEnd: true
+  Connections {
+    target: adapter
+    function onGenerationChanged() {
+      implementation.refreshForgottenProfile()
     }
-    onExited: function(exitCode, _exitStatus) {
-      root.profileError = exitCode === 0 ? ""
-        : String(profileActionError.text || "Network action failed").trim()
-      action = ""
-      if (root.sessionCount > 0) {
-        root.refresh(false)
-        root.refreshProfiles()
-      }
+  }
+
+  Connections {
+    target: actions
+    function onPhaseChanged() {
+      if (actions.phase !== "pending")
+        implementation.catalogRefreshActionId = ""
     }
   }
 
   Component.onDestruction: {
-    sessionOwners = []
-    releaseWifiScanner()
-    stopSpeedTest()
-    detailsProc.running = false
-    profileList.running = false
+    implementation.shutdownOwners()
+    profileActionLease.active = false
+    profileActions.active = false
+    actions.active = false
+    enterprise.active = false
+    speedTest.active = false
+    scanner.active = false
+    reachability.active = false
+    catalog.active = false
+    telemetry.active = false
+    adapter.active = false
+    liveness.active = false
   }
 }

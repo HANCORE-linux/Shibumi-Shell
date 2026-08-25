@@ -39,7 +39,7 @@ Every feature has exactly one state owner and one action boundary:
 | G8 | Weather, clock, date, status indicators, Omarchy update | Shared Shibumi clock/status adapters plus official Quattro weather-detail, idle, notification, and update owners | Single V1 pill, lazy routed calendar, local weather/status/update facades, child settings, and monitor-local normal/compact/minimal stages are implemented. Top weather, update-available, idle/DND, the complete recording-indicator lifecycle, and a real Voxtype recording/transcription cycle pass on the validation system; bottom and physical multi-output acceptance remain. |
 | G9 | MPRIS | Keep-loaded official `omarchy.media` service plus one lazy process-wide Shibumi Cava service | Preserve the default row and current V1 FULL/muse 24-band spectrum, vinyl, transport, click, and wheel outcome; implementation plus real-player/failure/resource/Top-Bottom single-output acceptance pass, while multiple-real-player and physical multi-output gates remain |
 | G10 | Idle inhibitor, media browser, theme/wallpaper picker | Surface-bound Quickshell idle inhibitor, Omarchy theme/background actions, and one process-wide `hancore.shibumi.quick-access` picker/media controller | V1 quick-tools pill plus Tanzaku and Hearthstone presentation-only views; Quattro keeps its native carousel; basic focused-output runtime and worker cleanup accepted on the validation system |
-| G11 | Network | One process-wide `hancore.shibumi.network` service around the official `omarchy.network` state/action backend, plus Shibumi-owned inline speed-test and saved-profile workers | V1 `NET`/SSID/signal and compact views plus a lazy local details/DNS/speed-test/available/saved/connect/forget panel; top Wayland mapping and cleanup pass on the validation system, while mutation, bottom, and physical multi-output acceptance remain |
+| G11 | Network | One process-wide native `hancore.shibumi.network` service over public Quickshell Networking plus bounded Shibumi profile, telemetry, reachability, Enterprise, QR, and speed-test seams | V1 `NET`/SSID/signal and compact views plus a lazy local primitive-data panel; source/fixture cutover gates pass, while real mutation, Enterprise authentication, recovery, bottom, and physical multi-output acceptance remain |
 | G12 | Battery | One process-wide `hancore.shibumi.power-state` service over Quickshell's UPower singleton; Quattro battery helper only while the detail panel is open | V1 compact/full battery view and lazy battery panel; hidden on batteryless desktops; a real discharging-to-charging transition passes on the validation system |
 | G13 | Brightness | One process-wide `hancore.shibumi.brightness` service around the complete official `omarchy.monitor` backend | V1 `BRI`/sun/percentage and compact views plus a lazy, screen-local Shibumi brightness/scale/display panel; top/Bottom mapping, reversible laptop brightness mutation, and a real `1.0 -> 1.25 -> 1.0` scale round trip pass on the validation system, while physical display enable/disable and multi-output acceptance remain |
 | G14 | Power profile | Same process-wide `hancore.shibumi.power-state` service; one Quattro profile-list poller and one validated setter | V1 compact/full profile view and lazy profile panel; remains available without a battery |
@@ -173,19 +173,18 @@ exactly three retry starts before exposing failure. the validation system accept
 single-output lifecycle, real-player, degraded, Top/Bottom, visual, and
 resource slices; this does not waive physical multi-output acceptance.
 
-Network uses the same state/action delegation principle as audio, but the owner
-must be process-wide: Quattro's component includes a permanent three-second bar
-status process, so instantiating it inside every output would duplicate work.
-The `hancore.shibumi.network` service hosts that component, and all G11 widgets
-consume it. Screen-local popups delegate visible-network and DNS mutations to
-the official backend. The process-wide service runs
-`omarchy-network-speedtest` itself for bounded
-download/upload phases and publishes progress only to Shibumi's inline panel;
-it never loads Omarchy's standalone speed-test panel. A lifecycle-only `nmcli`
-query/action path adds saved profiles that are not currently visible because
-Quickshell's model omits them. One shared verbose status process runs while a
-Network panel is open or an Ethernet bar still consumes throughput, without
-restoring V1's permanent `/proc`/`ip`/`iw` poller.
+Network is process-wide and native. `hancore.shibumi.network` gates
+Quickshell's process-static Networking singleton behind a monitored
+NetworkManager-owner admission boundary, keeps raw devices and networks
+private, and publishes bounded primitive snapshots. Panel sessions acquire
+scanner, profile-catalog, telemetry, and reachability leases in dependency
+order; Ethernet bar surfaces acquire only telemetry. Exact UUID profiles use
+current `NMSettings` objects, Wi-Fi failures carry generation-bound native
+evidence, and the Shibumi-owned TLS speed test binds both phases to the same
+interface, source address, interface index, route, and run token. QR state is
+screen-local and never reads saved secrets. The only retained host identity is
+the documented `omarchy.network` IPC/widget-family compatibility alias; no host
+Network/QR component or Network feature helper is loaded.
 
 ## Sequencing Decision
 

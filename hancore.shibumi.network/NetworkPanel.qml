@@ -18,6 +18,7 @@ ShibumiPanel {
   property string passwordKey: ""
   property string passwordText: ""
   property string identityText: ""
+  property string serverDomainText: ""
   property var credentialDisplayNetworks: []
   property string credentialSsid: ""
   property var credentialSecurity: null
@@ -37,7 +38,7 @@ ShibumiPanel {
     let count = 0
     const rows = networkService ? networkService.networks : []
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i] && rows[i].known === true) count++
+      if (rows[i] && rows[i].listKind === "saved") count++
     }
     return count
   }
@@ -56,13 +57,18 @@ ShibumiPanel {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
       if (!row) continue
-      if (savedOnly ? row.known === true : row.visible !== false) result.push(row)
+      if (savedOnly ? row.listKind === "saved"
+          : row.listKind === "available" && row.visible !== false)
+        result.push(row)
     }
     return result
   }
 
   function entryKey(entry) { return entry ? String(entry.entryKey || "") : "" }
-  function canForget(entry) { return !!entry && entry.known === true }
+  function canForget(entry) { return !!entry && entry.canForget === true }
+  function actionAccepted(result) {
+    return !!result && result.accepted === true
+  }
 
   function signalIcon(value) {
     const signal = Number(value || 0)
@@ -74,6 +80,8 @@ ShibumiPanel {
   }
 
   function statusText() {
+    if (networkService.processRestartRequired)
+      return "Restart the shell to restore NetworkManager"
     if (!networkService.backendAvailable) return "NetworkManager unavailable"
     if (wifiControlsVisible && !networkService.wifiEnabled
         && networkService.kind === "disconnected")
@@ -102,6 +110,16 @@ ShibumiPanel {
     return fields.join(" · ")
   }
 
+  function dnsText() {
+    const rows = networkService ? networkService.dnsServers : []
+    const values = []
+    for (let index = 0; index < rows.length; index++) {
+      const address = rows[index] && rows[index].address
+      if (address) values.push(String(address))
+    }
+    return values.length > 0 ? values.join(" · ") : "Unavailable"
+  }
+
   function frequencyText() {
     const raw = String((networkService.info || ({})).freq || "").trim()
     if (!raw) return ""
@@ -125,6 +143,7 @@ ShibumiPanel {
     const fields = [String(entry.securityLabel || "Unknown")]
     if (entry.visible !== false) fields.push("Signal " + Math.round(entry.signal || 0) + "%")
     if (entry.known) fields.push("Saved")
+    if (entry.profileName) fields.push(String(entry.profileName))
     if (entry.visible === false) fields.push("Not currently visible")
     return fields.join(" · ")
   }
@@ -140,6 +159,7 @@ ShibumiPanel {
     passwordKey = ""
     passwordText = ""
     identityText = ""
+    serverDomainText = ""
     credentialDisplayNetworks = []
     credentialSsid = ""
     credentialSecurity = null
@@ -157,6 +177,7 @@ ShibumiPanel {
     passwordKey = expandedKey
     passwordText = ""
     identityText = ""
+    serverDomainText = ""
   }
 
   function currentCredentialRow() {
@@ -217,6 +238,37 @@ ShibumiPanel {
       bar.run("omarchy-launch-or-focus-tui nmtui")
   }
 
+  function connectedShareableNetwork() {
+    const rows = networkService ? networkService.networks : []
+    let result = null
+    let count = 0
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]
+      if (!row || row.listKind !== "available"
+          || row.connected !== true || row.canShare !== true) continue
+      result = row
+      count++
+    }
+    return count === 1 ? result : null
+  }
+
+  function showQrForConnected() {
+    const row = connectedShareableNetwork()
+    return row ? qrDialog.openNetwork(row).ok === true : false
+  }
+
+  function showQr(entry) {
+    return entry && entry.connected === true && entry.canShare === true
+      ? qrDialog.openNetwork(entry).ok === true : false
+  }
+
+  function updateQrNetwork() {
+    if (!qrDialog.opened) return
+    const row = connectedShareableNetwork()
+    if (!row) qrDialog.close()
+    else qrDialog.updateNetwork(row)
+  }
+
   function needsCredentials(entry) {
     return !!entry && !entry.known
       && (entry.securityKind === "psk"
@@ -224,8 +276,21 @@ ShibumiPanel {
   }
 
   function needsNetworkSettings(entry) {
-    return !!entry && !entry.known && !needsCredentials(entry)
-      && entry.securityKind !== "open"
+    return !!entry && (entry.entityKind === "catalog"
+        && entry.canConnect !== true
+      || !entry.known && !needsCredentials(entry)
+        && entry.securityKind !== "open"
+      || entry.known && entry.entityKind === "network"
+        && entry.profileId === "" && entry.canConnect !== true)
+  }
+
+  function canRunPrimary(entry) {
+    if (!entry) return false
+    if (entry.connected) return entry.canDisconnect === true
+    if (needsCredentials(entry)) return entry.securityKind === "enterprise"
+      || entry.canConnectWithPsk === true
+    if (needsNetworkSettings(entry)) return true
+    return entry.canConnect === true
   }
 
   function runPrimary(entry) {
@@ -242,21 +307,25 @@ ShibumiPanel {
       openNetworkSettings()
       return
     }
-    networkService.connect(entry)
+    const result = networkService.connect(entry)
+    if (!actionAccepted(result))
+      credentialError = String(result && result.message
+        || "Network changed. Select it again.")
   }
 
   function submitPassword(entry) {
     if (!entry || !passwordText || networkService.busy) return false
     let accepted = false
     if (entry.securityKind === "enterprise") {
-      if (!identityText) return false
-      accepted = networkService.connectEnterprise(
-        entry, identityText, passwordText)
+      if (!identityText || !serverDomainText) return false
+      accepted = actionAccepted(networkService.connectEnterprise(
+        entry, identityText, passwordText, serverDomainText))
     } else {
-      accepted = networkService.connectWithPassphrase(entry, passwordText)
+      accepted = actionAccepted(
+        networkService.connectWithPassphrase(entry, passwordText))
     }
     if (!accepted)
-      credentialError = "Network changed. Select it again."
+      credentialError = "Network changed or rejected the credentials."
     return accepted
   }
 
@@ -266,7 +335,10 @@ ShibumiPanel {
     if (pendingForgetKey === key) {
       pendingForgetKey = ""
       forgetTimer.stop()
-      networkService.forget(entry)
+      const result = networkService.forget(entry)
+      if (!actionAccepted(result))
+        credentialError = String(result && result.message
+          || "Saved profile changed. Select it again.")
       return
     }
     pendingForgetKey = key
@@ -299,6 +371,8 @@ ShibumiPanel {
     if (displayNetworks.length === 0) cursorIndex = -1
     if (passwordKey !== "")
       Qt.callLater(function() { panel.evaluateCredentialCompletion() })
+    if (qrDialog.opened)
+      Qt.callLater(function() { panel.updateQrNetwork() })
   }
 
   onOpenChanged: {
@@ -306,6 +380,7 @@ ShibumiPanel {
       speedDetailsVisible = networkService.speedTestRunning
       cursorIndex = displayNetworks.length > 0 ? 0 : -1
     } else {
+      if (qrDialog.opened) qrDialog.close()
       savedOnly = false
       expandedKey = ""
       pendingForgetKey = ""
@@ -538,11 +613,12 @@ ShibumiPanel {
               id: speedButton
               width: Commons.Style.space(86)
               label: panel.networkService.speedTestRunning ? "Running..." : "Run test"
-              enabled: !panel.networkService.speedTestRunning
+              enabled: panel.networkService.speedTestReady
+                && !panel.networkService.speedTestRunning
                 && panel.networkService.kind !== "disconnected"
               onClicked: {
                 panel.speedDetailsVisible = true
-                panel.networkService.runSpeedTest()
+                panel.networkService.runSpeedTest(panel.ownerWidget)
               }
             }
           }
@@ -591,28 +667,19 @@ ShibumiPanel {
 
         Column {
           width: parent.width
-          spacing: Commons.Style.space(5)
+          spacing: Commons.Style.space(3)
 
-          SectionLabel { text: "DNS" }
+          SectionLabel { text: "DNS SERVERS" }
 
-          Row {
+          Text {
             width: parent.width
-            spacing: Commons.Style.space(4)
-
-            Repeater {
-              model: panel.networkService.dnsProviders
-
-              PanelButton {
-                required property var modelData
-                width: (contentColumn.width - 3 * Commons.Style.space(4)) / 4
-                label: String(modelData)
-                current: panel.networkService.dnsProvider === String(modelData)
-                onClicked: {
-                  panel.networkService.setDns(String(modelData))
-                  if (String(modelData) === "Custom") panel.ownerWidget.close()
-                }
-              }
-            }
+            text: panel.dnsText()
+            color: panel.controlForeground
+            font.family: panel.bar
+              ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.body
+            wrapMode: Text.Wrap
+            renderType: Text.NativeRendering
           }
         }
 
@@ -818,6 +885,7 @@ ShibumiPanel {
                       : panel.needsNetworkSettings(networkRow.modelData)
                         ? "Open network settings" : "Connect"
                     enabled: !panel.networkService.busy
+                      && panel.canRunPrimary(networkRow.modelData)
                     onClicked: panel.runPrimary(networkRow.modelData)
                   }
 
@@ -830,6 +898,16 @@ ShibumiPanel {
                     urgent: true
                     onClicked: panel.requestForget(networkRow.modelData)
                   }
+                }
+
+                NetworkQrButton {
+                  width: parent.width
+                  visible: networkRow.expanded && !networkRow.passwordOpen
+                    && networkRow.modelData.connected === true
+                    && networkRow.modelData.canShare === true
+                  network: networkRow.modelData
+                  visualTokens: panel.shibumiTokens
+                  onActivated: panel.showQr(networkRow.modelData)
                 }
 
                 Column {
@@ -853,7 +931,7 @@ ShibumiPanel {
                     font.pixelSize: Commons.Style.font.body
                     selectByMouse: true
                     onTextChanged: panel.identityText = text
-                    onAccepted: passwordField.forceActiveFocus()
+                    onAccepted: serverDomainField.forceActiveFocus()
                     Keys.onEscapePressed: panel.clearPassword()
                     onActiveFocusChanged:
                       panel.credentialEditorFocusChanged(identityField,
@@ -873,6 +951,43 @@ ShibumiPanel {
                         ? panel.controlHoverFillColor : panel.controlFillColor
                       border.width: panel.controlBorderWidth
                       border.color: identityField.activeFocus
+                        ? panel.controlHoverBorderColor
+                        : panel.controlBorderColor
+                    }
+                  }
+
+                  TextField {
+                    id: serverDomainField
+                    width: parent.width
+                    height: Commons.Style.space(30)
+                    visible: networkRow.passwordOpen
+                      && networkRow.enterpriseCredentials
+                    text: panel.serverDomainText
+                    placeholderText: "Authentication server domain"
+                    color: panel.bar
+                      ? panel.bar.foreground : Commons.Color.foreground
+                    placeholderTextColor: panel.bar ? Qt.rgba(
+                      panel.bar.foreground.r, panel.bar.foreground.g,
+                      panel.bar.foreground.b, 0.42) : Commons.Color.foreground
+                    font.family: panel.bar
+                      ? panel.bar.fontFamily : Commons.Style.font.family
+                    font.pixelSize: Commons.Style.font.body
+                    selectByMouse: true
+                    onTextChanged: panel.serverDomainText = text
+                    onAccepted: passwordField.forceActiveFocus()
+                    Keys.onEscapePressed: panel.clearPassword()
+                    onActiveFocusChanged:
+                      panel.credentialEditorFocusChanged(serverDomainField,
+                        activeFocus)
+                    Component.onDestruction:
+                      if (panel.credentialEditor === serverDomainField)
+                        panel.credentialEditor = null
+                    background: Rectangle {
+                      radius: panel.controlRadius
+                      color: serverDomainField.activeFocus
+                        ? panel.controlHoverFillColor : panel.controlFillColor
+                      border.width: panel.controlBorderWidth
+                      border.color: serverDomainField.activeFocus
                         ? panel.controlHoverBorderColor
                         : panel.controlBorderColor
                     }
@@ -945,7 +1060,8 @@ ShibumiPanel {
                       label: panel.networkService.busy ? "Wait" : "Connect"
                       enabled: panel.passwordText !== ""
                         && (!networkRow.enterpriseCredentials
-                          || panel.identityText !== "")
+                          || panel.identityText !== ""
+                            && panel.serverDomainText !== "")
                         && panel.credentialError === ""
                         && !panel.networkService.busy
                       onClicked: panel.submitPassword(networkRow.modelData)
@@ -1002,6 +1118,13 @@ ShibumiPanel {
         }
       }
     }
+  }
+
+  NetworkQrDialog {
+    id: qrDialog
+    anchors.fill: parent
+    visualTokens: panel.shibumiTokens
+    onDismissed: panel.requestPanelKeyboardFocus(keyCatcher)
   }
 
   component SectionLabel: Text {

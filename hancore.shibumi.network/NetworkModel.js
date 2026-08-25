@@ -12,6 +12,10 @@ var ConnectionStateTokens = [
   "unknown", "connecting", "connected", "disconnecting", "disconnected"
 ]
 var ConnectivityTokens = ["unknown", "none", "portal", "limited", "full"]
+var ConnectionFailureTokens = [
+  "unknown", "no-secrets", "client-disconnected", "client-failed",
+  "authentication-timeout", "network-lost"
+]
 var MaxBackendObjects = 8192
 var MaxSnapshotRows = 4096
 

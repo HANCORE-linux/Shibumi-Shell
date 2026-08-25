@@ -4,8 +4,7 @@ import QtQuick
 import qs.Commons as Commons
 import "NetworkQrModel.js" as Model
 
-// Shibumi-owned Wi-Fi share action. Final production wiring will place this
-// beside the connected native Wi-Fi row during the atomic Network cutover.
+// Shibumi-owned Wi-Fi share action beside the connected primitive network row.
 Rectangle {
   id: root
 

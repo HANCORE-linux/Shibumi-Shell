@@ -53,7 +53,7 @@ def process_gone(pid: int) -> bool:
         return True
     try:
         fields = stat.read_text(encoding="ascii").split()
-    except FileNotFoundError:
+    except OSError:
         return True
     return len(fields) > 2 and fields[2] == "Z"
 

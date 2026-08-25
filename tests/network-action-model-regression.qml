@@ -14,15 +14,19 @@ ShellRoot {
     return Object.assign({ id: id }, values || ({}))
   }
 
-  function pending(kind, entityId, deviceId, relatedId, generation, target) {
+  function pending(kind, entityId, deviceId, relatedId, generation, target,
+      profileUuid) {
     return {
+      phase: "pending",
       kind: kind,
       entityId: entityId,
       deviceId: deviceId,
       relatedEntityId: relatedId || "",
       dispatchGeneration: generation,
       observedGeneration: generation,
-      targetEnabled: target === undefined ? null : target
+      targetEnabled: target === undefined ? null : target,
+      profileUuid: profileUuid || "",
+      profileSsid: profileUuid ? "N" : ""
     }
   }
 
@@ -134,6 +138,7 @@ ShellRoot {
       canDisconnect: true, ambiguous: false
     })
     const profile = row(profileId, {
+      uuid: "11111111-1111-4111-8111-111111111111",
       deviceId: deviceId, networkId: networkId, canConnect: true,
       canForget: true, ambiguous: false
     })
@@ -203,6 +208,22 @@ ShellRoot {
     if (!result.terminal || result.success || result.code !== "invalid")
       return fail("older observed topology completed connect")
 
+    const failure = {
+      schemaVersion: 1, entityId: networkId, deviceId: deviceId,
+      reason: "no-secrets", generation: 5
+    }
+    result = Model.connectionFailure(
+      pending("connect-with-psk", networkId, deviceId, "", 4), failure, 5)
+    if (!result || !result.terminal || result.success
+        || result.code !== "connection-no-secrets"
+        || Model.connectionFailure(
+          pending("connect-with-psk", networkId, deviceId, "", 5), failure, 5)
+          !== null
+        || Model.connectionFailure(
+          pending("disconnect", networkId, deviceId, "", 4), failure, 5)
+          !== null)
+      return fail("connection failure evidence was not generation-bound")
+
     result = Model.reconcile(
       pending("disconnect", networkId, deviceId, "", 4),
       view(4, devices, [disconnected], [], radio))
@@ -220,18 +241,43 @@ ShellRoot {
       return fail("authoritative disconnect was not completed")
 
     result = Model.reconcile(
-      pending("connect-profile", profileId, deviceId, networkId, 4),
-      view(4, devices, [connected], [profile], radio))
+      pending("connect-profile", profileId, deviceId, networkId, 4,
+        undefined, profile.uuid),
+      view(4, devices, [connected], [profile], radio), profile.uuid)
     if (result.terminal)
       return fail("same-generation profile state completed connect")
     result = Model.reconcile(
-      pending("connect-profile", profileId, deviceId, networkId, 4),
-      view(5, devices, [connected], [profile], radio))
+      pending("connect-profile", profileId, deviceId, networkId, 4,
+        undefined, profile.uuid),
+      view(5, devices, [connected], [profile], radio), profile.uuid)
     if (!result.terminal || !result.success)
-      return fail("profile connection did not follow related network")
+      return fail("profile connection did not follow exact active UUID")
+    const changedNetworkId =
+      'shibumi-network-v1:["network","changed-security"]'
+    const changedConnected = Object.assign({}, connected, {
+      id: changedNetworkId, security: "wpa2-eap"
+    })
+    const changedProfile = Object.assign({}, profile, {
+      networkId: changedNetworkId
+    })
     result = Model.reconcile(
-      pending("connect-profile", profileId, deviceId, networkId, 4),
-      view(5, devices, [connected], [], radio))
+      pending("connect-profile", profileId, deviceId, networkId, 4,
+        undefined, profile.uuid),
+      view(5, devices, [changedConnected], [changedProfile], radio),
+      profile.uuid)
+    if (!result.terminal || !result.success)
+      return fail("profile security transition invalidated exact completion")
+    result = Model.reconcile(
+      pending("connect-profile", profileId, deviceId, networkId, 4,
+        undefined, profile.uuid),
+      view(5, devices, [connected], [profile], radio),
+      "22222222-2222-4222-8222-222222222222")
+    if (result.terminal)
+      return fail("different active profile completed exact connect")
+    result = Model.reconcile(
+      pending("connect-profile", profileId, deviceId, networkId, 4,
+        undefined, profile.uuid),
+      view(5, devices, [connected], [], radio), profile.uuid)
     if (!result.terminal || result.success)
       return fail("missing profile completed profile connect")
 
@@ -248,8 +294,8 @@ ShellRoot {
     result = Model.reconcile(
       pending("forget-profile", profileId, deviceId, networkId, 4),
       view(5, devices, [], [], radio))
-    if (result.terminal)
-      return fail("access-point disappearance completed profile forget")
+    if (!result.terminal || !result.success)
+      return fail("saved-only profile and wrapper removal did not complete forget")
 
     result = Model.reconcile(
       pending("wifi-disable", radioId, "", "", 4, false),

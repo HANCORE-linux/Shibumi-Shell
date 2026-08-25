@@ -54,6 +54,11 @@ ShellRoot {
       rxBytes: 1000,
       txBytes: 2000,
       sampleMonotonicMs: 1000,
+      activeConnections: [{
+        uuid: "11111111-2222-4333-8444-555555555555",
+        kind: "wired", interfaceName: "eth0",
+        hardwareAddress: "02:00:00:00:00:07"
+      }],
       wifi: {
         ssid: "", ssidHex: "", signal: 0,
         frequencyMhz: 0, bitrateKbps: 0
@@ -70,6 +75,18 @@ ShellRoot {
     source.downloadBytesPerSecond = 0
     source.uploadBytesPerSecond = 0
     source.generation = 0
+    return source
+  }
+
+  function multiDevicePublicSnapshot() {
+    const source = forgedPublicSnapshot()
+    source.generation = 1
+    source.activeConnections.unshift({
+      uuid: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      kind: "wifi",
+      interfaceName: "wlan0",
+      hardwareAddress: "02:00:00:00:00:08"
+    })
     return source
   }
 
@@ -91,6 +108,18 @@ ShellRoot {
   }
 
   QtObject {
+    id: fakeWifiDevice
+    property string typeToken: "wifi"
+    property string name: "wlan0"
+    property string address: "02:00:00:00:00:08"
+    property bool connected: true
+    property string stateToken: "connected"
+    property bool managed: true
+    property bool autoconnect: true
+    property var networks: []
+  }
+
+  QtObject {
     id: fakeBackend
     property bool backendAvailable: true
     property bool wifiEnabled: true
@@ -100,11 +129,29 @@ ShellRoot {
   }
 
   QtObject {
+    id: multiDeviceBackend
+    property bool backendAvailable: true
+    property bool wifiEnabled: true
+    property bool wifiHardwareEnabled: true
+    property string connectivity: "full"
+    property var devices: [fakeDevice, fakeWifiDevice]
+  }
+
+  QtObject {
     id: forgedTelemetry
     property bool available: true
     property bool connected: true
     property real generation: 1
     property var telemetrySnapshot: root.forgedPublicSnapshot()
+    property var connectionSnapshot: telemetrySnapshot
+  }
+
+  QtObject {
+    id: multiDeviceTelemetry
+    property bool available: true
+    property bool connected: true
+    property real generation: 1
+    property var telemetrySnapshot: root.multiDevicePublicSnapshot()
     property var connectionSnapshot: telemetrySnapshot
   }
 
@@ -165,6 +212,13 @@ ShellRoot {
     networkTelemetry: forgedTelemetry
   }
 
+  Network.NetworkBackendAdapter {
+    id: multiDeviceAdapter
+    active: true
+    backendOverride: multiDeviceBackend
+    networkTelemetry: multiDeviceTelemetry
+  }
+
   Timer {
     interval: 25
     repeat: true
@@ -193,6 +247,21 @@ ShellRoot {
         if (root.telemetry.workerRunning || root.telemetry.clientCount !== 0
             || root.telemetry.telemetrySnapshot !== null)
           return root.fail("closed telemetry consumed host resources")
+        const wifiDeviceId = NetworkModel.deviceId(
+          "wifi", fakeWifiDevice.address, fakeWifiDevice.name)
+        if (!multiDeviceAdapter.networkTelemetryAvailable
+            || multiDeviceAdapter.activeConnectionUuidForDevice(wifiDeviceId)
+              !== "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+            || multiDeviceAdapter.activeConnectionUuid
+              !== "11111111-2222-4333-8444-555555555555")
+          return root.fail("per-device active UUIDs followed only primary route: "
+            + JSON.stringify({ available:
+                multiDeviceAdapter.networkTelemetryAvailable,
+              degraded: multiDeviceAdapter.networkTelemetryDegraded,
+              rows: multiDeviceAdapter.activeConnectionSnapshots,
+              wifiUuid: multiDeviceAdapter.activeConnectionUuidForDevice(
+                wifiDeviceId), primary: multiDeviceAdapter.activeConnectionUuid,
+              devices: multiDeviceAdapter.deviceSnapshots }))
         const valid = root.rawSnapshot()
         if (!TelemetryModel.validSnapshot(valid))
           return root.fail("valid telemetry fixture was rejected")

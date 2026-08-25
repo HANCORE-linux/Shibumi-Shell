@@ -23,6 +23,8 @@ Item {
   readonly property var deviceObjects: root.backendInitialized
     && Networking.devices ? Networking.devices.values : []
 
+  signal connectionFailure(var deviceObject, var networkObject, string reason)
+
   visible: false
   width: 0
   height: 0
@@ -141,6 +143,29 @@ Item {
       ok: true,
       code: "accepted",
       message: "Saved-profile removal dispatch accepted."
+    }
+  }
+
+  Instantiator {
+    model: root.deviceObjects
+
+    delegate: QtObject {
+      id: deviceObserver
+      required property var modelData
+      readonly property var observedDevice: modelData
+
+      property Instantiator networkObservers: Instantiator {
+        model: root.networkObjects(deviceObserver.observedDevice)
+
+        delegate: NetworkFailureObserver {
+          required property var modelData
+          deviceObject: deviceObserver.observedDevice
+          networkObject: modelData
+          onObserved: function(deviceObject, networkObject, reason) {
+            root.connectionFailure(deviceObject, networkObject, reason)
+          }
+        }
+      }
     }
   }
 }

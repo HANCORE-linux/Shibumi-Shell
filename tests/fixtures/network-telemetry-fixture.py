@@ -27,6 +27,7 @@ def snapshot(invocation: int, connected: bool = True) -> dict[str, object]:
             "rxBytes": 0,
             "txBytes": 0,
             "sampleMonotonicMs": invocation * 1000,
+            "activeConnections": [],
             "wifi": {
                 "ssid": "", "ssidHex": "", "signal": 0,
                 "frequencyMhz": 0, "bitrateKbps": 0,
@@ -67,6 +68,12 @@ def snapshot(invocation: int, connected: bool = True) -> dict[str, object]:
         "rxBytes": rx_bytes,
         "txBytes": tx_bytes,
         "sampleMonotonicMs": sample_ms,
+        "activeConnections": [{
+            "uuid": "11111111-2222-4333-8444-555555555555",
+            "kind": "wired",
+            "interfaceName": "eth0",
+            "hardwareAddress": "02:00:00:00:00:07",
+        }],
         "wifi": {
             "ssid": "", "ssidHex": "", "signal": 0,
             "frequencyMhz": 0, "bitrateKbps": 0,

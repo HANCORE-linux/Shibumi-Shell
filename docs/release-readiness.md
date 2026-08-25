@@ -89,7 +89,9 @@ until the revision-bound release collector reruns them:
 | Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
 | Configuration continuity | Passed: `shell.json` returned semantically unchanged after repeated transitions |
 | Runtime process count | Passed: one Quickshell process after each switch |
-| Network label runtime | Passed on Ethernet and Wi-Fi across repeated V1, V2, Omarchy, and V2-return transitions |
+| Network label runtime | Earlier host-backed payload passed on Ethernet and Wi-Fi; this evidence does not validate the native Step 5 cutover |
+| Native Network Step 5 source gates | Passed for primitive topology, exact profiles, scanner leases, liveness, telemetry, reachability, action/failure reconciliation, QR, Enterprise fixtures, speed-test races, and IPC routing |
+| Native Network Step 5 hardware | Required on Machine 2 for Wi-Fi/Ethernet actions, QR, speed test, NetworkManager loss/full-process recovery, bottom, and multi-output; Enterprise is physically unavailable and remains explicitly unconfirmed |
 | Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error in the final unpinned status smoke |
 | Control Center **Bars** view | Passed on the physical Wayland session |
 | Bluetooth connection and panel | Passed with a live Jabra Evolve2 55: fresh remove/pair/trust/connect, native audio route, disconnect/reconnect, and restored state |

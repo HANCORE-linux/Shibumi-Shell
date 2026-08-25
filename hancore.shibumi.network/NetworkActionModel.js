@@ -16,7 +16,10 @@ var DispatchCodes = [
 ]
 var TerminalCodes = [
   "idle", "pending", "completed", "timeout", "unavailable",
-  "device-removed", "cancelled", "adapter-replaced", "invalid"
+  "device-removed", "cancelled", "adapter-replaced", "invalid",
+  "connection-unknown", "connection-no-secrets",
+  "connection-client-disconnected", "connection-client-failed",
+  "connection-authentication-timeout", "connection-network-lost"
 ]
 var ConnectivityTokens = ["unknown", "none", "portal", "limited", "full"]
 
@@ -104,6 +107,14 @@ function fixedTerminalMessage(code) {
   case "cancelled": return "Network action monitoring was cancelled."
   case "adapter-replaced": return "Network backend changed during the action."
   case "invalid": return "Network action state became invalid."
+  case "connection-no-secrets": return "Network credentials were rejected."
+  case "connection-client-disconnected":
+    return "The Wi-Fi client was disconnected during authentication."
+  case "connection-client-failed": return "Wi-Fi authentication failed."
+  case "connection-authentication-timeout":
+    return "Wi-Fi authentication timed out."
+  case "connection-network-lost": return "The Wi-Fi network disappeared."
+  case "connection-unknown": return "The network connection failed."
   default: return "Network backend became unavailable during the action."
   }
 }
@@ -260,7 +271,8 @@ function actionContext(kind, entityId, radio, networks, profiles) {
     const targetEnabled = kind === "wifi-enable"
     if (radio.enabled === targetEnabled) return null
     return {
-      deviceId: "", relatedEntityId: "", targetEnabled: targetEnabled
+      deviceId: "", relatedEntityId: "", targetEnabled: targetEnabled,
+      profileUuid: "", profileSsid: ""
     }
   }
   if (kind === "connect" || kind === "connect-with-psk"
@@ -287,7 +299,8 @@ function actionContext(kind, entityId, radio, networks, profiles) {
     return {
       deviceId: resolved.row.deviceId,
       relatedEntityId: "",
-      targetEnabled: null
+      targetEnabled: null,
+      profileUuid: "", profileSsid: ""
     }
   }
   const resolved = rowResolution(profiles, entityId)
@@ -306,7 +319,9 @@ function actionContext(kind, entityId, radio, networks, profiles) {
   return {
     deviceId: resolved.row.deviceId,
     relatedEntityId: resolved.row.networkId,
-    targetEnabled: null
+    targetEnabled: null,
+    profileUuid: resolved.row.uuid,
+    profileSsid: resolved.row.ssid
   }
 }
 
@@ -321,6 +336,24 @@ function enterpriseConnected(pending, view) {
     && network.row.deviceId === pending.deviceId
     && network.row.connected === true && network.row.state === "connected"
     && network.row.stateChanging === false
+}
+
+function connectionFailure(pending, snapshot, observedGeneration) {
+  if (!pending || pending.phase !== "pending"
+      || ["connect", "connect-with-psk", "connect-profile"]
+        .indexOf(pending.kind) < 0
+      || !exactKeys(snapshot, [
+        "schemaVersion", "entityId", "deviceId", "reason", "generation"
+      ]) || snapshot.schemaVersion !== SchemaVersion
+      || snapshot.deviceId !== pending.deviceId
+      || snapshot.entityId !== (pending.kind === "connect-profile"
+        ? pending.relatedEntityId : pending.entityId)
+      || NetworkModel.ConnectionFailureTokens.indexOf(snapshot.reason) < 0
+      || !validGeneration(snapshot.generation)
+      || snapshot.generation <= pending.dispatchGeneration
+      || !validGeneration(observedGeneration)
+      || snapshot.generation > observedGeneration) return null
+  return terminal(false, "connection-" + snapshot.reason)
 }
 
 function deviceUsable(devices, entityId) {
@@ -345,7 +378,7 @@ function terminal(success, code) {
   }
 }
 
-function reconcile(pending, view) {
+function reconcile(pending, view, activeConnectionUuid) {
   if (!pending || typeof pending !== "object" || !validKind(pending.kind)
       || !validEntityId(pending.entityId, false)
       || !validGeneration(pending.dispatchGeneration)
@@ -404,32 +437,41 @@ function reconcile(pending, view) {
 
   if (pending.kind === "connect-profile") {
     const profile = rowResolution(view.profiles, pending.entityId)
-    const network = rowResolution(view.networks, pending.relatedEntityId)
     if (!profile.ok || profile.count !== 1 || !profile.row
         || profile.row.ambiguous === true
         || profile.row.deviceId !== pending.deviceId
-        || profile.row.networkId !== pending.relatedEntityId
-        || !network.ok || network.count !== 1 || !network.row
-        || network.row.ambiguous === true
-        || network.row.deviceId !== pending.deviceId)
+        || profile.row.uuid !== NetworkModel.canonicalUuid(pending.profileUuid)
+        || profile.row.ssid !== pending.profileSsid)
       return terminal(false, "invalid")
-    return completionFresh && network.row.connected === true
-      && network.row.state === "connected"
-      && network.row.stateChanging === false
+    const currentNetwork = rowResolution(
+      view.networks, profile.row.networkId)
+    if (!currentNetwork.ok || currentNetwork.count !== 1
+        || !currentNetwork.row || currentNetwork.row.ambiguous === true
+        || currentNetwork.row.deviceId !== pending.deviceId
+        || currentNetwork.row.ssid !== pending.profileSsid)
+      return terminal(false, "invalid")
+    const expectedUuid = NetworkModel.canonicalUuid(pending.profileUuid)
+    const observedUuid = NetworkModel.canonicalUuid(activeConnectionUuid)
+    return completionFresh && expectedUuid !== ""
+      && observedUuid === expectedUuid
+      && currentNetwork.row.connected === true
+      && currentNetwork.row.state === "connected"
+      && currentNetwork.row.stateChanging === false
         ? terminal(true, "completed") : pendingResult()
   }
 
-  const network = rowResolution(view.networks, pending.relatedEntityId)
-  if (!network.ok || network.count !== 1 || !network.row
-      || network.row.ambiguous === true
-      || network.row.deviceId !== pending.deviceId)
-    return pendingResult()
   const profile = rowResolution(view.profiles, pending.entityId)
   if (!profile.ok || profile.count > 1
       || profile.row && profile.row.ambiguous === true)
     return terminal(false, "invalid")
-  return profile.count === 0 && view.generation > pending.dispatchGeneration
-    ? terminal(true, "completed") : pendingResult()
+  if (profile.count === 0 && view.generation > pending.dispatchGeneration)
+    return terminal(true, "completed")
+  const network = rowResolution(view.networks, pending.relatedEntityId)
+  if (!network.ok || network.count > 1
+      || network.row && (network.row.ambiguous === true
+        || network.row.deviceId !== pending.deviceId))
+    return pendingResult()
+  return pendingResult()
 }
 
 function validPublicSnapshot(snapshot) {
@@ -470,7 +512,10 @@ function validPublicSnapshot(snapshot) {
   if (snapshot.phase === "succeeded")
     return snapshot.code === "completed" && snapshot.message === ""
   return ["timeout", "unavailable", "device-removed", "cancelled",
-    "adapter-replaced", "invalid"].indexOf(snapshot.code) >= 0
+    "adapter-replaced", "invalid", "connection-unknown",
+    "connection-no-secrets", "connection-client-disconnected",
+    "connection-client-failed", "connection-authentication-timeout",
+    "connection-network-lost"].indexOf(snapshot.code) >= 0
     && snapshot.message === fixedTerminalMessage(snapshot.code)
 }
 

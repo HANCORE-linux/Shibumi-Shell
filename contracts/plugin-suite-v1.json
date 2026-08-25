@@ -173,8 +173,7 @@
       "bundle": "default",
       "defaultSection": "right",
       "requires": [],
-      "recommends": [],
-      "hostContracts": ["omarchy.network"]
+      "recommends": []
     },
     {
       "id": "hancore.shibumi.battery",

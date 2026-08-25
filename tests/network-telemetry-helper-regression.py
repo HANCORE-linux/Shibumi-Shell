@@ -149,7 +149,8 @@ def main() -> int:
         property_count += 1
         destinations.append(_destination)
         if path == module["ROOT_PATH"]:
-            return {"PrimaryConnection": primary}
+            return {"PrimaryConnection": primary,
+                    "ActiveConnections": [primary]}
         if path == primary:
             return dict(active)
         if path == device_path and interface == module["DEVICE_INTERFACE"]:
@@ -177,7 +178,7 @@ def main() -> int:
         snapshot = collect_snapshot()
     finally:
         collect_globals.update(originals)
-    if property_count != 7 or ip_count != 4 \
+    if property_count != 11 or ip_count != 4 \
             or set(destinations) != {":1.7"}:
         raise AssertionError(
             f"full snapshot skipped final race checks: properties={property_count} ip={ip_count}"
@@ -193,6 +194,11 @@ def main() -> int:
             ] \
             or snapshot["rxBytes"] != 123456 \
             or snapshot["txBytes"] != 654321 \
+            or snapshot["activeConnections"] != [{
+                "uuid": active["Uuid"], "kind": "wired",
+                "interfaceName": "eth0",
+                "hardwareAddress": "02:00:00:00:00:07",
+            }] \
             or snapshot["wired"] != {"speedMbps": 1000, "carrier": True}:
         raise AssertionError(f"primitive telemetry projection changed: {snapshot!r}")
     forbidden = {"path", "activePath", "devicePath", "settings", "secrets"}
@@ -218,22 +224,21 @@ def main() -> int:
     if owner_calls != 2:
         raise AssertionError("owner replacement was not revalidated")
 
-    final_active_seen = False
-    active_calls = 0
+    root_calls = 0
     def late_primary_change(
         path: str, interface: str, properties: list[tuple[str, str]],
         deadline: float, destination: str = "",
     ) -> dict[str, object]:
-        nonlocal active_calls, final_active_seen
+        nonlocal root_calls
         if path == primary:
-            active_calls += 1
-            if active_calls > 1:
-                final_active_seen = True
             return dict(active)
         if path == module["ROOT_PATH"]:
-            return {"PrimaryConnection":
-                "/org/freedesktop/NetworkManager/ActiveConnection/8"
-                if final_active_seen else primary}
+            root_calls += 1
+            return {
+                "PrimaryConnection": primary if root_calls == 1
+                  else "/org/freedesktop/NetworkManager/ActiveConnection/8",
+                "ActiveConnections": [primary],
+            }
         return fake_properties(path, interface, properties, deadline, destination)
 
     collect_globals["get_name_owner"] = fake_owner
@@ -244,7 +249,7 @@ def main() -> int:
         expect_error(telemetry_error, collect_snapshot)
     finally:
         collect_globals.update(originals)
-    if not final_active_seen or active_calls != 2:
+    if root_calls != 2:
         raise AssertionError("late primary change did not reach final parent check")
 
     ip_calls = 0
@@ -277,7 +282,7 @@ def main() -> int:
     ) -> dict[str, object]:
         nonlocal disconnected_calls
         disconnected_calls += 1
-        return {"PrimaryConnection": "/"}
+        return {"PrimaryConnection": "/", "ActiveConnections": []}
 
     collect_globals["get_name_owner"] = fake_owner
     collect_globals["get_properties"] = disconnected_properties
@@ -285,7 +290,8 @@ def main() -> int:
         disconnected = collect_snapshot()
     finally:
         collect_globals.update(originals)
-    if disconnected != disconnected_snapshot(disconnected["sampleMonotonicMs"]) \
+    if disconnected != disconnected_snapshot(
+            disconnected["sampleMonotonicMs"], []) \
             or disconnected_calls != 2:
         raise AssertionError("disconnected state was not revalidated atomically")
 
