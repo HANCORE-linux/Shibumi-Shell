@@ -1284,9 +1284,10 @@ if rg -q 'entry\.network|modelData\.network|network: source\.network' \
     "$service" "$repo_root/hancore.shibumi.network/NetworkPanel.qml"; then
   fail "Network view/action contract exposes a raw WifiNetwork object"
 fi
-rg -Fq 'SectionLabel { text: "DNS SERVERS" }' \
-  "$repo_root/hancore.shibumi.network/NetworkPanel.qml" \
-  || fail "native DNS telemetry is not presented"
+if rg -q 'DNS SERVERS|dnsText\(' \
+    "$repo_root/hancore.shibumi.network/NetworkPanel.qml"; then
+  fail "redundant DNS telemetry is still presented in the Network panel"
+fi
 if rg -q 'setDns|dnsProviders' \
     "$service" "$repo_root/hancore.shibumi.network/NetworkPanel.qml"; then
   fail "cutover exposes a DNS mutation without a typed native seam"

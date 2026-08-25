@@ -117,16 +117,6 @@ ShibumiPanel {
     return fields.join(" · ")
   }
 
-  function dnsText() {
-    const rows = networkService ? networkService.dnsServers : []
-    const values = []
-    for (let index = 0; index < rows.length; index++) {
-      const address = rows[index] && rows[index].address
-      if (address) values.push(String(address))
-    }
-    return values.length > 0 ? values.join(" · ") : "Unavailable"
-  }
-
   function frequencyText() {
     const raw = String((networkService.info || ({})).freq || "").trim()
     if (!raw) return ""
@@ -765,26 +755,6 @@ ShibumiPanel {
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
             wrapMode: Text.Wrap
-          }
-        }
-
-        Ui.PanelSeparator { width: parent.width }
-
-        Column {
-          width: parent.width
-          spacing: Commons.Style.space(3)
-
-          SectionLabel { text: "DNS SERVERS" }
-
-          Text {
-            width: parent.width
-            text: panel.dnsText()
-            color: panel.controlForeground
-            font.family: panel.bar
-              ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.body
-            wrapMode: Text.Wrap
-            renderType: Text.NativeRendering
           }
         }
 

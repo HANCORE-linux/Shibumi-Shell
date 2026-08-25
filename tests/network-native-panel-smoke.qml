@@ -332,7 +332,7 @@ ShellRoot {
       }
       const available = panel.filteredNetworks()
       if (!panel.open || available.length !== 2 || panel.savedCount !== 2
-          || panel.dnsText() !== "1.1.1.1 · 2606:4700:4700::1111")
+          || typeof panel.dnsText !== "undefined")
         return root.fail("native primitive panel projection failed")
       const enterprise = available[1]
       panel.openPassword(enterprise)
