@@ -130,13 +130,15 @@ ShellRoot {
           surface.contentItem, "shibumiNetworkQrCanvas")
         if (!canvas || !canvas.visible || canvas.width <= 0)
           return root.fail("rendered QR canvas was not found")
+        root.closeControl = root.findNamed(
+          surface.contentItem, "shibumiNetworkQrCloseButton")
+        if (!root.closeControl || root.closeControl.primary !== true)
+          return root.fail("QR close action does not use the primary button style")
         root.phase = 99
         canvas.grabToImage(function(result) {
           if (!result.saveToFile(root.outputPath))
             return root.fail("could not save rendered QR canvas")
-          root.closeControl = root.findNamed(
-            surface.contentItem, "shibumiNetworkQrCloseButton")
-          if (!root.closeControl || !root.requestStarted("request-identity"))
+          if (!root.requestStarted("request-identity"))
             return root.fail("automatic saved-secret request did not start")
           dialog.updateNetwork(root.row("Other"))
           root.phase = 3

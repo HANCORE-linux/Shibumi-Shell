@@ -1049,6 +1049,12 @@ rg -Fq 'var MaxInputBytes = 240' "$qr_encoder" \
   || fail "Wi-Fi QR encoder has no fixed input bound"
 rg -Fq 'NetworkModel.validPsk(passphrase, network.security)' "$qr_model" \
   || fail "Wi-Fi QR passphrases bypass the native credential contract"
+rg -Fq 'primary: true' "$qr_dialog" \
+  || fail "Wi-Fi QR close action does not match the primary panel action style"
+rg -Fq 'root.visualTokens.seal' "$qr_dialog" \
+  || fail "Wi-Fi QR close action does not use the primary panel fill"
+rg -Fq 'root.visualTokens.paper' "$qr_dialog" \
+  || fail "Wi-Fi QR primary action lacks readable token contrast"
 rg -Fq 'left.network.generation === right.network.generation' "$qr_session" \
   || fail "Wi-Fi QR passphrase submission is not generation-bound"
 if rg -q '[Oo]marchy|nmcli|GetSecrets|Quickshell\.Io|\bProcess\b' \

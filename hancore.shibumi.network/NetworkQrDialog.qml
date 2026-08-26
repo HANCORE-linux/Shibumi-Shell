@@ -256,6 +256,7 @@ FocusScope {
         objectName: "shibumiNetworkQrCloseButton"
         width: parent.width
         label: session.ready ? "Done" : "Close"
+        primary: true
         onActivated: root.close()
       }
     }
@@ -270,16 +271,18 @@ FocusScope {
     height: Commons.Style.space(36)
     radius: root.visualTokens ? root.visualTokens.tileRadius
       : Commons.Style.space(7)
+    readonly property bool hovered: actionHover.hovered || activeFocus
     color: !action.enabled ? Qt.rgba(0, 0, 0, 0.08)
-      : actionHover.hovered
+      : action.hovered
         ? (root.visualTokens ? root.visualTokens.fillPrimaryHover
           : Qt.rgba(1, 1, 1, 0.16))
         : action.primary
-          ? (root.visualTokens ? root.visualTokens.fillActive
-            : Qt.rgba(1, 1, 1, 0.12))
+          ? (root.visualTokens ? root.visualTokens.seal
+            : Commons.Color.accent)
           : (root.visualTokens ? root.visualTokens.fillIdle
             : Qt.rgba(0, 0, 0, 0.10))
-    border.width: root.visualTokens ? root.visualTokens.panelBorderWidth : 1
+    border.width: action.primary ? 0
+      : root.visualTokens ? root.visualTokens.panelBorderWidth : 1
     border.color: root.visualTokens ? root.visualTokens.panelBorder
       : Qt.rgba(1, 1, 1, 0.18)
     activeFocusOnTab: true
@@ -287,8 +290,11 @@ FocusScope {
     Text {
       anchors.centerIn: parent
       text: action.label
-      color: root.visualTokens ? root.visualTokens.ink
-        : Commons.Color.foreground
+      color: action.primary
+        ? (root.visualTokens ? root.visualTokens.paper
+          : Commons.Color.background)
+        : (root.visualTokens ? root.visualTokens.ink
+          : Commons.Color.foreground)
       font.family: root.visualTokens ? root.visualTokens.fontFamily
         : Commons.Style.font.family
       font.pixelSize: Commons.Style.font.caption
