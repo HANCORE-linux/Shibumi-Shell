@@ -17,7 +17,8 @@ var FailureCodes = [
   "preflight-active-profile", "preflight-access-point",
   "preflight-active-network", "preflight-profile",
   "preflight-profile-identity", "preflight-profile-security",
-  "preflight-profile-version", "authorization-denied",
+  "preflight-profile-version", "authorization-request",
+  "authorization-call", "authorization-runtime", "authorization-denied",
   "authorization-timeout", "authorization-failed", "secret-response",
   "connection-changed", "worker-runtime"
 ]

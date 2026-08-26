@@ -1120,6 +1120,7 @@ fi
 rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret failures bypass bounded completion parsing"
 for diagnostic_code in preflight-active-network preflight-profile-security \
+    authorization-request authorization-call authorization-runtime \
     authorization-failed secret-response connection-changed worker-runtime; do
   rg -Fq "\"$diagnostic_code\"" "$qr_secret_model" \
     || fail "Wi-Fi QR secret diagnostic reason is not allowlisted: $diagnostic_code"

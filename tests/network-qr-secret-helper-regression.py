@@ -65,6 +65,7 @@ def main() -> int:
     profile_code = module["profile_failure_code"]
     error = module["SecretError"]
     diagnostic_error = module["DiagnosticError"]
+    authorization_call_error = module["AuthorizationCallError"]
     request = parse(canonical())
     if diagnostic_error("forged").code != "worker-runtime":
         raise AssertionError("unknown worker diagnostics are not fail-closed")
@@ -174,6 +175,18 @@ def main() -> int:
         "/org/freedesktop/NetworkManager/Settings/1"))
     expect_error(error, lambda: interactive_secrets(
         SecretBus(SecretReply()), "org.freedesktop.NetworkManager",
+        "/org/freedesktop/NetworkManager/Settings/1"))
+
+    class FailingSecretBus:
+        def send_message_with_reply_and_block(
+            self, _message: Any, timeout_s: float
+        ) -> Any:
+            if timeout_s != module["AUTHORIZATION_TIMEOUT_SECONDS"]:
+                raise AssertionError("authorization timeout changed")
+            raise RuntimeError("fixture failure")
+
+    expect_error(authorization_call_error, lambda: interactive_secrets(
+        FailingSecretBus(), ":1.77",
         "/org/freedesktop/NetworkManager/Settings/1"))
 
     active_identity = module["active_identity"]
