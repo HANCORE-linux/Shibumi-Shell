@@ -83,7 +83,96 @@ def main() -> int:
         "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
     }))
 
+    active_identity = module["active_identity"]
+    globals_ = active_identity.__globals__
+    original_prop = globals_["prop"]
+    device = "/org/freedesktop/NetworkManager/Devices/1"
+    active = "/org/freedesktop/NetworkManager/ActiveConnection/1"
+    profile = "/org/freedesktop/NetworkManager/Settings/1"
+    access_point = "/org/freedesktop/NetworkManager/AccessPoint/1"
+    accessed_properties: list[tuple[str, str, str]] = []
+    properties = {
+        (device, module["DEVICE_INTERFACE"], "ActiveConnection"): active,
+        (active, module["ACTIVE_INTERFACE"], "State"): 2,
+        (active, module["ACTIVE_INTERFACE"], "Uuid"):
+          request["profileUuid"],
+        (active, module["ACTIVE_INTERFACE"], "Devices"): [device],
+        (active, module["ACTIVE_INTERFACE"], "Connection"): profile,
+        (profile, module["CONNECTION_INTERFACE"], "Unsaved"): False,
+        (device, module["WIRELESS_INTERFACE"], "ActiveAccessPoint"):
+          access_point,
+        (access_point, module["ACCESS_POINT_INTERFACE"], "Ssid"):
+          b"Private",
+    }
+    def fake_prop(_bus: object, _destination: str, path: str,
+                  interface_name: str, key: str) -> Any:
+        accessed_properties.append((path, interface_name, key))
+        return properties[(path, interface_name, key)]
+    globals_["prop"] = fake_prop
+    try:
+        if active_identity(object(), ":1.77", request, device) \
+                != (active, profile, access_point):
+            raise AssertionError("active QR identity projection changed")
+        active_uuid_key = (active, module["ACTIVE_INTERFACE"], "Uuid")
+        if active_uuid_key not in accessed_properties:
+            raise AssertionError("active QR identity skipped its UUID binding")
+        properties[active_uuid_key] = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        expect_error(error, lambda: active_identity(
+            object(), ":1.77", request, device))
+    finally:
+        globals_["prop"] = original_prop
+
     run = module["run"]
+    profile_snapshot = module["profile_snapshot"]
+    globals_ = run.__globals__
+    boundary_names = ["arm_parent_death", "owner", "device_path",
+                      "active_identity", "profile_snapshot", "interface",
+                      "owner_unchanged", "prop"]
+    boundary_originals = {name: globals_[name] for name in boundary_names}
+    original_bus = globals_["dbus"].SystemBus
+    base_settings = {
+        "connection": {
+            "uuid": request["profileUuid"],
+            "type": "802-11-wireless",
+        },
+        "802-11-wireless": {"ssid": b"Private"},
+        "802-11-wireless-security": {
+            "key-mgmt": "wpa-psk",
+            "proto": ["rsn"],
+        },
+    }
+    for field, invalid in (
+        ("uuid", "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"),
+        ("type", "802-3-ethernet"),
+    ):
+        settings = {key: dict(value) for key, value in base_settings.items()}
+        settings["connection"][field] = invalid
+        secret_reads = [0]
+        class ProfileConnection:
+            def GetSettings(self) -> dict[str, Any]:
+                return settings
+            def GetSecrets(self, _setting: str) -> dict[str, Any]:
+                secret_reads[0] += 1
+                return {"802-11-wireless-security": {"psk": "correct horse"}}
+        globals_["arm_parent_death"] = lambda _pid: None
+        globals_["owner"] = lambda _bus: ":1.77"
+        globals_["device_path"] = lambda *_args: device
+        globals_["active_identity"] = lambda *_args: (
+            active, profile, access_point)
+        globals_["profile_snapshot"] = profile_snapshot
+        globals_["interface"] = lambda *_args: ProfileConnection()
+        globals_["owner_unchanged"] = lambda *_args: None
+        globals_["prop"] = lambda *_args: 7
+        globals_["dbus"].SystemBus = lambda: object()
+        try:
+            expect_error(error, lambda: run(request))
+        finally:
+            globals_["dbus"].SystemBus = original_bus
+            globals_.update(boundary_originals)
+        if secret_reads[0] != 0:
+            raise AssertionError(
+                "mismatched profile settings crossed GetSecrets")
+
     globals_ = run.__globals__
     names = ["arm_parent_death", "owner", "device_path", "active_identity",
              "profile_snapshot", "interface", "owner_unchanged"]

@@ -1072,6 +1072,9 @@ rg -Fq ').GetSettings()' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper does not revalidate current persisted settings"
 rg -Fq 'CONNECTION_INTERFACE, "VersionId"' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper does not bind the saved profile version"
+if rg -Uq 'CONNECTION_INTERFACE,\s*"(Uuid|Type)"' "$qr_secret_helper"; then
+  fail "Wi-Fi QR helper queries nonexistent Settings.Connection properties"
+fi
 rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper accepts a profile race around GetSecrets"
 [[ $(grep -Fc 'owner_unchanged(bus, destination)' "$qr_secret_helper") -ge 2 ]] \
