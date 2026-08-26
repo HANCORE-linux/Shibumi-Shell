@@ -103,9 +103,29 @@ def main() -> int:
     for value in malformed:
         expect_error(error, lambda value=value: parse(value))
 
+    expected_groups = frozenset({
+        "connection", "802-11-wireless", "802-11-wireless-security",
+        "ipv4", "ipv6", "proxy",
+    })
     if extract({"802-11-wireless-security": {"psk": "correct horse"}},
-               "wpa2-psk") != "correct horse":
+               "wpa2-psk", expected_groups) != "correct horse":
         raise AssertionError("exact saved PSK was rejected")
+    response_with_empty_groups = {
+        name: {} for name in expected_groups
+    }
+    response_with_empty_groups["802-11-wireless-security"] = {
+        "psk": "correct horse"
+    }
+    if extract(response_with_empty_groups, "wpa2-psk", expected_groups) \
+            != "correct horse":
+        raise AssertionError("NetworkManager empty setting maps were rejected")
+    response_with_extra_data = {name: {} for name in expected_groups}
+    response_with_extra_data["802-11-wireless-security"] = {
+        "psk": "correct horse"
+    }
+    response_with_extra_data["connection"] = {
+        "type": "802-11-wireless"
+    }
     invalid_maps = [
         ([], "secret-response-type"),
         ({}, "secret-response-empty"),
@@ -123,10 +143,12 @@ def main() -> int:
             "connection": {"type": "802-11-wireless"},
             "802-11-wireless-security": {"psk": "correct horse"},
         }, "secret-response-groups"),
+        (response_with_extra_data, "secret-extra-groups"),
     ]
     for value, code in invalid_maps:
         expect_diagnostic(secret_shape_error, code,
-                          lambda value=value: extract(value, "wpa2-psk"))
+                          lambda value=value: extract(
+                              value, "wpa2-psk", expected_groups))
     expect_error(error, lambda: bounded_settings_size({
         "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
     }))
@@ -313,7 +335,7 @@ def main() -> int:
     globals_["profile_snapshot"] = (
         lambda _bus, destination, _profile, _request:
           calls.append(("settings-owner", destination))
-          or (7, "50726976617465", "wpa2-psk")
+          or (7, "50726976617465", "wpa2-psk", expected_groups)
     )
     globals_["interface"] = lambda _bus, destination, path, _name: (
         calls.append(("settings-interface", destination + path)) or Connection()
@@ -353,8 +375,8 @@ def main() -> int:
         lambda _bus, _destination, _request, _device: identity
     )
     snapshots = iter([
-        (7, "50726976617465", "wpa2-psk"),
-        (8, "50726976617465", "wpa2-psk"),
+        (7, "50726976617465", "wpa2-psk", expected_groups),
+        (8, "50726976617465", "wpa2-psk", expected_groups),
     ])
     globals_["profile_snapshot"] = (
         lambda _bus, _destination, _profile, _request: next(snapshots)
@@ -379,7 +401,7 @@ def main() -> int:
     )
     globals_["profile_snapshot"] = (
         lambda _bus, _destination, _profile, _request:
-          (7, "50726976617465", "wpa2-psk")
+          (7, "50726976617465", "wpa2-psk", expected_groups)
     )
     globals_["interface"] = lambda *_args: Connection()
     globals_["interactive_secrets"] = lambda *_args: {

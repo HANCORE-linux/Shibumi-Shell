@@ -701,6 +701,9 @@ Current Phase 2 foundation:
   demand-driven. An explicit QR click may read only the `psk` field from the
   exact active saved WPA/WPA2/SAE profile through a bounded, owner- and
   topology-revalidated `GetSecrets("802-11-wireless-security")` request. That
+  response may contain only that `psk` value plus empty maps for the exact
+  secret-free setting-group names observed in the immediately preceding
+  `GetSettings()` snapshot; any other group, field, or value fails closed. The
   exact D-Bus message may request interactive authorization from Omarchy
   Quattro's native Polkit agent; it adds no PolicyKit rule or authorization
   bypass, and cancellation or timeout fails closed. Worker failures expose only

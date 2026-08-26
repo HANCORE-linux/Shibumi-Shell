@@ -1112,6 +1112,11 @@ rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper omits final NetworkManager owner revalidation"
 rg -Fq 'if fields != {"psk"}:' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper accepts an unbounded secret field map"
+rg -Fq 'groups not in {frozenset({target}), expected_groups}' \
+  "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts groups outside the preflight profile"
+rg -Fq 'if name != target' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts data in additional setting groups"
 rg -Fq 'clearEnvironment: true' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret worker inherits an injectable environment"
 rg -Fq '["/usr/bin/python3", "-I", root.helperPath]' "$qr_secret_dispatcher" \
@@ -1126,7 +1131,7 @@ rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
 for diagnostic_code in preflight-active-network preflight-profile-security \
     authorization-request authorization-call authorization-runtime \
     authorization-failed secret-response secret-response-groups \
-    secret-extra-fields connection-changed worker-runtime; do
+    secret-extra-groups secret-extra-fields connection-changed worker-runtime; do
   rg -Fq "\"$diagnostic_code\"" "$qr_secret_model" \
     || fail "Wi-Fi QR secret diagnostic reason is not allowlisted: $diagnostic_code"
 done

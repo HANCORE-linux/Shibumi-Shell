@@ -185,7 +185,9 @@ interface, source address, interface index, route, and run token. QR state is
 screen-local. Only an explicit QR click may request the single `psk` field from
 the exact active saved WPA/WPA2/SAE profile; the bounded process-wide reader
 revalidates owner and topology and may invoke Omarchy Quattro's native Polkit
-agent for NetworkManager's interactive authorization. It installs no PolicyKit
+agent for NetworkManager's interactive authorization. Its response may carry
+only that `psk` value plus empty maps for the exact setting-group names from the
+immediately preceding secret-free profile snapshot. It installs no PolicyKit
 rule and fails closed on cancellation or timeout. Failures cross the helper
 boundary only as an allowlisted secret-free stage code, never exception text or
 response data. The reader discards the value immediately after QR encoding. It

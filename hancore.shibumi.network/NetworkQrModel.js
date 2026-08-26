@@ -155,6 +155,7 @@ function fixedMessage(code) {
   case "secret-response-type": return "NetworkManager returned an invalid saved Wi-Fi password response type."
   case "secret-response-empty": return "NetworkManager returned no saved Wi-Fi password groups."
   case "secret-response-groups": return "NetworkManager returned unexpected saved Wi-Fi password groups."
+  case "secret-extra-groups": return "NetworkManager returned data in an additional Wi-Fi password group."
   case "secret-fields-empty": return "NetworkManager returned an empty Wi-Fi password group."
   case "secret-psk-missing": return "NetworkManager returned no PSK in the saved Wi-Fi password group."
   case "secret-extra-fields": return "NetworkManager returned additional saved Wi-Fi password fields."
