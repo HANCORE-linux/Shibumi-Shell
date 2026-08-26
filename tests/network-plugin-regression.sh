@@ -1110,7 +1110,7 @@ rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper accepts a profile race around GetSecrets"
 [[ $(grep -Fc 'owner_unchanged(bus, destination)' "$qr_secret_helper") -ge 2 ]] \
   || fail "Wi-Fi QR helper omits final NetworkManager owner revalidation"
-rg -Fq 'set(str(key) for key in setting) != {"psk"}' "$qr_secret_helper" \
+rg -Fq 'if fields != {"psk"}:' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper accepts an unbounded secret field map"
 rg -Fq 'clearEnvironment: true' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret worker inherits an injectable environment"
@@ -1125,7 +1125,8 @@ rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret failures bypass bounded completion parsing"
 for diagnostic_code in preflight-active-network preflight-profile-security \
     authorization-request authorization-call authorization-runtime \
-    authorization-failed secret-response connection-changed worker-runtime; do
+    authorization-failed secret-response secret-response-groups \
+    secret-extra-fields connection-changed worker-runtime; do
   rg -Fq "\"$diagnostic_code\"" "$qr_secret_model" \
     || fail "Wi-Fi QR secret diagnostic reason is not allowlisted: $diagnostic_code"
 done

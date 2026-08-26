@@ -66,6 +66,7 @@ def main() -> int:
     error = module["SecretError"]
     diagnostic_error = module["DiagnosticError"]
     authorization_call_error = module["AuthorizationCallError"]
+    secret_shape_error = module["SecretShapeError"]
     request = parse(canonical())
     if diagnostic_error("forged").code != "worker-runtime":
         raise AssertionError("unknown worker diagnostics are not fail-closed")
@@ -106,20 +107,26 @@ def main() -> int:
                "wpa2-psk") != "correct horse":
         raise AssertionError("exact saved PSK was rejected")
     invalid_maps = [
-        {},
-        {"802-11-wireless-security": {}},
-        {"802-11-wireless-security": {
+        ([], "secret-response-type"),
+        ({}, "secret-response-empty"),
+        ({"802-11-wireless-security": {}}, "secret-fields-empty"),
+        ({"802-11-wireless-security": {"identity": "unexpected"}},
+         "secret-psk-missing"),
+        ({"802-11-wireless-security": {
             "psk": "correct horse", "identity": "unexpected"
-        }},
-        {"802-11-wireless-security": {"psk": "short"}},
-        {"wifi-security": {"psk": "correct horse"}},
-        {
+        }}, "secret-extra-fields"),
+        ({"802-11-wireless-security": {"psk": "short"}},
+         "secret-value-invalid"),
+        ({"wifi-security": {"psk": "correct horse"}},
+         "secret-response-groups"),
+        ({
             "connection": {"type": "802-11-wireless"},
             "802-11-wireless-security": {"psk": "correct horse"},
-        },
+        }, "secret-response-groups"),
     ]
-    for value in invalid_maps:
-        expect_error(error, lambda value=value: extract(value, "wpa2-psk"))
+    for value, code in invalid_maps:
+        expect_diagnostic(secret_shape_error, code,
+                          lambda value=value: extract(value, "wpa2-psk"))
     expect_error(error, lambda: bounded_settings_size({
         "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
     }))

@@ -20,7 +20,9 @@ var FailureCodes = [
   "preflight-profile-version", "authorization-request",
   "authorization-call", "authorization-runtime", "authorization-denied",
   "authorization-timeout", "authorization-failed", "secret-response",
-  "connection-changed", "worker-runtime"
+  "secret-response-type", "secret-response-empty", "secret-response-groups",
+  "secret-fields-empty", "secret-psk-missing", "secret-extra-fields",
+  "secret-value-invalid", "connection-changed", "worker-runtime"
 ]
 
 function own(value, key) {
