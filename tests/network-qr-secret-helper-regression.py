@@ -66,35 +66,9 @@ def main() -> int:
     for value in malformed:
         expect_error(error, lambda value=value: parse(value))
 
-    empty_projection = module["profile_settings_projection"]({
-        "802-11-wireless-security": {}
-    })
     if extract({"802-11-wireless-security": {"psk": "correct horse"}},
-               "wpa2-psk", empty_projection) != "correct horse":
+               "wpa2-psk") != "correct horse":
         raise AssertionError("exact saved PSK was rejected")
-    public_settings = {
-        "connection": {"type": "802-11-wireless", "timestamp": 1},
-        "802-11-wireless": {
-            "seen-bssids": ["02:00:00:00:00:01"]
-        },
-        "802-11-wireless-security": {
-            "key-mgmt": "wpa-psk", "proto": ["rsn"]
-        },
-    }
-    authorized_response = {
-        "connection": {"type": "802-11-wireless", "timestamp": 2},
-        "802-11-wireless": {
-            "seen-bssids": ["02:00:00:00:00:02"]
-        },
-        "802-11-wireless-security": {
-            "key-mgmt": "wpa-psk", "proto": ["rsn"],
-            "psk": "correct horse",
-        },
-    }
-    if extract(authorized_response, "wpa2-psk",
-               module["profile_settings_projection"](public_settings)) \
-            != "correct horse":
-        raise AssertionError("full authorized profile response was rejected")
     invalid_maps = [
         {},
         {"802-11-wireless-security": {}},
@@ -105,31 +79,7 @@ def main() -> int:
         {"wifi-security": {"psk": "correct horse"}},
     ]
     for value in invalid_maps:
-        expect_error(error, lambda value=value: extract(
-            value, "wpa2-psk", empty_projection))
-    expected_public = module["profile_settings_projection"](public_settings)
-    response_with_other_secret = dict(authorized_response)
-    response_with_other_secret["802-1x"] = {"password": "unexpected"}
-    expect_error(error, lambda: extract(
-        response_with_other_secret, "wpa2-psk", expected_public))
-    changed_settings = {
-        name: dict(group) for name, group in authorized_response.items()
-    }
-    changed_settings["802-11-wireless-security"]["proto"] = ["wpa", "rsn"]
-    expect_error(error, lambda: extract(
-        changed_settings, "wpa2-psk", expected_public))
-    missing_settings = {
-        name: dict(group) for name, group in authorized_response.items()
-        if name != "connection"
-    }
-    expect_error(error, lambda: extract(
-        missing_settings, "wpa2-psk", expected_public))
-    oversized_settings = {
-        "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
-    }
-    expect_error(error, lambda: bounded_settings_size(oversized_settings))
-    expect_error(error, lambda: module["profile_settings_projection"](
-        {"connection": oversized_settings}))
+        expect_error(error, lambda value=value: extract(value, "wpa2-psk"))
     expect_error(error, lambda: bounded_settings_size({
         "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
     }))
@@ -304,7 +254,7 @@ def main() -> int:
     globals_["profile_snapshot"] = (
         lambda _bus, destination, _profile, _request:
           calls.append(("settings-owner", destination))
-          or (7, "50726976617465", "wpa2-psk", empty_projection)
+          or (7, "50726976617465", "wpa2-psk")
     )
     globals_["interface"] = lambda _bus, destination, path, _name: (
         calls.append(("settings-interface", destination + path)) or Connection()
@@ -338,8 +288,8 @@ def main() -> int:
         lambda _bus, _destination, _request, _device: identity
     )
     snapshots = iter([
-        (7, "50726976617465", "wpa2-psk", empty_projection),
-        (8, "50726976617465", "wpa2-psk", empty_projection),
+        (7, "50726976617465", "wpa2-psk"),
+        (8, "50726976617465", "wpa2-psk"),
     ])
     globals_["profile_snapshot"] = (
         lambda _bus, _destination, _profile, _request: next(snapshots)
@@ -364,7 +314,7 @@ def main() -> int:
     )
     globals_["profile_snapshot"] = (
         lambda _bus, _destination, _profile, _request:
-          (7, "50726976617465", "wpa2-psk", empty_projection)
+          (7, "50726976617465", "wpa2-psk")
     )
     globals_["interface"] = lambda *_args: Connection()
     globals_["interactive_secrets"] = lambda *_args: {

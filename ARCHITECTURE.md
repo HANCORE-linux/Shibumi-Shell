@@ -703,13 +703,8 @@ Current Phase 2 foundation:
   topology-revalidated `GetSecrets("802-11-wireless-security")` request. That
   exact D-Bus message may request interactive authorization from Omarchy
   Quattro's native Polkit agent; it adds no PolicyKit rule or authorization
-  bypass, and cancellation or timeout fails closed. NetworkManager returns a
-  complete connection map; the bounded helper accepts it only when removing
-  exactly `802-11-wireless-security.psk` produces the immediately preceding
-  secret-free settings projection (apart from NetworkManager's documented live
-  timestamp and seen-BSSID substitutions). Any other added secret or settings
-  drift fails closed. The passphrase crosses no snapshot, property, argument,
-  environment, cache, log,
+  bypass, and cancellation or timeout fails closed. The passphrase crosses no
+  snapshot, property, argument, environment, cache, log,
   or persistence boundary and is discarded immediately after QR encoding. No
   Network feature state comes from an Omarchy helper or `nmcli`;
 - each output owns only its bar presentation, telemetry consumer lease, lazy

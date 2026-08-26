@@ -1099,12 +1099,8 @@ rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper accepts a profile race around GetSecrets"
 [[ $(grep -Fc 'owner_unchanged(bus, destination)' "$qr_secret_helper") -ge 2 ]] \
   || fail "Wi-Fi QR helper omits final NetworkManager owner revalidation"
-rg -Fq 'profile_settings_projection(sanitized) != expected_settings' \
-  "$qr_secret_helper" \
-  || fail "Wi-Fi QR helper accepts settings or extra-secret response drift"
-rg -Fq 'name == "802-11-wireless-security" and key == "psk"' \
-  "$qr_secret_helper" \
-  || fail "Wi-Fi QR helper does not isolate the exact saved PSK field"
+rg -Fq 'set(str(key) for key in setting) != {"psk"}' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts an unbounded secret field map"
 rg -Fq 'clearEnvironment: true' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret worker inherits an injectable environment"
 rg -Fq '["/usr/bin/python3", "-I", root.helperPath]' "$qr_secret_dispatcher" \
