@@ -139,7 +139,7 @@
       "backendBoundary": "nativeApi",
       "outputCardinality": "process-wide",
       "workerPolicy": "shared-demand-driven",
-      "reason": "One process-wide Shibumi owner publishes bounded native NetworkManager snapshots and generation-bound typed actions; an explicit QR click may read only the exact active saved PSK plus NetworkManager's empty maps for the exact preflight setting-group names, through an owner- and topology-revalidated transient helper using interactive Polkit authorization without adding a policy rule or bypass."
+      "reason": "One process-wide Shibumi owner publishes bounded native NetworkManager snapshots and generation-bound typed actions; an explicit QR click may read only the exact active saved PSK plus NetworkManager's empty maps for the exact preflight setting-group names, through a transient interactive-Polkit helper that brackets each settings snapshot with equal VersionId reads and requires unchanged owner/topology/profile identity plus exactly NetworkManager's observed one-step VersionId advance without adding a policy rule or bypass."
     },
     {
       "id": "displays",

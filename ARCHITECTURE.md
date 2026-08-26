@@ -703,8 +703,13 @@ Current Phase 2 foundation:
   topology-revalidated `GetSecrets("802-11-wireless-security")` request. That
   response may contain only that `psk` value plus empty maps for the exact
   secret-free setting-group names observed in the immediately preceding
-  `GetSettings()` snapshot; any other group, field, or value fails closed. The
-  exact D-Bus message may request interactive authorization from Omarchy
+  `GetSettings()` snapshot bracketed by equal `VersionId` reads; any other
+  group, field, value, or in-snapshot version race fails closed.
+  Postflight requires the same owner, device, active connection, profile, access
+  point, SSID, security, and group set plus exactly NetworkManager's observed
+  one-step `VersionId` advance caused by the successful secret refresh; every
+  other version delta or identity change fails closed. The exact D-Bus message
+  may request interactive authorization from Omarchy
   Quattro's native Polkit agent; it adds no PolicyKit rule or authorization
   bypass, and cancellation or timeout fails closed. Worker failures expose only
   an allowlisted secret-free stage code, never exception text or response data.

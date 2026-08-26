@@ -1101,13 +1101,15 @@ rg -Fq 'resource.setrlimit(resource.RLIMIT_AS' "$qr_secret_helper" \
   || fail "Wi-Fi QR D-Bus worker does not apply its memory ceiling"
 rg -Fq ').GetSettings()' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper does not revalidate current persisted settings"
-rg -Fq 'CONNECTION_INTERFACE, "VersionId"' "$qr_secret_helper" \
-  || fail "Wi-Fi QR helper does not bind the saved profile version"
+[[ $(grep -Fc 'CONNECTION_INTERFACE, "VersionId"' "$qr_secret_helper") -ge 2 ]] \
+  || fail "Wi-Fi QR helper does not bracket settings with profile versions"
 if rg -Uq 'CONNECTION_INTERFACE,\s*"(Uuid|Type)"' "$qr_secret_helper"; then
   fail "Wi-Fi QR helper queries nonexistent Settings.Connection properties"
 fi
-rg -Fq 'settings_after != settings_before' "$qr_secret_helper" \
-  || fail "Wi-Fi QR helper accepts a profile race around GetSecrets"
+rg -Fq 'settings_after[1:] != settings_before[1:]' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts a public profile race around GetSecrets"
+rg -Fq 'settings_after[0] != settings_before[0] + 1' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper accepts an unexpected secret-refresh version delta"
 [[ $(grep -Fc 'owner_unchanged(bus, destination)' "$qr_secret_helper") -ge 2 ]] \
   || fail "Wi-Fi QR helper omits final NetworkManager owner revalidation"
 rg -Fq 'if fields != {"psk"}:' "$qr_secret_helper" \

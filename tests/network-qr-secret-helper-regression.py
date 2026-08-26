@@ -311,6 +311,36 @@ def main() -> int:
             raise AssertionError(
                 "mismatched profile settings crossed GetSecrets")
 
+    class RacingProfileConnection:
+        def GetSettings(self) -> dict[str, Any]:
+            return base_settings
+
+    version_reads: list[tuple[str, str, str]] = []
+    globals_["interface"] = lambda *_args: RacingProfileConnection()
+    globals_["prop"] = (
+        lambda _bus, _destination, path, interface_name, key:
+          version_reads.append((path, interface_name, key)) or 7
+    )
+    try:
+        profile_snapshot(object(), ":1.77", profile, request)
+    finally:
+        globals_.update(boundary_originals)
+    expected_version_read = (
+        profile, module["CONNECTION_INTERFACE"], "VersionId"
+    )
+    if version_reads != [expected_version_read, expected_version_read]:
+        raise AssertionError(
+            "profile snapshot did not bracket settings with exact VersionId")
+
+    racing_versions = iter([7, 8])
+    globals_["interface"] = lambda *_args: RacingProfileConnection()
+    globals_["prop"] = lambda *_args: next(racing_versions)
+    try:
+        expect_error(error, lambda: profile_snapshot(
+            object(), ":1.77", profile, request))
+    finally:
+        globals_.update(boundary_originals)
+
     globals_ = run.__globals__
     names = ["arm_parent_death", "owner", "device_path", "active_identity",
              "profile_snapshot", "interface", "interactive_secrets",
@@ -332,10 +362,12 @@ def main() -> int:
     globals_["active_identity"] = lambda _bus, destination, _request, _device: (
         calls.append(("active-owner", destination)) or identity
     )
+    secret_completed = [False]
     globals_["profile_snapshot"] = (
         lambda _bus, destination, _profile, _request:
           calls.append(("settings-owner", destination))
-          or (7, "50726976617465", "wpa2-psk", expected_groups)
+          or (8 if secret_completed[0] else 7,
+              "50726976617465", "wpa2-psk", expected_groups)
     )
     globals_["interface"] = lambda _bus, destination, path, _name: (
         calls.append(("settings-interface", destination + path)) or Connection()
@@ -343,6 +375,7 @@ def main() -> int:
     def valid_secrets(_bus: object, destination: str,
                       path: str) -> dict[str, dict[str, str]]:
         calls.append(("secret-owner", destination + path))
+        secret_completed[0] = True
         return {"802-11-wireless-security": {"psk": "correct horse"}}
     def malformed_secrets(*_args: Any) -> Any:
         raise error("unexpected secret response signature")
@@ -374,21 +407,34 @@ def main() -> int:
     globals_["active_identity"] = (
         lambda _bus, _destination, _request, _device: identity
     )
-    snapshots = iter([
-        (7, "50726976617465", "wpa2-psk", expected_groups),
-        (8, "50726976617465", "wpa2-psk", expected_groups),
-    ])
-    globals_["profile_snapshot"] = (
-        lambda _bus, _destination, _profile, _request: next(snapshots)
-    )
     globals_["interface"] = lambda *_args: Connection()
     globals_["interactive_secrets"] = lambda *_args: {
         "802-11-wireless-security": {"psk": "correct horse"}
     }
     globals_["owner_unchanged"] = lambda *_args: None
     globals_["dbus"].SystemBus = lambda: object()
+    unchanged = (7, "50726976617465", "wpa2-psk", expected_groups)
+    invalid_postflights = [
+        unchanged,
+        (6, "50726976617465", "wpa2-psk", expected_groups),
+        (9, "50726976617465", "wpa2-psk", expected_groups),
+        (8, "5072697661746500", "wpa2-psk", expected_groups),
+        (8, "50726976617465", "sae", expected_groups),
+        (8, "50726976617465", "wpa2-psk",
+         expected_groups | {"unexpected"}),
+    ]
     try:
-        expect_error(error, lambda: run(request))
+        for invalid_after in invalid_postflights:
+            snapshots = iter([
+                (7, "50726976617465", "wpa2-psk", expected_groups),
+                invalid_after,
+            ])
+            globals_["profile_snapshot"] = (
+                lambda _bus, _destination, _profile, _request:
+                  next(snapshots)
+            )
+            expect_diagnostic(
+                diagnostic_error, "connection-changed", lambda: run(request))
     finally:
         globals_["dbus"].SystemBus = original_bus
         globals_.update(originals)
