@@ -16,7 +16,7 @@ Item {
   property var networkService: null
   property var nativeLiveness: null
   property var commandOverride: null
-  property int workerTimeoutMs: 5000
+  property int workerTimeoutMs: 60000
   property int drainTimeoutMs: 1000
   readonly property string helperPath:
     String(Qt.resolvedUrl("scripts/network-qr-secret"))
@@ -65,7 +65,7 @@ Item {
 
   Timer {
     id: workerTimeout
-    interval: Math.max(500, Math.min(15000, root.workerTimeoutMs))
+    interval: Math.max(500, Math.min(60000, root.workerTimeoutMs))
     onTriggered: implementation.fail("timeout")
   }
 

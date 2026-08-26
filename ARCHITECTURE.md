@@ -700,8 +700,11 @@ Current Phase 2 foundation:
   surface, and route-bound TLS speed-test workers are process-wide and
   demand-driven. An explicit QR click may read only the `psk` field from the
   exact active saved WPA/WPA2/SAE profile through a bounded, owner- and
-  topology-revalidated `GetSecrets("802-11-wireless-security")` request. The
-  passphrase crosses no snapshot, property, argument, environment, cache, log,
+  topology-revalidated `GetSecrets("802-11-wireless-security")` request. That
+  exact D-Bus message may request interactive authorization from Omarchy
+  Quattro's native Polkit agent; it adds no PolicyKit rule or authorization
+  bypass, and cancellation or timeout fails closed. The passphrase crosses no
+  snapshot, property, argument, environment, cache, log,
   or persistence boundary and is discarded immediately after QR encoding. No
   Network feature state comes from an Omarchy helper or `nmcli`;
 - each output owns only its bar presentation, telemetry consumer lease, lazy

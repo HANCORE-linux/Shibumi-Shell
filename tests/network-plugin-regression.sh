@@ -1059,8 +1059,22 @@ if rg -q 'property [^:]*\b(passphrase|password|psk)\b' \
     "$qr_session" "$qr_dialog" "$qr_secret_dispatcher"; then
   fail "Wi-Fi QR owners retain a credential property"
 fi
-rg -Fq 'GetSecrets("802-11-wireless-security")' "$qr_secret_helper" \
+rg -Fq 'CONNECTION_INTERFACE, "GetSecrets"' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper does not scope its explicit secret read"
+rg -Fq 'message.append("802-11-wireless-security", signature="s")' \
+  "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper does not bind the exact secret setting argument"
+rg -Fq 'message.set_auto_start(False)' "$qr_secret_helper" \
+  || fail "Wi-Fi QR secret authorization can activate a replacement service"
+rg -Fq 'message.set_allow_interactive_authorization(True)' \
+  "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper cannot invoke Omarchy native Polkit authorization"
+rg -Fq 'AUTHORIZATION_TIMEOUT_SECONDS = 55.0' "$qr_secret_helper" \
+  || fail "Wi-Fi QR interactive authorization has no fixed timeout"
+rg -Fq 'property int workerTimeoutMs: 60000' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR dispatcher cannot bound interactive authorization"
+rg -Fq 'Math.min(60000, root.workerTimeoutMs)' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR interactive worker timeout can grow unbounded"
 rg -Fq 'MAX_SETTINGS_BYTES = 256 * 1024' "$qr_secret_helper" \
   || fail "Wi-Fi QR profile settings revalidation is unbounded"
 rg -Fq 'MAX_ADDRESS_SPACE_BYTES = 128 * 1024 * 1024' \

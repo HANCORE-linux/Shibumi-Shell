@@ -48,6 +48,7 @@ def main() -> int:
     parse = module["parse_request"]
     extract = module["extract_psk"]
     bounded_settings_size = module["bounded_settings_size"]
+    interactive_secrets = module["interactive_secrets"]
     error = module["SecretError"]
     request = parse(canonical())
     if request["profileUuid"] != "11111111-2222-4333-8444-555555555555":
@@ -82,6 +83,59 @@ def main() -> int:
     expect_error(error, lambda: bounded_settings_size({
         "oversized": b"x" * (module["MAX_SETTINGS_BYTES"] + 1)
     }))
+
+    class SecretReply:
+        def __init__(self, signature: str = "a{sa{sv}}",
+                     values: list[Any] | None = None) -> None:
+            self.signature = signature
+            self.values = values if values is not None else [{
+                "802-11-wireless-security": {"psk": "correct horse"}
+            }]
+        def get_signature(self) -> str:
+            return self.signature
+        def get_args_list(self, **kwargs: Any) -> list[Any]:
+            if kwargs != {"byte_arrays": True}:
+                raise AssertionError("secret reply requested unsafe conversion")
+            return self.values
+
+    class SecretBus:
+        def __init__(self, reply: SecretReply) -> None:
+            self.reply = reply
+            self.message: Any = None
+            self.timeout: float = 0
+        def send_message_with_reply_and_block(
+            self, message: Any, timeout_s: float
+        ) -> SecretReply:
+            self.message = message
+            self.timeout = timeout_s
+            return self.reply
+
+    secret_bus = SecretBus(SecretReply())
+    secret_map = interactive_secrets(secret_bus, ":1.77",
+        "/org/freedesktop/NetworkManager/Settings/1")
+    message = secret_bus.message
+    if secret_map["802-11-wireless-security"]["psk"] != "correct horse" \
+            or message.get_destination() != ":1.77" \
+            or message.get_path() \
+                != "/org/freedesktop/NetworkManager/Settings/1" \
+            or message.get_interface() != module["CONNECTION_INTERFACE"] \
+            or message.get_member() != "GetSecrets" \
+            or str(message.get_signature()) != "s" \
+            or [str(value) for value in message.get_args_list()] \
+                != ["802-11-wireless-security"] \
+            or message.get_auto_start() \
+            or not message.get_allow_interactive_authorization() \
+            or secret_bus.timeout != module["AUTHORIZATION_TIMEOUT_SECONDS"]:
+        raise AssertionError("interactive secret message crossed its exact boundary")
+    expect_error(error, lambda: interactive_secrets(
+        SecretBus(SecretReply("s", ["unexpected"])), ":1.77",
+        "/org/freedesktop/NetworkManager/Settings/1"))
+    expect_error(error, lambda: interactive_secrets(
+        SecretBus(SecretReply(values=[])), ":1.77",
+        "/org/freedesktop/NetworkManager/Settings/1"))
+    expect_error(error, lambda: interactive_secrets(
+        SecretBus(SecretReply()), "org.freedesktop.NetworkManager",
+        "/org/freedesktop/NetworkManager/Settings/1"))
 
     active_identity = module["active_identity"]
     globals_ = active_identity.__globals__
@@ -127,7 +181,7 @@ def main() -> int:
     globals_ = run.__globals__
     boundary_names = ["arm_parent_death", "owner", "device_path",
                       "active_identity", "profile_snapshot", "interface",
-                      "owner_unchanged", "prop"]
+                      "interactive_secrets", "owner_unchanged", "prop"]
     boundary_originals = {name: globals_[name] for name in boundary_names}
     original_bus = globals_["dbus"].SystemBus
     base_settings = {
@@ -161,6 +215,9 @@ def main() -> int:
             active, profile, access_point)
         globals_["profile_snapshot"] = profile_snapshot
         globals_["interface"] = lambda *_args: ProfileConnection()
+        globals_["interactive_secrets"] = lambda *_args: (
+            secret_reads.__setitem__(0, secret_reads[0] + 1)
+            or {"802-11-wireless-security": {"psk": "correct horse"}})
         globals_["owner_unchanged"] = lambda *_args: None
         globals_["prop"] = lambda *_args: 7
         globals_["dbus"].SystemBus = lambda: object()
@@ -175,7 +232,8 @@ def main() -> int:
 
     globals_ = run.__globals__
     names = ["arm_parent_death", "owner", "device_path", "active_identity",
-             "profile_snapshot", "interface", "owner_unchanged"]
+             "profile_snapshot", "interface", "interactive_secrets",
+             "owner_unchanged"]
     originals = {name: globals_[name] for name in names}
     calls: list[tuple[str, str]] = []
 
@@ -199,7 +257,12 @@ def main() -> int:
           or (7, "50726976617465", "wpa2-psk")
     )
     globals_["interface"] = lambda _bus, destination, path, _name: (
-        calls.append(("secret-owner", destination + path)) or Connection()
+        calls.append(("settings-interface", destination + path)) or Connection()
+    )
+    globals_["interactive_secrets"] = (
+        lambda _bus, destination, path:
+          calls.append(("secret-owner", destination + path))
+          or {"802-11-wireless-security": {"psk": "correct horse"}}
     )
     globals_["owner_unchanged"] = lambda _bus, destination: calls.append(
         ("revalidate-owner", destination)
@@ -212,7 +275,7 @@ def main() -> int:
         globals_["dbus"].SystemBus = original_bus
         globals_.update(originals)
     if result["psk"] != "correct horse" \
-            or ("GetSecrets", "802-11-wireless-security") not in calls \
+            or ("secret-owner", ":1.77/profile/1") not in calls \
             or any(":1.77" not in value for kind, value in calls
                    if kind.endswith("owner")):
         raise AssertionError("QR secret read crossed its exact owner/setting boundary")
@@ -232,6 +295,9 @@ def main() -> int:
         lambda _bus, _destination, _profile, _request: next(snapshots)
     )
     globals_["interface"] = lambda *_args: Connection()
+    globals_["interactive_secrets"] = lambda *_args: {
+        "802-11-wireless-security": {"psk": "correct horse"}
+    }
     globals_["owner_unchanged"] = lambda *_args: None
     globals_["dbus"].SystemBus = lambda: object()
     try:
@@ -251,6 +317,9 @@ def main() -> int:
           (7, "50726976617465", "wpa2-psk")
     )
     globals_["interface"] = lambda *_args: Connection()
+    globals_["interactive_secrets"] = lambda *_args: {
+        "802-11-wireless-security": {"psk": "correct horse"}
+    }
     final_checks = 0
     def changing_owner(_bus: object, _destination: str) -> None:
         nonlocal final_checks

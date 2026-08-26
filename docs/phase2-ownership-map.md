@@ -184,8 +184,11 @@ evidence, and the Shibumi-owned TLS speed test binds both phases to the same
 interface, source address, interface index, route, and run token. QR state is
 screen-local. Only an explicit QR click may request the single `psk` field from
 the exact active saved WPA/WPA2/SAE profile; the bounded process-wide reader
-revalidates owner and topology and discards the value immediately after QR
-encoding. It never publishes, caches, logs, or persists the secret. The only
+revalidates owner and topology and may invoke Omarchy Quattro's native Polkit
+agent for NetworkManager's interactive authorization. It installs no PolicyKit
+rule, fails closed on cancellation or timeout, and discards the value
+immediately after QR encoding. It never publishes, caches, logs, or persists
+the secret. The only
 retained host identity is
 the documented `omarchy.network` IPC/widget-family compatibility alias; no host
 Network/QR component or Network feature helper is loaded.
