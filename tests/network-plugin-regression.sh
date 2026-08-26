@@ -1084,6 +1084,10 @@ rg -Fq 'message.set_allow_interactive_authorization(True)' \
   || fail "Wi-Fi QR helper cannot invoke Omarchy native Polkit authorization"
 rg -Fq 'AUTHORIZATION_TIMEOUT_SECONDS = 55.0' "$qr_secret_helper" \
   || fail "Wi-Fi QR interactive authorization has no fixed timeout"
+if rg -Fq 'timeout_s=AUTHORIZATION_TIMEOUT_SECONDS' \
+    "$qr_secret_helper"; then
+  fail "Wi-Fi QR helper uses unsupported dbus-python timeout keyword"
+fi
 rg -Fq 'property int workerTimeoutMs: 60000' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR dispatcher cannot bound interactive authorization"
 rg -Fq 'Math.min(60000, root.workerTimeoutMs)' "$qr_secret_dispatcher" \

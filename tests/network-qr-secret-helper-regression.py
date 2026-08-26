@@ -144,7 +144,7 @@ def main() -> int:
             self.message: Any = None
             self.timeout: float = 0
         def send_message_with_reply_and_block(
-            self, message: Any, timeout_s: float
+            self, message: Any, timeout_s: float, /
         ) -> SecretReply:
             self.message = message
             self.timeout = timeout_s
@@ -179,7 +179,7 @@ def main() -> int:
 
     class FailingSecretBus:
         def send_message_with_reply_and_block(
-            self, _message: Any, timeout_s: float
+            self, _message: Any, timeout_s: float, /
         ) -> Any:
             if timeout_s != module["AUTHORIZATION_TIMEOUT_SECONDS"]:
                 raise AssertionError("authorization timeout changed")
