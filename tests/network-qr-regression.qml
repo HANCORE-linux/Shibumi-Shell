@@ -6,6 +6,7 @@ import "network" as Network
 import "network/NetworkModel.js" as NetworkModel
 import "network/NetworkQrModel.js" as QrModel
 import "network/NetworkQrEncoder.js" as QrEncoder
+import "network/NetworkQrSecretModel.js" as QrSecretModel
 
 ShellRoot {
   id: root
@@ -81,6 +82,15 @@ ShellRoot {
     interval: 50
     running: true
     onTriggered: {
+      const diagnostic = QrModel.fixedMessage("authorization-denied")
+      const workerFailure = QrSecretModel.parseFailure(
+        '{"schemaVersion":1,"status":"failed","requestToken":"shibumi-qr-secret-v1:[1,1]","code":"authorization-denied"}')
+      if (!workerFailure || workerFailure.code !== "authorization-denied"
+          || diagnostic.indexOf("denied") < 0
+          || QrSecretModel.parseFailure(
+            '{"schemaVersion":1,"status":"failed","requestToken":"shibumi-qr-secret-v1:[1,1]","code":"forged"}'))
+        return root.fail("secret-free worker diagnostics are not bounded")
+
       const open = root.networkRow("Guest", "open", 1)
       let result = session.openNetwork(open)
       if (!result.ok || result.code !== "ready" || session.needsPassphrase

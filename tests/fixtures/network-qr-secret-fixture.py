@@ -16,6 +16,14 @@ def main() -> int:
     if mode == "slow":
         time.sleep(30)
         return 0
+    if mode == "authorization-denied":
+        print(json.dumps({
+            "schemaVersion": 1,
+            "status": "failed",
+            "requestToken": request["requestToken"],
+            "code": "authorization-denied",
+        }, separators=(",", ":")), flush=True)
+        return 2
     if mode == "fail":
         return 2
     result = {

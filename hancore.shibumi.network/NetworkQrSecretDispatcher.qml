@@ -183,6 +183,12 @@ Item {
         fail("protocol")
         return false
       }
+      const failure = Model.parseFailure(line)
+      if (failure) {
+        fail(failure.requestToken === requestToken
+          ? failure.code : "stale")
+        return false
+      }
       let completion = Model.parseCompletion(line)
       if (!completion
           || !Model.completionMatches(

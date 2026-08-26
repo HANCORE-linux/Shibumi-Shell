@@ -69,6 +69,7 @@ ShellRoot {
     property int rejectedCount: 0
     property bool ready: false
     property string expectedToken: ""
+    property string rejectedCode: ""
     function stageSavedSecret(evidence, psk) {
       if (!evidence || evidence.requestToken !== expectedToken
           || psk !== "correct horse" || ready) return false
@@ -81,9 +82,10 @@ ShellRoot {
       ready = true
       return true
     }
-    function rejectSavedSecret(requestToken, _code) {
+    function rejectSavedSecret(requestToken, code) {
       if (requestToken !== expectedToken) return false
       rejectedCount++
+      rejectedCode = String(code || "")
       ready = false
       return true
     }
@@ -157,16 +159,25 @@ ShellRoot {
         if (consumer.stagedCount !== 4 || consumer.committedCount !== 1
             || consumer.rejectedCount !== 4 || consumer.ready)
           return root.fail("nonzero exit committed a staged QR")
-        root.start("slow", 6)
+        root.start("authorization-denied", 6)
+        return
+      }
+      if (root.phase === 6) {
+        if (dispatcher.phase !== "failed" || dispatcher.workerRunning) return
+        if (dispatcher.errorCode !== "authorization-denied"
+            || consumer.rejectedCode !== "authorization-denied"
+            || consumer.rejectedCount !== 5 || consumer.ready)
+          return root.fail("bounded worker failure reason was not preserved")
+        root.start("slow", 7)
         if (!dispatcher.cancel(consumer, consumer.expectedToken))
           return root.fail("exact QR secret cancellation was rejected")
         return
       }
-      if (root.phase === 6) {
+      if (root.phase === 7) {
         if (dispatcher.workerRunning) return
         if (dispatcher.phase !== "cancelled"
             || consumer.committedCount !== 1
-            || consumer.rejectedCount !== 5 || consumer.ready)
+            || consumer.rejectedCount !== 6 || consumer.ready)
           return root.fail("cancelled secret worker did not settle")
         console.log("network QR secret dispatcher regression passed")
         Qt.exit(0)

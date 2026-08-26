@@ -46,12 +46,21 @@ FocusScope {
     return true
   }
 
+  function boundedFailureCode(code) {
+    const value = String(code || "")
+    const allowed = [
+      "timeout", "stale", "preflight", "authorization-denied",
+      "authorization-timeout", "authorization-failed", "secret-response",
+      "connection-changed"
+    ]
+    return allowed.indexOf(value) >= 0 ? value : "secret-unavailable"
+  }
+
   function rejectSecretRequest(code) {
     if (!root.opened || !session.needsPassphrase) return false
     root.secretPending = false
     root.secretRequestToken = ""
-    session.rejectSavedSecret(code === "timeout" ? "timeout"
-      : code === "stale" ? "stale" : "secret-unavailable")
+    session.rejectSavedSecret(root.boundedFailureCode(code))
     closeButton.forceActiveFocus()
     return true
   }
@@ -85,8 +94,7 @@ FocusScope {
         || requestToken !== root.secretRequestToken) return false
     root.secretPending = false
     root.secretRequestToken = ""
-    session.rejectSavedSecret(code === "timeout" ? "timeout"
-      : code === "stale" ? "stale" : "secret-unavailable")
+    session.rejectSavedSecret(root.boundedFailureCode(code))
     closeButton.forceActiveFocus()
     return true
   }
@@ -239,6 +247,7 @@ FocusScope {
       }
 
       Text {
+        objectName: "shibumiNetworkQrErrorMessage"
         width: parent.width
         visible: session.errorMessage !== ""
         text: session.errorMessage

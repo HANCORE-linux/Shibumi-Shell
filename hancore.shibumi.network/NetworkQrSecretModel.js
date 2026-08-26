@@ -11,6 +11,10 @@ var InterfacePattern = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$/
 var MacPattern = /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/
 var UuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 var SsidHexPattern = /^[0-9A-F]{2}(?:[0-9A-F]{2}){0,31}$/
+var FailureCodes = [
+  "preflight", "authorization-denied", "authorization-timeout",
+  "authorization-failed", "secret-response", "connection-changed"
+]
 
 function own(value, key) {
   return value !== null && typeof value === "object"
@@ -81,6 +85,22 @@ function requestLine(value, requestToken) {
     security: safe.security,
     generation: safe.generation
   })
+}
+
+function parseFailure(line) {
+  if (typeof line !== "string" || line.length < 2 || line.length > MaxLine
+      || line.trim() !== line || line.indexOf("\u0000") >= 0) return null
+  let value = null
+  try { value = JSON.parse(line) }
+  catch (error) { return null }
+  if (JSON.stringify(value) !== line
+      || !exactKeys(value, ["schemaVersion", "status", "requestToken", "code"])
+      || value.schemaVersion !== SchemaVersion || value.status !== "failed"
+      || typeof value.requestToken !== "string"
+      || !TokenPattern.test(value.requestToken)
+      || typeof value.code !== "string"
+      || FailureCodes.indexOf(value.code) < 0) return null
+  return value
 }
 
 function parseCompletion(line) {

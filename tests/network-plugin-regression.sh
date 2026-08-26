@@ -1110,11 +1110,18 @@ rg -Fq 'completion.psk = ""' "$qr_secret_dispatcher" \
 if rg -q 'property [^:]*stdoutBuffer' "$qr_secret_dispatcher"; then
   fail "Wi-Fi QR secret worker retains partial stdout in a QML property"
 fi
+rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR secret failures bypass bounded completion parsing"
+rg -Fq '"authorization-failed", "secret-response", "connection-changed"' \
+  "$qr_secret_model" \
+  || fail "Wi-Fi QR secret diagnostic reasons are not explicitly allowlisted"
+rg -Fq '"status": "failed"' "$qr_secret_helper" \
+  || fail "Wi-Fi QR helper lacks secret-free stage diagnostics"
 rg -Fq 'splitMarker: ""' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret stderr does not use chunk-discard framing"
-rg -Fq 'print("network-qr-secret: unavailable", file=sys.stderr)' \
-  "$qr_secret_helper" \
-  || fail "Wi-Fi QR helper exposes variable exception text"
+if rg -q 'print\([^\n]*(str|repr)\(error\)' "$qr_secret_helper"; then
+  fail "Wi-Fi QR helper exposes variable exception text"
+fi
 rg -Fq 'function beginQrGesture(owner, entry)' "$service" \
   || fail "Wi-Fi QR secret reads lack a one-shot gesture boundary"
 rg -Fq 'function qrShareEligible(' "$native_model" \

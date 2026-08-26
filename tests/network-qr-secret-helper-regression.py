@@ -43,16 +43,40 @@ def expect_error(error: type[BaseException], callback: Any) -> None:
     raise AssertionError("malformed QR secret input was accepted")
 
 
+def expect_diagnostic(error: type[BaseException], code: str,
+                      callback: Any) -> None:
+    try:
+        callback()
+    except error as caught:
+        if getattr(caught, "code", "") == code:
+            return
+        raise AssertionError("unexpected QR secret diagnostic") from caught
+    raise AssertionError("missing QR secret diagnostic")
+
+
 def main() -> int:
     module = runpy.run_path(str(HELPER))
     parse = module["parse_request"]
     extract = module["extract_psk"]
     bounded_settings_size = module["bounded_settings_size"]
     interactive_secrets = module["interactive_secrets"]
+    authorization_code = module["authorization_failure_code"]
     error = module["SecretError"]
+    diagnostic_error = module["DiagnosticError"]
     request = parse(canonical())
     if request["profileUuid"] != "11111111-2222-4333-8444-555555555555":
         raise AssertionError("valid QR secret request was rejected")
+    if authorization_code(
+            "org.freedesktop.NetworkManager.Settings.PermissionDenied") \
+            != "authorization-denied" \
+            or authorization_code(
+                "org.freedesktop.NetworkManager.AgentManager.UserCanceled") \
+            != "authorization-denied" \
+            or authorization_code("org.freedesktop.DBus.Error.NoReply") \
+            != "authorization-timeout" \
+            or authorization_code("org.example.Other") \
+            != "authorization-failed":
+        raise AssertionError("authorization diagnostics are not fail-closed")
 
     malformed = [
         canonical()[:-1],
@@ -77,6 +101,10 @@ def main() -> int:
         }},
         {"802-11-wireless-security": {"psk": "short"}},
         {"wifi-security": {"psk": "correct horse"}},
+        {
+            "connection": {"type": "802-11-wireless"},
+            "802-11-wireless-security": {"psk": "correct horse"},
+        },
     ]
     for value in invalid_maps:
         expect_error(error, lambda value=value: extract(value, "wpa2-psk"))
@@ -259,17 +287,23 @@ def main() -> int:
     globals_["interface"] = lambda _bus, destination, path, _name: (
         calls.append(("settings-interface", destination + path)) or Connection()
     )
-    globals_["interactive_secrets"] = (
-        lambda _bus, destination, path:
-          calls.append(("secret-owner", destination + path))
-          or {"802-11-wireless-security": {"psk": "correct horse"}}
-    )
+    def valid_secrets(_bus: object, destination: str,
+                      path: str) -> dict[str, dict[str, str]]:
+        calls.append(("secret-owner", destination + path))
+        return {"802-11-wireless-security": {"psk": "correct horse"}}
+    def malformed_secrets(*_args: Any) -> Any:
+        raise error("unexpected secret response signature")
+    globals_["interactive_secrets"] = valid_secrets
     globals_["owner_unchanged"] = lambda _bus, destination: calls.append(
         ("revalidate-owner", destination)
     )
     original_bus = globals_["dbus"].SystemBus
     globals_["dbus"].SystemBus = lambda: object()
     try:
+        globals_["interactive_secrets"] = malformed_secrets
+        expect_diagnostic(
+            diagnostic_error, "secret-response", lambda: run(request))
+        globals_["interactive_secrets"] = valid_secrets
         result = run(request)
     finally:
         globals_["dbus"].SystemBus = original_bus

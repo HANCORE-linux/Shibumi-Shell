@@ -189,6 +189,20 @@ ShellRoot {
       if (root.phase === 6) {
         if (root.ticks < 2) return
         if (!root.controlsCleared("stale secret")) return
+        if (!root.requestStarted("request-denied")
+            || !dialog.rejectSavedSecret(
+              "request-denied", "authorization-denied"))
+          return root.fail("diagnostic request setup failed")
+        const diagnostic = root.findNamed(
+          surface.contentItem, "shibumiNetworkQrErrorMessage")
+        if (!diagnostic || !diagnostic.visible
+            || diagnostic.text
+              !== "Authorization to read the saved Wi-Fi password was denied.")
+          return root.fail("bounded worker failure was not rendered exactly")
+        if (!root.requestStarted("request-forged")
+            || !dialog.rejectSavedSecret("request-forged", "forged")
+            || diagnostic.text !== "The saved Wi-Fi password is unavailable.")
+          return root.fail("unknown worker failure crossed the dialog allowlist")
         if (!root.requestStarted("request-valid"))
           return root.fail("valid request setup failed")
         if (!dialog.stageSavedSecret(
