@@ -192,7 +192,7 @@ ShellRoot {
     }
     function requestQrSecret(owner, _entry, gestureToken) {
       if (gestureToken !== "gesture")
-        return { accepted: false, code: "unauthorized", requestToken: "" }
+        return { accepted: false, code: "gesture-expired", requestToken: "" }
       qrSecretCalls++
       qrOwner = owner
       qrRequestToken = "request-token"

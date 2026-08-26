@@ -66,6 +66,8 @@ def main() -> int:
     error = module["SecretError"]
     diagnostic_error = module["DiagnosticError"]
     request = parse(canonical())
+    if diagnostic_error("forged").code != "worker-runtime":
+        raise AssertionError("unknown worker diagnostics are not fail-closed")
     if request["profileUuid"] != "11111111-2222-4333-8444-555555555555":
         raise AssertionError("valid QR secret request was rejected")
     if authorization_code(

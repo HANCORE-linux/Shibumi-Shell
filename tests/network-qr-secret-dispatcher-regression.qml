@@ -113,6 +113,18 @@ ShellRoot {
         return root.fail("timed out in phase " + root.phase)
       if (root.phase === 0) {
         if (!dispatcher.authorized) return
+        dispatcher.commandOverride = []
+        let rejected = dispatcher.request(consumer, root.descriptor)
+        if (rejected.accepted || rejected.code !== "worker-unavailable")
+          return root.fail("missing worker command was not distinguished")
+        dispatcher.commandOverride = [
+          "/usr/bin/python3", root.fixturePath, "chunked"
+        ]
+        liveness.serviceUsable = false
+        rejected = dispatcher.request(consumer, root.descriptor)
+        if (rejected.accepted || rejected.code !== "backend-unavailable")
+          return root.fail("unavailable native backend was not distinguished")
+        liveness.serviceUsable = true
         root.start("chunked", 1)
         return
       }

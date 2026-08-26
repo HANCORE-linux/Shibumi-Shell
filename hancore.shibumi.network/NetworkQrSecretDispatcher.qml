@@ -137,17 +137,24 @@ Item {
 
     function request(owner, descriptor) {
       const safe = Model.descriptor(descriptor)
-      const workerCommand = command()
-      if (!safe || !owner || typeof owner.stageSavedSecret !== "function"
+      if (!safe) return publicResult(false, "descriptor-invalid", "")
+      if (!owner || typeof owner.stageSavedSecret !== "function"
           || typeof owner.commitSavedSecret !== "function"
-          || typeof owner.rejectSavedSecret !== "function"
-          || !root.active || !authorized || root.busy || !workerCommand
-          || !root.nativeLiveness
+          || typeof owner.rejectSavedSecret !== "function")
+        return publicResult(false, "consumer-invalid", "")
+      if (!root.active) return publicResult(false, "dispatcher-inactive", "")
+      if (!authorized)
+        return publicResult(false, "authority-unavailable", "")
+      if (root.busy) return publicResult(false, "dispatcher-busy", "")
+      const workerCommand = command()
+      if (!workerCommand)
+        return publicResult(false, "worker-unavailable", "")
+      if (!root.nativeLiveness
           || root.nativeLiveness.serviceUsable !== true)
-        return publicResult(false, safe ? "unavailable" : "invalid", "")
+        return publicResult(false, "backend-unavailable", "")
       const token = nextToken()
       const line = Model.requestLine(safe, token)
-      if (line === "") return publicResult(false, "invalid", "")
+      if (line === "") return publicResult(false, "request-invalid", "")
       pendingOwner = owner
       pendingDescriptor = safe
       requestToken = token
@@ -289,9 +296,9 @@ Item {
           errorCode = "consumer-rejected"
         }
       } else if (phase === "pending" || phase === "staged") {
-        notifyFailure("unavailable")
+        notifyFailure("worker-no-result")
         phase = "failed"
-        errorCode = "unavailable"
+        errorCode = "worker-no-result"
       }
       inputLine = ""
       completionDelivered = false

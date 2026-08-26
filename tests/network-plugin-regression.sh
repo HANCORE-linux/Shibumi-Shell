@@ -1057,6 +1057,11 @@ rg -Fq 'root.visualTokens.paper' "$qr_dialog" \
   || fail "Wi-Fi QR primary action lacks readable token contrast"
 rg -Fq 'Behavior on color { ColorAnimation { duration: 100 } }' "$qr_dialog" \
   || fail "Wi-Fi QR close hover does not match panel action animation"
+rg -Fq 'actionMouse.containsMouse && action.enabled' "$qr_dialog" \
+  || fail "Wi-Fi QR close hover is not pointer-driven"
+if rg -q 'property bool hovered:.*activeFocus' "$qr_dialog"; then
+  fail "Wi-Fi QR close autofocus pins the pointer hover state"
+fi
 rg -Fq 'left.network.generation === right.network.generation' "$qr_session" \
   || fail "Wi-Fi QR passphrase submission is not generation-bound"
 if rg -q '[Oo]marchy|nmcli|GetSecrets|Quickshell\.Io|\bProcess\b' \
@@ -1115,7 +1120,7 @@ fi
 rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret failures bypass bounded completion parsing"
 for diagnostic_code in preflight-active-network preflight-profile-security \
-    authorization-failed secret-response connection-changed; do
+    authorization-failed secret-response connection-changed worker-runtime; do
   rg -Fq "\"$diagnostic_code\"" "$qr_secret_model" \
     || fail "Wi-Fi QR secret diagnostic reason is not allowlisted: $diagnostic_code"
 done
@@ -1128,6 +1133,14 @@ if rg -q 'print\([^\n]*(str|repr)\(error\)' "$qr_secret_helper"; then
 fi
 rg -Fq 'function beginQrGesture(owner, entry)' "$service" \
   || fail "Wi-Fi QR secret reads lack a one-shot gesture boundary"
+rg -Fq 'code: "descriptor-stale"' "$service" \
+  || fail "Wi-Fi QR descriptor rejection is not distinguishable"
+rg -Fq 'code: "gesture-expired"' "$service" \
+  || fail "Wi-Fi QR gesture rejection is not distinguishable"
+rg -Fq '"authority-unavailable"' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR dispatcher authority gate is not distinguishable"
+rg -Fq '"backend-unavailable"' "$qr_secret_dispatcher" \
+  || fail "Wi-Fi QR dispatcher backend gate is not distinguishable"
 rg -Fq 'function qrShareEligible(' "$native_model" \
   || fail "secured QR action lacks persisted-profile eligibility"
 rg -Fq 'adapter.savedProfileCatalogAvailable !== true' "$service" \

@@ -19,7 +19,7 @@ var FailureCodes = [
   "preflight-profile-identity", "preflight-profile-security",
   "preflight-profile-version", "authorization-denied",
   "authorization-timeout", "authorization-failed", "secret-response",
-  "connection-changed"
+  "connection-changed", "worker-runtime"
 ]
 
 function own(value, key) {

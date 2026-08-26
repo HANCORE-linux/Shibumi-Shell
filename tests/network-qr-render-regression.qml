@@ -132,8 +132,11 @@ ShellRoot {
           return root.fail("rendered QR canvas was not found")
         root.closeControl = root.findNamed(
           surface.contentItem, "shibumiNetworkQrCloseButton")
-        if (!root.closeControl || root.closeControl.primary !== true)
-          return root.fail("QR close action does not use the primary button style")
+        if (!root.closeControl || root.closeControl.primary !== true
+            || root.closeControl.hovered || !root.closeControl.activeFocus
+            || root.closeControl.border.width <= 0
+            || root.closeControl.border.color === root.closeControl.color)
+          return root.fail("QR close action lacks distinct pointer and focus styles")
         root.phase = 99
         canvas.grabToImage(function(result) {
           if (!result.saveToFile(root.outputPath))
@@ -199,6 +202,11 @@ ShellRoot {
             || diagnostic.text
               !== "Authorization to read the saved Wi-Fi password was denied.")
           return root.fail("bounded worker failure was not rendered exactly")
+        if (!root.requestStarted("request-gate")
+            || !dialog.rejectSavedSecret("request-gate", "gesture-expired")
+            || diagnostic.text
+              !== "The QR Code click expired before the password request.")
+          return root.fail("dispatcher gate failure was not rendered exactly")
         if (!root.requestStarted("request-forged")
             || !dialog.rejectSavedSecret("request-forged", "forged")
             || diagnostic.text !== "The saved Wi-Fi password is unavailable.")

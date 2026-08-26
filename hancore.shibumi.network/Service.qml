@@ -230,10 +230,12 @@ Item {
     }
     const row = implementation.entryData(entry)
     const descriptor = implementation.qrSecretDescriptor(row)
-    if (!descriptor
-        || !implementation.consumeQrGesture(
-          owner, descriptor, gestureToken)) return {
-      accepted: false, code: "unauthorized", requestToken: ""
+    if (!descriptor) return {
+      accepted: false, code: "descriptor-stale", requestToken: ""
+    }
+    if (!implementation.consumeQrGesture(
+        owner, descriptor, gestureToken)) return {
+      accepted: false, code: "gesture-expired", requestToken: ""
     }
     return qrSecrets.request(owner, descriptor)
   }

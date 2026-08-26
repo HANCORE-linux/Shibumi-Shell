@@ -56,7 +56,12 @@ FocusScope {
       "preflight-profile", "preflight-profile-identity",
       "preflight-profile-security", "preflight-profile-version",
       "authorization-denied", "authorization-timeout",
-      "authorization-failed", "secret-response", "connection-changed"
+      "authorization-failed", "secret-response", "connection-changed",
+      "consumer-invalid", "dispatcher-inactive", "authority-unavailable",
+      "dispatcher-busy", "worker-unavailable", "backend-unavailable",
+      "worker-runtime", "worker-no-result", "start-failed", "protocol",
+      "consumer-rejected", "restart-required", "descriptor-stale",
+      "gesture-expired", "descriptor-invalid", "request-invalid"
     ]
     return allowed.indexOf(value) >= 0 ? value : "secret-unavailable"
   }
@@ -285,7 +290,7 @@ FocusScope {
     height: Commons.Style.space(36)
     radius: root.visualTokens ? root.visualTokens.tileRadius
       : Commons.Style.space(7)
-    readonly property bool hovered: actionHover.hovered || activeFocus
+    readonly property bool hovered: actionMouse.containsMouse && action.enabled
     color: !action.enabled ? Qt.rgba(0, 0, 0, 0.08)
       : action.hovered
         ? (root.visualTokens ? root.visualTokens.fillPrimaryHover
@@ -295,11 +300,19 @@ FocusScope {
             : Commons.Color.accent)
           : (root.visualTokens ? root.visualTokens.fillIdle
             : Qt.rgba(0, 0, 0, 0.10))
-    border.width: action.primary ? 0
+    border.width: action.activeFocus ? 1 : action.primary ? 0
       : root.visualTokens ? root.visualTokens.panelBorderWidth : 1
-    border.color: root.visualTokens ? root.visualTokens.panelBorder
-      : Qt.rgba(1, 1, 1, 0.18)
+    border.color: action.activeFocus
+      ? (root.visualTokens ? root.visualTokens.paper : Commons.Color.background)
+      : root.visualTokens ? root.visualTokens.panelBorder
+        : Qt.rgba(1, 1, 1, 0.18)
     activeFocusOnTab: true
+
+    function activate() {
+      if (!action.enabled) return false
+      action.activated()
+      return true
+    }
 
     Behavior on color { ColorAnimation { duration: 100 } }
     Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -318,22 +331,27 @@ FocusScope {
       font.bold: true
     }
 
-    HoverHandler { id: actionHover; enabled: action.enabled }
-    TapHandler { enabled: action.enabled; onTapped: action.activated() }
+    MouseArea {
+      id: actionMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      enabled: action.enabled
+      onClicked: action.activate()
+    }
     Keys.onSpacePressed: function(event) {
       if (!action.enabled) return
       event.accepted = true
-      action.activated()
+      action.activate()
     }
     Keys.onReturnPressed: function(event) {
       if (!action.enabled) return
       event.accepted = true
-      action.activated()
+      action.activate()
     }
     Keys.onEnterPressed: function(event) {
       if (!action.enabled) return
       event.accepted = true
-      action.activated()
+      action.activate()
     }
     Accessible.role: Accessible.Button
     Accessible.name: action.label
