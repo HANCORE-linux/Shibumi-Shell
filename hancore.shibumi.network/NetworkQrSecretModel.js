@@ -12,8 +12,14 @@ var MacPattern = /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/
 var UuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 var SsidHexPattern = /^[0-9A-F]{2}(?:[0-9A-F]{2}){0,31}$/
 var FailureCodes = [
-  "preflight", "authorization-denied", "authorization-timeout",
-  "authorization-failed", "secret-response", "connection-changed"
+  "preflight-manager", "preflight-device", "preflight-active",
+  "preflight-active-connection", "preflight-active-device",
+  "preflight-active-profile", "preflight-access-point",
+  "preflight-active-network", "preflight-profile",
+  "preflight-profile-identity", "preflight-profile-security",
+  "preflight-profile-version", "authorization-denied",
+  "authorization-timeout", "authorization-failed", "secret-response",
+  "connection-changed"
 ]
 
 function own(value, key) {

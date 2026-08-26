@@ -49,9 +49,14 @@ FocusScope {
   function boundedFailureCode(code) {
     const value = String(code || "")
     const allowed = [
-      "timeout", "stale", "preflight", "authorization-denied",
-      "authorization-timeout", "authorization-failed", "secret-response",
-      "connection-changed"
+      "timeout", "stale", "preflight-manager", "preflight-device",
+      "preflight-active", "preflight-active-connection",
+      "preflight-active-device", "preflight-active-profile",
+      "preflight-access-point", "preflight-active-network",
+      "preflight-profile", "preflight-profile-identity",
+      "preflight-profile-security", "preflight-profile-version",
+      "authorization-denied", "authorization-timeout",
+      "authorization-failed", "secret-response", "connection-changed"
     ]
     return allowed.indexOf(value) >= 0 ? value : "secret-unavailable"
   }
@@ -295,6 +300,9 @@ FocusScope {
     border.color: root.visualTokens ? root.visualTokens.panelBorder
       : Qt.rgba(1, 1, 1, 0.18)
     activeFocusOnTab: true
+
+    Behavior on color { ColorAnimation { duration: 100 } }
+    Behavior on border.color { ColorAnimation { duration: 100 } }
 
     Text {
       anchors.centerIn: parent

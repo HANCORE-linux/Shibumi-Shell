@@ -1055,6 +1055,8 @@ rg -Fq 'root.visualTokens.seal' "$qr_dialog" \
   || fail "Wi-Fi QR close action does not use the primary panel fill"
 rg -Fq 'root.visualTokens.paper' "$qr_dialog" \
   || fail "Wi-Fi QR primary action lacks readable token contrast"
+rg -Fq 'Behavior on color { ColorAnimation { duration: 100 } }' "$qr_dialog" \
+  || fail "Wi-Fi QR close hover does not match panel action animation"
 rg -Fq 'left.network.generation === right.network.generation' "$qr_session" \
   || fail "Wi-Fi QR passphrase submission is not generation-bound"
 if rg -q '[Oo]marchy|nmcli|GetSecrets|Quickshell\.Io|\bProcess\b' \
@@ -1112,9 +1114,11 @@ if rg -q 'property [^:]*stdoutBuffer' "$qr_secret_dispatcher"; then
 fi
 rg -Fq 'const failure = Model.parseFailure(line)' "$qr_secret_dispatcher" \
   || fail "Wi-Fi QR secret failures bypass bounded completion parsing"
-rg -Fq '"authorization-failed", "secret-response", "connection-changed"' \
-  "$qr_secret_model" \
-  || fail "Wi-Fi QR secret diagnostic reasons are not explicitly allowlisted"
+for diagnostic_code in preflight-active-network preflight-profile-security \
+    authorization-failed secret-response connection-changed; do
+  rg -Fq "\"$diagnostic_code\"" "$qr_secret_model" \
+    || fail "Wi-Fi QR secret diagnostic reason is not allowlisted: $diagnostic_code"
+done
 rg -Fq '"status": "failed"' "$qr_secret_helper" \
   || fail "Wi-Fi QR helper lacks secret-free stage diagnostics"
 rg -Fq 'splitMarker: ""' "$qr_secret_dispatcher" \

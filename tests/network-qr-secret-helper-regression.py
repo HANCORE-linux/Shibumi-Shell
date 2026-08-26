@@ -61,6 +61,8 @@ def main() -> int:
     bounded_settings_size = module["bounded_settings_size"]
     interactive_secrets = module["interactive_secrets"]
     authorization_code = module["authorization_failure_code"]
+    active_code = module["active_failure_code"]
+    profile_code = module["profile_failure_code"]
     error = module["SecretError"]
     diagnostic_error = module["DiagnosticError"]
     request = parse(canonical())
@@ -77,6 +79,13 @@ def main() -> int:
             or authorization_code("org.example.Other") \
             != "authorization-failed":
         raise AssertionError("authorization diagnostics are not fail-closed")
+    if active_code("active network entity mismatch") \
+            != "preflight-active-network" \
+            or active_code("unknown") != "preflight-active" \
+            or profile_code("profile security identity mismatch") \
+            != "preflight-profile-security" \
+            or profile_code("unknown") != "preflight-profile":
+        raise AssertionError("preflight diagnostics are not fail-closed")
 
     malformed = [
         canonical()[:-1],
