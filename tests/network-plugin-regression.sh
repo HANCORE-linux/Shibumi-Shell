@@ -35,7 +35,8 @@ install -m 0755 "$repo_root/tests/fixtures/omarchy-network-speedtest" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-fail" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-empty" \
   "$repo_root/tests/fixtures/omarchy-network-speedtest-malformed" \
-  "$repo_root/tests/fixtures/omarchy-network-speedtest-resistant" "$tmpdir/bin/"
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-resistant" \
+  "$repo_root/tests/fixtures/omarchy-network-speedtest-ramp" "$tmpdir/bin/"
 install -m 0755 "$repo_root/tests/fixtures/network-bin/omarchy-network-status" \
   "$repo_root/tests/fixtures/network-bin/nmcli" "$tmpdir/bin/"
 

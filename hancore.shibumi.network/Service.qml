@@ -540,9 +540,17 @@ Item {
     if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)) return
     const value = Number(raw)
     if (!isFinite(value) || value < 0) return
+    if (speedTestPhase !== "down" && speedTestPhase !== "up") return
+    // The backend streams one sample per second for the whole phase and the
+    // early samples land while the transfer is still ramping. Keep the peak so
+    // the reported figure reflects the link rather than whichever sample
+    // happened to arrive last before the phase timer fired.
+    const current = speedTestPhase === "down"
+      ? speedTestDownloadMbps : speedTestUploadMbps
+    if (current !== "" && Number(current) >= value) return
     const normalized = String(value)
     if (speedTestPhase === "down") speedTestDownloadMbps = normalized
-    else if (speedTestPhase === "up") speedTestUploadMbps = normalized
+    else speedTestUploadMbps = normalized
   }
 
   function startSpeedTestPhase(phaseValue) {

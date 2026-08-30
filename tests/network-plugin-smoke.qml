@@ -170,6 +170,14 @@ ShellRoot {
     speedTestPhaseDuration: 10000
   }
 
+  Network.Service {
+    id: rampSpeedService
+    bar: fakeBar
+    panelComponent: currentNetworkPanelComponent
+    speedTestExecutable: "omarchy-network-speedtest-ramp"
+    speedTestPhaseDuration: 1500
+  }
+
   Loader {
     id: immediateDestructionLoader
     active: false
@@ -364,6 +372,19 @@ ShellRoot {
             || destructionSpeedLoader.item !== null)
           return root.fail("active speed-test service survived Loader teardown")
         if (root.destructionTicks < 140 || !root.restartContractPassed) return
+        if (!rampSpeedService.ready || !rampSpeedService.runSpeedTest())
+          return root.fail("ramping inline speed-test startup")
+        root.speedPhase = 11
+        return
+      }
+
+      if (root.speedPhase === 11) {
+        if (rampSpeedService.speedTestRunning) return
+        if (rampSpeedService.speedTestPhase !== ""
+            || rampSpeedService.speedTestDownloadMbps !== "880"
+            || rampSpeedService.speedTestUploadMbps !== "310"
+            || rampSpeedService.speedTestError !== "")
+          return root.fail("ramping inline speed-test peak retention")
         root.speedContractPassed = true
       }
     }

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+# Emits a ramping sample stream whose final value is not the peak, mirroring a
+# real transfer that starts in TCP slow-start and dips before the phase ends.
+
+set -euo pipefail
+
+case "${1:-}" in
+  down) samples=(120 880 210) ;;
+  up) samples=(45 310 90) ;;
+  *)
+    printf 'unexpected speed-test phase\n' >&2
+    exit 2
+    ;;
+esac
+
+trap 'exit 0' TERM INT
+
+for value in "${samples[@]}"; do
+  printf '%s\n' "$value"
+  sleep 0.05
+done
+
+while true; do
+  sleep 0.1
+done
