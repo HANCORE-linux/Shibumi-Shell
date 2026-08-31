@@ -553,6 +553,16 @@ class OmarchyRuntime:
         )
 
     def refresh_menu(self, *, timeout: float = 8) -> None:
+        try:
+            plugins = self.list_plugins()
+        except RuntimeFailure:
+            plugins = {}
+        if not plugins.get("omarchy.menu", {}).get("active"):
+            # omarchy.menu is unloaded whenever Shibumi's own menu is the
+            # active bar/menu; callIfLoaded() then always answers "unknown"
+            # (shell.qml never returns anything else for an unloaded plugin),
+            # so there is no running instance left to refresh.
+            return
         command = [
             self.command("omarchy-shell"),
             "shell",
