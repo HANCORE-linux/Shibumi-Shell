@@ -51,7 +51,7 @@ PanelWindow {
     Behavior on x {
       enabled: root.layoutSession.returning
       NumberAnimation {
-        duration: root.bar.visualTokens.invalidDropDuration
+        duration: root.bar.visualTokens ? root.bar.visualTokens.invalidDropDuration : 0
         easing.type: Easing.OutCubic
       }
     }
@@ -59,7 +59,7 @@ PanelWindow {
     Behavior on y {
       enabled: root.layoutSession.returning
       NumberAnimation {
-        duration: root.bar.visualTokens.invalidDropDuration
+        duration: root.bar.visualTokens ? root.bar.visualTokens.invalidDropDuration : 0
         easing.type: Easing.OutCubic
       }
     }
@@ -67,7 +67,8 @@ PanelWindow {
     Rectangle {
       anchors.fill: parent
       anchors.margins: -Commons.Style.space(1)
-      radius: Math.min(height / 2, root.bar.visualTokens.pillRadius)
+      radius: root.bar.visualTokens
+        ? Math.min(height / 2, root.bar.visualTokens.pillRadius) : 0
       color: root.layoutSession.targetGroupId !== ""
         ? Qt.rgba(root.bar.urgent.r, root.bar.urgent.g, root.bar.urgent.b, 0.2)
         : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
@@ -92,7 +93,7 @@ PanelWindow {
   }
 
   Timer {
-    interval: root.bar.visualTokens.returnCleanupDuration
+    interval: root.bar.visualTokens ? root.bar.visualTokens.returnCleanupDuration : 0
     running: root.layoutSession.returning
     repeat: false
     onTriggered: {
