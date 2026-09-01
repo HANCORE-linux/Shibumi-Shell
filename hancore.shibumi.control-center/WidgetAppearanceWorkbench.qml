@@ -8,6 +8,10 @@ Column {
 
   required property var controller
   required property var widgetOptions
+  // Third-party bar widgets that declare x-shibumi.displayModes join the
+  // catalog under their dynamic "G:<plugin id>" group.
+  readonly property var catalogOptions:
+    widgetOptions.concat(pluginAppearanceOptions())
   property real uiScale: 1
   property color foreground: Commons.Color.menu.text
   property color accent: Commons.Color.menu.selectedText
@@ -199,6 +203,8 @@ Column {
   function pluginIdForGroup(groupValue) {
     const plugin = pluginForGroup(groupValue)
     if (plugin) return String(plugin.id || "")
+    if (isPluginCatalogGroup(groupValue))
+      return String(groupValue).slice(2)
     const ids = {
       G1: "hancore.shibumi.control-center",
       G2: "hancore.shibumi.workspaces",
@@ -336,11 +342,36 @@ Column {
 
   function catalogOptionForGroup(groupValue) {
     const group = String(groupValue || "")
-    for (let index = 0; index < widgetOptions.length; index++) {
-      if (String(widgetOptions[index].group || "") === group)
-        return widgetOptions[index]
+    for (let index = 0; index < catalogOptions.length; index++) {
+      if (String(catalogOptions[index].group || "") === group)
+        return catalogOptions[index]
     }
     return null
+  }
+
+  function pluginAppearanceOptions() {
+    const entries = controller.pluginEntries || []
+    const result = []
+    for (let index = 0; index < entries.length; index++) {
+      const entry = entries[index]
+      const id = String(entry.id || "")
+      const modes = Array.isArray(entry.displayModes) ? entry.displayModes : []
+      if (id === "" || entry.barWidget !== true || modes.length === 0
+          || controller.shibumiWidgetGroup(id) !== "") continue
+      result.push({
+        group: "G:" + id,
+        label: String(entry.name || id),
+        glyph: String(entry.glyph || "widgets"),
+        modes: modes
+      })
+    }
+    return result
+  }
+
+  function isPluginCatalogGroup(groupValue) {
+    const group = String(groupValue || "")
+    return group.indexOf("G:") === 0
+      && controller.shibumiWidgetGroup(group.slice(2)) === ""
   }
 
   function isShibumiWidgetOption(source) {
@@ -460,6 +491,17 @@ Column {
       || catalogGroupForSettingsGroup(groupValue) || "")
     if (catalogGroup === "G1") return []
     if (catalogGroup === "G9") return mediaStyleOptions
+    if (isPluginCatalogGroup(catalogGroup)) {
+      // The state service normalizes third-party display modes in V2 only;
+      // V1 keeps them at Default.
+      const option = catalogOptionForGroup(catalogGroup)
+      const modes = option && Array.isArray(option.modes) ? option.modes : []
+      if (controller.v2LayoutActive !== true)
+        return [{ value: "full", label: "Default", enabled: true }]
+      return displayModeOptions.filter(function(candidate) {
+        return modes.indexOf(candidate.value) >= 0
+      })
+    }
     if (controller.v2LayoutActive === true) return displayModeOptions
     const compactAvailable = v1CompactGroupIds.indexOf(catalogGroup) >= 0
     return compactAvailable ? [

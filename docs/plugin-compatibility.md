@@ -85,6 +85,24 @@ payload verification, and uninstall remain transactional.
 The application launcher remains owned by Omarchy. Shibumi neither registers
 a `menu` entry point nor enables an application-menu service.
 
+## Third-party widget appearance
+
+The Control Center's Icons editor lists Shibumi widgets and any enabled
+third-party bar widget whose manifest declares the display modes it renders:
+
+```json
+"x-shibumi": { "displayModes": ["full", "icon", "text"] }
+```
+
+`full` (icon and text) is the canonical default and must be included; `icon`
+and `text` are optional. The editor offers only the declared modes, stores the
+choice in the widget's group settings, and the bar host injects it into the
+widget's `settings` as `displayMode` (the legacy `compact: true` flag means
+`icon`). The V2 presentation honors `icon` and `text`; V1 keeps third-party
+widgets at Default. Surface, color, outline, spacing, and opacity controls
+apply through the host slot and need no widget support. Widgets that do not
+declare `displayModes` keep their original rendering and stay in Plugins.
+
 ## Third-party bar acceptance
 
 A third-party bar must implement Omarchy Quattro's standard bar-widget

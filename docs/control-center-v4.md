@@ -411,8 +411,11 @@ not secondary sections inside Icons:
 - **Icons** owns per-widget icon/content modes plus their surfaces, colors,
   shape, spacing, and opacity. It follows the active bar's canonical
   left/center/right layout order and lists only enabled groups that implement
-  the Shibumi appearance contract. Provider filters do not appear in this
-  editor; unsupported stock or third-party widgets remain in Plugins. The
+  the Shibumi appearance contract, plus enabled third-party bar widgets that
+  declare `x-shibumi.displayModes` (see
+  [plugin compatibility](plugin-compatibility.md#third-party-widget-appearance)).
+  Provider filters do not appear in this editor; other stock or third-party
+  widgets remain in Plugins. The
   selected widget's live preview shares the inspector header, content and
   surface choices use visual samples, and the surface palette uses the same
   neutral-border, underline-selection, and hover-motion contract as Bars.
