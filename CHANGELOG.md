@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Listed third-party bar widgets that declare `x-shibumi.displayModes` in the Icons appearance editor, offering only their declared modes
+
 ## 0.1.1-beta.11: Native Audio and Bluetooth cutover
 
 Public beta candidate for 2026-08-23.

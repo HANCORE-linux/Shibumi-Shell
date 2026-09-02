@@ -312,6 +312,19 @@ ShibumiPanel {
     return changed
   }
 
+  // Third-party bar widgets opt into the Icons editor by declaring which
+  // displayMode values they render: "x-shibumi": { "displayModes": [...] }.
+  // Unknown values are dropped; a widget that cannot show "full" (the
+  // canonical default) is not listed. Suite widgets keep their catalog modes.
+  function pluginDisplayModes(shibumi) {
+    const declared = shibumi && Array.isArray(shibumi.displayModes)
+      ? shibumi.displayModes : []
+    const result = ["full", "icon", "text"].filter(function(mode) {
+      return declared.indexOf(mode) >= 0
+    })
+    return result.indexOf("full") >= 0 ? result : []
+  }
+
   function pluginGlyph(pluginId, kinds) {
     const id = String(pluginId || "").toLowerCase()
     const semanticGlyphs = [
@@ -488,6 +501,7 @@ ShibumiPanel {
         version: String(manifest.version || ""),
         kinds: kinds,
         glyph: pluginGlyph(id, kinds),
+        displayModes: pluginDisplayModes(shibumi),
         enabled: enabled,
         barWidget: barWidget,
         installedInBar: barWidget

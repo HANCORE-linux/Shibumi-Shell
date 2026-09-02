@@ -1649,6 +1649,10 @@ workbench="$control_dir/WidgetAppearanceWorkbench.qml"
   || fail "direct widget Appearance workbench is missing"
 for workbench_contract in \
     'readonly property var overviewOptions: buildOverviewOptions()' \
+    'widgetOptions.concat(pluginAppearanceOptions())' \
+    'function pluginAppearanceOptions()' \
+    'function isPluginCatalogGroup(groupValue)' \
+    '|| controller.shibumiWidgetGroup(id) !== "") continue' \
     'readonly property var activeOptions: overviewOptions.active' \
     'readonly property var inactiveOptions: overviewOptions.inactive' \
     'readonly property var editableOptions: activeOptions.concat(inactiveOptions)' \

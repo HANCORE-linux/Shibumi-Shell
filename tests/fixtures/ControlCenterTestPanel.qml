@@ -73,20 +73,29 @@ Item {
   property string lastSwitchTarget: ""
   property string lastQuickSystemAction: ""
   property int reloadCalls: 0
-  readonly property var activeWidgetOrder: v2LayoutActive
-    ? {
-        left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
-        center: ["G8"],
-        right: [
-          "G9", "G10", "G11", "G14", "G12", "G13", "G16",
-          "G18", "G17", "G15"
-        ]
-      }
-    : {
-        left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
-        center: ["G8"],
-        right: ["G9", "G10", "G11", "G12", "G13", "G14", "G15"]
-      }
+  // Appends a third-party dynamic group to the active order so the smoke
+  // test can exercise x-shibumi.displayModes without changing the baseline
+  // widget counts every other phase asserts.
+  property bool thirdPartyAppearanceFixture: false
+  readonly property var activeWidgetOrder: {
+    const order = v2LayoutActive
+      ? {
+          left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
+          center: ["G8"],
+          right: [
+            "G9", "G10", "G11", "G14", "G12", "G13", "G16",
+            "G18", "G17", "G15"
+          ]
+        }
+      : {
+          left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+          center: ["G8"],
+          right: ["G9", "G10", "G11", "G12", "G13", "G14", "G15"]
+        }
+    if (thirdPartyAppearanceFixture)
+      order.right = order.right.concat(["G:example.chess"])
+    return order
+  }
   readonly property bool quickNetworkAvailable: true
   readonly property bool quickNetworkEnabled: true
   readonly property string quickNetworkLabel: "Fixture Wi-Fi"

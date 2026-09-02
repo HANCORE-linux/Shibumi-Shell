@@ -446,6 +446,70 @@ ShellRoot {
               - v1OverviewPanelHeight) > 0.5)
           return root.fail("Icons overview height differed between V1 and V2")
         panel.v2LayoutActive = false
+
+        // A third-party bar widget that declares x-shibumi.displayModes joins
+        // the Icons editor with only its declared modes in V2, and stays at
+        // Default in V1. One without the declaration is not listed.
+        const savedEntries = panel.pluginEntries
+        panel.pluginEntries = savedEntries.concat([{
+          id: "example.chess", name: "Example Chess", description: "",
+          author: "Example", category: "Info", searchTags: [],
+          kinds: ["bar-widget"], glyph: "widgets", provider: "Third-party",
+          removable: true, userToggleable: true, styleAvailable: true,
+          installedInBar: true, barWidget: true, enabled: true, group: "",
+          displayModes: ["full", "icon"],
+          replacementGroup: "", replacementTarget: "",
+          replacementTargetEnabled: false, replacementInEffect: false,
+          replacementLabel: "", replaced: false, replacedBy: "",
+          replacedByIds: []
+        }])
+        panel.v2LayoutActive = true
+        const v2BaseCount = appearance.activeWidgetCount
+        panel.thirdPartyAppearanceFixture = true
+        const thirdPartyCount = appearance.activeWidgetCount
+        const thirdPartyOpened = thirdPartyCount === v2BaseCount + 1
+          && appearance.openWidgetDetails("G:example.chess", "")
+        const thirdPartyMode = appearance.selectedWidgetMode
+        const thirdPartyModeValues = appearance.selectedWidgetModeOptions
+          .map(function(option) { return String(option.value) }).join(",")
+        panel.v2LayoutActive = false
+        const thirdPartyV1Default = appearance.selectedWidgetModeOptions
+            .length === 1
+          && appearance.selectedWidgetModeOptions[0].value === "full"
+        appearance.showWidgetOverview()
+        appearance.selectedWidgetGroup = "G4"
+        appearance.selectedWidgetId = ""
+        panel.pluginEntries = savedEntries.concat([{
+          id: "example.plain", name: "Example Plain", description: "",
+          author: "Example", category: "Info", searchTags: [],
+          kinds: ["bar-widget"], glyph: "widgets", provider: "Third-party",
+          removable: true, userToggleable: true, styleAvailable: true,
+          installedInBar: true, barWidget: true, enabled: true, group: "",
+          displayModes: [],
+          replacementGroup: "", replacementTarget: "",
+          replacementTargetEnabled: false, replacementInEffect: false,
+          replacementLabel: "", replaced: false, replacedBy: "",
+          replacedByIds: []
+        }])
+        panel.v2LayoutActive = true
+        const undeclaredHidden = appearance.activeWidgetCount === v2BaseCount
+        panel.v2LayoutActive = false
+        panel.thirdPartyAppearanceFixture = false
+        panel.pluginEntries = savedEntries
+        if (!thirdPartyOpened)
+          return root.fail("declared third-party widget was not listed: "
+            + thirdPartyCount + " active widgets, expected "
+            + (v2BaseCount + 1))
+        if (thirdPartyMode !== "full" || thirdPartyModeValues !== "icon,full")
+          return root.fail("third-party display modes were "
+            + thirdPartyModeValues + " with mode " + thirdPartyMode)
+        if (!thirdPartyV1Default)
+          return root.fail("third-party V1 appearance is not Default-only")
+        if (!undeclaredHidden)
+          return root.fail("undeclared third-party widget entered the Icons editor")
+        if (appearance.activeWidgetCount !== 12
+            || appearance.inactiveWidgetCount !== 6)
+          return root.fail("third-party appearance fixture cleanup failed")
         if (!appearance.resetActionVisible
             || appearance.resetConfirmationPending
             || appearance.activeResetVariant !== "v1"
