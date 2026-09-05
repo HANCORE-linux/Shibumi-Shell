@@ -23,6 +23,7 @@ python3 "$repo_root/tests/production-boundary-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
 python3 "$repo_root/tests/test_shibumi_manager.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
+python3 "$repo_root/tests/test_lifecycle_admission.py"
 python3 "$repo_root/tests/test_inc013_drain_contract.py"
 python3 "$repo_root/tests/quickshell-empty-registry-mutation.py"
 "$repo_root/tests/state-matrix-contract-regression.sh"
@@ -776,9 +777,16 @@ for bluetooth_adapter in "$bluetooth_adapter"; do
     || fail "$bluetooth_adapter does not confirm discovery ownership from observed state"
   rg -q 'property var audioHandoffIntent: null' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter lacks explicit latest-only audio intent state"
-  rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
+  rg -Fq 'nativeDeviceSnapshots())' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter publishes native QObjects instead of detached records"
+  rg -q 'function resolveNativeDevice\(' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not resolve current entities before mutation"
+  if rg -q 'device\.(connect|disconnect|pair|forget)\(' "$bluetooth_adapter"; then
+    fail "$bluetooth_adapter has more than one device mutation path"
+  fi
+  rg -U -q 'function validatePendingAudioOutput\(\)[^}]*resolveNativeDevice\([^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
     "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter does not revalidate audio handoff state"
+    || fail "$bluetooth_adapter does not revalidate audio handoff identity/state"
   [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 4 ]] \
     || fail "$bluetooth_adapter must have exactly four bounded lifecycle timers"
   if rg -q 'IpcHandler \{|Loader \{|panelSource|panelComponent|registeredWidget' \
@@ -810,6 +818,10 @@ if rg -q 'Process \{|FileView \{' "$bluetooth_service" "$bluetooth_adapter"; the
 fi
 rg -q 'childPanelWidget\("omarchy\.bluetooth"\)' tests/bluetooth-plugin-smoke.qml \
   || fail "Bluetooth alias routing is not regression-tested against shipped code"
+rg -Fq 'result.ok === true' "$bluetooth_panel" \
+  || fail "Bluetooth panel treats structured action results as booleans"
+[[ -f tests/bluetooth-device-identity-regression.qml ]] \
+  || fail "Bluetooth stale-identity regression is missing"
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"

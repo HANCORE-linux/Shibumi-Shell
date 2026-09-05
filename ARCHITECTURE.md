@@ -188,6 +188,23 @@ The lifecycle contract and uncompleted physical gates are defined in
 - Every bar-owner transition uses Quattro's full restart boundary, including
   rollback and interrupted-transaction recovery. Live reload is reserved for
   mutations that keep the active bar owner.
+- Before recovery or any other lifecycle mutation, the release lifecycle
+  inventories every public and private transaction journal and classifies the
+  install by revision, complete plugin digests, activation metadata, and
+  journal schema. Beta.12 admits only the exact public Beta.11, Step-5-tip, and
+  current-release identities. Step-6 Power registration, Step-6 journal fields
+  or phases, partial cross-release markers, and unknown states fail closed
+  without discarding or recovering any journal. One admitted public journal may
+  explain an exposed target/state mismatch; recovery consumes its validated
+  snapshot and live identity is checked again before the requested operation.
+  Rollback and commit artifacts are role-bound to exact pre-mutation digests;
+  recovery atomically quarantines and revalidates backups, preserves the live
+  target until post-restore validation succeeds, and holds no-follow,
+  inode-bound archive directories through commit cleanup. More than one public
+  journal is ambiguous and fails closed.
+- Step-6 development installations are not downgraded or migrated by Beta.12.
+  They require a separately reviewed rollback that compares every target
+  identity and preserves intervening foreign or user changes.
 
 ### Release Decision
 
@@ -202,6 +219,11 @@ The lifecycle contract and uncompleted physical gates are defined in
   pass, resource pass, and every non-deferrable hardware and output gate.
 - Known gaps must be recorded in `docs/release-readiness.md`. A missing test is
   not converted into a pass by plausibility or a green fixture.
+- Release archives are bound to the accepted commit and carry a complete
+  inventory and checksum. Tag publication first creates a draft, downloads and
+  verifies the exact remote asset name/size/digest inventory, and publishes
+  only after that comparison succeeds. Server-side rules must prevent updates
+  or deletion of published `v*` tags.
 
 ## Product Boundary
 
@@ -351,7 +373,10 @@ the saved preference.
 - Generic per-plugin enable, disable, and remove actions do not own Shibumi's
   suite lifecycle. Shibumi roots must be managed as one dependency set;
   `shibumi-suite repair` transactionally restores a partial payload and its
-  selected profile.
+  selected profile. Repair alone may admit an absent owned root or payload
+  digest drift when the installation state and every remaining ownership marker
+  retain the exact supported identity; unsafe markers, paths, and foreign roots
+  still fail closed.
 - Uninstall removes Shibumi plugin references, selects the built-in bar, and
   uses Quattro's full restart boundary before deleting the provider payload.
   It removes `bar.shibumi` unless `--keep-settings` is explicit.
@@ -744,9 +769,19 @@ Current Phase 2 foundation:
   discharging-to-charging transition with matching kernel, UPower, helper,
   widget, and panel state.
 - G15 has one process-wide `hancore.shibumi.bluetooth` service and one native
-  `BluetoothBackendAdapter`. The adapter owns Quickshell's BlueZ/PipeWire
-  models, pairing/device actions, pending state, and Bluetooth-audio handoff;
-  no complete Omarchy Bluetooth UI component is instantiated as a backend;
+  `BluetoothBackendAdapter`. The adapter keeps native BlueZ device QObjects
+  private and publishes detached primitive records carrying the device path,
+  address, adapter identity, and monotonic device/adapter incarnations. Every
+  mutation resolves exactly one current entity immediately before dispatch;
+  stale, malformed, ambiguous, unavailable, or state-conflicting requests
+  return typed failures and dispatch nothing. Beta.12 deliberately retains one
+  `omarchy-bluetooth-device` helper path per device action and never invokes a
+  native device method in parallel. Because the 4.0.2 helper accepts only an
+  action/address pair, production fails closed with more than one adapter; the
+  residual replacement race after dispatch remains explicit Step-4B helper
+  debt. Callers inspect `.ok` explicitly. The
+  adapter also owns pending state and Bluetooth-audio handoff; no complete
+  Omarchy Bluetooth UI component is instantiated as a backend;
 - each output owns only its V1 Bluetooth presentation and lazy Shibumi device
   panel. The process-wide service leases discovery across open panels and owns one
   symmetric six-method `omarchy.bluetooth` IPC target. Presentation has no

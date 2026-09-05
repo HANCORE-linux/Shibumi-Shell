@@ -21,6 +21,7 @@ from unittest.mock import Mock, patch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from shibumi_suite.admission import preflight_lifecycle_state  # noqa: E402
 from shibumi_suite.cli import (  # noqa: E402
     CliError,
     command_activate,
@@ -539,6 +540,10 @@ class SuiteLifecycleTests(unittest.TestCase):
             REPO_ROOT / "contracts/plugin-suite-v1.json",
             self.source / "contracts/plugin-suite-v1.json",
         )
+        shutil.copy2(
+            REPO_ROOT / "contracts/lifecycle-predecessors-v1.json",
+            self.source / "contracts/lifecycle-predecessors-v1.json",
+        )
         contract = json.loads(
             (self.source / "contracts/plugin-suite-v1.json").read_text(encoding="utf-8")
         )
@@ -599,6 +604,63 @@ class SuiteLifecycleTests(unittest.TestCase):
     def install(self) -> None:
         self.assertEqual(
             command_install(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+
+    def test_runtime_paths_reject_symlinked_writable_root_before_mutation(
+        self,
+    ) -> None:
+        for command in (
+            "omarchy",
+            "omarchy-shell",
+            "omarchy-bluetooth-device",
+            "omarchy-audio-output-set-default",
+            "omarchy-plugin-validate",
+        ):
+            path = self.paths.omarchy_root / "bin" / command
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("#!/bin/sh\n", encoding="utf-8")
+        required_sources = {
+            "shell/services/PluginRegistry.qml": (
+                "function entryPointUrl\nfunction isEnabled\n"
+            ),
+            "shell/shell.qml": (
+                "function configureBar\ntarget.pluginRegistry = shell.pluginRegistry\n"
+            ),
+            "shell/Ui/KeyboardPanel.qml": (
+                "property var borderSpec:\nBorderSurface {\n"
+            ),
+        }
+        for relative, payload in required_sources.items():
+            path = self.paths.omarchy_root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(payload, encoding="utf-8")
+
+        external = self.root / "external/omarchy"
+        external.mkdir(parents=True)
+        sentinel = external / "sentinel"
+        sentinel.write_text("preserve\n", encoding="utf-8")
+        self.paths.plugin_dir.parent.parent.mkdir(parents=True)
+        self.paths.plugin_dir.parent.symlink_to(external, target_is_directory=True)
+
+        with self.assertRaisesRegex(RuntimeFailure, "symlinked Omarchy plugin"):
+            self.paths.validate()
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+
+    def test_normal_package_install_is_admitted_for_its_next_lifecycle(self) -> None:
+        shutil.copy2(
+            REPO_ROOT / "packaging/package-metadata.json",
+            self.source / "PACKAGE-METADATA.json",
+        )
+        packaged_suite = Suite.load(self.source)
+        self.assertEqual(
+            command_install(
+                self.args(), packaged_suite, self.paths, self.runtime
+            ),
+            0,
+        )
+        self.assertEqual(
+            preflight_lifecycle_state(self.paths, packaged_suite),
+            "current-release",
         )
 
     def test_fresh_install_does_not_create_stock_transparency_preference(
@@ -723,7 +785,13 @@ class SuiteLifecycleTests(unittest.TestCase):
     def create_quattro_host_contract(self) -> None:
         bin_dir = self.paths.omarchy_root / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
-        for command in ("omarchy", "omarchy-shell", "omarchy-plugin-validate"):
+        for command in (
+            "omarchy",
+            "omarchy-shell",
+            "omarchy-plugin-validate",
+            "omarchy-bluetooth-device",
+            "omarchy-audio-output-set-default",
+        ):
             (bin_dir / command).write_text("#!/bin/sh\n", encoding="utf-8")
         sources = {
             "shell/services/PluginRegistry.qml": (
@@ -971,8 +1039,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.11")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.11")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.12")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.12")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -991,7 +1059,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.11")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.12")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_sandbox_update_advances_beta_7_to_beta_9(self) -> None:
@@ -1063,7 +1131,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             plugin_id: spec.payload_digest()
             for plugin_id, spec in self.suite.plugins.items()
         }
-        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.11")
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.12")
         self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
@@ -1081,7 +1149,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], "0.1.1-beta.11")
+            self.assertEqual(manifest["version"], "0.1.1-beta.12")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -1289,7 +1357,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.11+installed.9"
+                state["suiteVersion"] = "0.1.1-beta.12+installed.9"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -1298,7 +1366,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.11")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.12")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -1361,9 +1429,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.11")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.11")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.11")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.12")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.12")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.12")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

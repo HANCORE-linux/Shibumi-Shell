@@ -20,9 +20,9 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> AUR registration is currently unavailable, so `0.1.1-beta.11` is not
-> published there yet. This is the supported flow once AUR access returns and
-> the package is released.
+> `0.1.1-beta.12` is a local candidate and is not published to AUR. This is
+> the supported flow only after the release gates pass and publication is
+> separately authorized.
 
 ```bash
 omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
@@ -155,6 +155,15 @@ discards staging, and leaves the live plugins unchanged; unlock the active
 session and retry. For an external-bar installation, update preserves the
 active bar and layout.
 
+Beta.12 inventories every existing journal before recovery and admits only the
+exact public Beta.11, Step-5-tip, or current Beta.12 revision/digest identity.
+A shared version string is not sufficient. Step-6 Power registration, Step-6
+journal metadata, mixed live markers, or any unknown state abort before
+recovery and before mutation. One fully admitted interrupted journal may be
+recovered before live payload identity is checked again; multiple public
+journals fail as ambiguous. Do not install Beta.12 over a Step-6 development
+installation; use its separately reviewed rollback procedure.
+
 ### Move from a checkout to the package
 
 Install the package without uninstalling the existing suite, then run:
@@ -182,7 +191,9 @@ shibumi-shell update --allow-downgrade --yes
 
 Without `--allow-downgrade`, update and repair refuse to replace a newer staged
 suite with an older payload. The authorized rollback still uses the normal
-transaction, runtime verification, and automatic failure recovery.
+transaction, runtime verification, and automatic failure recovery, but only
+between identities explicitly admitted by that release. It is not a Step-6
+rollback mechanism.
 
 ## Status
 
@@ -210,9 +221,12 @@ managed profile with:
 ```
 
 Repair validates and stages all current plugin roots, verifies the running
-payload, and rolls back to the exact pre-repair state if a gate fails. It
-restores the selected Shibumi profile in managed mode and preserves the active
-bar and layout in external mode. It refuses to overwrite a foreign directory.
+payload, and rolls back to the exact pre-repair state if a gate fails. Repair
+alone tolerates a missing owned plugin root or changed payload bytes only while
+the supported install state and every remaining ownership marker stay exact.
+It restores the selected Shibumi profile in managed mode and preserves the
+active bar and layout in external mode. It refuses unsafe markers or paths and
+never overwrites a foreign directory.
 
 ## Switch bar hosts
 

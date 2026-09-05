@@ -33,15 +33,25 @@ Item {
   property var retiredDiscoveryAdapter: null
   property bool discoveryDesired: false
   property var nativePendingActions: ({})
+  // Raw native entities remain private here. The registry assigns a monotonic
+  // incarnation whenever a device or adapter QObject is replaced.
+  property var nativeAdapterEntity: null
+  property int nativeAdapterGeneration: 0
+  property var nativeEntityRegistry: []
+  property int nativeEntitySequence: 0
+  property int nativeIdentityEpoch: 0
+  property int nativeEntityLimit: 512
   property var audioHandoffIntent: null
   property var pendingAudioOutputDevice: null
   property int pendingAudioOutputAttempts: 0
 
-  readonly property var backend: backendOverride !== null ? backendOverride : root
   readonly property bool ready: true
   readonly property var adapter: backendOverride !== null
     ? ("adapter" in backendOverride ? backendOverride.adapter : null)
     : (adapterOverride !== null ? adapterOverride : Bluetooth.defaultAdapter)
+  readonly property var nativeAdapters: backendOverride === null
+    && adapterOverride === null && Bluetooth.adapters
+    ? Model.toArray(Bluetooth.adapters.values) : (adapter ? [adapter] : [])
   readonly property bool adapterAvailable: adapter !== null
   readonly property bool radioEnabled: adapterAvailable
     && adapter.enabled !== undefined && adapter.enabled === true
@@ -53,7 +63,8 @@ Item {
   readonly property var audioRoute: audioRouteOverride !== null
     ? audioRouteOverride : nativeAudioRoute
   readonly property var pipewireNodes: nativeAudioRoute.nodes
-  readonly property var nativeDeviceGroups: Model.deviceLists(nativeDevices)
+  readonly property var nativeDeviceGroups: Model.deviceLists(
+    nativeDeviceSnapshots())
   readonly property var connectedDevices: backendOverride !== null
     ? backendList("connectedDevices") : nativeDeviceGroups.connected
   readonly property var knownDevices: backendOverride !== null
@@ -80,6 +91,102 @@ Item {
     if (backendOverride === null || !(name in backendOverride)) return []
     const values = backendOverride[name]
     return Array.isArray(values) ? values : []
+  }
+
+  function entityText(entity, name) {
+    if (!entity || !(name in entity)) return ""
+    return String(entity[name] || "").trim()
+  }
+
+  function validDbusPath(value) {
+    return typeof value === "string" && value.length > 1
+      && value.length <= 512 && value.charAt(0) === "/"
+      && value.indexOf("//") < 0
+  }
+
+  function validGeneration(value) {
+    return typeof value === "number" && Number.isFinite(value)
+      && value > 0 && Math.floor(value) === value
+  }
+
+  function observeNativeAdapter() {
+    if (backendOverride !== null || nativeAdapterEntity === adapter) return
+    nativeAdapterEntity = adapter
+    nativeAdapterGeneration++
+  }
+
+  function registryEntry(device) {
+    void(nativeIdentityEpoch)
+    for (let i = 0; i < nativeEntityRegistry.length; i++) {
+      const entry = nativeEntityRegistry[i]
+      if (entry.entity === device
+          && entry.adapterEntity === adapter
+          && entry.adapterGeneration === nativeAdapterGeneration)
+        return entry
+    }
+    return null
+  }
+
+  function reconcileNativeEntities() {
+    if (backendOverride !== null) return
+    observeNativeAdapter()
+    const values = Model.toArray(nativeDevices)
+    const next = []
+    const count = Math.min(values.length, nativeEntityLimit)
+    for (let i = 0; i < count; i++) {
+      const device = values[i]
+      if (!device) continue
+      let entry = registryEntry(device)
+      if (!entry) {
+        nativeEntitySequence++
+        entry = {
+          entity: device,
+          generation: nativeEntitySequence,
+          adapterEntity: adapter,
+          adapterGeneration: nativeAdapterGeneration
+        }
+      }
+      next.push(entry)
+    }
+    let changed = next.length !== nativeEntityRegistry.length
+    if (!changed) {
+      for (let i = 0; i < next.length; i++) {
+        if (next[i].entity !== nativeEntityRegistry[i].entity
+            || next[i].generation !== nativeEntityRegistry[i].generation
+            || next[i].adapterGeneration
+              !== nativeEntityRegistry[i].adapterGeneration) {
+          changed = true
+          break
+        }
+      }
+    }
+    if (changed) {
+      nativeEntityRegistry = next
+      nativeIdentityEpoch++
+    }
+  }
+
+  function nativeDeviceSnapshot(device) {
+    const entry = registryEntry(device)
+    const deviceAdapter = device && "adapter" in device ? device.adapter : null
+    return Model.deviceRecord(device, {
+      entityId: entityText(device, "dbusPath"),
+      generation: entry ? entry.generation : 0,
+      adapterId: entityText(deviceAdapter, "adapterId"),
+      adapterEntityId: entityText(deviceAdapter, "dbusPath"),
+      adapterGeneration: entry ? entry.adapterGeneration : 0
+    })
+  }
+
+  function nativeDeviceSnapshots() {
+    void(nativeIdentityEpoch)
+    const values = Model.toArray(nativeDevices)
+    const records = []
+    const count = Math.min(values.length, nativeEntityLimit)
+    for (let i = 0; i < count; i++) {
+      if (values[i]) records.push(nativeDeviceSnapshot(values[i]))
+    }
+    return records
   }
 
   function deviceLabel(device) {
@@ -226,7 +333,12 @@ Item {
     audioHandoffIntent = {
       address: String(device.address),
       name: device.name ? String(device.name) : "",
-      deviceName: device.deviceName ? String(device.deviceName) : ""
+      deviceName: device.deviceName ? String(device.deviceName) : "",
+      entityId: String(device.entityId || ""),
+      generation: Number(device.generation || 0),
+      adapterId: String(device.adapterId || ""),
+      adapterEntityId: String(device.adapterEntityId || ""),
+      adapterGeneration: Number(device.adapterGeneration || 0)
     }
     audioIntentTimeout.restart()
   }
@@ -273,49 +385,163 @@ Item {
     Quickshell.execDetached(command)
   }
 
-  function runNativeDeviceAction(device, action, pending) {
-    if (!device || !device.address) return false
-    setNativePendingAction(device.address, pending)
-    executeDeviceCommand(deviceCommand(action, device.address))
-    return true
+  function deviceActionResult(ok, code, message, request, action) {
+    return {
+      ok: ok === true,
+      code: String(code || (ok ? "dispatched" : "unavailable")),
+      message: String(message || ""),
+      action: String(action || ""),
+      entityId: request && typeof request.entityId === "string"
+        ? request.entityId : "",
+      generation: request && validGeneration(request.generation)
+        ? request.generation : 0
+    }
   }
 
-  function connectDevice(device) {
-    if (!device || device.connected) return false
-    if (backendOverride !== null) {
-      if (typeof backendOverride.connectDevice !== "function") return false
-      backendOverride.connectDevice(device)
-      return true
-    }
-    const action = device.paired || device.bonded || device.trusted
-      ? "connect" : "pair"
-    rememberAudioHandoffIntent(device)
-    return runNativeDeviceAction(device, action, "connecting")
+  function normalizeDeviceActionResult(value, request, action) {
+    if (value && typeof value === "object"
+        && typeof value.ok === "boolean"
+        && typeof value.code === "string") return value
+    return deviceActionResult(false, "unavailable",
+      "Bluetooth action backend returned no typed result", request, action)
   }
 
-  function disconnectDevice(device) {
-    if (!device || !device.address || !device.connected) return false
-    if (backendOverride !== null) {
-      if (typeof backendOverride.disconnectDevice !== "function") return false
-      backendOverride.disconnectDevice(device)
-      return true
-    }
-    cancelAudioHandoff(device.address)
-    setNativePendingAction(device.address, "disconnecting")
-    if (typeof device.disconnect === "function") device.disconnect()
-    executeDeviceCommand(deviceCommand("disconnect", device.address))
-    return true
+  function validateDeviceRequest(request, action) {
+    if (!request || typeof request !== "object"
+        || typeof request.address !== "string"
+        || !Model.isAddressLike(request.address)
+        || typeof request.entityId !== "string"
+        || !validDbusPath(request.entityId)
+        || !validGeneration(request.generation)
+        || typeof request.adapterId !== "string"
+        || request.adapterId.length < 1 || request.adapterId.length > 256
+        || typeof request.adapterEntityId !== "string"
+        || !validDbusPath(request.adapterEntityId)
+        || !validGeneration(request.adapterGeneration))
+      return deviceActionResult(false, "invalid-request",
+        "Bluetooth device identity is malformed", request, action)
+    return null
   }
 
-  function forgetDevice(device) {
-    if (!device || !device.address) return false
-    if (backendOverride !== null) {
-      if (typeof backendOverride.forgetDevice !== "function") return false
-      backendOverride.forgetDevice(device)
-      return true
+  function resolveNativeDevice(request, action) {
+    const invalid = validateDeviceRequest(request, action)
+    if (invalid) return { result: invalid, entity: null }
+    if (!adapterAvailable || !radioEnabled)
+      return { result: deviceActionResult(false, "unavailable",
+        "Bluetooth adapter is unavailable", request, action), entity: null }
+    // The retained Omarchy 4.0.2 helper accepts an address but no controller.
+    // Fail closed unless production has exactly one controller and it is the
+    // incarnation validated below, so bluetoothctl cannot select a different
+    // already-present adapter after this boundary.
+    if (backendOverride === null && adapterOverride === null
+        && (nativeAdapters.length !== 1 || nativeAdapters[0] !== adapter))
+      return { result: deviceActionResult(false, "ambiguous-entity",
+        "Bluetooth helper cannot bind an ambiguous adapter inventory",
+        request, action), entity: null }
+
+    reconcileNativeEntities()
+    const values = Model.toArray(nativeDevices)
+    if (values.length > nativeEntityLimit)
+      return { result: deviceActionResult(false, "unavailable",
+        "Bluetooth device inventory exceeds the supported bound",
+        request, action), entity: null }
+
+    if (request.adapterGeneration !== nativeAdapterGeneration
+        || request.adapterId !== entityText(adapter, "adapterId")
+        || request.adapterEntityId !== entityText(adapter, "dbusPath"))
+      return { result: deviceActionResult(false, "stale-entity",
+        "Bluetooth adapter incarnation changed", request, action), entity: null }
+
+    const matches = []
+    for (let i = 0; i < values.length; i++) {
+      const entity = values[i]
+      if (!entity) continue
+      const entityAdapter = "adapter" in entity ? entity.adapter : null
+      if (Model.normalizedAddress(entityText(entity, "address"))
+            === Model.normalizedAddress(request.address)
+          && entityText(entity, "dbusPath") === request.entityId
+          && entityAdapter === adapter
+          && entityText(entityAdapter, "adapterId") === request.adapterId
+          && entityText(entityAdapter, "dbusPath") === request.adapterEntityId)
+        matches.push(entity)
     }
-    cancelAudioHandoff(device.address)
-    return runNativeDeviceAction(device, "forget", "forgetting")
+    if (matches.length > 1)
+      return { result: deviceActionResult(false, "ambiguous-entity",
+        "Bluetooth device identity is ambiguous", request, action), entity: null }
+    if (matches.length === 0)
+      return { result: deviceActionResult(false, "stale-entity",
+        "Bluetooth device is no longer current", request, action), entity: null }
+
+    const entry = registryEntry(matches[0])
+    if (!entry || entry.generation !== request.generation)
+      return { result: deviceActionResult(false, "stale-entity",
+        "Bluetooth device incarnation changed", request, action), entity: null }
+    return { result: null, entity: matches[0] }
+  }
+
+  function runNativeDeviceAction(request, action, pending) {
+    const resolved = resolveNativeDevice(request, action)
+    if (resolved.result) return resolved.result
+    const entity = resolved.entity
+    const address = entityText(entity, "address")
+    let commandAction = action
+    if (action === "connect") {
+      if (entity.connected)
+        return deviceActionResult(false, "state-conflict",
+          "Bluetooth device is already connected", request, action)
+      commandAction = entity.paired || entity.bonded || entity.trusted
+        ? "connect" : "pair"
+      rememberAudioHandoffIntent(request)
+    } else if (action === "disconnect") {
+      if (!entity.connected)
+        return deviceActionResult(false, "state-conflict",
+          "Bluetooth device is not connected", request, action)
+      cancelAudioHandoff(address)
+    } else if (action === "forget") {
+      if (!entity.paired && !entity.bonded && !entity.trusted)
+        return deviceActionResult(false, "state-conflict",
+          "Bluetooth device is not known", request, action)
+      cancelAudioHandoff(address)
+    }
+
+    setNativePendingAction(address, pending)
+    try {
+      // This helper is the one mutation path for every device action in this
+      // compatibility release. Never also invoke a native device method.
+      executeDeviceCommand(deviceCommand(commandAction, address))
+    } catch (error) {
+      setNativePendingAction(address, "")
+      if (action === "connect") cancelAudioHandoff(address)
+      return deviceActionResult(false, "dispatch-failed",
+        "Bluetooth action dispatch failed", request, action)
+    }
+    return deviceActionResult(true, "dispatched", "", request, action)
+  }
+
+  function overrideDeviceAction(method, request, action) {
+    if (!backendOverride || typeof backendOverride[method] !== "function")
+      return deviceActionResult(false, "unavailable",
+        "Bluetooth action backend is unavailable", request, action)
+    return normalizeDeviceActionResult(
+      backendOverride[method](request), request, action)
+  }
+
+  function connectDevice(request) {
+    return backendOverride !== null
+      ? overrideDeviceAction("connectDevice", request, "connect")
+      : runNativeDeviceAction(request, "connect", "connecting")
+  }
+
+  function disconnectDevice(request) {
+    return backendOverride !== null
+      ? overrideDeviceAction("disconnectDevice", request, "disconnect")
+      : runNativeDeviceAction(request, "disconnect", "disconnecting")
+  }
+
+  function forgetDevice(request) {
+    return backendOverride !== null
+      ? overrideDeviceAction("forgetDevice", request, "forget")
+      : runNativeDeviceAction(request, "forget", "forgetting")
   }
 
   function audioRouteRequest(device) {
@@ -357,11 +583,16 @@ Item {
   }
 
   function scheduleAudioOutputSwitch(device) {
-    if (!device || !device.address || !device.connected) return
+    if (!device || !device.address) return
     pendingAudioOutputDevice = {
-      address: device && device.address ? device.address : "",
-      name: device && device.name ? device.name : "",
-      deviceName: device && device.deviceName ? device.deviceName : ""
+      address: String(device.address),
+      name: device.name ? String(device.name) : "",
+      deviceName: device.deviceName ? String(device.deviceName) : "",
+      entityId: String(device.entityId || ""),
+      generation: Number(device.generation || 0),
+      adapterId: String(device.adapterId || ""),
+      adapterEntityId: String(device.adapterEntityId || ""),
+      adapterGeneration: Number(device.adapterGeneration || 0)
     }
     pendingAudioOutputAttempts = 0
     audioIntentTimeout.restart()
@@ -383,19 +614,20 @@ Item {
   }
 
   function validatePendingAudioOutput() {
-    if (!pendingAudioOutputDevice) return false
-    const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
-    if (!radioEnabled || !device || !device.connected
+    if (!pendingAudioOutputDevice) return null
+    const resolved = resolveNativeDevice(pendingAudioOutputDevice, "audio-route")
+    const device = resolved.entity
+    if (resolved.result || !device || !device.connected
         || !deviceUsesCurrentAdapter(device)) {
       cancelPendingAudioOutput("")
-      return false
+      return null
     }
-    return true
+    return device
   }
 
   function switchPendingAudioOutput() {
-    if (!validatePendingAudioOutput()) return
-    const device = nativeDeviceByAddress(pendingAudioOutputDevice.address)
+    const device = validatePendingAudioOutput()
+    if (!device) return
     const routeResult = requestBluetoothAudioRoute(device)
     if (routeResult.ok) {
       pendingAudioOutputDevice = null
@@ -419,9 +651,11 @@ Item {
     if (backendOverride !== null) return
     const intent = audioHandoffIntent
     if (intent) {
-      const device = nativeDeviceByAddress(intent.address)
-      if (device && device.connected && deviceUsesCurrentAdapter(device)) {
-        scheduleAudioOutputSwitch(device)
+      const resolved = resolveNativeDevice(intent, "audio-route")
+      const device = resolved.entity
+      if (resolved.result) clearAudioHandoffIntent(intent.address)
+      else if (device && device.connected && deviceUsesCurrentAdapter(device)) {
+        scheduleAudioOutputSwitch(intent)
         audioHandoffIntent = null
       }
     }
@@ -457,6 +691,7 @@ Item {
   }
 
   onNativeDevicesChanged: {
+    reconcileNativeEntities()
     syncNativePendingActions()
     syncNativeAudioHandoffIntents()
   }
@@ -478,6 +713,8 @@ Item {
   onDiscoveryDesiredChanged: if (!discoveryDesired) stopDiscovery()
   onRadioEnabledChanged: if (!radioEnabled) cancelAllAudioHandoffs()
   onAdapterChanged: {
+    observeNativeAdapter()
+    reconcileNativeEntities()
     // Ownership is tied to the adapter instance on which Shibumi started the
     // scan. Stop that scan before observing a replacement adapter as external.
     retirePendingDiscovery()
@@ -489,6 +726,7 @@ Item {
     discoveryOwnerAdapter = null
     cancelAllAudioHandoffs()
   }
+  Component.onCompleted: reconcileNativeEntities()
   Component.onDestruction: destroyDiscovery()
 
   Timer {

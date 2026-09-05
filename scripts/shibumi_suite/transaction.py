@@ -11,11 +11,18 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from . import MANAGED_MARKER, STATE_SCHEMA_VERSION, SUITE_ID
+from .admission import (
+    inventory_transactions,
+    supported_install_identities,
+    verify_transaction_artifact_bindings,
+)
 from .config import atomic_write
 from .model import (
     ContractError,
     PluginSpec,
+    Suite,
     payload_copy_ignore,
+    plugin_payload_digest,
     suite_payload_digest,
 )
 from .runtime import OmarchyRuntime, RuntimeFailure, RuntimePaths
@@ -151,6 +158,150 @@ def _durable_mkdir(path: Path) -> None:
         # before any transaction can mutate live lifecycle state.
         _fsync_directory(directory)
         _fsync_directory(directory.parent)
+
+
+def _expected_directory_binding(
+    bindings: list[dict[str, Any]] | None, path: Path
+) -> dict[str, Any] | None:
+    if bindings is None:
+        return None
+    matches = [
+        binding for binding in bindings
+        if binding.get("kind") == "directoryIdentity"
+        and binding.get("path") == path
+    ]
+    if len(matches) != 1:
+        raise TransactionError(
+            f"validated archive directory binding is unavailable: {path}"
+        )
+    return matches[0]
+
+
+def _verify_open_directory(
+    descriptor: int,
+    path: Path,
+    expected: dict[str, Any] | None,
+    created: os.stat_result | None = None,
+) -> None:
+    metadata = os.fstat(descriptor)
+    authority = created if created is not None else expected
+    if authority is None:
+        return
+    expected_device = (
+        authority.st_dev if isinstance(authority, os.stat_result)
+        else authority.get("device")
+    )
+    expected_inode = (
+        authority.st_ino if isinstance(authority, os.stat_result)
+        else authority.get("inode")
+    )
+    if metadata.st_dev != expected_device or metadata.st_ino != expected_inode:
+        raise TransactionError(
+            f"transaction archive directory identity changed: {path}"
+        )
+
+
+def _open_absolute_directory(
+    path: Path, expected: dict[str, Any] | None
+) -> int:
+    if not path.is_absolute():
+        raise TransactionError(f"transaction archive path is not absolute: {path}")
+    descriptor = os.open(
+        "/", os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW
+    )
+    try:
+        for part in path.parts[1:]:
+            child = os.open(
+                part,
+                os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = child
+        _verify_open_directory(descriptor, path, expected)
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _open_directory_child(
+    parent_fd: int,
+    name: str,
+    path: Path,
+    expected: dict[str, Any] | None,
+) -> int:
+    expected_exists = bool(expected and expected.get("exists"))
+    created: os.stat_result | None = None
+    if expected is not None and not expected_exists:
+        try:
+            os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            raise TransactionError(
+                f"transaction archive directory appeared after admission: {path}"
+            )
+    try:
+        os.mkdir(name, mode=0o700, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+        created = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileExistsError:
+        if expected is not None and not expected_exists:
+            raise TransactionError(
+                f"transaction archive directory appeared after admission: {path}"
+            )
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=parent_fd,
+        )
+    except OSError as error:
+        raise TransactionError(
+            f"cannot open trusted transaction archive directory {name}: {error}"
+        ) from error
+    try:
+        _verify_open_directory(descriptor, path, expected, created)
+        os.fsync(descriptor)
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _open_archive_descriptors(
+    paths: RuntimePaths,
+    token: str,
+    bindings: list[dict[str, Any]] | None = None,
+) -> tuple[int, int, int]:
+    backup_path = paths.state_dir / "backups"
+    destination_path = backup_path / token
+    state_fd = _open_absolute_directory(
+        paths.state_dir,
+        _expected_directory_binding(bindings, paths.state_dir),
+    )
+    try:
+        backup_fd = _open_directory_child(
+            state_fd,
+            "backups",
+            backup_path,
+            _expected_directory_binding(bindings, backup_path),
+        )
+        try:
+            destination_fd = _open_directory_child(
+                backup_fd,
+                token,
+                destination_path,
+                _expected_directory_binding(bindings, destination_path),
+            )
+        except Exception:
+            os.close(backup_fd)
+            raise
+    except Exception:
+        os.close(state_fd)
+        raise
+    return state_fd, backup_fd, destination_fd
 
 
 def _discard_private_transactions(root: Path) -> int:
@@ -507,14 +658,17 @@ class PluginTransaction:
             target = self.paths.plugin_dir / spec.id
             if stage.exists() or backup.exists():
                 raise TransactionError(f"transaction path already exists for {spec.id}")
+            had_target = target.exists() or target.is_symlink()
             record = {
                 "action": "replace",
                 "pluginId": spec.id,
                 "target": str(target),
                 "stage": str(stage),
                 "backup": str(backup),
-                "hadTarget": target.exists() or target.is_symlink(),
+                "hadTarget": had_target,
             }
+            if had_target:
+                record["beforePayloadDigest"] = plugin_payload_digest(target)
             self.records.append(record)
             records_by_id[spec.id] = record
             self._write_journal("staging")
@@ -609,6 +763,7 @@ class PluginTransaction:
                 "stage": "",
                 "backup": str(backup),
                 "hadTarget": True,
+                "beforePayloadDigest": plugin_payload_digest(target),
             }
             self.records.append(record)
             self.live_mutation_started = True
@@ -635,6 +790,7 @@ class PluginTransaction:
                 "stage": "",
                 "backup": str(backup),
                 "hadTarget": True,
+                "beforePayloadDigest": plugin_payload_digest(target),
             }
             self.records.append(record)
             self.live_mutation_started = True
@@ -827,12 +983,21 @@ def _discard_pre_exposure_records(
     stages: list[Path] = []
     for record in records:
         target, stage, backup = _safe_record_paths(plugin_root, token, record)
+        target_exists = target.exists() or target.is_symlink()
         target_marker = _marker(target) if target.is_dir() else None
-        unexpected_target = not bool(record.get("hadTarget")) and (
-            target.exists() or target.is_symlink()
+        unexpected_target = not bool(record.get("hadTarget")) and target_exists
+        missing_original = bool(record.get("hadTarget")) and not target_exists
+        unsafe_artifact = (
+            target.is_symlink()
+            or backup.is_symlink()
+            or (stage is not None and stage.is_symlink())
         )
-        if backup.exists() or backup.is_symlink() or unexpected_target or (
-            target_marker and target_marker.get("transaction") == token
+        if (
+            unsafe_artifact
+            or missing_original
+            or backup.exists()
+            or unexpected_target
+            or (target_marker and target_marker.get("transaction") == token)
         ):
             raise TransactionError(
                 "pre-exposure transaction contains live mutation artifacts"
@@ -847,13 +1012,65 @@ def _discard_pre_exposure_records(
 
 
 def _preflight_restore_records(
-    plugin_root: Path, token: str, records: Iterable[dict[str, Any]]
+    plugin_root: Path,
+    token: str,
+    records: Iterable[dict[str, Any]],
+    backup_overrides: dict[str, Path] | None = None,
 ) -> None:
     for record in reversed(list(records)):
-        target, _stage, backup = _safe_record_paths(plugin_root, token, record)
-        target_marker = _marker(target) if target.is_dir() else None
+        target, stage, expected_backup = _safe_record_paths(
+            plugin_root, token, record
+        )
+        backup = (backup_overrides or {}).get(
+            str(record.get("pluginId") or ""), expected_backup
+        )
         target_exists = target.exists() or target.is_symlink()
-        if backup.exists() or backup.is_symlink():
+        backup_exists = backup.exists() or backup.is_symlink()
+        stage_exists = bool(stage and (stage.exists() or stage.is_symlink()))
+        if (
+            target.is_symlink()
+            or backup.is_symlink()
+            or (stage is not None and stage.is_symlink())
+            or (target_exists and not target.is_dir())
+            or (backup_exists and not backup.is_dir())
+            or (stage_exists and stage is not None and not stage.is_dir())
+        ):
+            raise TransactionError(
+                "transaction recovery artifact is unsafe or malformed"
+            )
+        target_marker = _marker(target) if target_exists else None
+        action = str(record.get("action") or "")
+        owner_check = is_legacy_managed_target \
+            if action == "remove-legacy" else is_managed_target
+        plugin_id = str(record.get("pluginId") or "")
+        if target_exists and not owner_check(target, plugin_id):
+            raise TransactionError(
+                f"transaction contains an externally changed target: {target}"
+            )
+        if backup_exists and not owner_check(backup, plugin_id):
+            raise TransactionError(
+                f"transaction backup ownership is invalid: {backup}"
+            )
+        if bool(record.get("hadTarget")):
+            # A replacement/removal of an existing target can have no backup
+            # only before that target is renamed. Once the target is absent or
+            # carries this transaction's exposed marker, the missing backup is
+            # unrecoverable and must preserve the journal without mutation.
+            if not backup_exists and (
+                not target_exists
+                or (
+                    target_marker is not None
+                    and target_marker.get("transaction") == token
+                )
+            ):
+                raise TransactionError(
+                    f"transaction backup is missing for exposed target: {target}"
+                )
+        elif backup_exists:
+            raise TransactionError(
+                f"transaction created an impossible backup for new target: {backup}"
+            )
+        if backup_exists:
             if target_exists:
                 if not target_marker or target_marker.get("transaction") != token:
                     raise TransactionError(
@@ -866,54 +1083,181 @@ def _preflight_restore_records(
                 )
 
 
+def _verify_recovery_backup(
+    plugin_id: str,
+    expected_backup: Path,
+    current_backup: Path,
+    bindings: list[dict[str, Any]],
+    identities: list[dict[str, Any]],
+    *,
+    binding_path: Path | None = None,
+) -> None:
+    candidates = [
+        binding for binding in bindings
+        if binding.get("exists") is True
+        and binding.get("kind") in {"managed", "legacy"}
+        and binding.get("pluginId") == plugin_id
+        and binding.get("role") == "backup"
+    ]
+    preferred_paths = {binding_path} if binding_path is not None else {
+        expected_backup, current_backup
+    }
+    path_candidates = [
+        binding for binding in candidates
+        if binding.get("path") in preferred_paths
+    ]
+    if len(path_candidates) == 1:
+        candidates = path_candidates
+    if len(candidates) != 1:
+        raise TransactionError(
+            f"validated backup binding is unavailable: {expected_backup}"
+        )
+    current = dict(candidates[0])
+    current["path"] = current_backup
+    verify_transaction_artifact_bindings([current], identities)
+
+
 def _restore_records(
-    plugin_root: Path, token: str, records: Iterable[dict[str, Any]]
+    plugin_root: Path,
+    token: str,
+    records: Iterable[dict[str, Any]],
+    backup_overrides: dict[str, Path] | None = None,
+    backup_bindings: list[dict[str, Any]] | None = None,
+    artifact_identities: list[dict[str, Any]] | None = None,
 ) -> None:
     record_list = list(records)
-    _preflight_restore_records(plugin_root, token, record_list)
+    _preflight_restore_records(
+        plugin_root, token, record_list, backup_overrides
+    )
     for record in reversed(record_list):
-        target, stage, backup = _safe_record_paths(plugin_root, token, record)
+        target, stage, expected_backup = _safe_record_paths(
+            plugin_root, token, record
+        )
+        plugin_id = str(record.get("pluginId") or "")
+        backup = (backup_overrides or {}).get(plugin_id, expected_backup)
+        discard = plugin_root / f".shibumi-discard.{token}.{plugin_id}"
         target_marker = _marker(target) if target.is_dir() else None
-        if backup.exists() or backup.is_symlink():
+        backup_exists = backup.exists() or backup.is_symlink()
+        discard_exists = discard.exists() or discard.is_symlink()
+        if backup_exists:
+            if backup_bindings and artifact_identities:
+                _verify_recovery_backup(
+                    plugin_id,
+                    expected_backup,
+                    backup,
+                    backup_bindings,
+                    artifact_identities,
+                )
             if target.exists() or target.is_symlink():
                 if not target_marker or target_marker.get("transaction") != token:
                     raise TransactionError(
                         f"cannot safely roll back externally changed target: {target}"
                     )
-                _remove_path(target)
-            os.replace(backup, target)
+                if discard_exists:
+                    raise TransactionError(
+                        f"transaction rollback discard already exists: {discard}"
+                    )
+                os.replace(target, discard)
+                discard_exists = True
+                _fsync_directory(plugin_root)
+            try:
+                os.replace(backup, target)
+                _fsync_directory(plugin_root)
+                if backup_bindings and artifact_identities:
+                    _verify_recovery_backup(
+                        plugin_id,
+                        expected_backup,
+                        target,
+                        backup_bindings,
+                        artifact_identities,
+                    )
+            except Exception:
+                if target.exists() or target.is_symlink():
+                    os.replace(target, backup)
+                if discard_exists and not (
+                    target.exists() or target.is_symlink()
+                ):
+                    os.replace(discard, target)
+                _fsync_directory(plugin_root)
+                raise
+            if discard_exists:
+                _remove_path(discard)
         elif target.exists() or target.is_symlink():
             if target_marker and target_marker.get("transaction") == token:
-                _remove_path(target)
+                if discard_exists:
+                    raise TransactionError(
+                        f"transaction rollback discard conflicts with target: {discard}"
+                    )
+                os.replace(target, discard)
+                _fsync_directory(plugin_root)
+                _remove_path(discard)
+            elif discard_exists:
+                _remove_path(discard)
+        elif discard_exists:
+            _remove_path(discard)
         if stage and (stage.exists() or stage.is_symlink()):
             _remove_path(stage)
     if plugin_root.is_dir():
         _fsync_directory(plugin_root)
 
 
-def _archive_transaction_backups(
+def _archive_transaction_backups_open(
     paths: RuntimePaths,
     token: str,
     records: Iterable[dict[str, Any]],
+    destination: Path,
+    logical_destination: Path,
+    backup_root: Path,
+    backup_overrides: dict[str, Path] | None = None,
+    backup_bindings: list[dict[str, Any]] | None = None,
+    artifact_identities: list[dict[str, Any]] | None = None,
 ) -> None:
-    destination = paths.state_dir / "backups" / token
     for record in records:
-        _, _, backup = _safe_record_paths(paths.plugin_dir, token, record)
+        _, _, expected_backup = _safe_record_paths(
+            paths.plugin_dir, token, record
+        )
         plugin_id = str(record["pluginId"])
+        backup = (backup_overrides or {}).get(plugin_id, expected_backup)
         archived = destination / plugin_id
+        logical_archived = logical_destination / plugin_id
         partial = destination / f".{plugin_id}.partial"
         if partial.exists() or partial.is_symlink():
             _remove_path(partial)
         if archived.exists() or archived.is_symlink():
             # The archive-side rename is the per-record commit point. A crash
             # after it but before source removal legitimately leaves both.
+            if (backup.exists() or backup.is_symlink()) \
+                    and backup_bindings and artifact_identities:
+                _verify_recovery_backup(
+                    plugin_id,
+                    expected_backup,
+                    backup,
+                    backup_bindings,
+                    artifact_identities,
+                )
+            if backup_bindings and artifact_identities:
+                _verify_recovery_backup(
+                    plugin_id,
+                    expected_backup,
+                    archived,
+                    backup_bindings,
+                    artifact_identities,
+                    binding_path=logical_archived,
+                )
             if backup.exists() or backup.is_symlink():
                 _remove_path(backup)
                 _fsync_directory(paths.plugin_dir)
             continue
         if not (backup.exists() or backup.is_symlink()):
             continue
-        _durable_mkdir(destination)
+        if backup_bindings and artifact_identities:
+            _verify_recovery_backup(
+                plugin_id,
+                expected_backup,
+                backup,
+                backup_bindings,
+                artifact_identities,
+            )
         try:
             if backup.is_symlink():
                 partial.symlink_to(os.readlink(backup))
@@ -925,6 +1269,14 @@ def _archive_transaction_backups(
                 _fsync_regular_file(partial)
             os.replace(partial, archived)
             _fsync_directory(destination)
+            if backup_bindings and artifact_identities:
+                _verify_recovery_backup(
+                    plugin_id,
+                    expected_backup,
+                    archived,
+                    backup_bindings,
+                    artifact_identities,
+                )
             _remove_path(backup)
             _fsync_directory(paths.plugin_dir)
         except Exception:
@@ -937,7 +1289,6 @@ def _archive_transaction_backups(
     if paths.plugin_dir.is_dir():
         _fsync_directory(paths.plugin_dir)
 
-    backup_root = paths.state_dir / "backups"
     if backup_root.is_dir():
         retained = sorted(
             (path for path in backup_root.iterdir() if path.is_dir()),
@@ -950,6 +1301,116 @@ def _archive_transaction_backups(
             removed_stale = True
         if removed_stale:
             _fsync_directory(backup_root)
+
+
+def _archive_transaction_backups(
+    paths: RuntimePaths,
+    token: str,
+    records: Iterable[dict[str, Any]],
+    backup_overrides: dict[str, Path] | None = None,
+    backup_bindings: list[dict[str, Any]] | None = None,
+    artifact_identities: list[dict[str, Any]] | None = None,
+    archive_descriptors: tuple[int, int, int] | None = None,
+) -> None:
+    state_fd, backup_fd, destination_fd = (
+        archive_descriptors
+        if archive_descriptors is not None
+        else _open_archive_descriptors(paths, token)
+    )
+    try:
+        proc_root = Path("/proc/self/fd")
+        _archive_transaction_backups_open(
+            paths,
+            token,
+            records,
+            proc_root / str(destination_fd),
+            paths.state_dir / "backups" / token,
+            proc_root / str(backup_fd),
+            backup_overrides,
+            backup_bindings,
+            artifact_identities,
+        )
+    finally:
+        os.close(destination_fd)
+        os.close(backup_fd)
+        os.close(state_fd)
+
+
+def _restore_quarantined_backups(
+    plugin_root: Path,
+    quarantined: dict[str, tuple[Path, Path]],
+) -> None:
+    conflict: Path | None = None
+    for original, quarantine in reversed(list(quarantined.values())):
+        if not (quarantine.exists() or quarantine.is_symlink()):
+            continue
+        if original.exists() or original.is_symlink():
+            conflict = original
+            continue
+        os.replace(quarantine, original)
+    if plugin_root.is_dir():
+        _fsync_directory(plugin_root)
+    if conflict is not None:
+        raise TransactionError(
+            f"cannot restore quarantined transaction backup: {conflict}"
+        )
+
+
+def _quarantine_recovery_backups(
+    plugin_root: Path,
+    token: str,
+    records: Iterable[dict[str, Any]],
+    bindings: list[dict[str, Any]],
+    identities: list[dict[str, Any]],
+) -> dict[str, tuple[Path, Path]]:
+    quarantined: dict[str, tuple[Path, Path]] = {}
+    try:
+        for record in records:
+            plugin_id = str(record["pluginId"])
+            _, _, backup = _safe_record_paths(plugin_root, token, record)
+            quarantine = plugin_root / (
+                f".shibumi-recovery.{token}.{plugin_id}"
+            )
+            admitted = [
+                binding for binding in bindings
+                if binding.get("path") in {backup, quarantine}
+                and binding.get("exists") is True
+                and binding.get("kind") in {"managed", "legacy"}
+            ]
+            if not admitted:
+                if backup.exists() or backup.is_symlink() \
+                        or quarantine.exists() or quarantine.is_symlink():
+                    raise TransactionError(
+                        f"unadmitted transaction backup appeared: {backup}"
+                    )
+                continue
+            if len(admitted) != 1:
+                raise TransactionError(
+                    f"validated backup authority is ambiguous: {backup}"
+                )
+            admitted_path = admitted[0]["path"]
+            if admitted_path == backup:
+                if not (backup.exists() or backup.is_symlink()) \
+                        or quarantine.exists() or quarantine.is_symlink():
+                    raise TransactionError(
+                        f"admitted transaction backup disappeared: {backup}"
+                    )
+                os.replace(backup, quarantine)
+                _fsync_directory(plugin_root)
+            elif admitted_path != quarantine \
+                    or not (quarantine.exists() or quarantine.is_symlink()) \
+                    or backup.exists() or backup.is_symlink():
+                raise TransactionError(
+                    f"admitted transaction quarantine changed: {quarantine}"
+                )
+            quarantined[plugin_id] = (backup, quarantine)
+            moved_binding = dict(admitted[0])
+            moved_binding["path"] = quarantine
+            verify_transaction_artifact_bindings([moved_binding], identities)
+    except Exception:
+        _restore_quarantined_backups(plugin_root, quarantined)
+        raise
+    return quarantined
 
 
 def _snapshot_bytes(path: Path, label: str, directory: Path) -> bytes:
@@ -965,7 +1426,20 @@ def _snapshot_bytes(path: Path, label: str, directory: Path) -> bytes:
         ) from error
 
 
-def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
+def recover_transactions(
+    paths: RuntimePaths,
+    runtime: OmarchyRuntime,
+    *,
+    suite: Suite | None = None,
+) -> int:
+    validated_inventory: list[dict[str, Any]] | None = None
+    if suite is not None:
+        # Repeat the all-journal read-only inventory at the recovery boundary
+        # and consume those exact parsed/snapshot values below. Recovery must
+        # never reparse a different journal after admission.
+        validated_inventory = inventory_transactions(
+            paths, suite, supported_install_identities(suite)
+        )
     root = paths.state_dir / "transactions"
     if root.is_symlink():
         raise TransactionError(f"refusing symlinked transaction root: {root}")
@@ -975,29 +1449,81 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
         raise TransactionError(f"transaction root is not a directory: {root}")
     # Preparation and cleanup directories are never authoritative. Public
     # journals appear only after preparation and disappear atomically before
-    # recursive cleanup.
-    _discard_private_transactions(root)
-    entries = sorted(root.iterdir())
-    for entry in entries:
-        if entry.is_symlink() or not entry.is_dir():
+    # recursive cleanup. When admission is active, bind names and directory
+    # inodes before the first discard or recovery mutation.
+    validated_by_directory: dict[Path, dict[str, Any]] = {}
+    if validated_inventory is not None:
+        current = sorted(root.iterdir(), key=lambda item: item.name)
+        expected = sorted(
+            (item["directory"] for item in validated_inventory),
+            key=lambda item: item.name,
+        )
+        if [item.name for item in current] != [item.name for item in expected]:
             raise TransactionError(
-                f"refusing malformed transaction namespace entry: {entry}"
+                "transaction inventory changed after lifecycle admission"
             )
+        for item, directory in zip(validated_inventory, expected, strict=True):
+            metadata = directory.lstat()
+            if (
+                directory.is_symlink()
+                or not directory.is_dir()
+                or metadata.st_dev != item["device"]
+                or metadata.st_ino != item["inode"]
+            ):
+                raise TransactionError(
+                    f"transaction directory changed after lifecycle admission: {directory}"
+                )
+            validated_by_directory[directory] = item
+        private = [
+            item["directory"]
+            for item in validated_inventory
+            if item["kind"] == "private"
+        ]
+        for directory in private:
+            shutil.rmtree(directory)
+        if private:
+            _fsync_directory(root)
+        entries = sorted(
+            (
+                item["directory"]
+                for item in validated_inventory
+                if item["kind"] == "public"
+            ),
+            key=lambda item: item.name,
+        )
+    else:
+        _discard_private_transactions(root)
+        entries = sorted(root.iterdir())
+        for entry in entries:
+            if entry.is_symlink() or not entry.is_dir():
+                raise TransactionError(
+                    f"refusing malformed transaction namespace entry: {entry}"
+                )
     recovered = 0
     for directory in entries:
-        journal_file = directory / "journal.json"
-        if journal_file.is_symlink() or not journal_file.is_file():
-            raise TransactionError(
-                f"transaction journal is missing or unsafe: {directory}"
-            )
-        try:
-            journal = json.loads(journal_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise TransactionError(f"cannot recover transaction {directory}: {error}") from error
-        if not isinstance(journal, dict):
-            raise TransactionError(
-                f"transaction journal is not an object: {directory}"
-            )
+        validated = validated_by_directory.get(directory)
+        if validated is not None:
+            journal = validated["journal"]
+            if not isinstance(journal, dict):
+                raise TransactionError(
+                    f"validated transaction journal is unavailable: {directory}"
+                )
+        else:
+            journal_file = directory / "journal.json"
+            if journal_file.is_symlink() or not journal_file.is_file():
+                raise TransactionError(
+                    f"transaction journal is missing or unsafe: {directory}"
+                )
+            try:
+                journal = json.loads(journal_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                raise TransactionError(
+                    f"cannot recover transaction {directory}: {error}"
+                ) from error
+            if not isinstance(journal, dict):
+                raise TransactionError(
+                    f"transaction journal is not an object: {directory}"
+                )
         schema = journal.get("schemaVersion")
         if (
             journal.get("suiteId") != SUITE_ID
@@ -1067,14 +1593,25 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
         live_mutation_value: bool | None = None
         payload_reload_value: bool | None = None
         if phase in ROLLBACK_PHASES:
+            admitted_snapshots = validated["snapshots"] if validated else {}
             if config_existed_value:
-                config_snapshot_payload = _snapshot_bytes(
-                    directory / "shell.json.before", "config", directory
-                )
+                config_snapshot_payload = admitted_snapshots.get("config") \
+                    if validated else _snapshot_bytes(
+                        directory / "shell.json.before", "config", directory
+                    )
+                if config_snapshot_payload is None:
+                    raise TransactionError(
+                        f"validated config snapshot is unavailable: {directory}"
+                    )
             if menu_extension_value and journal["menuExtensionExisted"]:
-                menu_snapshot_payload = _snapshot_bytes(
-                    directory / "omarchy-menu.jsonc.before", "menu", directory
-                )
+                menu_snapshot_payload = admitted_snapshots.get("menu") \
+                    if validated else _snapshot_bytes(
+                        directory / "omarchy-menu.jsonc.before", "menu", directory
+                    )
+                if menu_snapshot_payload is None:
+                    raise TransactionError(
+                        f"validated menu snapshot is unavailable: {directory}"
+                    )
             shell_stopped_value = journal.get("shellStopped", True)
             if not isinstance(shell_stopped_value, bool):
                 raise TransactionError(
@@ -1113,6 +1650,20 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                         f"{directory}"
                     )
 
+        artifact_bindings: list[dict[str, Any]] = []
+        artifact_identities: list[dict[str, Any]] = []
+        if validated is not None and suite is not None:
+            bindings_value = validated.get("artifacts")
+            if not isinstance(bindings_value, list):
+                raise TransactionError(
+                    f"validated transaction artifacts are unavailable: {directory}"
+                )
+            artifact_bindings = bindings_value
+            artifact_identities = supported_install_identities(suite)
+            verify_transaction_artifact_bindings(
+                artifact_bindings, artifact_identities
+            )
+
         if phase in COMMIT_PHASES:
             if "desiredState" not in journal:
                 raise TransactionError(
@@ -1128,48 +1679,120 @@ def recover_transactions(paths: RuntimePaths, runtime: OmarchyRuntime) -> int:
                 raise TransactionError(
                     f"transaction archive intent is malformed: {directory}"
                 )
-            state_file = paths.state_dir / "install.json"
-            if desired is None:
-                _durable_unlink(state_file)
-            elif isinstance(desired, dict):
-                atomic_write(
-                    state_file,
-                    (json.dumps(desired, indent=2, sort_keys=True) + "\n").encode(
-                        "utf-8"
-                    ),
-                )
-            removed_stage = False
-            for record in records:
-                _, stage, _ = _safe_record_paths(plugin_root, token, record)
-                if stage and (stage.exists() or stage.is_symlink()):
-                    _remove_path(stage)
-                    removed_stage = True
-            if removed_stage:
-                _fsync_directory(plugin_root)
-            if archive_value:
-                _archive_transaction_backups(paths, token, records)
-            else:
-                removed_backup = False
+            quarantined = _quarantine_recovery_backups(
+                plugin_root,
+                token,
+                records,
+                artifact_bindings,
+                artifact_identities,
+            ) if artifact_bindings else {}
+            backup_overrides = {
+                plugin_id: quarantine
+                for plugin_id, (_, quarantine) in quarantined.items()
+            }
+            archive_descriptors: tuple[int, int, int] | None = None
+            try:
+                archive_descriptors = _open_archive_descriptors(
+                    paths, token, artifact_bindings or None
+                ) if archive_value else None
+                state_file = paths.state_dir / "install.json"
+                if desired is None:
+                    _durable_unlink(state_file)
+                elif isinstance(desired, dict):
+                    atomic_write(
+                        state_file,
+                        (json.dumps(desired, indent=2, sort_keys=True) + "\n").encode(
+                            "utf-8"
+                        ),
+                    )
+                removed_stage = False
                 for record in records:
-                    _, _, backup = _safe_record_paths(plugin_root, token, record)
-                    if backup.exists() or backup.is_symlink():
-                        _remove_path(backup)
-                        removed_backup = True
-                if removed_backup:
+                    _, stage, _ = _safe_record_paths(plugin_root, token, record)
+                    if stage and (stage.exists() or stage.is_symlink()):
+                        _remove_path(stage)
+                        removed_stage = True
+                if removed_stage:
                     _fsync_directory(plugin_root)
+                if archive_value:
+                    descriptors_for_archive = archive_descriptors
+                    archive_descriptors = None
+                    _archive_transaction_backups(
+                        paths,
+                        token,
+                        records,
+                        backup_overrides,
+                        artifact_bindings,
+                        artifact_identities,
+                        descriptors_for_archive,
+                    )
+                else:
+                    removed_backup = False
+                    for record in records:
+                        _, _, expected_backup = _safe_record_paths(
+                            plugin_root, token, record
+                        )
+                        backup = backup_overrides.get(
+                            str(record["pluginId"]), expected_backup
+                        )
+                        if backup.exists() or backup.is_symlink():
+                            if artifact_bindings:
+                                _verify_recovery_backup(
+                                    str(record["pluginId"]),
+                                    expected_backup,
+                                    backup,
+                                    artifact_bindings,
+                                    artifact_identities,
+                                )
+                            _remove_path(backup)
+                            removed_backup = True
+                    if removed_backup:
+                        _fsync_directory(plugin_root)
+            except Exception:
+                if archive_descriptors is not None:
+                    for descriptor in reversed(archive_descriptors):
+                        os.close(descriptor)
+                _restore_quarantined_backups(plugin_root, quarantined)
+                raise
         else:
             restart_on_reconcile = restart_value
             if live_mutation_value is False and not shell_stopped_value:
                 _discard_pre_exposure_records(plugin_root, token, records)
             else:
-                # A managed transaction keeps restoreRequiresDrain monotonic
-                # after its first stop. A later start may have succeeded even
-                # when shellStopped is false, so re-establish the stopped state
-                # before restoring any live plugin root.
-                if restore_requires_drain_value:
-                    _preflight_restore_records(plugin_root, token, records)
-                    runtime.stop_shell()
-                _restore_records(plugin_root, token, records)
+                # Atomically move each admitted backup out of its replaceable
+                # public name, validate the moved object, and consume only
+                # those quarantined objects after all preflights succeed.
+                quarantined = _quarantine_recovery_backups(
+                    plugin_root,
+                    token,
+                    records,
+                    artifact_bindings,
+                    artifact_identities,
+                ) if artifact_bindings else {}
+                backup_overrides = {
+                    plugin_id: quarantine
+                    for plugin_id, (_, quarantine) in quarantined.items()
+                }
+                try:
+                    # A managed transaction keeps restoreRequiresDrain monotonic
+                    # after its first stop. A later start may have succeeded even
+                    # when shellStopped is false, so re-establish the stopped state
+                    # before restoring any live plugin root.
+                    if restore_requires_drain_value:
+                        _preflight_restore_records(
+                            plugin_root, token, records, backup_overrides
+                        )
+                        runtime.stop_shell()
+                    _restore_records(
+                        plugin_root,
+                        token,
+                        records,
+                        backup_overrides,
+                        artifact_bindings,
+                        artifact_identities,
+                    )
+                except Exception:
+                    _restore_quarantined_backups(plugin_root, quarantined)
+                    raise
                 if config_existed_value:
                     atomic_write(config_path, config_snapshot_payload)
                 else:

@@ -131,7 +131,7 @@
       "backendBoundary": "nativeApi",
       "outputCardinality": "process-wide",
       "workerPolicy": "shared-demand-driven",
-      "reason": "BlueZ ownership is native; the remaining helper/audio compatibility debt is explicitly bounded below."
+      "reason": "BlueZ state ownership is native and publishes detached identity-bound records; Beta.12 retains exactly one Omarchy helper mutation path per device action plus the declared audio compatibility debt."
     },
     {
       "id": "network",
@@ -392,7 +392,7 @@
     {"value":"omarchy-audio-sink-availability","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.audio","capability":"audio","backend":"omarchy.audio","removalStep":"Step 4A","reason":"Native Audio must preserve the official output-availability filter until the atomic cutover is complete."},
     {"value":"omarchy-audio-output-sink","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.audio","capability":"audio","backend":"omarchy.audio","removalStep":"Step 4A","reason":"Resolve the effective physical output before native volume and mute mutations."},
     {"value":"omarchy-battery-status","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"battery-ac","backend":"omarchy.power","removalStep":"Step 6","reason":"Remove the Omarchy battery helper after UPower is authoritative."},
-    {"value":"omarchy-bluetooth-device","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","backend":"omarchy.bluetooth","removalStep":"Step 4B","reason":"Remove ordinary Omarchy Bluetooth helper mutations after native BlueZ actions are complete."},
+    {"value":"omarchy-bluetooth-device","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","backend":"omarchy.bluetooth","removalStep":"Step 4B","reason":"Beta.12 resolves the current device and adapter incarnation immediately before this single helper dispatch and rejects a multi-adapter production inventory because the Omarchy 4.0.2 helper carries only action/address, not controller path; closing the residual post-dispatch helper race remains a separately scoped native-action cutover."},
     {"value":"omarchy-capture-screenrecording","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording actions behind the typed Shibumi status service."},
     {"value":"omarchy-cmd-missing","count":1,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-cmd-present","count":4,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},

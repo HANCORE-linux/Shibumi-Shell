@@ -1401,7 +1401,10 @@ class Probe:
         # Stable Omarchy is authoritative for release baselines. Keep the
         # development package as a diagnostic-only fallback for engineering
         # hosts that intentionally provide omarchy-dev instead.
-        for package_group in (("omarchy", "omarchy-dev"), ("quickshell-git",)):
+        for package_group in (
+            ("omarchy", "omarchy-dev"),
+            ("quickshell", "quickshell-git"),
+        ):
             for package in package_group:
                 try:
                     result = run(["pacman", "-Q", package], timeout=3)

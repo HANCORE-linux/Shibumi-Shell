@@ -30,10 +30,10 @@ baseline jobs. The installed-package job defaults to the package-managed host:
 ```
 
 The installed-source-parity job requires an explicit Git checkout of the
-official `v4.0.0` source revision used by the installed package:
+official `v4.0.2` source revision used by the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 ```
 
@@ -60,10 +60,10 @@ Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The complete-host jobs select three repository-owned manifests with
 non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-v4.0.0.json` validates the
-  package-managed `omarchy 4.0.0-1` layout;
-- `contracts/baselines/omarchy-installed-source-parity-v4.0.0.json` proves that
-  the official `v4.0.0` source form satisfies the same complete suite;
+- `contracts/baselines/omarchy-installed-package-v4.0.2.json` validates the
+  package-managed `omarchy 4.0.2-1`, `omarchy-settings 4.0.2-1` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.0.2.json` proves that
+  the official `v4.0.2` source form satisfies the same complete suite;
 - `contracts/baselines/omarchy-forward-compat-ed7bae4a.json` proves forward
   compatibility with the recorded upstream snapshot.
 

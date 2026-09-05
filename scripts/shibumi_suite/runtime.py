@@ -59,7 +59,12 @@ class RuntimePaths:
     def validate(self) -> None:
         if not self.omarchy_root.is_absolute():
             raise RuntimeFailure("OMARCHY_PATH must be absolute")
-        for command in ("omarchy", "omarchy-shell"):
+        for command in (
+            "omarchy",
+            "omarchy-shell",
+            "omarchy-bluetooth-device",
+            "omarchy-audio-output-set-default",
+        ):
             if not (self.omarchy_root / "bin" / command).is_file():
                 raise RuntimeFailure(
                     f"Omarchy command is missing: {self.omarchy_root / 'bin' / command}"
@@ -118,6 +123,20 @@ class RuntimePaths:
             raise RuntimeFailure(
                 f"Omarchy shell defaults are missing: {self.defaults_file}"
             )
+        mutable_paths = {
+            "Omarchy plugin directory": self.plugin_dir,
+            "Omarchy config directory": self.config_file.parent,
+            "Shibumi state directory": self.state_dir,
+            "Shibumi cache directory": self.cache_dir,
+            "Shibumi lock directory": self.lock_file.parent,
+            "Shibumi lock file": self.lock_file,
+        }
+        for label, path in mutable_paths.items():
+            symlink = _first_existing_symlink(path)
+            if symlink is not None:
+                raise RuntimeFailure(
+                    f"refusing symlinked {label}: {symlink}"
+                )
         if self.config_file.is_symlink():
             raise RuntimeFailure(
                 f"refusing to replace symlinked Omarchy shell config: {self.config_file}"
@@ -128,6 +147,23 @@ class RuntimePaths:
                 "refusing symlinked Omarchy menu extension path: "
                 f"{self.menu_extension_file}"
             )
+
+
+def _first_existing_symlink(path: Path) -> Path | None:
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            if current.is_symlink():
+                return current
+            current.lstat()
+        except FileNotFoundError:
+            break
+        except OSError as error:
+            raise RuntimeFailure(
+                f"cannot validate writable path component {current}: {error}"
+            ) from error
+    return None
 
 
 def _omarchy_root(home: Path) -> Path:

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import STATE_SCHEMA_VERSION, SUITE_ID
+from .admission import AdmissionError, preflight_lifecycle_state
 from .config import (
     apply_identity_contract,
     ConfigError,
@@ -1329,11 +1330,27 @@ def main(argv: list[str] | None = None) -> int:
         paths.validate()
         runtime = OmarchyRuntime(paths.omarchy_root)
         if args.command == "status":
+            preflight_lifecycle_state(paths, suite)
             return command_status(suite, paths)
 
+        allow_payload_repair = args.command == "repair"
         with SuiteLock(paths.lock_file):
-            recovered = recover_transactions(paths, runtime)
+            preflight_lifecycle_state(
+                paths,
+                suite,
+                allow_pending_recovery=True,
+                allow_payload_repair=allow_payload_repair,
+            )
+            recovered = recover_transactions(paths, runtime, suite=suite)
             if recovered:
+                # Recovery can legitimately replace exposed payload or commit
+                # state. Require the resulting live identity before the user's
+                # requested mutation proceeds.
+                preflight_lifecycle_state(
+                    paths,
+                    suite,
+                    allow_payload_repair=allow_payload_repair,
+                )
                 print(f"Recovered {recovered} interrupted Shibumi transaction(s).")
             if args.command == "install":
                 return command_install(args, suite, paths, runtime)
@@ -1351,6 +1368,7 @@ def main(argv: list[str] | None = None) -> int:
                 return command_uninstall(args, suite, paths, runtime)
         raise CliError(f"unsupported command: {args.command}")
     except (
+        AdmissionError,
         CliError,
         ConfigError,
         ContractError,

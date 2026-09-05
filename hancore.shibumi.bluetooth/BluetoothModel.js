@@ -39,6 +39,32 @@ function sortedByLabel(devices) {
   return list
 }
 
+// Copy only presentation and action-identity primitives out of a native
+// BluetoothDevice. Native QObjects stay private to BluetoothBackendAdapter.
+function deviceRecord(device, identity) {
+  var source = device || ({})
+  var binding = identity || ({})
+  return {
+    address: String(source.address || "").trim(),
+    name: String(source.name || ""),
+    deviceName: String(source.deviceName || ""),
+    icon: String(source.icon || ""),
+    state: Number(source.state || 0),
+    connected: source.connected === true,
+    paired: source.paired === true,
+    bonded: source.bonded === true,
+    pairing: source.pairing === true,
+    trusted: source.trusted === true,
+    batteryAvailable: source.batteryAvailable === true,
+    battery: Number(source.battery || 0),
+    entityId: String(binding.entityId || ""),
+    generation: Number(binding.generation || 0),
+    adapterId: String(binding.adapterId || ""),
+    adapterEntityId: String(binding.adapterEntityId || ""),
+    adapterGeneration: Number(binding.adapterGeneration || 0)
+  }
+}
+
 function deviceLists(devices) {
   var values = toArray(devices)
   var connected = []

@@ -62,9 +62,10 @@ before editing JSON or suite state by hand.
 
 ## Know the beta boundary
 
-Version `0.1.1-beta.11` is the current Arch-package candidate. Its package and
-source contracts are tested locally; AUR publication and the complete package
-lifecycle on the validation system remain release gates. Shibumi supports Omarchy Quattro
+Version `0.1.1-beta.12` is the current local Arch-package candidate. Its
+package and Omarchy 4.0.2 source contracts are tested locally; fresh physical
+acceptance, publication, and the complete package lifecycle remain release
+gates. Shibumi supports Omarchy Quattro
 only. The exact accepted host packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
 

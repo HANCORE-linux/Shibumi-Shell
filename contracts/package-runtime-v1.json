@@ -36,6 +36,10 @@
     "notify-send": "libnotify",
     "wl-copy": "wl-clipboard"
   },
+  "requiredHostCommands": {
+    "omarchy-bluetooth-device": "Retained Beta.12 Bluetooth device mutation path",
+    "omarchy-audio-output-set-default": "Retained Bluetooth audio-route compatibility path"
+  },
   "requiredFonts": {
     "Material Symbols Rounded": "ttf-material-symbols-variable",
     "Material Symbols Sharp": "ttf-material-symbols-variable",

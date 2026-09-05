@@ -9,7 +9,7 @@ Item {
   required property var bluetoothService
 
   Component.onCompleted: {
-    bluetoothService.backend.viewLoadCount++
+    bluetoothService.backendOverride.viewLoadCount++
     bar.requestPopout(ownerWidget)
   }
   Component.onDestruction: {

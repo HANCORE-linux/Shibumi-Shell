@@ -9,6 +9,8 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
+  property var recordA: null
+  property var recordB: null
 
   function fail(message) {
     console.error("bluetooth-audio-intent-regression:", message)
@@ -17,6 +19,8 @@ ShellRoot {
 
   QtObject {
     id: nativeAdapter
+    property string adapterId: "hci-intent"
+    property string dbusPath: "/org/bluez/hci_intent"
     property bool enabled: true
     property bool discovering: false
   }
@@ -26,6 +30,7 @@ ShellRoot {
     property string address: "AA:00:00:00:00:01"
     property string name: "Intent A"
     property string deviceName: name
+    property string dbusPath: "/org/bluez/hci_intent/dev_AA_00_00_00_00_01"
     property bool connected: false
     property bool paired: true
     property bool bonded: true
@@ -38,6 +43,7 @@ ShellRoot {
     property string address: "CC:00:00:00:00:03"
     property string name: "Intent A"
     property string deviceName: name
+    property string dbusPath: "/org/bluez/hci_intent/dev_CC_00_00_00_00_03"
     property bool connected: true
     property bool paired: true
     property bool bonded: true
@@ -50,6 +56,7 @@ ShellRoot {
     property string address: "BB:00:00:00:00:02"
     property string name: "Intent B"
     property string deviceName: name
+    property string dbusPath: "/org/bluez/hci_intent/dev_BB_00_00_00_00_02"
     property bool connected: false
     property bool paired: true
     property bool bonded: true
@@ -312,7 +319,12 @@ ShellRoot {
             || booleanFailure.code !== "unavailable"
             || unavailableRoute.ok)
           return root.fail("Bluetooth route seam leaked, misrouted, or mutated an unavailable sink")
-        if (!backend.connectDevice(deviceA) || !backend.connectDevice(deviceB))
+        root.recordA = backend.knownDevices[0]
+        root.recordB = backend.knownDevices[1]
+        const connectA = backend.connectDevice(root.recordA)
+        const connectB = backend.connectDevice(root.recordB)
+        if (!connectA || connectA.ok !== true
+            || !connectB || connectB.ok !== true)
           return root.fail("could not create ordered connect intents")
         backend.nativePendingActions = ({})
         deviceA.connected = true
@@ -331,7 +343,8 @@ ShellRoot {
             || audioOutput.lastEntityId !== "sink:802")
           return root.fail("latest intent B did not exclusively hand off audio")
         deviceB.connected = false
-        if (!backend.connectDevice(deviceB))
+        const expiringConnect = backend.connectDevice(root.recordB)
+        if (!expiringConnect || expiringConnect.ok !== true)
           return root.fail("could not create expiring intent B")
         backend.nativePendingActions = ({})
         root.phase++

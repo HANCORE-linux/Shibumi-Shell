@@ -14,7 +14,7 @@ ShellRoot {
     || requestedOrder === "backend-first"
   readonly property bool ready: validOrder && serviceLoader.item
     && backendLoader.item && serviceLoader.item.ready
-    && serviceLoader.item.backend === backendLoader.item
+    && typeof serviceLoader.item.backend === "undefined"
   property int stateGeneration: 0
   property int settledStateGeneration: 0
   property string settledStateValue: ""

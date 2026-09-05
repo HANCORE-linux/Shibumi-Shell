@@ -1,6 +1,6 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.11` candidate contract
+Status: `0.1.1-beta.12` local candidate contract
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
@@ -12,7 +12,8 @@ The `shibumi-shell` package installs:
 
 - the immutable suite under `/usr/share/shibumi-shell`;
 - the stable command `/usr/bin/shibumi-shell`;
-- the suite, host-facade, and package-runtime contracts;
+- the suite, host-facade, package-runtime, backend-boundary, and exact
+  lifecycle-predecessor contracts;
 - package-origin metadata, license, and runtime user documentation.
 
 It has no `.install` script or Pacman hook. A package transaction must never
@@ -90,10 +91,13 @@ the PKGBUILD containing `_source_sha256` inside the bytes it hashes would make
 the checksum self-referential. The runtime package helpers under `packaging/`
 remain in the asset.
 
-The GitHub tag workflow rebuilds the archive from the accepted clean commit,
-requires `v<VERSION>`, compares the result with the pinned PKGBUILD checksum,
-and publishes the archive, checksum, and inventory as immutable prerelease
-assets. The checkout action is pinned to a full commit SHA.
+The GitHub tag workflow rebuilds the archive from `GITHUB_SHA`, requires the
+remote `v<VERSION>` tag to peel to that commit, and compares the result with the
+pinned PKGBUILD checksum. It creates a draft with an explicit asset inventory,
+downloads the remote assets, compares every name, size, and SHA-256, and only
+then publishes. A server-side `v*` ruleset must independently block tag updates
+and deletion. A failed upload or verification remains a draft. The checkout
+action is pinned to a full commit SHA.
 
 ## Local rehearsal
 
@@ -111,13 +115,17 @@ result. It requires:
 - a successful source checksum validation;
 - files only below `/usr` plus normal package metadata;
 - no install hook, user path, bytecode cache, or unexpected payload;
-- the stable command, package marker, license, and suite contract;
+- the stable command, package marker, license, suite contract, and lifecycle
+  predecessor contract;
 - exactly the 24 contract-declared plugin manifests;
 - a successful packaged lifecycle help smoke.
 
 `--nodeps` is used only by this controlled rehearsal because dependency
-resolution is verified separately against the validation system. A clean-chroot build must
-perform normal dependency resolution before publication.
+resolution is verified separately against the validation system. The package
+continues to depend on Omarchy's `omarchy-bluetooth-device` and
+`omarchy-audio-output-set-default` helpers for the Beta.12 hotfix; those are
+explicit compatibility debt, not undeclared native replacements. A clean-chroot
+build must perform normal dependency resolution before publication.
 
 ## Publication gates
 

@@ -62,6 +62,24 @@ printf '%s\n' "$output"
 grep -F 'bluetooth backend regression passed' <<<"$output" >/dev/null \
   || fail "Bluetooth backend success marker missing"
 
+install -m 0644 "$repo_root/tests/bluetooth-device-identity-regression.qml" \
+  "$tmpdir/shell.qml"
+set +e
+output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" --no-color 2>&1)
+status=$?
+set -e
+printf '%s\n' "$output"
+[[ $status -eq 0 ]] || fail "Bluetooth device identity regression exited with $status"
+grep -F 'bluetooth device identity regression passed' <<<"$output" >/dev/null \
+  || fail "Bluetooth device identity success marker missing"
+
 install -m 0644 "$repo_root/tests/bluetooth-adapter-hotplug-regression.qml" \
   "$tmpdir/shell.qml"
 set +e
@@ -141,10 +159,21 @@ rg -q 'BluetoothAudioRouteAdapter' "$adapter" \
   || fail "Bluetooth adapter does not use the audio route seam"
 rg -Fq 'routeBluetoothDevice(request)' "$audio_route" \
   || fail "Bluetooth audio route seam lacks its narrow route method"
-rg -Fq 'executeDeviceCommand(deviceCommand(action, device.address))' "$adapter" \
-  || fail "Bluetooth adapter does not preserve the device helper contract"
-rg -Fq 'Model.deviceLists(nativeDevices)' "$adapter" \
+rg -Fq 'executeDeviceCommand(deviceCommand(commandAction, address))' "$adapter" \
+  || fail "Bluetooth adapter does not preserve one device-helper mutation path"
+if rg -q 'device\.(connect|disconnect|pair|forget)\(' "$adapter"; then
+  fail "Bluetooth adapter dispatches both native and helper device mutations"
+fi
+rg -Fq 'Model.deviceLists(' "$adapter" \
   || fail "Bluetooth adapter does not normalize the native device model"
+rg -Fq 'nativeDeviceSnapshots())' "$adapter" \
+  || fail "Bluetooth adapter publishes native QObjects instead of detached records"
+for identity_field in entityId generation adapterId adapterEntityId adapterGeneration; do
+  rg -q "$identity_field" "$adapter" \
+    || fail "Bluetooth action identity lacks $identity_field"
+done
+rg -Fq 'return result && result.ok === true' "$panel" \
+  || fail "Bluetooth panel treats a structured action result as a boolean"
 for device_signal in ConnectedDevices KnownDevices DiscoveredDevices; do
   rg -U -q "on${device_signal}Changed: \\{[^}]*syncNativePendingActions\\(\\)[^}]*syncNativeAudioHandoffIntents\\(\\)" \
     "$adapter" \
@@ -190,9 +219,9 @@ rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discoverin
   || fail "Bluetooth discovery ownership is not confirmed from observed adapter state"
 rg -q 'property var audioHandoffIntent: null' "$adapter" \
   || fail "Bluetooth audio handoff intent is not an explicit latest-only state"
-rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
+rg -U -q 'function validatePendingAudioOutput\(\)[^}]*resolveNativeDevice\([^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
   "$adapter" \
-  || fail "Bluetooth audio handoff is not revalidated immediately before execution"
+  || fail "Bluetooth audio handoff identity/state is not revalidated before execution"
 if rg -q 'Quickshell\.Bluetooth|Bluez|Process \{' \
     "$widget" "$panel"; then
   fail "screen-local Bluetooth presentation owns backend work"

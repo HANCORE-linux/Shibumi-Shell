@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.1-beta.12: Step 5 release line and Bluetooth identity fix
+
+Local release candidate; publication remains gated on fresh physical acceptance.
+
+### Added
+
+- Included the completed Step 5 native Network payload on a release line based
+  directly on the Step 5 tip
+- Added exact Omarchy 4.0.2 installed-package and source-parity contracts
+- Added pre-mutation lifecycle admission for exact Beta.11, Step-5-tip, and
+  current-release identities, with complete journal inventory before recovery
+
+### Changed
+
+- Bluetooth panels now receive detached primitive device records and consume
+  typed action results through explicit `.ok` checks
+- Bluetooth mutations resolve the current device and adapter incarnation and
+  dispatch exactly one retained Omarchy helper action
+- Release publication now uses exact-commit archives, a draft upload, and
+  remote asset digest verification before publication
+
+### Fixed
+
+- Rejected stale, malformed, ambiguous, or replacement Bluetooth identities
+  without dispatching a device mutation
+- Rejected Step-6 Power-registration state and unknown journal schemas before
+  recovery or any other lifecycle mutation
+
+### Known limits
+
+- Existing Step-6 development installations need a separate reviewed rollback;
+  the normal Beta.12 updater intentionally refuses them
+- The retained Omarchy Bluetooth and audio-route helpers remain explicit
+  compatibility dependencies
+- Fresh physical Network and Bluetooth acceptance is required before publication
+
 ## 0.1.1-beta.11: Native Audio and Bluetooth cutover
 
 Public beta candidate for 2026-08-23.

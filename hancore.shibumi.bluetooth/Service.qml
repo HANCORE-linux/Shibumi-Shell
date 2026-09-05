@@ -25,7 +25,6 @@ Item {
   property int discoveryRetryInterval: 1000
   property int discoveryRequestTimeoutInterval: 1500
 
-  readonly property var backend: adapter.backend
   readonly property bool ready: adapter.ready
   readonly property bool adapterAvailable: adapter.adapterAvailable
   readonly property bool radioEnabled: adapter.radioEnabled

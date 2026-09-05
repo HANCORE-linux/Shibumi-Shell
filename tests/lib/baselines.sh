@@ -14,17 +14,116 @@ shibumi_baseline_fail() {
 shibumi_require_baseline_tools() {
   command -v find >/dev/null 2>&1 \
     || shibumi_baseline_fail 'find is required' || return
-  command -v jq >/dev/null 2>&1 \
-    || shibumi_baseline_fail 'jq is required' || return
+  [[ -x /usr/bin/jq ]] \
+    || shibumi_baseline_fail '/usr/bin/jq is required' || return
   command -v realpath >/dev/null 2>&1 \
     || shibumi_baseline_fail 'realpath is required' || return
   command -v sha256sum >/dev/null 2>&1 \
     || shibumi_baseline_fail 'sha256sum is required' || return
   command -v sort >/dev/null 2>&1 \
     || shibumi_baseline_fail 'sort is required' || return
+  command -v stat >/dev/null 2>&1 \
+    || shibumi_baseline_fail 'stat is required' || return
+  [[ -x /usr/bin/python3 ]] \
+    || shibumi_baseline_fail '/usr/bin/python3 is required' || return
+}
+
+shibumi_read_unique_json_snapshot() {
+  local manifest=${1:-}
+  /usr/bin/python3 -I - "$manifest" <<'PY'
+import json
+import math
+import os
+import stat
+import sys
+
+
+MAX_BYTES = 65536
+
+
+def reject_duplicates(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate key: {key}")
+        value[key] = item
+    return value
+
+
+def reject_nonfinite(value):
+    raise ValueError(f"non-finite number: {value}")
+
+
+def parse_finite_float(value):
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError(f"non-finite float: {value}")
+    return parsed
+
+
+flags = os.O_RDONLY | os.O_CLOEXEC
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+descriptor = os.open(sys.argv[1], flags)
+try:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("manifest is not a regular file")
+    payload = bytearray()
+    while len(payload) <= MAX_BYTES:
+        chunk = os.read(descriptor, min(8192, MAX_BYTES + 1 - len(payload)))
+        if not chunk:
+            break
+        payload.extend(chunk)
+    if not payload or len(payload) > MAX_BYTES:
+        raise ValueError("manifest size is invalid")
+finally:
+    os.close(descriptor)
+text = bytes(payload).decode("utf-8", errors="strict")
+json.loads(
+    text,
+    object_pairs_hook=reject_duplicates,
+    parse_constant=reject_nonfinite,
+    parse_float=parse_finite_float,
+)
+sys.stdout.write(text)
+PY
+}
+
+shibumi_validate_unique_json_keys() {
+  local manifest=${1:-}
+  shibumi_read_unique_json_snapshot "$manifest" >/dev/null 2>&1 \
+    || shibumi_baseline_fail \
+      "baseline manifest has duplicate or ambiguous JSON fields: $manifest" \
+    || return
+}
+
+# Every later jq projection of an accepted manifest consumes the same bounded
+# in-memory snapshot. Replacing or growing the pathname cannot change the
+# identity between schema validation, tree validation, and provenance checks.
+jq() {
+  local argument_count=$#
+  local final_argument=
+  if (( argument_count > 0 )); then
+    final_argument=${!argument_count}
+  fi
+  local snapshot_path=${SHIBUMI_BASELINE_JSON_PATH:-}
+  local snapshot_json=${SHIBUMI_BASELINE_JSON:-}
+  if [[ ${SHIBUMI_SCHEMA_SNAPSHOT_ACTIVE:-} == 1 ]]; then
+    snapshot_path=${SHIBUMI_SCHEMA_SNAPSHOT_PATH:-}
+    snapshot_json=${SHIBUMI_SCHEMA_SNAPSHOT_JSON:-}
+  fi
+  if [[ -n $snapshot_path && $final_argument == "$snapshot_path" ]]; then
+    local -a snapshot_arguments=("${@:1:argument_count-1}")
+    /usr/bin/jq "${snapshot_arguments[@]}" <<<"$snapshot_json"
+  else
+    /usr/bin/jq "$@"
+  fi
 }
 
 shibumi_validate_omarchy_baseline_schema() {
+  SHIBUMI_BASELINE_JSON=
+  SHIBUMI_BASELINE_JSON_PATH=
   local manifest=${1:-}
   [[ -n $manifest && $manifest == /* ]] \
     || shibumi_baseline_fail 'baseline manifest path must be absolute' || return
@@ -32,6 +131,14 @@ shibumi_validate_omarchy_baseline_schema() {
     || shibumi_baseline_fail "baseline manifest is missing: $manifest" || return
   [[ -f $manifest && -r $manifest ]] \
     || shibumi_baseline_fail "baseline manifest is unreadable: $manifest" || return
+  local SHIBUMI_SCHEMA_SNAPSHOT_ACTIVE=1
+  local SHIBUMI_SCHEMA_SNAPSHOT_JSON
+  local SHIBUMI_SCHEMA_SNAPSHOT_PATH=$manifest
+  SHIBUMI_SCHEMA_SNAPSHOT_JSON=$(shibumi_read_unique_json_snapshot \
+      "$manifest" 2>/dev/null) \
+    || shibumi_baseline_fail \
+      "baseline manifest has duplicate or ambiguous JSON fields: $manifest" \
+    || return
   jq -e . "$manifest" >/dev/null 2>&1 \
     || shibumi_baseline_fail \
       "baseline manifest is not valid JSON: $manifest" || return
@@ -63,9 +170,19 @@ shibumi_validate_omarchy_baseline_schema() {
     || shibumi_baseline_fail \
       "baseline provenance must be an object: $manifest" || return
   jq -e '
-    .quickshellPackage | type == "object"
-    and (.name | type == "string" and length > 0)
-    and (.version | type == "string" and length > 0)
+    if .id == "installed-package-v4.0.2"
+        or .id == "installed-source-parity-v4.0.2"
+        or .id == "forward-compat-ed7bae4a" then
+      .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
+    elif .id == "installed-package-v4.0.0"
+        or .id == "installed-source-parity-v4.0.0" then
+      .quickshellPackage == {
+        "name": "quickshell-git",
+        "version": "0.3.0.r20.g28771c7-1"
+      }
+    else
+      false
+    end
   ' "$manifest" >/dev/null \
     || shibumi_baseline_fail \
       "baseline Quickshell package identity is invalid: $manifest" || return
@@ -125,10 +242,34 @@ shibumi_validate_omarchy_baseline_schema() {
   case $profile in
     installed-package)
       jq -e '
-        .provenance.kind == "package"
-        and (.package | type == "object")
-        and (.package.name | type == "string" and length > 0)
-        and (.package.version | type == "string" and length > 0)
+        if .id == "installed-package-v4.0.2" then
+          .provenance.kind == "package"
+          and (.provenance.packages | type == "array" and length == 2)
+          and ([.provenance.packages[].name] | sort
+            == ["omarchy", "omarchy-settings"])
+          and ([.provenance.packages[].name] | unique | length == 2)
+          and all(.provenance.packages[];
+            (.name | type == "string"
+              and test("^[a-z0-9@._+:-]+$")
+              and length <= 64)
+            and (.version | type == "string"
+              and test("^[A-Za-z0-9@._+:-]+$")
+              and length <= 128))
+          and (.provenance.subtreeOwners | type == "object")
+          and (.provenance.subtreeOwners | keys | sort
+            == ["bin", "config", "shell"])
+          and .provenance.subtreeOwners.bin == "omarchy"
+          and .provenance.subtreeOwners.config == "omarchy-settings"
+          and .provenance.subtreeOwners.shell == "omarchy"
+        elif .id == "installed-package-v4.0.0" then
+          .sourceRevision
+            == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+          and .provenance == {"kind": "package"}
+          and .package == {"name": "omarchy", "version": "4.0.0-1"}
+          and .quickshellPackage.name == "quickshell-git"
+        else
+          false
+        end
       ' "$manifest" >/dev/null \
         || shibumi_baseline_fail \
           "installed-package provenance is invalid: $manifest" || return
@@ -156,6 +297,8 @@ shibumi_validate_omarchy_baseline_schema() {
           "$profile subtree policy is invalid: $manifest" || return
       ;;
   esac
+  SHIBUMI_BASELINE_JSON=$SHIBUMI_SCHEMA_SNAPSHOT_JSON
+  SHIBUMI_BASELINE_JSON_PATH=$SHIBUMI_SCHEMA_SNAPSHOT_PATH
 }
 
 shibumi_validate_omarchy_tree() {
@@ -174,9 +317,9 @@ shibumi_validate_omarchy_tree() {
   canonical_path=$(realpath -e -- "$requested_path") \
     || shibumi_baseline_fail "cannot resolve OMARCHY_PATH: $requested_path" \
     || return
-  canonical_manifest=$(realpath -e -- "$requested_manifest") \
-    || shibumi_baseline_fail \
-      "cannot resolve baseline manifest: $requested_manifest" || return
+  # The schema reader already opened this exact absolute path with O_NOFOLLOW.
+  # Keep using its in-memory snapshot instead of resolving or reopening it.
+  canonical_manifest=$requested_manifest
 
   local subtree entry_policy expected_count expected_inventory
   local expected_structure expected_content subtree_root
@@ -281,7 +424,109 @@ shibumi_validate_omarchy_tree() {
   SHIBUMI_VALIDATED_OMARCHY_BASELINE=$canonical_manifest
 }
 
+shibumi_require_exact_package_identity() {
+  local label=${1:-package}
+  local expected_name=${2:-}
+  local expected_version=${3:-}
+  local actual_identity=${4:-}
+  [[ $actual_identity == "$expected_name $expected_version" ]] \
+    || shibumi_baseline_fail \
+      "$label identity drift: expected $expected_name $expected_version, got $actual_identity" \
+    || return
+}
+
+shibumi_require_exact_subtree_owner() {
+  local subtree=${1:-}
+  local expected_owner=${2:-}
+  local actual_owner=${3:-}
+  [[ $actual_owner == "$expected_owner" ]] \
+    || shibumi_baseline_fail \
+      "Omarchy subtree owner drift: expected $subtree -> $expected_owner, got $actual_owner" \
+    || return
+}
+
+shibumi_validate_quickshell_package_provenance() {
+  shibumi_require_baseline_tools || return
+
+  local requested_manifest=${1:-}
+  local reuse_snapshot=${2:-}
+  if [[ $reuse_snapshot == reuse ]]; then
+    [[ ${SHIBUMI_BASELINE_JSON_PATH:-} == "$requested_manifest" ]] \
+      || shibumi_baseline_fail \
+        "Quickshell provenance has no matching baseline snapshot" || return
+  else
+    shibumi_validate_omarchy_baseline_schema "$requested_manifest" || return
+  fi
+  [[ -x /usr/bin/pacman ]] \
+    || shibumi_baseline_fail "/usr/bin/pacman is required" || return
+
+  local package_name expected_version actual_identity
+  package_name=$(jq -r '.quickshellPackage.name' "$requested_manifest")
+  expected_version=$(jq -r '.quickshellPackage.version' "$requested_manifest")
+  actual_identity=$(/usr/bin/pacman -Q -- "$package_name" 2>/dev/null) \
+    || shibumi_baseline_fail \
+      "required Quickshell package is unavailable: $package_name" || return
+  shibumi_require_exact_package_identity \
+    "Quickshell package" "$package_name" "$expected_version" \
+    "$actual_identity" || return
+}
+
+shibumi_validate_installed_package_provenance() {
+  shibumi_require_baseline_tools || return
+
+  local requested_path=${1:-}
+  local requested_manifest=${2:-}
+  local reuse_snapshot=${3:-}
+  if [[ $reuse_snapshot == reuse ]]; then
+    [[ ${SHIBUMI_BASELINE_JSON_PATH:-} == "$requested_manifest" ]] \
+      || shibumi_baseline_fail \
+        "installed package provenance has no matching baseline snapshot" \
+      || return
+  else
+    shibumi_validate_omarchy_baseline_schema "$requested_manifest" || return
+  fi
+  [[ $(jq -r '.profile' "$requested_manifest") == installed-package \
+      && $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.2 ]] \
+    || shibumi_baseline_fail \
+      "installed package provenance requires the active installed-package manifest" \
+    || return
+
+  local canonical_path
+  canonical_path=$(realpath -e -- "$requested_path") \
+    || shibumi_baseline_fail \
+      "cannot resolve installed Omarchy package root: $requested_path" || return
+  [[ $canonical_path == /usr/share/omarchy ]] \
+    || shibumi_baseline_fail \
+      "installed-package baseline requires /usr/share/omarchy" || return
+  [[ -x /usr/bin/pacman ]] \
+    || shibumi_baseline_fail "/usr/bin/pacman is required" || return
+
+  local package_name expected_version actual_identity
+  while IFS=$'\t' read -r package_name expected_version; do
+    actual_identity=$(/usr/bin/pacman -Q -- "$package_name" 2>/dev/null) \
+      || shibumi_baseline_fail \
+        "required host package is unavailable: $package_name" || return
+    shibumi_require_exact_package_identity \
+      "host package" "$package_name" "$expected_version" "$actual_identity" \
+      || return
+  done < <(jq -r '.provenance.packages[] | [.name, .version] | @tsv' \
+    "$requested_manifest")
+
+  local subtree expected_owner actual_owner
+  while IFS=$'\t' read -r subtree expected_owner; do
+    actual_owner=$(/usr/bin/pacman -Qqo -- "$canonical_path/$subtree" 2>/dev/null) \
+      || shibumi_baseline_fail \
+        "cannot resolve package owner for Omarchy subtree: $subtree" || return
+    shibumi_require_exact_subtree_owner \
+      "$subtree" "$expected_owner" "$actual_owner" || return
+  done < <(jq -r '
+    .provenance.subtreeOwners | to_entries[] | [.key, .value] | @tsv
+  ' "$requested_manifest")
+}
+
 shibumi_validate_agents_baseline_schema() {
+  SHIBUMI_BASELINE_JSON=
+  SHIBUMI_BASELINE_JSON_PATH=
   shibumi_require_baseline_tools || return
 
   local requested_manifest=${1:-}
@@ -289,6 +534,14 @@ shibumi_validate_agents_baseline_schema() {
     && -r $requested_manifest ]] \
     || shibumi_baseline_fail \
       "Omarchy agents manifest is unreadable: $requested_manifest" || return
+  local SHIBUMI_SCHEMA_SNAPSHOT_ACTIVE=1
+  local SHIBUMI_SCHEMA_SNAPSHOT_JSON
+  local SHIBUMI_SCHEMA_SNAPSHOT_PATH=$requested_manifest
+  SHIBUMI_SCHEMA_SNAPSHOT_JSON=$(shibumi_read_unique_json_snapshot \
+      "$requested_manifest" 2>/dev/null) \
+    || shibumi_baseline_fail \
+      "Omarchy agents manifest has duplicate or ambiguous JSON fields: $requested_manifest" \
+    || return
 
   jq -e '
     .schemaVersion == 1
@@ -316,6 +569,8 @@ shibumi_validate_agents_baseline_schema() {
     || shibumi_baseline_fail \
       "Omarchy agents baseline schema is invalid: $requested_manifest" \
     || return
+  SHIBUMI_BASELINE_JSON=$SHIBUMI_SCHEMA_SNAPSHOT_JSON
+  SHIBUMI_BASELINE_JSON_PATH=$SHIBUMI_SCHEMA_SNAPSHOT_PATH
 }
 
 shibumi_validate_agents_baseline() {
@@ -334,15 +589,19 @@ shibumi_validate_agents_baseline() {
   canonical_path=$(realpath -e -- "$requested_path") \
     || shibumi_baseline_fail \
       "cannot resolve OMARCHY_PATH: $requested_path" || return
-  canonical_manifest=$(realpath -e -- "$requested_manifest") \
-    || shibumi_baseline_fail \
-      "cannot resolve agents manifest: $requested_manifest" || return
+  # The schema reader already opened this exact absolute path with O_NOFOLLOW.
+  # Keep using its in-memory snapshot instead of resolving or reopening it.
+  canonical_manifest=$requested_manifest
   command -v git >/dev/null 2>&1 \
     || shibumi_baseline_fail 'git is required for agents-current' || return
   expected_revision=$(jq -r '.sourceRevision' "$canonical_manifest")
-  actual_revision=$(git -C "$canonical_path" rev-parse HEAD 2>/dev/null) \
+  actual_revision=$(git -C "$canonical_path" rev-parse 'HEAD^{commit}' 2>/dev/null) \
     || shibumi_baseline_fail \
-      "agents-current baseline is not a Git checkout: $canonical_path" \
+      "agents-current baseline has no resolvable HEAD commit: $canonical_path" \
+    || return
+  git -C "$canonical_path" cat-file -e "$expected_revision^{commit}" 2>/dev/null \
+    || shibumi_baseline_fail \
+      "agents-current baseline is missing its declared commit object" \
     || return
   [[ $actual_revision == "$expected_revision" ]] \
     || shibumi_baseline_fail \
@@ -376,15 +635,15 @@ shibumi_load_omarchy_baseline() {
   local requested_path manifest
   case $profile in
     installed-package)
-      requested_path=${OMARCHY_PATH:-/usr/share/omarchy}
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
+      requested_path=/usr/share/omarchy
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.2.json"
       ;;
     installed-source-parity)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
       ;;
     forward-compat)
       requested_path=${OMARCHY_PATH:-}
@@ -409,6 +668,11 @@ shibumi_load_omarchy_baseline() {
 
   if [[ $profile != agents-current ]]; then
     shibumi_validate_omarchy_tree "$requested_path" "$manifest" || return
+    shibumi_validate_quickshell_package_provenance "$manifest" reuse || return
+    if [[ $profile == installed-package ]]; then
+      shibumi_validate_installed_package_provenance \
+        "$requested_path" "$manifest" reuse || return
+    fi
   fi
   local canonical_path=$SHIBUMI_VALIDATED_OMARCHY_PATH
   local canonical_manifest=$SHIBUMI_VALIDATED_OMARCHY_BASELINE
@@ -424,9 +688,14 @@ shibumi_load_omarchy_baseline() {
       || return
     local expected_revision actual_revision
     expected_revision=$(jq -r '.sourceRevision' "$canonical_manifest")
-    actual_revision=$(git -C "$canonical_path" rev-parse HEAD 2>/dev/null) \
+    actual_revision=$(git -C "$canonical_path" rev-parse 'HEAD^{commit}' 2>/dev/null) \
       || shibumi_baseline_fail \
-        "$profile Omarchy baseline is not a Git checkout: $canonical_path" \
+        "$profile Omarchy baseline has no resolvable HEAD commit: $canonical_path" \
+      || return
+    git -C "$canonical_path" cat-file -e "$expected_revision^{commit}" \
+      2>/dev/null \
+      || shibumi_baseline_fail \
+        "$profile Omarchy baseline is missing its declared commit object" \
       || return
     [[ $actual_revision == "$expected_revision" ]] \
       || shibumi_baseline_fail \

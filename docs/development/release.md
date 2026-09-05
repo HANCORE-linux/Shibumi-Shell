@@ -46,6 +46,7 @@ git status --short
 git diff --check
 python3 tests/test_package_release.py
 python3 tests/test_shibumi_suite.py
+python3 tests/test_lifecycle_admission.py
 python3 tests/test_shibumi_health.py
 ./scripts/rehearse-aur-package
 ```
@@ -59,7 +60,7 @@ Run the complete contract against all four pinned Quattro proof axes:
 ```bash
 cd /path/to/shibumi
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
@@ -109,15 +110,25 @@ not available.
 1. Review `git diff`, generated evidence, and the working tree.
 2. Commit with a concise imperative subject.
 3. Rebuild the archive from the clean commit and confirm its SHA matches the
-   pinned PKGBUILD value.
-4. Tag the exact accepted commit as `v<version>`.
-5. Push the branch and tag to `HANCORE-linux/Shibumi-Shell`.
-6. Verify the remote branch and tag resolve to the intended commits.
-7. Confirm the SHA-pinned GitHub workflow publishes the archive, checksum, and
-   inventory from that exact tag.
+   pinned PKGBUILD value:
+   `scripts/build-release-archive --expected-commit <full-commit> --check-reproducible`.
+4. Configure a server-side immutable `v*` tag ruleset that blocks updates and
+   deletion; workflow checks do not replace this control.
+5. Tag the exact accepted commit as `v<version>`.
+6. Push the branch and tag to `HANCORE-linux/Shibumi-Shell`.
+7. Verify the remote tag peels to the intended commit.
+8. Confirm the workflow builds from `GITHUB_SHA`, uploads only the declared
+   assets to a draft, downloads them, verifies every remote name, size, and
+   SHA-256, and repeats remote direct/peeled tag-to-commit verification
+   immediately before publishing.
 
-Do not move an already published tag. If a candidate needs another fix, advance
-the prerelease version and produce a new immutable asset.
+A failed upload or remote verification must remain a draft. A retry may reuse
+that same verified draft, refresh its notes, and replace only the five declared
+assets; an undeclared remote asset still blocks publication. The workflow
+repeats the complete remote comparison immediately before publication. Do not
+manually publish a failed draft as a shortcut, and do not move an already
+published tag. If a candidate needs another fix, advance the prerelease version
+and produce a new immutable asset.
 
 ## Public-release gate
 

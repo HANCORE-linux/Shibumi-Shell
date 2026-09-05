@@ -21,6 +21,13 @@ if str(ROOT) not in sys.path:
 
 from scripts.shibumi_suite.model import Suite
 PKGBUILD = ROOT / "packaging/aur/PKGBUILD"
+PACKAGE_CONTRACTS = (
+    "plugin-suite-v1.json",
+    "host-facade-v1.json",
+    "package-runtime-v1.json",
+    "backend-boundary-v1.json",
+    "lifecycle-predecessors-v1.json",
+)
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -32,6 +39,100 @@ def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+
+
+def expected_package_inventory() -> tuple[dict[str, tuple[int, bytes]], set[str]]:
+    files: dict[str, tuple[int, bytes]] = {}
+    directories = {"usr", "usr/bin", "usr/share"}
+
+    def add_file(source: Path, destination: str, mode: int) -> None:
+        if destination in files:
+            raise RuntimeError(f"duplicate expected package path: {destination}")
+        files[destination] = (mode, source.read_bytes())
+        parent = Path(destination).parent
+        while parent.as_posix() not in (".", ""):
+            directories.add(parent.as_posix())
+            parent = parent.parent
+
+    def add_tree(source: Path, destination: str) -> None:
+        for path in sorted(source.rglob("*")):
+            relative = path.relative_to(source)
+            if "__pycache__" in relative.parts or path.suffix in (".pyc", ".pyo"):
+                continue
+            target = (Path(destination) / relative).as_posix()
+            if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+                raise RuntimeError(f"unsupported expected package source: {path}")
+            if path.is_dir():
+                directories.add(target)
+            else:
+                add_file(path, target, path.stat().st_mode & 0o777)
+
+    for plugin in sorted(ROOT.glob("hancore.shibumi.*")):
+        if plugin.is_dir():
+            add_tree(plugin, f"usr/share/shibumi-shell/{plugin.name}")
+    for contract in PACKAGE_CONTRACTS:
+        add_file(
+            ROOT / "contracts" / contract,
+            f"usr/share/shibumi-shell/contracts/{contract}",
+            0o644,
+        )
+    add_file(
+        ROOT / "scripts/shibumi-suite",
+        "usr/share/shibumi-shell/scripts/shibumi-suite",
+        0o755,
+    )
+    add_tree(
+        ROOT / "scripts/shibumi_suite",
+        "usr/share/shibumi-shell/scripts/shibumi_suite",
+    )
+    add_file(ROOT / "VERSION", "usr/share/shibumi-shell/VERSION", 0o644)
+    add_file(
+        ROOT / "packaging/package-metadata.json",
+        "usr/share/shibumi-shell/PACKAGE-METADATA.json",
+        0o644,
+    )
+    add_file(ROOT / "packaging/shibumi-shell", "usr/bin/shibumi-shell", 0o755)
+    add_file(
+        ROOT / "LICENSE", "usr/share/licenses/shibumi-shell/LICENSE", 0o644
+    )
+    add_file(ROOT / "README.md", "usr/share/doc/shibumi-shell/README.md", 0o644)
+    add_file(
+        ROOT / "docs/install.md",
+        "usr/share/doc/shibumi-shell/install.md",
+        0o644,
+    )
+    return files, directories
+
+
+def verify_package_inventory(extract: Path) -> None:
+    expected_files, expected_directories = expected_package_inventory()
+    actual_files: dict[str, tuple[int, bytes]] = {}
+    actual_directories: set[str] = set()
+    usr = extract / "usr"
+    for path in [usr, *sorted(usr.rglob("*"))]:
+        relative = path.relative_to(extract).as_posix()
+        mode = path.lstat().st_mode
+        if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+            raise RuntimeError(f"unsupported installed package path: {relative}")
+        if path.is_dir():
+            actual_directories.add(relative)
+        else:
+            actual_files[relative] = (mode & 0o777, path.read_bytes())
+    if set(actual_files) != set(expected_files):
+        raise RuntimeError(
+            "installed package file inventory drift: "
+            f"missing={sorted(set(expected_files) - set(actual_files))} "
+            f"unexpected={sorted(set(actual_files) - set(expected_files))}"
+        )
+    if actual_directories != expected_directories:
+        raise RuntimeError(
+            "installed package directory inventory drift: "
+            f"missing={sorted(expected_directories - actual_directories)} "
+            f"unexpected={sorted(actual_directories - expected_directories)}"
+        )
+    for path, expected in expected_files.items():
+        if actual_files[path] != expected:
+            raise RuntimeError(f"installed package mode/content drift: {path}")
 
 
 def main() -> int:
@@ -121,6 +222,7 @@ def main() -> int:
             "usr/share/shibumi-shell/VERSION",
             "usr/share/shibumi-shell/PACKAGE-METADATA.json",
             "usr/share/shibumi-shell/contracts/backend-boundary-v1.json",
+            "usr/share/shibumi-shell/contracts/lifecycle-predecessors-v1.json",
             "usr/share/shibumi-shell/scripts/shibumi-suite",
             "usr/share/licenses/shibumi-shell/LICENSE",
         }
@@ -134,6 +236,11 @@ def main() -> int:
         subprocess.run(
             ["bsdtar", "-xf", str(package), "-C", str(extract)], check=True
         )
+        try:
+            verify_package_inventory(extract)
+        except (OSError, RuntimeError) as error:
+            print(str(error), file=sys.stderr)
+            return 1
         payload = extract / "usr/share/shibumi-shell"
         boundary_check = run(
             [
