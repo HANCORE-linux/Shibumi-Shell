@@ -186,8 +186,10 @@ The lifecycle contract and uncompleted physical gates are defined in
   restore that object; older state schemas use Quattro's current stock bar as a
   compatibility fallback rather than synthesizing an empty layout.
 - Every bar-owner transition uses Quattro's full restart boundary, including
-  rollback and interrupted-transaction recovery. Live reload is reserved for
-  mutations that keep the active bar owner.
+  rollback and interrupted-transaction recovery. Managed install, migration,
+  update, and repair drain the exact production shell before publishing plugin
+  roots; they never stop a shell after starting asynchronous plugin discovery.
+  Live reload is reserved for mutations that keep the active bar owner.
 - Before recovery or any other lifecycle mutation, the release lifecycle
   inventories every public and private transaction journal and classifies the
   install by revision, complete plugin digests, activation metadata, and

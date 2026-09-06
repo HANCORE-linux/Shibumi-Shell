@@ -551,13 +551,17 @@ def command_install(
             configured_bar=configured_bar_id(desired),
             previous_bar=current.get("bar"),
         )
-        transaction.expose()
-        transaction.stage_removal_ids(suite.retired_plugins)
-        runtime.rescan()
+        # A rescan begins asynchronous QML incubation. A managed install must
+        # drain before publishing plugin roots, not rescan and then kill an
+        # incubating shell. External installs retain the live-reload boundary.
+        runtime.require_session_unlocked("Shibumi install")
         if not external:
             transaction.stop_shell()
+        transaction.expose()
+        transaction.stage_removal_ids(suite.retired_plugins)
         transaction.write_config(encode_config(desired))
         if external:
+            runtime.rescan()
             runtime.reload_config()
         else:
             runtime.restart_shell()
@@ -661,9 +665,13 @@ def command_migrate(
             "migratedEpoch": int(time.time()),
         }
 
-        transaction.expose()
-        runtime.rescan()
+        # Migration changes the active bar owner and therefore uses the same
+        # pre-publication drain as managed install/update/repair. Never stop a
+        # shell immediately after starting an asynchronous plugin rescan.
+        runtime.require_session_unlocked("Shibumi migration")
         transaction.stop_shell()
+        transaction.expose()
+        transaction.stage_legacy_removal(old_plugin_ids)
         transaction.write_config(encode_config(desired))
         runtime.restart_shell()
         transaction.mark_shell_started()
@@ -679,9 +687,9 @@ def command_migrate(
                 suite, profile.id
             ),
         )
-        transaction.stage_legacy_removal(old_plugin_ids)
-        runtime.rescan()
-        runtime.verify_uninstall(set(old_plugin_ids))
+        runtime.verify_uninstall(
+            set(old_plugin_ids), expected_bar_namespace="shibumi-bar"
+        )
         transaction.finish(desired_state, archive_previous=True)
 
     old_state_dir = legacy_state_dir(paths)

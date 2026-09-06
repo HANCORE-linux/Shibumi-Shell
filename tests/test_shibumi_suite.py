@@ -183,7 +183,24 @@ class FakeOmarchyRuntime(OmarchyRuntime):
             raise RuntimeFailure("injected shell is not running")
 
     def verify_bar_layer_ownership(self, expected_namespace: str) -> None:
-        return
+        config_path = (
+            self.paths.config_file
+            if self.paths.config_file.is_file()
+            else self.paths.defaults_file
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        bar = config.get("bar") if isinstance(config.get("bar"), dict) else {}
+        active_bar = str(bar.get("id") or "omarchy.bar")
+        actual_namespace = (
+            "shibumi-bar"
+            if active_bar == "hancore.shibumi.bar"
+            else "omarchy-bar"
+        )
+        if expected_namespace != actual_namespace:
+            raise RuntimeFailure(
+                f"expected bar layer {expected_namespace!r}, "
+                f"found {actual_namespace!r}"
+            )
 
     def payload_ready(self, payload_digest: str) -> bool:
         target = self.paths.plugin_dir / "hancore.shibumi.state"
@@ -1744,6 +1761,64 @@ class SuiteLifecycleTests(unittest.TestCase):
             any(plugin_id.startswith("omarchy.") for plugin_id in layout_ids)
         )
 
+    def test_locked_migration_preserves_legacy_state_before_shell_drain(
+        self,
+    ) -> None:
+        self.prepare_legacy_install()
+        original_config = self.paths.config_file.read_bytes()
+        original_plugins = sorted(
+            path.name for path in self.paths.plugin_dir.iterdir()
+        )
+        self.runtime.session_lock_status["pending"] = True
+
+        with self.assertRaisesRegex(
+            RuntimeFailure, r"session lock is active \(pending\)"
+        ):
+            command_migrate(
+                self.args(), self.suite, self.paths, self.runtime
+            )
+
+        self.assertEqual(self.runtime.stops, 0)
+        self.assertEqual(self.runtime.restarts, 0)
+        self.assertEqual(self.runtime.rescans, 0)
+        self.assertEqual(
+            self.paths.config_file.read_bytes(), original_config
+        )
+        self.assertEqual(
+            sorted(path.name for path in self.paths.plugin_dir.iterdir()),
+            original_plugins,
+        )
+        self.assertFalse((self.paths.state_dir / "install.json").exists())
+        self.assertTrue(
+            (self.paths.state_dir.parent / "qsrise" / "install.json").is_file()
+        )
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_managed_migration_drains_before_publish_and_never_rescans_before_stop(
+        self,
+    ) -> None:
+        self.prepare_legacy_install()
+        original_expose = PluginTransaction.expose
+
+        def recording_expose(transaction: PluginTransaction) -> None:
+            self.runtime.events.append("expose")
+            original_expose(transaction)
+
+        self.runtime.events.clear()
+        with patch.object(PluginTransaction, "expose", recording_expose):
+            self.assertEqual(
+                command_migrate(
+                    self.args(), self.suite, self.paths, self.runtime
+                ),
+                0,
+            )
+
+        self.assertEqual(self.runtime.events, ["stop", "expose", "restart"])
+        # Legacy roots are staged for removal while the shell is drained, so
+        # migration never starts asynchronous plugin incubation.
+        self.assertEqual(self.runtime.rescans, 0)
+        self.assertEqual(self.runtime.session_lock_preflights, 1)
+
     def test_migration_does_not_create_transparency_preference(self) -> None:
         self.prepare_legacy_install()
         config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
@@ -1870,10 +1945,22 @@ class SuiteLifecycleTests(unittest.TestCase):
     def test_failed_migration_restores_legacy_payload_config_and_state(self) -> None:
         self.prepare_legacy_install()
         original_config = self.paths.config_file.read_bytes()
-        self.runtime.fail_rescan_calls = {2}
+        with patch.object(
+            self.runtime,
+            "verify_uninstall",
+            side_effect=RuntimeFailure(
+                "injected post-restart legacy verification failure"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure,
+                "post-restart legacy verification failure",
+            ):
+                command_migrate(
+                    self.args(), self.suite, self.paths, self.runtime
+                )
 
-        with self.assertRaises(RuntimeFailure):
-            command_migrate(self.args(), self.suite, self.paths, self.runtime)
+        self.assertNotIn("rescan", self.runtime.events)
 
         self.assertEqual(self.paths.config_file.read_bytes(), original_config)
         for new_id in self.suite.plugins:
@@ -2303,6 +2390,50 @@ class SuiteLifecycleTests(unittest.TestCase):
             set(profile.layout["left"] + profile.layout["center"] + profile.layout["right"])
             <= restored_ids
         )
+        self.assertEqual(command_status(self.suite, self.paths), 0)
+
+    def test_locked_managed_install_discards_staging_before_shell_drain(
+        self,
+    ) -> None:
+        self.runtime.session_lock_status["pending"] = True
+
+        with self.assertRaisesRegex(
+            RuntimeFailure, r"session lock is active \(pending\)"
+        ):
+            command_install(
+                self.args(), self.suite, self.paths, self.runtime
+            )
+
+        self.assertEqual(self.runtime.stops, 0)
+        self.assertEqual(self.runtime.restarts, 0)
+        self.assertEqual(self.runtime.rescans, 0)
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertFalse((self.paths.state_dir / "install.json").exists())
+        self.assertFalse(
+            any(
+                (self.paths.plugin_dir / plugin_id).exists()
+                for plugin_id in self.suite.plugins
+            )
+        )
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_managed_install_drains_before_publish_without_rescan(self) -> None:
+        original_expose = PluginTransaction.expose
+
+        def recording_expose(transaction: PluginTransaction) -> None:
+            self.runtime.events.append("expose")
+            original_expose(transaction)
+
+        with patch.object(PluginTransaction, "expose", recording_expose):
+            self.assertEqual(
+                command_install(
+                    self.args(), self.suite, self.paths, self.runtime
+                ),
+                0,
+            )
+
+        self.assertEqual(self.runtime.events, ["stop", "expose", "restart"])
+        self.assertEqual(self.runtime.session_lock_preflights, 1)
         self.assertEqual(command_status(self.suite, self.paths), 0)
 
     def test_managed_update_stops_before_publish_and_restarts_once(self) -> None:

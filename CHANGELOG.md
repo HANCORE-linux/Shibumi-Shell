@@ -27,6 +27,8 @@ Local release candidate; publication remains gated on fresh physical acceptance.
   without dispatching a device mutation
 - Rejected Step-6 Power-registration state and unknown journal schemas before
   recovery or any other lifecycle mutation
+- Prevented managed install and migration from stopping Quickshell while an
+  asynchronous plugin rescan is still incubating QML objects
 
 ### Known limits
 

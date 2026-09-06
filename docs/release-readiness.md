@@ -9,6 +9,13 @@ Network payload, the Bluetooth ST-01 identity fix, and Omarchy 4.0.2
 compatibility work. It contains no Step-6 product functionality and no
 automatic Step-6 migration.
 
+Candidate `98faf6a7117b3dd22675ceedf597f8b887a41363` was rejected during its
+first physical fresh-install attempt: managed install requested a plugin rescan
+and then stopped Quickshell while asynchronous QML incubation was still active,
+producing `SIGSEGV`. The replacement candidate drains the production shell
+before publishing managed plugin roots and must repeat every automated and
+physical gate; evidence from the rejected identity is not transferable.
+
 ## Candidate boundary
 
 The normal lifecycle supports only these predecessor identities:
@@ -80,8 +87,8 @@ helper remains declared debt. Helper removal is not part of this hotfix.
 | AUR package rehearsal with exact installed inventory | Required after checksum pinning |
 | Fresh physical Network acceptance | **Open; public-beta blocker** |
 | Fresh physical Bluetooth acceptance | **Open; public-beta blocker** |
-| Live install, activation, update, rollback, and uninstall | Not authorized in local-candidate scope |
-| Machine 2 | Out of scope and untouched |
+| Live install, activation, update, rollback, and uninstall | Rejected candidate exposed managed-install rescan/stop race; full replacement-RC rerun required |
+| Machine 2 | Exact package staging prepared; physical activation deferred until the replacement RC passes automated gates |
 | Push, tag, GitHub release, or AUR publication | Not authorized |
 
 Fixtures prove deterministic boundaries but do not replace physical Network,

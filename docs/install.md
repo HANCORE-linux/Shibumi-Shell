@@ -65,16 +65,22 @@ cd Shibumi-Shell
 ```
 
 The dry run validates the suite and prints every target without changing the
-system. The real transaction:
+system. Run a real transaction only from an active, unlocked Omarchy desktop.
+A fresh install is not a recovery launcher for an absent shell; use
+`omarchy restart shell` first so the lock state can be verified fail closed.
+The real transaction:
 
 1. validates all plugin manifests with Omarchy;
 2. rejects unsafe or foreign replacement targets;
 3. stages and hashes the complete payload;
 4. snapshots the affected plugins and `shell.json`;
-5. exposes all plugins and rescans the registry;
-6. activates the Shibumi bar and managed layout;
-7. reloads the shell and verifies the running payload;
-8. restores the previous state if a gate fails.
+5. verifies that the session is unlocked;
+6. for managed activation, drains the production shell before publishing any
+   plugin root, writes the new config, and performs one full restart;
+7. for external-layout installation, publishes the roots and uses a live
+   registry rescan and config reload without changing the active bar owner;
+8. verifies the running payload and restores the previous state if a gate
+   fails.
 
 Shibumi's lifecycle does not edit files below `~/.config/hypr/` and does not
 change Hyprland window borders, inner gaps, or outer gaps. Such changes are not

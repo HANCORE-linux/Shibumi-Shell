@@ -754,7 +754,13 @@ class OmarchyRuntime:
             time.sleep(0.1)
         raise RuntimeFailure(f"Shibumi deactivation verification failed: {detail}")
 
-    def verify_uninstall(self, plugin_ids: set[str], *, timeout: float = 8) -> None:
+    def verify_uninstall(
+        self,
+        plugin_ids: set[str],
+        *,
+        expected_bar_namespace: str = "omarchy-bar",
+        timeout: float = 8,
+    ) -> None:
         deadline = time.monotonic() + timeout
         detail = "removed plugins remain visible"
         while time.monotonic() < deadline:
@@ -763,7 +769,7 @@ class OmarchyRuntime:
                 remaining = plugin_ids & plugins.keys()
                 if not remaining:
                     self.verify_single_shell_instance()
-                    self.verify_bar_layer_ownership("omarchy-bar")
+                    self.verify_bar_layer_ownership(expected_bar_namespace)
                     self.ping()
                     return
                 detail = f"remaining={sorted(remaining)}"
