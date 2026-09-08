@@ -6,6 +6,8 @@ Local release candidate; publication remains gated on fresh physical acceptance.
 
 ### Added
 
+- Added an optional second V1 center slot through the existing edit-mode `+`,
+  preserving saved one-slot layouts until explicitly extended
 - Included the completed Step 5 native Network payload on a release line based
   directly on the Step 5 tip
 - Added exact Omarchy 4.0.2 installed-package and source-parity contracts
@@ -23,6 +25,14 @@ Local release candidate; publication remains gated on fresh physical acceptance.
 
 ### Fixed
 
+- Included regional extras and center siblings in existing responsive budgets
+- Made new V1 family replacements slot-neutral without relocating existing providers
+- Followed host-selected enabled clones for widget admission, components and
+  metadata, preserving active clone identity and entry settings
+- Refused ambiguous base-slot provider removal unchanged; move the provider
+  back to an extra before removal. Control Center uninstall preflights this case
+- Corrected drag-ghost capture/window lookup, image lifetime, stale callbacks,
+  and duplicated Bottom positioning; physical revalidation remains required
 - Rejected stale, malformed, ambiguous, or replacement Bluetooth identities
   without dispatching a device mutation
 - Rejected Step-6 Power-registration state and unknown journal schemas before

@@ -2,9 +2,16 @@ import QtQuick
 import "../core" as Core
 import "../core/ShibumiConfig.js" as ShibumiConfig
 
-Item {
+Window {
   id: root
 
+  property bool started: false
+  onFrameSwapped: {
+    if (!started) {
+      started = true
+      Qt.callLater(run)
+    }
+  }
   property int writes: 0
   visible: true
   width: 320
@@ -13,6 +20,7 @@ Item {
   function fail(message) {
     console.error("layout-controller-regression:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   function same(left, right) {
@@ -113,7 +121,7 @@ Item {
     layoutController: controller
   }
 
-  Component.onCompleted: {
+  function run() {
     if (controller.groupLocation("G8").region !== "center"
         || controller.splitEnabled("left", 0)
         || controller.swapGroups("G1", "G1")
@@ -127,9 +135,9 @@ Item {
         || !firstScreen.registerTarget("G4", secondTarget)
         || firstScreen.registerTarget("G99", secondTarget)
         || firstScreen.targets.length !== 2
-        || firstScreen.targetAt(20, 20) !== "G3"
-        || firstScreen.targetAt(120, 20) !== "G4"
-        || firstScreen.targetAt(250, 20) !== "")
+        || (firstScreen.targetAt(20, 20) || {}).groupId !== "G3"
+        || (firstScreen.targetAt(120, 20) || {}).groupId !== "G4"
+        || firstScreen.targetAt(250, 20) !== null)
       fail("per-output target registry")
     if (!firstScreen.setEditing(true) || firstScreen.setEditing(true)
         || !firstScreen.begin("G3", firstTarget, 20, 20)
@@ -145,7 +153,7 @@ Item {
     if (!firstScreen.unregisterTarget(secondTarget)
         || firstScreen.unregisterTarget(secondTarget)
         || firstScreen.targets.length !== 1
-        || firstScreen.targetAt(120, 20) !== "")
+        || firstScreen.targetAt(120, 20) !== null)
       fail("target unregister lifecycle")
 
     if (!firstScreen.begin("G3", firstTarget, 20, 20)
@@ -156,10 +164,12 @@ Item {
         || firstScreen.sourceItem !== null)
       fail("invalid drop return lifecycle")
 
-    if (!firstScreen.begin("G1") || !firstScreen.updateTarget("G15")
+    if (!firstScreen.begin("G1", firstTarget, 20, 20)
+        || !firstScreen.updateTarget({ groupId: "G15" })
         || secondScreen.active || firstScreen.screenName !== "DP-1")
       fail("first output drag state")
-    if (!secondScreen.begin("G2") || !secondScreen.updateTarget("G14")
+    if (!secondScreen.begin("G2", secondTarget, 120, 20)
+        || !secondScreen.updateTarget({ groupId: "G14" })
         || !firstScreen.active || firstScreen.targetGroupId !== "G15")
       fail("per-output drag isolation")
     if (!firstScreen.drop() || firstScreen.active
@@ -173,9 +183,11 @@ Item {
         || controller.groupLocation("G14").index !== 1)
       fail("second output drop after shared mutation")
 
-    if (!firstScreen.begin("G3") || firstScreen.updateTarget("G3")
-        || firstScreen.updateTarget("G99") || firstScreen.drop())
+    if (!firstScreen.begin("G3", firstTarget, 20, 20)
+        || firstScreen.updateTarget({ groupId: "G3" })
+        || firstScreen.updateTarget({ groupId: "G99" }) || firstScreen.drop())
       fail("invalid drag target handling")
+    firstScreen.cancel()
 
     let protectedState = ShibumiConfig.normalize(fakeStateService.config)
     protectedState.layoutProtection.v1 = true
@@ -208,7 +220,7 @@ Item {
     if (!controller.addV1Slot("left")
         || !controller.addV1Slot("left")
         || controller.addV1Slot("left")
-        || controller.addV1Slot("center")
+        || controller.addV1Slot("unknown")
         || controller.v1Slots.left.length !== 9
         || controller.splits.left.length !== 8
         || controller.baseV1SlotCount("left") !== 7
@@ -242,6 +254,11 @@ Item {
           { pluginId: "custom.right", region: "right" }
         ])
         || !controller.moveGroupToSlot("G:custom.left", "left", 0)
+        || controller.reconcileV1PluginGroups([
+          { pluginId: "custom.right", region: "right" }
+        ])
+        || root.writes !== 15
+        || !controller.moveGroupToSlot("G:custom.left", "left", 7)
         || !controller.reconcileV1PluginGroups([
           { pluginId: "custom.right", region: "right" }
         ])
@@ -251,14 +268,28 @@ Item {
         || !controller.reconcileV1PluginGroups([])
         || !same(controller.order, ShibumiConfig.defaultOrder())
         || !same(controller.splits, ShibumiConfig.defaultSplits())
-        || root.writes !== 17)
+        || root.writes !== 18)
       fail("V1 plugin-group lifecycle transaction")
+
+    const restoreOrder = controller.currentV1Order()
+    const restoreSplits = controller.currentV1Splits(restoreOrder)
+    const writesBeforeRestore = root.writes
+    if (!controller.restoreV1Layout(restoreOrder, restoreSplits)
+        || controller.restoreV1Layout({ left: [], center: [], right: [] }, restoreSplits)
+        || controller.restoreV1Layout(restoreOrder, { left: [], right: [], boundaries: [] })
+        || root.writes !== writesBeforeRestore
+        || !controller.swapGroups("G1", "G6")
+        || !controller.restoreV1Layout(restoreOrder, restoreSplits)
+        || !same(controller.order, restoreOrder)
+        || !same(controller.splits, restoreSplits))
+      fail("V1 exact rollback validation/idempotence")
 
     const protectedV2State = ShibumiConfig.normalize(fakeStateService.config)
     protectedV2State.presentation.shellStyle = "full"
     protectedV2State.layoutProtection.v2 = true
     fakeStateService.config = ShibumiConfig.normalize(protectedV2State)
-    if (!controller.v2Mode || !controller.v2LayoutProtected
+    if (controller.restoreV1Layout(restoreOrder, restoreSplits)
+        || !controller.v2Mode || !controller.v2LayoutProtected
         || !controller.activeLayoutProtected
         || controller.interactiveMutationAllowed(false)
         || !controller.interactiveMutationAllowed(true)

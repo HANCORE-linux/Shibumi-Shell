@@ -42,6 +42,10 @@ Item {
     ? activeItem.QsWindow.window : null
   readonly property var moduleManifest: {
     void(resolverRevision)
+    const resolver = bar && "hostWidgetResolver" in bar
+      ? bar.hostWidgetResolver : null
+    if (resolver && typeof resolver.manifestFor === "function")
+      return resolver.manifestFor(moduleName)
     const registry = bar ? bar.pluginRegistry : null
     const installed = registry && registry.installedPlugins
       ? registry.installedPlugins : null

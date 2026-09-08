@@ -106,6 +106,35 @@ The full contract covers:
 - Control Center, Omarchy menu continuity, bar, panel, and widget behavior;
 - transactional installer and updater regressions.
 
+The bar gates also run `tests/v1-center-slot-regression.qml` and the two-output
+slot-interaction fixture. `tests/drag-ghost-render-regression.sh` renders only
+controlled fixture content offscreen at scale factors 1 and 1.5, checks capture
+pixels with the installed `/usr/bin/magick`, and tests cancellation/image lifetime.
+It also tests already hidden source-window refusal and cancellation when the
+source changes windows. Invalid dimensions use the shared size-guard predicate:
+Qt's offscreen QWindow clamps zero dimensions to one, so this is not a native
+zero-sized-window runtime test. Changed bar/model QML fixtures abort
+the current JavaScript stack after `Qt.exit(1)`: scheduling failure alone must not
+fall through to a later success exit. Mutation counterchecks must prove a nonzero
+process exit, not merely a diagnostic string or final PASS marker.
+`tests/qml-assertion-exit-regression.py` repeats positive/negative/restored-positive
+controls for the center limit and controller persistence count in private copies.
+The bar-host fixture also runs `fixtures/CloneSelectionChecks.qml` against the
+selected baseline's unmodified registry decision/mutation methods, with only
+startup directory/watcher I/O disabled. It proves the original-enable hazard,
+clone identity/settings preservation and atomic refusal cases without a live
+registry. Model/controller/bar tests cover ambiguous extra-slot removal and the
+explicit return-to-extra workaround. `fixtures/PluginRemovalChecks.qml` executes
+the exact extracted Control Center removal method against inert process
+properties, proving refusal before command dispatch. That fixture neither runs
+an uninstaller nor proves a filesystem-uninstall transaction. The loaded Plugin
+Catalog confirmation tests preserve the actionable error and its generic fallback.
+Center interaction cases exercise disabled and non-loading G8, a width-reactive
+sibling on two simulated outputs, edit placeholders and loading recovery,
+without deriving owner readiness from its own allocated width.
+It uses no desktop screenshot or physical layer surface; real Top/Bottom ghost
+and mixed-scale acceptance remain separate.
+
 ## Live validation
 
 After the complete contract passes:

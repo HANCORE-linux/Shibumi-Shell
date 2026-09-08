@@ -28,6 +28,7 @@ ShellRoot {
   function fail(message) {
     console.error("control-center-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
@@ -1083,6 +1084,21 @@ ShellRoot {
             || plugins.filteredEntries.length !== 0)
           return root.fail("plugin favorite could not be removed")
         plugins.favoritesOnly = false
+        const beforeRemoval = JSON.stringify(panel.pluginEntries)
+        panel.refusePluginRemoval = true
+        if (!plugins.requestPluginRemovalById("acme.weather")
+            || plugins.confirmPluginRemoval()
+            || plugins.feedbackDetail !== panel.removalRefusalDetail
+            || panel.pluginRemovalRunning
+            || JSON.stringify(panel.pluginEntries) !== beforeRemoval)
+          return root.fail("plugin removal feedback hid the return-to-extra workaround")
+        panel.removalRefusalDetail = ""
+        if (!plugins.requestPluginRemovalById("acme.weather")
+            || plugins.confirmPluginRemoval()
+            || plugins.feedbackDetail !== "The provider rejected the remove request."
+            || JSON.stringify(panel.pluginEntries) !== beforeRemoval)
+          return root.fail("plugin removal generic fallback retained stale feedback")
+        panel.refusePluginRemoval = false
         if (!plugins.requestPluginRemovalById("acme.weather")
             || !plugins.removalConfirmationVisible
             || !plugins.confirmPluginRemoval()

@@ -62,6 +62,15 @@ Item {
   readonly property var visualTokens: styleReady ? activeStyle.visualTokens : null
   readonly property var hostWidgetResolver: hostWidgetResolverService
   readonly property var layoutController: layoutStateController
+  property int providerRegistryRevision: 0
+  readonly property var v1FamilySlotBindings: {
+    void(layoutConfig)
+    void(layoutStateController.v1Slots)
+    void(providerRegistryRevision)
+    void(pluginRegistry ? pluginRegistry.installedPlugins : null)
+    return WidgetFamilies.v1SlotBindings(v1PluginSpecs(),
+      layoutStateController.v1Slots, pluginRegistry)
+  }
   readonly property string styleId: styleRegistry.resolvedId
   readonly property var availableStyleIds: styleRegistry.availableIds
   property color foreground: styleReady ? activeStyle.foreground : Color.bar.text
@@ -418,8 +427,11 @@ Item {
         return groupId === "" || !layoutStateController.groupLocation(groupId)
       }))
     }
+    const familyProviders = Object.values(v1FamilySlotBindings)
     return deduplicatedUnassignedEntries(entries.filter(function(entry) {
-      const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+      const id = entryId(entry)
+      if (familyProviders.indexOf(id) >= 0) return false
+      const groupId = GroupRegistry.dynamicGroupIdForModule(id)
       return groupId === "" || !layoutStateController.groupLocation(groupId)
     }))
   }
@@ -494,15 +506,22 @@ Item {
   }
 
   function reconcileActivePluginGroups(specs, syncValue, followRegionsValue) {
-    return layoutStateController.v2Mode
-      ? layoutStateController.reconcileV2PluginGroups(
-          specs, syncValue, followRegionsValue)
-      : layoutStateController.reconcileV1PluginGroups(specs)
+    if (layoutStateController.v2Mode)
+      return layoutStateController.reconcileV2PluginGroups(
+        specs, syncValue, followRegionsValue)
+    if (!Array.isArray(specs)) return false
+    const bindings = WidgetFamilies.v1SlotBindings(specs,
+      layoutStateController.currentV1Order(), pluginRegistry)
+    const familyProviders = Object.values(bindings)
+    return layoutStateController.reconcileV1PluginGroups(
+      specs.filter(function(spec) {
+        return !spec || familyProviders.indexOf(spec.pluginId) < 0
+      }))
   }
 
   function reconcileV1PluginGroups() {
     if (layoutStateController.v2Mode) return true
-    if (!layoutStateController.reconcileV1PluginGroups(v1PluginSpecs()))
+    if (!reconcileActivePluginGroups(v1PluginSpecs()))
       return false
     return reconcileWidgetFamilyProviders()
   }
@@ -535,26 +554,20 @@ Item {
     return false
   }
 
-  function hasBarWidgetEntryPoint(widgetId) {
-    const id = String(widgetId || "")
-    const installed = pluginRegistry && pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins : null
-    const candidate = installed ? installed[id] : null
-    if (!id || !candidate) return false
-    if (pluginRegistry
-        && typeof pluginRegistry.entryPointUrl === "function")
-      return String(pluginRegistry.entryPointUrl(
-        candidate, "barWidget") || "") !== ""
-    const entryPoints = candidate.entryPoints
-    return Util.isPlainObject(entryPoints)
-      && String(entryPoints.barWidget || "") !== ""
+  function hasBarWidgetEntryPoint(widgetId, selectionValue) {
+    const selection = selectionValue === undefined
+      ? hostWidgetResolverService.selectionFor(widgetId) : selectionValue
+    const candidate = selection ? selection.manifest : null
+    if (!candidate || !pluginRegistry
+        || typeof pluginRegistry.entryPointUrl !== "function") return false
+    return String(pluginRegistry.entryPointUrl(
+      candidate, "barWidget") || "") !== ""
   }
 
-  function widgetAllowsMultiple(widgetId) {
-    const id = String(widgetId || "")
-    const installed = pluginRegistry && pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins : null
-    const candidate = installed ? installed[id] : null
+  function widgetAllowsMultiple(widgetId, selectionValue) {
+    const selection = selectionValue === undefined
+      ? hostWidgetResolverService.selectionFor(widgetId) : selectionValue
+    const candidate = selection ? selection.manifest : null
     return !!(candidate && candidate.barWidget
       && candidate.barWidget.allowMultiple === true)
   }
@@ -942,18 +955,45 @@ Item {
   }
 
   function setBarWidgetInstalled(widgetId, installed, region) {
-    const id = String(widgetId || "")
+    const requestedId = String(widgetId || "")
+    const selection = installed === true
+      ? hostWidgetResolverService.selectionFor(requestedId) : null
+    if (installed === true && !hasBarWidgetEntryPoint(requestedId, selection))
+      return false
+    const id = selection ? selection.id : requestedId
+    const effectiveSelection = selection
+      ? hostWidgetResolverService.selectionFor(id) : null
+    if (selection && (!effectiveSelection || effectiveSelection.id !== id
+        || effectiveSelection.manifest !== selection.manifest)) return false
+    // A host-selected clone retains its own activation identity. Enabling the
+    // original would tell Omarchy to restore the source and remove the clone.
+    if (id !== requestedId && JSON.stringify(widgetFamilyGroups(id).sort())
+        !== JSON.stringify(widgetFamilyGroups(requestedId).sort())) return false
     const targetRegion = WidgetFamilies.targetRegion(
       id, region, pluginRegistry)
     const familyGroups = widgetFamilyGroups(id)
     if (!id || !shell || typeof shell.mutateShellConfig !== "function")
       return false
-    if (installed === true && !hasBarWidgetEntryPoint(id))
+    // V1's fixed family slot has one provider identity, not instance keys.
+    // Refuse an ambiguous multi-instance replacement before changing layout,
+    // registry enablement or either generation's family state. Existing
+    // layouts and unrelated allowMultiple entries keep their old semantics.
+    if (installed === true && !layoutStateController.v2Mode
+        && familyGroups.length > 0 && widgetAllowsMultiple(id, selection))
       return false
 
     const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
+    const existingEntries = ["left", "center", "right"].reduce(
+      (entries, part) => entries.concat(previousLayout[part].filter(
+        entry => entryId(entry) === id)), [])
+    if (installed === true && !widgetAllowsMultiple(id, selection)
+        && existingEntries.length > 1) return false
     const previousV2Layout = currentV2LayoutSnapshot()
+    const previousV1Order = !layoutStateController.v2Mode
+      ? layoutStateController.currentV1Order() : null
+    const previousV1Splits = previousV1Order
+      ? layoutStateController.currentV1Splits(previousV1Order) : null
     const replacedProviderIds = installed === true
       ? conflictingLayoutProviderIds(id) : [id]
     const displacedGroups = []
@@ -968,9 +1008,12 @@ Item {
     }
     const nextLayout = layoutWithoutProviderIds(
       previousLayout, replacedProviderIds)
-    if (installed === true)
-      nextLayout[targetRegion].push({ id: id, shibumiModule: true })
-    else if (isV1AdditionalSuiteWidget(id))
+    if (installed === true) {
+      const entry = existingEntries.length === 1 && Util.isPlainObject(existingEntries[0])
+        ? JSON.parse(JSON.stringify(existingEntries[0])) : { id: id }
+      entry.shibumiModule = true
+      nextLayout[targetRegion].push(entry)
+    } else if (isV1AdditionalSuiteWidget(id))
       nextLayout[targetRegion].push({ id: id })
     const nextOwnedGroups = providerFamilyGroupsInLayout(nextLayout)
     const stateValues = ({})
@@ -996,15 +1039,25 @@ Item {
     const registryWasEnabled = pluginRegistry
       && typeof pluginRegistry.isEnabled === "function"
       ? pluginRegistry.isEnabled(id) : null
+    if (installed === true && registryWasEnabled !== true
+        && (!pluginRegistry || typeof pluginRegistry.setEnabled !== "function"))
+      return false
     const desiredSpecs = activePluginSpecs(replacedProviderIds,
       installed === true ? { id: id, region: targetRegion } : null)
     if (!reconcileActivePluginGroups(
           desiredSpecs, false, layoutStateController.v2Mode))
       return false
 
-    if (installed === true && pluginRegistry
-        && typeof pluginRegistry.setEnabled === "function")
-      pluginRegistry.setEnabled(id, true)
+    if (installed === true && registryWasEnabled !== true
+        && pluginRegistry.setEnabled(id, true) !== true) {
+      const restoredGroups = previousV1Order
+        ? layoutStateController.restoreV1Layout(previousV1Order, previousV1Splits)
+        : reconcileActivePluginGroups(previousSpecs, false)
+      const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
+      if (!restoredGroups || !restoredV2)
+        console.warn("provider enable rollback was incomplete")
+      return false
+    }
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(nextLayout))
@@ -1036,8 +1089,10 @@ Item {
         if (!Util.isPlainObject(config.bar)) config.bar = {}
         config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
       })
-      const restoredGroups = reconcileActivePluginGroups(
-        previousSpecs, false)
+      const restoredGroups = previousV1Order
+        ? layoutStateController.restoreV1Layout(
+            previousV1Order, previousV1Splits)
+        : reconcileActivePluginGroups(previousSpecs, false)
       const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
       if (registryWasEnabled === false && pluginRegistry
           && typeof pluginRegistry.setEnabled === "function")
@@ -1057,6 +1112,10 @@ Item {
     const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
     const previousV2Layout = currentV2LayoutSnapshot()
+    const previousV1Order = !layoutStateController.v2Mode
+      ? layoutStateController.currentV1Order() : null
+    const previousV1Splits = previousV1Order
+      ? layoutStateController.currentV1Splits(previousV1Order) : null
     const groups = Util.isPlainObject(stateValues)
       ? Object.keys(stateValues) : []
     const previousStates = groups.length > 0
@@ -1073,8 +1132,10 @@ Item {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
     })
-    const restoredGroups = reconcileActivePluginGroups(
-      previousSpecs, false)
+    const restoredGroups = previousV1Order
+      ? layoutStateController.restoreV1Layout(
+          previousV1Order, previousV1Splits)
+      : reconcileActivePluginGroups(previousSpecs, false)
     const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
     const restoredStates = !previousStates
       || setWidgetGroupVariantStates(previousStates)
@@ -1144,6 +1205,12 @@ Item {
     for (let index = 0; index < groups.length; index++)
       states[groups[index]] = { v1: true, v2: true }
     return restoreWidgetFamilyProviderStates(states)
+  }
+
+  function canRemoveBarWidget(widgetId) {
+    const id = String(widgetId || "")
+    return id !== "" && (layoutStateController.v2Mode
+      || layoutStateController.canRemoveV1PluginGroup(id))
   }
 
   function removeBarWidgetAndRestoreFamilies(widgetId, groupValues) {
@@ -1946,6 +2013,10 @@ Item {
     ignoreUnknownSignals: true
 
     function onPluginsChanged() {
+      // Component creation also changes the resolver revision. Do not use it
+      // as a family dependency: a new projected slot would invalidate its
+      // own binding while its provider component is being constructed.
+      root.providerRegistryRevision++
       v1PluginReconcileTimer.restart()
     }
   }

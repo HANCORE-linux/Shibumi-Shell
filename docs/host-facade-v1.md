@@ -60,6 +60,20 @@ while switching back to `omarchy.bar` reactivates its saved value.
 Compatibility is verified against the supported Quattro commit and the
 validation system; it is not inferred from successful QML parsing.
 
+Host widget entry points and their display metadata follow the registry's
+`resolveEnabledId()` selection when that API exists. Cached components are
+retained only while the selected entry-point URL still matches. An empty host
+resolution or missing selected manifest remains unavailable; it never falls
+back around a host refusal. Older registries without this API retain direct
+manifest lookup. Provider admission uses the same selection record for the
+entry point and multi-instance check. An active clone keeps its selected ID
+and existing entry settings; admitting it must not enable its original and
+thereby ask Omarchy to restore the source. Missing selections, unstable selected
+IDs, conflicting families and duplicate single-instance entries are refused
+before mutation. Clone families without explicit semantics follow exact
+installed `omarchy.clonedFrom` sources, bounded to 32 entries and rejecting
+cycles or absent sources. This does not grant access beyond a host's registry scope.
+
 ## Internal State
 
 Slot arrays, active popout, tooltip backing state and the layout controller are

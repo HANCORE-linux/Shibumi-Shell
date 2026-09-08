@@ -7,6 +7,7 @@ Item {
   function fail(message) {
     console.error("responsive-layout-regression:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   function expectVisible(stage, visibleIds, hiddenIds) {
@@ -61,6 +62,16 @@ Item {
       false, 1920, 5, 4, 300, 400, 12, 812)
     if (fullCenter !== 812) {
       fail("full center budget ignores measured geometry")
+      return
+    }
+
+    if (ResponsiveLayout.centerAvailableWidth(
+          true, 1920, 5, 4, 300, 400, 12, 100, 160) !== 1018
+        || ResponsiveLayout.centerAvailableWidth(
+          false, 1920, 5, 4, 300, 400, 12, 812, 160) !== 652
+        || ResponsiveLayout.centerAvailableWidth(
+          false, 1920, 5, 4, 300, 400, 12, 100, 160) !== 0) {
+      fail("center extras were omitted or produced a negative budget")
       return
     }
 

@@ -35,9 +35,10 @@ function nextNarrowStage(currentStage, availableWidth, stageWidths) {
 
 function centerAvailableWidth(compactShell, surfaceWidth, frameInset,
                               contentInset, leftWidth, rightWidth,
-                              centerGap, measuredSpan) {
+                              centerGap, measuredSpan, centerExtrasWidth) {
+  var extras = Math.max(0, Number(centerExtrasWidth) || 0)
   if (!compactShell)
-    return Math.max(0, Number(measuredSpan) || 0)
+    return Math.max(0, (Number(measuredSpan) || 0) - extras)
 
   // Fit, Dock and Notch are content-driven surfaces. Measuring their center
   // budget from the current shell width makes the responsive center feed back
@@ -49,5 +50,6 @@ function centerAvailableWidth(compactShell, surfaceWidth, frameInset,
     - 2 * Math.max(0, Number(contentInset) || 0)
     - Math.max(0, Number(leftWidth) || 0)
     - Math.max(0, Number(rightWidth) || 0)
-    - 2 * Math.max(0, Number(centerGap) || 0))
+    - 2 * Math.max(0, Number(centerGap) || 0)
+    - extras)
 }

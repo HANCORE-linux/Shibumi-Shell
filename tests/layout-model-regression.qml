@@ -6,6 +6,7 @@ QtObject {
   function fail(message) {
     console.error("layout-model-regression:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   function same(left, right) {
@@ -71,7 +72,7 @@ QtObject {
     if (!leftOne || !leftTwo || !bothSides
         || leftTwo.left.length !== 9 || bothSides.right.length !== 8
         || LayoutModel.addSlot(leftTwo, "left") !== null
-        || LayoutModel.addSlot(order, "center") !== null
+        || LayoutModel.maxCount("center") !== 2
         || !LayoutModel.isExtraSlot(leftTwo, "left", 7)
         || LayoutModel.isExtraSlot(leftTwo, "left", 6))
       fail("V1 optional slot limits or roles")
@@ -128,9 +129,13 @@ QtObject {
 
     const dynamicInBase = LayoutModel.moveGroupToSlot(
       reconciled.order, "G:custom.left", "left", 0)
-    const withoutLeft = dynamicInBase
+    if (LayoutModel.reconcilePluginGroups(dynamicInBase, reconciled.splits,
+          [{ pluginId: "custom.right", region: "right" }]) !== null)
+      fail("ambiguous base repair guessed among fixed and dynamic extras")
+    const returnedToExtra = LayoutModel.swapGroups(dynamicInBase, "G:custom.left", "G1")
+    const withoutLeft = returnedToExtra
       ? LayoutModel.reconcilePluginGroups(
-        dynamicInBase, reconciled.splits,
+        returnedToExtra, reconciled.splits,
         [{ pluginId: "custom.right", region: "right" }]) : null
     if (!withoutLeft || withoutLeft.order.left.length !== 7
         || withoutLeft.order.left[0] !== "G1"

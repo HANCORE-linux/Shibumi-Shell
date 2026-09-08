@@ -118,14 +118,11 @@ function stringList(value) {
 function manifestFor(pluginId, registry) {
   var installed = registry && registry.installedPlugins
     ? registry.installedPlugins : null
-  return installed ? installed[pluginId] || null : null
+  return installed && Object.prototype.hasOwnProperty.call(installed, pluginId)
+    ? installed[pluginId] || null : null
 }
 
-function capabilitiesForPlugin(pluginValue, registry) {
-  var pluginId = String(pluginValue || "")
-  var known = KnownCapabilities[pluginId]
-  if (known) return known.slice()
-  var manifest = manifestFor(pluginId, registry)
+function declaredCapabilities(manifest) {
   var shibumi = manifest && manifest["x-shibumi"]
     ? manifest["x-shibumi"] : null
   var declared = shibumi ? stringList(shibumi.capabilities) : []
@@ -136,6 +133,29 @@ function capabilitiesForPlugin(pluginValue, registry) {
   var single = barWidget ? String(barWidget.semanticRole || "")
     .trim().toLowerCase() : ""
   return single ? [single] : []
+}
+
+function capabilitiesForPlugin(pluginValue, registry) {
+  var id = String(pluginValue || "")
+  var seen = Object.create(null)
+  // Native clones need not declare Shibumi semantics of their own. Inherit
+  // only through exact installed source IDs, with bounded/cycle-safe lookup.
+  for (var depth = 0; depth < 32; depth++) {
+    if (!id || seen[id]) return []
+    seen[id] = true
+    var known = Object.prototype.hasOwnProperty.call(KnownCapabilities, id)
+      ? KnownCapabilities[id] : null
+    if (known) return known.slice()
+    var manifest = manifestFor(id, registry)
+    if (!manifest) return []
+    var declared = declaredCapabilities(manifest)
+    if (declared.length > 0) return declared
+    var metadata = manifest.omarchy
+    var source = metadata ? String(metadata.clonedFrom || "") : ""
+    if (!source || !manifestFor(source, registry)) return []
+    id = source
+  }
+  return []
 }
 
 function familyForCapability(capabilityValue) {
@@ -201,6 +221,37 @@ function familyForGroup(groupValue, registry) {
     }
   }
   return null
+}
+
+// Reuse one displaced fixed V1 slot for a newly placed family provider.
+// Existing dynamic placements remain authoritative: no saved order, split,
+// slot limit or schema is migrated merely by loading this version.
+function v1SlotBindings(specs, order, registry) {
+  var result = Object.create(null)
+  if (!Array.isArray(specs) || !order) return result
+  var placed = Object.create(null)
+  for (var r = 0; r < 3; r++) {
+    var entries = order[["left", "center", "right"][r]]
+    if (!Array.isArray(entries)) return Object.create(null)
+    for (var i = 0; i < entries.length; i++) placed[entries[i]] = true
+  }
+  var seen = Object.create(null)
+  for (var s = 0; s < specs.length; s++) {
+    var spec = specs[s]
+    if (!spec || typeof spec.pluginId !== "string") continue
+    var id = spec.pluginId
+    if (!id || id.length > 160 || !/^[a-z0-9][a-z0-9._-]*$/.test(id)
+        || placed["G:" + id] || seen[id]) continue
+    seen[id] = true
+    var families = familiesForPlugin(id, registry)
+    for (var f = 0; f < families.length; f++) {
+      var group = families[f].group
+      if (!placed[group] || result[group]) continue
+      result[group] = id
+      break
+    }
+  }
+  return result
 }
 
 function targetRegion(pluginValue, fallbackValue, registry) {

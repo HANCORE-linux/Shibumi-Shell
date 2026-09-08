@@ -14,11 +14,30 @@ QtObject {
   property var componentUrls: ({})
   property int revision: 0
 
-  function entryPointUrl(widgetId) {
+  function selectionFor(widgetId) {
     const registry = bar ? bar.pluginRegistry : null
     const plugins = registry && registry.installedPlugins
       ? registry.installedPlugins : null
-    const manifest = plugins ? plugins[String(widgetId || "")] : null
+    const requestedId = String(widgetId || "")
+    if (!requestedId || !plugins) return null
+    // The host owns clone selection. An explicit empty resolution is a
+    // refusal, not permission to fall back to the original manifest.
+    const id = typeof registry.resolveEnabledId === "function"
+      ? String(registry.resolveEnabledId(requestedId) || "") : requestedId
+    if (!id || !Object.prototype.hasOwnProperty.call(plugins, id)
+        || !plugins[id] || typeof plugins[id] !== "object"
+        || Array.isArray(plugins[id])) return null
+    return { id: id, manifest: plugins[id] }
+  }
+
+  function manifestFor(widgetId) {
+    const selection = selectionFor(widgetId)
+    return selection ? selection.manifest : null
+  }
+
+  function entryPointUrl(widgetId) {
+    const registry = bar ? bar.pluginRegistry : null
+    const manifest = manifestFor(widgetId)
     if (!manifest || !registry || typeof registry.entryPointUrl !== "function")
       return ""
     return String(registry.entryPointUrl(manifest, "barWidget") || "")
@@ -27,7 +46,9 @@ QtObject {
   function componentFor(widgetId) {
     const id = String(widgetId || "")
     const existing = components[id]
-    return existing && existing.status === Component.Ready ? existing : null
+    const url = entryPointUrl(id)
+    return existing && existing.status === Component.Ready
+      && url !== "" && componentUrls[id] === url ? existing : null
   }
 
   function ensureComponent(widgetId) {

@@ -351,6 +351,33 @@ Item {
         }
         return widths
       }
+      function groupAvailableWidth(index) {
+        if (!root) return 0
+        if (root.v2Mode || root.region !== "center" || root.availableWidth <= 0)
+          return root.availableWidth
+        // Prefer G8 only while its enabled, stage-shown widgets are loaded.
+        // Otherwise the first loaded center occupant owns the remainder.
+        // Readiness, not hasContent/width, chooses the owner: its own budget
+        // must not feed back into selection. Edit placeholders stay siblings.
+        let ownerIndex = -1
+        for (let i = 0; i < horizontalRepeater.count; i++) {
+          const cell = horizontalRepeater.itemAt(i)
+          if (!cell || !cell.budgetOwnerEligible) continue
+          if (ownerIndex < 0) ownerIndex = i
+          if (cell.modelData === "G8") { ownerIndex = i; break }
+        }
+        if (index !== ownerIndex) return 0
+        let siblings = root.canAddSlot ? root.groupSpacing + addSlotTarget.width : 0
+        for (let i = 0; i < horizontalRepeater.count; i++) {
+          if (i === index) continue
+          const cell = horizontalRepeater.itemAt(i)
+          if (cell && cell.effectiveHasContent)
+            siblings += cell.targetVisual.width + root.groupSpacing
+        }
+        // Zero is the host widget API's unconstrained sentinel.
+        return Math.max(1, root.availableWidth - siblings)
+      }
+
       readonly property var groupGeometry: {
         if (!root) return []
         void(root.groups)
@@ -480,6 +507,8 @@ Item {
           property real measuredMinimumGroupWidth: 0
           readonly property bool effectiveHasContent: placeholderSlot
             || contentShown
+          readonly property bool budgetOwnerEligible: modelData !== ""
+            && groupSlot.groupEnabled && stageShown && groupSlot.hasLoadedWidgets
           readonly property bool budgetHasContent: groupSlot.groupEnabled
             && (groupHasContent
             || (measuredHasContent && groupSlot.groupEnabled
@@ -660,7 +689,8 @@ Item {
             bar: horizontalCell.lifecycleBar
             groupId: horizontalCell.modelData
             screenName: root ? root.screenName : ""
-            availableWidth: root ? root.availableWidth : 0
+            availableWidth: horizontalRow
+              ? horizontalRow.groupAvailableWidth(horizontalCell.index) : 0
             enabled: root ? !root.slotEditing : false
             x: horizontalCell.leadingGap
             anchors.verticalCenter: parent.verticalCenter
@@ -799,6 +829,7 @@ Item {
             id: splitMarker
 
             readonly property bool hasFollowingGroup: root && horizontalRow
+              && (root.v2Mode || root.region !== "center")
               && horizontalCell.contentShown
               && (root.v2Mode
                 ? horizontalRow.hasContentAfter(horizontalCell.index)

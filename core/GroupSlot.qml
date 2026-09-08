@@ -21,6 +21,15 @@ Item {
       ? Number(stateService.revision) || 0 : 0
   readonly property bool v2Shell: !!(bar.visualTokens
     && bar.visualTokens.v2Shell === true)
+  // Keep the fixed slot/drag identity, but render the chosen provider with
+  // its own existing dynamic settings and compatibility surface recipe.
+  readonly property string effectiveGroupId: {
+    const bindings = !v2Shell && bar && "v1FamilySlotBindings" in bar
+      ? bar.v1FamilySlotBindings : null
+    const replacement = bindings ? String(bindings[groupId] || "") : ""
+    return replacement !== ""
+      ? GroupRegistry.dynamicGroupIdForModule(replacement) : groupId
+  }
   readonly property var groupSettings: {
     // Calls across the plugin-service boundary do not reliably retain nested
     // config dependencies. Observe both published invalidation surfaces before
@@ -29,9 +38,10 @@ Item {
     void(stateRevision)
     return stateService
       && typeof stateService.groupSettingsForVariant === "function"
-      ? stateService.groupSettingsForVariant(groupId,
+      ? stateService.groupSettingsForVariant(effectiveGroupId,
           v2Shell ? "v2" : "v1")
-      : stateConfig.widgets ? stateConfig.widgets[groupId] || ({}) : ({})
+      : stateConfig.widgets
+        ? stateConfig.widgets[effectiveGroupId] || ({}) : ({})
   }
   readonly property bool groupEnabled: {
     // Calls across the plugin-service boundary do not reliably retain nested
@@ -42,11 +52,11 @@ Item {
     return stateService
       && typeof stateService.groupEnabledForVariant === "function"
         ? stateService.groupEnabledForVariant(
-            groupId, v2Shell ? "v2" : "v1")
+            effectiveGroupId, v2Shell ? "v2" : "v1")
         : groupSettings.enabled !== false
   }
   readonly property string dynamicModuleId:
-    GroupRegistry.dynamicModuleIdForGroup(groupId)
+    GroupRegistry.dynamicModuleIdForGroup(effectiveGroupId)
   readonly property bool dynamicV1Group: !v2Shell && dynamicModuleId !== ""
   // These optional suite widgets already own a native PillSurface. Keep the
   // compatibility wrapper only for external dynamic widgets so inherited and
@@ -81,7 +91,7 @@ Item {
   // model for a value-only settings update destroys the live widget and any
   // open panel it owns.
   readonly property var moduleIds: GroupRegistry.moduleIdsFor(
-    groupId, bar.layoutConfig)
+    effectiveGroupId, bar.layoutConfig)
   readonly property int moduleCount: moduleIds.length
   readonly property var contentItem: content.item
   readonly property real v2SurfaceHeight: bar.visualTokens
@@ -93,6 +103,11 @@ Item {
   readonly property Item visualSurfaceItem: widgetSurface
   readonly property bool dynamicShadowLoaded:
     dynamicShadowLoader.item !== null
+  // Loading readiness is independent of the budget/geometry it will receive.
+  // Using hasContent to select a budget owner would feed its width back into
+  // that same selection and can oscillate for width-reactive providers.
+  readonly property bool hasLoadedWidgets: contentItem
+    ? contentItem.hasLoadedWidgets === true : false
   readonly property bool hasContent: implicitWidth > 0.5 && implicitHeight > 0.5
   readonly property real minimumResponsiveWidth: contentItem
     && "minimumResponsiveWidth" in contentItem
@@ -110,8 +125,16 @@ Item {
   width: implicitWidth
   height: implicitHeight
 
+  function anyLoadedWidget(repeater) {
+    for (let i = 0; i < repeater.count; i++) {
+      const slot = repeater.itemAt(i)
+      if (slot && slot.activeItem) return true
+    }
+    return false
+  }
+
   function resolvedEntry(moduleId) {
-    return GroupRegistry.entryFor(groupId, moduleId, groupSettings,
+    return GroupRegistry.entryFor(effectiveGroupId, moduleId, groupSettings,
       bar.layoutConfig)
   }
 
@@ -200,6 +223,8 @@ Item {
 
     Item {
       id: horizontalRoot
+      readonly property bool hasLoadedWidgets: root
+        ? root.anyLoadedWidget(moduleRepeater) : false
 
       readonly property real minimumResponsiveWidth: {
         void(moduleRow.implicitWidth)
@@ -240,12 +265,14 @@ Item {
             hostEntry: GroupRegistry.hostEntryFor(
               modelData, root.bar.layoutConfig)
             settingsOverrides: GroupRegistry.settingsOverridesFor(
-              root.groupId, modelData, root.groupSettings,
+              root.effectiveGroupId, modelData, root.groupSettings,
               root.bar.layoutConfig)
             region: root.groupId
             screenName: root.screenName
+            // Zero means unconstrained to the center widget. Keep a depleted
+            // measured budget constrained instead of expanding it again.
             availableWidth: root.availableWidth > 0
-              ? Math.max(0, root.availableWidth - horizontalRoot.siblingWidth(index)) : 0
+              ? Math.max(1, root.availableWidth - horizontalRoot.siblingWidth(index)) : 0
             horizontalHostHeight: root.v2Shell ? 0 : root.v1SlotHeight
           }
         }
@@ -257,6 +284,8 @@ Item {
     id: verticalContent
 
     Item {
+      readonly property bool hasLoadedWidgets: root
+        ? root.anyLoadedWidget(moduleRepeater) : false
       implicitWidth: moduleColumn.childrenRect.width
       implicitHeight: moduleColumn.childrenRect.height
 
@@ -273,7 +302,7 @@ Item {
             hostEntry: GroupRegistry.hostEntryFor(
               modelData, root.bar.layoutConfig)
             settingsOverrides: GroupRegistry.settingsOverridesFor(
-              root.groupId, modelData, root.groupSettings,
+              root.effectiveGroupId, modelData, root.groupSettings,
               root.bar.layoutConfig)
             region: root.groupId
             screenName: root.screenName

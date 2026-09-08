@@ -105,6 +105,9 @@ Item {
   readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
   property bool pluginRemovalRunning: false
+  property bool refusePluginRemoval: false
+  property string removalRefusalDetail: "Move this widget back to an extra bar slot before removing it."
+  property string pluginActionError: ""
   readonly property bool pluginUpdateCheckRunning:
     pluginUpdateService.running === true
   readonly property int pluginUpdateCount: pluginUpdateService.updateCount
@@ -705,6 +708,8 @@ Item {
   }
 
   function removePlugin(pluginId) {
+    pluginActionError = refusePluginRemoval ? removalRefusalDetail : ""
+    if (refusePluginRemoval) return false
     const id = String(pluginId || "")
     const remaining = pluginEntries.filter(function(entry) {
       return String(entry.id || "") !== id || entry.removable !== true

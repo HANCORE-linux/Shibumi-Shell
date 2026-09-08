@@ -83,6 +83,24 @@ baseline.
   feature and is outside the Shibumi product contract.
 - The default order is `G1-G7` on the left, `G8` in the center, and
   `G9, G10, G11, G14, G12, G13, G15` on the right.
+- V1 can explicitly add one center slot in edit mode: at most two center
+  positions total. The default remains G8 alone; existing saved layouts are
+  not expanded on load. Only an empty extra slot can be removed. Center slots
+  use the existing drag/drop and gap treatment without an internal center
+  divider or new split-schema field. G8's width budget excludes its center
+  sibling; when G8 is disabled or has no loaded widget, the first loaded,
+  stage-shown center group owns the remainder. Owner selection uses loading
+  readiness, not its budget-dependent geometry, to avoid binding feedback.
+  Compaction remains output-local and never rewrites the layout.
+  Automatic outer plugin allocation is unchanged. A center-bound provider
+  may use an already added empty center slot, but cannot grow it implicitly.
+  When removing a provider from a base position, automatic repair requires
+  exactly one occupied extra containing a fixed group. Multiple occupied
+  extras are ambiguous without swap history: refuse without mutation. Users
+  can move the provider back into an extra before removing it. No provenance
+  field, saved-layout migration or V2 removal change is introduced. The
+  Control Center preflights installed V1 bar widgets before starting plugin
+  uninstall; bar removal still revalidates the layout at its own mutation.
 - All split boundaries start disabled. Split markers, drag targets, invalid
   returns, persistence, and geometry must retain the V1 behavior.
 - V1 and V2 own independent optional layout-protection preferences. Both
@@ -94,7 +112,27 @@ baseline.
   groups start enabled. Hardware-dependent widgets may remain hidden when the
   required hardware is absent.
 - Responsive hiding is temporary presentation state. It must not rewrite the
-  stored group order, enabled state, compact state, or split state.
+  stored group order, enabled state, compact state, or split state. Its width
+  budget includes unassigned provider entries in all three regions; center
+  extras reduce the grouped center's available width. The existing stage
+  priorities remain unchanged, including when the final stage cannot fit.
+- A newly placed V1 family alternative reuses one displaced fixed group slot
+  instead of requiring an additional dynamic slot. The fixed slot retains its
+  order and drag identity; the alternative retains its own settings and host
+  surface. Existing explicit dynamic placements are not silently migrated.
+  Multiple providers cannot share one slot. New V1 managed family replacements
+  require single-instance manifests: an `allowMultiple` family request is
+  refused before layout, registry or family-state mutation. Existing layouts,
+  unrelated multi-instance entries and V2 retain their behavior.
+  Admission uses the host-selected manifest, including clone selection. An
+  active clone retains its own provider ID and existing entry settings; the
+  original is not enabled in its place. Missing selections, conflicting
+  families and duplicate single-instance entries are refused before mutation.
+  Clone family inheritance follows only exact installed source manifests,
+  with cycle detection and a 32-entry traversal bound.
+  Family replacement does not increase capacity; the separately approved
+  optional V1 center slot follows
+  the limits above. V2 layout semantics and the saved schema remain unchanged.
 - G1 is the Shibumi wordmark and Control Center. Omarchy remains the sole owner
   of the application launcher menu; G1 neither owns nor opens it.
 - G1 exposes the current V1 palette contract: colors 01-07 plus foreground,

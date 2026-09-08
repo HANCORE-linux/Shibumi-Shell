@@ -137,7 +137,9 @@ for group_activation_contract in \
   'void(stateConfig)' \
   'void(stateRevision)' \
   'stateService.groupEnabledForVariant(' \
-  'groupId, v2Shell ? "v2" : "v1")'; do
+  'effectiveGroupId, v2Shell ? "v2" : "v1")' \
+  'const bindings = !v2Shell && bar && "v1FamilySlotBindings" in bar' \
+  '? GroupRegistry.dynamicGroupIdForModule(replacement) : groupId'; do
   rg -Fq "$group_activation_contract" core/GroupSlot.qml \
     || fail "optional group activation is not reactive: $group_activation_contract"
 done

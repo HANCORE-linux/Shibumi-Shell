@@ -160,6 +160,25 @@ Item {
     return next ? persist(next.order, next.splits) : false
   }
 
+  function restoreV1Layout(orderValue, splitsValue) {
+    if (v2Mode || !LayoutModel.validOrder(orderValue)
+        || !LayoutModel.validSplits(splitsValue, orderValue)) return false
+    const currentOrder = currentV1Order()
+    const currentSplits = currentV1Splits(currentOrder)
+    return LayoutModel.sameOrder(currentOrder, orderValue)
+      && LayoutModel.sameSplits(currentSplits, splitsValue, orderValue)
+      || persist(orderValue, splitsValue)
+  }
+
+  function canRemoveV1PluginGroup(pluginId) {
+    const groupId = LayoutModel.dynamicGroupId(pluginId)
+    if (groupId === "") return false
+    const currentOrder = currentV1Order()
+    if (!LayoutModel.locationFor(currentOrder, groupId)) return true
+    return LayoutModel.removeDynamicGroup(currentOrder,
+      currentV1Splits(currentOrder), groupId) !== null
+  }
+
   function reconcileV1PluginGroups(specs) {
     const currentOrder = currentV1Order()
     const currentSplits = currentV1Splits(currentOrder)

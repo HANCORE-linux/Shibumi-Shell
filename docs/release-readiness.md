@@ -16,6 +16,34 @@ producing `SIGSEGV`. The replacement candidate drains the production shell
 before publishing managed plugin roots and must repeat every automated and
 physical gate; evidence from the rejected identity is not transferable.
 
+## Post-acceptance bar corrections (2026-09-08)
+
+Candidate `d077efbd442bd7784b6ba691b67ef7160dcc00e5` completed the scoped
+physical round but was reopened after the V1 ghost-content failure and the
+additional bar findings. Both original Step-6 installations were restored.
+The older staging/acceptance rows below are not a live deployment inventory.
+
+The source corrections cover #44 (regional extra widths and grouped-center
+budget), #46 (slot-neutral new V1 family replacements with existing dynamic
+placements preserved), and #23 (host-selected clone resolution and metadata).
+Separately authorized for Beta.12 is one optional V1 center slot, explicitly
+added in edit mode, for at most two total. Existing layouts are not expanded
+on load. The ghost correction uses the attached Window API, retains its image
+result, rejects stale capture callbacks, and removes the duplicate Bottom
+offset. The real layer delegates to an offscreen render-tested visual.
+There is no split-schema migration, new overflow policy, or dev-host capability
+bypass. The exact
+production-boundary ledger changes the resolver's `entryPointUrl` occurrence
+count from five to six for cache revalidation; its host-integration owner and
+single component-creation route are unchanged.
+
+These changes need a new exact candidate, complete automated gates, independent
+review, and affected physical acceptance. Ghost and two-slot-center physical
+acceptance remain open; offscreen pixel/scale checks are not Wayland or physical
+mixed-scale evidence. No corrected package has been deployed, and no publication
+is authorized.
+Historical acceptance of `d077efb` is not acceptance of the changed payload.
+
 ## Candidate boundary
 
 The normal lifecycle supports only these predecessor identities:

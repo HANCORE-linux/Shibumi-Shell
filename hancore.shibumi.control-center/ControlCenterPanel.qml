@@ -755,6 +755,7 @@ ShibumiPanel {
   }
 
   function removePlugin(pluginId) {
+    pluginActionError = ""
     const id = String(pluginId || "")
     if (id === "" || pluginRemoval.running) return false
     let entry = null
@@ -766,6 +767,13 @@ ShibumiPanel {
     }
     if (!entry || entry.removable !== true) {
       console.warn("Control Center rejected non-removable plugin:", id)
+      return false
+    }
+    if (!stockOmarchyHost && !v2LayoutActive && entry.barWidget === true
+        && entry.installedInBar === true
+        && (!bar || typeof bar.canRemoveBarWidget !== "function"
+          || !bar.canRemoveBarWidget(id))) {
+      pluginActionError = "Move this widget back to an extra bar slot before removing it."
       return false
     }
     removalPluginId = id

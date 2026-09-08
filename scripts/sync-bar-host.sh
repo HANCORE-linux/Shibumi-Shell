@@ -20,6 +20,7 @@ files=(
   core/BarSection.qml
   core/CenterSection.qml
   core/DragGhostPanel.qml
+  core/DragGhostVisual.qml
   core/DragSession.qml
   core/EditBackdropPanel.qml
   core/GroupRegistry.js

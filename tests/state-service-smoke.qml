@@ -40,6 +40,7 @@ ShellRoot {
   function fail(message) {
     console.error("state-service-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Timer {
@@ -294,6 +295,20 @@ ShellRoot {
             || state.config.splits.left.length !== 7
             || state.setLayout(extended, splits))
           return root.fail("atomic extended V1 layout mutation")
+        const centerOrder = JSON.parse(JSON.stringify(state.config.order))
+        const beforeCenterV2 = JSON.stringify(state.config.v2Layout)
+        centerOrder.center.push("")
+        if (!state.setLayout(centerOrder, extendedSplits)
+            || state.config.order.center.length !== 2
+            || state.config.v1SlotRoles.center[1] !== "extra"
+            || fakeShell.shellConfig.bar.shibumi.order.center.length !== 2
+            || JSON.stringify(state.config.v2Layout) !== beforeCenterV2)
+          return root.fail("persisted optional V1 center slot")
+        centerOrder.center.push("")
+        const beforeInvalidCenter = JSON.stringify(fakeShell.shellConfig)
+        if (state.setLayout(centerOrder, extendedSplits)
+            || JSON.stringify(fakeShell.shellConfig) !== beforeInvalidCenter)
+          return root.fail("third center slot did not fail without mutation")
         if (!state.setGroupSetting("G:custom.widget", "compact", true)
             || !state.setWidgetSetting(
               "G:custom.widget", "custom.widget", "density", "small")
@@ -304,7 +319,8 @@ ShellRoot {
           return root.fail("dynamic V1 group settings")
         if (!state.resetLayout()
             || state.config.order.left[0] !== "G1"
-            || state.config.splits.left[0] !== false)
+            || state.config.splits.left[0] !== false
+            || state.config.order.center.length !== 1)
           return root.fail("layout reset")
         const v2Layout = JSON.parse(JSON.stringify(state.config.v2Layout))
         const temperatureIndex = v2Layout.right.indexOf("G16")

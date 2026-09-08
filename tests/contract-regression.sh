@@ -137,6 +137,11 @@ rg -q '^PanelWindow \{' core/DragGhostPanel.qml \
   || fail "drag ghost must be isolated from the edge-local bar window"
 rg -q 'mask: Region \{\}' core/DragGhostPanel.qml \
   || fail "drag ghost overlay must remain input-transparent"
+rg -Fq 'DragGhostVisual {' core/DragGhostPanel.qml \
+  || fail "drag layer must use the render-tested visual"
+if rg -q 'barOrigin[XY]' core/DragGhostPanel.qml core/DragGhostVisual.qml; then
+  fail "drag ghost must not add an edge offset to full-window coordinates"
+fi
 rg -Fq 'y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
   core/BarPanel.qml \
   || fail "bottom bar surface must use stable explicit placement"
@@ -313,8 +318,14 @@ rg -q 'if \("availableWidth" in target\)' core/WidgetSlot.qml \
   || fail "widget slots do not inject the monitor-local width budget"
 rg -q 'onAvailableWidthChanged: injectProperties\(\)' core/WidgetSlot.qml \
   || fail "center width changes are not forwarded reactively"
-rg -q 'availableWidth: horizontalSurface.centerAvailableWidth' styles/shibumi/BarSurface.qml \
-  || fail "center width budget is not monitor-local"
+rg -Fq 'availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)' styles/shibumi/BarSurface.qml \
+  || fail "center width budget is not monitor-local or becomes unconstrained"
+rg -Fq '+ leftExtras.width + centerExtras.width + rightExtras.width' \
+  styles/shibumi/BarSurface.qml \
+  || fail "responsive staging omits unassigned provider widths"
+rg -Fq 'centerGap, measuredCenterSpan, centerExtras.width)' \
+  styles/shibumi/BarSurface.qml \
+  || fail "center extras do not reduce the grouped center budget"
 rg -Fq 'ResponsiveLayout.centerAvailableWidth(compactShell, width,' \
   styles/shibumi/BarSurface.qml \
   || fail "compact V2 shells measure the center against their own fitted width"
@@ -1092,7 +1103,10 @@ QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' \
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
+  "$repo_root/tests/v1-center-slot-regression.qml"
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-controller-regression.qml"
+python3 "$repo_root/tests/qml-assertion-exit-regression.py"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/run-geometry-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
@@ -1149,6 +1163,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/reactor-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/bar-host-registry-regression.sh"
   "$repo_root/tests/window-recovery-regression.sh"
+  "$repo_root/tests/drag-ghost-render-regression.sh"
 
   official_audio_panel=${OMARCHY_PATH}/shell/plugins/panels/audio/Panel.qml
   [[ -s $official_audio_panel ]] || fail "official Quattro audio panel is missing"

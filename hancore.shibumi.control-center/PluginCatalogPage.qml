@@ -280,7 +280,8 @@ Column {
     }
     removingPluginId = ""
     feedbackTitle = "Plugin could not be removed"
-    feedbackDetail = "The provider rejected the remove request."
+    feedbackDetail = String(controller.pluginActionError
+      || "The provider rejected the remove request.")
     feedbackTimer.restart()
     return false
   }

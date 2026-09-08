@@ -4,8 +4,11 @@ import "core" as Core
 import "styles/shibumi" as ShibumiStyle
 
 ShellRoot {
-  Item {
+  Window {
     id: test
+    visible: true
+    property bool frameSeen: false
+    onFrameSwapped: frameSeen = true
 
     width: 520
     height: 60
@@ -15,6 +18,11 @@ ShellRoot {
     property int attempts: 0
     property int selectedRadius: 12
     property bool smallRadiusChecked: false
+    property var originalClockTarget: null
+    property var fallbackClockTarget: null
+    property string centerLayoutSnapshot: ""
+    property bool wideSibling: false
+    property bool missingClock: false
 
     Component {
       id: markerWidget
@@ -23,14 +31,22 @@ ShellRoot {
         property var bar: null
         property string moduleName: ""
         property var settings: ({})
-        implicitWidth: 30
+        property real availableWidth: 0
+        readonly property real naturalWidth: test.wideSibling
+          && moduleName === "hancore.shibumi.memory" ? 300 : 30
+        implicitWidth: availableWidth > 0
+          && (moduleName === "hancore.shibumi.center" || naturalWidth === 300)
+            ? Math.min(naturalWidth, availableWidth) : naturalWidth
         implicitHeight: 20
       }
     }
 
     QtObject {
       id: fakeWidgetRegistry
-      function componentFor(moduleName) { return moduleName ? markerWidget : null }
+      function componentFor(moduleName) {
+        return moduleName && !(test.missingClock && moduleName === "hancore.shibumi.center")
+          ? markerWidget : null
+      }
     }
 
     QtObject {
@@ -171,9 +187,34 @@ ShellRoot {
       layoutSession: secondSession
     }
 
+    Loader {
+      id: centerLoader
+      x: 320
+      active: test.phase >= 14
+      sourceComponent: ShibumiStyle.GroupSection {
+        bar: fakeBar
+        region: "center"
+        availableWidth: 160
+        layoutSession: session
+      }
+    }
+    Loader {
+      id: secondCenterLoader
+      x: 320
+      y: 32
+      active: test.phase >= 14
+      sourceComponent: ShibumiStyle.GroupSection {
+        bar: fakeBar
+        region: "center"
+        availableWidth: 230
+        layoutSession: secondSession
+      }
+    }
+
     function fail(message) {
       console.error("v1-slot-interaction-regression:", message)
       Qt.exit(1)
+      throw new Error(message)
     }
 
     function target(groupId, index) {
@@ -186,16 +227,18 @@ ShellRoot {
       if (!source || !targetEntry || !source.item || !targetEntry.item)
         return false
       const sourceOrigin = source.item.mapToItem(null, 0, 0)
+      const destination = targetEntry.item.mapToItem(null, 0, 0)
       return session.begin(sourceGroupId, source.item,
           sourceOrigin.x + source.item.width / 2,
           sourceOrigin.y + source.item.height / 2)
-        && session.updateTarget(targetEntry)
+        && session.move(destination.x + targetEntry.item.width / 2,
+          destination.y + targetEntry.item.height / 2)
         && session.drop()
     }
 
     Timer {
       interval: 10
-      running: true
+      running: test.frameSeen
       repeat: true
 
       onTriggered: {
@@ -259,7 +302,9 @@ ShellRoot {
           const occupiedExtra = test.target("G1", 7)
           if (controller.v1Slots.left[0] !== ""
               || controller.v1Slots.left[7] !== "G1"
-              || session.targets.length !== 8 || !emptyBase || !occupiedExtra) return
+              || session.targets.length !== 8 || !emptyBase || !occupiedExtra
+              || !("availableWidth" in occupiedExtra.item)
+              || !occupiedExtra.item.visible || occupiedExtra.item.width <= 0) return
           if (controller.removeV1SlotAt("left", 0)
               || controller.removeV1SlotAt("left", 7))
             return test.fail("base or occupied extra slot was removable")
@@ -346,7 +391,9 @@ ShellRoot {
         if (test.phase === 11) {
           const dynamic = test.target("G:custom.widget", 7)
           if (!dynamic || session.targets.length !== 8
-              || secondSession.targets.length !== 8) return
+              || secondSession.targets.length !== 8
+              || !("availableWidth" in dynamic.item)
+              || !dynamic.item.visible || dynamic.item.width <= 0) return
           if (!test.dragTo("G:custom.widget", test.target("G1", 0)))
             return test.fail("dynamic V1 group did not share drag/drop")
           test.phase = 12
@@ -371,6 +418,133 @@ ShellRoot {
               || session.targets.length !== 7
               || secondSession.targets.length !== 7
               || test.writes !== 11) return
+          test.phase = 14
+          test.attempts = 0
+          return
+        }
+
+        if (test.phase === 14) {
+          const clock = test.target("G8", 0)
+          if (!clock || !("availableWidth" in clock.item)
+              || session.targets.length !== 8 || !centerLoader.item) return
+          test.originalClockTarget = clock.item
+          if (!centerLoader.item.canAddSlot || !controller.addV1Slot("center")
+              || controller.addV1Slot("center"))
+            return test.fail("center plus/capacity contract")
+          test.phase = 15
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 15) {
+          const extra = session.targets.find(entry => entry.region === "center" && entry.index === 1)
+          if (!extra || session.targets.length !== 9 || secondSession.targets.length !== 9) return
+          if (centerLoader.item.canAddSlot || extra.item.width !== 24
+              || test.target("G8", 0).item !== test.originalClockTarget
+              || controller.removeV1SlotAt("center", 0)
+              || !test.dragTo("G4", extra))
+            return test.fail("center addition replaced G8 owner or broke drop target")
+          test.phase = 16
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 16) {
+          const moved = test.target("G4", 1)
+          const clock = test.target("G8", 0)
+          if (!moved || moved.region !== "center" || !clock
+              || !("availableWidth" in moved.item) || !("availableWidth" in clock.item)
+              || controller.v1Slots.left[3] !== "") return
+          if (controller.removeV1SlotAt("center", 1)
+              || clock.item.availableWidth !== 124 || moved.item.availableWidth !== 0
+              || centerLoader.item.enabledSeparatorHitTargetCount !== 0)
+            return test.fail("center sibling budget or occupied removal guard: clock="
+              + clock.item.availableWidth + ", sibling=" + moved.item.availableWidth
+              + ", siblingWidth=" + moved.item.width + ", separators="
+              + centerLoader.item.enabledSeparatorHitTargetCount)
+          test.centerLayoutSnapshot = JSON.stringify(fakeStateService.config)
+          centerLoader.item.availableWidth = 55
+          test.phase = 17
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 17) {
+          const clock = test.target("G8", 0)
+          if (!clock || clock.item.availableWidth !== 19 || centerLoader.item.width > 55) return
+          const otherClock = secondSession.targets.find(entry => entry.groupId === "G8")
+          if (!otherClock || otherClock.item.availableWidth !== 194
+              || JSON.stringify(fakeStateService.config) !== test.centerLayoutSnapshot)
+            return test.fail("output-local center budget changed another output or stored layout")
+          // The preceding reorder may rebuild delegates; pin the current
+          // G8 slot, not the owner saved before that drag.
+          test.fallbackClockTarget = clock.item
+          test.wideSibling = true
+          fakeStateService.setGroupEnabled("G8", false)
+          session.setEditing(false)
+          secondSession.setEditing(false)
+          test.centerLayoutSnapshot = JSON.stringify(fakeStateService.config)
+          test.phase = 20
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 20 || test.phase === 21 || test.phase === 22) {
+          if (test.attempts < 8) return
+          const sibling = session.targets.find(entry => entry.groupId === "G4")
+          const otherSibling = secondSession.targets.find(entry => entry.groupId === "G4")
+          const placeholderWidth = test.phase === 21 ? 30 : 0
+          if (!sibling || !otherSibling || !("availableWidth" in sibling.item)
+              || sibling.item.availableWidth !== 55 - placeholderWidth
+              || otherSibling.item.availableWidth !== 230 - placeholderWidth
+              || centerLoader.item.width > 55 || secondCenterLoader.item.width > 230
+              || !test.fallbackClockTarget || test.fallbackClockTarget.hasLoadedWidgets
+              || JSON.stringify(fakeStateService.config) !== test.centerLayoutSnapshot)
+            return test.fail("disabled/unavailable G8 left the loaded center sibling unconstrained: phase="
+              + test.phase + ", budget=" + (sibling ? sibling.item.availableWidth : -1))
+          if (test.phase === 20) {
+            session.setEditing(true)
+            secondSession.setEditing(true)
+            test.phase = 21
+          } else if (test.phase === 21) {
+            session.setEditing(false)
+            secondSession.setEditing(false)
+            test.missingClock = true
+            fakeStateService.setGroupEnabled("G8", true)
+            test.centerLayoutSnapshot = JSON.stringify(fakeStateService.config)
+            test.phase = 22
+          } else {
+            test.missingClock = false
+            fakeStateService.setGroupEnabled("G8", false)
+            fakeStateService.setGroupEnabled("G8", true)
+            test.wideSibling = false
+            session.setEditing(true)
+            secondSession.setEditing(true)
+            test.centerLayoutSnapshot = JSON.stringify(fakeStateService.config)
+            test.phase = 23
+          }
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 23) {
+          const clock = test.target("G8", 0)
+          if (!clock || !clock.item.hasLoadedWidgets || clock.item.availableWidth !== 19) return
+          if (JSON.stringify(fakeStateService.config) !== test.centerLayoutSnapshot)
+            return test.fail("center readiness recovery rewrote stored layout")
+          const home = session.targets.find(entry => entry.region === "left" && entry.index === 3)
+          if (!test.dragTo("G4", home)) return test.fail("center-to-outer return failed")
+          test.phase = 18
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 18) {
+          if (controller.v1Slots.center[1] !== "" || !controller.removeV1Slot("center"))
+            return test.fail("empty center slot removal failed")
+          test.phase = 19
+          test.attempts = 0
+          return
+        }
+        if (test.phase === 19) {
+          if (controller.v1Slots.center.length !== 1 || session.targets.length !== 8
+              || secondSession.targets.length !== 8 || test.writes !== 15) return
+          if (!centerLoader.item.canAddSlot || "center" in controller.splits)
+            return test.fail("center cleanup changed split schema or plus availability")
           stop()
           session.setEditing(false)
           secondSession.setEditing(false)

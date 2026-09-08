@@ -53,29 +53,29 @@ for bar_host in \
       'readonly property bool requestedTransparent: false' \
       'readonly property bool transparent: false'; do
     rg -Fq "$fixed_property" "$bar_host" \
-      || fail "opaque facade contract drifted in ${bar_host#$repo_root/}: $fixed_property"
+      || fail "opaque facade contract drifted in ${bar_host#"$repo_root"/}: $fixed_property"
   done
   if rg -q 'config\.transparent|^[[:space:]]*(requestedTransparent|transparent)[[:space:]]*=' \
       "$bar_host"; then
-    fail "Shibumi applies the stock transparency preference in ${bar_host#$repo_root/}"
+    fail "Shibumi applies the stock transparency preference in ${bar_host#"$repo_root"/}"
   fi
   rg -Uq 'function setRequestedTransparency\(value\) \{[^}]*return false' \
     "$bar_host" \
-    || fail "transparency compatibility method is not a no-op in ${bar_host#$repo_root/}"
+    || fail "transparency compatibility method is not a no-op in ${bar_host#"$repo_root"/}"
   rg -Fq 'function toggleGroupSeparator(groupId, editingValue)' "$bar_host" \
-    || fail "V2 separator route lacks edit context in ${bar_host#$repo_root/}"
+    || fail "V2 separator route lacks edit context in ${bar_host#"$repo_root"/}"
   rg -Fq 'layoutStateController.interactiveMutationAllowed(editingValue)' \
     "$bar_host" \
-    || fail "V2 separator route bypasses layout protection in ${bar_host#$repo_root/}"
+    || fail "V2 separator route bypasses layout protection in ${bar_host#"$repo_root"/}"
 done
 
 for bar_surface in \
     "$repo_root/styles/shibumi/BarSurface.qml" \
     "$repo_root/hancore.shibumi.bar/styles/shibumi/BarSurface.qml"; do
   rg -Fq 'visible: true' "$bar_surface" \
-    || fail "V1/V2 chrome is not explicitly opaque in ${bar_surface#$repo_root/}"
+    || fail "V1/V2 chrome is not explicitly opaque in ${bar_surface#"$repo_root"/}"
   if rg -q 'bar\.transparent' "$bar_surface"; then
-    fail "bar surface still consumes stock transparency in ${bar_surface#$repo_root/}"
+    fail "bar surface still consumes stock transparency in ${bar_surface#"$repo_root"/}"
   fi
 done
 
@@ -86,7 +86,7 @@ done
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
-mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/fixtures"
+mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/native"
 chmod 700 "$tmpdir/runtime"
 
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
@@ -99,6 +99,21 @@ cp -a "$bar_root/styles" "$tmpdir/"
 cp "$bar_root/Bar.qml" "$tmpdir/Bar.qml"
 cp "$repo_root/tests/fixtures/ResolverTestWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/ResolverReplacementWidget.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/CloneSelectionChecks.qml" "$tmpdir/fixtures/"
+cp "$omarchy_path/shell/services/PluginRegistry.qml" "$tmpdir/native/"
+python3 - "$repo_root" "$tmpdir" <<'PY'
+import sys
+from pathlib import Path
+repo, target = map(Path, sys.argv[1:])
+panel = (repo / 'hancore.shibumi.control-center/ControlCenterPanel.qml').read_text()
+start = panel.index('  function removePlugin(pluginId) {')
+end = panel.index('  function rescanPlugins() {', start)
+fixture = (repo / 'tests/fixtures/PluginRemovalChecks.qml').read_text()
+if fixture.count('  // INJECT_REMOVE_PLUGIN') != 1:
+    raise SystemExit('plugin removal fixture injection marker drifted')
+(target / 'fixtures/PluginRemovalChecks.qml').write_text(
+    fixture.replace('  // INJECT_REMOVE_PLUGIN', panel[start:end]))
+PY
 cp "$repo_root/tests/fixtures/DirectPreferredHostedPanelWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/MisleadingItemHostedPanelWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/NestedHostedPanelWidget.qml" "$tmpdir/fixtures/"

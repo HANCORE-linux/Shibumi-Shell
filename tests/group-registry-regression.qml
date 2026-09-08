@@ -2,11 +2,14 @@ import QtQuick
 import "../core/GroupRegistry.js" as GroupRegistry
 import "../core/ShibumiConfig.js" as ShibumiConfig
 import "../core/WidgetFamilies.js" as WidgetFamilies
+import "../core/LayoutModel.js" as LayoutModel
 
 QtObject {
   function fail(message) {
     console.error("group-registry-regression:", message)
     Qt.exit(1)
+    // Qt.exit schedules shutdown; abort this stack before the success exit.
+    throw new Error(message)
   }
 
   Component.onCompleted: {
@@ -121,6 +124,68 @@ QtObject {
         || WidgetFamilies.replacementLabel("omarchy.power", null)
           !== "Replaces Shibumi Battery and Shibumi Power Profile")
       fail("provider family fallback/multi-group label")
+
+    const fullOrder = LayoutModel.defaultOrder()
+    fullOrder.left.push("G:custom.one", "G:custom.two")
+    fullOrder.right.push("G:custom.three", "G:custom.four")
+    const fullBefore = JSON.stringify(fullOrder)
+    const familyBindings = WidgetFamilies.v1SlotBindings([
+      { pluginId: "custom.one" }, { pluginId: "custom.two" },
+      { pluginId: "custom.three" }, { pluginId: "custom.four" },
+      { pluginId: "omarchy.audio" }, { pluginId: "omarchy.clock" },
+      { pluginId: "omarchy.weather" }, { pluginId: "omarchy.power" },
+      { pluginId: "omarchy.power" }
+    ], fullOrder, null)
+    if (familyBindings.G6 !== "omarchy.audio"
+        || familyBindings.G8 !== "omarchy.clock"
+        || familyBindings.G12 !== "omarchy.power"
+        || Object.keys(familyBindings).length !== 3
+        || JSON.stringify(fullOrder) !== fullBefore
+        || LayoutModel.maxCount("left") !== 9
+        || LayoutModel.maxCount("center") !== 2
+        || LayoutModel.maxCount("right") !== 9)
+      fail("slot-neutral family projection changed order or slot limits")
+    const legacyOrder = LayoutModel.defaultOrder()
+    legacyOrder.right.push("G:omarchy.clock")
+    if (Object.keys(WidgetFamilies.v1SlotBindings(
+          [{ pluginId: "omarchy.clock" }], legacyOrder, null)).length !== 0)
+      fail("existing dynamic placement was silently migrated")
+    const declaredBindings = WidgetFamilies.v1SlotBindings([
+      { pluginId: "example.audio" }
+    ], fullOrder, { installedPlugins: {
+      "example.audio": { barWidget: { semanticCapabilities: ["audio"] } }
+    } })
+    if (declaredBindings.G6 !== "example.audio")
+      fail("declared compatible provider did not reuse its family slot")
+    const cloneRegistry = { installedPlugins: {
+      "omarchy.clock": {},
+      "local.clock": { omarchy: { clonedFrom: "omarchy.clock" } },
+      "local.nested": { omarchy: { clonedFrom: "local.clock" } },
+      "local.a": { omarchy: { clonedFrom: "local.b" } },
+      "local.b": { omarchy: { clonedFrom: "local.a" } },
+      "local.missing": { omarchy: { clonedFrom: "omarchy.absent" } },
+      "local.inherited": { omarchy: { clonedFrom: "constructor" } }
+    } }
+    if (WidgetFamilies.v1SlotBindings([{ pluginId: "local.clock" }],
+          fullOrder, cloneRegistry).G8 !== "local.clock"
+        || JSON.stringify(WidgetFamilies.capabilitiesForPlugin("local.nested", cloneRegistry))
+          !== '["clock"]')
+      fail("clone family did not follow the installed source manifest")
+    for (const id of ["local.a", "local.b", "local.missing", "local.inherited", "constructor"]) {
+      if (WidgetFamilies.capabilitiesForPlugin(id, cloneRegistry).length !== 0)
+        fail("cyclic, absent or inherited clone source acquired family authority")
+    }
+    const deepRegistry = { installedPlugins: { "omarchy.clock": {} } }
+    for (let i = 0; i < 33; i++)
+      deepRegistry.installedPlugins["local.depth" + i] = {
+        omarchy: { clonedFrom: i === 32 ? "omarchy.clock" : "local.depth" + (i + 1) }
+      }
+    if (WidgetFamilies.capabilitiesForPlugin("local.depth0", deepRegistry).length !== 0)
+      fail("clone family source traversal was not bounded")
+    if (Object.keys(WidgetFamilies.v1SlotBindings([
+          null, { pluginId: "Invalid Plugin" }, { pluginId: "custom.generic" }
+        ], fullOrder, null)).length !== 0)
+      fail("invalid or unrelated provider acquired a fixed family slot")
 
     if (g3.length !== 1 || g3[0].id !== "hancore.shibumi.status")
       fail("status presentation ownership")

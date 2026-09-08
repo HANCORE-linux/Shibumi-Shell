@@ -55,17 +55,23 @@ appearance keys instead of writing an ignored top-level fallback.
 
 V1 keeps seven base slots on the left, one in the center, and seven on the
 right. **Bars → Edit slots** exposes those positions as drop targets and allows
-up to two additional slots on each outer side. The center cannot be extended.
+up to two additional slots on each outer side and one in the center (two
+center positions total; default: G8 alone). The existing `+` appears in
+edit mode; adding the second position does not move G8. A saved one-position
+center stays unchanged until you explicitly add a slot. Only empty extra slots
+can be removed. The center has no internal divider; the existing section
+boundaries and split schema stay unchanged.
 
-- `+` adds an empty outer slot until that side reaches nine positions.
+- `+` adds an empty slot up to nine positions per outer side or two in the center.
 - Dragging a group onto an occupied slot swaps the two groups; dragging it onto
   an empty slot moves it there and leaves its former base position available.
 - Base positions remain locked drop targets. Only an empty extra position can
   be removed.
 - A disabled, hardware-unavailable, or responsively hidden V1 group remains a
   compact proxy while editing, so its position can still be changed.
-- Splits remain positional. Adding or removing a slot changes the matching
-  split array in the same validated state transaction.
+- Outer splits remain positional. Adding or removing an outer slot changes
+  its split array in the same validated transaction. Center changes preserve
+  the existing split arrays and section boundaries.
 - **Restore layout** returns V1 to its fixed `7 / 1 / 7` default and removes
   every extra position.
 
@@ -90,14 +96,46 @@ pieces.
 
 Installing an additional compatible bar widget creates one stable V1 group
 named from the plugin ID (for example `G:example.weather`). The group is added
-to an outer extra slot and then participates in the same split and drag/drop
-transactions as G1–G15. Its identity never depends on installation order, so
+to an outer extra slot by default and participates in the same drag/drop
+transactions as G1–G15. A center-bound provider can instead use an explicitly
+added empty center slot. Its identity never depends on installation order, so
 restarts, V1/V2 switching, and multi-monitor rendering cannot renumber it.
-Removing the plugin removes its group atomically; if the group had been dragged
-into a base slot, the displaced base group is moved back before the extra slot
-is removed. At most two extra positions per outer side are accepted. When all
-four are occupied, installation is rejected instead of rendering a widget
-outside V1's managed layout.
+Removing a provider directly from an extra removes that slot atomically. If
+it is in a base position, automatic repair requires exactly one occupied extra
+containing a fixed group. When several extras are occupied, removal is refused
+without changing the layout: the saved layout has no history to identify the
+correct return slot. Move the provider back into an extra, then remove it.
+The Control Center checks this before starting plugin uninstall. Direct external
+Omarchy commands are outside this bar-layout transaction. No saved layout is
+migrated. At most two extra positions per outer side are accepted. When all
+four are occupied, an outer-bound unrelated widget is rejected instead of
+silently consuming the center or rendering outside V1's managed layout.
+
+New managed V1 family replacements require single-instance providers.
+An `allowMultiple` family provider is refused without changing layout, registry
+enablement or family state. These checks use the actually selected clone when
+one is active, not the original manifest. A valid active clone keeps its own
+ID and entry settings when explicitly added as a managed family provider.
+Existing explicit placements are not converted on load; unrelated multi-instance
+widgets and V2 retain their allocation/removal behavior.
+
+A newly placed family alternative is different: it uses one displaced fixed
+slot, such as G6 for an Audio replacement, without consuming an extra position.
+That slot keeps its saved position and split/drag identity. The alternative
+keeps its own settings and standard provider surface. Only one provider can
+use a fixed slot; further providers need their own positions. Existing dynamic
+placements from earlier versions remain where the user put them and are not
+converted automatically. Family replacement neither adds a position nor changes
+the layout schema. Separately, a center-bound unrelated provider can use an
+already added empty center slot; automatic plugin placement never expands the
+center. Other additions retain the existing outer-slot allocation.
+
+On narrow outputs, unassigned provider widths count toward the existing
+responsive stages. Center extras also reduce the space available to the
+clock/weather group, as does a widget in the optional second center slot.
+This corrects the budget; it does not add an overflow menu
+or new hiding priorities, and content wider than the final stage can still
+exceed the available space.
 
 ## Picker routing
 
