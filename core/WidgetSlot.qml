@@ -159,6 +159,9 @@ Item {
     resolutionAttempts = 0
     ensureResolvedComponent()
   }
+  onResolverRevisionChanged: {
+    if (resolvedComponent === null && moduleEnabled) ensureResolvedComponent()
+  }
   onModuleEnabledChanged: {
     if (moduleEnabled) {
       resolutionAttempts = 0

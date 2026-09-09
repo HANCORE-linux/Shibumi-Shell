@@ -2,9 +2,15 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "Model.js" as Model
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.update-center"
+    owner: root
+  }
 
   property var shell: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")

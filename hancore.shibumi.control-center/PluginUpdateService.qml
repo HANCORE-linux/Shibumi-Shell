@@ -3,9 +3,15 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.control-center"
+    owner: root
+  }
 
   property var pluginRegistry: null
   readonly property int pluginRevision: pluginRegistry

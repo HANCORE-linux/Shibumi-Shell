@@ -2,12 +2,22 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide owner for Quattro's Bluetooth and Bluetooth-audio state.
 // Screen-local widgets and panels consume this facade without constructing
 // additional BlueZ or PipeWire models.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.bluetooth"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null

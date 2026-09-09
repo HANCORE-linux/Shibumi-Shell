@@ -1,9 +1,15 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.cpu"
+    owner: root
+  }
 
   property string omarchyPath: ""
   property var shell: null

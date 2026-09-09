@@ -6,9 +6,19 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons as Commons
 import "PickerModel.js" as PickerModel
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.quick-access"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property string omarchyPath: ""
   property var shell: null

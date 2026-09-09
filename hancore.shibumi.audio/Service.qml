@@ -2,12 +2,22 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // Process-wide observable audio snapshot. The official Quattro audio widget
 // remains the PipeWire and action owner; screen-local Shibumi widgets only
 // report the state they already consume from that owner.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.audio"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null

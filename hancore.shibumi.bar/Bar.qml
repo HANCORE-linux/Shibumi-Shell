@@ -11,6 +11,7 @@ import "core/PanelRouting.js" as PanelRouting
 import "core/WidgetFamilies.js" as WidgetFamilies
 import "services" as Services
 import "styles" as Styles
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
@@ -25,7 +26,9 @@ Item {
   property var barConfig: ({})
   readonly property int shibumiHostContractVersion: 1
   readonly property string pluginSourceDir: manifest
-    ? String(manifest.__sourceDir || "") : ""
+    ? String(manifest.__sourceDir || "") || ownSourceDir : ""
+  readonly property string ownSourceDir: decodeURIComponent(
+    String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/+$/, ""))
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
   property bool hostReady: false
@@ -1904,6 +1907,15 @@ Item {
     return geometry
   }
 
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.bar"
+    owner: root
+    isBar: true
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
   onBarConfigChanged: {
     applyBarConfig()
   }

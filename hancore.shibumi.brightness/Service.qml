@@ -1,12 +1,22 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide owner for Quattro's monitor state and actions. The official
 // component keeps hardware, scale, display, OSD, and IPC ownership; every
 // output consumes this service through its own lazy Shibumi panel.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.brightness"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null

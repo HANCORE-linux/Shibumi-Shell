@@ -4,15 +4,27 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "ShibumiConfig.js" as ShibumiConfig
+import "host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.state"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
   readonly property string pluginSourceDir: manifest
-    ? String(manifest.__sourceDir || "") : ""
+    ? String(manifest.__sourceDir || "") || ownSourceDir : ""
+  readonly property string ownSourceDir: decodeURIComponent(
+    String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/+$/, ""))
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
 

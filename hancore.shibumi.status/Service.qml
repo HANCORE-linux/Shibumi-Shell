@@ -3,11 +3,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide adapter over Quattro-owned status backends. Bar views never
 // instantiate their own pollers, so multiple monitors consume the same state.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.status"
+    owner: root
+  }
 
   property var shell: null
   property var manifest: null
@@ -28,7 +34,14 @@ Item {
     id: notificationAdapter
   }
 
-  onShellChanged: notificationAdapter.attachShell(shell)
+  onShellChanged: {
+    if (shell && shell !== suiteHostShell) {
+      suiteHostShell.host = shell
+      shell = suiteHostShell
+      return
+    }
+    notificationAdapter.attachShell(shell)
+  }
   Component.onCompleted: notificationAdapter.attachShell(shell)
 
   property string recordingPid: ""

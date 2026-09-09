@@ -4,11 +4,17 @@ import QtQuick
 import Quickshell.Io
 import Quickshell.Services.UPower
 import "PowerModel.js" as PowerModel
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide state and action owner for the separate G12 battery and
 // G14 power-profile views. Views never poll hardware or invoke profiles.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.power-state"
+    owner: root
+  }
 
   property string omarchyPath: ""
   property var shell: null

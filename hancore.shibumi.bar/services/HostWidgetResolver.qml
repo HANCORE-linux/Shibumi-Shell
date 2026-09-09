@@ -24,6 +24,15 @@ QtObject {
     return String(registry.entryPointUrl(manifest, "barWidget") || "")
   }
 
+  function registeredComponent(widgetId) {
+    const registry = bar ? bar.barWidgetRegistry : null
+    const entry = registry && registry.widgets
+      ? registry.widgets[String(widgetId || "")] : null
+    const component = entry ? entry.component : null
+    return component && component.status === Component.Ready
+      ? component : null
+  }
+
   function componentFor(widgetId) {
     const id = String(widgetId || "")
     const existing = components[id]
@@ -32,13 +41,17 @@ QtObject {
 
   function ensureComponent(widgetId) {
     const id = String(widgetId || "")
+    if (!id) return null
     const url = entryPointUrl(id)
-    if (!id || !url) return null
+    const registered = url ? null : registeredComponent(id)
+    if (!url && !registered) return null
 
     const existing = componentFor(id)
-    if (existing && componentUrls[id] === url) return existing
+    if (existing && componentUrls[id] === url
+        && (url || existing === registered)) return existing
 
-    const component = Qt.createComponent(url, Component.PreferSynchronous)
+    const component = url
+      ? Qt.createComponent(url, Component.PreferSynchronous) : registered
     if (!component || component.status !== Component.Ready) {
       const detail = component && typeof component.errorString === "function"
         ? String(component.errorString()) : "component is not ready"
@@ -80,7 +93,9 @@ QtObject {
       const previousUrl = String(componentUrls[id] || "")
       const currentUrl = entryPointUrl(id)
       if (!component || component.status !== Component.Ready
-          || currentUrl === "" || currentUrl !== previousUrl) continue
+          || currentUrl !== previousUrl
+          || (currentUrl === "" && registeredComponent(id) !== component))
+        continue
       nextComponents[id] = component
       nextUrls[id] = previousUrl
     }
@@ -96,6 +111,13 @@ QtObject {
 
   property Connections registryConnections: Connections {
     target: root.bar ? root.bar.pluginRegistry : null
+    ignoreUnknownSignals: true
     function onPluginsChanged() { root.syncRegistry() }
+  }
+
+  property Connections widgetRegistryConnections: Connections {
+    target: root.bar ? root.bar.barWidgetRegistry : null
+    ignoreUnknownSignals: true
+    function onRevisionChanged() { root.syncRegistry() }
   }
 }

@@ -4,12 +4,22 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "CavaThemeModel.js" as CavaThemeModel
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide, lazy spectrum owner for every Shibumi output. Omarchy's
 // official media service remains authoritative for player state and actions.
 // This service owns only Cava availability, lifecycle, output, and theme data.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.media"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null

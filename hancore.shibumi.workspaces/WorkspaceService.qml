@@ -3,9 +3,19 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Hyprland
 import "WorkspaceModel.js" as WorkspaceModel
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.workspaces"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null

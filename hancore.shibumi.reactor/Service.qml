@@ -2,11 +2,21 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // Mode 0 keeps this facade worker-free. Modes 7 and 8 load exactly one
 // process-wide backend and forward its events to every per-output renderer.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.reactor"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property string omarchyPath: ""
   property var shell: null

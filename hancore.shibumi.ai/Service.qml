@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "AgentUsageModel.js" as AgentUsageModel
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide provider owner. Current Omarchy agent collectors publish
 // primitive JSON records which this service normalizes for every output. On
@@ -11,6 +12,15 @@ import "AgentUsageModel.js" as AgentUsageModel
 // fallback. No host panel or screen-local worker is instantiated.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.ai"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property string omarchyPath: ""
   property var shell: null

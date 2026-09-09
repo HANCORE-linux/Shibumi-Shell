@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
 import Quickshell.Networking
+import "../hancore.shibumi.state/host" as ShibumiHost
 
 // One process-wide NetworkManager owner for every Shibumi output. Quattro's
 // official network component remains authoritative for live status, details,
@@ -11,6 +12,15 @@ import Quickshell.Networking
 // saved-profile view missing from the host API.
 Item {
   id: root
+
+  readonly property var suiteHostShell: ShibumiHost.HostShell {
+    pluginId: "hancore.shibumi.network"
+    owner: root
+  }
+  onShellChanged: if (shell && shell !== suiteHostShell) {
+    suiteHostShell.host = shell
+    shell = suiteHostShell
+  }
 
   property var shell: null
   property var manifest: null
