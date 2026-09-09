@@ -17,7 +17,8 @@ QtObject {
     ? host.shellConfig
     : ({ bar: host && host.barConfig ? host.barConfig : ({}) })
   readonly property var pluginRegistry: host && "pluginRegistry" in host
-    ? host.pluginRegistry : null
+    && host.pluginRegistry && "rescan" in host.pluginRegistry
+    ? host.pluginRegistry : Local.Registry.catalogue
 
   function serviceFor(id) {
     const service = Local.Registry.serviceFor(id)

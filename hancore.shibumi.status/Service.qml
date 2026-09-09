@@ -23,6 +23,9 @@ Item {
   readonly property var idleService: shell
     && typeof shell.firstPartyServiceFor === "function"
     ? shell.firstPartyServiceFor("omarchy.idle") : null
+  readonly property var hostNotificationService: shell
+    && typeof shell.firstPartyServiceFor === "function"
+    ? shell.firstPartyServiceFor("omarchy.notifications") : null
   readonly property var notificationService: notificationAdapter.available
     ? notificationAdapter : null
   readonly property bool stayAwake: idleService
@@ -42,6 +45,7 @@ Item {
     }
     notificationAdapter.attachShell(shell)
   }
+  onHostNotificationServiceChanged: notificationAdapter.attachShell(shell)
   Component.onCompleted: notificationAdapter.attachShell(shell)
 
   property string recordingPid: ""

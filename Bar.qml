@@ -1916,6 +1916,11 @@ Item {
     suiteHostShell.host = shell
     shell = suiteHostShell
   }
+  onPluginRegistryChanged: {
+    if (pluginRegistry && !("rescan" in pluginRegistry)
+        && pluginRegistry !== ShibumiHost.Registry.catalogue)
+      pluginRegistry = ShibumiHost.Registry.catalogue
+  }
   onBarConfigChanged: {
     applyBarConfig()
   }

@@ -47,8 +47,9 @@ QtObject {
     if (!url && !registered) return null
 
     const existing = componentFor(id)
-    if (existing && componentUrls[id] === url
-        && (url || existing === registered)) return existing
+    if (existing && (componentUrls[id] === ""
+        ? existing === registeredComponent(id) : componentUrls[id] === url))
+      return existing
 
     const component = url
       ? Qt.createComponent(url, Component.PreferSynchronous) : registered
@@ -93,8 +94,8 @@ QtObject {
       const previousUrl = String(componentUrls[id] || "")
       const currentUrl = entryPointUrl(id)
       if (!component || component.status !== Component.Ready
-          || currentUrl !== previousUrl
-          || (currentUrl === "" && registeredComponent(id) !== component))
+          || (previousUrl !== "" && currentUrl !== previousUrl)
+          || (previousUrl === "" && registeredComponent(id) !== component))
         continue
       nextComponents[id] = component
       nextUrls[id] = previousUrl

@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import "." as Local
 
 QtObject {
   id: registry
@@ -8,6 +9,10 @@ QtObject {
   property var services: ({})
   property var bar: null
   property var barHost: null
+  readonly property var catalogue: Local.PluginCatalogue {}
+
+  onBarChanged: catalogue.bar = bar
+  onBarHostChanged: catalogue.barHost = barHost
 
   function register(id, service) {
     const key = String(id || "")
