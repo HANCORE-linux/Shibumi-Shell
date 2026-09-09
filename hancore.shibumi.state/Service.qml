@@ -30,8 +30,15 @@ Item {
 
   readonly property int contractVersion: 1
   readonly property bool ready: shell !== null
-  readonly property var sourceConfig: shell && shell.shellConfig
-    && shell.shellConfig.bar ? shell.shellConfig.bar.shibumi : null
+  readonly property var sourceBarConfig: ShibumiHost.Registry.bar
+    && "barConfig" in ShibumiHost.Registry.bar
+      ? ShibumiHost.Registry.bar.barConfig
+      : shell && shell.shellConfig ? shell.shellConfig.bar : null
+  readonly property bool sourceConfigReady:
+    ShibumiConfig.isPlainObject(sourceBarConfig)
+      && Object.keys(sourceBarConfig).length > 0
+  readonly property var sourceConfig: sourceBarConfig
+    ? sourceBarConfig.shibumi : null
 
   property var config: ShibumiConfig.defaultConfig()
   property int revision: 0
@@ -75,19 +82,25 @@ Item {
   }
 
   function commit(mutator) {
-    if (!shell || typeof shell.mutateShellConfig !== "function"
+    const writer = ShibumiHost.Registry.barHost || shell
+    if (!sourceConfigReady || !writer
+        || typeof writer.mutateShellConfig !== "function"
         || typeof mutator !== "function") return false
 
     const current = ShibumiConfig.normalize(sourceConfig)
     const next = JSON.parse(JSON.stringify(current))
     if (mutator(next) === false) return false
     const normalized = ShibumiConfig.normalize(next)
-    if (same(current, normalized)) return false
+    if (same(current, normalized)) {
+      applySourceConfig(current)
+      return false
+    }
 
-    shell.mutateShellConfig(function(shellConfig) {
+    const accepted = writer.mutateShellConfig(function(shellConfig) {
       if (!ShibumiConfig.isPlainObject(shellConfig.bar)) shellConfig.bar = {}
       shellConfig.bar.shibumi = normalized
     })
+    if (accepted === false) return false
     applySourceConfig(normalized)
     return true
   }
@@ -685,8 +698,9 @@ Item {
     return setLayout(ShibumiConfig.defaultOrder(), ShibumiConfig.defaultSplits())
   }
 
-  onSourceConfigChanged: applySourceConfig(sourceConfig)
-  Component.onCompleted: applySourceConfig(sourceConfig)
+  onSourceConfigChanged: if (sourceConfigReady) applySourceConfig(sourceConfig)
+  onSourceConfigReadyChanged: if (sourceConfigReady) applySourceConfig(sourceConfig)
+  Component.onCompleted: if (sourceConfigReady) applySourceConfig(sourceConfig)
 
   IpcHandler {
     target: "shibumi-suite-runtime"

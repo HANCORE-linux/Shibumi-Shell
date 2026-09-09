@@ -3,17 +3,20 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "plugin" as StatePlugin
+import "plugin/host" as ShibumiHost
 
 ShellRoot {
   id: root
 
   property int stage: 0
+  property bool failed: false
   property int revisionBeforeExternalChange: 0
 
   QtObject {
     id: fakeShell
 
     property int writes: 0
+    property bool denyWrites: false
     property var shellConfig: ({
       version: 1,
       bar: {
@@ -25,11 +28,38 @@ ShellRoot {
     })
 
     function mutateShellConfig(mutator) {
+      if (denyWrites) return false
+      persist(mutator)
+    }
+
+    function persist(mutator) {
       const next = JSON.parse(JSON.stringify(shellConfig))
       mutator(next)
       shellConfig = next
       writes++
     }
+  }
+
+  QtObject {
+    id: fakeBarHost
+    property bool denyWrites: false
+    function mutateShellConfig(mutator) {
+      if (denyWrites) return false
+      fakeShell.persist(mutator)
+      return true
+    }
+  }
+
+  QtObject {
+    id: fakeActiveBar
+    property bool configInjected: true
+    readonly property var barConfig: configInjected ? fakeShell.shellConfig.bar : ({})
+  }
+
+  QtObject {
+    id: staleServiceFacade
+    property var barConfig: ({})
+    function mutateShellConfig(_mutator) { return false }
   }
 
   StatePlugin.Service {
@@ -38,8 +68,83 @@ ShellRoot {
   }
 
   function fail(message) {
+    failed = true
     console.error("state-service-smoke:", message)
     Qt.exit(1)
+  }
+
+  function checkScopedSelection() {
+    const moduleId = "hancore.shibumi.ai"
+    function selected() {
+      return state.groupSettings("G7")[moduleId].aiTool
+    }
+    function saved() {
+      return fakeShell.shellConfig.bar.shibumi.widgets.G7[moduleId].aiTool
+    }
+
+    if (!state.setWidgetSetting("G7", moduleId, "aiTool", "codex"))
+      return fail("seed saved Codex selection")
+    fakeShell.denyWrites = true
+    const revision = state.revision
+    const writes = fakeShell.writes
+    if (state.setWidgetSetting("G7", moduleId, "aiTool", "claude")
+        || selected() !== "codex" || saved() !== "codex"
+        || state.revision !== revision || fakeShell.writes !== writes)
+      return fail("rejected write must not change local state")
+
+    staleServiceFacade.barConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar))
+    state.shell = staleServiceFacade
+    ShibumiHost.Registry.bar = fakeActiveBar
+    ShibumiHost.Registry.barHost = fakeBarHost
+    const outerBefore = JSON.stringify(fakeShell.shellConfig)
+    for (const tool of ["claude", "opencode", "codex"]) {
+      if (!state.setWidgetSetting("G7", moduleId, "aiTool", tool)
+          || selected() !== tool || saved() !== tool)
+        return fail("scoped persisted AI selection: " + tool)
+    }
+    if (JSON.stringify(fakeShell.shellConfig) !== outerBefore)
+      return fail("selection changed unrelated host configuration")
+    fakeShell.persist(function(config) {
+      config.bar.shibumi.reactor.mode = 4
+      config.bar.transparent = true
+    })
+    if (state.config.reactor.mode !== 4
+        || !state.setWidgetSetting("G7", moduleId, "aiTool", "claude")
+        || !state.setWidgetSetting("G7", moduleId, "aiTool", "codex")
+        || fakeShell.shellConfig.bar.shibumi.reactor.mode !== 4
+        || fakeShell.shellConfig.bar.transparent !== true
+        || staleServiceFacade.barConfig.shibumi.reactor.mode === 4)
+      return fail("live bar configuration must supersede stale service snapshot")
+    const beforeInjection = JSON.stringify(state.config)
+    const writesBeforeInjection = fakeShell.writes
+    fakeActiveBar.configInjected = false
+    if (state.sourceConfigReady
+        || JSON.stringify(state.config) !== beforeInjection
+        || state.setWidgetSetting("G7", moduleId, "aiTool", "claude")
+        || fakeShell.writes !== writesBeforeInjection)
+      return fail("uninjected bar must retain state and reject writes")
+    fakeActiveBar.configInjected = true
+    if (!state.sourceConfigReady || JSON.stringify(state.config) !== beforeInjection)
+      return fail("late bar injection must restore the live config source")
+
+    fakeBarHost.denyWrites = true
+    const rejectedRevision = state.revision
+    if (state.setWidgetSetting("G7", moduleId, "aiTool", "claude")
+        || selected() !== "codex" || saved() !== "codex"
+        || state.revision !== rejectedRevision)
+      return fail("bar rejection must not change local state")
+
+    const stale = JSON.parse(JSON.stringify(state.config))
+    stale.widgets.G7[moduleId].aiTool = "claude"
+    state.applySourceConfig(stale)
+    const beforeNoop = fakeShell.writes
+    if (state.setWidgetSetting("G7", moduleId, "aiTool", "codex")
+        || selected() !== "codex" || fakeShell.writes !== beforeNoop)
+      return fail("persisted no-op must reconcile stale local selection")
+    ShibumiHost.Registry.barHost = null
+    ShibumiHost.Registry.bar = null
+    state.shell = fakeShell
+    fakeShell.denyWrites = false
   }
 
   Timer {
@@ -351,6 +456,8 @@ ShellRoot {
           || state.revision <= root.revisionBeforeExternalChange)
         return root.fail("external shell config reactivity")
 
+      root.checkScopedSelection()
+      if (root.failed) return
       stop()
       console.log("state service smoke passed")
       Qt.quit()
