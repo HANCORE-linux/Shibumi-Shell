@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1-beta.12: Omarchy 4.0.3 compatibility
+
+### Fixed
+
+- Resolved the suite directory from the plugin's own file location rather than
+  the host's private `__sourceDir` manifest field, which Omarchy 4.0.3 no
+  longer exposes to third-party plugins. `.shibumi-managed.json` loads again in
+  the bar and the state service.
+
+
 ## 0.1.1-beta.11: Native Audio and Bluetooth cutover
 
 Public beta candidate for 2026-08-23.

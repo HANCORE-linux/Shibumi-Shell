@@ -11,8 +11,13 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
-  readonly property string pluginSourceDir: manifest
-    ? String(manifest.__sourceDir || "") : ""
+  readonly property string pluginSourceDir: {
+    // Third-party manifests do not expose the host's private source directory
+    // (Omarchy 4.0.3 sanitizes it), so derive the directory from this file.
+    var sourceUrl = String(Qt.resolvedUrl("./"))
+    return sourceUrl.indexOf("file://") === 0
+      ? decodeURIComponent(sourceUrl.slice(7)).replace(/\/$/, "") : ""
+  }
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
 
