@@ -20,6 +20,10 @@ command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 "$repo_root/tests/baseline-contract-regression.sh"
 "$repo_root/tests/documentation-regression.py"
 python3 "$repo_root/tests/production-boundary-regression.py"
+python3 "$repo_root/tests/shared-runtime-import-regression.py"
+python3 "$repo_root/tests/isolated-process-regression.py"
+python3 "$repo_root/tests/source-snapshot-regression.py"
+python3 "$repo_root/tests/isolated-files-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
 python3 "$repo_root/tests/test_shibumi_manager.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
@@ -62,7 +66,7 @@ for retired_root_copy in \
     || fail "plugin-canonical source regained a root copy: $retired_root_copy"
 done
 unexpected_root_sources=$(find adapters assets services widgets -type f 2>/dev/null \
-  | grep -Ev '^(services/(HostWidgetResolver\.qml|PickerModel\.js|PowerModel\.js|PowerService\.qml|QuoteDefaults\.js|ReactorModel\.js|SystemTelemetry\.qml|ThemePalette\.qml|ThemePaletteModel\.js|ThermalTelemetry\.qml)|widgets/(IconText\.qml|PacmanWorkspaceMarker\.qml|PillSurface\.qml|ShibumiButtonGroup\.qml|ShibumiPanel\.qml|ShibumiPanelToolTip\.qml|ShibumiSlider\.qml))$' \
+  | grep -Ev '^(services/(HostWidgetResolver\.qml|PickerModel\.js|PowerModel\.js|PowerService\.qml|PowerCommand\.qml|QuoteDefaults\.js|ReactorModel\.js|SystemTelemetry\.qml|ThemePalette\.qml|ThemePaletteModel\.js|ThermalTelemetry\.qml)|widgets/(IconText\.qml|PacmanWorkspaceMarker\.qml|PillSurface\.qml|ShibumiButtonGroup\.qml|ShibumiPanel\.qml|ShibumiPanelToolTip\.qml|ShibumiSlider\.qml))$' \
   || true)
 [[ -z $unexpected_root_sources ]] || fail \
   "historical root implementation remains outside declared vendoring maps: $unexpected_root_sources"
@@ -109,8 +113,8 @@ if rg -q 'omarchy-hyprland-launch|commandLauncher' Bar.qml; then
   fail "bar command launcher still depends on the removed legacy launcher"
 fi
 
-rg -q 'model: root\.outputWindowsEnabled \? Quickshell\.screens : \[\]' Bar.qml \
-  || fail "bar variants must preserve native Quickshell screen objects"
+rg -Uq 'model: root\.outputWindowsEnabled && !root\.shutdownPrepared\n[[:space:]]*\? Quickshell\.screens : \[\]' Bar.qml \
+  || fail "bar variants must preserve the shutdown-gated native Quickshell screen model"
 if rg -q 'model: .*barScreens' Bar.qml; then
   fail "bar variants must not use a JavaScript copy of Quickshell.screens"
 fi
@@ -372,21 +376,38 @@ fi
   || fail "Mode 7 renderer must own exactly one adaptive frame timer"
 rg -q 'target: "shibumi-reactor"' hancore.shibumi.reactor/Service.qml \
   || fail "Reactor control IPC target is missing"
-rg -Fq 'active: root.ready && (root.mode === 7 || root.mode === 8)' \
+rg -Fq 'desiredBackendMode: ready && (mode === 7 || mode === 8) ? mode : 0' \
   hancore.shibumi.reactor/Service.qml \
   || fail "Reactor backend is not lifecycle-lazy"
-rg -q 'root\.mode === 7 \? eventBackendComponent' \
+rg -Fq 'backendLoader.active = next !== 0' hancore.shibumi.reactor/Service.qml \
+  || fail "Reactor deferred loader ignores current mode"
+rg -q 'root\.loadedBackendMode === 7 \? eventBackendComponent' \
   hancore.shibumi.reactor/Service.qml \
   || fail "Mode 7 Reactor service is not selected lazily"
 [[ $(rg -c 'ReactorService \{' hancore.shibumi.reactor/Service.qml) -eq 1 ]] \
   || fail "Mode 7 Reactor service must be process-wide"
 [[ $(rg -c 'QuoteService \{' hancore.shibumi.reactor/Service.qml) -eq 1 ]] \
   || fail "Mode 8 quote service must be process-wide"
-if rg -q '\bProcess\b' hancore.shibumi.reactor/QuoteService.qml; then
-  fail "Mode 8 quote service must not spawn processes"
+if rg -q '\b(Process|FileView)\b' hancore.shibumi.reactor/QuoteService.qml; then
+  fail "Mode 8 must delegate acquisition to its one bounded source"
 fi
-[[ $(rg -c 'FileView \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
-  || fail "Mode 8 must read user quotes through exactly one root FileView"
+[[ $(rg -c 'BoundedTextSource \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
+  || fail "Mode 8 must own exactly one bounded quote source"
+[[ $(rg -c 'BoundedTextSource \{' hancore.shibumi.reactor/ReactorService.qml) -eq 2 ]] \
+  || fail "Mode 7 must own exactly two bounded text sources"
+if rg -q 'FileView[[:space:]]*\{' hancore.shibumi.reactor/ReactorService.qml; then
+  fail "Mode 7 must not bypass bounded text acquisition"
+fi
+[[ $(rg -c 'Process \{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must coalesce into one reader"
+[[ $(rg -c 'Timer \{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must own one deadline only"
+[[ $(rg -c 'FileView[[:space:]]*\{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must own exactly one metadata watcher"
+[[ $(rg -c '^[[:space:]]*preload:' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "bounded watcher has ambiguous preload settings"
+rg -q '^[[:space:]]*preload: false$' hancore.shibumi.reactor/BoundedTextSource.qml \
+  || fail "bounded watcher must not buffer input"
 [[ $(rg -c 'Timer \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
   || fail "Mode 8 must schedule quotes through exactly one root timer"
 if rg -q 'Quickshell\.(Networking|Services\.(Pipewire|Mpris|Notifications))' \
@@ -395,6 +416,8 @@ if rg -q 'Quickshell\.(Networking|Services\.(Pipewire|Mpris|Notifications))' \
 fi
 [[ $(rg -c 'Process \{' hancore.shibumi.reactor/ReactorService.qml) -eq 1 ]] \
   || fail "Mode 7 may own only the single legacy pacman event tail"
+rg -Uq 'Process[[:space:]]*\{[[:space:]]*id: pacmanTail' hancore.shibumi.reactor/ReactorService.qml \
+  || fail "Mode 7 direct process is not the existing pacman tail"
 rg -q 'firstPartyService\("omarchy\.media"\)' hancore.shibumi.reactor/ReactorService.qml \
   || fail "Reactor media events bypass Quattro media ownership"
 rg -q 'statusService\.notificationService' hancore.shibumi.reactor/ReactorService.qml \
@@ -528,9 +551,9 @@ fi
   || fail "native audio backend must own exactly one microphone meter"
 rg -q 'audioBackend\.inputPeak' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not consume the primitive microphone peak"
-rg -q 'audioBackend\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+rg -q 'next\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not acquire microphone peak monitoring"
-rg -q 'audioBackend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+rg -q 'backend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not release microphone peak monitoring"
 rg -q 'enabled: root\.active && root\.peakMonitoringEnabled' \
   hancore.shibumi.audio/AudioBackendAdapter.qml \
@@ -673,11 +696,27 @@ if rg -q 'Quickshell\.Services\.UPower|UPower\.|Quickshell\.Io' \
   hancore.shibumi.brightness/MonitorPanelBridge.qml hancore.shibumi.brightness/Service.qml; then
   fail "Shibumi brightness presentation must not create a second monitor owner"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.brightness/BarWidget.qml \
+if rg -q 'Process \{|FileView \{' hancore.shibumi.brightness/BarWidget.qml \
   hancore.shibumi.brightness/BrightnessPanel.qml hancore.shibumi.brightness/Service.qml \
-  hancore.shibumi.brightness/MonitorPanelBridge.qml; then
+  hancore.shibumi.brightness/MonitorPanelBridge.qml \
+  || rg -q 'Timer \{' hancore.shibumi.brightness/BarWidget.qml \
+    hancore.shibumi.brightness/BrightnessPanel.qml hancore.shibumi.brightness/Service.qml; then
   fail "brightness presentation and monitor adapter must remain worker-free"
 fi
+bridge=hancore.shibumi.brightness/MonitorPanelBridge.qml
+[[ $(rg -o 'Timer[[:space:]]*\{' "$bridge" | wc -l) -eq 3 ]] \
+  || fail "monitor adapter must own exactly three deferred timers"
+if rg -q '\b(repeat|running)[[:space:]]*:' "$bridge"; then
+  fail "monitor adapter deferred timers must not repeat or run independently"
+fi
+rg -Uq 'Timer \{\n[[:space:]]*id: panelSync\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: root\.syncPanelSource\(\)\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter panel sync is not zero-interval and owner-bound"
+rg -Uq 'Timer \{\n[[:space:]]*id: panelInjection\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: root\.injectPanel\(\)\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter panel injection is not zero-interval and owner-bound"
+rg -Uq 'Timer \{\n[[:space:]]*id: hiddenClose\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: \{\n([^\n]*\n){0,3}[[:space:]]*&& typeof root\.panel\.close === "function"\) root\.panel\.close\(\)\n[[:space:]]*\}\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter hidden close is not zero-interval and owner-bound"
+rg -Uq 'function shutdown\(\) \{\n([^\n]*\n){0,4}[[:space:]]*panelSync\.stop\(\)\n[[:space:]]*panelInjection\.stop\(\)\n[[:space:]]*hiddenClose\.stop\(\)' "$bridge" \
+  || fail "monitor adapter shutdown does not stop every deferred timer"
 if rg -q '^[[:space:]]*selected:' hancore.shibumi.brightness/BrightnessPanel.qml; then
   fail "brightness panel uses Button-only selected state on CursorSurface"
 fi
@@ -695,10 +734,10 @@ rg -q '"service": "Service.qml"' hancore.shibumi.power-state/manifest.json \
   || fail "battery/profile state must have one process-wide power owner"
 rg -q 'Quickshell.Services.UPower' services/PowerService.qml \
   || fail "power owner does not consume the event-driven UPower singleton"
-rg -q 'command: \["omarchy-powerprofiles-list", "--active-state"\]' \
+rg -Fq 'commandFor("profiles", ["omarchy-powerprofiles-list", "--active-state"])' \
   services/PowerService.qml \
   || fail "power owner does not use the Quattro profile contract"
-rg -Fq 'command: ["busctl", "--system", "get-property",' \
+rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   services/PowerService.qml \
   || fail "power owner does not use the lightweight active-profile probe"
 rg -Fq 'onTriggered: root.refreshActiveProfile()' \
@@ -709,6 +748,10 @@ rg -Fq 'interval: 5 * 60 * 1000' services/PowerService.qml \
 rg -q 'omarchy-battery-status --shell' \
   services/PowerService.qml \
   || fail "power owner does not use the Quattro battery detail contract"
+[[ $(rg -c 'PowerCommand \{' services/PowerService.qml) -eq 4 ]] \
+  || fail "power owner must retain exactly four operation slots"
+[[ $(rg -c 'Process \{' services/PowerCommand.qml) -eq 1 ]] \
+  || fail "each power operation slot must own exactly one process"
 if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|Timer \{|FileView \{' \
   hancore.shibumi.battery/BarWidget.qml hancore.shibumi.battery/BatteryPanel.qml \
   hancore.shibumi.power-profile/BarWidget.qml hancore.shibumi.power-profile/PowerProfilePanel.qml; then
@@ -1125,7 +1168,10 @@ mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \
 chmod 700 "$quote_smoke_root/runtime"
 cp hancore.shibumi.reactor/QuoteDefaults.js \
   hancore.shibumi.reactor/ReactorModel.js \
+  hancore.shibumi.reactor/BoundedTextSource.qml \
   hancore.shibumi.reactor/QuoteService.qml "$quote_smoke_root/services/"
+mkdir -p "$quote_smoke_root/services/scripts"
+cp hancore.shibumi.reactor/scripts/read-reactor-text.py "$quote_smoke_root/services/scripts/"
 cp tests/quote-service-smoke.qml "$quote_smoke_root/shell.qml"
 set +e
 quote_service_output=$(timeout 4 env \
@@ -1162,6 +1208,11 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/quick-access-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/reactor-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/bar-host-registry-regression.sh"
+  OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/state-restore-control-regression.py"
+  OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/layout-transition-regression.py" --controls
+  python3 "$repo_root/tests/native-catalog-regression.py" --controls
+  python3 "$repo_root/tests/native-catalog-instance-selection-regression.py"
+  python3 "$repo_root/tests/catalog-demand-regression.py" --controls
   "$repo_root/tests/window-recovery-regression.sh"
   "$repo_root/tests/drag-ghost-render-regression.sh"
 
