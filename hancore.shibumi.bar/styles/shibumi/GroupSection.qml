@@ -110,55 +110,69 @@ Item {
     return result
   }
 
-  function isGroupSubsequence(shorter, longer) {
-    let cursor = 0
-    for (let index = 0; index < longer.length
-        && cursor < shorter.length; index++) {
-      if (String(longer[index] || "") === String(shorter[cursor] || ""))
-        cursor++
+  function commonGroupSubsequence(current, desired) {
+    const rows = []
+    for (let left = 0; left <= current.length; left++)
+      rows.push(new Array(desired.length + 1).fill(0))
+    for (let left = current.length - 1; left >= 0; left--) {
+      for (let right = desired.length - 1; right >= 0; right--) {
+        rows[left][right] = current[left] === desired[right]
+          ? rows[left + 1][right + 1] + 1
+          : Math.max(rows[left + 1][right], rows[left][right + 1])
+      }
     }
-    return cursor === shorter.length
+    const retained = []
+    let left = 0
+    let right = 0
+    while (left < current.length && right < desired.length) {
+      if (current[left] === desired[right]) {
+        retained.push(current[left])
+        left++
+        right++
+      } else if (rows[left + 1][right] >= rows[left][right + 1]) {
+        left++
+      } else {
+        right++
+      }
+    }
+    return retained
   }
 
   function syncStableGroups() {
-    const desired = Array.isArray(groups) ? groups : []
+    const desiredSource = Array.isArray(groups) ? groups : []
+    const desired = desiredSource.map(function(value) {
+      return String(value || "")
+    })
     const current = stableGroupValues()
     if (JSON.stringify(current) === JSON.stringify(desired)) return
 
-    // Pure additions/removals retain every unchanged delegate. Reorders need
-    // a rebuild because Repeater row moves do not change the visual child
-    // order; edit mode already closes panels before such a drag operation.
-    if (isGroupSubsequence(current, desired)) {
-      let currentIndex = 0
-      for (let target = 0; target < desired.length; target++) {
-        const groupId = String(desired[target] || "")
-        if (currentIndex < stableGroupModel.count
-            && String(stableGroupModel.get(currentIndex).groupId || "")
-              === groupId) {
-          currentIndex++
-          continue
-        }
+    // Repeater row moves do not reliably update visual child order. Retain a
+    // maximal common subsequence instead, then remove and insert only groups
+    // whose position actually changed. In particular, V1 <-> V2 must not tear
+    // down every widget owner in a reordered region.
+    const retained = commonGroupSubsequence(current, desired)
+    let retainedIndex = retained.length - 1
+    for (let index = stableGroupModel.count - 1; index >= 0; index--) {
+      const groupId = String(stableGroupModel.get(index).groupId || "")
+      if (retainedIndex >= 0 && groupId === retained[retainedIndex]) {
+        retainedIndex--
+      } else {
+        stableGroupModel.remove(index)
+      }
+    }
+
+    let currentIndex = 0
+    for (let target = 0; target < desired.length; target++) {
+      const groupId = desired[target]
+      if (currentIndex < stableGroupModel.count
+          && String(stableGroupModel.get(currentIndex).groupId || "")
+            === groupId) {
+        currentIndex++
+      } else {
         stableGroupModel.insert(target, { groupId: groupId })
         currentIndex++
       }
-      return
     }
-    if (isGroupSubsequence(desired, current)) {
-      let desiredIndex = desired.length - 1
-      for (let index = stableGroupModel.count - 1; index >= 0; index--) {
-        const groupId = String(stableGroupModel.get(index).groupId || "")
-        if (desiredIndex >= 0
-            && groupId === String(desired[desiredIndex] || "")) {
-          desiredIndex--
-          continue
-        }
-        stableGroupModel.remove(index)
-      }
-      return
-    }
-    stableGroupModel.clear()
-    for (let index = 0; index < desired.length; index++)
-      stableGroupModel.append({ groupId: String(desired[index] || "") })
   }
 
   onGroupsChanged: syncStableGroups()

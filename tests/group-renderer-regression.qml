@@ -289,7 +289,11 @@ ShellRoot {
 
       property bool activeLayoutProtected: false
       readonly property bool v2Mode: true
-      readonly property var order: noSplitController.order
+      readonly property var order: ({
+        left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
+        center: ["G8"],
+        right: ["G9", "G10", "G11", "G14", "G12", "G13", "G15"]
+      })
       readonly property var splits: noSplitController.splits
 
       function splitEnabled(region, index) {
@@ -994,6 +998,16 @@ ShellRoot {
       return result
     }
 
+    function groupCells(section) {
+      const result = []
+      const children = section && section.contentItem
+        ? section.contentItem.children || [] : []
+      for (const child of children) {
+        if ("modelData" in child) result.push(child)
+      }
+      return result
+    }
+
     function regionItem(item, region) {
       if (!item) return null
       if ("region" in item && "contentItem" in item
@@ -1087,7 +1101,8 @@ ShellRoot {
         { v2: false, position: "top" },
         { v2: false, position: "bottom" },
         { v2: true, position: "top" },
-        { v2: true, position: "bottom" }
+        { v2: true, position: "bottom" },
+        { v2: false, position: "top" }
       ]
       readonly property var alignmentFixtures: [
         {
@@ -1105,6 +1120,10 @@ ShellRoot {
       ]
 
       property int familyPhase: 0
+      property var retainedAlignmentCells: ({})
+      readonly property var retainedAlignmentIds: [
+        "G1", "G2", "G3", "G5", "G6", "G7"
+      ]
       interval: 10
       running: true
       repeat: true
@@ -1193,6 +1212,40 @@ ShellRoot {
                   + alignmentCase.position + " with " + fixture.name
                   + " " + fixture.extraHeight + "px extra: "
                   + alignmentError)
+                return
+              }
+            }
+          }
+          const alignmentLeft = test.regionItem(
+            tallAlignmentSurface, "left")
+          const alignmentCells = test.groupCells(alignmentLeft)
+          const alignmentOrder = alignmentCells.map(function(cell) {
+            return String(cell.modelData || "")
+          })
+          const expectedAlignmentOrder = alignmentCase.v2
+            ? v2SplitController.order.left : noSplitController.v1Slots.left
+          if (JSON.stringify(alignmentOrder)
+              !== JSON.stringify(expectedAlignmentOrder)) {
+            if (attempts < 50) return
+            stop()
+            test.fail("variant alignment order did not settle: "
+              + JSON.stringify(alignmentOrder) + " expected "
+              + JSON.stringify(expectedAlignmentOrder))
+            return
+          }
+          if (alignmentPhase === 0) {
+            const owners = ({})
+            for (const cell of alignmentCells) owners[cell.modelData] = cell
+            retainedAlignmentCells = owners
+          } else {
+            for (const groupId of retainedAlignmentIds) {
+              const cell = alignmentCells.find(function(item) {
+                return String(item.modelData || "") === groupId
+              })
+              if (cell !== retainedAlignmentCells[groupId]) {
+                stop()
+                test.fail("variant reorder replaced retained group owner "
+                  + groupId + " in alignment phase " + alignmentPhase)
                 return
               }
             }
