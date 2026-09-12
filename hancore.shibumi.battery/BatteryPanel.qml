@@ -9,9 +9,12 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var powerService
+  readonly property var powerState: powerService || ({ percent: 0, batteryStatus: "",
+    timeText: "", charging: false, batteryHealthText: "", batteryId: "",
+    changeRate: 0, batteryInfo: ({}) })
 
   owner: ownerWidget
-  open: ownerWidget.opened && powerService.hasBattery
+  open: ownerWidget.opened && !!powerService && powerService.hasBattery
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Commons.Style.space(300))
   contentHeight: fittedContentHeight(column.implicitHeight)
@@ -57,7 +60,7 @@ ShibumiPanel {
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: panel.powerService.percent + "%"
+        text: panel.powerState.percent + "%"
         color: panel.bar ? panel.bar.urgent : Commons.Color.accent
         font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: Commons.Style.font.heading
@@ -71,7 +74,7 @@ ShibumiPanel {
         color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
           panel.bar.foreground.b, 0.12) : Commons.Color.background
         Rectangle {
-          width: parent.width * panel.powerService.percent / 100
+          width: parent.width * panel.powerState.percent / 100
           height: parent.height
           radius: height / 2
           color: panel.bar ? panel.bar.urgent : Commons.Color.accent
@@ -82,37 +85,37 @@ ShibumiPanel {
       Column {
         width: parent.width
         spacing: Commons.Style.space(5)
-        BatteryInfoRow { label: "Status"; value: panel.powerService.batteryStatus }
+        BatteryInfoRow { label: "Status"; value: panel.powerState.batteryStatus }
         BatteryInfoRow {
-          visible: panel.powerService.timeText !== ""
-          label: panel.powerService.charging ? "Time to full" : "Time left"
-          value: panel.powerService.timeText
+          visible: panel.powerState.timeText !== ""
+          label: panel.powerState.charging ? "Time to full" : "Time left"
+          value: panel.powerState.timeText
         }
         BatteryInfoRow {
-          visible: panel.powerService.batteryHealthText !== ""
-          label: panel.powerService.batteryId !== ""
-            ? "Health (" + panel.powerService.batteryId + ")" : "Health"
-          value: panel.powerService.batteryHealthText
+          visible: panel.powerState.batteryHealthText !== ""
+          label: panel.powerState.batteryId !== ""
+            ? "Health (" + panel.powerState.batteryId + ")" : "Health"
+          value: panel.powerState.batteryHealthText
         }
         BatteryInfoRow {
-          visible: panel.powerService.changeRate > 0
-          label: panel.powerService.charging ? "Charge rate" : "Power draw"
-          value: panel.powerService.changeRate.toFixed(1) + " W"
+          visible: panel.powerState.changeRate > 0
+          label: panel.powerState.charging ? "Charge rate" : "Power draw"
+          value: panel.powerState.changeRate.toFixed(1) + " W"
         }
         BatteryInfoRow {
-          visible: panel.powerService.batteryInfo.size !== undefined
+          visible: panel.powerState.batteryInfo.size !== undefined
           label: "Battery size"
-          value: String(panel.powerService.batteryInfo.size || "")
+          value: String(panel.powerState.batteryInfo.size || "")
         }
         BatteryInfoRow {
-          visible: panel.powerService.batteryInfo.cycles !== undefined
+          visible: panel.powerState.batteryInfo.cycles !== undefined
           label: "Charge cycles"
-          value: String(panel.powerService.batteryInfo.cycles || "")
+          value: String(panel.powerState.batteryInfo.cycles || "")
         }
         BatteryInfoRow {
-          visible: panel.powerService.batteryInfo.threshold !== undefined
+          visible: panel.powerState.batteryInfo.threshold !== undefined
           label: "Charge threshold"
-          value: String(panel.powerService.batteryInfo.threshold || "")
+          value: String(panel.powerState.batteryInfo.threshold || "")
         }
       }
 

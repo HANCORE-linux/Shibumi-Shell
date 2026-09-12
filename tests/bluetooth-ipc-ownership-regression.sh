@@ -143,6 +143,7 @@ run_case() {
   case_root=$(mktemp -d "/tmp/shibumi-bluetooth-ipc-${load_order}.XXXXXX")
   mkdir -p "$case_root/runtime" "$case_root/fixtures"
   chmod 700 "$case_root/runtime"
+  shibumi_stage_suite_runtime "$repo_root" "$case_root"
   cp -a -- "$repo_root/hancore.shibumi.bluetooth" "$case_root/bluetooth"
   cp -a -- "$omarchy_path/shell/Commons" "$case_root/Commons"
   cp -a -- "$omarchy_path/shell/Ui" "$case_root/Ui"
@@ -161,7 +162,14 @@ run_case() {
     setsid "$quickshell_bin" -p "$case_root" --no-color \
     >"$case_root/quickshell.log" 2>&1 &
   case_shell_pid=$!
-  case_shell_pgid=$(ps -o pgid= -p "$case_shell_pid" | tr -d ' ')
+  case_shell_pgid=""
+  for _ in {1..50}; do
+    case_shell_pgid=$(ps -o pgid= -p "$case_shell_pid" 2>/dev/null \
+      | tr -d ' ' || true)
+    [[ $case_shell_pgid == "$case_shell_pid" ]] && break
+    kill -0 "$case_shell_pid" 2>/dev/null || break
+    sleep 0.01
+  done
   if [[ $case_shell_pgid != "$case_shell_pid" ]]; then
     record_failure "$load_order shell PID $case_shell_pid does not own PGID $case_shell_pgid"
     cleanup_case

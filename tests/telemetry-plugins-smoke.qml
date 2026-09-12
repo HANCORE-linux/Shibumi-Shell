@@ -16,22 +16,25 @@ ShellRoot {
   property bool gpuFixtureParsed: false
   property int gpuSelectionPhase: 0
 
-  Component.onCompleted:
-    telemetryService.thermal.parseDetailed("55|63|90|105|44|82|90|39")
-
   function fail(message) {
     console.error("telemetry-plugins-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Telemetry.Service {
     id: telemetryService
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.13", kinds: ["service"]})
     // Keep this fixture isolated from machine-specific hwmon inventory.
     thermalProbeEnabled: false
   }
 
   Cpu.Service {
     id: cpuService
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.13", kinds: ["service"]})
+    gpuProbeEnabled: false
   }
 
   QtObject {
@@ -198,7 +201,9 @@ ShellRoot {
           || root.attempts < 4) return
       if (root.attempts > 100) return root.fail("widgets did not become ready")
 
+      if (!telemetryService.ready || !cpuService.ready) return
       if (!root.gpuFixtureParsed) {
+        telemetryService.thermal.parseDetailed("55|63|90|105|44|82|90|39")
         cpuService.gpu.parse([
           "device|pci:0000:03:00.0|sysfs|17|49|0|0|"
             + "AMD Ryzen 9 7950X Integrated Graphics|amdgpu|6.14.2|card0",
@@ -358,8 +363,8 @@ ShellRoot {
       if (telemetryService.system.memoryConsumers !== 1
           || telemetryService.system.cpuConsumers !== 2)
         return root.fail("shared telemetry leases are not balanced per widget")
-      if (cpuService.gpu.consumers !== 1)
-        return root.fail("GPU widget did not own exactly one telemetry lease")
+      if (cpuService.gpu.consumers !== 2)
+        return root.fail("GPU widget and thermal service did not each own one GPU lease")
       if (telemetryService.thermal.consumers !== 1
           || !temperature.setTemperatureSource("memory")
           || fakeState.lastGroup !== "G:hancore.shibumi.temperature"

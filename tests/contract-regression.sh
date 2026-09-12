@@ -20,9 +20,14 @@ command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 "$repo_root/tests/baseline-contract-regression.sh"
 "$repo_root/tests/documentation-regression.py"
 python3 "$repo_root/tests/production-boundary-regression.py"
+python3 "$repo_root/tests/shared-runtime-import-regression.py"
+python3 "$repo_root/tests/isolated-process-regression.py"
+python3 "$repo_root/tests/source-snapshot-regression.py"
+python3 "$repo_root/tests/isolated-files-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
 python3 "$repo_root/tests/test_shibumi_manager.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
+python3 "$repo_root/tests/test_lifecycle_admission.py"
 python3 "$repo_root/tests/test_inc013_drain_contract.py"
 python3 "$repo_root/tests/quickshell-empty-registry-mutation.py"
 "$repo_root/tests/state-matrix-contract-regression.sh"
@@ -61,7 +66,7 @@ for retired_root_copy in \
     || fail "plugin-canonical source regained a root copy: $retired_root_copy"
 done
 unexpected_root_sources=$(find adapters assets services widgets -type f 2>/dev/null \
-  | grep -Ev '^(services/(HostWidgetResolver\.qml|PickerModel\.js|PowerModel\.js|PowerService\.qml|QuoteDefaults\.js|ReactorModel\.js|SystemTelemetry\.qml|ThemePalette\.qml|ThemePaletteModel\.js|ThermalTelemetry\.qml)|widgets/(IconText\.qml|PacmanWorkspaceMarker\.qml|PillSurface\.qml|ShibumiButtonGroup\.qml|ShibumiPanel\.qml|ShibumiPanelToolTip\.qml|ShibumiSlider\.qml))$' \
+  | grep -Ev '^(services/(HostWidgetResolver\.qml|PickerModel\.js|PowerModel\.js|PowerService\.qml|PowerCommand\.qml|QuoteDefaults\.js|ReactorModel\.js|SystemTelemetry\.qml|ThemePalette\.qml|ThemePaletteModel\.js|ThermalTelemetry\.qml)|widgets/(IconText\.qml|PacmanWorkspaceMarker\.qml|PillSurface\.qml|ShibumiButtonGroup\.qml|ShibumiPanel\.qml|ShibumiPanelToolTip\.qml|ShibumiSlider\.qml))$' \
   || true)
 [[ -z $unexpected_root_sources ]] || fail \
   "historical root implementation remains outside declared vendoring maps: $unexpected_root_sources"
@@ -108,8 +113,8 @@ if rg -q 'omarchy-hyprland-launch|commandLauncher' Bar.qml; then
   fail "bar command launcher still depends on the removed legacy launcher"
 fi
 
-rg -q 'model: root\.outputWindowsEnabled \? Quickshell\.screens : \[\]' Bar.qml \
-  || fail "bar variants must preserve native Quickshell screen objects"
+rg -Uq 'model: root\.outputWindowsEnabled && !root\.shutdownPrepared\n[[:space:]]*\? Quickshell\.screens : \[\]' Bar.qml \
+  || fail "bar variants must preserve the shutdown-gated native Quickshell screen model"
 if rg -q 'model: .*barScreens' Bar.qml; then
   fail "bar variants must not use a JavaScript copy of Quickshell.screens"
 fi
@@ -136,6 +141,11 @@ rg -q '^PanelWindow \{' core/DragGhostPanel.qml \
   || fail "drag ghost must be isolated from the edge-local bar window"
 rg -q 'mask: Region \{\}' core/DragGhostPanel.qml \
   || fail "drag ghost overlay must remain input-transparent"
+rg -Fq 'DragGhostVisual {' core/DragGhostPanel.qml \
+  || fail "drag layer must use the render-tested visual"
+if rg -q 'barOrigin[XY]' core/DragGhostPanel.qml core/DragGhostVisual.qml; then
+  fail "drag ghost must not add an edge offset to full-window coordinates"
+fi
 rg -Fq 'y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
   core/BarPanel.qml \
   || fail "bottom bar surface must use stable explicit placement"
@@ -182,8 +192,10 @@ rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' services/HostWi
 [[ $(rg -l 'bar\.registeredWidgetComponent' \
   hancore.shibumi.{audio,status,center}/BarWidget.qml | wc -l) -eq 3 ]] \
   || fail "host-backed composites bypass the stable widget resolver"
-rg -q 'registeredComponent\("omarchy\.network"\)' hancore.shibumi.network/Service.qml \
-  || fail "shipped network owner bypasses the stable widget resolver"
+if rg -q 'registered(Component|Source)|registeredWidget(Component|Source)' \
+    hancore.shibumi.network/Service.qml; then
+  fail "native Network owner still resolves a host feature component"
+fi
 rg -q 'registeredComponent\("omarchy\.monitor"\)' hancore.shibumi.brightness/Service.qml \
   || fail "shipped monitor owner bypasses the stable widget resolver"
 if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' \
@@ -310,8 +322,14 @@ rg -q 'if \("availableWidth" in target\)' core/WidgetSlot.qml \
   || fail "widget slots do not inject the monitor-local width budget"
 rg -q 'onAvailableWidthChanged: injectProperties\(\)' core/WidgetSlot.qml \
   || fail "center width changes are not forwarded reactively"
-rg -q 'availableWidth: horizontalSurface.centerAvailableWidth' styles/shibumi/BarSurface.qml \
-  || fail "center width budget is not monitor-local"
+rg -Fq 'availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)' styles/shibumi/BarSurface.qml \
+  || fail "center width budget is not monitor-local or becomes unconstrained"
+rg -Fq '+ leftExtras.width + centerExtras.width + rightExtras.width' \
+  styles/shibumi/BarSurface.qml \
+  || fail "responsive staging omits unassigned provider widths"
+rg -Fq 'centerGap, measuredCenterSpan, centerExtras.width)' \
+  styles/shibumi/BarSurface.qml \
+  || fail "center extras do not reduce the grouped center budget"
 rg -Fq 'ResponsiveLayout.centerAvailableWidth(compactShell, width,' \
   styles/shibumi/BarSurface.qml \
   || fail "compact V2 shells measure the center against their own fitted width"
@@ -358,21 +376,38 @@ fi
   || fail "Mode 7 renderer must own exactly one adaptive frame timer"
 rg -q 'target: "shibumi-reactor"' hancore.shibumi.reactor/Service.qml \
   || fail "Reactor control IPC target is missing"
-rg -Fq 'active: root.ready && (root.mode === 7 || root.mode === 8)' \
+rg -Fq 'desiredBackendMode: ready && (mode === 7 || mode === 8) ? mode : 0' \
   hancore.shibumi.reactor/Service.qml \
   || fail "Reactor backend is not lifecycle-lazy"
-rg -q 'root\.mode === 7 \? eventBackendComponent' \
+rg -Fq 'backendLoader.active = next !== 0' hancore.shibumi.reactor/Service.qml \
+  || fail "Reactor deferred loader ignores current mode"
+rg -q 'root\.loadedBackendMode === 7 \? eventBackendComponent' \
   hancore.shibumi.reactor/Service.qml \
   || fail "Mode 7 Reactor service is not selected lazily"
 [[ $(rg -c 'ReactorService \{' hancore.shibumi.reactor/Service.qml) -eq 1 ]] \
   || fail "Mode 7 Reactor service must be process-wide"
 [[ $(rg -c 'QuoteService \{' hancore.shibumi.reactor/Service.qml) -eq 1 ]] \
   || fail "Mode 8 quote service must be process-wide"
-if rg -q '\bProcess\b' hancore.shibumi.reactor/QuoteService.qml; then
-  fail "Mode 8 quote service must not spawn processes"
+if rg -q '\b(Process|FileView)\b' hancore.shibumi.reactor/QuoteService.qml; then
+  fail "Mode 8 must delegate acquisition to its one bounded source"
 fi
-[[ $(rg -c 'FileView \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
-  || fail "Mode 8 must read user quotes through exactly one root FileView"
+[[ $(rg -c 'BoundedTextSource \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
+  || fail "Mode 8 must own exactly one bounded quote source"
+[[ $(rg -c 'BoundedTextSource \{' hancore.shibumi.reactor/ReactorService.qml) -eq 2 ]] \
+  || fail "Mode 7 must own exactly two bounded text sources"
+if rg -q 'FileView[[:space:]]*\{' hancore.shibumi.reactor/ReactorService.qml; then
+  fail "Mode 7 must not bypass bounded text acquisition"
+fi
+[[ $(rg -c 'Process \{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must coalesce into one reader"
+[[ $(rg -c 'Timer \{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must own one deadline only"
+[[ $(rg -c 'FileView[[:space:]]*\{' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "each bounded source must own exactly one metadata watcher"
+[[ $(rg -c '^[[:space:]]*preload:' hancore.shibumi.reactor/BoundedTextSource.qml) -eq 1 ]] \
+  || fail "bounded watcher has ambiguous preload settings"
+rg -q '^[[:space:]]*preload: false$' hancore.shibumi.reactor/BoundedTextSource.qml \
+  || fail "bounded watcher must not buffer input"
 [[ $(rg -c 'Timer \{' hancore.shibumi.reactor/QuoteService.qml) -eq 1 ]] \
   || fail "Mode 8 must schedule quotes through exactly one root timer"
 if rg -q 'Quickshell\.(Networking|Services\.(Pipewire|Mpris|Notifications))' \
@@ -381,6 +416,8 @@ if rg -q 'Quickshell\.(Networking|Services\.(Pipewire|Mpris|Notifications))' \
 fi
 [[ $(rg -c 'Process \{' hancore.shibumi.reactor/ReactorService.qml) -eq 1 ]] \
   || fail "Mode 7 may own only the single legacy pacman event tail"
+rg -Uq 'Process[[:space:]]*\{[[:space:]]*id: pacmanTail' hancore.shibumi.reactor/ReactorService.qml \
+  || fail "Mode 7 direct process is not the existing pacman tail"
 rg -q 'firstPartyService\("omarchy\.media"\)' hancore.shibumi.reactor/ReactorService.qml \
   || fail "Reactor media events bypass Quattro media ownership"
 rg -q 'statusService\.notificationService' hancore.shibumi.reactor/ReactorService.qml \
@@ -514,9 +551,9 @@ fi
   || fail "native audio backend must own exactly one microphone meter"
 rg -q 'audioBackend\.inputPeak' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not consume the primitive microphone peak"
-rg -q 'audioBackend\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+rg -q 'next\.acquirePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not acquire microphone peak monitoring"
-rg -q 'audioBackend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
+rg -q 'backend\.releasePeakMonitoring\(\)' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not release microphone peak monitoring"
 rg -q 'enabled: root\.active && root\.peakMonitoringEnabled' \
   hancore.shibumi.audio/AudioBackendAdapter.qml \
@@ -611,10 +648,16 @@ rg -q 'G11: \["hancore.shibumi.network"\]' core/GroupRegistry.js \
   || fail "G11 is not owned by the Shibumi network presentation"
 rg -q 'hancore\.shibumi\.network' contracts/plugin-suite-v1.json \
   || fail "Shibumi network presentation is not registered"
-[[ $(rg -c 'NetworkPanelBridge \{' hancore.shibumi.network/Service.qml) -eq 1 ]] \
-  || fail "network backend must be process-wide"
-rg -q 'NetworkPanelBridge' hancore.shibumi.network/Service.qml \
-  || fail "process-wide network service does not preserve the official panel owner"
+for owner in NetworkLivenessContinuity NetworkManagerLiveness \
+    NetworkProfileCatalog NetworkTelemetry NetworkReachability \
+    NetworkBackendAdapter NetworkScannerLease NetworkEnterpriseDispatcher \
+    NetworkActionCoordinator NetworkSpeedTest NetworkProfileActionDispatcher \
+    NetworkProfileActionLease \
+    NetworkPanelBridge; do
+  [[ $(rg -c "^[[:space:]]*$owner \\{" \
+    hancore.shibumi.network/Service.qml) -eq 1 ]] \
+    || fail "network service must own exactly one native $owner"
+done
 if rg -q 'NetworkPanelBridge|Quickshell\.Networking|Networking\.' \
   hancore.shibumi.network/BarWidget.qml hancore.shibumi.network/NetworkPanel.qml; then
   fail "screen-local network presentation must not own NetworkManager"
@@ -623,30 +666,19 @@ if rg -q 'Process \{|FileView \{' hancore.shibumi.network/BarWidget.qml \
   hancore.shibumi.network/NetworkPanel.qml hancore.shibumi.network/NetworkPanelBridge.qml; then
   fail "screen-local network presentation must not own backend workers"
 fi
-[[ $(rg -c 'NetworkPanelBridge \{' hancore.shibumi.network/Service.qml) -eq 1 ]] \
-  || fail "process-wide network service must own exactly one official backend"
-rg -q 'property var sessionOwners: \[\]' hancore.shibumi.network/Service.qml \
-  || fail "network service lacks multi-output session accounting"
-rg -q 'profileList\.running = false' hancore.shibumi.network/Service.qml \
-  || fail "network service does not stop saved-profile discovery on final close"
-rg -q 'detailsProc\.running = false' hancore.shibumi.network/Service.qml \
-  || fail "network service does not stop detail sampling on final close"
-rg -q 'property var scannerDevice: null' hancore.shibumi.network/Service.qml \
-  || fail "network service does not track its scanner lease"
-rg -q 'if \(scannerDevice && scannerDevice !== nextDevice\)' \
-  hancore.shibumi.network/Service.qml \
-  || fail "network service does not release replaced scanner devices"
-rg -q 'releaseWifiScanner\(\)' hancore.shibumi.network/Service.qml \
-  || fail "network scanner is not released outside panel sessions"
-if rg -q 'scannerEnabled' hancore.shibumi.network/NetworkPanelBridge.qml; then
-  fail "network bridge competes with the process-wide scanner owner"
-fi
-rg -q 'command: \["omarchy-network-status", "--verbose"\]' \
-  hancore.shibumi.network/Service.qml \
-  || fail "network panel details do not use the shared lifecycle worker"
-if rg -U -q 'id: detailsPoll[\s\S]{0,240}root\.refresh' \
-  hancore.shibumi.network/Service.qml; then
-  fail "network details poll must not restart DNS/profile refresh work"
+rg -q 'property var ownerRecords: \[\]' hancore.shibumi.network/Service.qml \
+  || fail "network service lacks multi-output lease accounting"
+rg -q 'scanner\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network scanner is not released after panel sessions"
+rg -q 'reachability\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network reachability is not released after panel sessions"
+rg -q 'catalog\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "saved-profile catalog is not released after panel sessions"
+rg -q 'telemetry\.release\(owner\)' hancore.shibumi.network/Service.qml \
+  || fail "network telemetry is not demand-driven"
+if rg -q 'InlineSpeedTestRunner|omarchy-network-|\bnmcli\b' \
+    hancore.shibumi.network; then
+  fail "native Network cutover retained a legacy backend helper"
 fi
 rg -q 'childPanelWidget\("omarchy\.network"\)' tests/network-plugin-smoke.qml \
   || fail "network alias routing is not regression-tested"
@@ -664,11 +696,27 @@ if rg -q 'Quickshell\.Services\.UPower|UPower\.|Quickshell\.Io' \
   hancore.shibumi.brightness/MonitorPanelBridge.qml hancore.shibumi.brightness/Service.qml; then
   fail "Shibumi brightness presentation must not create a second monitor owner"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.brightness/BarWidget.qml \
+if rg -q 'Process \{|FileView \{' hancore.shibumi.brightness/BarWidget.qml \
   hancore.shibumi.brightness/BrightnessPanel.qml hancore.shibumi.brightness/Service.qml \
-  hancore.shibumi.brightness/MonitorPanelBridge.qml; then
+  hancore.shibumi.brightness/MonitorPanelBridge.qml \
+  || rg -q 'Timer \{' hancore.shibumi.brightness/BarWidget.qml \
+    hancore.shibumi.brightness/BrightnessPanel.qml hancore.shibumi.brightness/Service.qml; then
   fail "brightness presentation and monitor adapter must remain worker-free"
 fi
+bridge=hancore.shibumi.brightness/MonitorPanelBridge.qml
+[[ $(rg -o 'Timer[[:space:]]*\{' "$bridge" | wc -l) -eq 3 ]] \
+  || fail "monitor adapter must own exactly three deferred timers"
+if rg -q '\b(repeat|running)[[:space:]]*:' "$bridge"; then
+  fail "monitor adapter deferred timers must not repeat or run independently"
+fi
+rg -Uq 'Timer \{\n[[:space:]]*id: panelSync\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: root\.syncPanelSource\(\)\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter panel sync is not zero-interval and owner-bound"
+rg -Uq 'Timer \{\n[[:space:]]*id: panelInjection\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: root\.injectPanel\(\)\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter panel injection is not zero-interval and owner-bound"
+rg -Uq 'Timer \{\n[[:space:]]*id: hiddenClose\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: \{\n([^\n]*\n){0,3}[[:space:]]*&& typeof root\.panel\.close === "function"\) root\.panel\.close\(\)\n[[:space:]]*\}\n[[:space:]]*\}' "$bridge" \
+  || fail "monitor adapter hidden close is not zero-interval and owner-bound"
+rg -Uq 'function shutdown\(\) \{\n([^\n]*\n){0,4}[[:space:]]*panelSync\.stop\(\)\n[[:space:]]*panelInjection\.stop\(\)\n[[:space:]]*hiddenClose\.stop\(\)' "$bridge" \
+  || fail "monitor adapter shutdown does not stop every deferred timer"
 if rg -q '^[[:space:]]*selected:' hancore.shibumi.brightness/BrightnessPanel.qml; then
   fail "brightness panel uses Button-only selected state on CursorSurface"
 fi
@@ -686,10 +734,10 @@ rg -q '"service": "Service.qml"' hancore.shibumi.power-state/manifest.json \
   || fail "battery/profile state must have one process-wide power owner"
 rg -q 'Quickshell.Services.UPower' services/PowerService.qml \
   || fail "power owner does not consume the event-driven UPower singleton"
-rg -q 'command: \["omarchy-powerprofiles-list", "--active-state"\]' \
+rg -Fq 'commandFor("profiles", ["omarchy-powerprofiles-list", "--active-state"])' \
   services/PowerService.qml \
   || fail "power owner does not use the Quattro profile contract"
-rg -Fq 'command: ["busctl", "--system", "get-property",' \
+rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   services/PowerService.qml \
   || fail "power owner does not use the lightweight active-profile probe"
 rg -Fq 'onTriggered: root.refreshActiveProfile()' \
@@ -700,6 +748,10 @@ rg -Fq 'interval: 5 * 60 * 1000' services/PowerService.qml \
 rg -q 'omarchy-battery-status --shell' \
   services/PowerService.qml \
   || fail "power owner does not use the Quattro battery detail contract"
+[[ $(rg -c 'PowerCommand \{' services/PowerService.qml) -eq 4 ]] \
+  || fail "power owner must retain exactly four operation slots"
+[[ $(rg -c 'Process \{' services/PowerCommand.qml) -eq 1 ]] \
+  || fail "each power operation slot must own exactly one process"
 if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|Timer \{|FileView \{' \
   hancore.shibumi.battery/BarWidget.qml hancore.shibumi.battery/BatteryPanel.qml \
   hancore.shibumi.power-profile/BarWidget.qml hancore.shibumi.power-profile/PowerProfilePanel.qml; then
@@ -779,9 +831,16 @@ for bluetooth_adapter in "$bluetooth_adapter"; do
     || fail "$bluetooth_adapter does not confirm discovery ownership from observed state"
   rg -q 'property var audioHandoffIntent: null' "$bluetooth_adapter" \
     || fail "$bluetooth_adapter lacks explicit latest-only audio intent state"
-  rg -U -q 'function validatePendingAudioOutput\(\)[^}]*!radioEnabled[^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
+  rg -Fq 'nativeDeviceSnapshots())' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter publishes native QObjects instead of detached records"
+  rg -q 'function resolveNativeDevice\(' "$bluetooth_adapter" \
+    || fail "$bluetooth_adapter does not resolve current entities before mutation"
+  if rg -q 'device\.(connect|disconnect|pair|forget)\(' "$bluetooth_adapter"; then
+    fail "$bluetooth_adapter has more than one device mutation path"
+  fi
+  rg -U -q 'function validatePendingAudioOutput\(\)[^}]*resolveNativeDevice\([^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
     "$bluetooth_adapter" \
-    || fail "$bluetooth_adapter does not revalidate audio handoff state"
+    || fail "$bluetooth_adapter does not revalidate audio handoff identity/state"
   [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 4 ]] \
     || fail "$bluetooth_adapter must have exactly four bounded lifecycle timers"
   if rg -q 'IpcHandler \{|Loader \{|panelSource|panelComponent|registeredWidget' \
@@ -813,6 +872,10 @@ if rg -q 'Process \{|FileView \{' "$bluetooth_service" "$bluetooth_adapter"; the
 fi
 rg -q 'childPanelWidget\("omarchy\.bluetooth"\)' tests/bluetooth-plugin-smoke.qml \
   || fail "Bluetooth alias routing is not regression-tested against shipped code"
+rg -Fq 'result.ok === true' "$bluetooth_panel" \
+  || fail "Bluetooth panel treats structured action results as booleans"
+[[ -f tests/bluetooth-device-identity-regression.qml ]] \
+  || fail "Bluetooth stale-identity regression is missing"
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
@@ -1083,7 +1146,10 @@ QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' \
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-model-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
+  "$repo_root/tests/v1-center-slot-regression.qml"
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/layout-controller-regression.qml"
+python3 "$repo_root/tests/qml-assertion-exit-regression.py"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
   "$repo_root/tests/run-geometry-regression.qml"
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qml \
@@ -1102,7 +1168,10 @@ mkdir -p "$quote_smoke_root/services" "$quote_smoke_root/runtime" \
 chmod 700 "$quote_smoke_root/runtime"
 cp hancore.shibumi.reactor/QuoteDefaults.js \
   hancore.shibumi.reactor/ReactorModel.js \
+  hancore.shibumi.reactor/BoundedTextSource.qml \
   hancore.shibumi.reactor/QuoteService.qml "$quote_smoke_root/services/"
+mkdir -p "$quote_smoke_root/services/scripts"
+cp hancore.shibumi.reactor/scripts/read-reactor-text.py "$quote_smoke_root/services/scripts/"
 cp tests/quote-service-smoke.qml "$quote_smoke_root/shell.qml"
 set +e
 quote_service_output=$(timeout 4 env \
@@ -1138,8 +1207,15 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/ai-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/quick-access-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/reactor-plugin-regression.sh"
+  "$repo_root/tests/host-registry-prime-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/bar-host-registry-regression.sh"
+  OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/state-restore-control-regression.py"
+  OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/layout-transition-regression.py" --controls
+  python3 "$repo_root/tests/native-catalog-regression.py" --controls
+  python3 "$repo_root/tests/native-catalog-instance-selection-regression.py"
+  python3 "$repo_root/tests/catalog-demand-regression.py" --controls
   "$repo_root/tests/window-recovery-regression.sh"
+  "$repo_root/tests/drag-ghost-render-regression.sh"
 
   official_audio_panel=${OMARCHY_PATH}/shell/plugins/panels/audio/Panel.qml
   [[ -s $official_audio_panel ]] || fail "official Quattro audio panel is missing"
@@ -1155,29 +1231,6 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     selectPlayer; do
     rg -q "${media_contract}" "$official_media_service" \
       || fail "official media service contract changed: $media_contract"
-  done
-  official_network_panel=${OMARCHY_PATH}/shell/plugins/panels/network/Panel.qml
-  [[ -s $official_network_panel ]] || fail "official Quattro network panel is missing"
-  for network_contract in networkManagerAvailable kind signalStrength \
-    connectedWifiNetwork info wifiNetworks wifiDevice dnsProvider refresh \
-    connectWithPassphrase disconnect forget setDns; do
-    rg -q "${network_contract}" "$official_network_panel" \
-      || fail "official network panel contract changed: $network_contract"
-  done
-  if ! rg -q 'connectKnown|connectDirectly' "$official_network_panel"; then
-    fail "official network panel has no compatible connect action"
-  fi
-  official_network_speedtest=${OMARCHY_PATH}/bin/omarchy-network-speedtest
-  [[ -x $official_network_speedtest ]] \
-    || fail "official network speed-test command is missing"
-  for speed_contract in \
-    'direction="${1:-}"' \
-    'down | up' \
-    'omarchy-network-speedtest [down|up]' \
-    'format_mbps' \
-    'trap cleanup EXIT'; do
-    rg -Fq "$speed_contract" "$official_network_speedtest" \
-      || fail "network speed-test command changed: $speed_contract"
   done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"

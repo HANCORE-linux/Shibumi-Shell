@@ -545,7 +545,7 @@ feature is intentionally implemented by Shibumi and is not an upstream gap.
 | `hancore.shibumi.center` | QTR-005 weather, QTR-006 system update | Host service gap |
 | `hancore.shibumi.media` | `omarchy.media` already supplies a service | Contract available |
 | `hancore.shibumi.quick-access` | `omarchy.background`; discovery via QTR-007 | Partial host service gap |
-| `hancore.shibumi.network` | QTR-005 network | Host service gap |
+| `hancore.shibumi.network` | Public Quickshell Networking plus Shibumi-owned bounded D-Bus helpers | Own native capability; QTR-005 remains a general host ecosystem gap |
 | `hancore.shibumi.battery` | QTR-005 power/UPower | Partial host service gap |
 | `hancore.shibumi.brightness` | QTR-005 monitor | Host service gap |
 | `hancore.shibumi.power-profile` | QTR-005 power | Host service gap |
@@ -579,7 +579,9 @@ Quattro shortcomings:
    Audio, Bluetooth, Monitor, and Power; then Weather and Model Usage.
 5. **Shared status and UX context:** QTR-006, QTR-007, and QTR-008.
 
-Shibumi can continue development with bounded adapters, but QTR-003 through
-QTR-006 should be resolved before those adapters are treated as stable public
+Shibumi can continue development with bounded adapters. G11 no longer consumes
+QTR-005 Network as a feature backend; its retained `omarchy.network` identity is
+IPC/widget-family compatibility only. QTR-003 through QTR-006 should still be
+resolved before other transitional adapters are treated as stable public
 architecture. The desired outcome is not more Omarchy UI: it is one
 authoritative backend that stock and third-party presentations can both use.

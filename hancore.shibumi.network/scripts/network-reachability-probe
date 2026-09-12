@@ -1,0 +1,209 @@
+#!/usr/bin/python3
+"""Emit one bounded router and internet ICMP reachability sample."""
+
+from __future__ import annotations
+
+import ctypes
+import ipaddress
+import json
+import math
+import os
+import re
+import select
+import signal
+import subprocess
+import sys
+import time
+from typing import Any
+
+PING = "/usr/bin/ping"
+INTERNET_TARGET = "1.1.1.1"
+SCHEMA_VERSION = 1
+MAX_OUTPUT_BYTES = 8192
+MAX_PROTOCOL_BYTES = 2048
+PROBE_TIMEOUT_SECONDS = 1.5
+MAX_RUNTIME_SECONDS = 4.0
+PR_SET_PDEATHSIG = 1
+INTERFACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$")
+SUMMARY_PATTERN = re.compile(
+    rb"(?:rtt|round-trip) min/avg/max/(?:mdev|stddev) = "
+    rb"[0-9.]+/([0-9]+(?:\.[0-9]+)?)/[0-9.]+/[0-9.]+ ms\n?"
+)
+
+
+class ProbeError(RuntimeError):
+    pass
+
+
+def arm_parent_death(parent_pid: int, death_signal: int) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, death_signal, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), death_signal)
+
+
+def arm_supervisor_parent_death() -> None:
+    parent_pid = os.getppid()
+    arm_parent_death(parent_pid, signal.SIGTERM)
+
+
+def terminate(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=0.25)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=0.25)
+
+
+def parse_arguments(arguments: list[str]) -> tuple[str, str]:
+    if len(arguments) != 4 or arguments[0] != "--interface" \
+            or arguments[2] != "--gateway":
+        raise ProbeError("usage")
+    interface_name = arguments[1]
+    if not INTERFACE_PATTERN.fullmatch(interface_name):
+        raise ProbeError("invalid interface")
+    gateway = arguments[3]
+    if gateway == "none":
+        return interface_name, ""
+    try:
+        parsed = ipaddress.ip_address(gateway)
+    except ValueError as error:
+        raise ProbeError("invalid gateway") from error
+    if str(parsed) != gateway:
+        raise ProbeError("noncanonical gateway")
+    return interface_name, gateway
+
+
+def read_bounded_output(
+    process: subprocess.Popen[bytes], deadline: float
+) -> bytes:
+    assert process.stdout is not None
+    descriptor = process.stdout.fileno()
+    os.set_blocking(descriptor, False)
+    output = bytearray()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProbeError("probe timeout")
+        ready, _, _ = select.select([descriptor], [], [], min(remaining, 0.1))
+        if ready:
+            chunk = os.read(descriptor, 4096)
+            if not chunk:
+                break
+            output.extend(chunk)
+            if len(output) > MAX_OUTPUT_BYTES:
+                raise ProbeError("probe output exceeded bound")
+        elif process.poll() is not None:
+            chunk = os.read(descriptor, 4096)
+            if chunk:
+                output.extend(chunk)
+                if len(output) > MAX_OUTPUT_BYTES:
+                    raise ProbeError("probe output exceeded bound")
+                continue
+            break
+    return bytes(output)
+
+
+def probe_target(interface_name: str, target: str, deadline: float) -> dict[str, Any]:
+    remaining = min(PROBE_TIMEOUT_SECONDS, deadline - time.monotonic())
+    if remaining <= 0:
+        return {"status": "error", "latencyMs": None}
+    parent_pid = os.getpid()
+    try:
+        process = subprocess.Popen(
+            [
+                PING, "-n", "-c", "1", "-W", "1", "-I",
+                interface_name, "--", target,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env={"LANG": "C", "LC_ALL": "C", "PATH": "/usr/bin"},
+            preexec_fn=lambda: arm_parent_death(parent_pid, signal.SIGKILL),
+        )
+    except OSError:
+        return {"status": "error", "latencyMs": None}
+    probe_deadline = min(deadline, time.monotonic() + remaining)
+    try:
+        output = read_bounded_output(process, probe_deadline)
+        code = process.wait(timeout=max(0.05, probe_deadline - time.monotonic()))
+    except (ProbeError, subprocess.TimeoutExpired):
+        terminate(process)
+        return {"status": "error", "latencyMs": None}
+    finally:
+        if process.poll() is None:
+            terminate(process)
+    if code == 1:
+        return {"status": "timeout", "latencyMs": None}
+    if code != 0:
+        return {"status": "error", "latencyMs": None}
+    match = SUMMARY_PATTERN.search(output)
+    if match is None:
+        return {"status": "error", "latencyMs": None}
+    try:
+        latency = float(match.group(1).decode("ascii", errors="strict"))
+    except (UnicodeDecodeError, ValueError):
+        return {"status": "error", "latencyMs": None}
+    if not math.isfinite(latency) or latency < 0 or latency > 60000:
+        return {"status": "error", "latencyMs": None}
+    canonical_latency: int | float = (
+        int(latency) if latency.is_integer() else latency
+    )
+    return {"status": "reply", "latencyMs": canonical_latency}
+
+
+def build_snapshot(interface_name: str, gateway: str) -> dict[str, Any]:
+    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
+    router = (
+        probe_target(interface_name, gateway, deadline)
+        if gateway
+        else {"status": "skipped", "latencyMs": None}
+    )
+    internet = probe_target(interface_name, INTERNET_TARGET, deadline)
+    return {
+        "schemaVersion": SCHEMA_VERSION,
+        "interfaceName": interface_name,
+        "gateway": gateway,
+        "internetTarget": INTERNET_TARGET,
+        "sampleMonotonicMs": int(time.monotonic() * 1000),
+        "router": router,
+        "internet": internet,
+    }
+
+
+def emit(snapshot: dict[str, Any]) -> None:
+    record = {
+        "schemaVersion": SCHEMA_VERSION,
+        "event": "snapshot",
+        "sequence": 1,
+        "snapshot": snapshot,
+    }
+    encoded = json.dumps(
+        record, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8", errors="strict")
+    if len(encoded) > MAX_PROTOCOL_BYTES or b"\n" in encoded:
+        raise ProbeError("protocol line exceeded bound")
+    sys.stdout.buffer.write(encoded + b"\n")
+    sys.stdout.buffer.flush()
+
+
+def run(arguments: list[str]) -> int:
+    try:
+        interface_name, gateway = parse_arguments(arguments)
+        emit(build_snapshot(interface_name, gateway))
+        return 0
+    except (BrokenPipeError, ProbeError):
+        return 2
+
+
+def main() -> int:
+    arm_supervisor_parent_death()
+    return run(sys.argv[1:])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,191 +1,176 @@
-# Is Shibumi 0.1.1-beta.11 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.13 ready for prerelease testing?
 
-> **Document status: Current validation and release gate.** This page records the latest Shibumi evidence. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+> **Document status: Local release-candidate gate.** This page records evidence
+> and open acceptance. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Shibumi `0.1.1-beta.11` carries the Step 2, Step 3, Step 4A, and Step 4B
-integration on the exact clean candidate. Its complete contract remains
-revision-bound across the installed-package, installed-source-parity, and
-forward-compatibility proof axes. Destructive live Wayland acceptance is
-retained only for the exact revisions that produced it; the release workflow
-must record fresh checksummed evidence for the tagged candidate. Local physical
-Audio and Bluetooth acceptance passed. Physical second-display, mixed-scale,
-hotplug, and enterprise-Wi-Fi gates remain stable-release gates; Machine2 is
-intentionally outside this candidate's scope.
+Beta.13 supersedes Beta.12, which was tagged but not published as a GitHub
+release or AUR package, and retains its 24-plugin, Omarchy 4.0.3 runtime, bar,
+and lifecycle work. It contains no Step-6 product functionality and no
+automatic Step-6 migration.
 
-## Current test target
+## Beta.13 snapshot hotfix status (2026-09-12)
 
-The current acceptance target is an internal validation system. Its hostname,
-account, and network address are intentionally not part of the public product
-documentation and are not required by Shibumi users.
+The current uncommitted worktree keeps each admitted `shell.json` snapshot open
+through transaction end as a no-follow regular-file descriptor. Pathname,
+held-object, size, and digest checks reject replacement and in-place mutation,
+including inode reuse.
 
-- **Omarchy**: `4.0.0-1` (`v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7`)
-- **Runtime**: `/usr/share/omarchy/shell`
-- **Display**: `DP-1`, `2560x1440`, scale `1.0`
-- **Candidate**: 24 plugins under `hancore.shibumi.*`
-- **Policy**: Maintainers run destructive runtime acceptance only on the
-  isolated validation system
+Focused Python regressions cover replacement, mutation, descriptor cleanup,
+drained-baseline rebind, and crash simulation. Those regressions and an
+independent review passed in the uncommitted worktree. Exact-commit Beta.13
+archive and package-bound gates, Machine 2, physical acceptance, and publication
+remain open.
 
-The read-only V1 and V2 reference is pinned by repository revision and content
-digests in
-[`quickshell-dots-d0896fc-v2-deec8103.json`](../contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json);
-no maintainer-local checkout path is part of the acceptance contract.
+## Superseded Beta.12 candidate history
 
-## Step 2 boundary checkpoint
+Beta.12 was based directly on Step-5 tip
+`5154c020a44d71139a6614a183ec91021b9772c1`. It contained the 24-plugin native
+Network payload, the Bluetooth ST-01 identity fix, and Omarchy 4.0.2
+compatibility work. It contained no Step-6 product functionality and no
+automatic Step-6 migration.
 
-The compact production boundary is implemented without a backend cutover. The
-single machine-readable source is
-[`backend-boundary-v1.json`](../contracts/backend-boundary-v1.json); it declares
-all capability owners, current boundaries, declared output cardinality, worker
-policy, explicit transition steps, and only the Notifications, OSD, and Idle
-host-owned exceptions. Its transition ledger prevents silent reclassification
-of existing compatibility debt, and every process-wide Shibumi owner must expose
-a valid service manifest. `scripts/check-production-boundary` is
-manifest-driven and fails closed on unknown categories, owners, transitional
-backends, private providers, hidden components, helper-backed state, undeclared
-commands, package escapes, transition-ledger drift, and missing owner manifests.
-The lint verifies these declarations; live process and worker cardinality remain
-runtime gates.
+Candidate `98faf6a7117b3dd22675ceedf597f8b887a41363` was rejected during its
+first physical fresh-install attempt: managed install requested a plugin rescan
+and then stopped Quickshell while asynchronous QML incubation was still active,
+producing `SIGSEGV`. The replacement candidate drains the production shell
+before publishing managed plugin roots and must repeat every automated and
+physical gate; evidence from the rejected identity is not transferable.
 
-Validation passed on the dedicated Step 2 worktree based on `e92d8ee`:
+## Post-acceptance bar corrections (2026-09-08)
 
-- production boundary lint and 15 focused boundary regression tests;
-- package (14), suite (99), and health (44) unit gates passed;
-- the Arch AUR rehearsal builds and extracts the package, including the installed
-  `contracts/backend-boundary-v1.json` payload;
-- documentation, plugin-suite, AUR scaffold, `git diff --check`, and the complete
-  pinned contract regression passed.
+Candidate `d077efbd442bd7784b6ba691b67ef7160dcc00e5` completed the scoped
+physical round but was reopened after the V1 ghost-content failure and the
+additional bar findings. Both original Step-6 installations were restored.
+The older staging/acceptance rows below are not a live deployment inventory.
 
-The Step 2 boundary remains the base contract. Step 3's Bluetooth audio-route
-seam and Step 4A/4B native Audio/Bluetooth cutover are integrated in this
-candidate; the consumed Omarchy baselines remain unchanged.
+The source corrections cover #44 (regional extra widths and grouped-center
+budget), #46 (slot-neutral new V1 family replacements with existing dynamic
+placements preserved), and #23 (host-selected clone resolution and metadata).
+Separately authorized for Beta.12 is one optional V1 center slot, explicitly
+added in edit mode, for at most two total. Existing layouts are not expanded
+on load. The ghost correction uses the attached Window API, retains its image
+result, rejects stale capture callbacks, and removes the duplicate Bottom
+offset. The real layer delegates to an offscreen render-tested visual.
+There is no split-schema migration, new overflow policy, or dev-host capability
+bypass. The exact
+production-boundary ledger changes the resolver's `entryPointUrl` occurrence
+count from five to six for cache revalidation; its host-integration owner and
+single component-creation route are unchanged.
 
-## Prerelease acceptance summary
+These changes need a new exact candidate, complete automated gates, independent
+review, and affected physical acceptance. Ghost and two-slot-center physical
+acceptance remain open; offscreen pixel/scale checks are not Wayland or physical
+mixed-scale evidence. No corrected package has been deployed, and no publication
+is authorized.
+Historical acceptance of `d077efb` is not acceptance of the changed payload.
 
-The beta.11 source candidate plus explicitly retained prior acceptance currently
-provides these results. Rows marked historical do not become beta.11 evidence
-until the revision-bound release collector reruns them:
+## Candidate boundary
 
-| Gate | Result |
+The normal lifecycle supports only these predecessor identities:
+
+- public `0.1.1-beta.11` at
+  `adbb11068e9c77561ff0c3d1b8fca5212653ae3c`, including its package identity;
+- the exact Step-5 tip at
+  `5154c020a44d71139a6614a183ec91021b9772c1`;
+- the exact current Beta.13 payload after installation.
+
+The version string is not authority. Admission also compares source revision,
+complete suite and plugin digests, activation metadata, managed markers, and
+the complete journal schema. Every existing journal is inventoried before any
+journal is recovered or discarded. One admitted public journal may explain an
+exposure mismatch, is consumed from its validated snapshot, and is followed by
+a second live-identity check; multiple public journals fail as ambiguous.
+Step-6 Power registration, Step-6 phases or fields, mixed live markers, and
+unknown states fail closed without mutation. Repair alone may tolerate a
+missing owned root or payload drift while exact state and remaining marker
+authority hold. Machines already running Step 6 need a separate reviewed
+rollback.
+
+## Current tested host contract
+
+| Component | Accepted identity |
 | --- | --- |
-| V1 source inventory | Passed: 72 QML and JavaScript surfaces mapped |
-| Standalone V2 source inventory | Passed: 80 QML and JavaScript surfaces mapped |
-| Embedded V2 differences | Passed: 26 intentional differences classified against `d0896fc` |
-| Quattro compatibility | Passed against official `omarchy 4.0.0-1`, source tag `v4.0.0`, and recorded forward snapshot |
-| Plugin validation and self-containment | Passed for all 24 plugins |
-| Complete installed-package contract | Passed against `omarchy 4.0.0-1` with the v4.0.0 package manifest |
-| Complete installed-source-parity contract | Passed against immutable `v4.0.0` (`f0020448`) |
-| Complete forward-compatibility contract | Passed against immutable `ed7bae4a` |
-| Agents integration contract | Passed against immutable `v4.0.0` (`f0020448`) |
-| Suite lifecycle unit tests | Passed: 99 of 99 |
-| Control Center manager tests | Passed: 29 of 29 |
-| Health tests | Passed: 44 of 44 |
-| Notifications adapter contract | Passed: current/legacy models, replay races, DND, dismiss, clear, host reload, and unavailable states |
-| Real Vesktop notification path | Passed: authoritative host history records `app: "vesktop"` and `appIcon: "vesktop"` |
-| INC-013 convergence contract | Passed: 14 of 14 |
-| Baseline locale matrix | Passed under C, C UTF-8, and en_US UTF-8 |
-| Transactional live update | Beta.10 to beta.11 exact final-commit update and clean-commit collector still required |
-| Generic plugin-manager recovery | Passed: individual Bluetooth disable detected and repaired transactionally |
-| Ownership repair | Passed: all 24 current markerless plugins adopted and marked |
-| Bar continuity | Passed: Shibumi to Omarchy to Shibumi |
-| Configuration continuity | Passed: `shell.json` returned semantically unchanged after repeated transitions |
-| Runtime process count | Passed: one Quickshell process after each switch |
-| Network label runtime | Passed on Ethernet and Wi-Fi across repeated V1, V2, Omarchy, and V2-return transitions |
-| Current QML log | Passed: no Shibumi type, reference, loader, or binding-loop error in the final unpinned status smoke |
-| Control Center **Bars** view | Passed on the physical Wayland session |
-| Bluetooth connection and panel | Passed with a live Jabra Evolve2 55: fresh remove/pair/trust/connect, native audio route, disconnect/reconnect, and restored state |
-| Idle/screensaver panel cleanup | Passed in the bar-host regression and deployed live |
-| Temperature sources | Passed: CPU and core live; absent sources disabled |
-| Workspace styles | Passed: seven supported styles and geometry checks |
+| Omarchy | `omarchy 4.0.2-1` |
+| Omarchy settings | `omarchy-settings 4.0.2-1` |
+| Official source | `v4.0.2`, `346e69e1cec6c4e8924531874af6ba010a1bc99e` |
+| Quickshell | `quickshell 0.3.1-1` |
+| Installed-package profile | `installed-package-v4.0.2` |
+| Source-parity profile | `installed-source-parity-v4.0.2` |
+| Agents reference | `v4.0.0`, retained for that isolated contract only |
+| Forward reference | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 
-The hardened center smoke fails on unavailable QML types or a missing `PanelWindow` backend. The earlier WeatherPanel false pass no longer exists.
+The installed package and pinned `v4.0.2` source have exact `shell` and
+`config` parity. Installed `/usr/share/omarchy/bin` links resolve to the same
+source payload, apart from three host-local helpers not owned by those packages.
+The machine-readable manifests bind the complete consumed subtrees.
 
-## Fixed prerelease blockers
+## Bluetooth ST-01
 
-The audit fixed these release blockers:
+`BluetoothBackendAdapter` keeps native device QObjects private. The service and
+panel receive detached primitive records containing address, device D-Bus path,
+adapter ID/path, and monotonic device/adapter incarnations. Immediately before
+mutation, the adapter resolves exactly one current native entity and checks its
+state. Malformed, stale, ambiguous, missing, or state-conflicting identities
+return typed failures and dispatch zero actions.
 
-- Bounded V1/V2 Network labels use independent text metrics instead of a cyclic `width`/`implicitWidth` binding
-- The **Bars** page can return from Omarchy to Shibumi
-- Suite activation excludes stock Omarchy widgets, and the continuity manager rejects mixed-layout contamination before saving a Shibumi profile
-- The continuity manager discovers the current `/usr/share/omarchy` install when `OMARCHY_PATH` is absent
-- Markerless suite-owned alpha installs can update without accepting foreign plugin directories
-- Temperature selection supports CPU package, hottest core, GPU, NVMe, and memory sources
-- The standalone and embedded V2 workspace styles remain available, including Frame and Aurora streak
-- The Shibumi Pacman style is available in both layout variants and remains
-  explicitly separate from the QS Rise V2 port inventory
-- The Control Center waits for all seven workspace-style controls
-- V1 and V2 evidence covers every source surface instead of selected feature samples
-- The center smoke rejects missing production panel types
-- Bluetooth reports the live connection without presenting an untrusted phone battery value
-- Active panels close before an idle or screensaver bar pre-hide can invalidate their anchor
-- Standard non-Shibumi panels use one provider-neutral hosted-panel adapter;
-  WireGuard proves the same V2 bar cutout and native panel-tip geometry used
-  for compatible Quattro built-ins and future third-party plugins
-- The Plugins page opens a direct, validation-gated Git installer and reports
-  real Shibumi, Omarchy, and third-party provider counts
+The panel consumes action results through explicit `.ok`; a truthy
+`{ok: false}` object cannot be mistaken for success. Device connect, pair,
+disconnect, and forget retain exactly one
+`omarchy-bluetooth-device` helper mutation path. The audio handoff remains
+incarnation-bound and the `omarchy-audio-output-set-default` compatibility
+helper remains declared debt. Helper removal is not part of this hotfix.
 
-## Lifecycle and supply-chain boundary
+## Evidence status
 
-Quattro validates and loads each plugin, but it doesn't update this multi-plugin repository. `shibumi-suite` owns the source update as one transaction.
+| Gate | Status |
+| --- | --- |
+| Exact 24-plugin source contract | Local automated gate required on final commit |
+| Omarchy 4.0.2 installed-package baseline | Passed locally |
+| Omarchy 4.0.2 source-parity baseline | Passed locally |
+| Forward-compatibility baseline | Passed locally |
+| Bluetooth detached-record and stale-identity regression | Passed locally |
+| Lifecycle predecessor and all-journal admission regression | Passed locally |
+| Snapshot FD identity, cleanup, rebind, and crash-simulation regressions | Passed with independent review in the current uncommitted worktree; exact-commit evidence remains open |
+| Full Python, QML, shell, documentation, and package suites | Required on final commit |
+| Reproducible exact-commit archive and checksum | Required after final commit |
+| AUR package rehearsal with exact installed inventory | Required after checksum pinning |
+| Fresh physical Network acceptance | **Open; public-beta blocker** |
+| Fresh physical Bluetooth acceptance | **Open; public-beta blocker** |
+| Live install, activation, update, rollback, and uninstall | Beta.12 rejected candidate exposed managed-install rescan/stop race; full Beta.13 package rerun required |
+| Machine 2 | Beta.12 package staging was prepared; no Beta.13 package staging or activation has passed |
+| Push, tag, GitHub release, or AUR publication | Not authorized |
 
-The lifecycle adapter enforces these controls:
+Fixtures prove deterministic boundaries but do not replace physical Network,
+Bluetooth, output, suspend/resume, notification, drag/drop, or visual checks.
+Enterprise Wi-Fi, mixed scale, multi-output, and display hotplug remain tracked
+stable-release gates where hardware or credentials are unavailable.
 
-- It validates all 24 manifests with the official Omarchy validator
-- It rejects symlinks, special files, unsafe entry points, foreign markers, and unknown replacement directories
-- It hashes each plugin and the complete suite before activation
-- It prepares and publishes recovery transactions atomically before live mutation
-- It durably orders installed plugins, `shell.json`, install state, generated menu state, journals, archive copies, and cleanup
-- It validates complete recovery state before changing files or stopping the shell
-- It retains the recovery journal and snapshots if rollback itself fails
-- It restarts for bar-owner/provider handoff and reserves hot reload for unchanged ownership
-- It verifies the exact running payload after reconciliation
-- It restores the previous payload and configuration after a failed gate
+## Release asset gate
 
-The theme updater disables Git hooks, executable filters, prompts, and external protocols. It applies only an unchanged reviewed commit with a fast-forward merge. The audit found no critical or high-severity security or supply-chain issue.
+The final archive must be built from the exact clean commit, reproduce
+byte-for-byte, and provide a complete inventory plus SHA-256 sidecar. The AUR
+rehearsal must reject every unexpected installed path and confirm package
+metadata, lifecycle help, the predecessor contract, and all 24 plugin roots.
 
-The V1 and V2 shell-update interface is adapted to `shibumi-suite`. The Update Center checks Arch packages and installed Git themes. It doesn't fetch a new Shibumi source revision.
+A tag workflow must:
 
-## Public beta limits
+1. prove the remote tag peels to `GITHUB_SHA`;
+2. rebuild the exact-commit archive and validate all asset relationships;
+3. create a draft release containing only the declared assets;
+4. download those remote assets and compare every name, size, and SHA-256;
+5. repeat direct/peeled remote tag verification against `GITHUB_SHA`;
+6. publish only after both comparisons pass.
 
-The beta.11 public beta may be committed, tagged, and pushed with these limits:
+Repository administrators must enforce a server-side immutable `v*` tag
+ruleset that blocks tag updates and deletion. Workflow checks do not replace
+that server-side control. Any failed upload or verification remains a draft and
+must never be treated as a published release. Workflow retries may reuse only
+that draft, clobber only the declared asset names, and must repeat the complete
+remote comparison immediately before publication; undeclared assets fail the
+retry closed.
 
-- The complete visual state matrix remains partial for uncommon hover, degraded, account-backed, and device-backed states
-- the validation system has no physical second display for mixed-scale, hotplug, or unplug-during-drag acceptance
-- No enterprise Wi-Fi credentials were supplied for a real authentication test
-- Local Bluetooth pairing, audio routing, disconnect/reconnect, and forget
-  passed with the Jabra Evolve2 55
-- A Shibumi update starts from a trusted repository checkout
-- Machine2 validation is intentionally excluded from the beta.11 acceptance
-  target
-Fixtures cover unavailable and error behavior, but they don't replace the physical gates.
-The predecessor's multi-monitor and mixed-scale implementation is mapped into
-the Shibumi source and automated contracts, but inherited behavior does not
-replace a physical Shibumi run on the target Quattro release.
+## Publication decision
 
-## Public release blockers
-
-Before making a stable `v0.1.1` repository release:
-
-1. Complete the remaining rows in [`../contracts/v1-state-matrix.json`](../contracts/v1-state-matrix.json)
-2. Test a physical second display, mixed scale, hotplug, and unplug during drag
-3. Test a real enterprise Wi-Fi authentication failure and reconnect
-4. Repeat physical Bluetooth pairing, audio routing, disconnect, and forget
-   on the stable-release target if the beta.11 local evidence is not adopted
-5. Repeat the complete validation contract on the exact public-release commit
-
-## Release evidence
-
-`scripts/collect-release-evidence` runs the manager, suite, health, package,
-INC-013, mutation, dry-run, four complete host-contract jobs, and isolated
-Quattro runtime gate. It records the exact candidate identity, commands, exit
-codes, host versions, baseline identities, bounded log paths, and SHA-256 log
-digests. The tag workflow runs this collector on the isolated validation runner
-before publication and publishes both the manifest and its log bundle. Missing
-baseline paths, failed commands, or a non-clean tagged candidate fail closed.
-
-The detailed contracts and historical measurements remain available in:
-
-- [`v1-parity-matrix.md`](v1-parity-matrix.md)
-- [`v1-widget-parity-audit.md`](v1-widget-parity-audit.md)
-- [`current-v1-discrepancy-audit.md`](current-v1-discrepancy-audit.md)
-- [`qs-rise-predecessor-release-evidence.md`](qs-rise-predecessor-release-evidence.md)
-- [`omarchy-quattro-contract-gaps.md`](omarchy-quattro-contract-gaps.md)
+Beta.13 is a local candidate, not an authorized release. Publication remains
+blocked until the final clean-commit automated gates, AUR rehearsal, and fresh
+physical Network/Bluetooth acceptance pass and separate authorization is given.

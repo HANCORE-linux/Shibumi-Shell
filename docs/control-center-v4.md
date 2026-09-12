@@ -353,7 +353,8 @@ not automatically checkable rather than treated as current. Shibumi does not
 silently update third-party code.
 
 Every plugin card, including a card revealed by search, exposes a star action.
-Starred plugin IDs are persisted in `bar.shibumi.plugins.favorites`. The
+Starred plugin IDs are persisted in `shibumi.plugins.favorites` inside the
+canonical State `plugins[]` service entry. The
 connected **Favorites** child route below Plugins scopes the same provider
 filter, predictive search, activation, and removal controls to that saved set;
 selecting Plugins again returns to the complete catalog.

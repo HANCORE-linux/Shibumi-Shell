@@ -7,6 +7,7 @@ QtObject {
   function fail(message) {
     console.error("center-model-regression:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Component.onCompleted: {

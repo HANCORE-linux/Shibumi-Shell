@@ -10,30 +10,33 @@ ShibumiPanel {
   required property var ownerWidget
   required property var powerService
   property int selectedIndex: 0
+  readonly property var powerState: powerService || ({ profiles: [], activeProfile: "",
+    profileActionRunning: false, profileError: "", profileLabel: function() { return "" } })
 
   owner: ownerWidget
-  open: ownerWidget.opened && powerService.profileAvailable
+  open: ownerWidget.opened && !!powerService && powerService.profileAvailable
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Commons.Style.space(220))
   contentHeight: fittedContentHeight(column.implicitHeight)
 
   function syncSelection() {
-    var index = powerService.profiles.indexOf(powerService.activeProfile)
+    var index = powerState.profiles.indexOf(powerState.activeProfile)
     selectedIndex = index >= 0 ? index : 0
   }
 
   function moveSelection(delta) {
-    var count = powerService.profiles.length
+    var count = powerState.profiles.length
     if (count <= 0) return
     selectedIndex = (selectedIndex + delta + count) % count
   }
 
   function activateSelected() {
-    if (selectedIndex < 0 || selectedIndex >= powerService.profiles.length) return
+    if (!powerService || selectedIndex < 0 || selectedIndex >= powerState.profiles.length) return
     if (powerService.setProfile(powerService.profiles[selectedIndex]))
       ownerWidget.close()
   }
 
+  onPowerServiceChanged: syncSelection()
   onOpenChanged: if (open) {
     powerService.refreshProfiles()
     syncSelection()
@@ -90,12 +93,12 @@ ShibumiPanel {
       }
 
       Repeater {
-        model: panel.powerService.profiles
+        model: panel.powerState.profiles
         delegate: Item {
           id: profileRow
           required property string modelData
           required property int index
-          readonly property bool active: panel.powerService.activeProfile === modelData
+          readonly property bool active: panel.powerState.activeProfile === modelData
           readonly property bool selected: panel.selectedIndex === index
           width: column.width
           height: Commons.Style.space(32)
@@ -131,7 +134,7 @@ ShibumiPanel {
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: panel.powerService.profileLabel(profileRow.modelData)
+              text: panel.powerService ? panel.powerService.profileLabel(profileRow.modelData) : ""
               color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
               font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: Commons.Style.font.body
@@ -144,10 +147,10 @@ ShibumiPanel {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            enabled: !panel.powerService.profileActionRunning
+            enabled: !!panel.powerService && !panel.powerState.profileActionRunning
             onEntered: panel.selectedIndex = profileRow.index
             onClicked: {
-              if (panel.powerService.setProfile(profileRow.modelData))
+              if (panel.powerService && panel.powerService.setProfile(profileRow.modelData))
                 panel.ownerWidget.close()
             }
           }
@@ -155,12 +158,12 @@ ShibumiPanel {
       }
 
       Text {
-        visible: panel.powerService.profileActionRunning
-          || panel.powerService.profileError !== ""
+        visible: panel.powerState.profileActionRunning
+          || panel.powerState.profileError !== ""
         width: parent.width
-        text: panel.powerService.profileError !== ""
-          ? panel.powerService.profileError : "Applying profile…"
-        color: panel.powerService.profileError !== "" && panel.bar
+        text: panel.powerState.profileError !== ""
+          ? panel.powerState.profileError : "Applying profile…"
+        color: panel.powerState.profileError !== "" && panel.bar
           ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
         font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: Commons.Style.font.caption

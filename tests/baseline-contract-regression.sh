@@ -4,8 +4,10 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 helper="$repo_root/tests/lib/baselines.sh"
-installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
-installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
+installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.2.json"
+installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
+historical_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
+historical_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
 forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-ed7bae4a.json"
 agents_baseline="$repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
 predecessor_baseline="$repo_root/contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json"
@@ -38,6 +40,10 @@ command -v sha256sum >/dev/null 2>&1 || fail 'sha256sum is required'
   || fail 'ambiguous installed baseline name is still present'
 [[ ! -e $repo_root/contracts/baselines/omarchy-upstream-12af188.json ]] \
   || fail 'ambiguous upstream baseline name is still present'
+[[ -r $historical_package_baseline ]] \
+  || fail 'historical beta.11 installed-package baseline is missing'
+[[ -r $historical_source_baseline ]] \
+  || fail 'historical beta.11 source-parity baseline is missing'
 [[ -r $predecessor_baseline ]] || fail 'pinned predecessor baseline is missing'
 [[ -r $malformed_fixture ]] || fail 'malformed baseline fixture is missing'
 [[ -x $installed_package_job ]] \
@@ -54,28 +60,72 @@ source "$helper"
 for manifest in \
   "$installed_package_baseline" \
   "$installed_source_baseline" \
+  "$historical_package_baseline" \
+  "$historical_source_baseline" \
   "$forward_compat_baseline"; do
   shibumi_validate_omarchy_baseline_schema "$manifest" \
     || fail "$(basename "$manifest") does not satisfy the central schema"
 done
 
 jq -e '
-  .id == "installed-package-v4.0.0"
+  .id == "installed-package-v4.0.2"
   and .profile == "installed-package"
-  and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+  and .sourceRevision == "346e69e1cec6c4e8924531874af6ba010a1bc99e"
   and .provenance.kind == "package"
-  and .package.name == "omarchy"
-  and .package.version == "4.0.0-1"
+  and ([.provenance.packages[] | [.name, .version]] | sort) == ([
+    ["omarchy", "4.0.2-1"],
+    ["omarchy-settings", "4.0.2-1"]
+  ] | sort)
+  and .provenance.subtreeOwners == {
+    "bin": "omarchy",
+    "config": "omarchy-settings",
+    "shell": "omarchy"
+  }
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
   and ([.subtrees[] | select(.path == "bin" and .entryPolicy == "absolute-symlinks")] | length) == 1
   and all(.subtrees[] | select(.path != "bin"); .entryPolicy == "regular-files")
 ' "$installed_package_baseline" >/dev/null \
   || fail 'installed-package baseline identity or provenance is invalid'
+[[ $(sha256sum "$historical_package_baseline" | awk '{print $1}') \
+    == 902f3d0af5bfca48a83f658f46d7921e93a0d12c608bbf8bdcd230580c65b584 ]] \
+  || fail 'published beta.11 installed-package manifest bytes drifted'
+jq -e '
+  .id == "installed-package-v4.0.0"
+  and .profile == "installed-package"
+  and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+  and .provenance == {"kind": "package"}
+  and .package == {"name": "omarchy", "version": "4.0.0-1"}
+  and .quickshellPackage.name == "quickshell-git"
+' "$historical_package_baseline" >/dev/null \
+  || fail 'historical installed-package baseline identity is invalid'
+historical_source_matches() {
+  [[ $(sha256sum "$1" | awk '{print $1}') \
+      == 18e5740d2a07116d9c49e3e5046f7d8c82d4f4d7aab7b994340ded617f273610 ]]
+}
+historical_source_matches "$historical_source_baseline" \
+  || fail 'published beta.11 source-parity manifest bytes drifted'
+historical_source_mutant=$(mktemp)
+cp "$historical_source_baseline" "$historical_source_mutant"
+printf ' ' >>"$historical_source_mutant"
+if historical_source_matches "$historical_source_mutant"; then
+  fail 'historical source-parity digest accepts a one-byte mutation'
+fi
+rm -f -- "$historical_source_mutant"
 jq -e '
   .id == "installed-source-parity-v4.0.0"
   and .profile == "installed-source-parity"
   and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+  and .provenance.revision == .sourceRevision
+' "$historical_source_baseline" >/dev/null \
+  || fail 'historical source-parity baseline identity is invalid'
+
+jq -e '
+  .id == "installed-source-parity-v4.0.2"
+  and .profile == "installed-source-parity"
+  and .sourceRevision == "346e69e1cec6c4e8924531874af6ba010a1bc99e"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
   and all(.subtrees[]; .entryPolicy == "regular-files")
 ' "$installed_source_baseline" >/dev/null \
   || fail 'installed-source-parity baseline identity or provenance is invalid'
@@ -85,12 +135,175 @@ jq -e '
   and .sourceRevision == "ed7bae4ac5a570e9df307486e0202fdafcc6ee24"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
   and all(.subtrees[]; .entryPolicy == "regular-files")
 ' "$forward_compat_baseline" >/dev/null \
   || fail 'forward-compat baseline identity or provenance is invalid'
 
+shibumi_require_exact_package_identity \
+  'host package' omarchy 4.0.2-1 'omarchy 4.0.2-1' \
+  || fail 'exact package identity rejected its positive control'
+for malformed_identity in \
+  '' \
+  'omarchy 4.0.2-2' \
+  'omarchy-dev 4.0.2-1' \
+  'prefix omarchy 4.0.2-1' \
+  $'omarchy 4.0.2-1\nomarchy-settings 4.0.2-1'; do
+  if shibumi_require_exact_package_identity \
+      'host package' omarchy 4.0.2-1 "$malformed_identity" \
+      >/dev/null 2>&1; then
+    fail "exact package identity accepted malformed output: $malformed_identity"
+  fi
+done
+shibumi_require_exact_subtree_owner shell omarchy omarchy \
+  || fail 'exact subtree owner rejected its positive control'
+for malformed_owner in '' omarchy-settings $'omarchy\nomarchy-settings'; do
+  if shibumi_require_exact_subtree_owner \
+      shell omarchy "$malformed_owner" >/dev/null 2>&1; then
+    fail "exact subtree owner accepted malformed output: $malformed_owner"
+  fi
+done
+relocation_output=''
+if relocation_output=$(shibumi_validate_installed_package_provenance \
+    "$repo_root" "$installed_package_baseline" 2>&1); then
+  fail 'installed package provenance accepted a relocated repository tree'
+fi
+[[ $relocation_output == *'requires /usr/share/omarchy'* ]] \
+  || fail "relocated package root failed through the wrong invariant: $relocation_output"
+
 agents_fixture=$(mktemp)
 trap 'rm -f -- "$agents_fixture"' EXIT
+/usr/bin/python3 -I - "$installed_source_baseline" "$agents_fixture" top <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text(encoding="utf-8")
+mode = sys.argv[3]
+if mode == "top":
+    source = source.replace(
+        '{\n  "schemaVersion": 2,',
+        '{\n  "schemaVersion": 2,\n  "schemaVersion": 2,',
+        1,
+    )
+else:
+    source = source.replace(
+        '"kind": "git",',
+        '"kind": "git",\n    "kind": "git",',
+        1,
+    )
+Path(sys.argv[2]).write_text(source, encoding="utf-8")
+PY
+if shibumi_validate_omarchy_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'central baseline schema accepts a duplicate top-level JSON key'
+fi
+/usr/bin/python3 -I - "$installed_source_baseline" "$agents_fixture" nested <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text(encoding="utf-8")
+source = source.replace(
+    '"kind": "git",',
+    '"kind": "git",\n    "kind": "git",',
+    1,
+)
+Path(sys.argv[2]).write_text(source, encoding="utf-8")
+PY
+if shibumi_validate_omarchy_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'central baseline schema accepts a duplicate nested JSON key'
+fi
+for nonfinite in 1e309 -1e309; do
+  for placement in top nested; do
+    if [[ $placement == top ]]; then
+      printf '{"ignored":%s}\n' "$nonfinite" >"$agents_fixture"
+    else
+      printf '{"ignored":{"value":%s}}\n' \
+        "$nonfinite" >"$agents_fixture"
+    fi
+    if shibumi_validate_unique_json_keys \
+        "$agents_fixture" >/dev/null 2>&1; then
+      fail "central baseline parser accepts overflowing JSON number: $nonfinite"
+    fi
+  done
+done
+for manifest_size in 65535 65536 65537; do
+  /usr/bin/python3 -I - "$agents_fixture" "$manifest_size" <<'PY'
+from pathlib import Path
+import sys
+
+size = int(sys.argv[2])
+prefix = '{"padding":"'
+suffix = '"}\n'
+payload = prefix + ("a" * (size - len(prefix) - len(suffix))) + suffix
+assert len(payload.encode("utf-8")) == size
+Path(sys.argv[1]).write_text(payload, encoding="utf-8")
+PY
+  if (( manifest_size <= 65536 )); then
+    shibumi_validate_unique_json_keys "$agents_fixture" \
+      || fail "central baseline parser rejected bounded size $manifest_size"
+  elif shibumi_validate_unique_json_keys \
+      "$agents_fixture" >/dev/null 2>&1; then
+    fail "central baseline parser accepted oversized manifest $manifest_size"
+  fi
+done
+
+cp "$installed_source_baseline" "$agents_fixture"
+shibumi_validate_omarchy_baseline_schema "$agents_fixture" \
+  || fail 'baseline replacement probe could not capture its initial snapshot'
+printf '{"sourceRevision":"replaced"}\n' >"$agents_fixture"
+[[ $(jq -r '.sourceRevision' "$agents_fixture") \
+    == 346e69e1cec6c4e8924531874af6ba010a1bc99e ]] \
+  || fail 'baseline replacement changed an already accepted snapshot'
+if shibumi_validate_omarchy_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'complete schema accepted the semantic-invalid replacement'
+fi
+[[ -z ${SHIBUMI_BASELINE_JSON:-} \
+    && -z ${SHIBUMI_BASELINE_JSON_PATH:-} ]] \
+  || fail 'failed complete schema left rejected snapshot state active'
+[[ $(jq -r '.sourceRevision' "$agents_fixture") == replaced ]] \
+  || fail 'jq served stale complete snapshot after schema rejection'
+rm -f -- "$agents_fixture"
+if shibumi_validate_omarchy_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'complete schema accepted a missing same-path manifest'
+fi
+[[ -z ${SHIBUMI_BASELINE_JSON:-} \
+    && -z ${SHIBUMI_BASELINE_JSON_PATH:-} ]] \
+  || fail 'missing complete manifest preserved stale snapshot state'
+if jq -e . "$agents_fixture" >/dev/null 2>&1; then
+  fail 'jq served stale complete snapshot for a missing manifest'
+fi
+
+cp "$agents_baseline" "$agents_fixture"
+shibumi_validate_agents_baseline_schema "$agents_fixture" \
+  || fail 'Agents replacement probe could not capture its initial snapshot'
+printf '{"sourceRevision":"replaced"}\n' >"$agents_fixture"
+[[ $(jq -r '.sourceRevision' "$agents_fixture") \
+    == f0020448ca87329199de7cb12f2015ebc4a3e5e7 ]] \
+  || fail 'Agents replacement changed an already accepted snapshot'
+if shibumi_validate_agents_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'Agents schema reused stale snapshot state across validation calls'
+fi
+[[ -z ${SHIBUMI_BASELINE_JSON:-} \
+    && -z ${SHIBUMI_BASELINE_JSON_PATH:-} ]] \
+  || fail 'failed Agents schema left rejected snapshot state active'
+[[ $(jq -r '.sourceRevision' "$agents_fixture") == replaced ]] \
+  || fail 'jq served stale Agents snapshot after schema rejection'
+rm -f -- "$agents_fixture"
+if shibumi_validate_agents_baseline_schema \
+    "$agents_fixture" >/dev/null 2>&1; then
+  fail 'Agents schema accepted a missing same-path manifest'
+fi
+[[ -z ${SHIBUMI_BASELINE_JSON:-} \
+    && -z ${SHIBUMI_BASELINE_JSON_PATH:-} ]] \
+  || fail 'missing Agents manifest preserved stale snapshot state'
+if jq -e . "$agents_fixture" >/dev/null 2>&1; then
+  fail 'jq served stale Agents snapshot for a missing manifest'
+fi
+
 cp "$agents_baseline" "$agents_fixture"
 shibumi_validate_agents_baseline_schema "$agents_baseline" \
   || fail 'Agents baseline does not satisfy its central schema'
@@ -166,6 +379,14 @@ done
 rg -Fq 'SHIBUMI_OMARCHY_BASELINE_PROFILE=installed-package' \
   "$installed_package_job" \
   || fail 'installed-package job selects the wrong baseline'
+rg -Fq 'OMARCHY_PATH=/usr/share/omarchy' "$installed_package_job" \
+  || fail 'installed-package job does not pin the package-managed root'
+if rg -Fq 'OMARCHY_PATH=${OMARCHY_PATH:-' "$installed_package_job"; then
+  fail 'installed-package job permits a relocated unowned tree'
+fi
+rg -Uq 'if \[\[ \$profile == installed-package \]\]; then\n[[:space:]]+shibumi_validate_installed_package_provenance' \
+  "$helper" \
+  || fail 'installed-package loader does not verify package provenance'
 rg -Fq 'SHIBUMI_OMARCHY_BASELINE_PROFILE=installed-source-parity' \
   "$installed_source_job" \
   || fail 'installed-source-parity job selects the wrong baseline'
@@ -229,6 +450,31 @@ while IFS= read -r subtree; do
   mkdir -p "$fixture/omarchy"
   cp -a "$selected_host_path/$subtree" "$fixture/omarchy/$subtree"
 done < <(jq -r '.subtrees[].path' "$selected_manifest")
+
+for mutation in \
+  '.quickshellPackage.name = "quickshell-git"' \
+  '.quickshellPackage.version = "0.3.1-2"'; do
+  mutant="$fixture/quickshell-provenance-mutant.json"
+  jq "$mutation" "$selected_manifest" >"$mutant"
+  if shibumi_validate_quickshell_package_provenance \
+      "$mutant" >/dev/null 2>&1; then
+    fail "Quickshell package provenance accepted mutation: $mutation"
+  fi
+done
+
+if [[ $selected_profile == installed-package ]]; then
+  for mutation in \
+    '.provenance.packages[0].version = "4.0.2-2"' \
+    '.provenance.packages[1].version = "4.0.2-2"' \
+    '.provenance.subtreeOwners.config = "omarchy"'; do
+    mutant="$fixture/installed-provenance-mutant.json"
+    jq "$mutation" "$selected_manifest" >"$mutant"
+    if shibumi_validate_installed_package_provenance \
+        "$selected_host_path" "$mutant" >/dev/null 2>&1; then
+      fail "installed package provenance accepted mutation: $mutation"
+    fi
+  done
+fi
 
 shibumi_validate_omarchy_tree "$fixture/omarchy" "$selected_manifest" \
   || fail 'central helper rejected the exact selected subtree bytes'
@@ -361,6 +607,10 @@ assert_schema_rejected quickshell-package-name "$installed_package_baseline" \
 assert_schema_rejected quickshell-package-version "$installed_package_baseline" \
   '.quickshellPackage.version = ""' \
   'baseline Quickshell package identity is invalid'
+assert_schema_rejected quickshell-package-installed-substitution \
+  "$installed_package_baseline" \
+  '.quickshellPackage = {"name": "omarchy", "version": "4.0.2-1"}' \
+  'baseline Quickshell package identity is invalid'
 assert_schema_rejected subtrees-type "$installed_package_baseline" \
   '.subtrees = {}' 'baseline subtrees must be an array'
 assert_schema_rejected subtree-count "$installed_package_baseline" \
@@ -398,12 +648,23 @@ assert_schema_rejected content-digest "$installed_package_baseline" \
 assert_schema_rejected package-provenance-kind "$installed_package_baseline" \
   '.provenance.kind = "git"' \
   'installed-package provenance is invalid'
-assert_schema_rejected package-object "$installed_package_baseline" \
-  '.package = null' 'installed-package provenance is invalid'
+assert_schema_rejected package-list "$installed_package_baseline" \
+  '.provenance.packages = null' 'installed-package provenance is invalid'
+assert_schema_rejected package-duplicate "$installed_package_baseline" \
+  '.provenance.packages[1] = .provenance.packages[0]' \
+  'installed-package provenance is invalid'
 assert_schema_rejected package-name "$installed_package_baseline" \
-  '.package.name = ""' 'installed-package provenance is invalid'
+  '.provenance.packages[0].name = "../omarchy"' \
+  'installed-package provenance is invalid'
 assert_schema_rejected package-version "$installed_package_baseline" \
-  '.package.version = ""' 'installed-package provenance is invalid'
+  '.provenance.packages[0].version = ""' \
+  'installed-package provenance is invalid'
+assert_schema_rejected package-owner-set "$installed_package_baseline" \
+  'del(.provenance.subtreeOwners.config)' \
+  'installed-package provenance is invalid'
+assert_schema_rejected package-owner-value "$installed_package_baseline" \
+  '.provenance.subtreeOwners.config = "omarchy"' \
+  'installed-package provenance is invalid'
 assert_schema_rejected package-bin-policy "$installed_package_baseline" \
   '(.subtrees[] | select(.path == "bin")).entryPolicy = "regular-files"' \
   'installed-package subtree policy is invalid'

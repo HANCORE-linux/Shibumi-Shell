@@ -81,7 +81,7 @@ ShibumiPanel {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           anchors.top: parent.top
-          text: panel.telemetry.memPercent + "%"
+          text: (panel.telemetry ? panel.telemetry.memPercent : 0) + "%"
           color: panel.bar ? panel.bar.urgent : Commons.Color.accent
           font.family: panel.bar ? panel.bar.fontFamily
             : Commons.Style.font.family
@@ -98,7 +98,7 @@ ShibumiPanel {
           color: panel.controlActiveFillColor
 
           Rectangle {
-            width: parent.width * panel.telemetry.memPercent / 100
+            width: parent.width * (panel.telemetry ? panel.telemetry.memPercent : 0) / 100
             height: parent.height
             radius: height / 2
             color: panel.bar ? panel.bar.urgent : Commons.Color.accent
@@ -114,22 +114,22 @@ ShibumiPanel {
         MemoryStatRow {
           width: parent.width
           label: "Used"
-          value: panel.telemetry.memUsedGiB.toFixed(1) + " GiB"
-          detail: panel.telemetry.memUsedMiB + " MiB"
+          value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
+          detail: (panel.telemetry ? panel.telemetry.memUsedMiB : 0) + " MiB"
           bar: panel.bar
         }
         MemoryStatRow {
           width: parent.width
           label: "Available"
-          value: (panel.telemetry.memAvailableMiB / 1024).toFixed(1) + " GiB"
-          detail: panel.telemetry.memAvailableMiB + " MiB"
+          value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
+          detail: (panel.telemetry ? panel.telemetry.memAvailableMiB : 0) + " MiB"
           bar: panel.bar
         }
         MemoryStatRow {
           width: parent.width
           label: "Total"
-          value: panel.telemetry.memTotalGiB.toFixed(1) + " GiB"
-          detail: panel.telemetry.memTotalMiB + " MiB"
+          value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
+          detail: (panel.telemetry ? panel.telemetry.memTotalMiB : 0) + " MiB"
           bar: panel.bar
         }
       }

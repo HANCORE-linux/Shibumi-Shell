@@ -4,15 +4,17 @@ import QtQuick
 import QtQuick.Effects
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.control-center"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
 
-  readonly property var hostShell: bar && bar.shell ? bar.shell : null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var hostShell: suiteShell
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -127,13 +129,14 @@ Ui.Panel {
   function injectPanel(item) {
     if (!item) return
     if ("anchorItem" in item) item.anchorItem = pill
-    if ("bar" in item) item.bar = root.bar
+    if ("bar" in item) item.bar = Qt.binding(function() { return root.bar })
     if ("ownerWidget" in item) item.ownerWidget = root
-    if ("stateService" in item) item.stateService = root.stateService
+    if ("stateService" in item)
+      item.stateService = Qt.binding(function() { return root.stateService })
     if ("healthService" in item) item.healthService = healthState
     if ("switchService" in item) item.switchService = switchState
     if ("pluginUpdateService" in item)
-      item.pluginUpdateService = activePluginUpdateService
+      item.pluginUpdateService = Qt.binding(function() { return root.activePluginUpdateService })
   }
 
   function syncPanelLoader() {
@@ -151,12 +154,12 @@ Ui.Panel {
     loadedPanelSource = panelSource
     panelLoader.setSource(panelSource, {
       anchorItem: pill,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      stateService: root.stateService,
+      stateService: Qt.binding(function() { return root.stateService }),
       healthService: healthState,
       switchService: switchState,
-      pluginUpdateService: activePluginUpdateService
+      pluginUpdateService: Qt.binding(function() { return root.activePluginUpdateService })
     })
   }
 
@@ -165,6 +168,10 @@ Ui.Panel {
     syncPanelLoader()
   }
   onStateServiceChanged: syncPanelLoader()
+  Connections {
+    target: root.stateService
+    function onReadyChanged() { root.syncPanelLoader() }
+  }
   onPanelSourceChanged: syncPanelLoader()
   onPanelLoadedChanged: {
     if (!panelLoaded || pendingPage === "") return

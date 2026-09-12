@@ -28,6 +28,11 @@ Column {
   property var undoGroupStates: ({})
   property var undoProviderSnapshot: null
   property var undoPluginIds: []
+  property var pendingPluginMutation: null
+  property var pendingUndoRestore: null
+  property bool pageComplete: false
+  readonly property bool transitionPending:
+    pendingPluginMutation !== null || pendingUndoRestore !== null
   property real feedbackProgress: 0
   readonly property real boundedFeedbackProgress:
     Math.max(0, Math.min(1, feedbackProgress))
@@ -43,6 +48,42 @@ Column {
   property string removingPluginId: ""
   property string removingPluginName: ""
   property bool pluginUpdateConsumerActive: false
+  property var leasedPluginUpdateService: null
+  property var catalogConsumerService: null
+  property var catalogConsumerToken: null
+  readonly property var catalogServiceCandidate: {
+    const service = controller.effectivePluginUpdateService || null
+    try {
+      return service && service.scopedHost === true
+          && typeof service.acquireCatalogConsumer === "function"
+          && typeof service.releaseCatalogConsumer === "function"
+          && typeof service.hasCatalogConsumer === "function"
+          && typeof service.catalogObservation === "function"
+          && typeof service.isCatalogObservationCurrent === "function"
+        ? service : null
+    } catch (error) { return null }
+  }
+  readonly property bool catalogConsumerActive: {
+    try {
+      return catalogConsumerService !== null && catalogConsumerToken !== null
+        && catalogConsumerService === catalogServiceCandidate
+        && catalogConsumerService.hasCatalogConsumer(catalogConsumerToken)
+    } catch (error) { return false }
+  }
+  readonly property var catalogObservation: {
+    const service = catalogConsumerService
+    const token = catalogConsumerToken
+    if (!catalogConsumerActive || !service || !token) return null
+    try {
+      if ("catalogReady" in service) void(service.catalogReady)
+      if ("catalogReadSerial" in service) void(service.catalogReadSerial)
+      if ("catalogGeneration" in service) void(service.catalogGeneration)
+      const observation = service.catalogObservation(token)
+      return observation
+          && service.isCatalogObservationCurrent(token, observation)
+        ? observation : null
+    } catch (error) { return null }
+  }
 
   readonly property var allEntries: (controller.pluginEntries || [])
     .filter(function(entry) {
@@ -131,6 +172,8 @@ Column {
     && activeRepeater.count === displayedActiveEntries.length
     && availableRepeater.count === displayedAvailableEntries.length
     && (!motionActive || favoritesOnly || pluginUpdateConsumerActive)
+    && (catalogServiceCandidate === null
+      || (catalogConsumerActive && catalogObservation !== null))
 
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(10)
@@ -195,6 +238,135 @@ Column {
       && local.y <= pluginSearch.height + pluginSearch.reservedPopupHeight
   }
 
+  function transitionSucceeded(result) {
+    return ["confirmed", "unchanged"].indexOf(String(result || "")) >= 0
+  }
+
+  function transitionFailureDetail(result) {
+    const value = String(result || "")
+    if (value === "state-refused")
+      return "The saved widget state was refused or could not be confirmed."
+    if (value === "revoked")
+      return "The active bar changed before the widget request completed."
+    if (value === "native-indeterminate")
+      return "Omarchy did not confirm the final native bar layout."
+    if (value.indexOf("timeout") >= 0)
+      return "The widget request timed out before it could be confirmed."
+    if (value === "conflict")
+      return "A newer bar-layout change replaced this widget request."
+    if (value === "compensated")
+      return "The native layout refused the request; saved widget state was restored."
+    return "The widget request did not reach a confirmed layout."
+  }
+
+  function feedbackRecord(title, detail, mode, pluginId, value, group, ids,
+      groupValues, groupStates, providerSnapshot) {
+    return {
+      title: String(title || ""), detail: String(detail || ""),
+      mode: String(mode || ""), pluginId: String(pluginId || ""),
+      pluginValue: value === true, group: String(group || ""),
+      ids: Array.isArray(ids) ? ids.slice() : [],
+      groups: Array.isArray(groupValues) ? groupValues.slice() : [],
+      groupStates: groupStates && typeof groupStates === "object"
+        ? JSON.parse(JSON.stringify(groupStates)) : ({}),
+      providerSnapshot: providerSnapshot
+          && typeof providerSnapshot === "object"
+        ? JSON.parse(JSON.stringify(providerSnapshot)) : null
+    }
+  }
+
+  function publishFeedbackRecord(record) {
+    showFeedback(record.title, record.detail, record.mode,
+      record.pluginId, record.pluginValue, record.group, record.ids,
+      record.groups, record.groupStates, record.providerSnapshot)
+  }
+
+  function beginAcceptedPluginRequest(beforeLayoutSerial, beforeStateSerial,
+      name, record) {
+    const layoutSerial = Number(controller.pluginLayoutTransitionSerial || 0)
+    const stateSerial = Number(controller.pluginStateTransitionSerial || 0)
+    const channel = layoutSerial > beforeLayoutSerial ? "layout"
+      : stateSerial > beforeStateSerial ? "state" : ""
+    if (channel === "") {
+      publishFeedbackRecord(record)
+      return true
+    }
+    const serial = channel === "layout" ? layoutSerial : stateSerial
+    const busy = channel === "layout"
+      ? controller.pluginLayoutTransitionBusy === true
+      : controller.pluginStateTransitionBusy === true
+    if (!busy) {
+      showFeedback(name + " could not be changed",
+        "The bar did not retain the accepted request.",
+        "", "", false, "", [])
+      return false
+    }
+    pendingPluginMutation = {
+      owner: controller,
+      serial: serial,
+      channel: channel,
+      name: String(name || "Plugin"),
+      feedback: record
+    }
+    feedbackTimer.stop()
+    feedbackCountdown.stop()
+    feedbackVisible = true
+    feedbackTitle = "Updating " + String(name || "plugin") + " …"
+    feedbackDetail = channel === "layout"
+      ? "Waiting for saved state and the native bar layout."
+      : "Waiting for the saved widget state."
+    clearUndoState()
+    return true
+  }
+
+  function settlePluginMutation(serial, result, channel) {
+    const pending = pendingPluginMutation
+    if (!pending || pending.serial !== serial
+        || pending.channel !== channel) return false
+    pendingPluginMutation = null
+    if (pending.owner !== controller) return false
+    if (transitionSucceeded(result)) {
+      if (pending.feedback.mode === "provider-snapshot") {
+        const snapshot = typeof controller.confirmedProviderUndoSnapshot
+          === "function"
+          ? controller.confirmedProviderUndoSnapshot(serial) : null
+        if (!snapshot) {
+          showFeedback(pending.feedback.title,
+            "The change completed, but its exact previous layout was not retained for Undo.",
+            "", "", false, "", [])
+          return false
+        }
+        pending.feedback.providerSnapshot = snapshot
+      }
+      publishFeedbackRecord(pending.feedback)
+      return true
+    }
+    showFeedback(pending.name + " could not be changed",
+      transitionFailureDetail(result), "", "", false, "", [])
+    return false
+  }
+
+  function settleUndoRestore(serial, result, channel) {
+    const pending = pendingUndoRestore
+    if (!pending || pending.serial !== serial
+        || pending.channel !== channel) return false
+    pendingUndoRestore = null
+    if (pending.owner !== controller) return false
+    if (transitionSucceeded(result)) {
+      feedbackVisible = false
+      clearUndoState()
+      return true
+    }
+    // Keep the exact Undo payload for an explicit retry after a failed async
+    // restore. Acceptance is never presented as persistence completion.
+    feedbackVisible = true
+    feedbackTitle = "Undo could not be completed"
+    feedbackDetail = transitionFailureDetail(result)
+    feedbackProgress = 1
+    feedbackCountdown.start()
+    return false
+  }
+
   function showFeedback(title, detail, mode, pluginId, value, group, ids,
       groupValues, groupStates, providerSnapshot) {
     feedbackTimer.stop()
@@ -240,7 +412,7 @@ Column {
   }
 
   function requestPluginRemoval(entry) {
-    if (!entry || entry.removable !== true
+    if (!entry || entry.removable !== true || transitionPending
         || controller.pluginRemovalRunning === true) return false
     feedbackTimer.stop()
     feedbackCountdown.stop()
@@ -280,22 +452,40 @@ Column {
     }
     removingPluginId = ""
     feedbackTitle = "Plugin could not be removed"
-    feedbackDetail = "The provider rejected the remove request."
+    feedbackDetail = String(controller.pluginActionError
+      || "The provider rejected the remove request.")
     feedbackTimer.restart()
     return false
   }
 
   function togglePlugin(entry) {
-    if (!entry) return false
+    if (!entry || transitionPending) return false
+    if (typeof controller.pluginActivationAvailable === "function"
+        && !controller.pluginActivationAvailable(entry)) {
+      showFeedback("Action unavailable",
+        "Omarchy has not published a current component authority for this widget.",
+        "", "", false, "", [])
+      return false
+    }
     const id = String(entry.id || "")
     const name = String(entry.name || id)
     const providerSnapshot = typeof controller.providerUndoSnapshot
       === "function" ? controller.providerUndoSnapshot(id) : null
+    const transitionSerial = Number(
+      controller.pluginLayoutTransitionSerial || 0)
+    const stateTransitionSerial = Number(
+      controller.pluginStateTransitionSerial || 0)
 
     if (entry.replaced === true) {
       const alternatives = Array.isArray(entry.replacedByIds)
         ? entry.replacedByIds.slice() : []
       const replacementName = String(entry.replacedBy || "alternative")
+      if (controller.nativeCatalogRequired === true && !providerSnapshot) {
+        showFeedback(name + " could not be restored",
+          "The current provider layout could not be captured safely.",
+          "", "", false, "", [])
+        return false
+      }
       if (!controller.setPluginEnabled(id, true)) {
         showFeedback(
           name + " could not be restored",
@@ -304,12 +494,12 @@ Column {
           "", "", false, "", [])
         return false
       }
-      showFeedback(
-        name + " restored",
-        replacementName + " was removed to avoid duplicates.",
-        providerSnapshot ? "provider-snapshot" : "plugins",
-        "", false, "", alternatives, [], ({}), providerSnapshot)
-      return true
+      return beginAcceptedPluginRequest(
+        transitionSerial, stateTransitionSerial, name,
+        feedbackRecord(name + " restored",
+          replacementName + " was removed to avoid duplicates.",
+          providerSnapshot ? "provider-snapshot" : "plugins",
+          "", false, "", alternatives, [], ({}), providerSnapshot))
     }
 
     const wasEnabled = entry.installedInBar === true
@@ -324,6 +514,15 @@ Column {
     const displacedProviderIds = Array.isArray(entry.conflictingProviderIds)
       ? entry.conflictingProviderIds.slice() : []
     const displacedProviderStates = entry.conflictingProviderStates || ({})
+    const providerChange = enable && (displacedProviderIds.length > 0
+      || group !== "" && targetWasEnabled)
+    if (controller.nativeCatalogRequired === true && providerChange
+        && !providerSnapshot) {
+      showFeedback(name + " could not be activated",
+        "The current provider layout could not be captured safely.",
+        "", "", false, "", [])
+      return false
+    }
     if (!controller.setPluginEnabled(id, enable)) {
       showFeedback(
         name + (enable ? " could not be activated"
@@ -334,9 +533,9 @@ Column {
       return false
     }
 
+    let record = null
     if (enable && displacedProviderIds.length > 0) {
-      showFeedback(
-        name + " activated",
+      record = feedbackRecord(name + " activated",
         displacedProviderIds.length === 1
           ? displacedProviderIds[0] + " was replaced to avoid duplicates."
           : displacedProviderIds.length
@@ -345,19 +544,19 @@ Column {
         "", false, "", displacedProviderIds, [],
         displacedProviderStates, providerSnapshot)
     } else if (enable && group !== "" && targetWasEnabled) {
-      showFeedback(
-        name + " activated",
+      record = feedbackRecord(name + " activated",
         target + " was hidden to avoid duplicates.",
         providerSnapshot ? "provider-snapshot" : "restore-group",
         "", false, group, [], groups, targetStates, providerSnapshot)
     } else {
-      showFeedback(
+      record = feedbackRecord(
         name + (enable ? " activated" : " deactivated"),
         enable ? "The plugin is now visible in the active bar."
           : "The plugin was removed from the active bar.",
         "plugin-value", id, wasEnabled, "", [])
     }
-    return true
+    return beginAcceptedPluginRequest(
+      transitionSerial, stateTransitionSerial, name, record)
   }
 
   function togglePluginById(pluginId) {
@@ -376,8 +575,15 @@ Column {
   }
 
   function undoLastChange() {
+    if (transitionPending) return false
     feedbackTimer.stop()
     feedbackCountdown.stop()
+    const beforeLayoutSerial = Number(
+      controller.pluginLayoutTransitionSerial || 0)
+    const beforeProviderSerial = Number(
+      controller.providerSnapshotTransitionSerial || 0)
+    const beforeStateSerial = Number(
+      controller.pluginStateTransitionSerial || 0)
     let restored = false
     if (undoMode === "provider-snapshot") {
       restored = typeof controller.restoreProviderUndoSnapshot === "function"
@@ -403,34 +609,152 @@ Column {
     }
     if (!restored) {
       feedbackVisible = true
+      feedbackTitle = "Undo could not be completed"
+      feedbackDetail = String(controller.pluginActionError
+        || "The previous provider layout was not restored.")
       feedbackProgress = 1
       feedbackCountdown.start()
       return false
+    }
+    const providerSerial = Number(
+      controller.providerSnapshotTransitionSerial || 0)
+    const layoutSerial = Number(
+      controller.pluginLayoutTransitionSerial || 0)
+    const stateSerial = Number(
+      controller.pluginStateTransitionSerial || 0)
+    const channel = providerSerial > beforeProviderSerial
+      ? "provider" : layoutSerial > beforeLayoutSerial ? "layout"
+        : stateSerial > beforeStateSerial ? "state" : ""
+    const serial = channel === "provider" ? providerSerial
+      : channel === "layout" ? layoutSerial : stateSerial
+    const busy = channel === "provider"
+      ? controller.providerSnapshotTransitionBusy === true
+      : channel === "layout"
+        ? controller.pluginLayoutTransitionBusy === true
+        : channel === "state"
+          ? controller.pluginStateTransitionBusy === true : false
+    if (channel !== "") {
+      if (!busy) {
+        feedbackVisible = true
+        feedbackTitle = "Undo could not be completed"
+        feedbackDetail = "The bar did not retain the accepted restore request."
+        feedbackProgress = 1
+        feedbackCountdown.start()
+        return false
+      }
+      pendingUndoRestore = {
+        owner: controller, serial: serial, channel: channel
+      }
+      feedbackVisible = true
+      feedbackTitle = "Restoring previous provider …"
+      feedbackDetail = "Waiting for saved state and the native bar layout."
+      feedbackProgress = 1
+      return true
     }
     feedbackVisible = false
     clearUndoState()
     return true
   }
 
+  function releaseCatalogConsumer() {
+    const service = catalogConsumerService
+    const token = catalogConsumerToken
+    catalogConsumerService = null
+    catalogConsumerToken = null
+    if (!service || !token) return false
+    try { return service.releaseCatalogConsumer(token) === true }
+    catch (error) { return false }
+  }
+
+  function syncCatalogConsumer() {
+    const next = catalogServiceCandidate
+    if (catalogConsumerService === next && catalogConsumerToken) {
+      try {
+        if (next && next.hasCatalogConsumer(catalogConsumerToken)) return true
+      } catch (error) {}
+    }
+    releaseCatalogConsumer()
+    if (!next) return false
+    let token = null
+    try { token = next.acquireCatalogConsumer(root) }
+    catch (error) { token = null }
+    if (!token) return false
+    if (next !== catalogServiceCandidate) {
+      try { next.releaseCatalogConsumer(token) }
+      catch (error) {}
+      catalogConsumerSync.restart()
+      return false
+    }
+    try {
+      if (!next.hasCatalogConsumer(token)) {
+        next.releaseCatalogConsumer(token)
+        return false
+      }
+    } catch (error) {
+      try { next.releaseCatalogConsumer(token) }
+      catch (releaseError) {}
+      return false
+    }
+    catalogConsumerService = next
+    catalogConsumerToken = token
+    return true
+  }
+
+  function requestCatalogRefresh() {
+    const service = catalogConsumerService
+    const token = catalogConsumerToken
+    if (!catalogConsumerActive || !service || !token
+        || typeof service.requestCatalogRefresh !== "function") return false
+    try { return service.requestCatalogRefresh(token) === true }
+    catch (error) { return false }
+  }
+
   function syncPluginUpdateConsumer() {
-    const shouldBeActive = motionActive && !favoritesOnly
-    const service = controller.effectivePluginUpdateService
-    if (!service) return false
-    if (shouldBeActive === pluginUpdateConsumerActive) return false
-    pluginUpdateConsumerActive = shouldBeActive
-    if (shouldBeActive) service.acquireConsumer()
-    else service.releaseConsumer()
+    const next = motionActive && !favoritesOnly
+      ? (controller.effectivePluginUpdateService || null) : null
+    if (leasedPluginUpdateService === next) return false
+    if (leasedPluginUpdateService)
+      leasedPluginUpdateService.releaseConsumer()
+    leasedPluginUpdateService = next
+    pluginUpdateConsumerActive = next !== null
+    if (next) next.acquireConsumer()
     return true
   }
 
   onMotionActiveChanged: pluginUpdateConsumerSync.restart()
   onFavoritesOnlyChanged: pluginUpdateConsumerSync.restart()
-  Component.onCompleted: pluginUpdateConsumerSync.restart()
-  Component.onDestruction: {
-    if (pluginUpdateConsumerActive
-        && controller.effectivePluginUpdateService)
-      controller.effectivePluginUpdateService.releaseConsumer()
+  onCatalogServiceCandidateChanged: catalogConsumerSync.restart()
+  onControllerChanged: {
+    if (!pageComplete) return
+    pendingPluginMutation = null
+    pendingUndoRestore = null
+    feedbackVisible = false
+    clearUndoState()
+    if (leasedPluginUpdateService)
+      leasedPluginUpdateService.releaseConsumer()
+    leasedPluginUpdateService = null
     pluginUpdateConsumerActive = false
+    pluginUpdateConsumerSync.restart()
+  }
+  Component.onCompleted: {
+    pageComplete = true
+    pluginUpdateConsumerSync.restart()
+    catalogConsumerSync.restart()
+  }
+  Component.onDestruction: {
+    pendingPluginMutation = null
+    pendingUndoRestore = null
+    if (leasedPluginUpdateService) leasedPluginUpdateService.releaseConsumer()
+    leasedPluginUpdateService = null
+    pluginUpdateConsumerActive = false
+    releaseCatalogConsumer()
+  }
+
+  Timer {
+    id: catalogConsumerSync
+    interval: 0
+    repeat: false
+    onTriggered: root.syncCatalogConsumer()
   }
 
   Timer {
@@ -446,6 +770,21 @@ Column {
 
     function onEffectivePluginUpdateServiceChanged() {
       pluginUpdateConsumerSync.restart()
+      catalogConsumerSync.restart()
+    }
+
+    function onPluginLayoutTransitionSettled(serial, result) {
+      if (!root.settleUndoRestore(serial, result, "layout"))
+        root.settlePluginMutation(serial, result, "layout")
+    }
+
+    function onProviderSnapshotTransitionSettled(serial, result) {
+      root.settleUndoRestore(serial, result, "provider")
+    }
+
+    function onPluginStateTransitionSettled(serial, result) {
+      if (!root.settleUndoRestore(serial, result, "state"))
+        root.settlePluginMutation(serial, result, "state")
     }
 
     function onPluginRemovalFinished(pluginId, success, detail) {
@@ -547,6 +886,7 @@ Column {
     HoverHandler {
       id: feedbackHover
       enabled: root.feedbackVisible && root.undoMode !== ""
+        && !root.transitionPending
     }
 
     Rectangle {
@@ -624,7 +964,7 @@ Column {
 
       Rectangle {
         id: undoButton
-        visible: root.undoMode !== ""
+        visible: root.undoMode !== "" && !root.transitionPending
         activeFocusOnTab: visible
         anchors.verticalCenter: parent.verticalCenter
         width: visible ? Commons.Style.space(54) : 0
@@ -760,6 +1100,7 @@ Column {
       anchors.leftMargin: root.feedbackProgressInset
       anchors.bottomMargin: Commons.Style.space(2)
       visible: root.feedbackVisible && root.undoMode !== ""
+        && !root.transitionPending
       width: root.feedbackProgressAvailableWidth
         * root.boundedFeedbackProgress
       height: 2

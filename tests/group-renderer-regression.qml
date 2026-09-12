@@ -289,7 +289,11 @@ ShellRoot {
 
       property bool activeLayoutProtected: false
       readonly property bool v2Mode: true
-      readonly property var order: noSplitController.order
+      readonly property var order: ({
+        left: ["G1", "G2", "G3", "G5", "G6", "G4", "G7"],
+        center: ["G8"],
+        right: ["G9", "G10", "G11", "G14", "G12", "G13", "G15"]
+      })
       readonly property var splits: noSplitController.splits
 
       function splitEnabled(region, index) {
@@ -645,6 +649,39 @@ ShellRoot {
     }
 
     QtObject {
+      id: familyResolver
+      property int revision: 0
+      function ensureComponent(id) { return id ? markerWidget : null }
+      function manifestFor(id) {
+        return id === "omarchy.clock"
+          ? { id: "local.clock", name: "Local clock clone" } : null
+      }
+    }
+
+    QtObject {
+      id: familyBar
+      property bool useV2: false
+      property var v1FamilySlotBindings: ({ G8: "omarchy.clock" })
+      readonly property var hostWidgetResolver: familyResolver
+      readonly property bool vertical: false
+      readonly property int barSize: 26
+      readonly property var shell: disabledShell
+      readonly property var visualTokens: useV2
+        ? v2SplitBar.visualTokens : noSplitBar.visualTokens
+      readonly property var layoutConfig: ({ left: [],
+        center: [{ id: "omarchy.clock", shibumiModule: true, format: "HH:mm" }],
+        right: [] })
+      property var activePopout: null
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(id) { return markerWidget }
+      function registerModuleSlot(slot) {}
+      function unregisterModuleSlot(slot) {}
+      function hideTooltip(owner) {}
+      function releasePopout(owner) {}
+    }
+
+    QtObject {
       id: delayedBar
 
       readonly property bool vertical: false
@@ -837,6 +874,27 @@ ShellRoot {
       y: 120
     }
 
+    ShibumiStyle.BarSurface {
+      id: narrowExtraSurface
+      bar: tallAlignmentBar
+      width: fullSurface.responsiveProbe.candidates
+        ? fullSurface.responsiveProbe.candidates[0] + 34 : 1200
+      height: tallAlignmentBar.barSize
+    }
+
+    ShibumiStyle.BarSurface {
+      id: narrowPlainSurface
+      bar: noSplitBar
+      width: narrowExtraSurface.width
+      height: noSplitBar.barSize
+    }
+
+    Core.GroupSlot {
+      id: familySlot
+      bar: familyBar
+      groupId: "G8"
+    }
+
     Core.WidgetSlot {
       id: directWidget
       bar: noSplitBar
@@ -914,6 +972,7 @@ ShellRoot {
     function fail(message) {
       console.error("group-renderer-regression:", message)
       Qt.exit(1)
+      throw new Error(message)
     }
 
     function closeEnough(actual, expected) {
@@ -936,6 +995,16 @@ ShellRoot {
       if (item.activeItem) result.push(item)
       const children = item.children || []
       for (const child of children) widgetSlots(child, result)
+      return result
+    }
+
+    function groupCells(section) {
+      const result = []
+      const children = section && section.contentItem
+        ? section.contentItem.children || [] : []
+      for (const child of children) {
+        if ("modelData" in child) result.push(child)
+      }
       return result
     }
 
@@ -1032,7 +1101,8 @@ ShellRoot {
         { v2: false, position: "top" },
         { v2: false, position: "bottom" },
         { v2: true, position: "top" },
-        { v2: true, position: "bottom" }
+        { v2: true, position: "bottom" },
+        { v2: false, position: "top" }
       ]
       readonly property var alignmentFixtures: [
         {
@@ -1049,6 +1119,11 @@ ShellRoot {
         }
       ]
 
+      property int familyPhase: 0
+      property var retainedAlignmentCells: ({})
+      readonly property var retainedAlignmentIds: [
+        "G1", "G2", "G3", "G5", "G6", "G7"
+      ]
       interval: 10
       running: true
       repeat: true
@@ -1086,6 +1161,42 @@ ShellRoot {
           return
         }
 
+        if (familyPhase < 3) {
+          if (familyPhase === 0) {
+            const slots = test.widgetSlots(familySlot.contentItem, [])
+            if (slots.length !== 1) {
+              if (attempts < 50) return
+              return test.fail("family replacement content did not load")
+            }
+            if (familySlot.groupId !== "G8"
+                || familySlot.effectiveGroupId !== "G:omarchy.clock"
+                || !familySlot.groupEnabled || !familySlot.dynamicV1Group
+                || slots[0].moduleName !== "omarchy.clock"
+                || slots[0].moduleManifest.id !== "local.clock"
+                || slots[0].fallbackTooltipText !== "Local clock clone"
+                || slots[0].activeItem.settings.format !== "HH:mm"
+                || !familySlot.visualSurfaceItem.visible
+                || !test.closeEnough(familySlot.visualSurfaceItem.radius, 12))
+              return test.fail("fixed family slot lost provider identity/settings/surface")
+            familyBar.v1FamilySlotBindings = ({})
+          } else if (familyPhase === 1) {
+            if (familySlot.contentItem !== null) {
+              if (attempts < 50) return
+              return test.fail("removed family projection retained its provider")
+            }
+            familyBar.useV2 = true
+            familyBar.v1FamilySlotBindings = ({ G8: "omarchy.clock" })
+          } else {
+            if (familySlot.effectiveGroupId !== "G8"
+                || familySlot.groupEnabled || familySlot.contentItem !== null)
+              return test.fail("V1 family projection leaked into V2")
+            familyBar.useV2 = false
+          }
+          familyPhase++
+          attempts = 0
+          return
+        }
+
         if (alignmentPhase < alignmentCases.length) {
           const alignmentCase = alignmentCases[alignmentPhase]
           for (const fixture of alignmentFixtures) {
@@ -1103,6 +1214,58 @@ ShellRoot {
                   + alignmentError)
                 return
               }
+            }
+          }
+          const alignmentLeft = test.regionItem(
+            tallAlignmentSurface, "left")
+          const alignmentCells = test.groupCells(alignmentLeft)
+          const alignmentOrder = alignmentCells.map(function(cell) {
+            return String(cell.modelData || "")
+          })
+          const expectedAlignmentOrder = alignmentCase.v2
+            ? v2SplitController.order.left : noSplitController.v1Slots.left
+          if (JSON.stringify(alignmentOrder)
+              !== JSON.stringify(expectedAlignmentOrder)) {
+            if (attempts < 50) return
+            stop()
+            test.fail("variant alignment order did not settle: "
+              + JSON.stringify(alignmentOrder) + " expected "
+              + JSON.stringify(expectedAlignmentOrder))
+            return
+          }
+          if (alignmentPhase === 0) {
+            const owners = ({})
+            for (const cell of alignmentCells) owners[cell.modelData] = cell
+            retainedAlignmentCells = owners
+          } else {
+            for (const groupId of retainedAlignmentIds) {
+              const cell = alignmentCells.find(function(item) {
+                return String(item.modelData || "") === groupId
+              })
+              if (cell !== retainedAlignmentCells[groupId]) {
+                stop()
+                test.fail("variant reorder replaced retained group owner "
+                  + groupId + " in alignment phase " + alignmentPhase)
+                return
+              }
+            }
+          }
+          if (!alignmentCase.v2) {
+            const plain = fullSurface.responsiveProbe
+            const extra = tallAlignmentSurface.responsiveProbe
+            const slots = test.widgetSlots(tallAlignmentSurface, [])
+            const center = slots.find(slot => slot.moduleName === "hancore.shibumi.center")
+            const complete = extra.candidates && plain.candidates
+              && extra.candidates.every((value, index) =>
+                test.closeEnough(value - plain.candidates[index], 108))
+            if (!complete || !center
+                || !test.closeEnough(extra.centerAvailable, plain.centerAvailable - 108)
+                || !test.closeEnough(center.activeItem.availableWidth, extra.centerAvailable)
+                || narrowPlainSurface.responsiveStage !== 0
+                || narrowExtraSurface.responsiveStage === 0) {
+              if (attempts < 50) return
+              return test.fail("unassigned extras omitted from output-local width/staging: "
+                + JSON.stringify(extra) + " versus " + JSON.stringify(plain))
             }
           }
           alignmentPhase++
@@ -1627,6 +1790,10 @@ ShellRoot {
           test.fail("monitor width budget did not subtract optional siblings")
           return
         }
+
+        budgetGroup.availableWidth = 20
+        if (centerSlot.availableWidth !== 1 || optionalSlot.availableWidth !== 1)
+          return test.fail("exhausted sibling budget became unconstrained")
 
         console.log("group renderer regression passed")
         Qt.exit(0)

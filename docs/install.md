@@ -20,9 +20,9 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> AUR registration is currently unavailable, so `0.1.1-beta.11` is not
-> published there yet. This is the supported flow once AUR access returns and
-> the package is released.
+> `0.1.1-beta.13` is a local candidate and is not published to AUR. This is
+> the supported flow only after the release gates pass and publication is
+> separately authorized.
 
 ```bash
 omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
@@ -65,16 +65,22 @@ cd Shibumi-Shell
 ```
 
 The dry run validates the suite and prints every target without changing the
-system. The real transaction:
+system. Run a real transaction only from an active, unlocked Omarchy desktop.
+A fresh install is not a recovery launcher for an absent shell; use
+`omarchy restart shell` first so the lock state can be verified fail closed.
+The real transaction:
 
 1. validates all plugin manifests with Omarchy;
 2. rejects unsafe or foreign replacement targets;
 3. stages and hashes the complete payload;
 4. snapshots the affected plugins and `shell.json`;
-5. exposes all plugins and rescans the registry;
-6. activates the Shibumi bar and managed layout;
-7. reloads the shell and verifies the running payload;
-8. restores the previous state if a gate fails.
+5. verifies that the session is unlocked;
+6. for managed activation, drains the production shell before publishing any
+   plugin root, writes the new config, and performs one full restart;
+7. for external-layout installation, publishes the roots and uses a live
+   registry rescan and config reload without changing the active bar owner;
+8. verifies the running payload and restores the previous state if a gate
+   fails.
 
 Shibumi's lifecycle does not edit files below `~/.config/hypr/` and does not
 change Hyprland window borders, inner gaps, or outer gaps. Such changes are not
@@ -155,6 +161,15 @@ discards staging, and leaves the live plugins unchanged; unlock the active
 session and retry. For an external-bar installation, update preserves the
 active bar and layout.
 
+Beta.13 inventories every existing journal before recovery and admits only the
+exact public Beta.11, Step-5-tip, or current Beta.13 revision/digest identity.
+A shared version string is not sufficient. Step-6 Power registration, Step-6
+journal metadata, mixed live markers, or any unknown state abort before
+recovery and before mutation. One fully admitted interrupted journal may be
+recovered before live payload identity is checked again; multiple public
+journals fail as ambiguous. Do not install Beta.13 over a Step-6 development
+installation; use its separately reviewed rollback procedure.
+
 ### Move from a checkout to the package
 
 Install the package without uninstalling the existing suite, then run:
@@ -171,18 +186,27 @@ authoritative origin. The old checkout is not deleted or modified.
 
 ### Roll back a package version
 
-Install a previously accepted package from Pacman's cache, then explicitly
+Roll back only to an accepted package that explicitly uses the same canonical
+State service-entry storage contract. Beta.12 is the first package with that
+contract, so it has no older eligible package target. Do not install Beta.11 or
+an earlier package after Beta.12. Pacman replaces the lifecycle code before the
+user-level update runs, and the older code cannot enforce Beta.12's one-way
+storage guard or export canonical settings back to legacy storage.
+
+For a future eligible release, install its package from Pacman's cache, then
 authorize staging its older payload:
 
 ```bash
-sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-<older-version>-any.pkg.tar.zst
+sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-compatible-older.pkg.tar.zst
 shibumi-shell update --allow-downgrade --dry-run
 shibumi-shell update --allow-downgrade --yes
 ```
 
-Without `--allow-downgrade`, update and repair refuse to replace a newer staged
-suite with an older payload. The authorized rollback still uses the normal
-transaction, runtime verification, and automatic failure recovery.
+Without `--allow-downgrade`, compatible update and repair paths refuse to replace
+a newer staged suite with an older payload. The authorized rollback still uses
+the target release's normal transaction, runtime verification, and automatic
+failure recovery, but only between identities that release explicitly admits.
+It is not a Step-6 rollback mechanism.
 
 ## Status
 
@@ -210,9 +234,12 @@ managed profile with:
 ```
 
 Repair validates and stages all current plugin roots, verifies the running
-payload, and rolls back to the exact pre-repair state if a gate fails. It
-restores the selected Shibumi profile in managed mode and preserves the active
-bar and layout in external mode. It refuses to overwrite a foreign directory.
+payload, and rolls back to the exact pre-repair state if a gate fails. Repair
+alone tolerates a missing owned plugin root or changed payload bytes only while
+the supported install state and every remaining ownership marker stay exact.
+It restores the selected Shibumi profile in managed mode and preserves the
+active bar and layout in external mode. It refuses unsafe markers or paths and
+never overwrites a foreign directory.
 
 ## Switch bar hosts
 
@@ -245,8 +272,9 @@ The Control Center **Bars** page performs the same supported host switch and
 keeps both return paths visible.
 
 `omarchy bar reset` selects the stock bar while preserving the current layout.
-`omarchy bar defaults` replaces the complete `bar` object and removes
-`bar.shibumi`; use it only when that broader reset is intended.
+`omarchy bar defaults` replaces the complete `bar` object and its layout.
+Canonical settings in the State `plugins[]` service entry survive; activation
+restores the managed layout.
 
 ## Uninstall
 
@@ -283,12 +311,16 @@ The default uninstall restores the stock bar and removes Shibumi's managed
 configuration. Shibumi records the bar that was active before installation so
 its widgets and options can be restored as a complete layout. Install states
 created before this record existed fall back to Quattro's current stock-bar
-definition instead of leaving an empty bar. Preserve the `bar.shibumi`
-settings branch with:
+definition instead of leaving an empty bar. Preserve the complete canonical
+State service entry, including unknown fields and deep settings, with:
 
 ```bash
 ./scripts/shibumi-suite uninstall --keep-settings
 ```
+
+With `--keep-settings`, the retained State entry is dormant while its payload is
+absent and is reused on reinstall. Native per-plugin disable/removal is destructive
+and is not equivalent to this option.
 
 The adapter removes only suite-owned plugin directories. It refuses foreign or
 ambiguous targets.

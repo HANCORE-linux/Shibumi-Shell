@@ -20,6 +20,7 @@ fail() {
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cat >"$tmpdir/bin/notify-send" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >>"$SHIBUMI_NOTIFY_LOG"

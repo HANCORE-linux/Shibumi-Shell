@@ -8,9 +8,12 @@ import qs.Commons
 import "core" as Core
 import "core/GroupRegistry.js" as GroupRegistry
 import "core/PanelRouting.js" as PanelRouting
+import "core/LayoutModel.js" as LayoutModel
+import "core/V2LayoutModel.js" as V2LayoutModel
 import "core/WidgetFamilies.js" as WidgetFamilies
 import "services" as Services
 import "styles" as Styles
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Item {
   id: root
@@ -20,16 +23,61 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteHostShell }
+  SuiteRuntime.Provider {
+    id: barRuntimeProvider
+    pluginId: "hancore.shibumi.bar"
+    implementationVersion: "0.1.1-beta.13"
+    owner: root
+    host: suiteHostShell.host
+    manifest: root.manifest
+  }
+  onShellChanged: {
+    if (shell === suiteHostShell) return
+    suiteHostShell.host = shell
+    // Preserve the explicit legacy injection, including native widget APIs.
+    // A scoped facade is adapted, never replaced by a legacy fallback.
+    if (shell && "pluginId" in shell) shell = suiteHostShell
+  }
   property var pluginRegistry: null
   property var barWidgetRegistry: null
   property var barConfig: ({})
   readonly property int shibumiHostContractVersion: 1
-  readonly property string pluginSourceDir: manifest
-    ? String(manifest.__sourceDir || "") : ""
+  // The marker belongs to this loaded entry point, not to private host
+  // manifest metadata (which scoped hosts deliberately do not expose).
+  readonly property string suiteMarkerPath: {
+    const url = String(Qt.resolvedUrl(".shibumi-managed.json"))
+    if (url.indexOf("file:///") !== 0) return ""
+    // FileView takes a filesystem path, not a percent-encoded QML URL.
+    try { return decodeURIComponent(url.substring(7)) } catch (error) { return "" }
+  }
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
   property bool hostReady: false
+  readonly property bool mutationAdmissionReady:
+    hostReady && startupAdmissionSatisfied && !shutdownPrepared
   property bool outputWindowsEnabled: true
+  // No-output fixtures can opt out while the deployed scoped Bar performs
+  // the one process-bound native registry prime before becoming visible.
+  property bool nativeRegistryPrimeEnabled: outputWindowsEnabled
+  property bool shutdownPrepared: false
+  readonly property bool suiteRuntimeReady: SuiteRuntime.Runtime.contractVersion === 1
+    && SuiteRuntime.Runtime.ready
+    && SuiteRuntime.Runtime.isActiveBar(root)
+    && SuiteRuntime.Runtime.publishedBarConfig !== null
+    && SuiteRuntime.Runtime.payloadDigest === suitePayloadDigest
+    && SuiteRuntime.Runtime.serviceFor("hancore.shibumi.state") !== null
+  readonly property bool nativeRegistryPrimeRequired:
+    nativeRegistryPrimeEnabled && suiteHostShell.scoped
+  readonly property bool nativeRegistryPrimeReady: {
+    void(SuiteRuntime.Runtime.hostRegistryPrimeRevision)
+    return !nativeRegistryPrimeRequired
+      || SuiteRuntime.Runtime.hostRegistryPrimeReadyFor(
+        root, Quickshell.processId)
+  }
+  readonly property bool startupAdmissionSatisfied: injectionComplete
+    && (!suiteHostShell.scoped || suiteRuntimeReady)
+    && nativeRegistryPrimeReady
 
   property string home: Quickshell.env("HOME")
   property var fallbackBarConfig: ({
@@ -62,6 +110,56 @@ Item {
   readonly property var visualTokens: styleReady ? activeStyle.visualTokens : null
   readonly property var hostWidgetResolver: hostWidgetResolverService
   readonly property var layoutController: layoutStateController
+  property int providerRegistryRevision: 0
+  readonly property var catalogConsumerCandidate: {
+    void(SuiteRuntime.Runtime.revision)
+    if (!root.hostReady || !suiteHostShell.scoped
+        || !barRuntimeProvider.registered) return null
+    const candidate = suiteHostShell.serviceFor(
+      "hancore.shibumi.control-center")
+    try {
+      return candidate
+          && typeof candidate.acquireCatalogConsumer === "function"
+          && typeof candidate.releaseCatalogConsumer === "function"
+          && typeof candidate.hasCatalogConsumer === "function"
+          && typeof candidate.catalogObservation === "function"
+          && typeof candidate.isCatalogObservationCurrent === "function"
+        ? candidate : null
+    } catch (error) { return null }
+  }
+  property var catalogConsumerService: null
+  property var catalogConsumerToken: null
+  property int catalogConsumerRevision: 0
+  readonly property var catalogObservation: {
+    void(catalogConsumerRevision)
+    const service = catalogConsumerService
+    const token = catalogConsumerToken
+    if (!suiteHostShell.scoped || !service || service !== catalogConsumerCandidate
+        || !token) return null
+    try {
+      // Read reactivity comes only from the public primitive facade. Never
+      // retain or inspect the catalog backend or its snapshot property.
+      void(service.catalogReady)
+      void(service.catalogReadSerial)
+      void(service.catalogGeneration)
+      if (service.catalogReady !== true || !service.hasCatalogConsumer(token))
+        return null
+      const observation = service.catalogObservation(token)
+      if (!observation) return null
+      return service.isCatalogObservationCurrent(token, observation)
+        ? observation : null
+    } catch (error) { return null }
+  }
+  readonly property var v1FamilySlotBindings: {
+    void(layoutConfig)
+    void(layoutStateController.v1Slots)
+    void(providerRegistryRevision)
+    void(pluginRegistry ? pluginRegistry.installedPlugins : null)
+    void(catalogObservation)
+    return WidgetFamilies.v1SlotBindings(v1PluginSpecs(),
+      layoutStateController.v1Slots, pluginRegistry, catalogObservation,
+      suiteHostShell.scoped)
+  }
   readonly property string styleId: styleRegistry.resolvedId
   readonly property var availableStyleIds: styleRegistry.availableIds
   property color foreground: styleReady ? activeStyle.foreground : Color.bar.text
@@ -110,8 +208,85 @@ Item {
   // Restore records are output-local. A V1/V2 owner handoff on one output
   // must not suppress or overwrite a value-only mutation on another output.
   property var pendingWidgetRestores: []
+  property int nextWidgetRestoreId: 0
+  readonly property var restoreStateService: layoutStateController.stateService
+  readonly property bool restoreAdmitted: mutationAdmissionReady
+    && (!suiteHostShell.scoped || suiteRuntimeReady)
+  property var activeRestoreCalls: []
+  property var lastProviderUndoReceipt: null
+  property var lastCatalogTransitionSnapshot: null
+  readonly property alias layoutTransitionBusy: layoutTransition.busy
+  readonly property alias layoutTransitionSerial: layoutTransition.requestSerial
+  readonly property alias layoutTransitionResult: layoutTransition.lastResult
+  readonly property alias providerSnapshotTransitionBusy:
+    providerSnapshotTransition.busy
+  readonly property alias providerSnapshotTransitionSerial:
+    providerSnapshotTransition.requestSerial
+  readonly property alias providerSnapshotTransitionResult:
+    providerSnapshotTransition.lastResult
+  readonly property alias stateTransitionBusy: stateTransition.busy
+  readonly property alias stateTransitionSerial: stateTransition.requestSerial
+  readonly property alias stateTransitionResult: stateTransition.lastResult
+  readonly property bool layoutTransitionsSupported: layoutTransition.supported
+    && providerSnapshotTransition.supported && stateTransition.supported
+  readonly property bool legacyLayoutMutationAllowed: !suiteHostShell.scoped
+  signal layoutTransitionSettled(int serial, string result)
+  signal providerSnapshotTransitionSettled(int serial, string result)
+  signal stateTransitionSettled(int serial, string result)
+  onRestoreStateServiceChanged: revokeStateRestores()
+  onRestoreAdmittedChanged: revokeStateRestores()
   property string controlCenterWidgetDetailGroup: ""
   property string controlCenterWidgetDetailPlugin: ""
+
+  function releaseCatalogConsumer() {
+    const service = catalogConsumerService
+    const token = catalogConsumerToken
+    catalogConsumerService = null
+    catalogConsumerToken = null
+    catalogConsumerRevision++
+    if (!service || !token) return false
+    try { return service.releaseCatalogConsumer(token) === true }
+    catch (error) { return false }
+  }
+
+  function rebindCatalogConsumer() {
+    if (shutdownPrepared) return false
+    const candidate = catalogConsumerCandidate
+    if (catalogConsumerService === candidate && catalogConsumerToken) {
+      try {
+        if (candidate && candidate.hasCatalogConsumer(catalogConsumerToken))
+          return true
+      } catch (error) {}
+    }
+    releaseCatalogConsumer()
+    if (!candidate) return false
+    let token = null
+    try { token = candidate.acquireCatalogConsumer(root) }
+    catch (error) { token = null }
+    // Acquisition can synchronously replace/revoke the provider. Retain only
+    // the exact token from the still-selected service.
+    if (!token) return false
+    if (candidate !== catalogConsumerCandidate) {
+      try { candidate.releaseCatalogConsumer(token) }
+      catch (error) {}
+      Qt.callLater(root.rebindCatalogConsumer)
+      return false
+    }
+    try {
+      if (!candidate.hasCatalogConsumer(token)) {
+        candidate.releaseCatalogConsumer(token)
+        return false
+      }
+    } catch (error) {
+      try { candidate.releaseCatalogConsumer(token) }
+      catch (releaseError) {}
+      return false
+    }
+    catalogConsumerService = candidate
+    catalogConsumerToken = token
+    catalogConsumerRevision++
+    return true
+  }
 
   function normalizePosition(value) {
     const candidate = String(value || "").trim()
@@ -146,6 +321,7 @@ Item {
   }
 
   function setWidgetAppearance(groupId, key, valueJson) {
+    if (!mutationAdmissionReady) return "not-ready"
     const name = String(key || "")
     // The legacy endpoint only owns appearance shared by both variants.
     // Variant-scoped values must never report success after writing a
@@ -167,6 +343,7 @@ Item {
 
   function setWidgetAppearanceForVariant(groupId, variantValue, key,
       valueJson) {
+    if (!mutationAdmissionReady) return "not-ready"
     const variant = String(variantValue || "").toLowerCase()
     if (["v1", "v2"].indexOf(variant) < 0) return "invalid-variant"
     const state = pluginService("hancore.shibumi.state")
@@ -293,6 +470,7 @@ Item {
   }
 
   function setBarPosition(value, ownerValue, screenName) {
+    if (!mutationAdmissionReady || layoutTransitionBusy) return false
     const next = String(value || "")
     if (["top", "bottom"].indexOf(next) < 0 || !shell
         || typeof shell.mutateShellConfig !== "function") return false
@@ -306,6 +484,7 @@ Item {
   }
 
   function setAllSplits(value) {
+    if (!mutationAdmissionReady) return false
     return typeof value === "boolean"
       ? layoutStateController.setAllSplits(value) : false
   }
@@ -362,6 +541,7 @@ Item {
   }
 
   function setStyle(value) {
+    if (!mutationAdmissionReady) return false
     const next = styleRegistry.normalizeId(value)
     if (!styleRegistry.hasStyle(next)) return false
 
@@ -418,8 +598,11 @@ Item {
         return groupId === "" || !layoutStateController.groupLocation(groupId)
       }))
     }
+    const familyProviders = Object.values(v1FamilySlotBindings)
     return deduplicatedUnassignedEntries(entries.filter(function(entry) {
-      const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+      const id = entryId(entry)
+      if (familyProviders.indexOf(id) >= 0) return false
+      const groupId = GroupRegistry.dynamicGroupIdForModule(id)
       return groupId === "" || !layoutStateController.groupLocation(groupId)
     }))
   }
@@ -494,20 +677,29 @@ Item {
   }
 
   function reconcileActivePluginGroups(specs, syncValue, followRegionsValue) {
-    return layoutStateController.v2Mode
-      ? layoutStateController.reconcileV2PluginGroups(
-          specs, syncValue, followRegionsValue)
-      : layoutStateController.reconcileV1PluginGroups(specs)
+    if (layoutStateController.v2Mode)
+      return layoutStateController.reconcileV2PluginGroups(
+        specs, syncValue, followRegionsValue)
+    if (!Array.isArray(specs)) return false
+    const bindings = WidgetFamilies.v1SlotBindings(specs,
+      layoutStateController.currentV1Order(), pluginRegistry,
+      catalogObservation, suiteHostShell.scoped)
+    const familyProviders = Object.values(bindings)
+    return layoutStateController.reconcileV1PluginGroups(
+      specs.filter(function(spec) {
+        return !spec || familyProviders.indexOf(spec.pluginId) < 0
+      }))
   }
 
   function reconcileV1PluginGroups() {
     if (layoutStateController.v2Mode) return true
-    if (!layoutStateController.reconcileV1PluginGroups(v1PluginSpecs()))
+    if (!reconcileActivePluginGroups(v1PluginSpecs()))
       return false
     return reconcileWidgetFamilyProviders()
   }
 
   function reconcileActivePluginGroupsAndProviders() {
+    if (layoutTransitionBusy) return false
     // The shared host layout is also the V1 provider-region source. During a
     // background reconciliation, let it repair an existing V2 dynamic group
     // whose provider entry was moved outside the V2 editor. Explicit V2 drag
@@ -535,33 +727,32 @@ Item {
     return false
   }
 
-  function hasBarWidgetEntryPoint(widgetId) {
-    const id = String(widgetId || "")
-    const installed = pluginRegistry && pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins : null
-    const candidate = installed ? installed[id] : null
-    if (!id || !candidate) return false
-    if (pluginRegistry
-        && typeof pluginRegistry.entryPointUrl === "function")
-      return String(pluginRegistry.entryPointUrl(
-        candidate, "barWidget") || "") !== ""
-    const entryPoints = candidate.entryPoints
-    return Util.isPlainObject(entryPoints)
-      && String(entryPoints.barWidget || "") !== ""
+  function hasBarWidgetEntryPoint(widgetId, selectionValue) {
+    const selection = selectionValue === undefined
+      ? hostWidgetResolverService.selectionFor(widgetId) : selectionValue
+    if (hostWidgetResolverService.scoped)
+      return !!(selection && selection.metadata)
+    const candidate = selection ? selection.manifest : null
+    if (!candidate || !pluginRegistry
+        || typeof pluginRegistry.entryPointUrl !== "function") return false
+    return String(pluginRegistry.entryPointUrl(
+      candidate, "barWidget") || "") !== ""
   }
 
-  function widgetAllowsMultiple(widgetId) {
-    const id = String(widgetId || "")
-    const installed = pluginRegistry && pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins : null
-    const candidate = installed ? installed[id] : null
+  function widgetAllowsMultiple(widgetId, selectionValue) {
+    const selection = selectionValue === undefined
+      ? hostWidgetResolverService.selectionFor(widgetId) : selectionValue
+    if (hostWidgetResolverService.scoped)
+      return !!(selection && selection.metadata && selection.metadata.allowMultiple === true)
+    const candidate = selection ? selection.manifest : null
     return !!(candidate && candidate.barWidget
       && candidate.barWidget.allowMultiple === true)
   }
 
   function widgetFamilyGroups(widgetId) {
     return WidgetFamilies.familiesForPlugin(
-      String(widgetId || ""), pluginRegistry).map(function(family) {
+      String(widgetId || ""), pluginRegistry, catalogObservation,
+      suiteHostShell.scoped).map(function(family) {
         return String(family.group || "")
       }).filter(function(groupId, index, values) {
         return GroupRegistry.GroupIds.indexOf(groupId) >= 0
@@ -571,7 +762,8 @@ Item {
 
   function widgetCapabilities(widgetId) {
     return WidgetFamilies.capabilitiesForPlugin(
-      String(widgetId || ""), pluginRegistry)
+      String(widgetId || ""), pluginRegistry, catalogObservation,
+      suiteHostShell.scoped)
   }
 
   function widgetsShareCapability(leftId, rightId) {
@@ -668,9 +860,11 @@ Item {
     }))
   }
 
-  function syncV2DynamicLayout(slotsValue) {
-    if (!Util.isPlainObject(slotsValue)) return false
-    const nextLayout = currentLayoutSnapshot()
+  function planV2DynamicLayout(layoutValue, slotsValue) {
+    if (!Util.isPlainObject(slotsValue) || !Util.isPlainObject(layoutValue)
+        || !["left", "center", "right"].every(region =>
+          Array.isArray(layoutValue[region]) && Array.isArray(slotsValue[region]))) return null
+    const nextLayout = JSON.parse(JSON.stringify(layoutValue))
     const dynamicById = Object.create(null)
     const desiredByRegion = ({ left: [], center: [], right: [] })
     let changed = false
@@ -759,7 +953,79 @@ Item {
         changed = true
       }
     }
-    if (!changed) return true
+    return nextLayout
+  }
+
+  function planNativeTransition(layoutValue, intentValue) {
+    const intent = intentValue || ({})
+    if (intent.kind === "v2-layout")
+      return planV2DynamicLayout(layoutValue, intent.slots)
+    if (intent.kind === "provider-snapshot") {
+      const snapshotLayout = intent.layout
+      const expectedCurrent = intent.expectedCurrentLayout
+      if (!Util.isPlainObject(layoutValue)
+          || !Util.isPlainObject(snapshotLayout)
+          || !Util.isPlainObject(expectedCurrent)
+          || !["left", "center", "right"].every(function(region) {
+            return Array.isArray(layoutValue[region])
+              && Array.isArray(snapshotLayout[region])
+              && Array.isArray(expectedCurrent[region])
+          })
+          || !providerSnapshotTransition.same(
+            layoutValue, expectedCurrent)) return null
+      return JSON.parse(JSON.stringify(snapshotLayout))
+    }
+    if (intent.kind !== "catalog-layout" || !Util.isPlainObject(layoutValue)
+        || !["left", "center", "right"].every(function(region) {
+          return Array.isArray(layoutValue[region])
+        })) return null
+    const id = String(intent.id || "")
+    const region = String(intent.region || "")
+    if (!LayoutModel.validPluginId(id)
+        || ["left", "center", "right"].indexOf(region) < 0
+        || typeof intent.installed !== "boolean"
+        || !Array.isArray(intent.removeIds)
+        || intent.removeIds.some(function(value) {
+          return !LayoutModel.validPluginId(value)
+        })) return null
+    const next = JSON.parse(JSON.stringify(layoutValue))
+    let retained = null
+    for (const part of ["left", "center", "right"]) {
+      next[part] = next[part].filter(function(entry) {
+        const entryValue = entryId(entry)
+        if (entryValue === id && retained === null) retained = entry
+        return intent.removeIds.indexOf(entryValue) < 0
+      })
+    }
+    if (intent.installed) {
+      const entry = retained && Util.isPlainObject(retained)
+        ? JSON.parse(JSON.stringify(retained)) : {id: id}
+      entry.id = id
+      entry.shibumiModule = true
+      next[region].push(entry)
+    } else if (intent.keepConfigured === true) {
+      next[region].push({id: id})
+    }
+    return next
+  }
+
+  function requestV2LayoutTransition(patch) {
+    if (!mutationAdmissionReady) return false
+    return layoutTransition.request(patch, {
+      kind: "v2-layout", slots: patch && patch.v2Layout
+    })
+  }
+
+  function syncV2DynamicLayout(slotsValue) {
+    if (!mutationAdmissionReady) return false
+    if (layoutTransitionsSupported)
+      return requestV2LayoutTransition({v2Layout: slotsValue})
+    // Legacy presentation fixtures without the settlement API. Scoped hosts
+    // never fall back to optimistic mutation through an incomplete State seam.
+    if (suiteHostShell.scoped) return false
+    const nextLayout = planV2DynamicLayout(currentLayoutSnapshot(), slotsValue)
+    if (!nextLayout) return false
+    if (JSON.stringify(nextLayout) === JSON.stringify(currentLayoutSnapshot())) return true
     if (!shell || typeof shell.mutateShellConfig !== "function") return false
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
@@ -781,25 +1047,119 @@ Item {
       ? true : layoutStateController.restoreV2Layout(snapshotValue)
   }
 
+  function providerUndoSnapshotForTransition(serialValue) {
+    const serial = Number(serialValue)
+    const receipt = lastProviderUndoReceipt
+    if (!receipt || receipt.serial !== serial) return null
+    lastProviderUndoReceipt = null
+    return JSON.parse(JSON.stringify(receipt.snapshot))
+  }
+
+  function observedLayoutSnapshot() {
+    const config = Util.isPlainObject(barConfig) ? barConfig : null
+    const layout = config && Util.isPlainObject(config.layout)
+      ? config.layout : null
+    if (!layout || !["left", "center", "right"].every(function(region) {
+      return Array.isArray(layout[region])
+    })) return null
+    return JSON.parse(JSON.stringify(layout))
+  }
+
   function providerLayoutSnapshot(groupValues) {
     const groups = normalizedProviderGroups(groupValues)
     const states = groups.length > 0 ? widgetGroupVariantStates(groups) : ({})
     if (groups.length > 0 && !states) return null
+    const layout = suiteHostShell.scoped
+      ? observedLayoutSnapshot() : currentLayoutSnapshot()
+    if (!layout) return null
+    const patch = catalogLayoutPatch(layout, states || ({}))
+    if (suiteHostShell.scoped && (!layoutTransitionsSupported || !patch))
+      return null
     return {
-      layout: currentLayoutSnapshot(),
+      layout: layout,
       groupStates: states || ({}),
-      v2Layout: currentV2LayoutSnapshot()
+      v2Layout: currentV2LayoutSnapshot(),
+      variant: layoutStateController.v2Mode ? "v2" : "v1",
+      transitionPatch: patch
     }
   }
 
-  function restoreProviderLayoutSnapshot(snapshotValue) {
+  function validScopedProviderSnapshot(snapshotValue) {
     if (!Util.isPlainObject(snapshotValue)
+        || !Util.isPlainObject(snapshotValue.groupStates)
+        || !Util.isPlainObject(snapshotValue.transitionPatch)
+        || !Util.isPlainObject(snapshotValue.expectedStatePatch)
+        || !Util.isPlainObject(snapshotValue.expectedLayout)) return false
+    const stateGroups = Object.keys(snapshotValue.groupStates)
+    const groups = normalizedProviderGroups(stateGroups)
+    if (groups.length === 0 || groups.length !== stateGroups.length)
+      return false
+    for (let index = 0; index < groups.length; index++) {
+      const states = snapshotValue.groupStates[groups[index]]
+      if (!Util.isPlainObject(states)
+          || typeof states.v1 !== "boolean"
+          || typeof states.v2 !== "boolean") return false
+    }
+    const variant = String(snapshotValue.variant || "")
+    if (["v1", "v2"].indexOf(variant) < 0) return false
+    const patch = snapshotValue.transitionPatch
+    const keys = Object.keys(patch).sort()
+    const expectedKeys = ["familyStates", variant + "Layout"].sort()
+    if (!providerSnapshotTransition.same(keys, expectedKeys)
+        || !providerSnapshotTransition.same(
+          patch.familyStates, snapshotValue.groupStates)
+        || !providerSnapshotTransition.same(
+          Object.keys(snapshotValue.expectedStatePatch).sort(), expectedKeys))
+      return false
+    return variant !== "v2" || providerSnapshotTransition.same(
+      patch.v2Layout, snapshotValue.v2Layout)
+  }
+
+  function legacyFamilyMutationAllowed() {
+    // These multi-step provider/catalog flows still need native-authoritative
+    // sequencing. Never run their synchronous chain with queued State setters.
+    return mutationAdmissionReady && legacyLayoutMutationAllowed
+      && !layoutTransitionsSupported && !layoutTransitionBusy
+  }
+
+  function restoreProviderLayoutSnapshot(snapshotValue) {
+    if (!mutationAdmissionReady || !Util.isPlainObject(snapshotValue)
         || !Util.isPlainObject(snapshotValue.layout)
         || !Util.isPlainObject(snapshotValue.groupStates)) return false
     const layout = snapshotValue.layout
     for (const region of ["left", "center", "right"]) {
       if (!Array.isArray(layout[region])) return false
     }
+    if (suiteHostShell.scoped) {
+      if (!layoutTransitionsSupported || layoutTransitionBusy
+          || providerSnapshotTransitionBusy || stateTransitionBusy
+          || !validScopedProviderSnapshot(snapshotValue)
+          || !providerSnapshotTransition.same(
+            observedLayoutSnapshot(), snapshotValue.expectedLayout)) return false
+      let expectedState = null
+      let observedState = null
+      try {
+        expectedState = layoutStateController.stateService
+          .normalizedLayoutFamilyPatch(snapshotValue.expectedStatePatch)
+        observedState = layoutStateController.stateService
+          .layoutFamilySnapshot(snapshotValue.expectedStatePatch)
+      } catch (error) {
+        return false
+      }
+      if (!expectedState || !observedState
+          || !providerSnapshotTransition.same(
+            observedState, expectedState)) return false
+      const patch = JSON.parse(JSON.stringify(snapshotValue.transitionPatch))
+      const intent = {
+        kind: "provider-snapshot",
+        layout: JSON.parse(JSON.stringify(layout)),
+        expectedCurrentLayout: JSON.parse(JSON.stringify(
+          snapshotValue.expectedLayout)),
+        patch: patch
+      }
+      return providerSnapshotTransition.request(patch, intent)
+    }
+    if (!legacyFamilyMutationAllowed()) return false
     const previousV2Layout = currentV2LayoutSnapshot()
     if (!restoreV2LayoutSnapshot(snapshotValue.v2Layout)) return false
     if (!applyProviderLayoutTransaction(
@@ -856,6 +1216,7 @@ Item {
   }
 
   function setWidgetGroupVariantStates(stateValues) {
+    if (!mutationAdmissionReady || layoutTransitionBusy) return false
     if (!Util.isPlainObject(stateValues)) return false
     const sourceGroups = Object.keys(stateValues)
     const groups = normalizedProviderGroups(sourceGroups)
@@ -869,11 +1230,13 @@ Item {
     }
     const stateService = shell && typeof shell.serviceFor === "function"
       ? shell.serviceFor("hancore.shibumi.state") : null
-    if (!stateService) return false
+    if (!stateService || ("ready" in stateService && !stateService.ready)) return false
     let called = false
     if (typeof stateService.setGroupVariantStates === "function") {
       called = true
-      stateService.setGroupVariantStates(stateValues)
+      // Request acceptance, not synchronous persistence. Published config and
+      // persistenceSettled carry completion; never roll back from an old read.
+      if (stateService.setGroupVariantStates(stateValues)) return true
     } else if (typeof stateService.setGroupEnabledForVariant === "function") {
       called = true
       for (let index = 0; index < groups.length; index++) {
@@ -912,7 +1275,29 @@ Item {
     return setWidgetGroupVariantStates(states)
   }
 
+  function requestWidgetGroupStateTransition(groupId, variantValue, enabled) {
+    if (!mutationAdmissionReady) return false
+    const group = String(groupId || "")
+    const variant = String(variantValue || "").toLowerCase()
+    if (!layoutTransitionsSupported
+        || layoutTransitionBusy || providerSnapshotTransitionBusy
+        || stateTransitionBusy || GroupRegistry.GroupIds.indexOf(group) < 0
+        || ["v1", "v2"].indexOf(variant) < 0
+        || typeof enabled !== "boolean") return false
+    const states = widgetGroupVariantStates([group])
+    const stateService = layoutStateController.stateService
+    if (!states || !stateService || stateService.ready !== true
+        || stateService.writePending !== false
+        || !Number.isInteger(stateService.writeSerial)
+        || states[group][variant] === enabled) return false
+    states[group][variant] = enabled
+    return stateTransition.request({familyStates: states}, {
+      kind: "state-only", group: group, variant: variant, enabled: enabled
+    })
+  }
+
   function reconcileWidgetFamilyProviders() {
+    if (!legacyFamilyMutationAllowed()) return false
     const currentLayout = currentLayoutSnapshot()
     const removedProviderIds = conflictingProviderIdsInLayout(currentLayout)
     const nextLayout = layoutWithoutProviderIds(
@@ -941,19 +1326,160 @@ Item {
     return groups.length === 0 || setWidgetGroupVariantStates(stateValues)
   }
 
-  function setBarWidgetInstalled(widgetId, installed, region) {
+  function catalogLayoutPatch(nextLayout, stateValues) {
+    if (!Util.isPlainObject(nextLayout)) return null
+    const specs = activePluginSpecsForLayout(nextLayout)
+    const patch = ({})
+    if (layoutStateController.v2Mode) {
+      const planned = V2LayoutModel.reconcilePluginGroups(
+        layoutStateController.v2Slots, specs, true)
+      if (!planned || planned.unplaced.length > 0) return null
+      patch.v2Layout = planned.layout
+    } else {
+      const order = layoutStateController.currentV1Order()
+      const splits = layoutStateController.currentV1Splits(order)
+      const bindings = WidgetFamilies.v1SlotBindings(specs, order,
+        pluginRegistry, catalogObservation, suiteHostShell.scoped)
+      const providers = Object.values(bindings)
+      const planned = LayoutModel.reconcilePluginGroups(order, splits,
+        specs.filter(function(spec) {
+          return spec && providers.indexOf(spec.pluginId) < 0
+        }))
+      if (!planned || planned.unplaced.length > 0) return null
+      patch.v1Layout = {order: planned.order, splits: planned.splits}
+    }
+    if (stateValues && Object.keys(stateValues).length > 0)
+      patch.familyStates = JSON.parse(JSON.stringify(stateValues))
+    return patch
+  }
+
+  function catalogTransitionIntent(widgetId, installed, region) {
     const id = String(widgetId || "")
+    if (suiteHostShell.scoped) {
+      const snapshot = catalogObservation ? catalogObservation.snapshot : null
+      const row = snapshot && snapshot.byId
+        && Object.prototype.hasOwnProperty.call(snapshot.byId, id)
+        ? snapshot.byId[id] : null
+      if (!row || row.id !== id || !Array.isArray(row.kinds)
+          || row.kinds.indexOf("bar-widget") < 0) return null
+    }
+    const targetRegion = WidgetFamilies.targetRegion(id, region,
+      pluginRegistry, catalogObservation, suiteHostShell.scoped)
+    const removeIds = installed === true
+      ? conflictingLayoutProviderIds(id) : [id]
+    const affectedGroups = widgetFamilyGroups(id)
+    for (const removedId of removeIds) {
+      for (const group of widgetFamilyGroups(removedId))
+        if (affectedGroups.indexOf(group) < 0) affectedGroups.push(group)
+    }
+    const current = currentLayoutSnapshot()
+    const intent = {kind: "catalog-layout", id: id,
+      installed: installed === true, region: targetRegion,
+      removeIds: removeIds, keepConfigured: installed !== true
+        && isV1AdditionalSuiteWidget(id),
+      providerGroups: affectedGroups.slice()}
+    const next = planNativeTransition(current, intent)
+    if (!next) return null
+    const owned = providerFamilyGroupsInLayout(next)
+    const states = ({})
+    for (const group of affectedGroups)
+      states[group] = {v1: owned.indexOf(group) < 0,
+        v2: owned.indexOf(group) < 0}
+    const patch = catalogLayoutPatch(next, states)
+    return patch ? {patch: patch, intent: intent} : null
+  }
+
+  function validateNativeTransition(layoutValue, intentValue, patchValue) {
+    if (intentValue && intentValue.kind === "provider-snapshot")
+      return Util.isPlainObject(intentValue.patch)
+        && providerSnapshotTransition.same(intentValue.patch, patchValue)
+        && providerSnapshotTransition.same(
+          planNativeTransition(layoutValue, intentValue), intentValue.layout)
+    if (!intentValue || intentValue.kind !== "catalog-layout") return true
+    const planned = planNativeTransition(layoutValue, intentValue)
+    const expected = planned ? catalogLayoutPatch(planned,
+      patchValue && patchValue.familyStates) : null
+    return !!expected && layoutTransition.same(expected, patchValue)
+  }
+
+  function canSetBarWidgetInstalled(widgetId, installed) {
+    if (!mutationAdmissionReady) return false
+    const id = String(widgetId || "")
+    if (!suiteHostShell.scoped || !layoutTransitionsSupported
+        || layoutTransitionBusy || providerSnapshotTransitionBusy
+        || stateTransitionBusy || !catalogObservation
+        || !LayoutModel.validPluginId(id)) return false
+    if (installed !== true) return layoutContains(id)
+    const snapshot = catalogObservation.snapshot
+    const row = snapshot && snapshot.byId
+      && Object.prototype.hasOwnProperty.call(snapshot.byId, id)
+      ? snapshot.byId[id] : null
+    return !!(row && row.id === id && row.enabled === false
+      && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
+  }
+
+  function requestCatalogLayoutTransition(widgetId, installed, region,
+      observationValue) {
+    const id = String(widgetId || "")
+    if (!canSetBarWidgetInstalled(id, installed)
+        || observationValue !== catalogObservation) return false
+    const request = catalogTransitionIntent(id, installed, region)
+    if (!request) return false
+    const groups = Array.isArray(request.intent.providerGroups)
+      ? request.intent.providerGroups : []
+    lastCatalogTransitionSnapshot = groups.length > 0
+      ? providerLayoutSnapshot(groups) : null
+    const accepted = layoutTransition.request(request.patch, request.intent)
+    if (!accepted) lastCatalogTransitionSnapshot = null
+    return accepted
+  }
+
+  function setBarWidgetInstalled(widgetId, installed, region,
+      observationValue) {
+    if (!mutationAdmissionReady) return false
+    if (suiteHostShell.scoped)
+      return requestCatalogLayoutTransition(
+        widgetId, installed, region, observationValue)
+    if (!legacyFamilyMutationAllowed()) return false
+    const requestedId = String(widgetId || "")
+    const selection = installed === true
+      ? hostWidgetResolverService.selectionFor(requestedId) : null
+    if (installed === true && !hasBarWidgetEntryPoint(requestedId, selection))
+      return false
+    const id = selection ? selection.id : requestedId
+    const effectiveSelection = selection
+      ? hostWidgetResolverService.selectionFor(id) : null
+    if (selection && (!effectiveSelection || effectiveSelection.id !== id
+        || effectiveSelection.manifest !== selection.manifest)) return false
+    // A host-selected clone retains its own activation identity. Enabling the
+    // original would tell Omarchy to restore the source and remove the clone.
+    if (id !== requestedId && JSON.stringify(widgetFamilyGroups(id).sort())
+        !== JSON.stringify(widgetFamilyGroups(requestedId).sort())) return false
     const targetRegion = WidgetFamilies.targetRegion(
-      id, region, pluginRegistry)
+      id, region, pluginRegistry, catalogObservation, suiteHostShell.scoped)
     const familyGroups = widgetFamilyGroups(id)
     if (!id || !shell || typeof shell.mutateShellConfig !== "function")
       return false
-    if (installed === true && !hasBarWidgetEntryPoint(id))
+    // V1's fixed family slot has one provider identity, not instance keys.
+    // Refuse an ambiguous multi-instance replacement before changing layout,
+    // registry enablement or either generation's family state. Existing
+    // layouts and unrelated allowMultiple entries keep their old semantics.
+    if (installed === true && !layoutStateController.v2Mode
+        && familyGroups.length > 0 && widgetAllowsMultiple(id, selection))
       return false
 
     const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
+    const existingEntries = ["left", "center", "right"].reduce(
+      (entries, part) => entries.concat(previousLayout[part].filter(
+        entry => entryId(entry) === id)), [])
+    if (installed === true && !widgetAllowsMultiple(id, selection)
+        && existingEntries.length > 1) return false
     const previousV2Layout = currentV2LayoutSnapshot()
+    const previousV1Order = !layoutStateController.v2Mode
+      ? layoutStateController.currentV1Order() : null
+    const previousV1Splits = previousV1Order
+      ? layoutStateController.currentV1Splits(previousV1Order) : null
     const replacedProviderIds = installed === true
       ? conflictingLayoutProviderIds(id) : [id]
     const displacedGroups = []
@@ -968,9 +1494,12 @@ Item {
     }
     const nextLayout = layoutWithoutProviderIds(
       previousLayout, replacedProviderIds)
-    if (installed === true)
-      nextLayout[targetRegion].push({ id: id, shibumiModule: true })
-    else if (isV1AdditionalSuiteWidget(id))
+    if (installed === true) {
+      const entry = existingEntries.length === 1 && Util.isPlainObject(existingEntries[0])
+        ? JSON.parse(JSON.stringify(existingEntries[0])) : { id: id }
+      entry.shibumiModule = true
+      nextLayout[targetRegion].push(entry)
+    } else if (isV1AdditionalSuiteWidget(id))
       nextLayout[targetRegion].push({ id: id })
     const nextOwnedGroups = providerFamilyGroupsInLayout(nextLayout)
     const stateValues = ({})
@@ -991,41 +1520,34 @@ Item {
       && (typeof stateService.setGroupVariantStates === "function"
         || typeof stateService.setGroupEnabledForVariant === "function"
         || typeof stateService.setGroupSetting === "function")
+    if (stateGroups.length > 0 && !canSetFamilyState) return false
     const previousFamilyStates = stateGroups.length > 0
       ? widgetGroupVariantStates(stateGroups) : null
     const registryWasEnabled = pluginRegistry
       && typeof pluginRegistry.isEnabled === "function"
       ? pluginRegistry.isEnabled(id) : null
+    if (installed === true && registryWasEnabled !== true
+        && (!pluginRegistry || typeof pluginRegistry.setEnabled !== "function"))
+      return false
     const desiredSpecs = activePluginSpecs(replacedProviderIds,
       installed === true ? { id: id, region: targetRegion } : null)
     if (!reconcileActivePluginGroups(
           desiredSpecs, false, layoutStateController.v2Mode))
       return false
 
-    if (installed === true && pluginRegistry
-        && typeof pluginRegistry.setEnabled === "function")
-      pluginRegistry.setEnabled(id, true)
+    if (installed === true && registryWasEnabled !== true
+        && pluginRegistry.setEnabled(id, true) !== true) {
+      const restoredGroups = previousV1Order
+        ? layoutStateController.restoreV1Layout(previousV1Order, previousV1Splits)
+        : reconcileActivePluginGroups(previousSpecs, false)
+      const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
+      if (!restoredGroups || !restoredV2)
+        console.warn("provider enable rollback was incomplete")
+      return false
+    }
     shell.mutateShellConfig(function(config) {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(nextLayout))
-      // Test/minimal hosts may not expose the state-service mutation facade.
-      // The live shell always uses that facade because it is authoritative and
-      // prevents a stale config binding from restoring displaced providers.
-      if (stateGroups.length > 0 && !canSetFamilyState) {
-        if (!Util.isPlainObject(config.bar.shibumi))
-          config.bar.shibumi = {}
-        if (!Util.isPlainObject(config.bar.shibumi.widgets))
-          config.bar.shibumi.widgets = {}
-        for (let index = 0; index < stateGroups.length; index++) {
-          const group = stateGroups[index]
-          const currentGroup = Util.isPlainObject(
-            config.bar.shibumi.widgets[group])
-            ? config.bar.shibumi.widgets[group] : {}
-          currentGroup.enabledV1 = stateValues[group].v1
-          currentGroup.enabledV2 = stateValues[group].v2
-          config.bar.shibumi.widgets[group] = currentGroup
-        }
-      }
     })
     // Persist the provider choice last. mutateShellConfig may publish its
     // snapshot asynchronously, so writing this state before the layout would
@@ -1036,8 +1558,10 @@ Item {
         if (!Util.isPlainObject(config.bar)) config.bar = {}
         config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
       })
-      const restoredGroups = reconcileActivePluginGroups(
-        previousSpecs, false)
+      const restoredGroups = previousV1Order
+        ? layoutStateController.restoreV1Layout(
+            previousV1Order, previousV1Splits)
+        : reconcileActivePluginGroups(previousSpecs, false)
       const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
       if (registryWasEnabled === false && pluginRegistry
           && typeof pluginRegistry.setEnabled === "function")
@@ -1053,10 +1577,15 @@ Item {
 
   function applyProviderLayoutTransaction(nextLayout, desiredSpecs,
       stateValues) {
+    if (!legacyFamilyMutationAllowed()) return false
     if (!shell || typeof shell.mutateShellConfig !== "function") return false
     const previousSpecs = activePluginSpecs()
     const previousLayout = currentLayoutSnapshot()
     const previousV2Layout = currentV2LayoutSnapshot()
+    const previousV1Order = !layoutStateController.v2Mode
+      ? layoutStateController.currentV1Order() : null
+    const previousV1Splits = previousV1Order
+      ? layoutStateController.currentV1Splits(previousV1Order) : null
     const groups = Util.isPlainObject(stateValues)
       ? Object.keys(stateValues) : []
     const previousStates = groups.length > 0
@@ -1073,8 +1602,10 @@ Item {
       if (!Util.isPlainObject(config.bar)) config.bar = {}
       config.bar.layout = JSON.parse(JSON.stringify(previousLayout))
     })
-    const restoredGroups = reconcileActivePluginGroups(
-      previousSpecs, false)
+    const restoredGroups = previousV1Order
+      ? layoutStateController.restoreV1Layout(
+          previousV1Order, previousV1Splits)
+      : reconcileActivePluginGroups(previousSpecs, false)
     const restoredV2 = restoreV2LayoutSnapshot(previousV2Layout)
     const restoredStates = !previousStates
       || setWidgetGroupVariantStates(previousStates)
@@ -1088,7 +1619,8 @@ Item {
     const result = []
     for (let index = 0; index < groups.length; index++) {
       const family = WidgetFamilies.familyForGroup(
-        groups[index], pluginRegistry)
+        groups[index], pluginRegistry, catalogObservation,
+        suiteHostShell.scoped)
       if (!family) continue
       for (let alternativeIndex = 0;
            alternativeIndex < family.alternatives.length;
@@ -1114,7 +1646,56 @@ Item {
   }
 
   function restoreWidgetFamilyProviderStates(stateValues) {
-    if (!Util.isPlainObject(stateValues)) return false
+    if (!mutationAdmissionReady || !Util.isPlainObject(stateValues)) return false
+    if (suiteHostShell.scoped) {
+      if (!layoutTransitionsSupported || layoutTransitionBusy
+          || providerSnapshotTransitionBusy || stateTransitionBusy
+          || !catalogObservation) return false
+      const sourceGroups = Object.keys(stateValues)
+      const groups = normalizedProviderGroups(sourceGroups)
+      if (groups.length === 0 || groups.length !== sourceGroups.length)
+        return false
+      for (let index = 0; index < groups.length; index++) {
+        const states = stateValues[groups[index]]
+        if (!Util.isPlainObject(states)
+            || typeof states.v1 !== "boolean"
+            || typeof states.v2 !== "boolean") return false
+      }
+      const alternatives = widgetFamilyAlternativeIds(groups).filter(function(id) {
+        return layoutContains(id)
+      })
+      if (alternatives.length === 0) return false
+      const affectedGroups = groups.slice()
+      for (let index = 0; index < alternatives.length; index++) {
+        const alternativeGroups = widgetFamilyGroups(alternatives[index])
+        for (let groupIndex = 0; groupIndex < alternativeGroups.length;
+             groupIndex++) {
+          if (affectedGroups.indexOf(alternativeGroups[groupIndex]) < 0)
+            affectedGroups.push(alternativeGroups[groupIndex])
+        }
+      }
+      const intent = {kind: "catalog-layout", id: alternatives[0],
+        installed: false, region: "right", removeIds: alternatives,
+        keepConfigured: false, providerGroups: affectedGroups.slice()}
+      const next = planNativeTransition(currentLayoutSnapshot(), intent)
+      if (!next) return false
+      const ownedGroups = providerFamilyGroupsInLayout(next)
+      const effectiveStates = JSON.parse(JSON.stringify(stateValues))
+      for (let index = 0; index < affectedGroups.length; index++) {
+        const group = affectedGroups[index]
+        if (ownedGroups.indexOf(group) < 0
+            && !Object.prototype.hasOwnProperty.call(effectiveStates, group))
+          effectiveStates[group] = {v1: true, v2: true}
+      }
+      const patch = catalogLayoutPatch(next, effectiveStates)
+      const snapshot = patch ? providerLayoutSnapshot(affectedGroups) : null
+      if (!patch || !snapshot) return false
+      lastCatalogTransitionSnapshot = snapshot
+      const accepted = layoutTransition.request(patch, intent)
+      if (!accepted) lastCatalogTransitionSnapshot = null
+      return accepted
+    }
+    if (!legacyFamilyMutationAllowed()) return false
     const groups = normalizedProviderGroups(Object.keys(stateValues))
     if (groups.length === 0
         || groups.length !== Object.keys(stateValues).length) return false
@@ -1146,7 +1727,14 @@ Item {
     return restoreWidgetFamilyProviderStates(states)
   }
 
+  function canRemoveBarWidget(widgetId) {
+    const id = String(widgetId || "")
+    return id !== "" && (layoutStateController.v2Mode
+      || layoutStateController.canRemoveV1PluginGroup(id))
+  }
+
   function removeBarWidgetAndRestoreFamilies(widgetId, groupValues) {
+    if (!legacyFamilyMutationAllowed()) return false
     const id = String(widgetId || "")
     if (id === "") return false
     const groups = normalizedProviderGroups(groupValues)
@@ -1164,7 +1752,9 @@ Item {
   }
 
   function removeWidgetFamilyAlternatives(groupId) {
-    const family = WidgetFamilies.familyForGroup(groupId, pluginRegistry)
+    if (!mutationAdmissionReady) return false
+    const family = WidgetFamilies.familyForGroup(
+      groupId, pluginRegistry, catalogObservation, suiteHostShell.scoped)
     if (!family || !shell || typeof shell.mutateShellConfig !== "function")
       return false
     let changed = false
@@ -1187,7 +1777,8 @@ Item {
   }
 
   function widgetReplacementLabel(widgetId) {
-    return WidgetFamilies.replacementLabel(widgetId, pluginRegistry)
+    return WidgetFamilies.replacementLabel(
+      widgetId, pluginRegistry, catalogObservation, suiteHostShell.scoped)
   }
 
   function widgetReplacementGroups(widgetId) {
@@ -1202,7 +1793,8 @@ Item {
   function widgetReplacementTarget(widgetId) {
     return WidgetFamilies.joinedLabels(
       WidgetFamilies.replacementTargets(
-        String(widgetId || ""), pluginRegistry))
+        String(widgetId || ""), pluginRegistry, catalogObservation,
+        suiteHostShell.scoped))
   }
 
   function entryId(entry) {
@@ -1493,6 +2085,7 @@ Item {
   }
 
   function setLayoutEditing(enabled, screenName) {
+    if (!mutationAdmissionReady) return false
     const requested = String(screenName || "") || focusedOutputName()
     let changed = false
     for (let index = 0; index < layoutSessions.length; index++) {
@@ -1604,29 +2197,34 @@ Item {
   }
 
   function scheduleOpenControlCenterRestores(page, needsReplacement,
-      preferredOwner, preferredScreenName) {
+      preferredOwner, preferredScreenName, includeExisting) {
     const id = "hancore.shibumi.control-center"
     const owners = panelWidgets(id).filter(function(owner) {
       return owner && owner.opened === true
     })
-    if (preferredOwner && preferredOwner.opened === true
-        && owners.indexOf(preferredOwner) < 0) owners.push(preferredOwner)
+    if (preferredOwner && preferredOwner.opened === true) {
+      const index = owners.indexOf(preferredOwner)
+      if (index >= 0) owners.splice(index, 1)
+      owners.unshift(preferredOwner)
+    }
     const created = []
+    const outputs = Object.create(null)
     for (let index = 0; index < owners.length; index++) {
       const owner = owners[index]
       const preferred = owner === preferredOwner
         ? String(preferredScreenName || "") : ""
       const screenName = restoreScreenName(owner, preferred)
-      const alreadyPending = widgetRestorePendingForOutput(
-        id, owner, screenName)
+      // Outgoing and replacement owners can overlap on one output. Enroll
+      // that output once, preferring its explicit invoking owner.
+      if (Object.prototype.hasOwnProperty.call(outputs, screenName)) continue
+      outputs[screenName] = true
       const requestedPage = owner.panelLoaded === true && owner.panelItem
         ? String(owner.panelItem.settingsPage || page || "")
         : String(page || "")
-      scheduleWidgetRestore(id, requestedPage, needsReplacement,
-        owner, screenName)
-      if (!alreadyPending) created.push({
-        id: id, owner: owner, screenName: screenName
-      })
+      const capture = []
+      if (!scheduleWidgetRestore(id, requestedPage, needsReplacement,
+          owner, screenName, capture)) continue
+      if (capture[0].created || includeExisting === true) created.push(capture[0])
     }
     return created
   }
@@ -1637,10 +2235,154 @@ Item {
     for (let index = 0; index < values.length; index++) {
       const record = values[index]
       if (!record) continue
-      changed = cancelWidgetRestore(
-        record.id, record.owner, record.screenName) || changed
+      const current = widgetRestoreIndex(record.id, record.owner, record.screenName)
+      if (current < 0 || (record.restoreId !== undefined
+          && pendingWidgetRestores[current].restoreId !== record.restoreId)) continue
+      const live = pendingWidgetRestores[current]
+      // Undo only our provisional update, never newer navigation, settlement,
+      // cancellation/recreation or a timer turn entered by the callback.
+      if (record.scheduled && live.restoreRevision !== record.restoreRevision) continue
+      if (record.created === false) {
+        if (!record.previous) continue
+        const next = pendingWidgetRestores.slice()
+        const navigationChanged = record.scheduled
+          && live.navigationRevision !== record.scheduled.navigationRevision
+        next[current] = Object.assign({}, record.previous, navigationChanged
+          ? {page: live.page, navigationRevision: live.navigationRevision} : {})
+        pendingWidgetRestores = next
+        changed = true
+      } else changed = removeWidgetRestoreAt(current) || changed
     }
     return changed
+  }
+
+  // Keep restoration in the persistent Bar, not in a panel which a published
+  // style change can destroy. Queue acceptance is not persistence completion.
+  function runWithControlCenterRestore(callback, page, needsReplacement,
+      preferredOwner, preferredScreenName) {
+    if (!mutationAdmissionReady
+        || typeof callback !== "function" || !restoreAdmitted) return false
+    const writer = restoreStateService
+    const serial = writer && "writeSerial" in writer ? writer.writeSerial : -1
+    const revision = writer && "revision" in writer ? writer.revision : -1
+    const layoutSerial = layoutTransitionSerial
+    const snapshotSerial = providerSnapshotTransitionSerial
+    const records = scheduleOpenControlCenterRestores(page, needsReplacement,
+      preferredOwner, preferredScreenName, true)
+    if (!restoreAdmitted) { cancelCreatedWidgetRestores(records); return false }
+    const call = {writer: writer, serial: serial, settlements: []}
+    activeRestoreCalls.push(call)
+    let accepted = false
+    try { accepted = callback() === true }
+    catch (error) { cancelCreatedWidgetRestores(records); throw error }
+    finally { activeRestoreCalls = activeRestoreCalls.filter(item => item !== call) }
+    if (!accepted) { cancelCreatedWidgetRestores(records); return false }
+    if (!restoreAdmitted || (serial >= 0
+        && (!writer || writer !== restoreStateService || !writer.ready))) {
+      cancelCreatedWidgetRestores(records)
+      return false
+    }
+    const stateQueued = serial >= 0 && writer.writeSerial > serial
+    if (stateQueued && !writer.writePending
+        && !call.settlements.some(item => item.serial >= writer.writeSerial)) {
+      cancelCreatedWidgetRestores(records)
+      return false
+    }
+    const hold = layoutTransitionBusy && layoutTransition.operation.id > layoutSerial
+      ? layoutTransition.operation.id
+      : providerSnapshotTransitionBusy
+          && providerSnapshotTransition.operation.id > snapshotSerial
+        ? -providerSnapshotTransition.operation.id : 0
+    if (stateQueued || hold) {
+      const next = pendingWidgetRestores.slice()
+      for (let i = 0; i < records.length; i++) {
+        const ref = records[i]
+        const index = next.findIndex(function(record) { return record.restoreId === ref.restoreId })
+        if (index < 0) continue // User cancellation is newer than the request.
+        const record = next[index]
+        next[index] = Object.assign({}, record, {
+          restoreRevision: Number(record.restoreRevision || 0) + 1,
+          stateBound: true, writeOwner: writer,
+          waitingLayout: hold || record.waitingLayout || 0,
+          waitingWrites: (record.waitingWrites || []).concat(stateQueued
+            ? [{serial: writer.writeSerial, revision: revision}] : []),
+          restoreConfirmed: ref.created ? false : record.restoreConfirmed !== false
+        })
+      }
+      pendingWidgetRestores = next
+      for (const event of call.settlements) {
+        if (!restoreAdmitted || writer !== restoreStateService || !writer.ready) break
+        settleStateRestores(event.serial, event.result, event.revision)
+      }
+    }
+    return true
+  }
+
+  function settleLayoutRestores(serial, result) {
+    if (!restoreAdmitted) { revokeStateRestores(); return }
+    const next = []
+    for (const record of pendingWidgetRestores) {
+      if (record.waitingLayout !== serial) { next.push(record); continue }
+      const confirmed = record.restoreConfirmed || result === "confirmed"
+      if (!confirmed && !(record.waitingWrites || []).length) continue
+      next.push(Object.assign({}, record, {waitingLayout: 0, restoreConfirmed: confirmed,
+        restoreRevision: Number(record.restoreRevision || 0) + 1, attempts: 0}))
+    }
+    pendingWidgetRestores = next
+    if (!next.length) widgetRestoreTimer.stop()
+  }
+
+  function observeStateSettlement(throughSerial, result) {
+    const writer = restoreStateService
+    for (const call of activeRestoreCalls) {
+      if (call.writer === writer && throughSerial > call.serial)
+        call.settlements.push({serial: throughSerial, result: result,
+          revision: writer ? writer.revision : -1})
+    }
+    settleStateRestores(throughSerial, result)
+  }
+
+  function revokeStateRestores() {
+    const writer = restoreStateService
+    pendingWidgetRestores = pendingWidgetRestores.filter(function(record) {
+      return root.restoreAdmitted && (!record.stateBound
+        || (record.writeOwner === writer && writer && writer.ready))
+    })
+    if (!pendingWidgetRestores.length && widgetRestoreTimer) widgetRestoreTimer.stop()
+  }
+
+  function settleStateRestores(throughSerial, result, observedRevision) {
+    const writer = restoreStateService
+    if (!restoreAdmitted || !writer || !writer.ready) { revokeStateRestores(); return }
+    const revision = observedRevision === undefined ? writer.revision : observedRevision
+    const next = []
+    for (const record of pendingWidgetRestores) {
+      if (record.writeOwner !== writer || !record.waitingWrites || !record.waitingWrites.length) {
+        next.push(record)
+        continue
+      }
+      const completed = record.waitingWrites.filter(function(request) { return request.serial <= throughSerial })
+      if (!completed.length) { next.push(record); continue }
+      const changed = result === "confirmed" || (result === "unchanged"
+        && completed.some(function(request) { return request.revision !== revision }))
+      const waiting = record.waitingWrites.filter(function(request) { return request.serial > throughSerial })
+      // A later refusal cannot undo an earlier applied write's restore. A pure
+      // no-op or failed first write must not reopen a panel at all.
+      const confirmed = record.restoreConfirmed || changed
+      if (!confirmed && !waiting.length && !record.waitingLayout) continue
+      next.push(Object.assign({}, record, {waitingWrites: waiting,
+        restoreRevision: Number(record.restoreRevision || 0) + 1,
+        restoreConfirmed: confirmed, attempts: 0}))
+    }
+    pendingWidgetRestores = next
+    if (!next.length) widgetRestoreTimer.stop()
+  }
+
+  Connections {
+    target: root.restoreStateService
+    ignoreUnknownSignals: true
+    function onPersistenceSettled(throughSerial, result) { root.observeStateSettlement(throughSerial, result) }
+    function onReadyChanged() { root.revokeStateRestores() }
   }
 
   function openConfigPanel() {
@@ -1683,27 +2425,32 @@ Item {
   }
 
   function scheduleWidgetRestore(pluginId, page, needsReplacement,
-      ownerValue, screenName) {
+      ownerValue, screenName, capture) {
     const id = String(pluginId || "")
-    if (id === "") return false
+    if (id === "" || !restoreAdmitted) return false
     const owner = ownerValue || findPanelWidget(id, screenName)
     const outputName = restoreScreenName(owner, screenName)
     const index = widgetRestoreIndex(id, owner, outputName)
     const next = pendingWidgetRestores.slice()
     if (index >= 0) {
       const current = next[index]
-      next[index] = {
+      next[index] = Object.assign({}, current, {
         id: id,
         page: String(page || current.page || ""),
-        attempts: Number(current.attempts || 0),
+        attempts: 0,
+        restoreRevision: Number(current.restoreRevision || 0) + 1,
         owner: current.owner || owner,
         activeOwner: current.activeOwner || null,
         needsReplacement: current.needsReplacement === true
           || needsReplacement === true,
         screenName: outputName
-      }
+      })
     } else {
       next.push({
+        restoreId: ++nextWidgetRestoreId,
+        restoreRevision: 0,
+        navigationRevision: 0,
+        restoreConfirmed: true,
         id: id,
         page: String(page || ""),
         attempts: 0,
@@ -1713,7 +2460,13 @@ Item {
         screenName: outputName
       })
     }
+    const scheduled = next[index >= 0 ? index : next.length - 1]
+    if (Array.isArray(capture)) capture.push({id: id, owner: owner, screenName: outputName,
+      restoreId: scheduled.restoreId, restoreRevision: scheduled.restoreRevision,
+      created: index < 0, scheduled: scheduled,
+      previous: index >= 0 ? Object.assign({}, pendingWidgetRestores[index]) : null})
     pendingWidgetRestores = next
+    if (!restoreAdmitted || !pendingWidgetRestores.some(record => record.restoreId === scheduled.restoreId)) return false
     if (!widgetRestoreTimer.running) widgetRestoreTimer.start()
     return true
   }
@@ -1738,8 +2491,8 @@ Item {
     // Navigation issued while the layout is rebuilding is newer than the
     // page captured at mutation time. Preserve that intent even when the
     // click still lands on the outgoing owner.
-    record.page = requestedPage
-    next[index] = record
+    next[index] = Object.assign({}, record, {page: requestedPage,
+      navigationRevision: Number(record.navigationRevision || 0) + 1})
     pendingWidgetRestores = next
     return true
   }
@@ -1800,15 +2553,22 @@ Item {
     repeat: true
 
     onTriggered: {
-      const next = []
+      if (!root.restoreAdmitted) { root.revokeStateRestores(); return }
       const records = root.pendingWidgetRestores.slice()
       for (let index = 0; index < records.length; index++) {
         const record = records[index]
+        if (root.pendingWidgetRestores.indexOf(record) < 0) continue
+        // Do not spend the 1.6s rebuild window or reopen an old owner while
+        // native persistence is pending (its deadline is longer than 1.6s).
+        if (record.waitingLayout) continue
+        if (record.waitingWrites && record.waitingWrites.length) continue
+        record.restoreRevision = Number(record.restoreRevision || 0) + 1
         record.attempts = Number(record.attempts || 0) + 1
         // Never let a missing replacement owner fall back to another output.
         const widget = root.findPanelWidgetOnScreen(
           record.id, record.screenName)
         const satisfied = root.widgetRestoreSatisfied(record, widget)
+        if (!root.restoreAdmitted || root.pendingWidgetRestores.indexOf(record) < 0) continue
         if (!satisfied && record.id
             === "hancore.shibumi.control-center"
             && String(record.page || "") !== "") {
@@ -1820,10 +2580,12 @@ Item {
         // Filesystem-backed config publication and the layout delegate rebuild
         // can replace the panel owner more than once. Keep each output-local
         // handoff alive for its full 1.6 s window.
-        if (record.attempts < 20) next.push(record)
+        const current = root.pendingWidgetRestores.indexOf(record)
+        if (current >= 0 && record.attempts >= 20) root.removeWidgetRestoreAt(current)
       }
-      root.pendingWidgetRestores = next
-      if (next.length === 0) stop()
+      // openPage()/open() can synchronously cancel or schedule another restore.
+      // Never replace that newer intent with the timer's old snapshot.
+      if (root.pendingWidgetRestores.length === 0) stop()
     }
   }
 
@@ -1904,22 +2666,71 @@ Item {
     return geometry
   }
 
-  onBarConfigChanged: {
-    applyBarConfig()
+  function prepareForShutdown() {
+    if (shutdownPrepared) return true
+    shutdownPrepared = true
+    startupAdmissionTimer.stop()
+    hostReadyDelay.stop()
+    v1PluginReconcileTimer.stop()
+    tooltipDelay.stop()
+    barHiddenProbe.running = false
+    hideTooltip(null)
+    hostReady = false
+    outputWindowsEnabled = false
+    releaseCatalogConsumer()
+    return true
   }
-  onLayoutConfigChanged: v1PluginReconcileTimer.restart()
-  onInjectionCompleteChanged: {
-    if (injectionComplete) {
-      hostReadyDelay.restart()
-      v1PluginReconcileTimer.restart()
-    } else {
+
+  onBarConfigChanged: {
+    if (!shutdownPrepared) applyBarConfig()
+  }
+  onLayoutConfigChanged: {
+    if (!shutdownPrepared) v1PluginReconcileTimer.restart()
+  }
+  function scheduleStartupAdmission() {
+    if (shutdownPrepared) return
+    startupAdmissionTimer.restart()
+  }
+
+  function advanceStartupAdmission() {
+    if (shutdownPrepared) return
+    if (!injectionComplete
+        || (suiteHostShell.scoped && !suiteRuntimeReady)) {
       hostReadyDelay.stop()
       hostReady = false
+      return
     }
+    if (nativeRegistryPrimeRequired && !nativeRegistryPrimeReady) {
+      SuiteRuntime.Runtime.requestHostRegistryPrime(
+        root, Quickshell.processId)
+      hostReadyDelay.stop()
+      hostReady = false
+      return
+    }
+    hostReadyDelay.restart()
+  }
+
+  onInjectionCompleteChanged: scheduleStartupAdmission()
+  onSuiteRuntimeReadyChanged: scheduleStartupAdmission()
+  onNativeRegistryPrimeReadyChanged: scheduleStartupAdmission()
+  onCatalogConsumerCandidateChanged: {
+    if (!shutdownPrepared) rebindCatalogConsumer()
   }
   Component.onCompleted: {
     applyBarConfig()
-    v1PluginReconcileTimer.restart()
+    rebindCatalogConsumer()
+    scheduleStartupAdmission()
+  }
+  Component.onDestruction: {
+    prepareForShutdown()
+    releaseCatalogConsumer()
+  }
+
+  Timer {
+    id: startupAdmissionTimer
+    interval: 0
+    repeat: false
+    onTriggered: root.advanceStartupAdmission()
   }
 
   Timer {
@@ -1927,7 +2738,7 @@ Item {
     interval: 1
     repeat: false
     onTriggered: {
-      if (root.injectionComplete)
+      if (!root.shutdownPrepared && root.hostReady)
         root.reconcileActivePluginGroupsAndProviders()
     }
   }
@@ -1937,7 +2748,7 @@ Item {
     ignoreUnknownSignals: true
 
     function onV2ModeChanged() {
-      v1PluginReconcileTimer.restart()
+      if (!root.shutdownPrepared) v1PluginReconcileTimer.restart()
     }
   }
 
@@ -1946,6 +2757,11 @@ Item {
     ignoreUnknownSignals: true
 
     function onPluginsChanged() {
+      if (root.shutdownPrepared) return
+      // Component creation also changes the resolver revision. Do not use it
+      // as a family dependency: a new projected slot would invalidate its
+      // own binding while its provider component is being constructed.
+      root.providerRegistryRevision++
       v1PluginReconcileTimer.restart()
     }
   }
@@ -1973,6 +2789,88 @@ Item {
   Services.HostWidgetResolver {
     id: hostWidgetResolverService
     bar: root
+  }
+
+  Core.LayoutTransition {
+    id: layoutTransition
+    stateService: layoutStateController.stateService
+    nativeWriter: suiteHostShell.scoped ? suiteHostShell.host : root.shell
+    observedBarConfig: root.barConfig
+    planNativeLayout: root.planNativeTransition
+    validateNativeLayout: root.validateNativeTransition
+    admitted: root.restoreAdmitted && !providerSnapshotTransition.busy
+      && !stateTransition.busy
+    onSettledContext: function(serial, result, context) {
+      root.lastProviderUndoReceipt = null
+      const intent = context && context.intent ? context.intent : null
+      const saved = root.lastCatalogTransitionSnapshot
+      root.lastCatalogTransitionSnapshot = null
+      const groups = intent && Array.isArray(intent.providerGroups)
+        ? root.normalizedProviderGroups(intent.providerGroups) : []
+      const savedGroups = saved && Util.isPlainObject(saved.groupStates)
+        ? root.normalizedProviderGroups(Object.keys(saved.groupStates)) : []
+      if (["confirmed", "unchanged"].indexOf(result) < 0
+          || !context || !context.nativeBefore || !context.nativeAfter
+          || !Util.isPlainObject(context.patch)
+          || !saved || groups.length === 0
+          || groups.length !== intent.providerGroups.length
+          || !providerSnapshotTransition.same(groups, savedGroups)
+          || ["v1", "v2"].indexOf(saved.variant) < 0
+          || !Util.isPlainObject(saved.transitionPatch)) return
+      let expectedStatePatch = JSON.parse(JSON.stringify(context.patch))
+      if (saved.variant === "v2") {
+        const specs = root.activePluginSpecsForLayout(context.nativeAfter)
+        const planned = V2LayoutModel.reconcilePluginGroups(
+          saved.v2Layout, specs, true)
+        if (!planned || planned.unplaced.length > 0) return
+        expectedStatePatch.v2Layout = planned.layout
+      }
+      root.lastProviderUndoReceipt = {
+        serial: serial,
+        snapshot: {
+          layout: JSON.parse(JSON.stringify(context.nativeBefore)),
+          expectedLayout: JSON.parse(JSON.stringify(context.nativeAfter)),
+          expectedStatePatch: JSON.parse(JSON.stringify(expectedStatePatch)),
+          groupStates: JSON.parse(JSON.stringify(saved.groupStates)),
+          v2Layout: saved.v2Layout === null ? null
+            : JSON.parse(JSON.stringify(saved.v2Layout)),
+          variant: saved.variant,
+          transitionPatch: JSON.parse(JSON.stringify(saved.transitionPatch))
+        }
+      }
+    }
+    onSettled: function(serial, result) {
+      root.settleLayoutRestores(serial, result)
+      root.layoutTransitionSettled(serial, result)
+    }
+  }
+
+  Core.LayoutTransition {
+    id: providerSnapshotTransition
+    stateService: layoutStateController.stateService
+    nativeWriter: suiteHostShell.scoped ? suiteHostShell.host : root.shell
+    observedBarConfig: root.barConfig
+    planNativeLayout: root.planNativeTransition
+    validateNativeLayout: root.validateNativeTransition
+    admitted: root.restoreAdmitted && !layoutTransition.busy
+      && !stateTransition.busy
+    onSettled: function(serial, result) {
+      root.settleLayoutRestores(-serial, result)
+      root.providerSnapshotTransitionSettled(serial, result)
+    }
+  }
+
+  Core.LayoutTransition {
+    id: stateTransition
+    stateService: layoutStateController.stateService
+    nativeWriter: null
+    observedBarConfig: null
+    planNativeLayout: null
+    admitted: root.restoreAdmitted && !layoutTransition.busy
+      && !providerSnapshotTransition.busy
+    onSettled: function(serial, result) {
+      root.stateTransitionSettled(serial, result)
+    }
   }
 
   Core.LayoutController {
@@ -2007,6 +2905,10 @@ Item {
 
   IpcHandler {
     target: "shibumi-suite"
+
+    function prepareShutdown(): string {
+      return root.prepareForShutdown() ? "ok" : "failed"
+    }
 
     function openControlCenter(): string {
       return root.openConfigPanel() ? "ok" : "not-ready"
@@ -2090,10 +2992,9 @@ Item {
       } catch (error) {
         // Plain strings remain convenient for CLI callers.
       }
-      const scheduled = root.scheduleOpenControlCenterRestores(
-        "bars", name === "shellStyle", null, "")
-      const changed = state.setPresentationSetting(name, value)
-      if (!changed) root.cancelCreatedWidgetRestores(scheduled)
+      const changed = root.runWithControlCenterRestore(function() {
+        return state.setPresentationSetting(name, value)
+      }, "bars", name === "shellStyle", null, "")
       return changed ? "ok" : "rejected"
     }
 
@@ -2133,12 +3034,10 @@ Item {
     function setShellStyle(style: string): string {
       const value = String(style || "")
       const state = root.pluginService("hancore.shibumi.state")
-      const scheduled = root.scheduleOpenControlCenterRestores(
-        "bars", true, null, "")
-      const changed = state
-        && typeof state.setPresentationSetting === "function"
-        && state.setPresentationSetting("shellStyle", value)
-      if (!changed) root.cancelCreatedWidgetRestores(scheduled)
+      const changed = root.runWithControlCenterRestore(function() {
+        return state && typeof state.setPresentationSetting === "function"
+          && state.setPresentationSetting("shellStyle", value)
+      }, "bars", true, null, "")
       return changed ? "ok" : "rejected"
     }
 
@@ -2151,6 +3050,7 @@ Item {
       const expected = String(expectedDigest || "")
       return root.hostReady
           && root.styleReady
+          && root.suiteRuntimeReady
           && root.suitePayloadLoaded
           && expected.length === 64
           && expected === root.suitePayloadDigest
@@ -2170,8 +3070,7 @@ Item {
 
   FileView {
     id: suiteMarker
-    path: root.pluginSourceDir !== ""
-      ? root.pluginSourceDir + "/.shibumi-managed.json" : ""
+    path: root.suiteMarkerPath
     watchChanges: false
     printErrors: false
     onLoaded: root.captureSuiteMarker(text())
@@ -2213,13 +3112,19 @@ Item {
   Timer {
     id: hostReadyDelay
     interval: 0
-    onTriggered: root.hostReady = root.injectionComplete
+    onTriggered: {
+      if (!root.shutdownPrepared) {
+        root.hostReady = root.startupAdmissionSatisfied
+        if (root.hostReady) v1PluginReconcileTimer.restart()
+      }
+    }
   }
 
   Variants {
     // Keep the host-native screen model so Variants receives output lifecycle
     // changes directly. BarPanel rejects incomplete placeholder screens.
-    model: root.outputWindowsEnabled ? Quickshell.screens : []
+    model: root.outputWindowsEnabled && !root.shutdownPrepared
+      ? Quickshell.screens : []
 
     delegate: Component {
       Core.BarPanel {

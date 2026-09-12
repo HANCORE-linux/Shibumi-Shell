@@ -87,18 +87,28 @@ class DrainScenario:
     timed_empty_respawn_delay: float | None = None
     registry_latency: float = 0.0
     kill_latency: float = 0.0
+    prepare_latency: float = 0.0
     registry_malformed: bool = False
+    prepare_supported: bool = False
+    replace_after_prepare: bool = False
     registry_latencies: list[float] = field(default_factory=list)
     registry_malformed_reads: set[int] = field(default_factory=set)
     matching: list[dict[str, object]] = field(init=False, default_factory=list)
     foreign: list[dict[str, object]] = field(init=False, default_factory=list)
     commands: list[tuple[str, ...]] = field(init=False, default_factory=list)
     kill_calls: int = field(init=False, default=0)
+    prepare_calls: int = field(init=False, default=0)
     registry_reads: int = field(init=False, default=0)
     next_pid: int = field(init=False, default=41000)
     empty_started_at: float | None = field(init=False, default=None)
     timed_respawn_injected_at: float | None = field(init=False, default=None)
+    prepare_replacement_injected: bool = field(init=False, default=False)
     empty_snapshot_times: list[float] = field(init=False, default_factory=list)
+    prepare_completed_times: list[float] = field(init=False, default_factory=list)
+    kill_started_times: list[float] = field(init=False, default_factory=list)
+    prepared_pids: list[int] = field(init=False, default_factory=list)
+    kill_target_pids: list[int] = field(init=False, default_factory=list)
+    killed_pids: list[int] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         self.shell_path = self.root / "shell"
@@ -132,9 +142,46 @@ class DrainScenario:
                 f"kills={self.kill_calls} remaining={self.remaining_ids}"
             )
 
-        if argv[:3] == ("quickshell", "kill", "-p"):
+        if (
+            argv[:3] == ("quickshell", "kill", "-p")
+            or argv[:3] == ("quickshell", "kill", "--pid")
+        ):
             self._advance_command(argv, self.kill_latency, kwargs.get("timeout"))
             return self._kill(argv)
+        if (
+            len(argv) == 7
+            and argv[:3] == ("quickshell", "ipc", "--pid")
+            and argv[4:] == ("call", "shibumi-suite", "prepareShutdown")
+        ):
+            self.prepare_calls += 1
+            pids = {str(instance["pid"]) for instance in self.matching}
+            if argv[3] not in pids:
+                raise AssertionError(f"prepare escaped exact Shibumi PID scope: {argv!r}")
+            self._advance_command(
+                argv, self.prepare_latency, kwargs.get("timeout")
+            )
+            if self.clock is not None:
+                self.prepare_completed_times.append(self.clock.now)
+            self.prepared_pids.append(int(argv[3]))
+            if (
+                self.prepare_supported
+                and self.replace_after_prepare
+                and not self.prepare_replacement_injected
+            ):
+                self.matching = [
+                    instance
+                    for instance in self.matching
+                    if str(instance["pid"]) != argv[3]
+                ]
+                self.matching.append(
+                    self._new_instance(self.config_path, "replacement")
+                )
+                self.prepare_replacement_injected = True
+            return SimpleNamespace(
+                returncode=0 if self.prepare_supported else 1,
+                stdout="ok\n" if self.prepare_supported else "",
+                stderr="" if self.prepare_supported else "target unavailable",
+            )
         if argv == ("quickshell", "list", "--all", "--json"):
             latency = (
                 self.registry_latencies[self.registry_reads]
@@ -159,22 +206,43 @@ class DrainScenario:
         self.clock.advance_command(latency)
 
     def _kill(self, argv: tuple[str, ...]):
-        expected = (
+        path_command = (
             "quickshell",
             "kill",
             "-p",
             str(self.shell_path),
             "--any-display",
         )
-        if argv != expected:
+        if argv == path_command:
+            target_index = 0 if self.matching else None
+            target_pid = (
+                int(self.matching[0]["pid"]) if self.matching else -1
+            )
+        elif len(argv) == 4 and argv[:3] == (
+            "quickshell", "kill", "--pid"
+        ):
+            target_pid = int(argv[3])
+            target_index = next(
+                (
+                    index
+                    for index, instance in enumerate(self.matching)
+                    if instance["pid"] == target_pid
+                ),
+                None,
+            )
+        else:
             raise AssertionError(f"kill escaped exact Shibumi scope: {argv!r}")
 
         self.kill_calls += 1
-        if not self.matching:
+        self.kill_target_pids.append(target_pid)
+        if self.clock is not None:
+            self.kill_started_times.append(self.clock.now)
+        if target_index is None:
             return SimpleNamespace(returncode=1, stdout="", stderr="no instance")
 
         if self.behavior != "no-progress":
-            self.matching.pop(0)
+            self.killed_pids.append(target_pid)
+            self.matching.pop(target_index)
             if not self.matching:
                 self.empty_started_at = None
 
@@ -529,6 +597,130 @@ class Incident013DrainContractTests(unittest.TestCase):
                             scenario.kill_calls,
                             "an empty matching registry must not issue a kill",
                         )
+
+    def test_supported_shibumi_bar_is_prepared_before_kill(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    prepare_supported=True,
+                )
+                clock = SyntheticClock()
+
+                adapter.run(
+                    scenario,
+                    clock,
+                    timeout=LONG_DEADLINE_SECONDS,
+                    quiet_period=0,
+                )
+
+                prepare_index = next(
+                    index
+                    for index, command in enumerate(scenario.commands)
+                    if command[:3] == ("quickshell", "ipc", "--pid")
+                )
+                kill_index = next(
+                    index
+                    for index, command in enumerate(scenario.commands)
+                    if command[:2] == ("quickshell", "kill")
+                )
+                self.assertLess(prepare_index, kill_index)
+                self.assertEqual(1, scenario.prepare_calls)
+                self.assertEqual(1, scenario.kill_calls)
+                self.assertEqual(1, len(scenario.prepare_completed_times))
+                self.assertEqual(1, len(scenario.kill_started_times))
+                self.assertGreaterEqual(
+                    scenario.kill_started_times[0]
+                    - scenario.prepare_completed_times[0],
+                    0.2,
+                    "the settle interval must elapse before kill starts",
+                )
+
+    def test_replacement_is_relisted_and_prepared_before_its_pid_kill(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    prepare_supported=True,
+                    replace_after_prepare=True,
+                )
+                original_pid = int(scenario.matching[0]["pid"])
+                clock = SyntheticClock()
+
+                adapter.run(
+                    scenario,
+                    clock,
+                    timeout=1.0,
+                    quiet_period=0,
+                )
+
+                self.assertTrue(scenario.prepare_replacement_injected)
+                self.assertGreaterEqual(len(scenario.prepared_pids), 2)
+                replacement_pid = scenario.prepared_pids[-1]
+                self.assertNotEqual(original_pid, replacement_pid)
+                self.assertEqual(
+                    [original_pid, replacement_pid],
+                    scenario.kill_target_pids[:2],
+                )
+                self.assertEqual([replacement_pid], scenario.killed_pids)
+                replacement_prepare = next(
+                    index
+                    for index, command in enumerate(scenario.commands)
+                    if command[:4]
+                    == ("quickshell", "ipc", "--pid", str(replacement_pid))
+                )
+                replacement_kill = next(
+                    index
+                    for index, command in enumerate(scenario.commands)
+                    if command
+                    == ("quickshell", "kill", "--pid", str(replacement_pid))
+                )
+                self.assertLess(replacement_prepare, replacement_kill)
+
+    def test_prepare_timeout_preserves_a_kill_budget(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    clock=clock,
+                    prepare_latency=1.0,
+                )
+
+                adapter.run(
+                    scenario,
+                    clock,
+                    timeout=LONG_DEADLINE_SECONDS,
+                    quiet_period=0,
+                )
+
+                self.assertEqual(1, scenario.prepare_calls)
+                self.assertEqual(1, scenario.kill_calls)
+
+    def test_prepare_is_skipped_when_only_the_kill_budget_remains(self):
+        for adapter in ADAPTERS:
+            with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:
+                clock = SyntheticClock()
+                scenario = self.make_scenario(
+                    tmp,
+                    matching_count=1,
+                    clock=clock,
+                    registry_latencies=[0.45, 0.0],
+                    prepare_supported=True,
+                )
+
+                adapter.run(
+                    scenario,
+                    clock,
+                    timeout=LONG_DEADLINE_SECONDS,
+                    quiet_period=0,
+                )
+
+                self.assertEqual(0, scenario.prepare_calls)
+                self.assertEqual(1, scenario.kill_calls)
 
     def test_temporary_respawn_still_converges(self):
         for adapter in ADAPTERS:

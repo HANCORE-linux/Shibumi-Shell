@@ -1,0 +1,269 @@
+#!/usr/bin/python3
+"""Perform one exact saved NetworkManager profile action without secrets."""
+
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import re
+import signal
+import sys
+import time
+from typing import Any
+
+import dbus
+
+SERVICE = "org.freedesktop.NetworkManager"
+ROOT_PATH = "/org/freedesktop/NetworkManager"
+ROOT_INTERFACE = "org.freedesktop.NetworkManager"
+SETTINGS_PATH = "/org/freedesktop/NetworkManager/Settings"
+SETTINGS_INTERFACE = "org.freedesktop.NetworkManager.Settings"
+CONNECTION_INTERFACE = "org.freedesktop.NetworkManager.Settings.Connection"
+PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
+DBUS_SERVICE = "org.freedesktop.DBus"
+DBUS_PATH = "/org/freedesktop/DBus"
+DBUS_INTERFACE = "org.freedesktop.DBus"
+DEVICE_INTERFACE = "org.freedesktop.NetworkManager.Device"
+ACTIVE_INTERFACE = "org.freedesktop.NetworkManager.Connection.Active"
+PROFILE_PATH = re.compile(r"^/org/freedesktop/NetworkManager/Settings/[0-9]+$")
+DEVICE_PATH = re.compile(r"^/org/freedesktop/NetworkManager/Devices/[0-9]+$")
+ACTIVE_PATH = re.compile(r"^/org/freedesktop/NetworkManager/ActiveConnection/[0-9]+$")
+OWNER_PATTERN = re.compile(r"^:[0-9]+\.[0-9]+$")
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+DEVICE_ID_PATTERN = re.compile(r"^shibumi-network-v1:.{1,1000}$")
+INTERFACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$")
+MAC_PATTERN = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
+TOKEN_PATTERN = re.compile(r"^shibumi-profile-action-v1:\[[1-9][0-9]{0,15},[1-9][0-9]{0,15}\]$")
+MAX_INPUT = 4096
+MAX_DEVICES = 64
+MAX_SAFE_INTEGER = 9007199254740991
+TIMEOUT_SECONDS = 22.0
+PR_SET_PDEATHSIG = 1
+
+
+class ActionError(RuntimeError):
+    pass
+
+
+class DuplicateKeyError(ActionError):
+    pass
+
+
+def no_duplicate_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateKeyError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def exact(value: Any, keys: set[str]) -> bool:
+    return isinstance(value, dict) and set(value) == keys
+
+
+def parse_request(raw: bytes) -> dict[str, Any]:
+    if not 2 <= len(raw) <= MAX_INPUT or not raw.endswith(b"\n") \
+            or raw.count(b"\n") != 1:
+        raise ActionError("invalid input framing")
+    try:
+        text = raw[:-1].decode("utf-8", errors="strict")
+        value = json.loads(text, object_pairs_hook=no_duplicate_object)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ActionError("invalid input JSON") from error
+    if json.dumps(value, ensure_ascii=False, separators=(",", ":")) != text \
+            or not exact(value, {
+                "schemaVersion", "action", "requestToken", "uuid",
+                "deviceId", "interfaceName", "hardwareAddress", "generation"
+            }):
+        raise ActionError("noncanonical request")
+    if value["schemaVersion"] != 1 \
+            or value["action"] not in {"connect", "forget"} \
+            or not isinstance(value["requestToken"], str) \
+            or not TOKEN_PATTERN.fullmatch(value["requestToken"]) \
+            or not isinstance(value["uuid"], str) \
+            or not UUID_PATTERN.fullmatch(value["uuid"]) \
+            or not isinstance(value["generation"], int) \
+            or isinstance(value["generation"], bool) \
+            or not 0 <= value["generation"] <= MAX_SAFE_INTEGER:
+        raise ActionError("invalid request identity")
+    if value["action"] == "connect":
+        if not isinstance(value["deviceId"], str) \
+                or not DEVICE_ID_PATTERN.fullmatch(value["deviceId"]) \
+                or not isinstance(value["interfaceName"], str) \
+                or not INTERFACE_PATTERN.fullmatch(value["interfaceName"]) \
+                or not isinstance(value["hardwareAddress"], str) \
+                or not MAC_PATTERN.fullmatch(value["hardwareAddress"]) \
+                or value["hardwareAddress"] in {
+                    "00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"
+                }:
+            raise ActionError("invalid device identity")
+    elif value["deviceId"] != "" or value["interfaceName"] != "" \
+            or value["hardwareAddress"] != "":
+        raise ActionError("forget request contains device identity")
+    return value
+
+
+def arm_parent_death(parent_pid: int) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0) != 0:
+        os._exit(127)
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+def owner(bus: dbus.SystemBus) -> str:
+    interface = dbus.Interface(
+        bus.get_object(DBUS_SERVICE, DBUS_PATH), DBUS_INTERFACE
+    )
+    value = str(interface.GetNameOwner(SERVICE))
+    if not OWNER_PATTERN.fullmatch(value):
+        raise ActionError("invalid NetworkManager owner")
+    return value
+
+
+def interface(bus: dbus.SystemBus, destination: str, path: str, name: str) -> Any:
+    return dbus.Interface(bus.get_object(destination, path), name)
+
+
+def prop(bus: dbus.SystemBus, destination: str, path: str,
+         name: str, key: str) -> Any:
+    return interface(bus, destination, path, PROPERTIES_INTERFACE).Get(name, key)
+
+
+def profile_path(bus: dbus.SystemBus, destination: str, uuid: str) -> str:
+    path = str(interface(
+        bus, destination, SETTINGS_PATH, SETTINGS_INTERFACE
+    ).GetConnectionByUuid(uuid))
+    if not PROFILE_PATH.fullmatch(path):
+        raise ActionError("invalid profile path")
+    if str(prop(bus, destination, path, CONNECTION_INTERFACE, "Uuid")).lower() != uuid \
+            or str(prop(bus, destination, path, CONNECTION_INTERFACE, "Type")) \
+                != "802-11-wireless" \
+            or bool(prop(bus, destination, path, CONNECTION_INTERFACE, "Unsaved")):
+        raise ActionError("profile identity mismatch")
+    return path
+
+
+def device_path(bus: dbus.SystemBus, destination: str,
+                request: dict[str, Any]) -> str:
+    values = list(interface(
+        bus, destination, ROOT_PATH, ROOT_INTERFACE
+    ).GetDevices())
+    if len(values) > MAX_DEVICES:
+        raise ActionError("device list exceeded bound")
+    matches: list[str] = []
+    for raw in values:
+        path = str(raw)
+        if not DEVICE_PATH.fullmatch(path):
+            raise ActionError("invalid device path")
+        device_type = int(prop(bus, destination, path, DEVICE_INTERFACE, "DeviceType"))
+        if device_type != 2:
+            continue
+        name = str(prop(bus, destination, path, DEVICE_INTERFACE, "Interface"))
+        address = str(prop(bus, destination, path, DEVICE_INTERFACE, "HwAddress")).upper()
+        managed = bool(prop(bus, destination, path, DEVICE_INTERFACE, "Managed"))
+        if name == request["interfaceName"] \
+                and address == request["hardwareAddress"] and managed:
+            matches.append(path)
+    if len(matches) != 1:
+        raise ActionError("device identity is ambiguous")
+    return matches[0]
+
+
+def owner_unchanged(bus: dbus.SystemBus, expected: str) -> None:
+    if owner(bus) != expected:
+        raise ActionError("NetworkManager owner changed")
+
+
+def wait_connected(bus: dbus.SystemBus, destination: str, active_path: str,
+                   request: dict[str, Any], target_device: str,
+                   deadline: float) -> None:
+    while time.monotonic() < deadline:
+        owner_unchanged(bus, destination)
+        if str(prop(bus, destination, active_path, ACTIVE_INTERFACE, "Uuid")).lower() \
+                != request["uuid"]:
+            raise ActionError("active UUID changed")
+        devices = [str(value) for value in prop(
+            bus, destination, active_path, ACTIVE_INTERFACE, "Devices"
+        )]
+        if devices != [target_device]:
+            raise ActionError("active device changed")
+        state = int(prop(bus, destination, active_path, ACTIVE_INTERFACE, "State"))
+        if state == 2:
+            return
+        if state in {3, 4}:
+            raise ActionError("activation failed")
+        time.sleep(0.1)
+    raise ActionError("activation timed out")
+
+
+def wait_forgotten(bus: dbus.SystemBus, destination: str, uuid: str,
+                   deadline: float) -> None:
+    while time.monotonic() < deadline:
+        owner_unchanged(bus, destination)
+        try:
+            profile_path(bus, destination, uuid)
+        except dbus.DBusException as error:
+            if error.get_dbus_name() in {
+                "org.freedesktop.NetworkManager.Settings.InvalidConnection",
+                "org.freedesktop.NetworkManager.Settings.ConnectionNotFound",
+                "org.freedesktop.DBus.Error.UnknownObject",
+            }:
+                return
+            raise
+        time.sleep(0.1)
+    raise ActionError("profile removal timed out")
+
+
+def run(request: dict[str, Any]) -> dict[str, Any]:
+    parent_pid = os.getppid()
+    arm_parent_death(parent_pid)
+    bus = dbus.SystemBus()
+    destination = owner(bus)
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    path = profile_path(bus, destination, request["uuid"])
+    if request["action"] == "connect":
+        target_device = device_path(bus, destination, request)
+        active = str(interface(
+            bus, destination, ROOT_PATH, ROOT_INTERFACE
+        ).ActivateConnection(path, target_device, "/"))
+        if not ACTIVE_PATH.fullmatch(active):
+            raise ActionError("invalid active connection path")
+        wait_connected(
+            bus, destination, active, request, target_device, deadline
+        )
+    else:
+        interface(bus, destination, path, CONNECTION_INTERFACE).Delete()
+        wait_forgotten(bus, destination, request["uuid"], deadline)
+    owner_unchanged(bus, destination)
+    return {
+        "schemaVersion": 1,
+        "status": "completed",
+        "action": request["action"],
+        "requestToken": request["requestToken"],
+        "uuid": request["uuid"],
+        "deviceId": request["deviceId"],
+        "interfaceName": request["interfaceName"],
+        "hardwareAddress": request["hardwareAddress"],
+        "generation": request["generation"],
+    }
+
+
+def main() -> int:
+    try:
+        raw = sys.stdin.buffer.read(MAX_INPUT + 1)
+        request = parse_request(raw)
+        result = run(request)
+        print(json.dumps(result, separators=(",", ":")), flush=True)
+        return 0
+    except (ActionError, DuplicateKeyError, dbus.DBusException, OSError) as error:
+        print(f"network-profile-action: unavailable ({error})", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

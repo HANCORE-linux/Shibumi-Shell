@@ -9,8 +9,8 @@
     "revision": "ed7bae4ac5a570e9df307486e0202fdafcc6ee24"
   },
   "quickshellPackage": {
-    "name": "quickshell-git",
-    "version": "0.3.0.r20.g28771c7-1"
+    "name": "quickshell",
+    "version": "0.3.1-1"
   },
   "subtrees": [
     {

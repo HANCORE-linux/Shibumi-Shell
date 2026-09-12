@@ -1,7 +1,7 @@
 # Maintainer: HANCORE Linux <hancore@users.noreply.github.com>
 pkgname=shibumi-shell
-_upstream_version=0.1.1-beta.11
-_source_sha256=a3d1cf0212d12eb95fd959adc914ad453a389c14841ad54dd791760ed11a9469
+_upstream_version=0.1.1-beta.13
+_source_sha256=5ccd065a89824958bce7dfb163fbd61beff7ae6ec27be342477632c22dedaaa2
 pkgver=${_upstream_version//-/}
 pkgrel=1
 pkgdesc="Transactional Shibumi desktop shell plugins for Omarchy Quattro"
@@ -12,6 +12,10 @@ depends=(
   'omarchy'
   'quickshell'
   'python'
+  'python-dbus'
+  'iputils'
+  'glib2'
+  'systemd'
   'jq'
   'curl'
   'networkmanager'
@@ -50,6 +54,8 @@ package() {
     "$appdir/contracts/package-runtime-v1.json"
   install -Dm644 contracts/backend-boundary-v1.json \
     "$appdir/contracts/backend-boundary-v1.json"
+  install -Dm644 contracts/lifecycle-predecessors-v1.json \
+    "$appdir/contracts/lifecycle-predecessors-v1.json"
   install -Dm755 scripts/shibumi-suite "$appdir/scripts/shibumi-suite"
   cp -a --no-preserve=ownership scripts/shibumi_suite "$appdir/scripts/"
   install -Dm644 VERSION "$appdir/VERSION"

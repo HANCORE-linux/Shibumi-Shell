@@ -24,6 +24,8 @@ Item {
   property int refreshCount: 0
   property int previewCount: 0
   property int setCount: 0
+  property int osdCount: 0
+  property int osdValue: 0
   property int scaleCount: 0
   property int toggleCount: 0
   property int textSizeSetCount: 0
@@ -56,6 +58,10 @@ Item {
   function previewBrightness(value) {
     previewCount++
     brightnessPercent = Math.max(1, Math.min(100, Math.round(value)))
+  }
+  function showBrightnessOsd(value) {
+    osdCount++
+    osdValue = Math.max(1, Math.min(100, Math.round(value)))
   }
   function setScale(value) {
     scaleCount++

@@ -41,7 +41,7 @@ than accidental visual drift:
 
 | Panel | V1 width | Shibumi plugin width | Reason |
 | --- | ---: | ---: | --- |
-| Network | 300 px | 380 px | Retains the approved available/saved Wi-Fi, DNS, security metadata, speed-test, connect, and forget workflow without compressing the V1 row hierarchy. |
+| Network | 300 px | 380 px | Retains the approved available/saved Wi-Fi, security metadata, speed-test, connect, and forget workflow without compressing the V1 row hierarchy. |
 | Display | 280 px | 380 px | Retains the approved per-display brightness, scale, enable/disable, and display-state controls while preserving V1 control sizes and spacing. |
 | Bluetooth | 300 px | 380 px | Retains the approved radio, discovery, device-state, pairing, connection, forget, and audio routing presentation without truncating device rows. |
 

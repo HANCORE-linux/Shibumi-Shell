@@ -160,12 +160,14 @@ class Suite:
         plugins: dict[str, PluginSpec],
         profiles: dict[str, ProfileSpec],
         retired_plugins: tuple[str, ...],
+        settings_storage_version: int = 0,
     ) -> None:
         self.root = root
         self.version = version
         self.plugins = plugins
         self.profiles = profiles
         self.retired_plugins = retired_plugins
+        self.settings_storage_version = settings_storage_version
 
     @classmethod
     def load(cls, root: Path) -> "Suite":
@@ -255,7 +257,10 @@ class Suite:
 
         if not plugins or not profiles:
             raise ContractError("suite must declare plugins and profiles")
-        return cls(root, version, plugins, profiles, retired_plugins)
+        storage_version = data.get("settingsStorageVersion", 0)
+        if type(storage_version) is not int or storage_version not in (0, 1):
+            raise ContractError("unsupported settings storage version")
+        return cls(root, version, plugins, profiles, retired_plugins, storage_version)
 
     @staticmethod
     def _validate_manifest(spec: PluginSpec) -> None:

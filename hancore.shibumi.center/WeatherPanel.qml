@@ -145,6 +145,10 @@ ShibumiPanel {
     }
     const location = WeatherLocationModel.locationCommit(locationField.text,
       locationSuggestions, suggestionIndex)
+    if (!location) {
+      locationError = "No matching location"
+      return false
+    }
     persistLocation(location.name, location.latitude, location.longitude)
     return true
   }
@@ -200,6 +204,7 @@ ShibumiPanel {
     geocodeOutput = ""
     locationError = ""
     geocodeProc.command = ["curl", "-fsS", "--max-time", "5",
+      "--max-filesize", "65536",
       "https://geocoding-api.open-meteo.com/v1/search?name="
         + encodeURIComponent(geocodeActiveQuery)
         + "&count=5&language=" + panel.geocodeLanguage + "&format=json"]
@@ -482,6 +487,7 @@ ShibumiPanel {
 
             TextField {
               id: locationField
+              maximumLength: WeatherLocationModel.maximumQueryLength()
               width: parent.width - saveLocationAction.width
                 - autoLocationAction.width - parent.spacing * 2
               height: parent.height

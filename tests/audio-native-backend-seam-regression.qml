@@ -11,6 +11,7 @@ ShellRoot {
   function fail(message) {
     console.error("audio-native-backend-seam-regression:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
@@ -166,8 +167,14 @@ ShellRoot {
     backendOverride: typedFailingBackend
   }
 
+  QtObject {
+    id: serviceHost
+    property string pluginId: "hancore.shibumi.audio"
+  }
   Audio.Service {
     id: service
+    shell: serviceHost
+    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"]})
     nativeBackendEnabled: true
     nativeBackendOverride: fakeBackend
   }

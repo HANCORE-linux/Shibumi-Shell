@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "center" as Center
 
 ShellRoot {
@@ -9,10 +10,19 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
+  property var savedSuggestions: []
+  property double rejectedAt: 0
+  FileView {
+    id: helperLog
+    path: Quickshell.env("WEATHER_LOCATION_LOG")
+    blockLoading: true
+    printErrors: false
+  }
 
   function fail(message) {
     console.error("weather-panel-location-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Item {
@@ -119,6 +129,9 @@ ShellRoot {
 
       if (root.phase === 1) {
         if (!weatherPanel.editingLocation) return
+        weatherPanel.locationEditorText = "Town" + "x".repeat(157)
+        if (weatherPanel.locationEditorText.length !== 160)
+          return root.fail("location input length limit")
         weatherPanel.locationEditorText = "xxx"
         weatherPanel.requestGeocode()
         root.phase = 2
@@ -151,6 +164,26 @@ ShellRoot {
         if (weatherPanel.contentHeight <= 0
             || weatherPanel.contentHeight > 520)
           return root.fail("location editor panel geometry")
+        root.savedSuggestions = weatherPanel.locationSuggestions
+        weatherPanel.locationSuggestions = [{name: "Broken", latitude: "52", longitude: 13}]
+        var refused = false
+        try { refused = weatherPanel.commitLocation() === false }
+        catch (_error) { return root.fail("malformed selection crashed instead of refusal") }
+        if (!refused || weatherPanel.savingLocation || weatherPanel.locationError !== "No matching location")
+          return root.fail("malformed selection was not refused")
+        root.rejectedAt = Date.now()
+        root.phase = 30
+        return
+      }
+
+      if (root.phase === 30) {
+        helperLog.reload()
+        if (weatherPanel.savingLocation || fakeWeather.reloadCount !== 0
+            || fakeWeather.refreshCount !== 0 || helperLog.text() !== "")
+          return root.fail("malformed selection dispatched location helper")
+        if (Date.now() - root.rejectedAt < 250) return
+        weatherPanel.locationSuggestions = root.savedSuggestions
+        weatherPanel.locationError = ""
         if (!weatherPanel.commitLocation())
           return root.fail("matching location commit was rejected")
         root.phase = 4

@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "owners/audio" as AudioOwner
-import "owners/state" as StateOwner
+import "owners/hancore.shibumi.state" as StateOwner
 
 ShellRoot {
   id: root
@@ -37,15 +37,15 @@ ShellRoot {
 
   AudioOwner.Service {
     shell: fakeShell
-    manifest: ({ id: "hancore.shibumi.audio" })
+    nativeBackendEnabled: false // Controlled peak stub; this fixture tests IPC.
+    manifest: ({ id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"] })
   }
 
   StateOwner.Service {
     shell: fakeShell
     omarchyPath: ""
     manifest: ({
-      id: "hancore.shibumi.state",
-      __sourceDir: Qt.resolvedUrl("owners/state").toString().replace(/^file:\/\//, "")
+      id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]
     })
   }
 

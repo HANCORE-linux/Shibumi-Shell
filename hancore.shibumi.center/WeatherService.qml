@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "WeatherReportModel.js" as WeatherReportModel
 
 Item {
   id: root
@@ -27,7 +28,12 @@ Item {
   property bool loaded: false
   property bool unavailable: false
   property bool refreshPending: false
+  property string weatherOutput: ""
+  property bool weatherCollected: false
+  property bool weatherExited: false
+  property bool weatherExitOk: false
   readonly property bool refreshing: weatherProc.running
+    || weatherCollected || weatherExited
   readonly property string locationQuery: {
     const latitude = parseFloat(String(configuredLocation.latitude))
     const longitude = parseFloat(String(configuredLocation.longitude))
@@ -112,11 +118,30 @@ Item {
 
   function refresh(force) {
     if (!enabled) return
-    if (weatherProc.running) {
+    if (refreshing) {
       if (force === true) refreshPending = true
       return
     }
+    weatherOutput = ""
+    weatherCollected = false
+    weatherExited = false
+    weatherExitOk = false
     weatherProc.running = true
+  }
+
+  function finishWeather() {
+    if (!weatherCollected || !weatherExited) return
+    const output = weatherOutput
+    const ok = weatherExitOk
+    const pending = refreshPending
+    weatherOutput = ""
+    weatherCollected = false
+    weatherExited = false
+    weatherExitOk = false
+    refreshPending = false
+    if (ok) parseReport(output)
+    else unavailable = true
+    if (pending) pendingRefresh.restart()
   }
 
   function reloadLocation() {
@@ -124,76 +149,54 @@ Item {
   }
 
   function parseReport(raw) {
-    const text = String(raw || "").trim()
-    if (!text) {
+    // Validate every consumed day/hour before changing any published field.
+    // This parser cap is NOT a bound on the still-unconverted collector below.
+    const candidate = WeatherReportModel.parse(raw)
+    if (!candidate) {
       unavailable = true
-      return
+      return false
     }
-
-    try {
-      const report = JSON.parse(text)
-      const current = report.current_condition && report.current_condition[0]
-        ? report.current_condition[0] : null
-      const area = report.nearest_area && report.nearest_area[0]
-        ? report.nearest_area[0] : null
-      const astronomy = report.weather && report.weather[0]
-        && report.weather[0].astronomy && report.weather[0].astronomy[0]
-        ? report.weather[0].astronomy[0] : null
-      if (!current) {
-        unavailable = true
-        return
-      }
-
-      icon = glyphForCode(current.weatherCode,
-        isNight(astronomy ? astronomy.sunrise : "", astronomy ? astronomy.sunset : ""))
-      tempC = String(current.temp_C || "")
-      tempF = String(current.temp_F || "")
-      feelsC = String(current.FeelsLikeC || "")
-      feelsF = String(current.FeelsLikeF || "")
-      description = current.weatherDesc && current.weatherDesc[0]
-        ? String(current.weatherDesc[0].value || "") : ""
-      place = area && area.areaName && area.areaName[0]
-        ? String(area.areaName[0].value || "") : ""
-      country = area && area.country && area.country[0]
-        ? String(area.country[0].value || "") : ""
-      humidity = String(current.humidity || "")
-      windKmh = String(current.windspeedKmph || "")
-      windMph = String(current.windspeedMiles || "")
-
-      const days = []
-      const reportDays = report.weather || []
-      for (let index = 0; index < reportDays.length && index < 3; index++) {
-        const day = reportDays[index]
-        days.push({
-          date: String(day.date || ""),
-          minC: String(day.mintempC || ""),
-          maxC: String(day.maxtempC || ""),
-          minF: String(day.mintempF || ""),
-          maxF: String(day.maxtempF || ""),
-          code: forecastCode(day),
-          rain: chanceOfRain(day)
-        })
-      }
-      forecastDays = days
-      loaded = true
-      unavailable = false
-    } catch (_error) {
-      unavailable = true
-    }
+    icon = glyphForCode(candidate.code,
+      isNight(candidate.sunrise, candidate.sunset))
+    tempC = candidate.tempC
+    tempF = candidate.tempF
+    feelsC = candidate.feelsC
+    feelsF = candidate.feelsF
+    description = candidate.description
+    place = candidate.place
+    country = candidate.country
+    humidity = candidate.humidity
+    windKmh = candidate.windKmh
+    windMph = candidate.windMph
+    forecastDays = candidate.forecastDays
+    loaded = true
+    unavailable = false
+    return true
   }
 
   Process {
     id: weatherProc
-    command: ["curl", "-fsS", "--max-time", "5", root.requestUrl]
+    command: ["curl", "-fsS", "--max-time", "5",
+      "--max-filesize", "131072", root.requestUrl]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.parseReport(text)
+      onStreamFinished: {
+        root.weatherOutput = text
+        root.weatherCollected = true
+        root.finishWeather()
+      }
     }
-    onRunningChanged: {
-      if (running || !root.refreshPending) return
-      root.refreshPending = false
-      Qt.callLater(function() { root.refresh(false) })
+    onExited: function(exitCode, exitStatus) {
+      root.weatherExitOk = exitCode === 0 && exitStatus === 0
+      root.weatherExited = true
+      root.finishWeather()
     }
+  }
+
+  Timer {
+    id: pendingRefresh
+    interval: 0
+    onTriggered: root.refresh(false)
   }
 
   FileView {
@@ -214,6 +217,7 @@ Item {
   }
 
   onLocationQueryChanged: refresh(true)
+  Component.onDestruction: pendingRefresh.stop()
 
   Timer {
     interval: 15 * 60 * 1000

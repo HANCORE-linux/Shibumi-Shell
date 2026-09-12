@@ -49,8 +49,16 @@ Item {
   width: 0
   height: 0
 
+  readonly property bool legacyMutationAllowed: !bar || bar.legacyLayoutMutationAllowed !== false
+  readonly property bool mutationAdmitted: !bar
+    || !("mutationAdmissionReady" in bar)
+    || bar.mutationAdmissionReady === true
+  readonly property bool mutationBusy: !mutationAdmitted
+    || !!(bar && bar.layoutTransitionBusy === true)
+    || !!(stateService && stateService.writePending === true)
+
   function interactiveMutationAllowed(editingValue) {
-    return editingValue === true || !activeLayoutProtected
+    return !mutationBusy && (editingValue === true || !activeLayoutProtected)
   }
 
   function groupLocation(groupId) {
@@ -86,6 +94,7 @@ Item {
   }
 
   function persist(nextOrder, nextSplits) {
+    if (mutationBusy) return false
     if (!stateService || typeof stateService.setLayout !== "function") return false
     if (!LayoutModel.validOrder(nextOrder)
         || !LayoutModel.validSplits(nextSplits, nextOrder)) return false
@@ -98,6 +107,10 @@ Item {
   }
 
   function persistV2Layout(nextSlots) {
+    if (mutationBusy) return false
+    if (bar && bar.layoutTransitionsSupported === true)
+      return bar.requestV2LayoutTransition({v2Layout: nextSlots})
+    if (!legacyMutationAllowed) return false
     if (!stateService || typeof stateService.setV2Layout !== "function")
       return false
     const previousSlots = V2LayoutModel.copy(v2Slots)
@@ -160,7 +173,27 @@ Item {
     return next ? persist(next.order, next.splits) : false
   }
 
+  function restoreV1Layout(orderValue, splitsValue) {
+    if (v2Mode || !LayoutModel.validOrder(orderValue)
+        || !LayoutModel.validSplits(splitsValue, orderValue)) return false
+    const currentOrder = currentV1Order()
+    const currentSplits = currentV1Splits(currentOrder)
+    return LayoutModel.sameOrder(currentOrder, orderValue)
+      && LayoutModel.sameSplits(currentSplits, splitsValue, orderValue)
+      || persist(orderValue, splitsValue)
+  }
+
+  function canRemoveV1PluginGroup(pluginId) {
+    const groupId = LayoutModel.dynamicGroupId(pluginId)
+    if (groupId === "") return false
+    const currentOrder = currentV1Order()
+    if (!LayoutModel.locationFor(currentOrder, groupId)) return true
+    return LayoutModel.removeDynamicGroup(currentOrder,
+      currentV1Splits(currentOrder), groupId) !== null
+  }
+
   function reconcileV1PluginGroups(specs) {
+    if (mutationBusy) return false
     const currentOrder = currentV1Order()
     const currentSplits = currentV1Splits(currentOrder)
     const next = LayoutModel.reconcilePluginGroups(
@@ -178,7 +211,14 @@ Item {
     const current = V2LayoutModel.copy(v2Slots)
     const next = V2LayoutModel.reconcilePluginGroups(
       current, specs, followRegionsValue === true)
-    if (!next || next.unplaced.length > 0) return false
+    if (!next || next.unplaced.length > 0 || mutationBusy) return false
+    if (bar && bar.layoutTransitionsSupported === true) {
+      if (syncValue === true)
+        return bar.requestV2LayoutTransition({v2Layout: next.layout})
+      // The legacy provider chain must not consume queued State as saved.
+      return V2LayoutModel.same(current, next.layout)
+    }
+    if (!legacyMutationAllowed) return false
     if (V2LayoutModel.same(current, next.layout)) {
       return syncValue === true && bar
         && typeof bar.syncV2DynamicLayout === "function"
@@ -248,6 +288,7 @@ Item {
   }
 
   function setAllSplits(enabled) {
+    if (mutationBusy) return false
     if (v2Mode)
       return stateService
         && typeof stateService.setAllV2Separators === "function"
@@ -258,7 +299,14 @@ Item {
   }
 
   function resetV2Layout() {
-    if (!v2Mode || !stateService
+    if (mutationBusy) return false
+    if (v2Mode && bar && bar.layoutTransitionsSupported === true) {
+      const separators = {}
+      for (const group of V2LayoutModel.GroupIds) separators[group] = null
+      return bar.requestV2LayoutTransition({v2Layout: V2LayoutModel.defaultLayout(),
+        v2Boundaries: [false, false], separators: separators})
+    }
+    if (!legacyMutationAllowed || !v2Mode || !stateService
         || typeof stateService.resetV2Layout !== "function") return false
     if (!stateService.resetV2Layout()) return false
     return !bar || typeof bar.syncV2DynamicLayout !== "function"
@@ -266,6 +314,7 @@ Item {
   }
 
   function restoreV2Layout(value) {
+    if (mutationBusy) return false
     if (!v2Mode || !stateService
         || typeof stateService.setV2Layout !== "function") return false
     const target = V2LayoutModel.copy(value)
@@ -275,6 +324,7 @@ Item {
   }
 
   function resetLayout() {
+    if (mutationBusy) return false
     if (v2Mode) return resetV2Layout()
     return stateService && typeof stateService.resetLayout === "function"
       ? stateService.resetLayout() : false

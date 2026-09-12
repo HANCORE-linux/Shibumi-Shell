@@ -1,0 +1,532 @@
+#!/usr/bin/python3
+"""Dispatch one bounded volatile PEAP/MSCHAPv2 NetworkManager connection."""
+
+from __future__ import annotations
+
+import ctypes
+import json
+import os
+import re
+import select
+import signal
+import sys
+import time
+from typing import Any
+
+import dbus
+
+SCHEMA_VERSION = 1
+METHOD = "peap-mschapv2"
+NETWORK_MANAGER = "org.freedesktop.NetworkManager"
+DBUS_SERVICE = "org.freedesktop.DBus"
+DBUS_PATH = "/org/freedesktop/DBus"
+DBUS_INTERFACE = "org.freedesktop.DBus"
+MANAGER_PATH = "/org/freedesktop/NetworkManager"
+MANAGER_INTERFACE = "org.freedesktop.NetworkManager"
+PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
+DEVICE_INTERFACE = "org.freedesktop.NetworkManager.Device"
+WIRELESS_INTERFACE = "org.freedesktop.NetworkManager.Device.Wireless"
+ACCESS_POINT_INTERFACE = "org.freedesktop.NetworkManager.AccessPoint"
+ACTIVE_CONNECTION_INTERFACE = "org.freedesktop.NetworkManager.Connection.Active"
+MAX_INPUT_BYTES = 8192
+MAX_OUTPUT_BYTES = 2048
+MAX_ID_BYTES = 1024
+MAX_IDENTITY_BYTES = 253
+MAX_PASSWORD_BYTES = 1024
+MAX_DOMAIN_BYTES = 253
+MAX_ACCESS_POINTS = 256
+MAX_RUNTIME_SECONDS = 20.0
+INPUT_TIMEOUT_SECONDS = 2.0
+CALL_TIMEOUT_SECONDS = 4.0
+PR_SET_PDEATHSIG = 1
+WIFI_DEVICE_TYPE = 2
+KEY_MGMT_8021X = 0x00000200
+KEY_MGMT_EAP_SUITE_B_192 = 0x00002000
+INTERFACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,14}$")
+HARDWARE_PATTERN = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
+SSID_HEX_PATTERN = re.compile(r"^[0-9A-F]{2}(?:[0-9A-F]{2}){0,31}$")
+ENTITY_PREFIX = "shibumi-network-v1:"
+REQUEST_TOKEN_PATTERN = re.compile(
+    r"^shibumi-enterprise-v1:\[[1-9][0-9]{0,9},[1-9][0-9]{0,15}\]$"
+)
+OBJECT_PATH_PATTERN = re.compile(
+    r"^/(?:[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)*)?$"
+)
+
+
+class EnterpriseError(RuntimeError):
+    pass
+
+
+class DuplicateKeyError(EnterpriseError):
+    pass
+
+
+def arm_parent_death() -> None:
+    parent_pid = os.getppid()
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL, 0, 0, 0) != 0:
+        raise EnterpriseError("parent supervision unavailable")
+    if os.getppid() != parent_pid:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def utf8_size(value: str) -> int:
+    try:
+        return len(value.encode("utf-8", errors="strict"))
+    except UnicodeEncodeError:
+        return -1
+
+
+def bounded_text(value: object, maximum: int) -> bool:
+    if not isinstance(value, str) or value.strip() != value:
+        return False
+    size = utf8_size(value)
+    return 1 <= size <= maximum and not any(
+        ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F
+        for character in value
+    )
+
+
+def valid_password(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    size = utf8_size(value)
+    return 1 <= size <= MAX_PASSWORD_BYTES and "\x00" not in value
+
+
+def valid_domain(value: object) -> bool:
+    if not isinstance(value, str) or value != value.lower() \
+            or value.strip() != value or "." not in value \
+            or not re.fullmatch(r"[a-z0-9.-]+", value):
+        return False
+    if not 1 <= utf8_size(value) <= MAX_DOMAIN_BYTES:
+        return False
+    labels = value.split(".")
+    return len(labels) >= 2 and all(
+        1 <= len(label) <= 63
+        and not label.startswith("-") and not label.endswith("-")
+        for label in labels
+    )
+
+
+def valid_entity_id(value: object) -> bool:
+    return isinstance(value, str) and value.startswith(ENTITY_PREFIX) \
+        and 1 <= utf8_size(value) <= MAX_ID_BYTES
+
+
+def valid_integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) \
+        and 0 <= value <= 9_007_199_254_740_991
+
+
+def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateKeyError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def read_request() -> bytes:
+    descriptor = sys.stdin.buffer.fileno()
+    os.set_blocking(descriptor, False)
+    deadline = time.monotonic() + INPUT_TIMEOUT_SECONDS
+    data = bytearray()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise EnterpriseError("input timeout")
+        ready, _, _ = select.select([descriptor], [], [], min(remaining, 0.1))
+        if not ready:
+            continue
+        chunk = os.read(descriptor, 4096)
+        if not chunk:
+            break
+        data.extend(chunk)
+        if len(data) > MAX_INPUT_BYTES + 1:
+            raise EnterpriseError("input exceeded bound")
+    if len(data) < 3 or len(data) > MAX_INPUT_BYTES + 1 \
+            or data.count(b"\n") != 1 or not data.endswith(b"\n"):
+        raise EnterpriseError("input framing invalid")
+    return bytes(data[:-1])
+
+
+def parse_request(encoded: bytes) -> dict[str, Any]:
+    try:
+        text = encoded.decode("utf-8", errors="strict")
+        value = json.loads(text, object_pairs_hook=unique_object)
+    except (UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError) as error:
+        raise EnterpriseError("invalid JSON") from error
+    if not isinstance(value, dict) or json.dumps(
+        value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ) != text:
+        raise EnterpriseError("noncanonical JSON")
+    expected = {
+        "deviceId", "entityId", "generation", "hardwareAddress", "identity", "interfaceName",
+        "method", "password", "requestToken", "schemaVersion", "security",
+        "serverDomain", "ssidHex",
+    }
+    if set(value) != expected or value["schemaVersion"] != SCHEMA_VERSION \
+            or value["method"] != METHOD \
+            or not valid_entity_id(value["deviceId"]) \
+            or not valid_entity_id(value["entityId"]) \
+            or not valid_integer(value["generation"]) \
+            or not isinstance(value["hardwareAddress"], str) \
+            or not HARDWARE_PATTERN.fullmatch(value["hardwareAddress"]) \
+            or value["hardwareAddress"] in {
+                "00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF"
+            } \
+            or not bounded_text(value["identity"], MAX_IDENTITY_BYTES) \
+            or not valid_password(value["password"]) \
+            or not valid_domain(value["serverDomain"]) \
+            or not isinstance(value["interfaceName"], str) \
+            or not INTERFACE_PATTERN.fullmatch(value["interfaceName"]) \
+            or value["security"] != "wpa2-eap" \
+            or not isinstance(value["ssidHex"], str) \
+            or not SSID_HEX_PATTERN.fullmatch(value["ssidHex"]) \
+            or not isinstance(value["requestToken"], str) \
+            or not REQUEST_TOKEN_PATTERN.fullmatch(value["requestToken"]):
+        raise EnterpriseError("invalid request")
+    return value
+
+
+def remaining_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise EnterpriseError("runtime exceeded")
+    return max(0.05, min(CALL_TIMEOUT_SECONDS, remaining))
+
+
+def object_path(value: object) -> str:
+    text = str(value)
+    if len(text) > 1024 or not OBJECT_PATH_PATTERN.fullmatch(text):
+        raise EnterpriseError("invalid object path")
+    return text
+
+
+def dbus_method(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    path: str,
+    interface: str,
+    method: str,
+) -> Any:
+    proxy = bus.get_object(owner, path, introspect=False)
+    return proxy.get_dbus_method(method, interface)
+
+
+def call(
+    method: Any, deadline: float, *arguments: object
+) -> Any:
+    return method(*arguments, timeout=remaining_timeout(deadline))
+
+
+def name_owner(bus: dbus.bus.BusConnection, deadline: float) -> str:
+    method = dbus_method(
+        bus, DBUS_SERVICE, DBUS_PATH, DBUS_INTERFACE, "GetNameOwner"
+    )
+    owner = str(call(method, deadline, NETWORK_MANAGER))
+    if not re.fullmatch(r":[1-9][0-9]*\.[0-9]+", owner):
+        raise EnterpriseError("invalid service owner")
+    return owner
+
+
+def property_value(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    path: str,
+    interface: str,
+    name: str,
+    deadline: float,
+) -> Any:
+    method = dbus_method(
+        bus, owner, path, PROPERTIES_INTERFACE, "Get"
+    )
+    return call(method, deadline, interface, name)
+
+
+def device_path(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    interface_name: str,
+    hardware_address: str,
+    deadline: float,
+) -> str:
+    method = dbus_method(
+        bus, owner, MANAGER_PATH, MANAGER_INTERFACE, "GetDeviceByIpIface"
+    )
+    path = object_path(call(method, deadline, interface_name))
+    if int(property_value(
+        bus, owner, path, DEVICE_INTERFACE, "DeviceType", deadline
+    )) != WIFI_DEVICE_TYPE:
+        raise EnterpriseError("device is not Wi-Fi")
+    if str(property_value(
+        bus, owner, path, DEVICE_INTERFACE, "Interface", deadline
+    )) != interface_name:
+        raise EnterpriseError("device interface changed")
+    if str(property_value(
+        bus, owner, path, DEVICE_INTERFACE, "HwAddress", deadline
+    )).upper() != hardware_address:
+        raise EnterpriseError("device hardware changed")
+    if not bool(property_value(
+        bus, owner, path, DEVICE_INTERFACE, "Managed", deadline
+    )):
+        raise EnterpriseError("device is unmanaged")
+    return path
+
+
+def ap_security_matches(security: str, wpa_flags: int, rsn_flags: int) -> bool:
+    del wpa_flags
+    return security == "wpa2-eap" and bool(rsn_flags & KEY_MGMT_8021X) \
+        and not bool(rsn_flags & KEY_MGMT_EAP_SUITE_B_192)
+
+
+def ap_snapshot(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    path: str,
+    deadline: float,
+) -> tuple[bytes, int, int, int]:
+    ssid_value = property_value(
+        bus, owner, path, ACCESS_POINT_INTERFACE, "Ssid", deadline
+    )
+    ssid = bytes(ssid_value)
+    if not 1 <= len(ssid) <= 32:
+        raise EnterpriseError("invalid AP SSID")
+    wpa_flags = int(property_value(
+        bus, owner, path, ACCESS_POINT_INTERFACE, "WpaFlags", deadline
+    ))
+    rsn_flags = int(property_value(
+        bus, owner, path, ACCESS_POINT_INTERFACE, "RsnFlags", deadline
+    ))
+    strength = int(property_value(
+        bus, owner, path, ACCESS_POINT_INTERFACE, "Strength", deadline
+    ))
+    if not 0 <= wpa_flags <= 0xFFFFFFFF \
+            or not 0 <= rsn_flags <= 0xFFFFFFFF or not 0 <= strength <= 100:
+        raise EnterpriseError("invalid AP properties")
+    return ssid, wpa_flags, rsn_flags, strength
+
+
+def access_point_path(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    device: str,
+    ssid: bytes,
+    security: str,
+    deadline: float,
+) -> str:
+    method = dbus_method(
+        bus, owner, device, WIRELESS_INTERFACE, "GetAllAccessPoints"
+    )
+    values = call(method, deadline)
+    if not isinstance(values, (list, tuple, dbus.Array)) \
+            or len(values) > MAX_ACCESS_POINTS:
+        raise EnterpriseError("AP collection exceeded bound")
+    candidates: list[tuple[int, str]] = []
+    for value in values:
+        path = object_path(value)
+        try:
+            candidate_ssid, wpa, rsn, strength = ap_snapshot(
+                bus, owner, path, deadline
+            )
+        except (dbus.DBusException, EnterpriseError):
+            continue
+        if candidate_ssid == ssid and ap_security_matches(security, wpa, rsn):
+            candidates.append((strength, path))
+    if not candidates:
+        raise EnterpriseError("enterprise AP disappeared")
+    candidates.sort(key=lambda item: (-item[0], item[1]))
+    return candidates[0][1]
+
+
+def wait_for_activation(
+    bus: dbus.bus.BusConnection,
+    owner: str,
+    active_path: str,
+    device: str,
+    request: dict[str, Any],
+    deadline: float,
+) -> dict[str, Any]:
+    while True:
+        if name_owner(bus, deadline) != owner:
+            raise EnterpriseError("service owner changed during activation")
+        active_id = str(property_value(
+            bus, owner, active_path, ACTIVE_CONNECTION_INTERFACE, "Id", deadline
+        ))
+        devices = property_value(
+            bus, owner, active_path, ACTIVE_CONNECTION_INTERFACE,
+            "Devices", deadline
+        )
+        if active_id != request["requestToken"] \
+                or not isinstance(devices, (list, tuple, dbus.Array)) \
+                or len(devices) > 16 \
+                or [object_path(value) for value in devices].count(device) != 1:
+            raise EnterpriseError("active connection identity changed")
+        state = int(property_value(
+            bus, owner, active_path, ACTIVE_CONNECTION_INTERFACE,
+            "State", deadline
+        ))
+        if state == 2:
+            if device_path(
+                bus, owner, request["interfaceName"],
+                request["hardwareAddress"], deadline
+            ) != device:
+                raise EnterpriseError("device identity changed after activation")
+            active_ap = object_path(property_value(
+                bus, owner, device, WIRELESS_INTERFACE,
+                "ActiveAccessPoint", deadline
+            ))
+            final_ssid, final_wpa, final_rsn, _strength = ap_snapshot(
+                bus, owner, active_ap, deadline
+            )
+            if final_ssid.hex().upper() != request["ssidHex"] \
+                    or not ap_security_matches(
+                        request["security"], final_wpa, final_rsn
+                    ):
+                raise EnterpriseError("active AP identity changed")
+            return {
+                "deviceId": request["deviceId"],
+                "entityId": request["entityId"],
+                "generation": request["generation"],
+                "hardwareAddress": request["hardwareAddress"],
+                "interfaceName": request["interfaceName"],
+                "requestToken": request["requestToken"],
+                "sampleMonotonicMs": int(time.monotonic() * 1000),
+                "schemaVersion": SCHEMA_VERSION,
+                "security": request["security"],
+                "ssidHex": request["ssidHex"],
+                "status": "connected",
+            }
+        if state >= 3:
+            raise EnterpriseError("activation failed")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise EnterpriseError("activation timeout")
+        time.sleep(min(0.2, remaining))
+
+
+def build_settings(request: dict[str, Any]) -> dbus.Dictionary:
+    ssid = bytes.fromhex(request["ssidHex"])
+    proto = "rsn"
+    inner = lambda value: dbus.Dictionary(value, signature="sv")
+    return dbus.Dictionary({
+        "802-11-wireless": inner({
+            "mode": dbus.String("infrastructure"),
+            "ssid": dbus.ByteArray(ssid),
+        }),
+        "802-11-wireless-security": inner({
+            "key-mgmt": dbus.String("wpa-eap"),
+            "proto": dbus.Array([dbus.String(proto)], signature="s"),
+        }),
+        "802-1x": inner({
+            "domain-suffix-match": dbus.String(request["serverDomain"]),
+            "eap": dbus.Array([dbus.String("peap")], signature="s"),
+            "identity": dbus.String(request["identity"]),
+            "password": dbus.String(request["password"]),
+            "password-flags": dbus.UInt32(0),
+            "phase2-auth": dbus.String("mschapv2"),
+            "system-ca-certs": dbus.Boolean(True),
+        }),
+        "connection": inner({
+            "autoconnect": dbus.Boolean(False),
+            "id": dbus.String(request["requestToken"]),
+            "type": dbus.String("802-11-wireless"),
+        }),
+        "ipv4": inner({"method": dbus.String("auto")}),
+        "ipv6": inner({"method": dbus.String("auto")}),
+    }, signature="sa{sv}")
+
+
+def dispatch(request: dict[str, Any], deadline: float) -> dict[str, Any]:
+    bus = dbus.SystemBus(private=True)
+    try:
+        owner = name_owner(bus, deadline)
+        device = device_path(
+            bus, owner, request["interfaceName"],
+            request["hardwareAddress"], deadline
+        )
+        ssid = bytes.fromhex(request["ssidHex"])
+        access_point = access_point_path(
+            bus, owner, device, ssid, request["security"], deadline
+        )
+        if name_owner(bus, deadline) != owner:
+            raise EnterpriseError("service owner changed")
+        if device_path(
+            bus, owner, request["interfaceName"],
+            request["hardwareAddress"], deadline
+        ) != device:
+            raise EnterpriseError("device identity changed")
+        final_ssid, final_wpa, final_rsn, _strength = ap_snapshot(
+            bus, owner, access_point, deadline
+        )
+        if final_ssid != ssid or not ap_security_matches(
+            request["security"], final_wpa, final_rsn
+        ):
+            raise EnterpriseError("AP identity changed")
+        settings = build_settings(request)
+        request["password"] = ""
+        options = dbus.Dictionary({
+            "persist": dbus.String("volatile")
+        }, signature="sv")
+        method = dbus_method(
+            bus, owner, MANAGER_PATH, MANAGER_INTERFACE,
+            "AddAndActivateConnection2",
+        )
+        result = call(
+            method, deadline, settings, dbus.ObjectPath(device),
+            dbus.ObjectPath(access_point), options,
+        )
+        if not isinstance(result, tuple) or len(result) != 3:
+            raise EnterpriseError("invalid activation response")
+        object_path(result[0])
+        active_path = object_path(result[1])
+        if not isinstance(result[2], (dict, dbus.Dictionary)) \
+                or len(result[2]) > 16:
+            raise EnterpriseError("activation response exceeded bound")
+        return wait_for_activation(
+            bus, owner, active_path, device, request, deadline
+        )
+    finally:
+        try:
+            bus.close()
+        except Exception:
+            pass
+
+
+def emit(snapshot: dict[str, Any]) -> None:
+    record = {
+        "event": "completion",
+        "schemaVersion": SCHEMA_VERSION,
+        "sequence": 1,
+        "snapshot": snapshot,
+    }
+    encoded = json.dumps(
+        record, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8", errors="strict")
+    if len(encoded) > MAX_OUTPUT_BYTES or b"\n" in encoded:
+        raise EnterpriseError("completion output exceeded bound")
+    sys.stdout.buffer.write(encoded + b"\n")
+    sys.stdout.buffer.flush()
+
+
+def run() -> int:
+    deadline = time.monotonic() + MAX_RUNTIME_SECONDS
+    try:
+        request = parse_request(read_request())
+        emit(dispatch(request, deadline))
+        return 0
+    except (BrokenPipeError, dbus.DBusException, EnterpriseError, OSError,
+            ValueError, TypeError, OverflowError):
+        return 2
+
+
+def main() -> int:
+    arm_parent_death()
+    return run()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

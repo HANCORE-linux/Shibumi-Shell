@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .model import PluginSpec, ProfileSpec
 
@@ -15,6 +16,8 @@ LEGACY_PLUGIN_PREFIX = "hancore.qsrise"
 PLUGIN_PREFIX = "hancore.shibumi"
 OMARCHY_PLUGIN_PREFIX = "omarchy."
 IDENTITY_VERSION = 3
+STATE_PLUGIN_ID = "hancore.shibumi.state"
+STATE_STORAGE_SCHEMA = "shibumiStateSchemaVersion"
 
 
 class ConfigError(RuntimeError):
@@ -89,10 +92,83 @@ def migrate_legacy_config(config: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def apply_identity_contract(config: dict[str, Any]) -> dict[str, Any]:
-    """Record the Shibumi identity and replace the pre-release default once."""
+def validate_state_envelope(config: dict[str, Any]) -> None:
+    """Match the runtime's shell envelope before any normalizing migration."""
+    if (not isinstance(config, dict) or type(config.get("version")) not in (int, float)
+            or config["version"] != 1 or not isinstance(config.get("plugins"), list)
+            or len(config["plugins"]) > 512 or not isinstance(config.get("bar"), dict)
+            or not isinstance(config["bar"].get("layout"), dict)
+            or any(not isinstance(config["bar"]["layout"].get(region), list) for region in REGIONS)):
+        raise ConfigError("invalid canonical State shell envelope")
+
+
+def state_entry(config: dict[str, Any]) -> dict[str, Any] | None:
+    entries = config.get("plugins", [])
+    if not isinstance(entries, list):
+        raise ConfigError("invalid plugins array")
+    matches = [entry for entry in entries if entry_id(entry) == STATE_PLUGIN_ID]
+    if len(matches) > 1 or (matches and not isinstance(matches[0], dict)):
+        raise ConfigError("ambiguous State service entry")
+    if matches and (STATE_STORAGE_SCHEMA in matches[0] or "shibumi" in matches[0]):
+        validate_state_envelope(config)
+    bar = config.get("bar", {})
+    if not isinstance(bar, dict) or not isinstance(bar.get("layout", {}), dict):
+        raise ConfigError("invalid bar layout")
+    layout = bar.get("layout", {})
+    if any(not isinstance(layout.get(region, []), list) for region in REGIONS):
+        raise ConfigError("invalid bar layout region")
+    if any(entry_id(entry) == STATE_PLUGIN_ID
+           for region in REGIONS for entry in layout.get(region, [])):
+        raise ConfigError("State service must not be a bar layout entry")
+    return matches[0] if matches else None
+
+
+def validate_state_settings(config: dict[str, Any]) -> dict[str, Any]:
+    """Validate canonical storage without creating, normalizing or migrating it."""
+    validate_state_envelope(config)
+    entry = state_entry(config)
+    # JSON's numeric 1 and 1.0 have the same meaning in the native/QML parser.
+    # Booleans and strings are not schema numbers.
+    if (entry is None or type(entry.get(STATE_STORAGE_SCHEMA)) not in (int, float)
+            or entry[STATE_STORAGE_SCHEMA] != 1
+            or not isinstance(entry.get("shibumi"), dict)
+            or type(entry["shibumi"].get("version")) not in (int, float)
+            or entry["shibumi"]["version"] != 1):
+        raise ConfigError("invalid canonical State settings; refusing legacy fallback")
+    return entry["shibumi"]
+
+
+def migrate_state_settings(config: dict[str, Any], *, import_legacy: bool = True) -> dict[str, Any]:
+    """One-way, drained lifecycle migration; runtime never writes bar.shibumi."""
+    state_entry(config)  # Reject ambiguity before normalization/deduplication.
     result = _normalize(config)
-    settings = result["bar"].get("shibumi")
+    entry = state_entry(result)
+    if entry is None:
+        entry = {"id": STATE_PLUGIN_ID}
+        result["plugins"].append(entry)
+    if STATE_STORAGE_SCHEMA in entry or "shibumi" in entry:
+        validate_state_settings(result)
+    else:
+        legacy = result["bar"].get("shibumi", {"version": 1}) if import_legacy else {"version": 1}
+        version = legacy.get("version", 1) if isinstance(legacy, dict) else None
+        if not isinstance(legacy, dict) or not (
+                (type(version) in (int, float) and version == 1) or version == "1"):
+            raise ConfigError("unsupported legacy State settings")
+        entry[STATE_STORAGE_SCHEMA] = 1
+        entry["shibumi"] = copy.deepcopy(legacy)
+        entry["shibumi"]["version"] = 1
+    # Stock keeps legacy data inert; it is never a runtime source. Cleanup is
+    # allowed only when the suite Bar is selected in the lifecycle document.
+    if result["bar"].get("id") == "hancore.shibumi.bar":
+        result["bar"].pop("shibumi", None)
+    validate_state_settings(result)
+    return result
+
+
+def apply_identity_contract(config: dict[str, Any], *, migrate_storage: bool = True) -> dict[str, Any]:
+    """Migrate storage with the new payload; old-payload activation stays legacy."""
+    result = migrate_state_settings(config) if migrate_storage else _normalize(config)
+    settings = state_entry(result)["shibumi"] if migrate_storage else result["bar"].get("shibumi")
     if not isinstance(settings, dict):
         return result
     try:
@@ -116,15 +192,41 @@ def apply_identity_contract(config: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
-    source = path if path.is_file() and path.stat().st_size > 0 else defaults_path
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def _finite_json_float(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
+
+
+def _finite_json_int(raw: str) -> int:
+    _finite_json_float(raw)  # QML numbers must remain finite even without an exponent.
+    return int(raw)
+
+
+def parse_config_bytes(
+    payload: bytes,
+    source: Path,
+    *,
+    user_config_exists: bool,
+) -> tuple[dict[str, Any], bool]:
+    """Parse already acquired config bytes with the canonical JSON rules."""
     try:
-        data = json.loads(source.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        raw = payload.decode("utf-8")
+        # Same parser budget as StateStorageModel; acquisition callers must
+        # impose their own byte and file-type bounds before invoking this.
+        if len(raw.encode("utf-16-le")) // 2 > 1048576:
+            raise ValueError("shell config exceeds State parser budget")
+        data = json.loads(raw, parse_constant=_reject_json_constant,
+                          parse_float=_finite_json_float, parse_int=_finite_json_int)
+    except (UnicodeError, ValueError) as error:
         raise ConfigError(f"cannot read shell config {source}: {error}") from error
     if not isinstance(data, dict):
         raise ConfigError(f"shell config must be a JSON object: {source}")
-    user_config_exists = source == path
     if not user_config_exists:
         # Host defaults provide a construction fallback, not a saved stock-bar
         # transparency preference. Do not materialize that preference merely
@@ -133,6 +235,17 @@ def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
         if isinstance(bar, dict):
             bar.pop("transparent", None)
     return data, user_config_exists
+
+
+def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
+    source = path if path.is_file() and path.stat().st_size > 0 else defaults_path
+    try:
+        payload = source.read_bytes()
+    except OSError as error:
+        raise ConfigError(f"cannot read shell config {source}: {error}") from error
+    return parse_config_bytes(
+        payload, source, user_config_exists=source == path
+    )
 
 
 def _normalize(config: dict[str, Any]) -> dict[str, Any]:
@@ -153,6 +266,7 @@ def apply_profile(
     profile: ProfileSpec,
     plugins: dict[str, PluginSpec],
 ) -> dict[str, Any]:
+    state_entry(config)
     result = _normalize(config)
     managed_widget_ids = {
         plugin_id for plugin_id, spec in plugins.items() if spec.is_bar_widget
@@ -261,7 +375,8 @@ def reconcile_profile_additions(
 def select_omarchy_image_picker(config: dict[str, Any]) -> dict[str, Any]:
     """Route theme/wallpaper selection back to Quattro on the stock bar."""
     result = _normalize(config)
-    shibumi = result["bar"].get("shibumi")
+    entry = state_entry(result)
+    shibumi = entry.get("shibumi") if entry and entry.get(STATE_STORAGE_SCHEMA) == 1 else result["bar"].get("shibumi")
     if isinstance(shibumi, dict):
         picker = shibumi.get("picker")
         if not isinstance(picker, dict):
@@ -282,6 +397,7 @@ def remove_suite(
 ) -> dict[str, Any]:
     result = _normalize(config)
     current_bar = copy.deepcopy(result["bar"])
+    retained_entry = copy.deepcopy(state_entry(result)) if keep_settings else None
     plugin_ids = set(plugins)
     preserved = preserve_ids or set()
     for region in REGIONS:
@@ -297,6 +413,11 @@ def remove_suite(
         if entry_id(entry) not in plugin_ids
         or entry_id(entry) in preserved
     ]
+    # A kept settings entry is inert when its payload is absent. Preserve the
+    # complete envelope, not just settings; normal uninstall removes it.
+    if retained_entry is not None and not any(
+            entry_id(entry) == STATE_PLUGIN_ID for entry in result["plugins"]):
+        result["plugins"].append(retained_entry)
     if result["bar"].get("id") == active_bar and restore_bar is not None:
         restored = _object(restore_bar)
         restored_layout = _object(restored.get("layout"))
@@ -318,7 +439,9 @@ def remove_suite(
             )
         else:
             result["bar"].pop("transparent", None)
-        if keep_settings and isinstance(current_bar.get("shibumi"), dict):
+        if retained_entry is not None and retained_entry.get(STATE_STORAGE_SCHEMA) == 1:
+            result["bar"].pop("shibumi", None)
+        elif keep_settings and isinstance(current_bar.get("shibumi"), dict):
             result["bar"]["shibumi"] = copy.deepcopy(current_bar["shibumi"])
     elif result["bar"].get("id") == active_bar:
         result["bar"].pop("id", None)
@@ -335,13 +458,19 @@ def remove_suite(
 
 
 def encode_config(config: dict[str, Any]) -> bytes:
-    return (json.dumps(config, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (json.dumps(config, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
-def _fsync_directory(path: Path) -> None:
+def _fsync_directory(
+    path: Path,
+    *,
+    on_durable: Callable[[], None] | None = None,
+) -> None:
     descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(descriptor)
+        if on_durable is not None:
+            on_durable()
     finally:
         os.close(descriptor)
 
@@ -362,7 +491,13 @@ def _durable_mkdir(path: Path) -> None:
         _fsync_directory(directory.parent)
 
 
-def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
+def atomic_write(
+    path: Path,
+    payload: bytes,
+    mode: int = 0o600,
+    *,
+    on_durable: Callable[[], None] | None = None,
+) -> None:
     _durable_mkdir(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
@@ -373,6 +508,6 @@ def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         os.replace(temporary, path)
-        _fsync_directory(path.parent)
+        _fsync_directory(path.parent, on_durable=on_durable)
     finally:
         temporary.unlink(missing_ok=True)

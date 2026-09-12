@@ -11,6 +11,10 @@ ShellRoot {
   property real fullWidth: 0
   property var clickTargets: []
   property int summonCount: 0
+  property int scopedSummonCount: 0
+  property string scopedSummonId: ""
+  property var scopedVisualLease: null
+  property var teardownLease: null
 
   function fail(message) {
     console.error("brightness-widget-smoke:", message)
@@ -33,7 +37,7 @@ ShellRoot {
     property bool foregroundAnimationEnabled: false
     property var activePopout: null
     property var clickTargets: root.clickTargets
-    property var shell: null
+    property var shell: visualShell
     property var barWidgetRegistry: null
     property var monitorService: sharedMonitorService
     property var visualTokens: ({
@@ -83,10 +87,58 @@ ShellRoot {
     Fixtures.MonitorTestPanel {}
   }
 
+  QtObject {
+    id: visualShell
+    function summon(_id, _payload) { return true }
+  }
+
+  QtObject {
+    id: scopedBarState
+    property bool barHidden: false
+    property int barSize: 35
+    property string fontFamily: "monospace"
+    property string position: "top"
+  }
+  QtObject {
+    id: scopedShell
+    property string pluginId: "hancore.shibumi.brightness"
+    property var bar: scopedBarState
+    function summon(id, _payload) {
+      root.scopedSummonCount++
+      root.scopedSummonId = String(id || "")
+      return true
+    }
+  }
+  QtObject {
+    id: scopedWidgetRegistry
+    property int revision: 1
+    property var widgets: ({ "omarchy.monitor": {
+      component: monitorPanelComponent, metadata: ({})
+    }})
+  }
+
   Brightness.Service {
     id: sharedMonitorService
     bar: fakeBar
     panelComponent: monitorPanelComponent
+  }
+
+  Brightness.Service {
+    id: scopedMonitorService
+    shell: scopedShell
+    barWidgetRegistry: scopedWidgetRegistry
+  }
+
+  Item { id: teardownLeaseHolder; visible: false }
+  Loader {
+    id: teardownServiceLoader
+    active: true
+    sourceComponent: Component {
+      Brightness.Service {
+        bar: fakeBar
+        panelComponent: monitorPanelComponent
+      }
+    }
   }
 
   QtObject {
@@ -141,7 +193,8 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!first || !second || !backend || !sharedMonitorService.ready
-            || root.phaseTicks < 3) return
+            || !scopedMonitorService.ready || !teardownServiceLoader.item
+            || !teardownServiceLoader.item.ready || root.phaseTicks < 3) return
         if (first.monitorService !== second.monitorService
             || first.monitorService !== sharedMonitorService
             || !first.brightnessAvailable || first.percent !== 64
@@ -154,13 +207,30 @@ ShellRoot {
         if (backend.opacity !== 0 || backend.manageIpc !== false
             || backend.settings.testSetting !== "retained")
           return root.fail("hidden official owner/settings")
+        const scopedBackend = scopedMonitorService.backend
+        if (scopedMonitorService.panelComponent !== monitorPanelComponent
+            || String(scopedMonitorService.panelSource) !== ""
+            || scopedBackend.bar.barSize !== 35
+            || scopedBackend.bar.fontFamily !== "monospace"
+            || scopedBackend.bar.shell !== scopedShell
+            || String(scopedBackend.bar.foreground) === ""
+            || String(scopedBackend.bar.background) === ""
+            || String(scopedBackend.bar.urgent) === "")
+          return root.fail("scoped component/scalar-bar visual bridge")
         if (first.childPanelWidget("omarchy.monitor") !== first
             || second.childPanelWidget("omarchy.monitor") !== second
             || !first.ownsPanelWidget(first))
           return root.fail("screen-local alias routing")
-        if (root.clickTargets.length !== 2)
-          return root.fail("duplicate official click target")
+        if (root.clickTargets.length !== 2
+            || sharedMonitorService._visualBarLeases.length !== 2
+            || sharedMonitorService.visualBar !== fakeBar)
+          return root.fail("visual bar leases or click targets")
 
+        scopedBackend.open()
+        root.teardownLease = teardownServiceLoader.item.acquireVisualBar(
+          teardownLeaseHolder, fakeBar)
+        if (!root.teardownLease) return root.fail("teardown lease acquisition")
+        teardownServiceLoader.active = false
         root.fullWidth = first.implicitWidth
         first.settings = ({ compact: true })
         root.phase++
@@ -170,13 +240,50 @@ ShellRoot {
         if (!first.compact || !first.compactValueVisible
             || first.implicitWidth >= root.fullWidth)
           return root.fail("V1 compact icon/value presentation")
+        if (teardownServiceLoader.item !== null)
+          return root.fail("dynamic monitor service did not tear down")
+        root.teardownLease = null
+        const scopedBackend = scopedMonitorService.backend
+        if (root.scopedSummonCount !== 1
+            || root.scopedSummonId !== "hancore.shibumi.brightness"
+            || scopedBackend.opened)
+          return root.fail("scoped legacy monitor IPC redirect")
+        root.scopedVisualLease = scopedMonitorService.acquireVisualBar(root, fakeBar)
+        if (!root.scopedVisualLease || scopedMonitorService.visualBar !== fakeBar
+            || scopedBackend.bar.shell !== visualShell)
+          return root.fail("scoped visual bar lease did not supply host facade")
+        scopedBackend.open()
+        if (root.summonCount !== 1 || root.scopedSummonCount !== 1)
+          return root.fail("visual bar redirect did not use the active bar")
+        if (!scopedMonitorService.releaseVisualBar(root.scopedVisualLease)
+            || scopedMonitorService.visualBar !== null)
+          return root.fail("scoped visual bar lease did not release")
+        root.scopedVisualLease = null
 
         backend.open()
-        if (root.summonCount !== 1)
+        if (root.summonCount !== 2)
           return root.fail("legacy monitor IPC redirect")
-        first.interactionTarget.wheelMoved(120)
-        if (sharedMonitorService.brightnessPercent !== 69 || backend.setCount !== 1)
-          return root.fail("wheel brightness forwarding")
+        first.interactionTarget.wheelMoved(0)
+        first.interactionTarget.wheelMoved(40)
+        first.interactionTarget.wheelMoved(40)
+        if (sharedMonitorService.brightnessPercent !== 64 || backend.setCount !== 0)
+          return root.fail("partial wheel deltas were not accumulated")
+        first.interactionTarget.wheelMoved(40)
+        first.interactionTarget.wheelMoved(240)
+        first.interactionTarget.wheelMoved(-60)
+        if (sharedMonitorService.brightnessPercent !== 74 || backend.setCount !== 2)
+          return root.fail("wheel notch/multi-delta forwarding")
+        first.interactionTarget.wheelMoved(-60)
+        if (sharedMonitorService.brightnessPercent !== 69 || backend.setCount !== 3
+            || backend.osdCount !== 3 || backend.osdValue !== 69)
+          return root.fail("negative wheel delta/OSD forwarding")
+        backend.brightnessAvailable = false
+        first.interactionTarget.wheelMoved(80)
+        backend.brightnessAvailable = true
+        first.interactionTarget.wheelMoved(40)
+        if (sharedMonitorService.brightnessPercent !== 69 || backend.setCount !== 3
+            || backend.osdCount !== 3)
+          return root.fail("unavailable wheel delta leaked after recovery")
         sharedMonitorService.previewBrightness(71)
         sharedMonitorService.setScale("1.6")
         sharedMonitorService.setTextSize(14)
@@ -223,12 +330,14 @@ ShellRoot {
         root.phaseTicks = 0
       } else {
         if (first.panelLoaded || root.clickTargets.length !== 1
-            || fakeBar.activePopout !== null)
+            || fakeBar.activePopout !== null
+            || sharedMonitorService._visualBarLeases.length !== 1)
           return root.fail("local panel teardown")
         firstLoader.active = false
         Qt.callLater(function() {
-          if (root.clickTargets.length !== 0)
-            return root.fail("click target destruction cleanup")
+          if (root.clickTargets.length !== 0
+              || sharedMonitorService._visualBarLeases.length !== 0)
+            return root.fail("click target/visual lease destruction cleanup")
           console.log("brightness plugin smoke passed")
           Qt.quit()
         })

@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "suiteId": "hancore.shibumi",
-  "suiteVersion": "0.1.1-beta.11",
+  "suiteVersion": "0.1.1-beta.13",
+  "settingsStorageVersion": 1,
   "hostContract": "contracts/host-facade-v1.json",
   "retiredPlugins": ["hancore.shibumi.menu"],
   "plugins": [
@@ -173,8 +174,7 @@
       "bundle": "default",
       "defaultSection": "right",
       "requires": [],
-      "recommends": [],
-      "hostContracts": ["omarchy.network"]
+      "recommends": []
     },
     {
       "id": "hancore.shibumi.battery",

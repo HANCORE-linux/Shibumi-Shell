@@ -10,9 +10,12 @@ Item {
   id: root
 
   property var bar: null
-  readonly property var stateService: bar && bar.shell
-    && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor("hancore.shibumi.state") : null
+  // Consumers with a scoped host explicitly supply their cooperative adapter.
+  // Visual geometry and colors still come from this output's bar object.
+  property var serviceShell: bar ? bar.shell : null
+  readonly property var stateService: serviceShell
+    && typeof serviceShell.serviceFor === "function"
+    ? serviceShell.serviceFor("hancore.shibumi.state") : null
   readonly property var presentation: stateService && stateService.config
     ? stateService.config.presentation || ({}) : ({})
   readonly property string shellStyle: "shibumi"

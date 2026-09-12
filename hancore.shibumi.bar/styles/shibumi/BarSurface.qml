@@ -114,7 +114,7 @@ Item {
       readonly property real centerAvailableWidth:
         ResponsiveLayout.centerAvailableWidth(compactShell, width,
           frameInset, shellContentInset, leftRegion.width, rightRegion.width,
-          centerGap, measuredCenterSpan)
+          centerGap, measuredCenterSpan, centerExtras.width)
       property int narrowStage: 0
       readonly property real sideMargin: shellX + shellContentInset
       readonly property real responsiveSideInset: shellContentInset
@@ -124,6 +124,7 @@ Item {
         return leftGroups.budgetWidthForStage(stage)
           + rightGroups.budgetWidthForStage(stage)
           + horizontalSurface.centerFloorWidth
+          + leftExtras.width + centerExtras.width + rightExtras.width
           + 2 * horizontalSurface.centerGap
           + 2 * horizontalSurface.responsiveSideInset
       })
@@ -136,6 +137,7 @@ Item {
         }),
         left: leftGroups.stageBudgetWidths,
         right: rightGroups.stageBudgetWidths,
+        extras: [leftExtras.width, centerExtras.width, rightExtras.width],
         centerFloor: Math.round(centerFloorWidth),
         centerAvailable: Math.round(centerAvailableWidth)
       })
@@ -389,7 +391,8 @@ Item {
           screenName: root.screenName
           layoutSession: root.layoutSession
           visibilityStage: horizontalSurface.narrowStage
-          availableWidth: horizontalSurface.centerAvailableWidth
+          // The widget API uses zero for an unconstrained width.
+          availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)
         }
 
         Core.BarSection {

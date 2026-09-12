@@ -23,7 +23,7 @@ ShellRoot {
             || weather.place !== "Testville") {
           console.error("weather start smoke: invalid initial report")
           Qt.exit(1)
-          return
+          throw new Error("weather start smoke: invalid initial report")
         }
         stop()
         console.log("weather service start smoke passed")
@@ -33,6 +33,7 @@ ShellRoot {
       if (root.attempts >= 100) {
         console.error("weather start smoke: service did not load without interaction")
         Qt.exit(1)
+        throw new Error("weather start smoke: service did not load without interaction")
       }
     }
   }

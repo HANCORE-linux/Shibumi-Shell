@@ -1,0 +1,3 @@
+singleton Runtime 1.0 Runtime.qml
+Provider 1.0 Provider.qml
+HostShell 1.0 HostShell.qml

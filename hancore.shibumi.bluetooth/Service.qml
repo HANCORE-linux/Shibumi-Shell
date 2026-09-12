@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // One process-wide owner for Quattro's Bluetooth and Bluetooth-audio state.
 // Screen-local widgets and panels consume this facade without constructing
@@ -11,13 +12,21 @@ Item {
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.bluetooth"
+    implementationVersion: "0.1.1-beta.13"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property var bar: shell ? shell.bar : null
   property var backendOverride: null
   property var audioRouteOverride: null
-  readonly property bool audioServiceLookupAvailable: shell !== null
-    && typeof shell.serviceFor === "function"
+  readonly property bool audioServiceLookupAvailable: suiteShell.serviceFor(
+    "hancore.shibumi.audio") !== null
   readonly property var audioService: audioServiceLookupAvailable
-    ? (shell.serviceFor("hancore.shibumi.audio") || null) : null
+    ? suiteShell.serviceFor("hancore.shibumi.audio") : null
   readonly property bool audioServiceUsable: audioService !== null
     && audioService.nativeBackendEnabled === true
     && typeof audioService.routeBluetoothDevice === "function"
@@ -25,7 +34,6 @@ Item {
   property int discoveryRetryInterval: 1000
   property int discoveryRequestTimeoutInterval: 1500
 
-  readonly property var backend: adapter.backend
   readonly property bool ready: adapter.ready
   readonly property bool adapterAvailable: adapter.adapterAvailable
   readonly property bool radioEnabled: adapter.radioEnabled

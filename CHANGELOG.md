@@ -1,5 +1,64 @@
 # Changelog
 
+## [0.1.1-beta.13] - 2026-09-12
+
+### Fixed
+
+- Kept the admitted `shell.json` rollback snapshot bound through transaction end
+  to a no-follow regular-file file descriptor (FD)
+- Checked the snapshot name, held object, size, and digest before restore,
+  rejecting replacement and in-place mutation, including inode reuse
+- Added regressions for descriptor cleanup, drained-baseline rebinding, and
+  crash-simulation recovery paths
+
+## 0.1.1-beta.12: Step 5 release line and Bluetooth identity fix
+
+Local release candidate; publication remains gated on fresh physical acceptance.
+
+### Added
+
+- Added an optional second V1 center slot through the existing edit-mode `+`,
+  preserving saved one-slot layouts until explicitly extended
+- Included the completed Step 5 native Network payload on a release line based
+  directly on the Step 5 tip
+- Added exact Omarchy 4.0.2 installed-package and source-parity contracts
+- Added pre-mutation lifecycle admission for exact Beta.11, Step-5-tip, and
+  current-release identities, with complete journal inventory before recovery
+
+### Changed
+
+- Bluetooth panels now receive detached primitive device records and consume
+  typed action results through explicit `.ok` checks
+- Bluetooth mutations resolve the current device and adapter incarnation and
+  dispatch exactly one retained Omarchy helper action
+- Release publication now uses exact-commit archives, a draft upload, and
+  remote asset digest verification before publication
+
+### Fixed
+
+- Included regional extras and center siblings in existing responsive budgets
+- Made new V1 family replacements slot-neutral without relocating existing providers
+- Followed host-selected enabled clones for widget admission, components and
+  metadata, preserving active clone identity and entry settings
+- Refused ambiguous base-slot provider removal unchanged; move the provider
+  back to an extra before removal. Control Center uninstall preflights this case
+- Corrected drag-ghost capture/window lookup, image lifetime, stale callbacks,
+  and duplicated Bottom positioning; physical revalidation remains required
+- Rejected stale, malformed, ambiguous, or replacement Bluetooth identities
+  without dispatching a device mutation
+- Rejected Step-6 Power-registration state and unknown journal schemas before
+  recovery or any other lifecycle mutation
+- Prevented managed install and migration from stopping Quickshell while an
+  asynchronous plugin rescan is still incubating QML objects
+
+### Known limits
+
+- Existing Step-6 development installations need a separate reviewed rollback;
+  the normal Beta.12 updater intentionally refuses them
+- The retained Omarchy Bluetooth and audio-route helpers remain explicit
+  compatibility dependencies
+- Fresh physical Network and Bluetooth acceptance is required before publication
+
 ## 0.1.1-beta.11: Native Audio and Bluetooth cutover
 
 Public beta candidate for 2026-08-23.
@@ -287,3 +346,5 @@ Released 2026-07-29.
 - The repository remains private
 - Physical multi-monitor, enterprise Wi-Fi, and Bluetooth-device gates remain open
 - Shibumi source updates require a trusted checkout and `shibumi-suite update`
+
+[0.1.1-beta.13]: https://github.com/HANCORE-linux/Shibumi-Shell/compare/v0.1.1-beta.12...v0.1.1-beta.13

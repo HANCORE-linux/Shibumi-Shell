@@ -7,7 +7,7 @@ var GroupIds = [
 var Regions = ["left", "center", "right"]
 var SplitRegions = ["left", "right", "boundaries"]
 var BaseCounts = { left: 7, center: 1, right: 7 }
-var ExtraLimits = { left: 2, center: 0, right: 2 }
+var ExtraLimits = { left: 2, center: 1, right: 2 }
 var DynamicGroupPrefix = "G:"
 
 function defaultOrder() {
@@ -175,7 +175,7 @@ function moveGroupToSlot(value, sourceValue, targetRegionValue,
 function addSlot(value, regionValue) {
   var result = copyOrder(value)
   var region = String(regionValue || "")
-  if (!result || (region !== "left" && region !== "right")
+  if (!result || Regions.indexOf(region) < 0
       || result[region].length >= maxCount(region)) return null
   result[region].push("")
   return validOrder(result) ? result : null
@@ -227,6 +227,13 @@ function removeSlotAt(orderValue, splitsValue, regionValue, indexValue) {
   if (!order || !splits || !isExtraSlot(order, region, index)
       || order[region][index] !== "") return null
 
+  // V1 has no internal center split field. Preserve the existing schema and
+  // both section boundaries when removing its optional empty slot.
+  if (region === "center") {
+    order.center.splice(index, 1)
+    return validOrder(order) && validSplits(splits, order)
+      ? { order: order, splits: splits } : null
+  }
   var sourceSplits = splits[region].slice()
   var lastIndex = order[region].length - 1
   order[region].splice(index, 1)
@@ -245,7 +252,7 @@ function removeSlotAt(orderValue, splitsValue, regionValue, indexValue) {
 function removeSlot(orderValue, splitsValue, regionValue) {
   var order = copyOrder(orderValue)
   var region = String(regionValue || "")
-  if (!order || (region !== "left" && region !== "right")) return null
+  if (!order || Regions.indexOf(region) < 0) return null
   for (var index = order[region].length - 1;
       index >= baseCount(region); index--) {
     if (order[region][index] === "")
@@ -270,20 +277,25 @@ function removeDynamicGroup(orderValue, splitsValue, groupValue) {
     return removeEmptyExtraAt(
       order, splits, location.region, location.index)
 
-  // A dynamic group may have been swapped into a locked base slot. Move the
-  // outer extra occupant into that empty base before shrinking the extra.
-  var candidates = preferredOuterRegions(location.region, order)
-  for (var outer = 0; outer < candidates.length; outer++) {
-    var outerRegion = candidates[outer]
-    for (var extraIndex = order[outerRegion].length - 1;
-        extraIndex >= baseCount(outerRegion); extraIndex--) {
-      if (order[outerRegion][extraIndex] === "") continue
-      order[location.region][location.index] = order[outerRegion][extraIndex]
-      order[outerRegion][extraIndex] = ""
-      return removeEmptyExtraAt(order, splits, outerRegion, extraIndex)
+  // The persisted layout has no swap provenance. Only a single occupied
+  // extra is an unambiguous repair candidate. Another dynamic provider may
+  // itself have been displaced, so it also makes the source ambiguous. Refuse multiple
+  // candidates without changing the caller's order/splits. The user can
+  // move the provider back into an extra slot before removing it.
+  var candidate = null
+  for (var r = 0; r < Regions.length; r++) {
+    var region = Regions[r]
+    for (var index = baseCount(region); index < order[region].length; index++) {
+      if (order[region][index] === "") continue
+      if (candidate) return null
+      candidate = { region: region, index: index }
     }
   }
-  return null
+  if (!candidate || GroupIds.indexOf(order[candidate.region][candidate.index]) < 0)
+    return null
+  order[location.region][location.index] = order[candidate.region][candidate.index]
+  order[candidate.region][candidate.index] = ""
+  return removeEmptyExtraAt(order, splits, candidate.region, candidate.index)
 }
 
 function preferredOuterRegions(regionValue, orderValue) {
@@ -301,6 +313,14 @@ function addDynamicGroup(orderValue, splitsValue, pluginValue, regionValue) {
   if (!order || !splits || groupId === "") return null
   if (locationFor(order, groupId)) return { order: order, splits: splits }
 
+  // Center capacity is explicitly added by the user, never grown by plugin
+  // reconciliation. Preserve legacy outer allocation unless a center-bound
+  // provider can use that already existing empty destination.
+  if (String(regionValue || "") === "center" && order.center.length === 2
+      && order.center[1] === "") {
+    order.center[1] = groupId
+    return { order: order, splits: splits }
+  }
   var candidates = preferredOuterRegions(regionValue, order)
   for (var c = 0; c < candidates.length; c++) {
     var region = candidates[c]

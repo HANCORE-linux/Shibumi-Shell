@@ -154,7 +154,7 @@ ShellRoot {
       root.phaseTicks++
       const first = firstLoader.item
       const second = secondLoader.item
-      const backend = sharedBluetoothService.backend
+      const backend = testBackend
 
       if (root.phase === 0) {
         if (!first || !second || !backend || !sharedBluetoothService.ready
@@ -167,8 +167,8 @@ ShellRoot {
             || first.contentHorizontalOffset !== 2
             || unavailableBluetooth.visible)
           return root.fail("shared backend readiness/state/geometry")
-        if (backend !== testBackend)
-          return root.fail("native adapter fixture boundary")
+        if (typeof sharedBluetoothService.backend !== "undefined")
+          return root.fail("public service leaked its native backend")
         if (first.childPanelWidget("omarchy.bluetooth") !== first
             || second.childPanelWidget("omarchy.bluetooth") !== second
             || !first.ownsPanelWidget(first))
@@ -252,10 +252,16 @@ ShellRoot {
             || fakeBar.activePopout !== second)
           return root.fail("two-output local panel sessions")
 
-        sharedBluetoothService.connectDevice(backend.knownDevices[0])
-        sharedBluetoothService.disconnectDevice(backend.connectedDevices[0])
-        sharedBluetoothService.forgetDevice(backend.knownDevices[0])
-        if (backend.connectCount !== 1 || backend.disconnectCount !== 1
+        const connectResult = sharedBluetoothService.connectDevice(
+          backend.knownDevices[0])
+        const disconnectResult = sharedBluetoothService.disconnectDevice(
+          backend.connectedDevices[0])
+        const forgetResult = sharedBluetoothService.forgetDevice(
+          backend.knownDevices[0])
+        if (!connectResult || connectResult.ok !== true
+            || !disconnectResult || disconnectResult.ok !== true
+            || !forgetResult || forgetResult.ok !== true
+            || backend.connectCount !== 1 || backend.disconnectCount !== 1
             || backend.forgetCount !== 1
             || sharedBluetoothService.pendingAction("66:77:88:99:AA:BB") !== "forgetting")
           return root.fail("backend device action forwarding")

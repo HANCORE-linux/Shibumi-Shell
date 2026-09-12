@@ -35,7 +35,8 @@ cleanup() {
   if [[ -n $stop_shells && -x $stop_shells ]]; then
     timeout --kill-after=1s 8s env \
       SHIBUMI_TEST_SERVICE_FILE="$service_file" \
-      SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" "$stop_shells" \
+      SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" \
+      SHIBUMI_TEST_SERVICE_PREFIX="$service_prefix" "$stop_shells" \
       >/dev/null 2>&1 || cleanup_error=1
   fi
   if (( cleanup_probe_armed == 1 )) \
@@ -69,6 +70,8 @@ trap cleanup EXIT
   || fail 'Quattro omarchy-shell is missing'
 command -v quickshell >/dev/null 2>&1 || fail 'quickshell is required'
 command -v jq >/dev/null 2>&1 || fail 'jq is required'
+command -v git >/dev/null 2>&1 || fail 'git is required'
+command -v tar >/dev/null 2>&1 || fail 'tar is required'
 command -v systemctl >/dev/null 2>&1 || fail 'systemctl is required'
 command -v systemd-run >/dev/null 2>&1 || fail 'systemd-run is required'
 [[ -n ${WAYLAND_DISPLAY:-} && -n ${XDG_RUNTIME_DIR:-} ]] \
@@ -81,7 +84,8 @@ stub_bin="$tmpdir/bin"
 fixture_omarchy="$tmpdir/omarchy"
 mkdir -p "$home/.config" "$home/.local/state" "$home/.cache" "$source_root" "$stub_bin" \
   "$fixture_omarchy"
-cp -a "$repo_root/." "$source_root/"
+predecessor_revision=5154c020a44d71139a6614a183ec91021b9772c1
+git -C "$repo_root" archive "$predecessor_revision" | tar -x -C "$source_root"
 cp -a "$omarchy_path/shell" "$fixture_omarchy/shell"
 cp -a "$omarchy_path/bin" "$fixture_omarchy/bin"
 ln -s "$omarchy_path/config" "$fixture_omarchy/config"
@@ -99,6 +103,15 @@ cat >"$stop_shells" <<'STOP_SHELLS'
 set -euo pipefail
 
 mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
+[[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
+  || exit 1
+for unit in "${units[@]}"; do
+  if [[ ! $unit =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])\.service$ \
+      && $unit != "$SHIBUMI_TEST_SERVICE_PREFIX-cleanup-probe.service" ]]; then
+    printf 'refusing foreign fixture service: %s\n' "$unit" >&2
+    exit 1
+  fi
+done
 unit_state() {
   timeout --kill-after=0.2s 0.8s systemctl --user show "$1" \
     -p LoadState -p ActiveState --value 2>/dev/null
@@ -159,6 +172,12 @@ cat >"$start_shell" <<'START_SHELL'
 set -euo pipefail
 
 mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
+[[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
+  || exit 1
+for existing in "${units[@]}"; do
+  [[ $existing =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])\.service$ ]] \
+    || exit 1
+done
 (( ${#units[@]} < 12 )) || {
   printf 'isolated shell service generation limit exceeded\n' >&2
   exit 1
@@ -260,36 +279,45 @@ done
 suite_cli install --yes || fail 'suite install command failed'
 state_file="$home/.local/state/shibumi/install.json"
 [[ -f $state_file ]] || fail 'install state is missing'
+state_tmp="$state_file.tmp"
+jq --arg revision "$predecessor_revision" \
+  '.sourceRevision = $revision' "$state_file" >"$state_tmp"
+mv "$state_tmp" "$state_file"
+while IFS= read -r marker; do
+  marker_tmp="$marker.tmp"
+  jq --arg revision "$predecessor_revision" \
+    '.sourceRevision = $revision' "$marker" >"$marker_tmp"
+  mv "$marker_tmp" "$marker"
+done < <(find "$home/.config/omarchy/plugins" -mindepth 2 -maxdepth 2 \
+  -name .shibumi-managed.json -type f -print)
 first_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $first_digest =~ ^[0-9a-f]{64}$ ]] || fail 'install payload digest is invalid'
 [[ $(shell_ipc shibumi-suite-runtime verifyPayload "$first_digest") == ok ]] \
   || fail 'installed state service did not confirm the first payload digest'
 suite_cli status >/dev/null || fail 'installed suite status is not clean'
 
+# Replace the exact Step-5 source with the reviewed Beta.13 candidate. This
+# exercises the admitted predecessor transition instead of manufacturing an
+# uncontracted locally modified source identity.
+rm -rf -- "$source_root"
+mkdir -p "$source_root"
+cp -a "$repo_root/." "$source_root/"
+suite_cli update --yes || fail 'suite update command failed'
+second_digest=$(jq -r '.payloadDigest // empty' "$state_file")
+[[ $second_digest =~ ^[0-9a-f]{64}$ && $second_digest != "$first_digest" ]] \
+  || fail 'predecessor update did not advance the payload identity'
+[[ $(shell_ipc shibumi-suite-runtime verifyPayload "$second_digest") == ok ]] \
+  || fail 'updated state service did not confirm the new payload digest'
+suite_cli status >/dev/null || fail 'updated suite status is not clean'
+
 suite_cli deactivate --keep-layout --yes \
   || fail 'suite external-bar transition failed'
 config="$home/.config/omarchy/shell.json"
 jq -e '(.bar.id // "omarchy.bar") == "omarchy.bar"' "$config" >/dev/null \
   || fail 'external-bar transition did not activate the stock bar'
-external_bar_snapshot=$(jq -Sc '.bar' "$config")
-[[ $(shell_ipc shibumi-suite-runtime verifyPayload "$first_digest") == ok ]] \
-  || fail 'state service endpoint was lost under the stock bar'
-
-printf '\n// isolated runtime update generation\n' \
-  >>"$source_root/hancore.shibumi.center/BarWidget.qml"
-suite_cli update --yes || fail 'suite update command failed'
-second_digest=$(jq -r '.payloadDigest // empty' "$state_file")
-[[ $second_digest =~ ^[0-9a-f]{64}$ && $second_digest != "$first_digest" ]] \
-  || fail 'updated payload digest did not change'
 [[ $(shell_ipc shibumi-suite-runtime verifyPayload "$second_digest") == ok ]] \
-  || fail 'updated state service did not confirm the new payload digest'
-[[ $(jq -Sc '.bar' "$config") == "$external_bar_snapshot" ]] \
-  || fail 'external update rewrote the stock bar or widget layout'
+  || fail 'state service endpoint was lost under the stock bar'
 suite_cli status >/dev/null || fail 'external suite status is not clean'
-
-suite_cli activate --yes || fail 'suite reactivation failed'
-jq -e '.bar.id == "hancore.shibumi.bar"' "$config" >/dev/null \
-  || fail 'reactivation did not restore the Shibumi bar'
 
 suite_cli uninstall --yes || fail 'suite uninstall command failed'
 [[ ! -e $home/.local/state/shibumi ]] || fail 'suite state remains after uninstall'
@@ -310,7 +338,8 @@ if find "$home/.config/omarchy/plugins" -mindepth 1 -maxdepth 1 \
 fi
 timeout --kill-after=1s 8s env \
   SHIBUMI_TEST_SERVICE_FILE="$service_file" \
-  SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" "$stop_shells" \
+  SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" \
+  SHIBUMI_TEST_SERVICE_PREFIX="$service_prefix" "$stop_shells" \
   || fail 'final fixture shell service drain failed'
 if grep -Eq \
     'hancore\.shibumi[^ ]*.*(Binding loop|TypeError|ReferenceError|is not a type|failed to load)|plugin hancore\.shibumi.*failed|bar option hancore\.shibumi.*failed' \

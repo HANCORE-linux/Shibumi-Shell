@@ -43,9 +43,10 @@ Open Control Center **Bars** and select Shibumi, or run:
 ./scripts/shibumi-suite activate
 ```
 
-If `omarchy bar defaults` was used, Shibumi can restore its managed layout but
-cannot reconstruct personal `bar.shibumi` settings that the defaults command
-deleted.
+If `omarchy bar defaults` was used, activation restores Shibumi's managed layout.
+Canonical settings in the State service entry survive that command. Native
+per-plugin disable/removal of State does delete its settings; repair cannot
+reconstruct deleted personal values and must not revive retired storage.
 
 ## A panel is misplaced or detached
 

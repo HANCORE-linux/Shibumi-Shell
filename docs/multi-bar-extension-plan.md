@@ -103,8 +103,10 @@ A minimal manifest shape is:
 ```
 
 The plugin may contain reviewed vendored host code from canonical development
-sources, but it may not import a sibling plugin or the repository root at
-runtime. No plugin payload may contain a symlink.
+sources. The only sibling-import exception is the exact State `runtime/` module
+and approved importer roster in [shared-runtime-v1.md](architecture/shared-runtime-v1.md).
+A new bar requires explicit roster admission; no other sibling or repository-root
+import is allowed. No plugin payload may contain a symlink.
 
 ## Shared host facade and state
 
@@ -112,13 +114,15 @@ Every bar implements [`host-facade-v1.md`](host-facade-v1.md) and exposes
 `shibumiHostContractVersion == 1`. Feature plugins bind only to that facade and
 standard Quattro contracts, never to a concrete bar directory.
 
-Shared feature state remains under `bar.shibumi`. A bar switch must preserve:
+Shared feature state lives under `.shibumi` in the canonical State `plugins[]`
+service entry, independent of the selected bar. A bar switch must preserve:
 
 - G1-G15 enablement, compact settings, order, and feature preferences;
 - menu, picker, workspace, Reactor, and panel state contracts; and
 - user entries outside the Shibumi-managed layout.
 
-A variant-only option may use a namespaced `bar.shibumi.bars.<bar-id>` object
+A future variant-only option may use a namespaced `shibumi.bars.<bar-id>` object
+inside that same State entry
 only when it has no meaning to another host. It must not copy the complete
 feature configuration. Schema normalization must bound and preserve such data
 when the corresponding bar is inactive.

@@ -18,7 +18,12 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
-cp -a -- "$repo_root/hancore.shibumi.state" "$tmpdir/state"
+cp -a -- "$repo_root/hancore.shibumi.state" "$tmpdir/hancore.shibumi.state"
+# This matrix asserts synchronous presentation behavior, not native persistence.
+# Replace the entire storage backend before construction; no native writer or
+# FileView can be reached. Actual async State+CC remain in the native fixture.
+cp -- "$repo_root/tests/fixtures/SynchronousStateStorage.qml" \
+  "$tmpdir/hancore.shibumi.state/StateStorage.qml"
 cp -a -- "$repo_root/hancore.shibumi.control-center" "$tmpdir/control"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
@@ -226,16 +231,16 @@ rg -Fq 'restoreBar.scheduleOpenControlCenterRestores(' \
 rg -Fq 'presentationName === "shellStyle"' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "shell-style restore does not wait for the replacement panel owner"
-rg -Fq 'settings.restorePage, true, ownerWidget, popoutScreenName' \
+rg -Fq 'needsReplacement !== false, ownerWidget, popoutScreenName' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "V1/V2 restore does not wait for replacement owners"
 layout_protection_controller=$(sed -n \
   '/^  function setLayoutProtection(variant, enabled) {$/,/^  }$/p' \
   "$control_dir/ControlCenterPanel.qml")
 for protection_restore_contract in \
-    'restoreBar.scheduleOpenControlCenterRestores' \
-    'settings.restorePage, false, ownerWidget, popoutScreenName' \
-    'restoreBar.cancelCreatedWidgetRestores(created)'; do
+    'return runWithControlCenterRestore(function() {' \
+    'state.setLayoutProtection(requested, enabled)' \
+    '}, false)'; do
   grep -Fq "$protection_restore_contract" \
     <<<"$layout_protection_controller" \
     || fail "layout lock restore drifted: $protection_restore_contract"
@@ -251,7 +256,11 @@ for output_restore_contract in \
     'function findPanelWidgetOnScreen(pluginId, screenName)' \
     'record.activeOwner === owner' \
     'function trackWidgetRestorePage(pluginId, page, ownerValue, screenName)' \
-    'if (record.attempts < 20) next.push(record)'; do
+    'record.attempts >= 20' \
+    'if (record.waitingWrites && record.waitingWrites.length) continue' \
+    'function settleStateRestores(throughSerial, result, observedRevision)' \
+    'root.pendingWidgetRestores.indexOf(record)' \
+    'const confirmed = record.restoreConfirmed || changed'; do
   rg -Fq "$output_restore_contract" \
     "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "output-local panel restore drifted: $output_restore_contract"
@@ -262,7 +271,7 @@ rg -Fq 'controller.trackSettingsPage(next)' \
 rg -Fq 'bar.cancelWidgetRestore(moduleName, root, outputName)' \
   "$control_dir/BarWidget.qml" \
   || fail "closing the Control Center does not cancel its output-local restore"
-rg -Fq 'function runWithControlCenterRestore(callback)' \
+rg -Fq 'function runWithControlCenterRestore(callback, needsReplacement, preservePanel)' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "widget Appearance changes do not preserve the Control Center"
 plugin_bar_toggle=$(sed -n \
@@ -1382,8 +1391,8 @@ for plugin_contract in \
     'controller.pluginUpdateShortStatusText' \
     'controller.pluginUpdateStatusText' \
     'function syncPluginUpdateConsumer()' \
-    'service.acquireConsumer()' \
-    'service.releaseConsumer()' \
+    'next.acquireConsumer()' \
+    'leasedPluginUpdateService.releaseConsumer()' \
     'Component.onDestruction:' \
     'actionWidth: Commons.Style.space(132)' \
     'onSecondaryActionRequested: root.controller.openPluginUpdater()' \

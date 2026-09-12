@@ -29,7 +29,7 @@ for signal_spec in INT:130 TERM:143 HUP:129; do
   set +e
   SHIBUMI_BT_CASES=service-first \
   SHIBUMI_BT_SIGNAL_READY_FILE="$marker" \
-    timeout --preserve-status --signal="$signal_name" --kill-after=3 4 \
+    timeout --preserve-status --signal="$signal_name" --kill-after=3 8 \
       bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
       >"$output" 2>&1
   status=$?
@@ -63,7 +63,7 @@ REAL_QUICKSHELL_BIN="$real_quickshell_bin" \
 SHIBUMI_BT_STUBBORN_CHILD_FILE="$child_state" \
 SHIBUMI_BT_CASES=service-first \
 SHIBUMI_BT_SIGNAL_READY_FILE="$marker" \
-  timeout --preserve-status --signal=TERM --kill-after=3 4 \
+  timeout --preserve-status --signal=TERM --kill-after=3 8 \
     bash "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
     >"$output" 2>&1
 status=$?

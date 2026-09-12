@@ -9,8 +9,8 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var workspaceService
-  property int cursorIndex: workspaceService.entries.length > 0 ? 0 : -1
-  readonly property var rows: workspaceService.entries
+  property int cursorIndex: rows.length > 0 ? 0 : -1
+  readonly property var rows: workspaceService ? workspaceService.entries : []
   readonly property int renderedRowCount: panelContent.renderedRowCount
   readonly property bool controlsFitWidth: panelContent.controlsFitWidth
 
@@ -39,7 +39,7 @@ ShibumiPanel {
   }
 
   function activateCursor() {
-    if (cursorIndex < 0 || cursorIndex >= rows.length) return false
+    if (!workspaceService || cursorIndex < 0 || cursorIndex >= rows.length) return false
     const focused = workspaceService.focusWorkspace(rows[cursorIndex].id)
     if (focused) ownerWidget.close()
     return focused

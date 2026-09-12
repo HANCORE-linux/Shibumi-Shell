@@ -11,11 +11,13 @@ Item {
   property Item focusTarget: null
   property int focusRequestCount: 0
   property bool centerOnBar: false
+  property bool surfaceOverrideEnabled: false
   property real centerOnBarOffset: 0
   property int padding: 0
   property real contentWidth: 0
   property real contentHeight: 0
   readonly property string shellStyle: "shibumi"
+  readonly property string popoutScreenName: ""
   readonly property color renderedSurfaceColor: "#181818"
   readonly property color controlForeground: "#eeeeee"
   readonly property color controlFillColor: "transparent"
@@ -35,7 +37,18 @@ Item {
     separator: "#404040",
     fillIdle: "#202020",
     fillHover: "#282828",
-    fillActive: "#303030"
+    fillActive: "#303030",
+    fillPrimaryHover: "#383838",
+    panelBackground: "#181818",
+    panelBorder: "#404040",
+    panelBorderWidth: 1,
+    panelRadius: 10,
+    tileRadius: 6,
+    ink: "#eeeeee",
+    mutedInk: "#999999",
+    seal: "#d75f5f",
+    fontFamily: "monospace",
+    captionSize: 11
   })
 
   width: contentWidth
@@ -58,13 +71,14 @@ Item {
   }
   function syncPopout() {
     if (!bar || !owner) return
-    if (open) bar.requestPopout(owner)
-    else bar.releasePopout(owner)
+    if (open && typeof bar.requestPopout === "function") bar.requestPopout(owner)
+    else if (!open && typeof bar.releasePopout === "function") bar.releasePopout(owner)
   }
 
   onOpenChanged: syncPopout()
   Component.onCompleted: syncPopout()
-  Component.onDestruction: if (bar && owner) bar.releasePopout(owner)
+  Component.onDestruction: if (bar && owner && typeof bar.releasePopout === "function")
+    bar.releasePopout(owner)
 
   Item {
     id: content

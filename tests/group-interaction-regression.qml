@@ -4,8 +4,11 @@ import "core" as Core
 import "styles/shibumi" as ShibumiStyle
 
 ShellRoot {
-  Item {
+  Window {
     id: test
+    visible: true
+    property bool frameSeen: false
+    onFrameSwapped: frameSeen = true
 
     width: 420
     height: 60
@@ -153,6 +156,7 @@ ShellRoot {
     function fail(message) {
       console.error("group-interaction-regression:", message)
       Qt.exit(1)
+      throw new Error(message)
     }
 
     function verifyAfterSwap() {
@@ -286,7 +290,7 @@ ShellRoot {
     Timer {
       property int attempts: 0
       interval: 10
-      running: true
+      running: test.frameSeen
       repeat: true
 
       onTriggered: {

@@ -137,7 +137,9 @@ for group_activation_contract in \
   'void(stateConfig)' \
   'void(stateRevision)' \
   'stateService.groupEnabledForVariant(' \
-  'groupId, v2Shell ? "v2" : "v1")'; do
+  'effectiveGroupId, v2Shell ? "v2" : "v1")' \
+  'const bindings = !v2Shell && bar && "v1FamilySlotBindings" in bar' \
+  '? GroupRegistry.dynamicGroupIdForModule(replacement) : groupId'; do
   rg -Fq "$group_activation_contract" core/GroupSlot.qml \
     || fail "optional group activation is not reactive: $group_activation_contract"
 done
@@ -343,8 +345,12 @@ done
 for widget in ai audio battery bluetooth brightness center control-center cpu gpu \
     media memory network power-profile quick-access status storage temperature \
     workspaces; do
-  rg -Fq 'HostTokens { id: hostTokens; bar: root.bar }' \
-    "hancore.shibumi.$widget/BarWidget.qml" \
+  token_injection='HostTokens { id: hostTokens; bar: root.bar }'
+  case "$widget" in
+    audio|media|control-center|cpu|memory|gpu|storage|temperature|workspaces|battery|power-profile)
+      token_injection='HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }' ;;
+  esac
+  rg -Fq "$token_injection" "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not provide standard-host visual tokens"
   rg -Fq 'if (value === "round") return pillHeight / 2' \
     "hancore.shibumi.$widget/HostTokens.qml" \

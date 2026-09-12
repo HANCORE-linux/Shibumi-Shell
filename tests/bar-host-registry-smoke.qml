@@ -1,5 +1,7 @@
 import QtQuick
 import Quickshell
+import "core/LayoutModel.js" as LayoutModel
+import "fixtures" as Fixtures
 
 ShellRoot {
   id: root
@@ -7,14 +9,107 @@ ShellRoot {
   property int attempts: 0
   property int stage: 0
   property int screensaverStage: 0
+  property bool mutationAdmissionChecked: false
   property var retainedItems: []
   property var inlineStateItem: null
   property var inlineStateSlot: null
   property string commandMarker: testCommandMarker
 
+  QtObject {
+    id: admissionLayoutSession
+    property string screenName: "admission-screen"
+    property int calls: 0
+    function setEditing(_enabled) {
+      calls++
+      return true
+    }
+  }
+
+  Fixtures.PluginRemovalChecks {
+    id: removalChecks
+    bar: hostBar
+  }
+
+  Fixtures.CloneSelectionChecks {
+    id: cloneChecks
+    bar: hostBar
+    host: fakeShell
+    stateOwner: stateService
+    fixtureDir: root.commandMarker.slice(0, root.commandMarker.lastIndexOf("/")) + "/fixtures"
+  }
+
+  Fixtures.StateRestoreChecks {
+    id: restoreChecks
+    bar: hostBar
+    stateOwner: stateService
+  }
+
+  Fixtures.LayoutRestoreChecks {
+    id: layoutRestoreChecks
+    referenceBar: hostBar
+  }
+
   function fail(message) {
     console.error("bar-host-registry-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
+  }
+
+  function verifyMutationAdmission() {
+    const originalLayout = JSON.parse(JSON.stringify(hostBar.layoutConfig))
+    const originalShell = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    const configuredLayout = JSON.parse(JSON.stringify(originalLayout))
+    configuredLayout.center = [{ id: "omarchy.clock", shibumiModule: true }]
+    hostBar.layoutConfig = configuredLayout
+    const configuredShell = JSON.parse(JSON.stringify(originalShell))
+    configuredShell.bar.layout = JSON.parse(JSON.stringify(configuredLayout))
+    fakeShell.shellConfig = configuredShell
+    const stateBefore = JSON.stringify(stateService.config)
+    const shellBefore = JSON.stringify(fakeShell.shellConfig)
+    const stateRevisionBefore = stateService.revision
+    const configWritesBefore = fakeShell.configWrites
+    const enableCallsBefore = fakePluginRegistry.enableCalls
+    const editingCallsBefore = admissionLayoutSession.calls
+    let callbackCalled = false
+    hostBar.registerLayoutSession(admissionLayoutSession)
+    hostBar.shutdownPrepared = true
+    const rejected = !hostBar.mutationAdmissionReady
+      && hostBar.setWidgetAppearance("G1", "separator", "true")
+        === "not-ready"
+      && hostBar.setWidgetAppearanceForVariant(
+        "G1", "v1", "compact", "true") === "not-ready"
+      && !hostBar.setStyle("shibumi")
+      && !hostBar.setBarPosition("bottom")
+      && !hostBar.setLayoutEditing(true, "admission-screen")
+      && !hostBar.setAllSplits(true)
+      && !hostBar.addV1Slot("center")
+      && !hostBar.removeV1Slot("left")
+      && !hostBar.layoutController.moveGroupToSlot("G1", "right", 0)
+      && !hostBar.resetBarLayout()
+      && !hostBar.setWidgetGroupVariantStates({
+        G1: { v1: false, v2: false }
+      })
+      && !hostBar.setBarWidgetInstalled("omarchy.clock", true, "right")
+      && !hostBar.removeWidgetFamilyAlternatives("G8")
+      && !hostBar.restoreWidgetFamilyProviderStates({
+        G8: { v1: true, v2: true }
+      })
+      && !hostBar.runWithControlCenterRestore(function() {
+        callbackCalled = true
+        return true
+      }, "bars", false, null, "")
+    hostBar.shutdownPrepared = false
+    const preserved = rejected && hostBar.mutationAdmissionReady && !callbackCalled
+      && JSON.stringify(stateService.config) === stateBefore
+      && JSON.stringify(fakeShell.shellConfig) === shellBefore
+      && stateService.revision === stateRevisionBefore
+      && fakeShell.configWrites === configWritesBefore
+      && fakePluginRegistry.enableCalls === enableCallsBefore
+      && admissionLayoutSession.calls === editingCallsBefore
+    hostBar.unregisterLayoutSession(admissionLayoutSession)
+    hostBar.layoutConfig = originalLayout
+    fakeShell.shellConfig = originalShell
+    return preserved
   }
 
   function verifyTransparencyContract() {
@@ -85,10 +180,179 @@ ShellRoot {
     return !hostBar.requestedTransparent && !hostBar.transparent
   }
 
+  function verifyV1RemovalAmbiguity() {
+    const savedState = JSON.parse(JSON.stringify(stateService.config))
+    const savedShell = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    const savedLayout = hostBar.currentLayoutSnapshot()
+    try {
+      const withCenter = LayoutModel.addSlot(LayoutModel.defaultOrder(), "center")
+      const pair = LayoutModel.moveGroupToSlot(withCenter, "G4", "center", 1)
+      const added = LayoutModel.addDynamicGroup(pair, LayoutModel.defaultSplits(), "example.outer", "left")
+      const swapped = LayoutModel.swapGroups(added.order, "G:example.outer", "G8")
+      const state = JSON.parse(JSON.stringify(savedState))
+      state.presentation.shellStyle = "shibumi"
+      state.order = swapped
+      state.splits = added.splits
+      stateService.config = state
+      hostBar.layoutConfig = { left: [{ id: "example.outer", shibumiModule: true }], center: [], right: [] }
+      fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(hostBar.layoutConfig))
+      const before = JSON.stringify({ state: stateService.config, shell: fakeShell.shellConfig,
+        layout: hostBar.layoutConfig, revision: stateService.revision, writes: fakeShell.configWrites,
+        enables: fakePluginRegistry.enableCalls })
+      if (!removalChecks.verify("example.outer", false)
+          || hostBar.canRemoveBarWidget("example.outer")
+          || hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
+          || JSON.stringify({ state: stateService.config, shell: fakeShell.shellConfig,
+            layout: hostBar.layoutConfig, revision: stateService.revision, writes: fakeShell.configWrites,
+            enables: fakePluginRegistry.enableCalls }) !== before)
+        return root.fail("ambiguous provider removal mutated bar/state/registry")
+      const home = LayoutModel.locationFor(swapped, "G8")
+      if (!hostBar.layoutController.moveGroupToSlot("G:example.outer", home.region, home.index)
+          || !hostBar.canRemoveBarWidget("example.outer")
+          || !removalChecks.verify("example.outer", true)
+          || !hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
+          || JSON.stringify(stateService.config.order) !== JSON.stringify(pair)
+          || JSON.stringify(stateService.config.splits) !== JSON.stringify(LayoutModel.defaultSplits()))
+        return root.fail("explicit return-to-extra did not permit safe removal")
+    } finally {
+      stateService.config = savedState
+      fakeShell.shellConfig = savedShell
+      hostBar.layoutConfig = savedLayout
+    }
+    return true
+  }
+
+  function verifyV1FamilyCapacity() {
+    const savedState = JSON.parse(JSON.stringify(stateService.config))
+    const savedLayout = hostBar.currentLayoutSnapshot()
+    const savedShell = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    const savedRegistry = fakePluginRegistry.installedPlugins
+    const installed = Object.assign({}, savedRegistry)
+    const extras = ["example.one", "example.two", "example.three", "example.four"]
+    for (const id of extras.concat(["example.fifth", "omarchy.audio"]))
+      installed[id] = { id: id, kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Fixture.qml" } }
+    for (const capability of ["audio", "clock"]) {
+      const id = "example.multi-" + capability
+      installed[id] = { id: id, kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Fixture.qml" },
+        barWidget: { allowMultiple: true, semanticCapabilities: [capability] } }
+    }
+    fakePluginRegistry.installedPlugins = installed
+    const fullOrder = LayoutModel.defaultOrder()
+    fullOrder.left.push("G:example.one", "G:example.two")
+    fullOrder.right.push("G:example.three", "G:example.four")
+    const movedOrder = LayoutModel.swapGroups(fullOrder, "G6", "G11")
+    const splits = LayoutModel.allSplits(true, movedOrder)
+    const next = JSON.parse(JSON.stringify(savedState))
+    next.presentation.shellStyle = "shibumi"
+    next.order = movedOrder
+    next.splits = splits
+    next.widgets.G6 = { enabledV1: true, enabledV2: true }
+    stateService.config = next
+    const fullLayout = {
+      left: extras.slice(0, 2).map(id => ({ id: id, shibumiModule: true })),
+      center: [],
+      right: extras.slice(2).map(id => ({ id: id, shibumiModule: true }))
+    }
+    hostBar.layoutConfig = fullLayout
+    fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(fullLayout))
+    const orderBefore = JSON.stringify(stateService.config.order)
+    const splitsBefore = JSON.stringify(stateService.config.splits)
+    const v2Before = JSON.stringify(stateService.config.v2Layout)
+    const stateBefore = JSON.stringify(stateService.config)
+    const shellBefore = JSON.stringify(fakeShell.shellConfig)
+    const enableCallsBefore = fakePluginRegistry.enableCalls
+    for (const id of ["example.multi-audio", "example.multi-clock"]) {
+      if (hostBar.setBarWidgetInstalled(id, true, "left")
+          || JSON.stringify(stateService.config) !== stateBefore
+          || JSON.stringify(fakeShell.shellConfig) !== shellBefore
+          || JSON.stringify(hostBar.layoutConfig) !== JSON.stringify(fullLayout)
+          || fakePluginRegistry.enableCalls !== enableCallsBefore
+          || hostBar.unassignedLayoutEntries("left").length !== 0
+          || hostBar.unassignedLayoutEntries("center").length !== 0)
+        return root.fail("V1 multi-instance family replacement did not refuse atomically")
+    }
+    if (!hostBar.setBarWidgetInstalled("omarchy.audio", true, "left"))
+      return root.fail("full V1 layout rejected slot-neutral audio replacement")
+    hostBar.layoutConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar.layout))
+    if (hostBar.v1FamilySlotBindings.G6 !== "omarchy.audio"
+        || hostBar.layoutController.groupLocation("G6").region !== "right"
+        || hostBar.layoutController.groupLocation("G:omarchy.audio") !== null
+        || JSON.stringify(stateService.config.order) !== orderBefore
+        || JSON.stringify(stateService.config.splits) !== splitsBefore
+        || JSON.stringify(stateService.config.v2Layout) !== v2Before
+        || !hostBar.reconcileV1PluginGroups()
+        || hostBar.unassignedLayoutEntries("left").length !== 0
+        || hostBar.unassignedLayoutEntries("right").length !== 0)
+      return root.fail("family replacement moved slots, splits, V2 or duplicated a provider")
+    for (const id of extras) {
+      if (!hostBar.layoutController.groupLocation("G:" + id))
+        return root.fail("family replacement displaced an unrelated dynamic provider")
+    }
+    const rejectedLayout = JSON.stringify(fakeShell.shellConfig.bar.layout)
+    const rejectedState = JSON.stringify(stateService.config)
+    if (hostBar.setBarWidgetInstalled("example.fifth", true, "left")
+        || JSON.stringify(fakeShell.shellConfig.bar.layout) !== rejectedLayout
+        || JSON.stringify(stateService.config) !== rejectedState)
+      return root.fail("genuinely additive fifth provider did not fail atomically")
+    if (!hostBar.removeBarWidgetAndRestoreFamilies("omarchy.audio", ["G6"]))
+      return root.fail("slot-neutral family restore failed")
+    hostBar.layoutConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar.layout))
+    if (hostBar.v1FamilySlotBindings.G6
+        || !stateService.groupEnabledForVariant("G6", "v1")
+        || JSON.stringify(stateService.config.order) !== orderBefore)
+      return root.fail("family restore did not retain the original fixed slot")
+
+    // Existing explicit placements are not migrated. If a later replacement
+    // fails, restore their exact order/splits rather than re-allocating them.
+    const legacy = JSON.parse(JSON.stringify(stateService.config))
+    legacy.order.right[legacy.order.right.indexOf("G:example.four")] = "G:example.battery"
+    legacy.widgets.G12 = { enabledV1: false, enabledV2: false }
+    legacy.widgets.G14 = { enabledV1: true, enabledV2: true }
+    stateService.config = legacy
+    const legacyLayout = JSON.parse(JSON.stringify(fullLayout))
+    legacyLayout.right[1].id = "example.battery"
+    hostBar.layoutConfig = legacyLayout
+    fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(legacyLayout))
+    const legacyOrder = JSON.stringify(stateService.config.order)
+    const legacySplits = JSON.stringify(stateService.config.splits)
+    if (hostBar.v1FamilySlotBindings.G12 || !hostBar.reconcileV1PluginGroups()
+        || JSON.stringify(stateService.config.order) !== legacyOrder)
+      return root.fail("existing family placement was migrated")
+    stateService.rejectGroupVariantStates = true
+    const accepted = hostBar.setBarWidgetInstalled("omarchy.power", true, "right")
+    stateService.rejectGroupVariantStates = false
+    if (accepted || JSON.stringify(stateService.config.order) !== legacyOrder
+        || JSON.stringify(stateService.config.splits) !== legacySplits
+        || JSON.stringify(fakeShell.shellConfig.bar.layout) !== JSON.stringify(legacyLayout)
+        || !stateService.groupEnabledForVariant("G14", "v1"))
+      return root.fail("rejected legacy family replacement did not restore exact layout")
+
+    const v2State = JSON.parse(JSON.stringify(stateService.config))
+    v2State.presentation.shellStyle = "full"
+    stateService.config = v2State
+    if (!hostBar.setBarWidgetInstalled("example.multi-audio", true, "left"))
+      return root.fail("V1 multi-instance refusal leaked into V2")
+    hostBar.layoutConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar.layout))
+    if (!hostBar.unassignedLayoutEntries("left").some(
+          entry => entry.id === "example.multi-audio"))
+      return root.fail("V2 multi-instance family behavior changed")
+
+    fakePluginRegistry.installedPlugins = savedRegistry
+    stateService.config = savedState
+    hostBar.layoutConfig = savedLayout
+    fakeShell.shellConfig = savedShell
+    return true
+  }
+
   QtObject {
     id: stateService
 
-    readonly property bool ready: true
+    property bool ready: true
+    property bool writePending: false
+    property int writeSerial: 0
+    signal persistenceSettled(int throughSerial, string result)
     property int revision: 0
     property var config: ({
       widgets: ({
@@ -322,7 +586,9 @@ ShellRoot {
       return serviceFor(pluginId)
     }
 
+    property int configWrites: 0
     function mutateShellConfig(mutator) {
+      configWrites++
       const next = JSON.parse(JSON.stringify(shellConfig))
       mutator(next)
       shellConfig = next
@@ -333,6 +599,8 @@ ShellRoot {
     id: fakePluginRegistry
 
     signal pluginsChanged()
+    property int enableCalls: 0
+    function setEnabled(id, enabled) { enableCalls++; return true }
 
     property url resolverUrl: Qt.resolvedUrl("fixtures/ResolverTestWidget.qml")
 
@@ -470,6 +738,8 @@ ShellRoot {
     running: true
 
     onTriggered: {
+      if (restoreChecks.started && !restoreChecks.done) return
+      if (layoutRestoreChecks.started && !layoutRestoreChecks.done) return
       root.attempts++
       if ((!hostBar.hostReady || !hostBar.styleReady
            || !hostBar.barToggleStateLoaded
@@ -483,7 +753,16 @@ ShellRoot {
         return root.fail("expected 16 registry slots, got "
                          + hostBar.moduleSlots.length)
 
+      if (!root.mutationAdmissionChecked) {
+        root.mutationAdmissionChecked = true
+        if (!root.verifyMutationAdmission())
+          return root.fail("inactive Bar mutation escaped the admission guard")
+        return
+      }
+
       if (root.screensaverStage === 0) {
+        if (hostBar.shell !== fakeShell)
+          return root.fail("legacy native widget shell was replaced by a narrower adapter")
         if (hostBar.barHidden)
           return root.fail("bar started hidden without a toggle or screensaver")
         hostBar.requestPopout(fakePopout)
@@ -570,6 +849,16 @@ ShellRoot {
             || hostBar.pendingWidgetRestores.length !== 0)
           return root.fail("output-local panel restore did not clean up")
         root.screensaverStage = 6
+      }
+
+      if (root.screensaverStage === 6 && !restoreChecks.done) {
+        restoreChecks.start()
+        return
+      }
+
+      if (restoreChecks.done && !layoutRestoreChecks.done) {
+        layoutRestoreChecks.start()
+        return
       }
 
       if (root.stage === 13) {
@@ -886,6 +1175,11 @@ ShellRoot {
           || !stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("rejected provider install did not roll back")
 
+      if (!removalChecks.verifyScopedActive("example.scoped", [])
+          || !removalChecks.verifyScopedActive(
+            "example.scoped-provider", ["G6"])
+          || !root.verifyV1FamilyCapacity() || !root.verifyV1RemovalAmbiguity()
+          || !cloneChecks.run()) return
       if (!hostBar.setBarWidgetInstalled(
             "omarchy.clock", true, "right"))
         return root.fail("Add plugin did not work with the active V1 layout")
@@ -893,14 +1187,14 @@ ShellRoot {
           || stateService.config.widgets.G8.enabledV1 !== false
           || stateService.config.widgets.G8.enabledV2 !== false)
         return root.fail("V1 provider replacement did not cover V2")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar.layout))
+      const clockGroup = hostBar.layoutController.groupLocation("G8")
+      if (!clockGroup || clockGroup.region !== "center"
+          || hostBar.v1FamilySlotBindings.G8 !== "omarchy.clock"
+          || hostBar.layoutController.groupLocation("G:omarchy.clock") !== null)
+        return root.fail("V1 family replacement did not reuse G8")
       if (!hostBar.removeWidgetFamilyAlternatives("G8"))
         return root.fail("V1 family alternative removal")
-      const clockGroup = hostBar.layoutController.groupLocation(
-        "G:omarchy.clock")
-      if (!clockGroup || clockGroup.region === "center"
-          || stateService.config.order[clockGroup.region][clockGroup.index]
-            !== "G:omarchy.clock")
-        return root.fail("V1 plugin did not receive an automatic G-group")
 
       const v2Config = JSON.parse(JSON.stringify(stateService.config))
       v2Config.presentation.shellStyle = "full"
@@ -1399,6 +1693,15 @@ ShellRoot {
 
       if (!root.verifyTransparencyContract())
         return root.fail("transparency contract did not settle opaque")
+
+      const providerRevision = hostBar.providerRegistryRevision
+      if (!hostBar.prepareForShutdown() || !hostBar.prepareForShutdown()
+          || !hostBar.shutdownPrepared || hostBar.hostReady
+          || hostBar.outputWindowsEnabled)
+        return root.fail("bar shutdown preparation did not settle idempotently")
+      fakePluginRegistry.pluginsChanged()
+      if (hostBar.providerRegistryRevision !== providerRevision)
+        return root.fail("bar shutdown accepted a late registry reconciliation")
 
       stop()
       console.log("bar host registry smoke passed")

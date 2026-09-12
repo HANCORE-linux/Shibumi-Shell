@@ -110,55 +110,69 @@ Item {
     return result
   }
 
-  function isGroupSubsequence(shorter, longer) {
-    let cursor = 0
-    for (let index = 0; index < longer.length
-        && cursor < shorter.length; index++) {
-      if (String(longer[index] || "") === String(shorter[cursor] || ""))
-        cursor++
+  function commonGroupSubsequence(current, desired) {
+    const rows = []
+    for (let left = 0; left <= current.length; left++)
+      rows.push(new Array(desired.length + 1).fill(0))
+    for (let left = current.length - 1; left >= 0; left--) {
+      for (let right = desired.length - 1; right >= 0; right--) {
+        rows[left][right] = current[left] === desired[right]
+          ? rows[left + 1][right + 1] + 1
+          : Math.max(rows[left + 1][right], rows[left][right + 1])
+      }
     }
-    return cursor === shorter.length
+    const retained = []
+    let left = 0
+    let right = 0
+    while (left < current.length && right < desired.length) {
+      if (current[left] === desired[right]) {
+        retained.push(current[left])
+        left++
+        right++
+      } else if (rows[left + 1][right] >= rows[left][right + 1]) {
+        left++
+      } else {
+        right++
+      }
+    }
+    return retained
   }
 
   function syncStableGroups() {
-    const desired = Array.isArray(groups) ? groups : []
+    const desiredSource = Array.isArray(groups) ? groups : []
+    const desired = desiredSource.map(function(value) {
+      return String(value || "")
+    })
     const current = stableGroupValues()
     if (JSON.stringify(current) === JSON.stringify(desired)) return
 
-    // Pure additions/removals retain every unchanged delegate. Reorders need
-    // a rebuild because Repeater row moves do not change the visual child
-    // order; edit mode already closes panels before such a drag operation.
-    if (isGroupSubsequence(current, desired)) {
-      let currentIndex = 0
-      for (let target = 0; target < desired.length; target++) {
-        const groupId = String(desired[target] || "")
-        if (currentIndex < stableGroupModel.count
-            && String(stableGroupModel.get(currentIndex).groupId || "")
-              === groupId) {
-          currentIndex++
-          continue
-        }
+    // Repeater row moves do not reliably update visual child order. Retain a
+    // maximal common subsequence instead, then remove and insert only groups
+    // whose position actually changed. In particular, V1 <-> V2 must not tear
+    // down every widget owner in a reordered region.
+    const retained = commonGroupSubsequence(current, desired)
+    let retainedIndex = retained.length - 1
+    for (let index = stableGroupModel.count - 1; index >= 0; index--) {
+      const groupId = String(stableGroupModel.get(index).groupId || "")
+      if (retainedIndex >= 0 && groupId === retained[retainedIndex]) {
+        retainedIndex--
+      } else {
+        stableGroupModel.remove(index)
+      }
+    }
+
+    let currentIndex = 0
+    for (let target = 0; target < desired.length; target++) {
+      const groupId = desired[target]
+      if (currentIndex < stableGroupModel.count
+          && String(stableGroupModel.get(currentIndex).groupId || "")
+            === groupId) {
+        currentIndex++
+      } else {
         stableGroupModel.insert(target, { groupId: groupId })
         currentIndex++
       }
-      return
     }
-    if (isGroupSubsequence(desired, current)) {
-      let desiredIndex = desired.length - 1
-      for (let index = stableGroupModel.count - 1; index >= 0; index--) {
-        const groupId = String(stableGroupModel.get(index).groupId || "")
-        if (desiredIndex >= 0
-            && groupId === String(desired[desiredIndex] || "")) {
-          desiredIndex--
-          continue
-        }
-        stableGroupModel.remove(index)
-      }
-      return
-    }
-    stableGroupModel.clear()
-    for (let index = 0; index < desired.length; index++)
-      stableGroupModel.append({ groupId: String(desired[index] || "") })
   }
 
   onGroupsChanged: syncStableGroups()
@@ -351,6 +365,33 @@ Item {
         }
         return widths
       }
+      function groupAvailableWidth(index) {
+        if (!root) return 0
+        if (root.v2Mode || root.region !== "center" || root.availableWidth <= 0)
+          return root.availableWidth
+        // Prefer G8 only while its enabled, stage-shown widgets are loaded.
+        // Otherwise the first loaded center occupant owns the remainder.
+        // Readiness, not hasContent/width, chooses the owner: its own budget
+        // must not feed back into selection. Edit placeholders stay siblings.
+        let ownerIndex = -1
+        for (let i = 0; i < horizontalRepeater.count; i++) {
+          const cell = horizontalRepeater.itemAt(i)
+          if (!cell || !cell.budgetOwnerEligible) continue
+          if (ownerIndex < 0) ownerIndex = i
+          if (cell.modelData === "G8") { ownerIndex = i; break }
+        }
+        if (index !== ownerIndex) return 0
+        let siblings = root.canAddSlot ? root.groupSpacing + addSlotTarget.width : 0
+        for (let i = 0; i < horizontalRepeater.count; i++) {
+          if (i === index) continue
+          const cell = horizontalRepeater.itemAt(i)
+          if (cell && cell.effectiveHasContent)
+            siblings += cell.targetVisual.width + root.groupSpacing
+        }
+        // Zero is the host widget API's unconstrained sentinel.
+        return Math.max(1, root.availableWidth - siblings)
+      }
+
       readonly property var groupGeometry: {
         if (!root) return []
         void(root.groups)
@@ -480,6 +521,8 @@ Item {
           property real measuredMinimumGroupWidth: 0
           readonly property bool effectiveHasContent: placeholderSlot
             || contentShown
+          readonly property bool budgetOwnerEligible: modelData !== ""
+            && groupSlot.groupEnabled && stageShown && groupSlot.hasLoadedWidgets
           readonly property bool budgetHasContent: groupSlot.groupEnabled
             && (groupHasContent
             || (measuredHasContent && groupSlot.groupEnabled
@@ -660,7 +703,8 @@ Item {
             bar: horizontalCell.lifecycleBar
             groupId: horizontalCell.modelData
             screenName: root ? root.screenName : ""
-            availableWidth: root ? root.availableWidth : 0
+            availableWidth: horizontalRow
+              ? horizontalRow.groupAvailableWidth(horizontalCell.index) : 0
             enabled: root ? !root.slotEditing : false
             x: horizontalCell.leadingGap
             anchors.verticalCenter: parent.verticalCenter
@@ -799,6 +843,7 @@ Item {
             id: splitMarker
 
             readonly property bool hasFollowingGroup: root && horizontalRow
+              && (root.v2Mode || root.region !== "center")
               && horizontalCell.contentShown
               && (root.v2Mode
                 ? horizontalRow.hasContentAfter(horizontalCell.index)

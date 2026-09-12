@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -33,15 +34,60 @@ EXCLUDED_PREFIXES = (
 )
 
 
+FORBIDDEN_GIT_ENVIRONMENT = {
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_COUNT",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_WORK_TREE",
+}
+
+
 def git(*arguments: str) -> str:
     result = subprocess.run(
-        ["git", *arguments],
+        ["git", "-c", "core.fsmonitor=false", *arguments],
         cwd=ROOT,
         check=True,
         stdout=subprocess.PIPE,
         text=True,
+        timeout=30,
     )
     return result.stdout
+
+
+def require_clean_commit(expected_commit: str | None) -> str:
+    ambient = sorted(name for name in FORBIDDEN_GIT_ENVIRONMENT if os.environ.get(name))
+    if ambient:
+        raise RuntimeError(
+            "release archive rejects ambient Git overrides: " + ", ".join(ambient)
+        )
+    if git("replace", "-l").strip():
+        raise RuntimeError("release archive rejects Git replacement objects")
+    head = git("rev-parse", "--verify", "HEAD^{commit}").strip()
+    if expected_commit is not None:
+        if not re.fullmatch(r"[0-9a-f]{40}", expected_commit):
+            raise RuntimeError("--expected-commit must be a full lowercase commit id")
+        if head != expected_commit:
+            raise RuntimeError(
+                f"release archive HEAD mismatch: expected {expected_commit}, got {head}"
+            )
+    status = git(
+        "status", "--porcelain=v1", "--untracked-files=all", "--ignored=matching"
+    )
+    unsafe_ignored = [
+        line for line in status.splitlines()
+        if line.startswith("!! ")
+        and ("__pycache__" in line or line.endswith((".pyc", ".pyo")))
+    ]
+    tracked_or_untracked = [
+        line for line in status.splitlines() if not line.startswith("!! ")
+    ]
+    if tracked_or_untracked or unsafe_ignored:
+        raise RuntimeError("release archive requires an exact clean worktree")
+    return head
 
 
 def included(path: str) -> bool:
@@ -78,18 +124,19 @@ def working_entries() -> list[tuple[str, int, bytes, str | None]]:
     return entries
 
 
-def committed_entries() -> list[tuple[str, int, bytes, str | None]]:
+def committed_entries(revision: str) -> list[tuple[str, int, bytes, str | None]]:
     entries: list[tuple[str, int, bytes, str | None]] = []
-    for line in git("ls-tree", "-r", "HEAD").splitlines():
+    for line in git("ls-tree", "-r", revision).splitlines():
         metadata, path = line.split("\t", 1)
         mode_text, _kind, _object = metadata.split()
         if not included(path) or excluded(path):
             continue
         blob = subprocess.run(
-            ["git", "show", f"HEAD:{path}"],
+            ["git", "-c", "core.fsmonitor=false", "show", f"{revision}:{path}"],
             cwd=ROOT,
             check=True,
             stdout=subprocess.PIPE,
+            timeout=30,
         ).stdout
         if mode_text == "120000":
             entries.append((path, 0o777, b"", blob.decode().rstrip("\n")))
@@ -156,18 +203,28 @@ def main() -> int:
     )
     parser.add_argument("--check-reproducible", action="store_true")
     parser.add_argument("--output-dir", default="dist")
+    parser.add_argument(
+        "--expected-commit",
+        help="require and archive this exact clean 40-character commit",
+    )
     args = parser.parse_args()
 
-    if not args.allow_dirty and git(
-        "status", "--porcelain", "--untracked-files=no"
-    ).strip():
-        print(
-            "release archive requires a clean worktree; --allow-dirty is rehearsal-only",
-            file=sys.stderr,
+    if args.allow_dirty and args.expected_commit:
+        print("--allow-dirty cannot be combined with --expected-commit", file=sys.stderr)
+        return 2
+    try:
+        revision = "working-tree" if args.allow_dirty else require_clean_commit(
+            args.expected_commit
         )
+    except (RuntimeError, subprocess.SubprocessError) as error:
+        print(str(error), file=sys.stderr)
         return 2
 
-    entries = working_entries() if args.allow_dirty else committed_entries()
+    entries = (
+        working_entries()
+        if args.allow_dirty
+        else committed_entries(revision)
+    )
     version_data = next(
         (data for path, _mode, data, link in entries if path == "VERSION" and link is None),
         b"",

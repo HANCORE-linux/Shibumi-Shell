@@ -88,16 +88,29 @@ QtObject {
     next[address] = action
     pendingActions = next
   }
+  function actionResult(device, action) {
+    return {
+      ok: true,
+      code: "dispatched",
+      message: "",
+      action: action,
+      entityId: String(device.entityId || device.address || ""),
+      generation: Number(device.generation || 0)
+    }
+  }
   function connectDevice(device) {
     connectCount++
     setPending(device.address, "connecting")
+    return actionResult(device, "connect")
   }
   function disconnectDevice(device) {
     disconnectCount++
     setPending(device.address, "disconnecting")
+    return actionResult(device, "disconnect")
   }
   function forgetDevice(device) {
     forgetCount++
     setPending(device.address, "forgetting")
+    return actionResult(device, "forget")
   }
 }

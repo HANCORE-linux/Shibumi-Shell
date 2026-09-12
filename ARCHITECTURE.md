@@ -83,6 +83,24 @@ baseline.
   feature and is outside the Shibumi product contract.
 - The default order is `G1-G7` on the left, `G8` in the center, and
   `G9, G10, G11, G14, G12, G13, G15` on the right.
+- V1 can explicitly add one center slot in edit mode: at most two center
+  positions total. The default remains G8 alone; existing saved layouts are
+  not expanded on load. Only an empty extra slot can be removed. Center slots
+  use the existing drag/drop and gap treatment without an internal center
+  divider or new split-schema field. G8's width budget excludes its center
+  sibling; when G8 is disabled or has no loaded widget, the first loaded,
+  stage-shown center group owns the remainder. Owner selection uses loading
+  readiness, not its budget-dependent geometry, to avoid binding feedback.
+  Compaction remains output-local and never rewrites the layout.
+  Automatic outer plugin allocation is unchanged. A center-bound provider
+  may use an already added empty center slot, but cannot grow it implicitly.
+  When removing a provider from a base position, automatic repair requires
+  exactly one occupied extra containing a fixed group. Multiple occupied
+  extras are ambiguous without swap history: refuse without mutation. Users
+  can move the provider back into an extra before removing it. No provenance
+  field, saved-layout migration or V2 removal change is introduced. The
+  Control Center preflights installed V1 bar widgets before starting plugin
+  uninstall; bar removal still revalidates the layout at its own mutation.
 - All split boundaries start disabled. Split markers, drag targets, invalid
   returns, persistence, and geometry must retain the V1 behavior.
 - V1 and V2 own independent optional layout-protection preferences. Both
@@ -94,7 +112,33 @@ baseline.
   groups start enabled. Hardware-dependent widgets may remain hidden when the
   required hardware is absent.
 - Responsive hiding is temporary presentation state. It must not rewrite the
-  stored group order, enabled state, compact state, or split state.
+  stored group order, enabled state, compact state, or split state. Its width
+  budget includes unassigned provider entries in all three regions; center
+  extras reduce the grouped center's available width. The existing stage
+  priorities remain unchanged, including when the final stage cannot fit.
+- A newly placed V1 family alternative reuses one displaced fixed group slot
+  instead of requiring an additional dynamic slot. The fixed slot retains its
+  order and drag identity; the alternative retains its own settings and host
+  surface. Existing explicit dynamic placements are not silently migrated.
+  Multiple providers cannot share one slot. New V1 managed family replacements
+  require single-instance manifests: an `allowMultiple` family request is
+  refused before layout, registry or family-state mutation. Existing layouts,
+  unrelated multi-instance entries and V2 retain their behavior.
+  On scoped hosts, rendering uses the exact configured layout ID and its
+  accepted `barWidgetRegistry.widgets[id].component` and metadata. Missing
+  registration stays empty until the registry publishes it; an original must
+  never substitute for a clone. Clone ancestry comes from public `listPlugins`,
+  with cycle detection and a 32-entry traversal bound, not fabricated foreign
+  manifests or executable paths. Native IPC owns enable/disable and clone
+  restoration; the active Bar owns layout edits and confirms its injected
+  `barConfig`. No shared catalog/config revision or universal CAS is assumed.
+  Older full-registry hosts retain their admitted manifest route. Missing
+  selections, conflicting families and duplicate single-instance entries are
+  refused before mutation. The pinned 4.0.3 fixture covers scoped catalog and
+  selected-provider flows; package-bound physical acceptance remains open.
+  Family replacement does not increase capacity; the separately approved
+  optional V1 center slot follows
+  the limits above. V2 layout semantics and the saved schema remain unchanged.
 - G1 is the Shibumi wordmark and Control Center. Omarchy remains the sole owner
   of the application launcher menu; G1 neither owns nor opens it.
 - G1 exposes the current V1 palette contract: colors 01-07 plus foreground,
@@ -146,6 +190,14 @@ ownership is [`docs/multi-bar-extension-plan.md`](docs/multi-bar-extension-plan.
 
 ### Runtime, Outputs, And Lifecycle
 
+- On the scoped 4.0.3 host, the admitted shared Runtime performs one exact-PID
+  public `shell.rescanPlugins` prime per Quickshell process before the Shibumi
+  bar becomes ready or visible. The first Bar owner stays unavailable; success
+  requires IPC acknowledgement and a newly admitted Bar owner after the host
+  rebuild. Missing replacement, timeout, nonzero exit, payload retirement, or
+  scope loss fails terminally for that process. There is no automatic retry,
+  settings-time rescan, stale Component retention, private registry access, or
+  second shell process.
 - One shared controller creates one bar per real output and rejects placeholder
   or zero-sized outputs.
 - Screen-local panels, pickers, tooltips, focus, input masks, and drag state
@@ -186,8 +238,34 @@ The lifecycle contract and uncompleted physical gates are defined in
   restore that object; older state schemas use Quattro's current stock bar as a
   compatibility fallback rather than synthesizing an empty layout.
 - Every bar-owner transition uses Quattro's full restart boundary, including
-  rollback and interrupted-transaction recovery. Live reload is reserved for
-  mutations that keep the active bar owner.
+  rollback and interrupted-transaction recovery. Managed install, migration,
+  update, and repair drain the exact production shell before publishing plugin
+  roots; they never stop a shell after starting asynchronous plugin discovery.
+  Live reload is reserved for mutations that keep the active bar owner.
+- Before recovery or any other lifecycle mutation, the release lifecycle
+  inventories every public and private transaction journal and classifies the
+  install by revision, complete plugin digests, activation metadata, and
+  journal schema. Beta.13 admits only the exact public Beta.11, Step-5-tip, and
+  current-release identities. Step-6 Power registration, Step-6 journal fields
+  or phases, partial cross-release markers, and unknown states fail closed
+  without discarding or recovering any journal. One admitted public journal may
+  explain an exposed target/state mismatch; recovery consumes its validated
+  snapshot and live identity is checked again before the requested operation.
+  Rollback and commit artifacts are role-bound to exact pre-mutation digests.
+  Schema-2 journals additionally bind the configuration parent by device and
+  inode. The lifecycle holds that parent descriptor, performs `shell.json`
+  reads and writes relative to it, and rechecks its path identity before
+  recovery, reconciliation, and retirement boundaries. Rollback snapshots are
+  bounded regular files opened without following symlinks and remain bound to
+  their admitted inode and digest. Recovery atomically quarantines and
+  revalidates backups, preserves the live target until post-restore validation
+  succeeds, and validates archive namespaces before commit cleanup. Detected
+  public-target, artifact, or configuration-parent authority loss stops the
+  operation without deleting a replacement. More than one public journal is
+  ambiguous and fails closed.
+- Step-6 development installations are not downgraded or migrated by Beta.13.
+  They require a separately reviewed rollback that compares every target
+  identity and preserves intervening foreign or user changes.
 
 ### Release Decision
 
@@ -202,6 +280,11 @@ The lifecycle contract and uncompleted physical gates are defined in
   pass, resource pass, and every non-deferrable hardware and output gate.
 - Known gaps must be recorded in `docs/release-readiness.md`. A missing test is
   not converted into a pass by plausibility or a green fixture.
+- Release archives are bound to the accepted commit and carry a complete
+  inventory and checksum. Tag publication first creates a draft, downloads and
+  verifies the exact remote asset name/size/digest inventory, and publishes
+  only after that comparison succeeds. Server-side rules must prevent updates
+  or deletion of published `v*` tags.
 
 ## Product Boundary
 
@@ -334,27 +417,58 @@ the saved preference.
 
 ### Configuration and reset behavior
 
-- Shibumi owns only its `bar.shibumi` extension inside the host-owned
-  `shell.json` document. The sibling `bar.transparent` preference remains
-  stock-bar-owned and survives install, update, activation, deactivation, and
-  migration unchanged.
+- Canonical settings live in the unique `plugins[]` service entry
+  `{id: "hancore.shibumi.state", shibumiStateSchemaVersion: 1, shibumi: {...}}`
+  inside the host-owned `shell.json`. State is the single runtime writer under
+  both bars, using its own scoped `updateEntryInline` capability and preserving
+  all unrelated entry fields. There is no Bar broker or second settings store.
+  The numeric schema value is 1 (JSON `1.0` is equivalent); booleans and strings
+  are invalid canonical versions. The sibling `bar.transparent` preference
+  remains stock-bar-owned and survives lifecycle operations unchanged.
+- The drained suite lifecycle migrates legacy `bar.shibumi` once when canonical
+  settings are absent. A bare State entry does not block that import; invalid
+  canonical data refuses rather than falling back. Runtime never migrates.
+  Installation metadata `settingsStorageVersion: 1` is bound to the admitted
+  payload identity and prevents current repair/update paths from resurrecting
+  legacy data after destructive native disable. The current lifecycle refuses a
+  legacy-storage target even with `--allow-downgrade`, and there is no reverse
+  export. This does not make a package-manager rollback to older lifecycle code
+  safe: Pacman replaces that guard before the user transaction runs. Beta.12 is
+  the first package with canonical storage and has no eligible older package
+  target. Transaction failure/recovery still restores its complete original
+  snapshots.
+- Two process-wide read-only FileViews watch the user document and official
+  defaults. Only a missing or zero-length user file falls back to defaults;
+  corrupt or unreadable data refuses. Reads spawn no subprocess. The 75 ms
+  debounce merges rapid setters against pending intent; a fresh complete entry
+  is read before dispatch. Each dispatch/readback has a two-second deadline.
+  Setter `true` means queued, not saved. Published config/revision remain
+  file-backed, with explicit pending/status/serial and settlement notification;
+  a native `false` can mean unchanged and requires matching file readback too.
+  Scope loss cancels queued work. Full-entry readback is not an fsync guarantee,
+  a generic CAS contract, or a bound on FileView's acquisition allocation.
 - The one-time migration renames `hancore.qsrise.*` IDs, `bar.qsrise`, nested
   plugin-keyed settings, and string references without changing unrelated
   configuration or the user's layout order.
 - `omarchy bar reset` selects `omarchy.bar` and retains the remaining bar
   configuration. `shibumi-suite status` reports Shibumi as inactive, and
   `shibumi-suite activate` selects it again.
-- `omarchy bar defaults` replaces the complete `bar` object. It therefore
-  removes Shibumi layout and personal `bar.shibumi` settings by host design.
-  `shibumi-suite activate` restores the managed default layout but cannot
-  reconstruct settings deleted by that command.
+- `omarchy bar defaults` replaces the complete `bar` object and removes its
+  layout, but canonical service-entry settings survive. `shibumi-suite activate`
+  restores the managed layout. Native disable/removal of the State entry is
+  destructive; it is not equivalent to suite `--keep-settings`.
 - Generic per-plugin enable, disable, and remove actions do not own Shibumi's
   suite lifecycle. Shibumi roots must be managed as one dependency set;
   `shibumi-suite repair` transactionally restores a partial payload and its
-  selected profile.
+  selected profile. Repair alone may admit an absent owned root or payload
+  digest drift when the installation state and every remaining ownership marker
+  retain the exact supported identity; unsafe markers, paths, and foreign roots
+  still fail closed.
 - Uninstall removes Shibumi plugin references, selects the built-in bar, and
   uses Quattro's full restart boundary before deleting the provider payload.
-  It removes `bar.shibumi` unless `--keep-settings` is explicit.
+  Normal uninstall removes canonical and legacy settings. `--keep-settings`
+  retains the complete canonical State entry, including unknown fields and deep
+  settings, dormant while its plugin payload is absent. Reinstall reuses it.
 
 ## Design Rules
 
@@ -407,11 +521,16 @@ scripts/                         sync, install, update, and uninstall tools
 tests/                           suite, contract, and regression tests
 ```
 
-Every runtime plugin is self-contained and may not import from a sibling or
-the repository root. Canonical helpers under `shared/` are deterministically
-vendored into plugin directories and checked for drift. Panels may consume
-services; services do not import panels. Widgets do not discover host paths or
-launch shell commands.
+The 24 runtime plugins remain separately registered and are installed and
+updated as one admitted suite. The explicitly authorized shared-runtime
+exception permits imports of `hancore.shibumi.state/runtime/` by cooperating
+Shibumi plugins; no other sibling or repository-root escape is allowed.
+The ownership, lifetime, version and publication rules are normative in
+[`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
+This is not a QML sandbox or an authorization to expose private host services.
+Other canonical helpers under `shared/` remain deterministically vendored and
+checked for drift. Panels may consume services; services do not import panels.
+Widgets do not discover host paths or launch shell commands.
 
 The Phase 2 owner for every V1 group and the notification and OSD boundaries
 are recorded in
@@ -689,23 +808,42 @@ Current Phase 2 foundation:
   paths per frame. the validation system accepts the real-player, unavailable/crash,
   retry/cleanup, Top/Bottom, single-output visual, and resource slices.
   Multiple real players and physical multi-output acceptance remain gates.
-- G11 uses one process-wide `hancore.shibumi.network` service, regardless of output count. It
-  hosts the registered `omarchy.network` component as the authoritative
-  `Quickshell.Networking`, status, scan, DNS, and visible-network action owner
-  while suppressing its stock button, popup, and IPC handler;
-- Shibumi owns the active `omarchy.network` compatibility handler and the
-  inline speed-test process. Current and legacy host speed-test routes both
-  open the Shibumi Network panel and run bounded `omarchy-network-speedtest`
-  download/upload phases without loading Omarchy's speed-test panel;
-- each output owns only its bar presentation and lazy Shibumi popup. A single
-  panel-lifecycle detail sampler feeds the official parser, and a one-shot
-  `nmcli` adapter supplies saved profiles absent from Quickshell's visible AP
-  model. Speed-test and profile workers stop after the final screen-local panel
-  closes; the shared detail sampler remains active only when an Ethernet bar
-  still consumes its throughput data. V1's separate permanent Ethernet poller
-  is not restored. Top Wayland mapping
-  and cleanup pass on the validation system; the new direct speed-test path,
-  bottom, mutation, and physical multi-output remain runtime gates.
+- G11 uses one process-wide `hancore.shibumi.network` service, regardless of
+  output count. It is the native NetworkManager owner over Quickshell's public
+  Networking API and publishes only generation-bound primitive radio, device,
+  network, exact-profile, connection, DNS, throughput, reachability, action,
+  and failure snapshots. Raw backend wrappers stay private;
+- Shibumi owns the single `omarchy.network` compatibility IPC handler without
+  loading the host Network or QR components. Its own scanner lease, bounded
+  profile catalog, telemetry, reachability, Enterprise dispatcher, Wi-Fi QR
+  surface, and route-bound TLS speed-test workers are process-wide and
+  demand-driven. An explicit QR click may read only the `psk` field from the
+  exact active saved WPA/WPA2/SAE profile through a bounded, owner- and
+  topology-revalidated `GetSecrets("802-11-wireless-security")` request. That
+  response may contain only that `psk` value plus empty maps for the exact
+  secret-free setting-group names observed in the immediately preceding
+  `GetSettings()` snapshot bracketed by equal `VersionId` reads; any other
+  group, field, value, or in-snapshot version race fails closed.
+  Postflight requires the same owner, device, active connection, profile, access
+  point, SSID, security, and group set plus exactly NetworkManager's observed
+  one-step `VersionId` advance caused by the successful secret refresh; every
+  other version delta or identity change fails closed. The exact D-Bus message
+  may request interactive authorization from Omarchy
+  Quattro's native Polkit agent; it adds no PolicyKit rule or authorization
+  bypass, and cancellation or timeout fails closed. Worker failures expose only
+  an allowlisted secret-free stage code, never exception text or response data.
+  The passphrase crosses no snapshot, property, argument, environment, cache, log,
+  or persistence boundary and is discarded immediately after QR encoding. No
+  Network feature state comes from an Omarchy helper or `nmcli`;
+- each output owns only its bar presentation, telemetry consumer lease, lazy
+  Shibumi popup, and ephemeral QR session. WPA2-Enterprise is conservatively
+  limited to PEAP/MSCHAPv2 with system CAs and a mandatory server domain;
+  unknown EAP/certificate variants fail closed. DNS servers are a read-only
+  diagnostic snapshot in this slice; unsupported DNS mutation is routed to
+  Network settings rather than implemented through an unbounded settings map.
+  Source and fixture gates pass,
+  while real mutation, Enterprise authentication, recovery, bottom, and
+  physical multi-output acceptance remain runtime gates and are not claimed.
 - G13 has one process-wide `hancore.shibumi.brightness` service around the
   registered `omarchy.monitor` component. That hidden component remains the only
   brightness, display, scale, IPC, poller, and command owner;
@@ -719,15 +857,43 @@ Current Phase 2 foundation:
 - G12 and G14 are separate V1 battery and power-profile presentations over the
   process-wide `hancore.shibumi.power-state` service. Battery state stays event-driven through the
   shared UPower singleton, battery details are panel-lifecycle gated, and one
-  profile refresh/set owner serves every output. The combined `omarchy.power`
+  profile refresh/set owner serves every output. Beta.13 retains the existing
+  UPower, Omarchy helper, `busctl`, and `powerprofilesctl` backend ownership;
+  shared-runtime admission is not a Step-6 backend transition. Battery truth
+  requires `UPowerDevice.ready`, independently of profile availability on
+  batteryless machines. The four existing operation slots remain process-wide,
+  each with a ten-second one-shot deadline and exact admission lease/generation.
+  Scope loss cancels work and rejects stale publication; a started operation
+  drains its exit and stdout callbacks before its slot can be reused. A late
+  process-start signal rechecks cancellation and admission. Deferred refreshes
+  retain revocable demand until dispatch; last-consumer release, battery loss
+  and scope invalidation cancel it. Synchronous busy-state notifications are
+  rechecked before process dispatch and completion publication. Cancellation cannot
+  undo a platform action already applied before the process was stopped.
+  The existing 5-second active-profile/detail and 5-minute full-profile timers
+  require current admission and their respective consumer leases. Panels keep
+  their local Bar and reactive service references; native battery objects are
+  not deliberately exported. Canonical Power sources remain under
+  `shared/power-state/`; vendoring rewrites only their exact runtime import depth.
+  The combined `omarchy.power`
   alias is consumed so it cannot run beside the split views; G14 remains
   available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,
   widget, and panel state.
 - G15 has one process-wide `hancore.shibumi.bluetooth` service and one native
-  `BluetoothBackendAdapter`. The adapter owns Quickshell's BlueZ/PipeWire
-  models, pairing/device actions, pending state, and Bluetooth-audio handoff;
-  no complete Omarchy Bluetooth UI component is instantiated as a backend;
+  `BluetoothBackendAdapter`. The adapter keeps native BlueZ device QObjects
+  private and publishes detached primitive records carrying the device path,
+  address, adapter identity, and monotonic device/adapter incarnations. Every
+  mutation resolves exactly one current entity immediately before dispatch;
+  stale, malformed, ambiguous, unavailable, or state-conflicting requests
+  return typed failures and dispatch nothing. Beta.13 deliberately retains one
+  `omarchy-bluetooth-device` helper path per device action and never invokes a
+  native device method in parallel. Because the 4.0.2 helper accepts only an
+  action/address pair, production fails closed with more than one adapter; the
+  residual replacement race after dispatch remains explicit Step-4B helper
+  debt. Callers inspect `.ok` explicitly. The
+  adapter also owns pending state and Bluetooth-audio handoff; no complete
+  Omarchy Bluetooth UI component is instantiated as a backend;
 - each output owns only its V1 Bluetooth presentation and lazy Shibumi device
   panel. The process-wide service leases discovery across open panels and owns one
   symmetric six-method `omarchy.bluetooth` IPC target. Presentation has no
@@ -752,10 +918,16 @@ Current Phase 2 foundation:
   chrome without coupling presentation to persistence.
 - Reactor Modes 1-6 are style-owned, backend-free gap renderers. Mode 7 uses
   one process-wide lazy event service over existing Shibumi and Quattro owners;
-  Mode 8 uses one process-wide lazy quote reader. Modes 7-8 share the same
+  Mode 8 uses one process-wide lazy quote reader. Theme/event/quote file
+  contents are acquired through bounded no-follow regular-file reads, not
+  unbounded FileView content buffers. Metadata watchers trigger one coalesced
+  short-lived Python reader per active input (two in Mode 7, one in Mode 8),
+  initially and on observed changes, with a two-second one-shot deadline and
+  cancellation on backend loss; there is no acquisition polling timer.
+  The existing single pacman event tail remains Mode-7-only. Modes 7-8 share the same
   per-output swarm renderer, use physical run gaps, and create no service or
   renderer in Mode 0. The Control Center persists the selected mode through
-  host-owned `bar.shibumi.reactor` state. Controlled Mode 7/8 Wayland and CPU
+  the canonical State entry's `shibumi.reactor` data. Controlled Mode 7/8 Wayland and CPU
   acceptance remains open.
 
 ### Phase 3: Interaction Model

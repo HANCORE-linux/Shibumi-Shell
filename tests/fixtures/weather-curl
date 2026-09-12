@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+[[ $# -eq 6 ]] || exit 4
+[[ $1 == -fsS ]] || exit 4
+[[ $2 == --max-time && $3 == 5 ]] || exit 4
+[[ $4 == --max-filesize && $5 == 131072 ]] || exit 4
+[[ $6 == https://wttr.in/*\?format=j1 ]] || exit 4
+
 cat <<'JSON'
 {"current_condition":[{"weatherCode":"113","temp_C":"21","temp_F":"70","FeelsLikeC":"20","FeelsLikeF":"68","weatherDesc":[{"value":"Clear"}],"humidity":"50","windspeedKmph":"10","windspeedMiles":"6"}],"nearest_area":[{"areaName":[{"value":"Testville"}],"country":[{"value":"Testland"}]}],"weather":[{"date":"2026-07-20","mintempC":"14","maxtempC":"24","mintempF":"57","maxtempF":"75","astronomy":[{"sunrise":"06:00 AM","sunset":"09:00 PM"}],"hourly":[{"time":"1200","weatherCode":"113","chanceofrain":"0"}]}]}
 JSON
+
+case ${SHIBUMI_WEATHER_CURL_EXIT:-0} in
+  0) ;;
+  63) exit 63 ;;
+  *) exit 5 ;;
+esac

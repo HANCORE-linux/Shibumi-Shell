@@ -18,8 +18,37 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
+forecast_fixture="$repo_root/tests/fixtures/weather-curl"
+geocode_fixture="$repo_root/tests/fixtures/weather-geocode-curl"
+if bash "$forecast_fixture" --header 'X-Test: --max-filesize 131072' \
+    'https://wttr.in/?format=j1' >/dev/null 2>&1 \
+    || bash "$forecast_fixture" -fsS --max-time 5 --max-filesize 1 \
+      'https://wttr.in/?format=j1' >/dev/null 2>&1 \
+    || bash "$forecast_fixture" -fsS --max-time 5 --max-filesize \
+      'https://wttr.in/?format=j1' >/dev/null 2>&1 \
+    || bash "$forecast_fixture" -fsS --max-time 5 --max-filesize 131072 \
+      'https://wttr.in/?format=j1' 'https://example.invalid/' >/dev/null 2>&1; then
+  fail "weather forecast fixture accepted an inexact argument vector"
+fi
+if bash "$geocode_fixture" --header 'X-Test: --max-filesize 65536' \
+    'https://geocoding-api.open-meteo.com/v1/search?language=de' >/dev/null 2>&1 \
+    || bash "$geocode_fixture" -fsS --max-time 5 --max-filesize 1 \
+      'https://geocoding-api.open-meteo.com/v1/search?language=de' >/dev/null 2>&1 \
+    || bash "$geocode_fixture" -fsS --max-time 5 --max-filesize \
+      'https://geocoding-api.open-meteo.com/v1/search?language=de' >/dev/null 2>&1 \
+    || bash "$geocode_fixture" -fsS --max-time 5 --max-filesize 65536 \
+      'https://geocoding-api.open-meteo.com/v1/search?language=de' \
+      'https://example.invalid/' >/dev/null 2>&1; then
+  fail "weather geocode fixture accepted an inexact argument vector"
+fi
+
+python3 "$repo_root/tests/weather-location-regression.py"
+python3 "$repo_root/tests/weather-report-regression.py"
+python3 "$repo_root/tests/weather-panel-control-regression.py" --host-shell "$omarchy_path/shell"
+
 mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.center" "$tmpdir/center"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
@@ -68,6 +97,72 @@ printf '%s\n' "$weather_output"
 [[ $weather_rc -eq 0 ]] || fail "weather start smoke exited $weather_rc"
 grep -F 'weather service start smoke passed' <<<"$weather_output" >/dev/null \
   || fail "weather service did not load before interaction"
+
+install -m 0644 "$repo_root/tests/weather-service-failure-smoke.qml" \
+  "$tmpdir/shell.qml"
+set +e
+weather_failure_output=$(timeout 8 env \
+  HOME="$tmpdir/weather-home" \
+  PATH="$tmpdir/bin:$PATH" \
+  SHIBUMI_WEATHER_CURL_EXIT=63 \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/weather-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+weather_failure_rc=$?
+set -e
+
+printf '%s\n' "$weather_failure_output"
+[[ $weather_failure_rc -eq 0 ]] \
+  || fail "weather failed-transfer smoke exited $weather_failure_rc"
+grep -F 'weather failed transfer stayed unpublished' \
+  <<<"$weather_failure_output" >/dev/null \
+  || fail "failed weather transfer published its output"
+
+mkdir -p "$tmpdir/teardown-runtime" "$tmpdir/teardown-bin"
+chmod 700 "$tmpdir/teardown-runtime"
+install -m 0755 "$repo_root/tests/fixtures/weather-curl" \
+  "$tmpdir/teardown-bin/weather-curl"
+cat >"$tmpdir/teardown-bin/curl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'call\n' >>"$WEATHER_CURL_LOG"
+sleep 0.2
+exec "$(dirname -- "$0")/weather-curl" "$@"
+EOF
+chmod 0755 "$tmpdir/teardown-bin/curl"
+install -m 0644 "$repo_root/tests/weather-service-teardown-smoke.qml" \
+  "$tmpdir/shell.qml"
+set +e
+weather_teardown_output=$(timeout 8 env \
+  HOME="$tmpdir/weather-home" \
+  PATH="$tmpdir/teardown-bin:$PATH" \
+  WEATHER_CURL_LOG="$tmpdir/teardown-curl.log" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/teardown-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+weather_teardown_rc=$?
+set -e
+
+printf '%s\n' "$weather_teardown_output"
+[[ $weather_teardown_rc -eq 0 ]] \
+  || fail "weather teardown smoke exited $weather_teardown_rc"
+grep -F 'weather pending refresh teardown passed' \
+  <<<"$weather_teardown_output" >/dev/null \
+  || fail "weather teardown success marker is missing"
+if grep -Eq 'Internal error|TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$weather_teardown_output"; then
+  fail "weather teardown produced a QML lifecycle warning"
+fi
+[[ -f $tmpdir/teardown-curl.log ]] \
+  || fail "weather teardown fixture was not called"
+[[ $(wc -l <"$tmpdir/teardown-curl.log") -eq 1 ]] \
+  || fail "destroyed weather service started a pending refresh"
 
 mkdir -p "$tmpdir/location-runtime"
 chmod 700 "$tmpdir/location-runtime"

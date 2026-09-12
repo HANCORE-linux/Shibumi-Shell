@@ -20,6 +20,10 @@ fail() {
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.workspaces" "$tmpdir/workspaces"
+mkdir -p "$tmpdir/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/workspaces-plugin-smoke.qml" "$tmpdir/shell.qml"
@@ -41,6 +45,49 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'workspaces plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+
+# Execute actual WorkspacePanel/Content; replace only its window shell.
+cp "$repo_root/tests/fixtures/ShibumiPanelTest.qml" "$tmpdir/workspaces/ShibumiPanel.qml"
+cp "$repo_root/tests/workspaces-runtime-smoke.qml" "$tmpdir/runtime-shell.qml"
+mkdir -m 700 "$tmpdir/scoped-runtime"
+set +e
+runtime_output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/scoped-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir/runtime-shell.qml" 2>&1)
+runtime_rc=$?
+set -e
+printf '%s\n' "$runtime_output"
+[[ $runtime_rc -eq 0 ]] || fail "scoped workspace smoke exited $runtime_rc"
+grep -F 'workspaces runtime smoke passed' <<<"$runtime_output" >/dev/null \
+  || fail "scoped workspace marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$runtime_output"; then
+  fail "scoped workspace QML error"
+fi
+
+cp -a "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
+mkdir -p "$tmpdir/geometry" "$tmpdir/geometry-runtime"
+chmod 700 "$tmpdir/geometry-runtime"
+cp "$repo_root/styles/shibumi/VisualTokens.qml" "$tmpdir/geometry/VisualTokens.qml"
+cp "$repo_root/tests/workspaces-geometry-regression.qml" "$tmpdir/geometry-shell.qml"
+set +e
+geometry_output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_SCALE_FACTOR=1 WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/geometry-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir/geometry-shell.qml" 2>&1)
+geometry_rc=$?
+set -e
+printf '%s\n' "$geometry_output"
+[[ $geometry_rc -eq 0 ]] || fail "workspace geometry exited $geometry_rc"
+grep -F 'workspaces geometry regression passed' <<<"$geometry_output" >/dev/null \
+  || fail "workspace geometry marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$geometry_output"; then
+  fail "workspace geometry QML error"
+fi
 
 rg -q 'serviceFor\("hancore\.shibumi\.workspaces"\)' \
   "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \

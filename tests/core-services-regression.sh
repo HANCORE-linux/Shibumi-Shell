@@ -16,6 +16,10 @@ trap 'rm -rf -- "$smoke_root"' EXIT
 mkdir -p "$smoke_root/runtime" "$smoke_root/home"
 chmod 700 "$smoke_root/runtime"
 cp -a "$repo_root/hancore.shibumi.telemetry" "$smoke_root/telemetry"
+mkdir -p "$smoke_root/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/runtime" "$smoke_root/hancore.shibumi.state/"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$smoke_root/hancore.shibumi.state/.shibumi-managed.json"
 mkdir -p "$smoke_root/cpu"
 cp "$repo_root/hancore.shibumi.cpu/Service.qml" \
   "$repo_root/hancore.shibumi.cpu/GpuTelemetry.qml" "$smoke_root/cpu/"
@@ -39,5 +43,8 @@ grep -q 'Configuration Loaded' <<<"$output" \
   || fail "configuration did not load"
 grep -q 'core services smoke passed' <<<"$output" \
   || fail "runtime assertions did not complete"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$output"; then
+  fail "QML runtime error"
+fi
 
 printf 'core services regression passed\n'

@@ -4,23 +4,21 @@ import QtQuick
 import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.media"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url panelSource: Qt.resolvedUrl("MediaPanel.qml")
-  readonly property var mediaService: bar && bar.shell
-    && typeof bar.shell.firstPartyServiceFor === "function"
-    ? bar.shell.firstPartyServiceFor("omarchy.media") : null
-  readonly property var spectrumService: bar && bar.shell
-    && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor("hancore.shibumi.media") : null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var mediaService: suiteShell.firstPartyServiceFor("omarchy.media")
+  readonly property var spectrumService: suiteShell.serviceFor("hancore.shibumi.media")
   readonly property var activePlayer: mediaService ? mediaService.activePlayer : null
-  readonly property bool active: mediaService
-    ? mediaService.hasMedia === true && activePlayer !== null : false
+  readonly property bool active: !!(activePlayer
+    && (activePlayer.trackTitle || activePlayer.trackArtist))
   readonly property bool playing: active && activePlayer.isPlaying === true
   readonly property string title: activePlayer ? String(activePlayer.trackTitle || "") : ""
   readonly property string artist: activePlayer ? String(activePlayer.trackArtist || "") : ""
@@ -112,11 +110,11 @@ Ui.Panel {
     }
     panelLoader.setSource(panelSource, {
       anchorItem: mediaSurface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      mediaService: root.mediaService,
-      spectrumService: root.spectrumService,
-      spectrumEnabled: root.spectrumEnabled
+      mediaService: Qt.binding(function() { return root.mediaService }),
+      spectrumService: Qt.binding(function() { return root.spectrumService }),
+      spectrumEnabled: Qt.binding(function() { return root.spectrumEnabled })
     })
   }
 

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -17,15 +18,21 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy "),
-    ("quickshellPackage", ("pacman", "-Q", "quickshell-git"), "quickshell-git "),
-    ("quickshellVersion", ("quickshell", "--version"), "Quickshell "),
+    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.2-"),
+    (
+        "omarchySettingsPackage",
+        ("pacman", "-Q", "omarchy-settings"),
+        "omarchy-settings 4.0.2-",
+    ),
+    ("quickshellPackage", ("pacman", "-Q", "quickshell"), "quickshell 0.3.1-"),
+    ("quickshellVersion", ("quickshell", "--version"), "Quickshell 0.3.1"),
 )
 
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("package-tests", ("python3", "tests/test_package_release.py")),
     ("manager-tests", ("python3", "tests/test_shibumi_manager.py")),
     ("suite-tests", ("python3", "tests/test_shibumi_suite.py")),
+    ("lifecycle-admission", ("python3", "tests/test_lifecycle_admission.py")),
     ("health-tests", ("python3", "tests/test_shibumi_health.py")),
     ("inc013-tests", ("python3", "tests/test_inc013_drain_contract.py")),
     ("registry-mutations", ("python3", "tests/quickshell-empty-registry-mutation.py")),
@@ -157,7 +164,9 @@ def redact_log(payload: bytes, baseline_paths: list[str]) -> bytes:
         if path
     )
     result = payload
-    for value, replacement in replacements:
+    for value, replacement in sorted(
+        replacements, key=lambda item: len(item[0]), reverse=True
+    ):
         result = result.replace(value.encode(), replacement.encode())
     return result
 
@@ -173,6 +182,10 @@ def main() -> int:
     parser.add_argument(
         "--list", action="store_true", help="print gate commands without running them"
     )
+    parser.add_argument(
+        "--expected-commit",
+        help="bind clean evidence to this exact lowercase commit id",
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -180,6 +193,17 @@ def main() -> int:
             print(f"{gate_id}\t{command_identity(command)}")
         return 0
 
+    commit = str(git("rev-parse", "HEAD^{commit}")).strip()
+    if args.expected_commit is not None:
+        if not re.fullmatch(r"[0-9a-f]{40}", args.expected_commit):
+            print("--expected-commit must be a full lowercase commit id", file=sys.stderr)
+            return 2
+        if commit != args.expected_commit:
+            print(
+                f"release evidence HEAD mismatch: expected {args.expected_commit}, got {commit}",
+                file=sys.stderr,
+            )
+            return 2
     status = str(git("status", "--porcelain=v1", "--untracked-files=all"))
     if status.strip() and not args.allow_dirty:
         print("release evidence requires a clean candidate", file=sys.stderr)
@@ -206,7 +230,6 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    commit = str(git("rev-parse", "HEAD")).strip()
     git_tree = str(git("rev-parse", "HEAD^{tree}")).strip()
     candidate_digest, candidate_file_count = candidate_inventory()
     started = int(time.time())
@@ -229,6 +252,7 @@ def main() -> int:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             env=os.environ.copy(),
+            timeout=900,
         )
         payload = redact_log(result.stdout, baseline_paths)
         log_path = log_dir / f"{gate_id}.log"

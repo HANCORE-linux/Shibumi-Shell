@@ -13,17 +13,20 @@ ShellRoot {
   function fail(message) {
     console.error("media-spectrum-service-smoke:", mode + ": " + message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
     id: player
     property bool isPlaying: true
+    property string trackTitle: "Fixture track"
+    property string trackArtist: ""
   }
 
   QtObject {
     id: mediaState
     property var activePlayer: player
-    readonly property bool hasMedia: activePlayer !== null
+    // No hasMedia field, matching the native 4.0.3 proxy.
   }
 
   QtObject {
@@ -39,6 +42,7 @@ ShellRoot {
   Media.Service {
     id: spectrum
     shell: fakeShell
+    manifest: ({id: "hancore.shibumi.media", version: "0.1.1-beta.13", kinds: ["service", "bar-widget"]})
   }
 
   Timer {

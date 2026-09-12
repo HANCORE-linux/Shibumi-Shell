@@ -89,10 +89,14 @@ ShibumiPanel {
     && bar.pluginRegistry ? bar.pluginRegistry
     : bar && bar.shell && "pluginRegistry" in bar.shell
       ? bar.shell.pluginRegistry : null
-  readonly property int pluginRevision: pluginRegistry
-    ? Number(pluginRegistry.registryRevision || 0) : 0
-  readonly property bool pluginsScanning: pluginRegistry
-    ? pluginRegistry.scanning === true : false
+  readonly property int pluginRevision: nativeCatalogRequired
+    ? pluginCatalogObservation
+      ? Number(pluginCatalogObservation.generation || 0) : 0
+    : pluginRegistry ? Number(pluginRegistry.registryRevision || 0) : 0
+  readonly property bool pluginsScanning: nativeCatalogRequired
+    ? effectivePluginUpdateService
+      && effectivePluginUpdateService.catalogRefreshing === true
+    : pluginRegistry ? pluginRegistry.scanning === true : false
   readonly property var pluginEntries: buildPluginEntries()
   readonly property int availablePluginCount: pluginEntries.length
   readonly property int enabledPluginCount: pluginEntries.filter(
@@ -145,12 +149,51 @@ ShibumiPanel {
   property string pluginActionError: ""
   signal pluginRemovalFinished(
     string pluginId, bool success, string detail)
+  signal pluginLayoutTransitionSettled(int serial, string result)
+  signal providerSnapshotTransitionSettled(int serial, string result)
+  signal pluginStateTransitionSettled(int serial, string result)
   readonly property string managerCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-manager"
   readonly property var effectivePluginUpdateService: pluginUpdateService
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.control-center") : null)
+  readonly property bool nativeCatalogRequired: effectivePluginUpdateService
+    && effectivePluginUpdateService.scopedHost === true
+  readonly property int pluginLayoutTransitionSerial: bar
+    && "layoutTransitionSerial" in bar
+    ? Number(bar.layoutTransitionSerial || 0) : 0
+  readonly property bool pluginLayoutTransitionBusy: bar
+    && "layoutTransitionBusy" in bar
+    ? bar.layoutTransitionBusy === true : false
+  readonly property int providerSnapshotTransitionSerial: bar
+    && "providerSnapshotTransitionSerial" in bar
+    ? Number(bar.providerSnapshotTransitionSerial || 0) : 0
+  readonly property bool providerSnapshotTransitionBusy: bar
+    && "providerSnapshotTransitionBusy" in bar
+    ? bar.providerSnapshotTransitionBusy === true : false
+  readonly property int pluginStateTransitionSerial: bar
+    && "stateTransitionSerial" in bar
+    ? Number(bar.stateTransitionSerial || 0) : 0
+  readonly property bool pluginStateTransitionBusy: bar
+    && "stateTransitionBusy" in bar
+    ? bar.stateTransitionBusy === true : false
+  readonly property var pluginCatalogObservation: {
+    const page = settingsPageItem
+    if (!nativeCatalogRequired || !page
+        || !("catalogObservation" in page)) return null
+    const observation = page.catalogObservation
+    if (!observation || typeof observation !== "object"
+        || !Object.isFrozen(observation)
+        || !observation.snapshot
+        || !Object.isFrozen(observation.snapshot)
+        || observation.snapshot.catalogKind !== "native-listPlugins"
+        || !Array.isArray(observation.snapshot.entries)
+        || !Object.isFrozen(observation.snapshot.entries)) return null
+    return observation
+  }
+  readonly property var pluginCatalogSnapshot: pluginCatalogObservation
+    ? pluginCatalogObservation.snapshot : null
   readonly property string pluginUpdateCommand: Quickshell.env("HOME")
     + "/.config/omarchy/plugins/hancore.shibumi.control-center"
     + "/manager/shibumi-plugin-updates"
@@ -363,6 +406,23 @@ ShibumiPanel {
     return kinds.indexOf("bar-widget") >= 0 ? "Adaptive" : "Original"
   }
 
+  function suiteManagedPlugin(pluginId) {
+    return [
+      "hancore.shibumi.ai", "hancore.shibumi.audio",
+      "hancore.shibumi.bar", "hancore.shibumi.battery",
+      "hancore.shibumi.bluetooth", "hancore.shibumi.brightness",
+      "hancore.shibumi.center", "hancore.shibumi.control-center",
+      "hancore.shibumi.cpu", "hancore.shibumi.gpu",
+      "hancore.shibumi.media", "hancore.shibumi.memory",
+      "hancore.shibumi.network", "hancore.shibumi.power-profile",
+      "hancore.shibumi.power-state", "hancore.shibumi.quick-access",
+      "hancore.shibumi.reactor", "hancore.shibumi.state",
+      "hancore.shibumi.status", "hancore.shibumi.storage",
+      "hancore.shibumi.telemetry", "hancore.shibumi.temperature",
+      "hancore.shibumi.update-center", "hancore.shibumi.workspaces"
+    ].indexOf(String(pluginId || "")) >= 0
+  }
+
   function shibumiWidgetGroup(pluginId) {
     const groups = {
       "hancore.shibumi.control-center": "G1",
@@ -406,8 +466,36 @@ ShibumiPanel {
     if (bar) void(bar.layoutConfig)
     void(stateConfig.widgets)
     const registry = pluginRegistry
-    const installed = registry && registry.installedPlugins
+    let installed = registry && registry.installedPlugins
       ? registry.installedPlugins : ({})
+    if (nativeCatalogRequired) {
+      installed = ({})
+      const snapshot = pluginCatalogSnapshot
+      if (!snapshot || !snapshot.byId || !Object.isFrozen(snapshot.byId))
+        return []
+      for (let rowIndex = 0; rowIndex < snapshot.entries.length; rowIndex++) {
+        const row = snapshot.entries[rowIndex]
+        if (!row || typeof row.id !== "string"
+            || snapshot.byId[row.id] !== row) return []
+        const managed = suiteManagedPlugin(row.id)
+        installed[row.id] = {
+          id: row.id,
+          name: row.name,
+          kinds: row.kinds,
+          "x-shibumi": managed ? { suiteId: "hancore.shibumi" } : ({}),
+          __isFirstParty: row.firstParty === true,
+          __catalogEnabled: row.enabled === true,
+          __catalogActive: row.active === true,
+          description: row.description,
+          author: row.author,
+          version: row.version,
+          tags: row.tags,
+          barWidget: row.barWidget,
+          __catalogCanDisable: row.canDisable === true,
+          __catalogClonedFrom: String(row.clonedFrom || "")
+        }
+      }
+    }
     const result = []
     const ids = Object.keys(installed).sort(function(left, right) {
       const leftName = String(installed[left].name || left).toLowerCase()
@@ -472,9 +560,10 @@ ShibumiPanel {
       // A full bar is a mutually exclusive shell host, not a widget/plugin
       // toggle. It must only be changed through a dedicated bar selector.
       if (kinds.indexOf("bar") >= 0) continue
-      const enabled = registry
-        && typeof registry.isEnabled === "function"
-        ? registry.isEnabled(id) : false
+      const enabled = nativeCatalogRequired
+        ? manifest.__catalogEnabled === true
+        : registry && typeof registry.isEnabled === "function"
+          ? registry.isEnabled(id) : false
       result.push({
         id: id,
         name: String(manifest.name || id),
@@ -490,8 +579,10 @@ ShibumiPanel {
         glyph: pluginGlyph(id, kinds),
         enabled: enabled,
         barWidget: barWidget,
-        installedInBar: barWidget
-          ? widgetInstalled(id) : enabled,
+        installedInBar: nativeCatalogRequired && suiteManaged && group !== ""
+          ? widgetInstalled(id)
+          : nativeCatalogRequired ? enabled
+            : barWidget ? widgetInstalled(id) : enabled,
         styleAvailable: true,
         suiteManaged: suiteManaged,
         userToggleable: barWidget && (!suiteManaged || group !== ""),
@@ -568,16 +659,29 @@ ShibumiPanel {
     return result
   }
 
+  function pluginActivationAvailable(entry) {
+    if (!entry || !nativeCatalogRequired) return true
+    const id = String(entry.id || "")
+    const group = String(entry.group || "")
+    if (group !== "" && !( !v2LayoutActive
+        && ["G16", "G17", "G18"].indexOf(group) >= 0)) return true
+    return bar && typeof bar.canSetBarWidgetInstalled === "function"
+      && bar.canSetBarWidgetInstalled(id, entry.installedInBar !== true)
+  }
+
   function setPluginEnabled(pluginId, enabled) {
     pluginActionError = ""
-    if (!pluginRegistry
-        || typeof pluginRegistry.setEnabled !== "function") {
+    if (!nativeCatalogRequired && (!pluginRegistry
+        || typeof pluginRegistry.setEnabled !== "function")) {
       pluginActionError = "The plugin registry is not ready."
       return false
     }
     const id = String(pluginId || "")
-    const manifest = pluginRegistry.installedPlugins
-      ? pluginRegistry.installedPlugins[id] : null
+    const manifest = nativeCatalogRequired && pluginCatalogSnapshot
+      && pluginCatalogSnapshot.byId
+      ? pluginCatalogSnapshot.byId[id]
+      : pluginRegistry && pluginRegistry.installedPlugins
+        ? pluginRegistry.installedPlugins[id] : null
     const kinds = manifest && Array.isArray(manifest.kinds)
       ? manifest.kinds : []
     if (kinds.indexOf("bar") >= 0) {
@@ -587,8 +691,9 @@ ShibumiPanel {
     }
     const shibumi = manifest && manifest["x-shibumi"]
       ? manifest["x-shibumi"] : ({})
-    const suiteManaged = String(shibumi.suiteId || "")
-      === "hancore.shibumi"
+    const suiteManaged = nativeCatalogRequired
+      ? suiteManagedPlugin(id)
+      : String(shibumi.suiteId || "") === "hancore.shibumi"
     if (kinds.indexOf("bar-widget") >= 0) {
       const group = shibumiWidgetGroup(id)
       if (group !== "") {
@@ -644,14 +749,16 @@ ShibumiPanel {
       pluginActionError = "This suite service is managed by Shibumi."
       return false
     }
-    return pluginRegistry.setEnabled(id, enabled === true)
+    return !nativeCatalogRequired
+      && pluginRegistry.setEnabled(id, enabled === true)
   }
 
   function setPluginBarWidgetEnabled(pluginId, enabled, section) {
+    const observation = pluginCatalogObservation
     return runWithControlCenterRestore(function() {
       return bar && typeof bar.setBarWidgetInstalled === "function"
-        ? bar.setBarWidgetInstalled(
-            String(pluginId || ""), enabled === true, String(section || ""))
+        ? bar.setBarWidgetInstalled(String(pluginId || ""), enabled === true,
+            String(section || ""), observation)
         : false
     })
   }
@@ -696,6 +803,11 @@ ShibumiPanel {
     if (typeof bar.setWidgetGroupVariantStates === "function")
       return bar.setWidgetGroupVariantStates(stateValues)
     return restoreShibumiProviders(groups)
+  }
+
+  function confirmedProviderUndoSnapshot(serial) {
+    return bar && typeof bar.providerUndoSnapshotForTransition === "function"
+      ? bar.providerUndoSnapshotForTransition(serial) : null
   }
 
   function providerUndoSnapshot(pluginId) {
@@ -744,6 +856,23 @@ ShibumiPanel {
     })
   }
 
+  property Connections transitionConnections: Connections {
+    target: panel.bar
+    ignoreUnknownSignals: true
+
+    function onLayoutTransitionSettled(serial, result) {
+      panel.pluginLayoutTransitionSettled(serial, result)
+    }
+
+    function onProviderSnapshotTransitionSettled(serial, result) {
+      panel.providerSnapshotTransitionSettled(serial, result)
+    }
+
+    function onStateTransitionSettled(serial, result) {
+      panel.pluginStateTransitionSettled(serial, result)
+    }
+  }
+
   function setProviderGroupStates(stateValues) {
     return stateValues && typeof stateValues === "object" && bar
       && typeof bar.setWidgetGroupVariantStates === "function"
@@ -755,6 +884,7 @@ ShibumiPanel {
   }
 
   function removePlugin(pluginId) {
+    pluginActionError = ""
     const id = String(pluginId || "")
     if (id === "" || pluginRemoval.running) return false
     let entry = null
@@ -766,6 +896,31 @@ ShibumiPanel {
     }
     if (!entry || entry.removable !== true) {
       console.warn("Control Center rejected non-removable plugin:", id)
+      return false
+    }
+    // Native scoped removal has no atomic uninstall + layout settlement API.
+    // Never delete an active provider and only then discover that its Bar
+    // entry or displaced Shibumi families cannot be restored.
+    const scopedBarMutationPending = nativeCatalogRequired && bar
+      && (bar.layoutTransitionBusy === true
+        || bar.providerSnapshotTransitionBusy === true
+        || bar.stateTransitionBusy === true)
+    const activeScopedBarWidget = nativeCatalogRequired
+      && entry.barWidget === true
+      && (entry.installedInBar === true
+        || bar && typeof bar.layoutContains === "function"
+          && bar.layoutContains(id))
+    if (scopedBarMutationPending || activeScopedBarWidget) {
+      pluginActionError = scopedBarMutationPending
+        ? "Wait for the current bar change before removing a plugin."
+        : "Deactivate this plugin and wait for the bar change before removing it."
+      return false
+    }
+    if (!stockOmarchyHost && !v2LayoutActive && entry.barWidget === true
+        && entry.installedInBar === true
+        && (!bar || typeof bar.canRemoveBarWidget !== "function"
+          || !bar.canRemoveBarWidget(id))) {
+      pluginActionError = "Move this widget back to an extra bar slot before removing it."
       return false
     }
     removalPluginId = id
@@ -780,6 +935,11 @@ ShibumiPanel {
   }
 
   function rescanPlugins() {
+    if (nativeCatalogRequired) {
+      const page = settingsPageItem
+      return page && typeof page.requestCatalogRefresh === "function"
+        ? page.requestCatalogRefresh() : false
+    }
     if (!pluginRegistry
         || typeof pluginRegistry.rescan !== "function") return false
     if (effectivePluginUpdateService)
@@ -827,13 +987,19 @@ ShibumiPanel {
   }
 
   function setGroupEnabled(groupId, enabled) {
+    const group = String(groupId || "")
+    const variant = v2LayoutActive ? "v2" : "v1"
     return runWithControlCenterRestore(function() {
+      if (bar && typeof bar.requestWidgetGroupStateTransition === "function")
+        return bar.requestWidgetGroupStateTransition(
+          group, variant, enabled === true)
+      if (nativeCatalogRequired) return false
       return stateService && typeof stateService.setGroupEnabledForVariant
         === "function"
-        ? stateService.setGroupEnabledForVariant(groupId,
-            v2LayoutActive ? "v2" : "v1", enabled === true)
+        ? stateService.setGroupEnabledForVariant(
+            group, variant, enabled === true)
         : stateService && typeof stateService.setGroupSetting === "function"
-          ? stateService.setGroupSetting(groupId, "enabled", enabled === true)
+          ? stateService.setGroupSetting(group, "enabled", enabled === true)
           : false
     })
   }
@@ -883,13 +1049,18 @@ ShibumiPanel {
     })
   }
 
-  function runWithControlCenterRestore(callback) {
+  function runWithControlCenterRestore(callback, needsReplacement, preservePanel) {
     if (typeof callback !== "function") return false
+    if (preservePanel === false) return callback()
     const restoreBar = bar
+    // The Bar survives a style-driven panel replacement and owns settlement.
+    if (restoreBar && typeof restoreBar.runWithControlCenterRestore === "function")
+      return restoreBar.runWithControlCenterRestore(callback, settings.restorePage,
+        needsReplacement !== false, ownerWidget, popoutScreenName)
     const created = restoreBar
       && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
       ? restoreBar.scheduleOpenControlCenterRestores(
-          settings.restorePage, true, ownerWidget, popoutScreenName) : []
+          settings.restorePage, needsReplacement !== false, ownerWidget, popoutScreenName) : []
     const changed = callback()
     if (!changed && restoreBar
         && typeof restoreBar.cancelCreatedWidgetRestores === "function")
@@ -907,39 +1078,23 @@ ShibumiPanel {
       "accent", "border", "panelBorder", "frost", "shadow",
       "radius", "shellStyle"
     ].indexOf(presentationName) >= 0
-    const restoreBar = bar
-    const created = preservePanel && restoreBar
-      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
-      ? restoreBar.scheduleOpenControlCenterRestores(
-          settings.restorePage, presentationName === "shellStyle",
-          ownerWidget, popoutScreenName) : []
-    const changed = stateService
-      && typeof stateService.setPresentationSetting === "function"
-      ? stateService.setPresentationSetting(name, value) : false
-    if (!changed && restoreBar
-        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
-      restoreBar.cancelCreatedWidgetRestores(created)
-    return changed
+    const state = stateService
+    return runWithControlCenterRestore(function() {
+      return state && typeof state.setPresentationSetting === "function"
+        ? state.setPresentationSetting(name, value) : false
+    }, presentationName === "shellStyle", preservePanel)
   }
 
   function setLayoutProtection(variant, enabled) {
     const requested = String(variant || "").toLowerCase()
     if (["v1", "v2"].indexOf(requested) < 0
         || typeof enabled !== "boolean") return false
-    const restoreBar = bar
-    // A lock write republishes shell.json. Enroll every open output without
-    // downgrading an already-running V1/V2 replacement-owner handoff.
-    const created = restoreBar
-      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
-      ? restoreBar.scheduleOpenControlCenterRestores(
-          settings.restorePage, false, ownerWidget, popoutScreenName) : []
-    const changed = stateService
-      && typeof stateService.setLayoutProtection === "function"
-      ? stateService.setLayoutProtection(requested, enabled) : false
-    if (!changed && restoreBar
-        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
-      restoreBar.cancelCreatedWidgetRestores(created)
-    return changed
+    const state = stateService
+    // A weaker lock restore must not downgrade an existing variant handoff.
+    return runWithControlCenterRestore(function() {
+      return state && typeof state.setLayoutProtection === "function"
+        ? state.setLayoutProtection(requested, enabled) : false
+    }, false)
   }
 
   function setBarVariant(target) {
@@ -947,16 +1102,10 @@ ShibumiPanel {
     if (requested !== "v1" && requested !== "v2"
         || !stateService
         || typeof stateService.setShellVariant !== "function") return false
-    const restoreBar = bar
-    const created = restoreBar
-      && typeof restoreBar.scheduleOpenControlCenterRestores === "function"
-      ? restoreBar.scheduleOpenControlCenterRestores(
-          settings.restorePage, true, ownerWidget, popoutScreenName) : []
-    const changed = stateService.setShellVariant(requested)
-    if (!changed && restoreBar
-        && typeof restoreBar.cancelCreatedWidgetRestores === "function")
-      restoreBar.cancelCreatedWidgetRestores(created)
-    return changed
+    const state = stateService
+    return runWithControlCenterRestore(function() {
+      return state.setShellVariant(requested)
+    })
   }
 
   function setWorkspacePreference(name, value) {

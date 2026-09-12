@@ -62,13 +62,16 @@ ShibumiPanel {
 
   function primaryAction(row) {
     if (!row || !row.device) return false
-    return row.device.connected
+    const result = row.device.connected
       ? bluetoothService.disconnectDevice(row.device)
       : bluetoothService.connectDevice(row.device)
+    return result && result.ok === true
   }
 
   function forget(row) {
-    return canForget(row) && bluetoothService.forgetDevice(row.device)
+    if (!canForget(row)) return false
+    const result = bluetoothService.forgetDevice(row.device)
+    return result && result.ok === true
   }
 
   function batteryStatusText(device) {

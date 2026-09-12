@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "CavaThemeModel.js" as CavaThemeModel
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // One process-wide, lazy spectrum owner for every Shibumi output. Omarchy's
 // official media service remains authoritative for player state and actions.
@@ -13,6 +14,15 @@ Item {
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
+  SuiteRuntime.Provider {
+    id: runtimeProvider
+    pluginId: "hancore.shibumi.media"
+    implementationVersion: "0.1.1-beta.13"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property bool runtimeWorkersEnabled: true
   property var spectrumClients: []
   property var levels: flatLevels(0.04)
@@ -30,16 +40,16 @@ Item {
   readonly property int bandCount: 24
   readonly property int clientCount: spectrumClients.length
   readonly property int maximumRetries: 3
-  readonly property var mediaService: shell
-    && typeof shell.firstPartyServiceFor === "function"
-    ? shell.firstPartyServiceFor("omarchy.media") : null
+  readonly property var mediaService: suiteShell.firstPartyServiceFor("omarchy.media")
   readonly property var activePlayer: mediaService
     ? mediaService.activePlayer : null
-  readonly property bool active: mediaService
-    ? mediaService.hasMedia === true && activePlayer !== null : false
+  // Same predicate as native Media.hasMedia, using the metadata actually
+  // exposed by the 4.0.3 first-party proxy (which has no hasMedia field).
+  readonly property bool active: !!(activePlayer
+    && (activePlayer.trackTitle || activePlayer.trackArtist))
   readonly property bool playing: active && activePlayer.isPlaying === true
   readonly property bool spectrumWanted: runtimeWorkersEnabled
-    && clientCount > 0 && playing
+    && runtimeProvider.registered && clientCount > 0 && playing
   readonly property bool workerRunning: cavaProcess.running
   readonly property bool probeRunning: cavaProbe.running
   readonly property string cavaThemePath: Quickshell.env("HOME")

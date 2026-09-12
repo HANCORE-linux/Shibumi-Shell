@@ -3,15 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.temperature"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
-
-  readonly property var hostShell: bar && bar.shell ? bar.shell : null
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var hostShell: suiteShell
   readonly property var telemetryService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.telemetry") : null
@@ -95,9 +96,9 @@ Ui.Panel {
     }
     panelLoader.setSource(Qt.resolvedUrl("TemperaturePanel.qml"), {
       anchorItem: surface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      telemetry: root.telemetry
+      telemetry: Qt.binding(function() { return root.telemetry })
     })
   }
 

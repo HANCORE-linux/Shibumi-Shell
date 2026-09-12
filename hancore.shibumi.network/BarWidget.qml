@@ -13,6 +13,9 @@ Ui.Panel {
   property url popupSource: Qt.resolvedUrl("NetworkPanel.qml")
   property var networkServiceOverride: null
   property var sessionService: null
+  property var trafficService: null
+  property string pendingPresentationMode: ""
+  property int presentationAttempts: 0
 
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
@@ -134,17 +137,88 @@ Ui.Panel {
     sessionService = null
   }
 
+  function releaseTrafficConsumer() {
+    if (trafficService
+        && typeof trafficService.endTrafficConsumer === "function")
+      trafficService.endTrafficConsumer(root)
+    trafficService = null
+  }
+
+  function syncTrafficConsumer() {
+    const desired = networkReady && mode === "ethernet"
+      ? networkService : null
+    if (trafficService === desired) {
+      trafficRetry.stop()
+      return
+    }
+    releaseTrafficConsumer()
+    if (!desired) {
+      trafficRetry.stop()
+      return
+    }
+    if (typeof desired.beginTrafficConsumer === "function"
+        && desired.beginTrafficConsumer(root) === true) {
+      trafficService = desired
+      trafficRetry.stop()
+    } else {
+      trafficRetry.restart()
+    }
+  }
+
+  function applyPendingPresentation() {
+    if (pendingPresentationMode === "") return true
+    if (!panelLoaded) return false
+    if (pendingPresentationMode === "speed") {
+      if ("speedDetailsVisible" in panelItem)
+        panelItem.speedDetailsVisible = true
+      if (!networkService
+          || typeof networkService.runSpeedTest !== "function") return false
+      if (networkService.speedTestRunning !== true) {
+        if (networkService.speedTestReady !== true
+            || networkService.runSpeedTest(root) !== true) return false
+      }
+    } else if (pendingPresentationMode === "qr") {
+      if (typeof panelItem.showQrForConnected !== "function"
+          || !panelItem.showQrForConnected()) return false
+    }
+    pendingPresentationMode = ""
+    return true
+  }
+
+  function openNetworkPresentation(modeValue) {
+    pendingPresentationMode = String(modeValue || "panel")
+    presentationAttempts = 0
+    if (!opened) open()
+    syncPanelLoader()
+    if (!applyPendingPresentation()) presentationRetry.restart()
+    return true
+  }
+
   function syncPanelLoader() {
     popupLoader.source = ""
-    if (!opened || !networkReady || !String(popupSource)) {
+    if (!opened || !String(popupSource)) {
+      pendingPresentationMode = ""
+      presentationRetry.stop()
+      sessionRetry.stop()
       releaseSession()
+      return
+    }
+    if (!networkReady) {
+      sessionRetry.stop()
+      releaseSession()
+      if (pendingPresentationMode !== "") presentationRetry.restart()
       return
     }
     if (sessionService !== networkService) {
       releaseSession()
+      if (typeof networkService.beginSession !== "function"
+          || networkService.beginSession(root) !== true) {
+        sessionRetry.restart()
+        return
+      }
       sessionService = networkService
-      sessionService.beginSession(root)
     }
+    sessionRetry.stop()
     popupLoader.setSource(popupSource, {
       anchorItem: surface,
       bar: root.bar,
@@ -160,15 +234,76 @@ Ui.Panel {
   }
 
   onOpenedChanged: syncPanelLoader()
-  onNetworkReadyChanged: syncPanelLoader()
+  onNetworkReadyChanged: {
+    syncPanelLoader()
+    syncTrafficConsumer()
+  }
+  onNetworkServiceChanged: {
+    syncPanelLoader()
+    syncTrafficConsumer()
+  }
   onPopupSourceChanged: syncPanelLoader()
-  onModeChanged: if (mode !== "ethernet") resetTrafficHistory()
+
+  Connections {
+    target: root.networkService
+    ignoreUnknownSignals: true
+    function onSpeedTestReadyChanged() {
+      if (root.pendingPresentationMode === "speed"
+          && !root.applyPendingPresentation()) presentationRetry.restart()
+    }
+    function onSpeedTestRunningChanged() {
+      if (root.pendingPresentationMode === "speed")
+        root.applyPendingPresentation()
+    }
+  }
+  onModeChanged: {
+    if (mode !== "ethernet") resetTrafficHistory()
+    syncTrafficConsumer()
+  }
+  Component.onCompleted: syncTrafficConsumer()
   Component.onDestruction: {
     close()
+    sessionRetry.stop()
+    trafficRetry.stop()
     releaseSession()
+    releaseTrafficConsumer()
   }
 
-  Loader { id: popupLoader }
+  Loader {
+    id: popupLoader
+    onLoaded: {
+      root.presentationAttempts = 0
+      if (!root.applyPendingPresentation()) presentationRetry.restart()
+    }
+  }
+
+  Timer {
+    id: trafficRetry
+    interval: 250
+    repeat: false
+    onTriggered: root.syncTrafficConsumer()
+  }
+
+  Timer {
+    id: sessionRetry
+    interval: 250
+    repeat: false
+    onTriggered: root.syncPanelLoader()
+  }
+
+  Timer {
+    id: presentationRetry
+    interval: 100
+    repeat: false
+    onTriggered: {
+      root.presentationAttempts++
+      const limit = 300
+      if (!root.applyPendingPresentation()
+          && root.presentationAttempts < limit) restart()
+      else if (root.presentationAttempts >= limit)
+        root.pendingPresentationMode = ""
+    }
+  }
 
   Timer {
     id: trafficSample

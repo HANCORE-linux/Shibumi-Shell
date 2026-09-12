@@ -5,6 +5,7 @@ import QtQuick
 Item {
   id: root
 
+  property bool ready: true
   property bool hasBattery: false
   property int percent: 20
   property bool charging: true

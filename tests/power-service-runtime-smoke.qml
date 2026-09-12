@@ -7,17 +7,30 @@ import "powerState" as PowerState
 ShellRoot {
   id: root
 
-  property int phase: 0
+  property int phase: -1
   property int attempts: 0
 
-  PowerState.Service { id: power }
+  QtObject { id: scopedHost; property string pluginId: "hancore.shibumi.power-state" }
+  PowerState.Service {
+    id: power
+    shell: scopedHost
+    manifest: ({ id: "hancore.shibumi.power-state", version: "0.1.1-beta.13",
+      kinds: ["service"], entryPoints: { service: "Service.qml" } })
+    batterySnapshotOverride: ({ ready: false })
+    commandOverrides: ({
+      profiles: ["omarchy-powerprofiles-list", "--active-state"],
+      activeProfile: ["busctl", "--system", "get-property", "org.freedesktop.UPower.PowerProfiles",
+        "/org/freedesktop/UPower/PowerProfiles", "org.freedesktop.UPower.PowerProfiles", "ActiveProfile"],
+      battery: ["omarchy-battery-status", "--shell"],
+      setProfile: ["powerprofilesctl", "set"]
+    })
+  }
 
   function fail(message) {
     console.error("power-service-runtime-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
-
-  Component.onCompleted: power.acquireProfiles()
 
   Timer {
     interval: 50
@@ -25,7 +38,13 @@ ShellRoot {
     running: true
     onTriggered: {
       root.attempts++
-      if (root.phase === 0) {
+      if (root.phase === -1) {
+        if (root.attempts > 100) return root.fail("admission deadline")
+        if (!power.ready) return
+        if (!power.acquireProfiles()) return root.fail("admitted acquire refused")
+        root.phase = 0
+        root.attempts = 0
+      } else if (root.phase === 0) {
         if (!power.profilesReady || power.activeProfile !== "balanced") {
           if (root.attempts >= 40) root.fail("initial validated profile state")
           return

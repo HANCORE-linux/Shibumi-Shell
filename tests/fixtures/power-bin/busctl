@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# == 6 && $1 == --system && $2 == get-property \
+  && $3 == org.freedesktop.UPower.PowerProfiles \
+  && $4 == /org/freedesktop/UPower/PowerProfiles \
+  && $5 == org.freedesktop.UPower.PowerProfiles && $6 == ActiveProfile ]] || exit 1
+IFS= read -r profile < "${SHIBUMI_POWER_FIXTURE_STATE:?}"
+[[ $profile == balanced || $profile == power-saver || $profile == performance ]] || exit 1
+printf 's "%s"\n' "$profile"

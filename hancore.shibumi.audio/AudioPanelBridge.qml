@@ -20,6 +20,7 @@ Item {
   property real peakValue: 0
   property var peakAcquire: null
   property var peakRelease: null
+  property var peakService: null
   property bool nativeBackendAccessEnabled: false
   property var nativeAudioService: null
 
@@ -235,19 +236,61 @@ Item {
     }
   }
 
+  property int peakClients: 0
+  property var leasedPeakOwner: null
+  property var leasedPeakRelease: null
+  readonly property bool peakLeaseHeld: leasedPeakOwner !== null
+    || leasedPeakRelease !== null
+
+  function clearPeakLease() {
+    const owner = leasedPeakOwner
+    const release = leasedPeakRelease
+    leasedPeakOwner = null
+    leasedPeakRelease = null
+    if (owner && typeof owner.releasePeakMonitoring === "function")
+      owner.releasePeakMonitoring()
+    else if (typeof release === "function") release()
+  }
+
+  function syncPeakLease() {
+    const owner = ready && peakClients > 0 ? (nativeAudioService || peakService) : null
+    const release = ready && peakClients > 0 && !owner ? peakRelease : null
+    if (peakLeaseHeld && owner === leasedPeakOwner
+        && release === leasedPeakRelease) return
+    clearPeakLease()
+    if (!ready || peakClients <= 0) return
+    if (owner) {
+      if (typeof owner.acquirePeakMonitoring === "function"
+          && typeof owner.releasePeakMonitoring === "function"
+          && owner.acquirePeakMonitoring() === true)
+        leasedPeakOwner = owner
+    } else if (typeof peakAcquire === "function" && typeof release === "function"
+        && peakAcquire() === true) {
+      leasedPeakRelease = release
+    }
+  }
+
   function acquirePeakMonitoring() {
-    if (nativeAudioService !== null
-        && typeof nativeAudioService.acquirePeakMonitoring === "function")
-      return nativeAudioService.acquirePeakMonitoring() === true
-    return typeof peakAcquire === "function" ? peakAcquire() === true : false
+    if (!ready) return false
+    peakClients++
+    syncPeakLease()
+    if (peakLeaseHeld) return true
+    peakClients--
+    return false
   }
 
   function releasePeakMonitoring() {
-    if (nativeAudioService !== null
-        && typeof nativeAudioService.releasePeakMonitoring === "function")
-      return nativeAudioService.releasePeakMonitoring() === true
-    return typeof peakRelease === "function" ? peakRelease() === true : false
+    if (peakClients <= 0) return false
+    peakClients--
+    syncPeakLease()
+    return true
   }
+
+  onNativeAudioServiceChanged: syncPeakLease()
+  onPeakServiceChanged: syncPeakLease()
+  onReadyChanged: syncPeakLease()
+  onPeakAcquireChanged: syncPeakLease()
+  onPeakReleaseChanged: syncPeakLease()
 
   function actionResult(ok, code, message, entityId) {
     return Model.actionResult(ok, code, message, entityId, generation)
@@ -552,6 +595,8 @@ Item {
   onPanelSourceChanged: Qt.callLater(syncPanelSource)
   Component.onCompleted: Qt.callLater(syncPanelSource)
   Component.onDestruction: {
+    peakClients = 0
+    clearPeakLease()
     panel.close()
     // Destroy the official panel while its host facade is still valid.
     panelLoader.active = false

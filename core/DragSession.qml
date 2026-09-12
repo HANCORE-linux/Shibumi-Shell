@@ -16,6 +16,7 @@ Item {
   property int targetIndex: -1
   property Item targetItem: null
   property Item sourceItem: null
+  property var sourceWindow: null
   property var targets: []
   property real ghostX: 0
   property real ghostY: 0
@@ -24,10 +25,35 @@ Item {
   property real ghostHomeX: 0
   property real ghostHomeY: 0
   property url ghostImageUrl: ""
+  // The image-provider URL is valid only while its grab result is retained.
+  property var ghostImageGrab: null
+  property int captureGeneration: 0
 
   visible: false
   width: 0
   height: 0
+
+  onSourceItemChanged: {
+    if (!sourceItem && (active || returning)) cancel()
+  }
+  Connections {
+    target: root.sourceItem ? root.sourceItem.Window : null
+    function onWindowChanged() {
+      if (root.active || root.returning) root.cancel()
+    }
+  }
+  Connections {
+    target: root.sourceWindow
+    function onVisibleChanged() {
+      if (target && !target.visible) root.cancel()
+    }
+    function onWidthChanged() {
+      if (target && !root.positiveSize(target)) root.cancel()
+    }
+    function onHeightChanged() {
+      if (target && !root.positiveSize(target)) root.cancel()
+    }
+  }
 
   function groupExists(groupId) {
     return layoutController
@@ -128,33 +154,55 @@ Item {
     return null
   }
 
+  function positiveSize(item) {
+    return item && Number.isFinite(item.width) && Number.isFinite(item.height)
+      && item.width > 0 && item.height > 0
+  }
+
   function begin(groupId, item, windowX, windowY) {
     const source = String(groupId || "")
     cancel()
-    if (!groupExists(source)) return false
+    if (!groupExists(source) || !item || !item.visible || !positiveSize(item)
+        || typeof item.mapToItem !== "function"
+        || typeof item.grabToImage !== "function") return false
+    const window = item.Window.window
+    if (!window || !window.visible || !positiveSize(window)) return false
+    const origin = item.mapToItem(null, 0, 0)
+    if (!Number.isFinite(origin.x) || !Number.isFinite(origin.y)) return false
+
     sourceGroupId = source
-    sourceItem = item || null
-    if (sourceItem) {
-      const origin = sourceItem.mapToItem(null, 0, 0)
-      ghostHomeX = origin.x
-      ghostHomeY = origin.y
-      ghostWidth = sourceItem.width
-      ghostHeight = sourceItem.height
-      ghostX = Number.isFinite(Number(windowX))
-        ? Number(windowX) - ghostWidth / 2 : ghostHomeX
-      ghostY = Number.isFinite(Number(windowY))
-        ? Number(windowY) - ghostHeight / 2 : ghostHomeY
-      if (sourceItem.window
-          && typeof sourceItem.grabToImage === "function") {
-        const capturedItem = sourceItem
-        sourceItem.grabToImage(function(result) {
-          if (root.sourceItem === capturedItem && result && result.url)
-            root.ghostImageUrl = result.url
-        }, Qt.size(Math.max(1, Math.ceil(ghostWidth)),
-          Math.max(1, Math.ceil(ghostHeight))))
-      }
+    sourceItem = item
+    sourceWindow = window
+    ghostHomeX = origin.x
+    ghostHomeY = origin.y
+    ghostWidth = item.width
+    ghostHeight = item.height
+    ghostX = Number.isFinite(Number(windowX))
+      ? Number(windowX) - ghostWidth / 2 : ghostHomeX
+    ghostY = Number.isFinite(Number(windowY))
+      ? Number(windowY) - ghostHeight / 2 : ghostHomeY
+    const generation = captureGeneration
+    const capturedItem = sourceItem
+    // Bound the raster to this output's validated logical window size,
+    // preserving aspect ratio. Ghost geometry stays in logical coordinates.
+    const captureScale = Math.min(1,
+      window.width / ghostWidth, window.height / ghostHeight)
+    if (!sourceItem.grabToImage(function(result) {
+      if (root) root.acceptGhostCapture(generation, capturedItem, result)
+    }, Qt.size(Math.max(1, Math.ceil(ghostWidth * captureScale)),
+      Math.max(1, Math.ceil(ghostHeight * captureScale))))) {
+      cancel()
+      return false
     }
     active = true
+    return true
+  }
+
+  function acceptGhostCapture(generation, item, result) {
+    if (generation !== captureGeneration || sourceItem !== item
+        || (!active && !returning) || !result || !result.url) return false
+    ghostImageGrab = result
+    ghostImageUrl = result.url
     return true
   }
 
@@ -222,6 +270,7 @@ Item {
   }
 
   function cancel() {
+    captureGeneration++
     active = false
     returning = false
     sourceGroupId = ""
@@ -230,6 +279,7 @@ Item {
     targetIndex = -1
     targetItem = null
     sourceItem = null
+    sourceWindow = null
     ghostX = 0
     ghostY = 0
     ghostWidth = 0
@@ -237,6 +287,7 @@ Item {
     ghostHomeX = 0
     ghostHomeY = 0
     ghostImageUrl = ""
+    ghostImageGrab = null
   }
 
   Component.onDestruction: {

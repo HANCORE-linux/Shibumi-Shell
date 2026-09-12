@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "../control" as Control
+import "../control/HostIdentity.js" as HostIdentity
 
 Item {
   id: root
@@ -59,7 +60,7 @@ Item {
       || "tanzaku") : "tanzaku"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
-  property string activeShell: "shibumi"
+  readonly property string activeShell: HostIdentity.shellName(bar)
   readonly property bool stockOmarchyHost: activeShell === "omarchy"
   readonly property string switchPhase: switchService
     ? String(switchService.phase || "idle") : "idle"
@@ -105,19 +106,38 @@ Item {
   readonly property string quickProfileLabel: "Balanced"
   readonly property bool pluginsScanning: false
   property bool pluginRemovalRunning: false
+  property bool refusePluginRemoval: false
+  property string removalRefusalDetail: "Move this widget back to an extra bar slot before removing it."
+  property string pluginActionError: ""
   readonly property bool pluginUpdateCheckRunning:
-    pluginUpdateService.running === true
-  readonly property int pluginUpdateCount: pluginUpdateService.updateCount
-  readonly property int pluginUpdateFailedCount: pluginUpdateService.failedCount
-  readonly property string pluginUpdateCheckError: pluginUpdateService.error
+    pluginUpdateService ? pluginUpdateService.running === true : false
+  readonly property int pluginUpdateCount: pluginUpdateService ? pluginUpdateService.updateCount : 0
+  readonly property int pluginUpdateFailedCount: pluginUpdateService ? pluginUpdateService.failedCount : 0
+  readonly property string pluginUpdateCheckError: pluginUpdateService ? pluginUpdateService.error : ""
   readonly property string pluginUpdateShortStatusText:
-    pluginUpdateService.shortStatusText
-  readonly property string pluginUpdateStatusText: pluginUpdateService.statusText
+    pluginUpdateService ? pluginUpdateService.shortStatusText : ""
+  readonly property string pluginUpdateStatusText: pluginUpdateService
+    ? pluginUpdateService.statusText : "Plugin update check unavailable"
   readonly property var effectivePluginUpdateService: pluginUpdateService
   property bool rejectProviderRestore: false
+  property bool asyncPluginTransitions: false
+  property bool asyncStateTransitions: false
+  property bool applyingPluginTransition: false
+  property int pluginLayoutTransitionSerial: 0
+  property bool pluginLayoutTransitionBusy: false
+  property int pluginStateTransitionSerial: 0
+  property bool pluginStateTransitionBusy: false
+  property int providerSnapshotTransitionSerial: 0
+  property bool providerSnapshotTransitionBusy: false
+  property var pendingPluginTransition: null
+  property var pendingPluginStateTransition: null
+  property var pendingProviderSnapshotRestore: null
   readonly property string pluginRemovalId: ""
   signal pluginRemovalFinished(
     string pluginId, bool success, string detail)
+  signal pluginLayoutTransitionSettled(int serial, string result)
+  signal providerSnapshotTransitionSettled(int serial, string result)
+  signal pluginStateTransitionSettled(int serial, string result)
   property var pluginEntries: [
     {
       id: "hancore.shibumi.audio",
@@ -626,6 +646,31 @@ Item {
 
   function setPluginEnabled(pluginId, enabled) {
     const id = String(pluginId || "")
+    if (asyncStateTransitions && !applyingPluginTransition
+        && id === "hancore.shibumi.bluetooth") {
+      if (pluginLayoutTransitionBusy || providerSnapshotTransitionBusy
+          || pluginStateTransitionBusy) return false
+      pluginStateTransitionSerial++
+      pluginStateTransitionBusy = true
+      pendingPluginStateTransition = {
+        serial: pluginStateTransitionSerial,
+        pluginId: id,
+        enabled: enabled === true
+      }
+      return true
+    }
+    if (asyncPluginTransitions && !applyingPluginTransition) {
+      if (pluginLayoutTransitionBusy || providerSnapshotTransitionBusy)
+        return false
+      pluginLayoutTransitionSerial++
+      pluginLayoutTransitionBusy = true
+      pendingPluginTransition = {
+        serial: pluginLayoutTransitionSerial,
+        pluginId: id,
+        enabled: enabled === true
+      }
+      return true
+    }
     const next = JSON.parse(JSON.stringify(pluginEntries))
     const shibumi = next[0]
     const omarchy = next[1]
@@ -651,11 +696,46 @@ Item {
       return setGroupEnabled("G4", enabled === true)
     } else if (id === "hancore.shibumi.storage") {
       return setGroupEnabled("G18", enabled === true)
+    } else if (id === "hancore.shibumi.bluetooth") {
+      if (!setGroupEnabled("G15", enabled === true)) return false
+      next[3].installedInBar = enabled === true
+      pluginEntries = next
+      return true
     } else {
       return false
     }
     omarchy.replacementTargetEnabled = shibumi.installedInBar === true
     pluginEntries = next
+    return true
+  }
+
+  function settlePluginTransition(result, publish) {
+    const pending = pendingPluginTransition
+    if (!pending || !pluginLayoutTransitionBusy) return false
+    if (publish === true) {
+      applyingPluginTransition = true
+      const applied = setPluginEnabled(pending.pluginId, pending.enabled)
+      applyingPluginTransition = false
+      if (!applied) return false
+    }
+    pendingPluginTransition = null
+    pluginLayoutTransitionBusy = false
+    pluginLayoutTransitionSettled(pending.serial, String(result || ""))
+    return true
+  }
+
+  function settlePluginStateTransition(result, publish) {
+    const pending = pendingPluginStateTransition
+    if (!pending || !pluginStateTransitionBusy) return false
+    if (publish === true) {
+      applyingPluginTransition = true
+      const applied = setPluginEnabled(pending.pluginId, pending.enabled)
+      applyingPluginTransition = false
+      if (!applied) return false
+    }
+    pendingPluginStateTransition = null
+    pluginStateTransitionBusy = false
+    pluginStateTransitionSettled(pending.serial, String(result || ""))
     return true
   }
 
@@ -675,12 +755,30 @@ Item {
       && setPluginEnabled("hancore.shibumi.audio", true)
   }
 
+  function confirmedProviderUndoSnapshot(serial) {
+    return Number(serial) === pluginLayoutTransitionSerial
+      ? { token: "audio-provider-snapshot", confirmedSerial: Number(serial) }
+      : null
+  }
+
   function providerUndoSnapshot(pluginId) {
     return String(pluginId || "") === "omarchy.audio"
       ? { token: "audio-provider-snapshot" } : null
   }
 
   function restoreProviderUndoSnapshot(snapshotValue) {
+    if (asyncPluginTransitions) {
+      if (pluginLayoutTransitionBusy || providerSnapshotTransitionBusy
+          || !snapshotValue
+          || snapshotValue.token !== "audio-provider-snapshot") return false
+      providerSnapshotTransitionSerial++
+      providerSnapshotTransitionBusy = true
+      pendingProviderSnapshotRestore = {
+        serial: providerSnapshotTransitionSerial,
+        snapshot: JSON.parse(JSON.stringify(snapshotValue))
+      }
+      return true
+    }
     const restoreBar = bar
     if (restoreBar
         && typeof restoreBar.scheduleWidgetRestore === "function")
@@ -695,6 +793,22 @@ Item {
     return restored
   }
 
+  function settleProviderSnapshotTransition(result, publish) {
+    const pending = pendingProviderSnapshotRestore
+    if (!pending || !providerSnapshotTransitionBusy) return false
+    if (publish === true) {
+      applyingPluginTransition = true
+      const applied = setPluginEnabled("hancore.shibumi.audio", true)
+      applyingPluginTransition = false
+      if (!applied) return false
+    }
+    pendingProviderSnapshotRestore = null
+    providerSnapshotTransitionBusy = false
+    providerSnapshotTransitionSettled(
+      pending.serial, String(result || ""))
+    return true
+  }
+
   function setProviderGroupStates(stateValues) {
     return !rejectProviderRestore && stateValues
       && typeof stateValues === "object"
@@ -705,6 +819,8 @@ Item {
   }
 
   function removePlugin(pluginId) {
+    pluginActionError = refusePluginRemoval ? removalRefusalDetail : ""
+    if (refusePluginRemoval) return false
     const id = String(pluginId || "")
     const remaining = pluginEntries.filter(function(entry) {
       return String(entry.id || "") !== id || entry.removable !== true

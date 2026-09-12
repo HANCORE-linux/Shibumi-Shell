@@ -7,6 +7,7 @@ import argparse
 import copy
 import fcntl
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -74,22 +75,42 @@ def paths() -> dict[str, Path]:
     }
 
 
-def decode_json(payload: bytes, label: str) -> dict[str, Any]:
+def reject_json_constant(value: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
+def finite_json_float(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value):
+        raise ValueError("non-finite JSON number")
+    return value
+
+
+def finite_json_int(raw: str) -> int:
+    finite_json_float(raw)
+    return int(raw)
+
+
+def decode_json(payload: bytes, label: str, *, shell_document: bool = False) -> dict[str, Any]:
     try:
-        value = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raw = payload.decode("utf-8")
+        if shell_document and len(raw.encode("utf-16-le")) // 2 > 1048576:
+            raise ValueError("shell config exceeds State parser budget")
+        value = json.loads(raw, parse_constant=reject_json_constant,
+                           parse_float=finite_json_float, parse_int=finite_json_int)
+    except ValueError as error:
         raise ManagerError(f"cannot read {label}: {error}") from error
     if not isinstance(value, dict):
         raise ManagerError(f"{label} must be a JSON object")
     return value
 
 
-def read_json(path: Path, label: str) -> dict[str, Any]:
+def read_json(path: Path, label: str, *, shell_document: bool = False) -> dict[str, Any]:
     try:
         payload = path.read_bytes()
     except OSError as error:
         raise ManagerError(f"cannot read {label}: {error}") from error
-    return decode_json(payload, label)
+    return decode_json(payload, label, shell_document=shell_document)
 
 
 def atomic_write(path: Path, payload: bytes) -> None:
@@ -111,7 +132,7 @@ def atomic_write(path: Path, payload: bytes) -> None:
 
 
 def encode(value: dict[str, Any]) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    return (json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
 def fsync_directory(path: Path) -> None:
@@ -408,7 +429,33 @@ def current_config(runtime_paths: dict[str, Path]) -> dict[str, Any]:
         if config_path.is_file() and config_path.stat().st_size
         else runtime_paths["defaults"]
     )
-    return normalize(read_json(source, "shell config"))
+    config = read_json(source, "shell config", shell_document=True)
+    state_settings(config)  # Refuse raw corruption before normalization or a switch.
+    return normalize(config)
+
+
+def state_settings(config: dict[str, Any]) -> dict[str, Any]:
+    entries = config.get("plugins")
+    bar = config.get("bar")
+    layout = bar.get("layout") if isinstance(bar, dict) else None
+    if (type(config.get("version")) not in (int, float) or config["version"] != 1
+            or not isinstance(entries, list) or len(entries) > 512 or not isinstance(layout, dict)
+            or any(not isinstance(layout.get(region), list) for region in REGIONS)):
+        raise ManagerError("invalid State container; run suite update/repair")
+    if any(entry_id(entry) == "hancore.shibumi.state"
+           for region in REGIONS for entry in layout.get(region, [])):
+        raise ManagerError("State service must not be a bar layout entry")
+    matches = [entry for entry in entries if entry_id(entry) == "hancore.shibumi.state"]
+    if len(matches) != 1 or not isinstance(matches[0], dict):
+        raise ManagerError("missing or ambiguous State settings; run suite update/repair")
+    entry = matches[0]
+    settings = entry.get("shibumi")
+    if (type(entry.get("shibumiStateSchemaVersion")) not in (int, float)
+            or entry["shibumiStateSchemaVersion"] != 1
+            or not isinstance(settings, dict)
+            or type(settings.get("version")) not in (int, float) or settings["version"] != 1):
+        raise ManagerError("invalid State settings; run suite update/repair")
+    return settings
 
 
 def activate_config(
@@ -416,6 +463,7 @@ def activate_config(
     state: dict[str, Any],
     target_layout: dict[str, list[Any]] | None = None,
 ) -> dict[str, Any]:
+    state_settings(config)
     result = normalize(config)
     activation = state["activation"]
     managed_ids = set(state["plugins"])
@@ -453,6 +501,7 @@ def deactivate_config(
     target_layout: dict[str, list[Any]] | None = None,
     target_center_anchor: str | None = None,
 ) -> dict[str, Any]:
+    state_settings(config)
     result = normalize(config)
     managed_ids = set(state["plugins"])
     activation = state["activation"]
@@ -519,10 +568,7 @@ def apply_shibumi_variant(
     if target not in {"v1", "v2"}:
         return config
     result = normalize(config)
-    shibumi = result["bar"].get("shibumi")
-    if not isinstance(shibumi, dict):
-        shibumi = {}
-        result["bar"]["shibumi"] = shibumi
+    shibumi = state_settings(result)
     presentation = shibumi.get("presentation")
     if not isinstance(presentation, dict):
         presentation = {}
@@ -658,14 +704,8 @@ def stop_shell(
         raise ManagerError("shell drain timeout must be positive")
     if quiet_period < 0:
         raise ManagerError("shell drain quiet period cannot be negative")
-    shell_path = runtime_paths["omarchy_root"] / "shell"
-    command = [
-        "quickshell",
-        "kill",
-        "-p",
-        str(shell_path),
-        "--any-display",
-    ]
+    prepare_settle = 0.2
+    kill_reserve = 0.05
     poll_interval = 0.05
     deadline = time.monotonic() + timeout
     evidence_deadline = deadline + 0.15
@@ -720,13 +760,53 @@ def stop_shell(
                 time.sleep(sleep_for)
             continue
 
+        target = instances[0]
+        pid = target.get("pid")
+        if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+            raise ManagerError(
+                "matching Omarchy shell instance has no valid PID"
+            )
+        prepared = False
+        prepare_budget = (
+            deadline - time.monotonic() - prepare_settle - kill_reserve
+        )
+        if prepare_budget > 0:
+            try:
+                result = subprocess.run(
+                    [
+                        "quickshell",
+                        "ipc",
+                        "--pid",
+                        str(pid),
+                        "call",
+                        "shibumi-suite",
+                        "prepareShutdown",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=min(0.25, prepare_budget),
+                    env=runtime_environment(runtime_paths),
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+            else:
+                prepared = (
+                    result.returncode == 0
+                    and result.stdout.strip() == "ok"
+                )
+        if prepared:
+            settle_budget = deadline - time.monotonic()
+            if settle_budget > 0:
+                time.sleep(min(prepare_settle, settle_budget))
+
         kill_budget = deadline - time.monotonic()
         if kill_budget <= 0:
             break
         empty_since = None
         try:
             subprocess.run(
-                command,
+                ["quickshell", "kill", "--pid", str(pid)],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -1162,6 +1242,7 @@ def recover() -> int:
 def request(target: str) -> int:
     runtime_paths = paths()
     load_state(runtime_paths)
+    current_config(runtime_paths)  # Do not enqueue/spawn for known-invalid storage.
     request_lock_path = runtime_paths["state"] / "switch-request.lock"
     request_lock_path.parent.mkdir(parents=True, exist_ok=True)
     with request_lock_path.open("a+") as request_lock:
@@ -1202,7 +1283,7 @@ def show_status() -> int:
     switch_status: dict[str, Any] = {}
     if status_path(runtime_paths).is_file():
         switch_status = read_json(status_path(runtime_paths), "switch status")
-    shibumi = config["bar"].get("shibumi")
+    shibumi = state_settings(config)
     presentation = shibumi.get("presentation") \
         if isinstance(shibumi, dict) else {}
     shell_style = str(presentation.get("shellStyle") or "shibumi") \

@@ -185,7 +185,8 @@ function normalizedOrder(value) {
   if (!isPlainObject(value)) return null
   if (!Array.isArray(value.left)
       || value.left.length < 7 || value.left.length > 9) return null
-  if (!Array.isArray(value.center) || value.center.length !== 1) return null
+  if (!Array.isArray(value.center)
+      || value.center.length < 1 || value.center.length > 2) return null
   if (!Array.isArray(value.right)
       || value.right.length < 7 || value.right.length > 9) return null
 

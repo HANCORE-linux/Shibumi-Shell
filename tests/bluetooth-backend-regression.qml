@@ -12,6 +12,7 @@ ShellRoot {
   property int ticks: 0
   property bool raceOwnedImmediately: false
   property bool guardAdapterDestroyed: false
+  property var audioDeviceRecord: null
 
   function fail(message) {
     console.error("bluetooth-backend-regression:", message)
@@ -38,6 +39,8 @@ ShellRoot {
 
   QtObject {
     id: nativeAdapter
+    property string adapterId: "hci-test"
+    property string dbusPath: "/org/bluez/hci_test"
     property bool enabled: true
     property bool discovering: false
   }
@@ -47,6 +50,7 @@ ShellRoot {
     property string address: "FE:DC:BA:98:76:54"
     property string name: "Shibumi Delayed Audio Device"
     property string deviceName: name
+    property string dbusPath: "/org/bluez/hci_test/dev_FE_DC_BA_98_76_54"
     property bool connected: false
     property bool paired: true
     property bool bonded: true
@@ -216,7 +220,9 @@ ShellRoot {
         discoveryFixture.rejectedDiscoveryStarts = 1
         discoveryService.beginSession(root)
 
-        if (!audioBackend.connectDevice(audioDevice)
+        root.audioDeviceRecord = audioBackend.knownDevices[0]
+        const firstResult = audioBackend.connectDevice(root.audioDeviceRecord)
+        if (!firstResult || firstResult.ok !== true
             || commandRunner.count !== 1)
           return root.fail("isolated connect command boundary")
         // UI pending may expire before the helper's pair+connect sequence.
@@ -238,7 +244,9 @@ ShellRoot {
         discoveryFixture.fakeAdapter.discovering = false
 
         audioDevice.connected = false
-        if (!audioBackend.connectDevice(audioDevice))
+        const secondResult = audioBackend.connectDevice(
+          root.audioDeviceRecord)
+        if (!secondResult || secondResult.ok !== true)
           return root.fail("second isolated connect command")
         audioBackend.nativePendingActions = ({})
         audioDevice.connected = true
@@ -260,7 +268,9 @@ ShellRoot {
         discoveryFixture.selectedAdapter = discoveryFixture.alternateAdapter
 
         audioDevice.connected = false
-        if (!audioBackend.connectDevice(audioDevice))
+        const thirdResult = audioBackend.connectDevice(
+          root.audioDeviceRecord)
+        if (!thirdResult || thirdResult.ok !== true)
           return root.fail("third isolated connect command")
         audioBackend.nativePendingActions = ({})
         audioDevice.connected = true

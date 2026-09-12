@@ -6,6 +6,7 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -15,9 +16,44 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+NAYUKI_NOTICE = """Third-party notice: QR Code generator library
+
+Copyright (c) Project Nayuki. (MIT License)
+https://www.nayuki.io/page/qr-code-generator-library
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+- The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+- The Software is provided "as is", without warranty of any kind, express or
+  implied, including but not limited to the warranties of merchantability,
+  fitness for a particular purpose and noninfringement. In no event shall the
+  authors or copyright holders be liable for any claim, damages or other
+  liability, whether in an action of contract, tort or otherwise, arising from,
+  out of or in connection with the Software or the use or other dealings in the
+  Software."""
+
+
+def has_complete_nayuki_notice(text: str) -> bool:
+    marker = "Third-party notice: QR Code generator library"
+    return marker in text and text.split(marker, 1)[1].strip() == (
+        NAYUKI_NOTICE.split(marker, 1)[1].strip()
+    )
 
 
 class PackageReleaseTests(unittest.TestCase):
+    def test_nayuki_notice_is_complete_and_truncation_fails(self) -> None:
+        license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+        self.assertTrue(has_complete_nayuki_notice(license_text))
+        truncated = license_text.split(
+            "Permission is hereby granted", 1
+        )[0].rstrip()
+        self.assertFalse(has_complete_nayuki_notice(truncated))
+
     def test_versions_and_all_plugin_manifests_agree(self) -> None:
         version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         suite = json.loads(
@@ -26,7 +62,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.11")
+        self.assertEqual(version, "0.1.1-beta.13")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -59,10 +95,15 @@ class PackageReleaseTests(unittest.TestCase):
             'contracts/backend-boundary-v1.json',
             pkgbuild,
         )
+        self.assertIn("contracts/lifecycle-predecessors-v1.json", pkgbuild)
         aur_check = (ROOT / "scripts/check-aur-package").read_text(
             encoding="utf-8"
         )
         self.assertIn("scripts/check-production-boundary", aur_check)
+        self.assertIn('"refs/tags/$tag^{}"', aur_check)
+        self.assertIn('remote_commit == "$head_commit"', aur_check)
+        self.assertIn('remote_tag_output=$(git ls-remote', aur_check)
+        self.assertIn('cannot resolve remote v%s', aur_check)
         hooks = list((ROOT / "packaging").rglob("*.install"))
         hooks += list((ROOT / "packaging").rglob("*.hook"))
         self.assertEqual(hooks, [])
@@ -150,6 +191,8 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn("scripts/rehearse-aur-package", workflow)
         rehearsal = (ROOT / "scripts/rehearse-aur-package").read_text(encoding="utf-8")
         self.assertIn("usr/share/shibumi-shell/contracts/backend-boundary-v1.json", rehearsal)
+        self.assertIn("usr/share/shibumi-shell/contracts/lifecycle-predecessors-v1.json", rehearsal)
+        self.assertIn("verify_package_inventory(extract)", rehearsal)
         self.assertIn("check-production-boundary", rehearsal)
         self.assertIn("Suite.load(payload)", rehearsal)
         self.assertIn('"--root"', rehearsal)
@@ -164,6 +207,7 @@ class PackageReleaseTests(unittest.TestCase):
         )
         for contract in (
             "python3 tests/test_shibumi_manager.py",
+            "python3 tests/test_lifecycle_admission.py",
             "python3 tests/test_inc013_drain_contract.py",
             "scripts/collect-release-evidence",
             '"dist/shibumi-shell-$version.release-evidence.json"',
@@ -184,6 +228,60 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn(
             "runs-on: [self-hosted, linux, shibumi-validation]", workflow
         )
+        self.assertIn('--expected-commit "$GITHUB_SHA"', workflow)
+        self.assertEqual(workflow.count('tag_output=$(git ls-remote --tags origin'), 2)
+        self.assertIn('gh release create "$tag"', workflow)
+        self.assertIn('gh release view "$tag" --json isDraft,tagName', workflow)
+        self.assertIn('gh release upload "$tag" "${assets[@]}" --clobber', workflow)
+        self.assertIn('--draft \\', workflow)
+        self.assertIn('gh release download "$tag"', workflow)
+        self.assertEqual(workflow.count('gh release download "$tag" --dir'), 2)
+        self.assertIn('gh release edit "$tag" --draft=false', workflow)
+        self.assertLess(
+            workflow.rindex('gh release download "$tag"'),
+            workflow.index('gh release edit "$tag" --draft=false'),
+        )
+
+    def test_quattro_cleanup_rejects_foreign_units_without_systemctl(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        stop_script = runtime.split(
+            "cat >\"$stop_shells\" <<'STOP_SHELLS'\n", 1
+        )[1].split("\nSTOP_SHELLS", 1)[0]
+        with tempfile.TemporaryDirectory(prefix="shibumi-cleanup-boundary.") as temporary:
+            root = Path(temporary)
+            script = root / "stop-shells"
+            script.write_text(stop_script, encoding="utf-8")
+            script.chmod(0o755)
+            service_file = root / "services"
+            service_file.write_text("production-user.service\n", encoding="utf-8")
+            systemctl_log = root / "systemctl.log"
+            stub_bin = root / "bin"
+            stub_bin.mkdir()
+            systemctl = stub_bin / "systemctl"
+            systemctl.write_text(
+                "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >>\"$SYSTEMCTL_LOG\"\n",
+                encoding="utf-8",
+            )
+            systemctl.chmod(0o755)
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": f"{stub_bin}:{environment['PATH']}",
+                "SYSTEMCTL_LOG": str(systemctl_log),
+                "SHIBUMI_TEST_SERVICE_FILE": str(service_file),
+                "SHIBUMI_TEST_CLEANUP_LOG": str(root / "cleanup.log"),
+                "SHIBUMI_TEST_SERVICE_PREFIX": "shibumi-runtime-Ab12Cd",
+            })
+            result = subprocess.run(
+                [str(script)],
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("refusing foreign fixture service", result.stderr)
+            self.assertFalse(systemctl_log.exists())
 
     def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
@@ -208,6 +306,9 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertNotIn("$(systemctl --user show", runtime)
         self.assertIn("--property=KillMode=control-group", runtime)
         self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
+        self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
+        self.assertIn("refusing foreign fixture service", runtime)
+        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])", runtime)
         self.assertIn("--kill-whom=all --signal=TERM", runtime)
         self.assertIn("--kill-whom=all --signal=KILL", runtime)
         self.assertIn("timeout --kill-after=1s 8s", runtime)
@@ -244,6 +345,7 @@ class PackageReleaseTests(unittest.TestCase):
                 "package-tests",
                 "manager-tests",
                 "suite-tests",
+                "lifecycle-admission",
                 "health-tests",
                 "inc013-tests",
                 "registry-mutations",
@@ -344,6 +446,67 @@ class PackageReleaseTests(unittest.TestCase):
             self.assertIn(f"\tdepends = {package}", srcinfo)
         for package, purpose in contract["optionalPackages"].items():
             self.assertIn(f"\toptdepends = {package}: {purpose}", srcinfo)
+        self.assertEqual(
+            set(contract["requiredHostCommands"]),
+            {"omarchy-bluetooth-device", "omarchy-audio-output-set-default"},
+        )
+        runtime = (ROOT / "scripts/shibumi_suite/runtime.py").read_text(
+            encoding="utf-8"
+        )
+        for command in contract["requiredHostCommands"]:
+            self.assertIn(f'"{command}"', runtime)
+
+    def test_release_archive_rejects_invalid_commit_binding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="shibumi-release-binding.") as temporary:
+            for expected, message in (
+                ("short", "full lowercase commit id"),
+                ("0" * 40, "HEAD mismatch"),
+            ):
+                with self.subTest(expected=expected):
+                    result = subprocess.run(
+                        [
+                            str(ROOT / "scripts/build-release-archive"),
+                            "--expected-commit",
+                            expected,
+                            "--output-dir",
+                            temporary,
+                        ],
+                        cwd=ROOT,
+                        text=True,
+                        capture_output=True,
+                    )
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn(message, result.stderr)
+
+    def test_rehearsal_inventory_rejects_unexpected_paths_and_mode_drift(self) -> None:
+        path = ROOT / "scripts/rehearse-aur-package"
+        loader = importlib.machinery.SourceFileLoader("aur_rehearsal", str(path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        files, directories = module.expected_package_inventory()
+        with tempfile.TemporaryDirectory(prefix="shibumi-package-inventory.") as temporary:
+            extracted = Path(temporary)
+            for directory in sorted(directories):
+                (extracted / directory).mkdir(parents=True, exist_ok=True)
+            for relative, (mode, payload) in files.items():
+                target = extracted / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+                target.chmod(mode)
+            module.verify_package_inventory(extracted)
+
+            extra = extracted / "usr/share/shibumi-shell/foreign"
+            extra.write_text("foreign\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "file inventory drift"):
+                module.verify_package_inventory(extracted)
+            extra.unlink()
+
+            target = extracted / "usr/bin/shibumi-shell"
+            target.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "mode/content drift"):
+                module.verify_package_inventory(extracted)
 
     def test_release_archive_is_reproducible_and_complete(self) -> None:
         with tempfile.TemporaryDirectory(prefix="shibumi-release-test.") as temporary:
@@ -392,6 +555,11 @@ class PackageReleaseTests(unittest.TestCase):
                 payload.extractall(extracted, filter="data")
             roots = {name.split("/", 1)[0] for name in names}
             self.assertEqual(roots, {f"shibumi-shell-{inventory['version']}"})
+            archive_root = extracted / next(iter(roots))
+            shipped_license = (archive_root / "LICENSE").read_text(
+                encoding="utf-8"
+            )
+            self.assertTrue(has_complete_nayuki_notice(shipped_license))
             self.assertFalse(
                 any(
                     "__pycache__" in name
@@ -404,11 +572,15 @@ class PackageReleaseTests(unittest.TestCase):
             )
             manifests = [name for name in names if name.endswith("/manifest.json")]
             self.assertEqual(len(manifests), 24)
+            lifecycle_contract = (
+                archive_root / "contracts/lifecycle-predecessors-v1.json"
+            )
+            self.assertTrue(lifecycle_contract.is_file())
             boundary = subprocess.run(
                 [
                     str(ROOT / "scripts/check-production-boundary"),
                     "--root",
-                    str(extracted / next(iter(roots))),
+                    str(archive_root),
                 ],
                 cwd=ROOT,
                 check=False,

@@ -16,9 +16,17 @@ command -v jq >/dev/null 2>&1 || fail "jq is required"
 rg -Fq 'function reloadPayload(): string' \
   "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail "bar host does not expose the post-update QML reload gate"
-rg -Fq 'runtime.reload_payload()' \
-  "$repo_root/scripts/shibumi_suite/cli.py" \
-  || fail "suite update does not request the post-update QML reload gate"
+if rg -Fq 'runtime.reload_payload()' "$repo_root/scripts/shibumi_suite/cli.py"; then
+  fail "suite lifecycle must use the drained full-restart path instead of hot payload reload"
+fi
+rg -Fq 'runtime.restart_shell()' "$repo_root/scripts/shibumi_suite/cli.py" \
+  || fail "suite lifecycle does not request the post-drain shell restart"
+(
+  cd "$repo_root"
+  python3 -m unittest \
+    tests.test_shibumi_suite.SuiteLifecycleTests.test_managed_update_stops_before_publish_and_restarts_once \
+    tests.test_shibumi_suite.SuiteLifecycleTests.test_external_update_transforms_the_post_stop_config_and_restarts
+) || fail "managed and external update must drain before publication and restart exactly once"
 
 jq -e '
   .schemaVersion == 1 and

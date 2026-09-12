@@ -2,11 +2,43 @@ import QtQuick
 import "../core/GroupRegistry.js" as GroupRegistry
 import "../core/ShibumiConfig.js" as ShibumiConfig
 import "../core/WidgetFamilies.js" as WidgetFamilies
+import "../core/LayoutModel.js" as LayoutModel
 
 QtObject {
   function fail(message) {
     console.error("group-registry-regression:", message)
     Qt.exit(1)
+    // Qt.exit schedules shutdown; abort this stack before the success exit.
+    throw new Error(message)
+  }
+
+  function catalogObservation(rows) {
+    const entries = []
+    const byId = Object.create(null)
+    for (let index = 0; index < rows.length; index++) {
+      const source = rows[index]
+      const row = Object.freeze({
+        id: source.id,
+        name: source.name || source.id,
+        kinds: Object.freeze(["bar-widget"]),
+        enabled: source.enabled === true,
+        active: false,
+        canDisable: true,
+        firstParty: source.firstParty === true,
+        clonedFrom: source.clonedFrom || ""
+      })
+      entries.push(row)
+      byId[row.id] = row
+    }
+    return Object.freeze({
+      serial: 1,
+      generation: 1,
+      snapshot: Object.freeze({
+        catalogKind: "native-listPlugins",
+        entries: Object.freeze(entries),
+        byId: Object.freeze(byId)
+      })
+    })
   }
 
   Component.onCompleted: {
@@ -121,6 +153,175 @@ QtObject {
         || WidgetFamilies.replacementLabel("omarchy.power", null)
           !== "Replaces Shibumi Battery and Shibumi Power Profile")
       fail("provider family fallback/multi-group label")
+
+    const fullOrder = LayoutModel.defaultOrder()
+    fullOrder.left.push("G:custom.one", "G:custom.two")
+    fullOrder.right.push("G:custom.three", "G:custom.four")
+    const fullBefore = JSON.stringify(fullOrder)
+    const familyBindings = WidgetFamilies.v1SlotBindings([
+      { pluginId: "custom.one" }, { pluginId: "custom.two" },
+      { pluginId: "custom.three" }, { pluginId: "custom.four" },
+      { pluginId: "omarchy.audio" }, { pluginId: "omarchy.clock" },
+      { pluginId: "omarchy.weather" }, { pluginId: "omarchy.power" },
+      { pluginId: "omarchy.power" }
+    ], fullOrder, null)
+    if (familyBindings.G6 !== "omarchy.audio"
+        || familyBindings.G8 !== "omarchy.clock"
+        || familyBindings.G12 !== "omarchy.power"
+        || Object.keys(familyBindings).length !== 3
+        || JSON.stringify(fullOrder) !== fullBefore
+        || LayoutModel.maxCount("left") !== 9
+        || LayoutModel.maxCount("center") !== 2
+        || LayoutModel.maxCount("right") !== 9)
+      fail("slot-neutral family projection changed order or slot limits")
+    const legacyOrder = LayoutModel.defaultOrder()
+    legacyOrder.right.push("G:omarchy.clock")
+    if (Object.keys(WidgetFamilies.v1SlotBindings(
+          [{ pluginId: "omarchy.clock" }], legacyOrder, null)).length !== 0)
+      fail("existing dynamic placement was silently migrated")
+    const declaredBindings = WidgetFamilies.v1SlotBindings([
+      { pluginId: "example.audio" }
+    ], fullOrder, { installedPlugins: {
+      "example.audio": { barWidget: { semanticCapabilities: ["audio"] } }
+    } })
+    if (declaredBindings.G6 !== "example.audio")
+      fail("declared compatible provider did not reuse its family slot")
+    const cloneRegistry = { installedPlugins: {
+      "omarchy.clock": {},
+      "local.clock": { omarchy: { clonedFrom: "omarchy.clock" } },
+      "local.nested": { omarchy: { clonedFrom: "local.clock" } },
+      "local.a": { omarchy: { clonedFrom: "local.b" } },
+      "local.b": { omarchy: { clonedFrom: "local.a" } },
+      "local.missing": { omarchy: { clonedFrom: "omarchy.absent" } },
+      "local.inherited": { omarchy: { clonedFrom: "constructor" } }
+    } }
+    if (WidgetFamilies.v1SlotBindings([{ pluginId: "local.clock" }],
+          fullOrder, cloneRegistry).G8 !== "local.clock"
+        || JSON.stringify(WidgetFamilies.capabilitiesForPlugin("local.nested", cloneRegistry))
+          !== '["clock"]')
+      fail("clone family did not follow the installed source manifest")
+    for (const id of ["local.a", "local.b", "local.missing", "local.inherited", "constructor"]) {
+      if (WidgetFamilies.capabilitiesForPlugin(id, cloneRegistry).length !== 0)
+        fail("cyclic, absent or inherited clone source acquired family authority")
+    }
+    const deepRegistry = { installedPlugins: { "omarchy.clock": {} } }
+    for (let i = 0; i < 33; i++)
+      deepRegistry.installedPlugins["local.depth" + i] = {
+        omarchy: { clonedFrom: i === 32 ? "omarchy.clock" : "local.depth" + (i + 1) }
+      }
+    if (WidgetFamilies.capabilitiesForPlugin("local.depth0", deepRegistry).length !== 0)
+      fail("clone family source traversal was not bounded")
+
+    const scopedNested = catalogObservation([
+      { id: "local.nested", clonedFrom: "local.clock", enabled: true },
+      { id: "local.clock", clonedFrom: "omarchy.clock", enabled: true },
+      { id: "omarchy.clock", enabled: false }
+    ])
+    if (JSON.stringify(WidgetFamilies.capabilitiesForPlugin(
+          "local.nested", cloneRegistry, scopedNested, true)) !== '["clock"]'
+        || WidgetFamilies.v1SlotBindings([{ pluginId: "local.nested" }],
+          fullOrder, cloneRegistry, scopedNested, true).G8 !== "local.nested")
+      fail("scoped nested clone lost its family or render identity")
+
+    const scopedMissing = catalogObservation([
+      { id: "local.missing", clonedFrom: "omarchy.clock", enabled: true }
+    ])
+    const scopedCycle = catalogObservation([
+      { id: "local.a", clonedFrom: "local.b", enabled: true },
+      { id: "local.b", clonedFrom: "local.a", enabled: true }
+    ])
+    if (WidgetFamilies.capabilitiesForPlugin(
+          "local.missing", cloneRegistry, scopedMissing, true).length !== 0
+        || WidgetFamilies.capabilitiesForPlugin(
+          "local.a", cloneRegistry, scopedCycle, true).length !== 0)
+      fail("scoped missing/cyclic ancestry acquired family authority")
+
+    const depth32Rows = []
+    for (let i = 0; i < 31; i++) depth32Rows.push({
+      id: "scoped.depth" + i,
+      clonedFrom: i === 30 ? "omarchy.clock" : "scoped.depth" + (i + 1),
+      enabled: true
+    })
+    depth32Rows.push({ id: "omarchy.clock", enabled: false })
+    const depth33Rows = [{
+      id: "scoped.too-deep", clonedFrom: "scoped.depth0", enabled: true
+    }].concat(depth32Rows)
+    if (JSON.stringify(WidgetFamilies.capabilitiesForPlugin(
+          "scoped.depth0", null, catalogObservation(depth32Rows), true))
+          !== '["clock"]'
+        || WidgetFamilies.capabilitiesForPlugin("scoped.too-deep", null,
+          catalogObservation(depth33Rows), true).length !== 0)
+      fail("scoped ancestry did not accept exactly 32 and reject 33 rows")
+
+    const contradictory = catalogObservation([
+      { id: "omarchy.audio", clonedFrom: "omarchy.clock", enabled: true },
+      { id: "omarchy.clock", enabled: false }
+    ])
+    if (WidgetFamilies.capabilitiesForPlugin(
+          "omarchy.audio", null, contradictory, true).length !== 0)
+      fail("contradictory known ancestry acquired family authority")
+
+    const enabledClone = catalogObservation([
+      { id: "omarchy.clock", enabled: false },
+      { id: "local.clock", clonedFrom: "omarchy.clock", enabled: true }
+    ])
+    const scopedClockFamily = WidgetFamilies.familyForGroup(
+      "G8", null, enabledClone, true)
+    if (WidgetFamilies.capabilitiesForPlugin(
+          "omarchy.clock", null, enabledClone, true).length !== 0
+        || JSON.stringify(WidgetFamilies.capabilitiesForPlugin(
+          "local.clock", null, enabledClone, true)) !== '["clock"]'
+        || WidgetFamilies.v1SlotBindings([{ pluginId: "local.clock" }],
+          fullOrder, null, enabledClone, true).G8 !== "local.clock"
+        || !scopedClockFamily
+        || JSON.stringify(scopedClockFamily.alternatives) !== '["local.clock"]'
+        || WidgetFamilies.replacementLabel(
+          "local.clock", null, enabledClone, true) !== "Replaces Shibumi Center")
+      fail("enabled clone did not suppress original or retain clone family identity")
+
+    const heuristicTrap = catalogObservation([
+      { id: "custom.weather-looking", name: "Clock and weather", enabled: true }
+    ])
+    const legacyDeclared = { installedPlugins: {
+      "custom.weather-looking": {
+        barWidget: { semanticCapabilities: ["clock"] }
+      }
+    } }
+    if (WidgetFamilies.capabilitiesForPlugin(
+          "omarchy.clock", cloneRegistry, null, true).length !== 0
+        || WidgetFamilies.capabilitiesForPlugin("custom.weather-looking",
+          legacyDeclared, heuristicTrap, true).length !== 0
+        || WidgetFamilies.familyForGroup(
+          "G8", cloneRegistry, null, true) !== null)
+      fail("scoped classification used stale legacy or name/category fallback")
+
+    const mutableObservation = {
+      serial: scopedNested.serial,
+      generation: scopedNested.generation,
+      snapshot: scopedNested.snapshot
+    }
+    const inheritedById = Object.create(scopedNested.snapshot.byId)
+    const inheritedObservation = Object.freeze({ serial: 1, generation: 1,
+      snapshot: Object.freeze({ catalogKind: "native-listPlugins",
+        entries: Object.freeze([]), byId: Object.freeze(inheritedById) }) })
+    const throwingObservation = {}
+    Object.defineProperty(throwingObservation, "serial", {
+      enumerable: true,
+      get: function() { throw new Error("untrusted getter") }
+    })
+    Object.freeze(throwingObservation)
+    if (WidgetFamilies.capabilitiesForPlugin(
+          "local.nested", null, mutableObservation, true).length !== 0
+        || WidgetFamilies.capabilitiesForPlugin(
+          "local.nested", null, inheritedObservation, true).length !== 0
+        || WidgetFamilies.capabilitiesForPlugin(
+          "local.nested", null, throwingObservation, true).length !== 0)
+      fail("mutable/prototype/getter catalog observation was accepted")
+
+    if (Object.keys(WidgetFamilies.v1SlotBindings([
+          null, { pluginId: "Invalid Plugin" }, { pluginId: "custom.generic" }
+        ], fullOrder, null)).length !== 0)
+      fail("invalid or unrelated provider acquired a fixed family slot")
 
     if (g3.length !== 1 || g3[0].id !== "hancore.shibumi.status")
       fail("status presentation ownership")

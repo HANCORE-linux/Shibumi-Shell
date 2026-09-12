@@ -60,6 +60,20 @@ while switching back to `omarchy.bar` reactivates its saved value.
 Compatibility is verified against the supported Quattro commit and the
 validation system; it is not inferred from successful QML parsing.
 
+Host widget entry points and their display metadata follow the registry's
+`resolveEnabledId()` selection when that API exists. Cached components are
+retained only while the selected entry-point URL still matches. An empty host
+resolution or missing selected manifest remains unavailable; it never falls
+back around a host refusal. Older registries without this API retain direct
+manifest lookup. Provider admission uses the same selection record for the
+entry point and multi-instance check. An active clone keeps its selected ID
+and existing entry settings; admitting it must not enable its original and
+thereby ask Omarchy to restore the source. Missing selections, unstable selected
+IDs, conflicting families and duplicate single-instance entries are refused
+before mutation. Clone families without explicit semantics follow exact
+installed `omarchy.clonedFrom` sources, bounded to 32 entries and rejecting
+cycles or absent sources. This does not grant access beyond a host's registry scope.
+
 ## Internal State
 
 Slot arrays, active popout, tooltip backing state and the layout controller are
@@ -94,6 +108,44 @@ one implementation and duplicate services when the active bar changes.
   methods for feature settings.
 - A feature plugin never mutates another feature plugin's settings.
 - A bar switch must preserve the installed feature services and their state.
+
+### Asynchronous Control Center restoration
+
+The optional `runWithControlCenterRestore(callback, page, needsReplacement,
+preferredOwner, preferredScreenName)` method keeps transient restoration in the
+active Bar, not in a panel that a settings publication may destroy. Its boolean
+result acknowledges the callback's request, not successful persistence. Existing
+Bar settings IPC `ok` replies likewise acknowledge the request, not a disk save.
+State's file-backed publication and settlement remain authoritative.
+
+State-backed restores hold their output-local owner/page until the corresponding
+`writeSerial` settles. Queued acceptance does not spend the existing 80 ms × 20
+attempt (1.6-second) rebuild window. Confirmed publication releases the hold;
+matching unchanged readback releases it only if State revision changed since the
+request. Pure no-ops and failed first writes do not reopen panels. A later failed
+write cannot undo a restore needed by an earlier confirmed publication.
+
+User close cancels the exact output's pending restore. State loss revokes
+State-bound records; Bar admission loss clears all records even if State remains
+ready. Late settlement cannot revive cancelled records. Rejected callbacks undo
+only their still-current provisional changes, preserving newer navigation or
+replacement identities. Every new handoff gets a fresh rebuild window. The timer
+rechecks membership after synchronous panel callbacks rather than publishing an
+old snapshot over newer intent. These are transient UI records, not persisted
+panel state or a second settings store.
+
+V2 layout transitions add a hold for their concrete transition ID: first-State
+settlement alone cannot start the rebuild window while native publication or
+conditional State compensation is pending. The optional
+`requestV2LayoutTransition(patch)` submits that operation; `layoutTransitionBusy`,
+`layoutTransitionSerial`, `layoutTransitionResult` and
+`layoutTransitionSettled(serial, result)` distinguish acceptance from completion.
+`confirmed`/`unchanged` establish the observed postconditions; `compensated`
+means the rejected native operation's State projection was restored. Refusal,
+conflict, revocation and indeterminate results do not assert that every possible
+native action was undone. These optional additions do not change facade v1's
+required-method roster. Pinned fixtures cover family, catalog and provider
+sequencing; physical owner replacement remains an acceptance gate.
 
 ## Versioning
 

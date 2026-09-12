@@ -42,6 +42,10 @@ Item {
     ? activeItem.QsWindow.window : null
   readonly property var moduleManifest: {
     void(resolverRevision)
+    const resolver = bar && "hostWidgetResolver" in bar
+      ? bar.hostWidgetResolver : null
+    if (resolver && typeof resolver.manifestFor === "function")
+      return resolver.manifestFor(moduleName)
     const registry = bar ? bar.pluginRegistry : null
     const installed = registry && registry.installedPlugins
       ? registry.installedPlugins : null
@@ -54,6 +58,12 @@ Item {
     moduleName.indexOf("hancore.shibumi.") === 0
   readonly property bool hostedModule: !suiteNativeModule
   readonly property string fallbackTooltipText: {
+    void(resolverRevision)
+    const resolver = bar && "hostWidgetResolver" in bar ? bar.hostWidgetResolver : null
+    const published = resolver && typeof resolver.metadataFor === "function"
+      ? resolver.metadataFor(moduleName) : null
+    if (published && String(published.displayName || "").trim() !== "")
+      return String(published.displayName).trim()
     const manifest = moduleManifest
     const metadata = manifest && manifest.barWidget
       && typeof manifest.barWidget === "object"

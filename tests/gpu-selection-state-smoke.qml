@@ -2,9 +2,10 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "cpu" as Cpu
 import "gpu" as Gpu
-import "state" as State
+import "hancore.shibumi.state" as State
 
 ShellRoot {
   id: root
@@ -12,15 +13,26 @@ ShellRoot {
   property int stage: 0
   property int attempts: 0
   property bool fixtureParsed: false
+  property var document: null
+  FileView {
+    id: writer
+    path: Quickshell.env("XDG_CONFIG_HOME") + "/omarchy/shell.json"
+    atomicWrites: true
+    onLoaded: root.document = JSON.parse(text())
+  }
 
   State.Service {
     id: stateService
     shell: fakeShell
+    omarchyPath: Quickshell.env("OMARCHY_PATH")
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
   }
 
   Cpu.Service {
     id: cpuService
-    Component.onCompleted: gpu.helperPath = "/usr/bin/false"
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.13", kinds: ["service"]})
+    gpuProbeEnabled: false
   }
 
   QtObject {
@@ -38,11 +50,17 @@ ShellRoot {
       return null
     }
 
-    function mutateShellConfig(mutator) {
-      const next = JSON.parse(JSON.stringify(shellConfig))
-      mutator(next)
-      shellConfig = next
+    function mutateShellConfig(mutator) { root.fail("legacy Bar writer was used") }
+    function updateEntryInline(id, entry) {
+      if (id !== "hancore.shibumi.state" || !entry || entry.id !== id || !root.document)
+        return root.fail("foreign or unavailable State entry write")
+      const next = JSON.parse(JSON.stringify(root.document))
+      if (next.plugins[0].id !== id) return root.fail("ambiguous State entry")
+      next.plugins[0] = entry
+      root.document = next
+      writer.setText(JSON.stringify(next))
       writes++
+      return true
     }
   }
 
@@ -99,6 +117,7 @@ ShellRoot {
   function fail(message) {
     console.error("gpu-selection-state-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Timer {
@@ -109,7 +128,13 @@ ShellRoot {
       root.attempts++
       if (root.attempts > 100)
         return root.fail("state-backed selection timed out at stage " + root.stage)
-      if (!stateService.ready || !gpuWidget.gpu) return
+      if (root.stage === 2) {
+        if (stateService.ready) return root.fail("revoked State stayed ready")
+        stateService.shell = fakeShell
+        root.stage = 3
+        return
+      }
+      if (!stateService.ready || stateService.writePending || !root.document || !gpuWidget.gpu) return
 
       if (!root.fixtureParsed) {
         cpuService.gpu.parse([
@@ -142,18 +167,16 @@ ShellRoot {
             || gpuWidget.selectedGpu.utilization !== 73
             || stateService.groupSetting("G17", "device", "")
               !== "pci:0000:04:00.0"
-            || fakeShell.shellConfig.bar.shibumi.widgets.G17.device
+            || root.document.plugins[0].shibumi.widgets.G17.device
               !== "pci:0000:04:00.0"
             || fakeShell.writes !== 1)
           return root.fail("state service did not update the live GPU widget")
-        const persisted = JSON.parse(JSON.stringify(
-          fakeShell.shellConfig.bar.shibumi))
-        fakeShell.shellConfig = ({ version: 1, bar: { shibumi: persisted } })
+        stateService.shell = null
         root.stage = 2
         return
       }
 
-      if (root.stage === 2) {
+      if (root.stage === 3) {
         if (stateService.groupSetting("G17", "device", "")
               !== "pci:0000:04:00.0"
             || gpuWidget.configuredDeviceId !== "pci:0000:04:00.0"
@@ -161,13 +184,16 @@ ShellRoot {
           return root.fail("normalized reload lost the persisted GPU")
         if (!gpuWidget.setGpuDevice("auto"))
           return root.fail("automatic source reset")
-        root.stage = 3
+        root.stage = 4
         return
       }
 
       if (gpuWidget.configuredDeviceId !== "auto"
           || gpuWidget.selectedDeviceId !== "pci:0000:03:00.0"
           || stateService.groupSetting("G17", "device", "") !== "auto"
+          || root.document.plugins[0].shibumi.widgets.G17.device !== "auto"
+          || root.document.plugins[0].foreign.keep !== 42
+          || fakeShell.shellConfig.bar.shibumi.widgets !== undefined
           || fakeShell.writes !== 2)
         return root.fail("automatic source did not persist after reload")
       console.log("GPU selection state smoke passed")

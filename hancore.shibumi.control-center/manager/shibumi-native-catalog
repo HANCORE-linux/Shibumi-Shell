@@ -1,0 +1,593 @@
+#!/usr/bin/env python3
+"""Bounded read-only native listPlugins IPC; never start a shell or mutate it."""
+import ctypes
+import json
+import math
+import os
+import re
+import selectors
+import signal
+import socket
+import stat
+import subprocess
+import sys
+import time
+
+MAX_OUTPUT = 262144
+MAX_ERROR = 8192
+DEADLINE = 3.0
+MAX_PROC_FIELD = 16384
+MAX_MANIFEST = 65536
+MAX_MANIFESTS = 512
+MAX_MANIFEST_TOTAL = 4 * 1024 * 1024
+MAX_MANIFEST_PROBES = 4096
+
+
+class Refused(Exception):
+    pass
+
+
+def collect(command, *, group_owner=False):
+    # Production runs in the custodian's reserved group. Direct inert unit tests
+    # retain the standalone owned-child-group seam.
+    parent = os.getpid()
+    if group_owner and os.getpgrp() != parent:
+        raise Refused("process-identity")
+    libc = ctypes.CDLL(None, use_errno=True)
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGHUP})
+    def child_setup():
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        signal.signal(signal.SIGHUP, signal.SIG_DFL)
+        if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0 or os.getppid() != parent:
+            os._exit(125)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    deadline = time.monotonic() + DEADLINE
+    process = None
+    selector = selectors.DefaultSelector()
+    output = bytearray()
+    sizes = {"out": 0, "err": 0}
+    try:
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, start_new_session=not group_owner, preexec_fn=child_setup)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        selector.register(process.stdout, selectors.EVENT_READ, "out")
+        selector.register(process.stderr, selectors.EVENT_READ, "err")
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise Refused("deadline")
+            for key, _ in selector.select(min(.05, remaining)):
+                maximum = MAX_OUTPUT if key.data == "out" else MAX_ERROR
+                data = os.read(key.fd, min(65536, maximum - sizes[key.data] + 1))
+                if not data:
+                    selector.unregister(key.fileobj)
+                    continue
+                sizes[key.data] += len(data)
+                if sizes[key.data] > maximum:
+                    raise Refused("output-limit")
+                if key.data == "out":
+                    output.extend(data)
+        # Reserve the leader PID until group cleanup; never poll/reap then killpg.
+        while True:
+            ended = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            if ended is not None:
+                break
+            if time.monotonic() >= deadline:
+                raise Refused("deadline")
+            time.sleep(.01)
+        if ended.si_code != os.CLD_EXITED or ended.si_status != 0:
+            raise Refused("ipc-failed")
+        return bytes(output)
+    finally:
+        # Cancellation cannot interrupt this cleanup halfway through. Under the
+        # custodian, any pending parent death is handled before another job runs.
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGHUP})
+        try:
+            selector.close()
+            if process is not None:
+                process.stdout.close()
+                process.stderr.close()
+                if not group_owner and os.getpgid(process.pid) != process.pid:
+                    raise Refused("process-identity")
+                try:
+                    if group_owner:
+                        os.kill(process.pid, signal.SIGKILL)
+                    else:
+                        os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=1)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+
+def guarded(job):
+    """The QProcess launcher never owns IPC descendants without a custodian.
+
+    The custodian stays alive until the launcher kills its entire reserved group.
+    Even launcher SIGKILL (QML destruction) delivers parent-death SIGTERM to the
+    custodian, which kills that whole group. A ready/start handshake ensures no
+    worker exists before the launcher knows the exact group. This is ownership
+    of trusted IPC code, not containment of malicious children escaping setsid.
+    """
+    signals = {signal.SIGTERM, signal.SIGHUP}
+    mask = signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+    parent_socket, child_socket = socket.socketpair()
+    parent = os.getpid()
+    try:
+        pid = os.fork()
+    except BaseException:
+        parent_socket.close()
+        child_socket.close()
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+        raise
+    if pid == 0:
+        parent_socket.close()
+        try:
+            os.setsid()
+            group = os.getpid()
+            def terminate_group(_signum=None, _frame=None):
+                if os.getpgrp() == group:
+                    os.killpg(group, signal.SIGKILL)
+                os._exit(125)
+            for signum in signals:
+                signal.signal(signum, terminate_group)
+            libc = ctypes.CDLL(None, use_errno=True)
+            if libc.prctl(1, signal.SIGTERM, 0, 0, 0) != 0 or os.getppid() != parent:
+                terminate_group()
+            # These owned cancellation signals must work even if the caller
+            # inherited a blocked mask. PDEATHSIG is useless while blocked.
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask - signals)
+            child_socket.settimeout(5)
+            child_socket.sendall(b"G")
+            if child_socket.recv(1) != b"S":
+                terminate_group()
+            status = 1
+            try:
+                job()
+                status = 0
+            except BaseException:
+                pass  # Only the fixed status byte crosses the private channel.
+            child_socket.sendall(bytes([status]))
+            # Never exit before launcher cleanup; otherwise launcher death after
+            # our exit could orphan descendants without a parent-death receiver.
+            while True:
+                signal.pause()
+        except BaseException:
+            if os.getpgrp() == os.getpid():
+                os.killpg(os.getpid(), signal.SIGKILL)
+            os._exit(125)
+    child_socket.close()
+    handlers = {signum: signal.getsignal(signum) for signum in signals}
+    cancelled = False
+    group_ready = False
+    def cancel(_signum, _frame):
+        nonlocal cancelled
+        cancelled = True
+        try:
+            os.kill(pid, signal.SIGTERM)  # Exact unreaped child, never caller group.
+        except ProcessLookupError:
+            pass
+    for signum in signals:
+        signal.signal(signum, cancel)
+    try:
+        signal.pthread_sigmask(signal.SIG_SETMASK, mask - signals)
+        parent_socket.settimeout(5)
+        if parent_socket.recv(1) != b"G" or os.getpgid(pid) != pid:
+            return 1
+        group_ready = True
+        if cancelled:
+            return 1
+        parent_socket.sendall(b"S")
+        status = parent_socket.recv(1)
+        return 0 if status == b"\0" and not cancelled else 1
+    except (OSError, Refused):
+        return 1
+    finally:
+        signal.pthread_sigmask(signal.SIG_BLOCK, signals)
+        try:
+            parent_socket.close()
+            try:
+                if group_ready:
+                    os.killpg(pid, signal.SIGKILL)
+                else:
+                    os.kill(pid, signal.SIGKILL)  # No start ACK, so no IPC worker.
+            except ProcessLookupError:
+                pass
+            deadline = time.monotonic() + 1
+            while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None:
+                if time.monotonic() >= deadline:
+                    raise Refused("custodian-drain")
+                time.sleep(.01)
+            os.waitpid(pid, 0)
+        finally:
+            for signum, handler in handlers.items():
+                signal.signal(signum, handler)
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
+
+
+def unique(pairs):
+    value = {}
+    for key, member in pairs:
+        if key in value:
+            raise Refused("duplicate-key")
+        value[key] = member
+    return value
+
+
+def reject(_):
+    raise Refused("invalid-json")
+
+
+def finite_float(raw):
+    value = float(raw)
+    if not math.isfinite(value):
+        raise Refused("invalid-json")
+    return value
+
+
+def file_identity(metadata):
+    return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_nlink,
+            metadata.st_size, metadata.st_mtime_ns, metadata.st_ctime_ns)
+
+
+def read_regular(path, maximum=MAX_MANIFEST, *, directory=None):
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                         dir_fd=directory)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 \
+                or before.st_size < 0 or before.st_size > maximum:
+            raise Refused("manifest-shape")
+        chunks = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(16384, maximum - total + 1))
+            if not chunk:
+                after = os.fstat(descriptor)
+                if file_identity(after) != file_identity(before) or total != before.st_size:
+                    raise Refused("manifest-race")
+                return b"".join(chunks)
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > maximum:
+                raise Refused("manifest-limit")
+    finally:
+        os.close(descriptor)
+
+
+def open_directory(path):
+    if not os.path.isabs(path) or os.path.normpath(path) != path:
+        raise Refused("manifest-root")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    descriptor = os.open("/", flags)
+    try:
+        for component in (part for part in path.split(os.sep) if part):
+            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def child_directory(directory, name):
+    return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC
+                   | os.O_NOFOLLOW, dir_fd=directory)
+
+
+def bounded_names(directory, probes):
+    names = []
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            probes[0] += 1
+            if probes[0] > MAX_MANIFEST_PROBES:
+                raise Refused("manifest-probes")
+            names.append(entry.name)
+    return sorted(names)
+
+
+def manifest_sources(shell_directory):
+    sources = []
+    probes = [0]
+    aggregate = [0]
+
+    def append_manifest(directory, name, first_party):
+        if len(sources) >= MAX_MANIFESTS:
+            raise Refused("manifest-count")
+        try:
+            raw = read_regular(name, directory=directory)
+        except FileNotFoundError:
+            return
+        aggregate[0] += len(raw)
+        if aggregate[0] > MAX_MANIFEST_TOTAL:
+            raise Refused("manifest-limit")
+        sources.append((raw, first_party))
+
+    first_root = None
+    try:
+        first_root = open_directory(os.path.join(shell_directory, "plugins"))
+        for first_name in bounded_names(first_root, probes):
+            try:
+                first = child_directory(first_root, first_name)
+            except OSError:
+                continue
+            try:
+                first_entries = bounded_names(first, probes)
+                for name in first_entries:
+                    if name == "manifest.json" or name.endswith(".manifest.json"):
+                        append_manifest(first, name, True)
+                for second_name in first_entries:
+                    try:
+                        second = child_directory(first, second_name)
+                    except OSError:
+                        continue
+                    try:
+                        for name in bounded_names(second, probes):
+                            if name == "manifest.json" or name.endswith(".manifest.json"):
+                                append_manifest(second, name, True)
+                    finally:
+                        os.close(second)
+            finally:
+                os.close(first)
+    except FileNotFoundError:
+        pass
+    finally:
+        if first_root is not None:
+            os.close(first_root)
+
+    local_root = None
+    local = os.path.join(os.environ.get("HOME", ""), ".config", "omarchy", "plugins")
+    try:
+        local_root = open_directory(local)
+        for name in bounded_names(local_root, probes):
+            if name.startswith("."):
+                continue
+            try:
+                plugin = child_directory(local_root, name)
+            except OSError:
+                continue
+            try:
+                append_manifest(plugin, "manifest.json", False)
+            finally:
+                os.close(plugin)
+    except FileNotFoundError:
+        pass
+    finally:
+        if local_root is not None:
+            os.close(local_root)
+    return sources
+
+
+def valid_text(value, maximum, empty=True):
+    return (isinstance(value, str) and len(value) <= maximum
+            and (empty or bool(value))
+            and not any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value))
+
+
+def string_list(value, maximum_items=64, maximum_text=128):
+    if value is None:
+        return []
+    if (not isinstance(value, list) or len(value) > maximum_items
+            or any(not valid_text(item, maximum_text, False) for item in value)
+            or len(set(value)) != len(value)):
+        raise Refused("manifest-metadata")
+    return list(value)
+
+
+def presentation(manifest):
+    bar = manifest.get("barWidget")
+    if bar is None:
+        bar = {}
+    if not isinstance(bar, dict):
+        raise Refused("manifest-metadata")
+    section = str(bar.get("defaultSection", "center"))
+    if section not in ("left", "center", "right"):
+        raise Refused("manifest-metadata")
+    values = {
+        "description": manifest.get("description", ""),
+        "author": manifest.get("author", ""),
+        "version": manifest.get("version", ""),
+        "tags": string_list(manifest.get("tags")),
+        "barWidget": {
+            "displayName": bar.get("displayName", ""),
+            "description": bar.get("description", ""),
+            "category": bar.get("category", ""),
+            "semanticCapabilities": string_list(bar.get("semanticCapabilities"), 32, 64),
+            "defaultSection": section,
+            "allowMultiple": bar.get("allowMultiple", False) is True,
+        },
+    }
+    for key, maximum in (("description", 4096), ("author", 512), ("version", 128)):
+        if not valid_text(values[key], maximum):
+            raise Refused("manifest-metadata")
+    for key, maximum in (("displayName", 512), ("description", 4096), ("category", 128)):
+        if not valid_text(values["barWidget"][key], maximum):
+            raise Refused("manifest-metadata")
+    return values
+
+
+def valid_manifest(manifest):
+    required = ("id", "name", "version", "kinds", "entryPoints")
+    if (manifest.get("schemaVersion") != 1
+            or any(key not in manifest for key in required)
+            or not valid_text(manifest.get("id"), 160, False)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", manifest["id"]) is None
+            or ".." in manifest["id"]
+            or not valid_text(manifest.get("name"), 512, False)
+            or not valid_text(manifest.get("version"), 128, False)
+            or not isinstance(manifest.get("kinds"), list) or not manifest["kinds"]
+            or not isinstance(manifest.get("entryPoints"), dict)):
+        return False
+    for value in manifest["entryPoints"].values():
+        if not isinstance(value, str) or not value or value.startswith("/") or ".." in value:
+            return False
+    return True
+
+
+def enrich_catalog(rows, shell_directory):
+    if not isinstance(rows, list) or len(rows) > 512:
+        raise Refused("catalog-shape")
+    native = {}
+    for row in rows:
+        if (not isinstance(row, dict) or set(row) != {"id", "name", "kinds", "enabled",
+                "active", "canDisable", "firstParty", "clonedFrom"}
+                or not valid_text(row.get("id"), 160, False)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", row["id"]) is None
+                or ".." in row["id"] or row["id"] in native):
+            raise Refused("catalog-shape")
+        native[row["id"]] = row
+    first_party_manifests = {}
+    third_party_manifests = {}
+    total = 0
+    for raw, first_party in manifest_sources(shell_directory):
+        total += len(raw)
+        if total > MAX_MANIFEST_TOTAL:
+            raise Refused("manifest-limit")
+        try:
+            manifest = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=unique,
+                                  parse_constant=reject, parse_float=finite_float)
+        except (UnicodeError, ValueError, RecursionError):
+            continue
+        if not isinstance(manifest, dict) or not valid_manifest(manifest):
+            continue
+        plugin_id = manifest["id"]
+        target = first_party_manifests if first_party else third_party_manifests
+        if plugin_id in target:
+            raise Refused("metadata-ambiguous")
+        target[plugin_id] = (manifest, first_party)
+    manifests = dict(first_party_manifests)
+    for plugin_id, candidate in third_party_manifests.items():
+        if plugin_id not in first_party_manifests and not plugin_id.startswith("omarchy."):
+            manifests[plugin_id] = candidate
+    enriched = []
+    for row in rows:
+        candidate = manifests.get(row["id"])
+        if not candidate:
+            raise Refused("metadata-missing")
+        manifest, first_party = candidate
+        cloned = manifest.get("omarchy", {})
+        cloned_from = str(cloned.get("clonedFrom", "")) if isinstance(cloned, dict) else ""
+        if (first_party is not row.get("firstParty")
+                or manifest.get("name") != row.get("name")
+                or manifest.get("kinds") != row.get("kinds")
+                or cloned_from != row.get("clonedFrom")):
+            raise Refused("metadata-stale")
+        value = dict(row)
+        value.update(presentation(manifest))
+        enriched.append(value)
+    encoded = json.dumps(enriched, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
+    if len(encoded) > MAX_OUTPUT:
+        raise Refused("output-limit")
+    return encoded
+
+
+def proc_field(directory, name, maximum=MAX_PROC_FIELD):
+    descriptor = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                         dir_fd=directory)
+    try:
+        chunks = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(4096, maximum - total + 1))
+            if not chunk:
+                return b"".join(chunks)
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > maximum:
+                raise Refused("process-identity")
+    finally:
+        os.close(descriptor)
+
+
+def stat_starttime(raw):
+    close = raw.rfind(b") ")
+    if close <= 0:
+        raise Refused("process-identity")
+    fields = raw[close + 2:].split()
+    if len(fields) < 20:
+        raise Refused("process-identity")
+    return int(fields[19])
+
+
+def shell_process_identity(pid, directory):
+    try:
+        proc = os.open("/proc/" + str(pid), os.O_RDONLY | os.O_DIRECTORY
+                       | os.O_CLOEXEC | os.O_NOFOLLOW)
+        try:
+            before = stat_starttime(proc_field(proc, "stat", 4096))
+            raw_command = proc_field(proc, "cmdline")
+            after = stat_starttime(proc_field(proc, "stat", 4096))
+        finally:
+            os.close(proc)
+    except (OSError, UnicodeError, ValueError):
+        raise Refused("process-identity") from None
+    if before != after:
+        raise Refused("process-identity")
+    command = tuple(part.decode("utf-8", errors="strict")
+                    for part in raw_command.split(b"\0") if part)
+    if not command or os.path.basename(command[0]) not in ("quickshell", "qs"):
+        raise Refused("process-identity")
+    paths = []
+    index = 1
+    while index < len(command):
+        argument = command[index]
+        if argument in ("-p", "--path"):
+            if index + 1 >= len(command):
+                raise Refused("process-identity")
+            paths.append(command[index + 1])
+            index += 2
+            continue
+        if argument.startswith("--path="):
+            paths.append(argument[len("--path="):])
+        index += 1
+    if paths != [directory]:
+        raise Refused("process-identity")
+    return after
+
+
+def main(*, group_owner=False):
+    if (len(sys.argv) != 5 or sys.argv[1] != "--shell"
+            or sys.argv[3] != "--pid"):
+        raise Refused("arguments")
+    directory = sys.argv[2]
+    raw_pid = sys.argv[4]
+    if (not raw_pid.isascii() or not raw_pid.isdecimal()
+            or str(int(raw_pid)) != raw_pid):
+        raise Refused("shell-pid")
+    shell_pid = int(raw_pid)
+    if shell_pid <= 1 or shell_pid > 2147483647:
+        raise Refused("shell-pid")
+    if (not os.path.isabs(directory) or len(directory) > 4096
+            or os.path.normpath(directory) != directory or not directory.endswith("/shell")
+            or any(ord(char) < 32 or ord(char) == 127 for char in directory)):
+        raise Refused("shell-path")
+    # The CLI's PID and path selectors are mutually exclusive. Bind the PID to
+    # the exact expected -p directory through /proc before and after IPC, then
+    # select only that process. Never use the ambiguous path-only fallback.
+    identity = shell_process_identity(shell_pid, directory)
+    command = ["/usr/bin/quickshell", "ipc", "--pid", raw_pid,
+        "call", "--", "shell", "listPlugins"]
+    raw = collect(command, group_owner=group_owner)
+    text = raw.decode("utf-8", errors="strict")
+    value = json.loads(text, object_pairs_hook=unique, parse_constant=reject,
+        parse_float=finite_float)
+    encoded = enrich_catalog(value, directory)
+    # Bind display/search metadata to one unchanged native identity snapshot.
+    # It grants no mutation right; the scoped Bar revalidates host component
+    # authority immediately before accepting a transition.
+    if collect(command, group_owner=group_owner) != raw:
+        raise Refused("catalog-stale")
+    if shell_process_identity(shell_pid, directory) != identity:
+        raise Refused("process-identity")
+    sys.stdout.buffer.write(encoded)
+    sys.stdout.buffer.flush()
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(guarded(lambda: main(group_owner=True)))
+    except (Refused, OSError, ValueError, RecursionError, subprocess.SubprocessError):
+        # Never log native stderr, metadata, paths or arbitrary exception text.
+        raise SystemExit(1)

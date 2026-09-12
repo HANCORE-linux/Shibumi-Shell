@@ -28,7 +28,7 @@ Item {
   height: 0
 
   function publishNext() {
-    if (!active || quotes.length === 0) return false
+    if (!active || quotesReader.busy || quotes.length === 0) return false
     currentIndex = (currentIndex + 1) % quotes.length
     const choices = []
     for (let offset = 0; offset < quotes.length && choices.length < 64; offset++) {
@@ -57,11 +57,11 @@ Item {
   }
 
   function reloadQuotes() {
+    if (!active) return false
     let parsed = []
-    try { parsed = ReactorModel.parseQuotes(quotesReader.text()) }
+    try { if (quotesReader.available) parsed = ReactorModel.parseQuotes(quotesReader.text) }
     catch (_error) {}
-    if (parsed.length === 0) return false
-    quotes = parsed
+    quotes = parsed.length > 0 ? parsed : QuoteDefaults.values()
     currentIndex = -1
     if (armed) {
       cleared()
@@ -72,6 +72,7 @@ Item {
   }
 
   function runTest(kindValue, _argumentValue) {
+    if (!active) return false
     const kind = String(kindValue || "").toLowerCase()
     if (kind === "clear") {
       cleared()
@@ -82,19 +83,18 @@ Item {
     return false
   }
 
-  FileView {
+  BoundedTextSource {
     id: quotesReader
-    path: root.runtimeProbesEnabled ? root.quotesPath : ""
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.reloadQuotes()
+    kind: "quotes"
+    active: root.runtimeProbesEnabled && root.active
+    onUpdated: root.reloadQuotes()
   }
 
   Timer {
     id: cycle
     interval: 450
     onTriggered: {
+      if (!root.active || !root.runtimeProbesEnabled) return
       root.armed = true
       root.publishNext()
       interval = 16000
@@ -102,5 +102,16 @@ Item {
     }
   }
 
-  Component.onCompleted: if (runtimeProbesEnabled) cycle.start()
+  function syncCycle() {
+    if (active && runtimeProbesEnabled) {
+      cycle.interval = 450
+      cycle.start()
+    } else {
+      cycle.stop()
+      armed = false
+    }
+  }
+  onActiveChanged: syncCycle()
+  onRuntimeProbesEnabledChanged: syncCycle()
+  Component.onCompleted: syncCycle()
 }

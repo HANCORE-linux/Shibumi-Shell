@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.network",
   "name": "Shibumi Network",
-  "version": "0.1.1-beta.11",
+  "version": "0.1.1-beta.13",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Shibumi network presentation over Omarchy's NetworkManager owner.",
+  "description": "Native Shibumi NetworkManager ownership, telemetry, actions, QR, and speed testing.",
   "kinds": ["bar-widget", "service"],
   "keepLoaded": true,
   "entryPoints": {

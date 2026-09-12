@@ -29,6 +29,9 @@ Ui.Panel {
   readonly property var monitorService: monitorServiceOverride
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.brightness") : null)
+  property var visualBarLease: null
+  property var visualBarLeaseService: null
+  property real wheelAccumulator: 0
   readonly property bool monitorReady: monitorService && monitorService.ready
   readonly property bool brightnessAvailable: monitorReady
     && monitorService.brightnessAvailable
@@ -77,6 +80,31 @@ Ui.Panel {
     return monitorService && monitorService.setBrightness(percent + Number(delta || 0))
   }
 
+  function adjustBrightnessFromWheel(delta) {
+    if (!brightnessAvailable) return false
+    const wheel = Commons.Util.wheelSteps(wheelAccumulator, Number(delta || 0))
+    wheelAccumulator = wheel.remainder
+    if (wheel.steps === 0) return false
+    if (!adjustBrightness(wheel.steps * 5)) return false
+    if (typeof monitorService.showBrightnessOsd === "function")
+      monitorService.showBrightnessOsd(monitorService.brightnessPercent)
+    return true
+  }
+
+  function syncVisualBarLease() {
+    if (visualBarLeaseService && visualBarLease
+        && typeof visualBarLeaseService.releaseVisualBar === "function")
+      visualBarLeaseService.releaseVisualBar(visualBarLease)
+    visualBarLease = null
+    visualBarLeaseService = null
+    if (!Qt.isQtObject(bar) || !monitorService
+        || typeof monitorService.acquireVisualBar !== "function") return
+    const lease = monitorService.acquireVisualBar(root, bar)
+    if (!lease) return
+    visualBarLeaseService = monitorService
+    visualBarLease = lease
+  }
+
   function syncPanelLoader() {
     popupLoader.source = ""
     if (!opened || !monitorReady || !String(popupSource)) return
@@ -92,7 +120,17 @@ Ui.Panel {
   onOpenedChanged: syncPanelLoader()
   onMonitorReadyChanged: syncPanelLoader()
   onPopupSourceChanged: syncPanelLoader()
-  Component.onDestruction: close()
+  onMonitorServiceChanged: syncVisualBarLease()
+  onBarChanged: syncVisualBarLease()
+  Component.onCompleted: syncVisualBarLease()
+  Component.onDestruction: {
+    close()
+    if (visualBarLeaseService && visualBarLease
+        && typeof visualBarLeaseService.releaseVisualBar === "function")
+      visualBarLeaseService.releaseVisualBar(visualBarLease)
+    visualBarLease = null
+    visualBarLeaseService = null
+  }
 
   Loader { id: popupLoader }
 
@@ -152,10 +190,7 @@ Ui.Panel {
       fixedHeight: surface.height
       tooltipText: root.tooltipText
       onPressed: function(_button) { root.toggle() }
-      onWheelMoved: function(delta) {
-        if (root.brightnessAvailable)
-          root.adjustBrightness(delta > 0 ? 5 : -5)
-      }
+      onWheelMoved: function(delta) { root.adjustBrightnessFromWheel(delta) }
     }
   }
 

@@ -3,15 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.memory"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
-
-  readonly property var hostShell: bar && bar.shell ? bar.shell : null
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var hostShell: suiteShell
   readonly property var telemetryService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.telemetry") : null
@@ -36,6 +37,7 @@ Ui.Panel {
   readonly property string usageLabel: usedGiB.toFixed(1) + "/" + totalGiB.toFixed(1) + " GiB"
   property url panelSource: Qt.resolvedUrl("MemoryPanel.qml")
   property var acquiredTelemetry: null
+  readonly property var panelItem: panelLoader.item
 
   implicitWidth: bar && bar.vertical ? bar.barSize : memorySurface.implicitWidth
   implicitHeight: bar && bar.vertical ? memorySurface.implicitHeight : bar ? bar.barSize : 28
@@ -54,9 +56,9 @@ Ui.Panel {
     }
     panelLoader.setSource(panelSource, {
       anchorItem: memorySurface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      telemetry: root.telemetry
+      telemetry: Qt.binding(function() { return root.telemetry })
     })
   }
 

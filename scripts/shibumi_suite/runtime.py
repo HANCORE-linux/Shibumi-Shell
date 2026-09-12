@@ -59,7 +59,12 @@ class RuntimePaths:
     def validate(self) -> None:
         if not self.omarchy_root.is_absolute():
             raise RuntimeFailure("OMARCHY_PATH must be absolute")
-        for command in ("omarchy", "omarchy-shell"):
+        for command in (
+            "omarchy",
+            "omarchy-shell",
+            "omarchy-bluetooth-device",
+            "omarchy-audio-output-set-default",
+        ):
             if not (self.omarchy_root / "bin" / command).is_file():
                 raise RuntimeFailure(
                     f"Omarchy command is missing: {self.omarchy_root / 'bin' / command}"
@@ -118,6 +123,20 @@ class RuntimePaths:
             raise RuntimeFailure(
                 f"Omarchy shell defaults are missing: {self.defaults_file}"
             )
+        mutable_paths = {
+            "Omarchy plugin directory": self.plugin_dir,
+            "Omarchy config directory": self.config_file.parent,
+            "Shibumi state directory": self.state_dir,
+            "Shibumi cache directory": self.cache_dir,
+            "Shibumi lock directory": self.lock_file.parent,
+            "Shibumi lock file": self.lock_file,
+        }
+        for label, path in mutable_paths.items():
+            symlink = _first_existing_symlink(path)
+            if symlink is not None:
+                raise RuntimeFailure(
+                    f"refusing symlinked {label}: {symlink}"
+                )
         if self.config_file.is_symlink():
             raise RuntimeFailure(
                 f"refusing to replace symlinked Omarchy shell config: {self.config_file}"
@@ -128,6 +147,23 @@ class RuntimePaths:
                 "refusing symlinked Omarchy menu extension path: "
                 f"{self.menu_extension_file}"
             )
+
+
+def _first_existing_symlink(path: Path) -> Path | None:
+    current = Path(path.anchor)
+    for component in path.parts[1:]:
+        current /= component
+        try:
+            if current.is_symlink():
+                return current
+            current.lstat()
+        except FileNotFoundError:
+            break
+        except OSError as error:
+            raise RuntimeFailure(
+                f"cannot validate writable path component {current}: {error}"
+            ) from error
+    return None
 
 
 def _omarchy_root(home: Path) -> Path:
@@ -422,13 +458,8 @@ class OmarchyRuntime:
             raise RuntimeFailure("shell drain timeout must be positive")
         if quiet_period < 0:
             raise RuntimeFailure("shell drain quiet period cannot be negative")
-        command = [
-            "quickshell",
-            "kill",
-            "-p",
-            str(shell_path),
-            "--any-display",
-        ]
+        prepare_settle = 0.2
+        kill_reserve = 0.05
         poll_interval = 0.05
         deadline = time.monotonic() + timeout
         evidence_deadline = deadline + 0.15
@@ -480,12 +511,53 @@ class OmarchyRuntime:
                     time.sleep(sleep_for)
                 continue
 
+            target = instances[0]
+            pid = target.get("pid")
+            if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+                raise RuntimeFailure(
+                    "matching Omarchy shell instance has no valid PID"
+                )
+            prepared = False
+            prepare_budget = (
+                deadline - time.monotonic() - prepare_settle - kill_reserve
+            )
+            if prepare_budget > 0:
+                try:
+                    result = self.run(
+                        [
+                            "quickshell",
+                            "ipc",
+                            "--pid",
+                            str(pid),
+                            "call",
+                            "shibumi-suite",
+                            "prepareShutdown",
+                        ],
+                        timeout=min(0.25, prepare_budget),
+                        check=False,
+                    )
+                except RuntimeFailure:
+                    pass
+                else:
+                    prepared = (
+                        result.returncode == 0
+                        and result.stdout.strip() == "ok"
+                    )
+            if prepared:
+                settle_budget = deadline - time.monotonic()
+                if settle_budget > 0:
+                    time.sleep(min(prepare_settle, settle_budget))
+
             kill_budget = deadline - time.monotonic()
             if kill_budget <= 0:
                 break
             empty_since = None
             try:
-                self.run(command, timeout=min(6, kill_budget), check=False)
+                self.run(
+                    ["quickshell", "kill", "--pid", str(pid)],
+                    timeout=min(6, kill_budget),
+                    check=False,
+                )
             except RuntimeFailure as error:
                 if time.monotonic() < deadline:
                     raise
@@ -718,7 +790,13 @@ class OmarchyRuntime:
             time.sleep(0.1)
         raise RuntimeFailure(f"Shibumi deactivation verification failed: {detail}")
 
-    def verify_uninstall(self, plugin_ids: set[str], *, timeout: float = 8) -> None:
+    def verify_uninstall(
+        self,
+        plugin_ids: set[str],
+        *,
+        expected_bar_namespace: str = "omarchy-bar",
+        timeout: float = 8,
+    ) -> None:
         deadline = time.monotonic() + timeout
         detail = "removed plugins remain visible"
         while time.monotonic() < deadline:
@@ -727,7 +805,7 @@ class OmarchyRuntime:
                 remaining = plugin_ids & plugins.keys()
                 if not remaining:
                     self.verify_single_shell_instance()
-                    self.verify_bar_layer_ownership("omarchy-bar")
+                    self.verify_bar_layer_ownership(expected_bar_namespace)
                     self.ping()
                     return
                 detail = f"remaining={sorted(remaining)}"

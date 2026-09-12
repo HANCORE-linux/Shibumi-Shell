@@ -27,7 +27,7 @@ ShellRoot {
           || quoteService.eventCount !== 1) {
         console.error("quote service smoke failed")
         Qt.exit(1)
-        return
+        throw new Error("quote service smoke failed")
       }
       console.log("quote service smoke passed")
       Qt.exit(0)

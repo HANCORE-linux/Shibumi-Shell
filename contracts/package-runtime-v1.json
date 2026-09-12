@@ -5,6 +5,10 @@
     "omarchy",
     "quickshell",
     "python",
+    "python-dbus",
+    "iputils",
+    "glib2",
+    "systemd",
     "jq",
     "curl",
     "networkmanager",
@@ -20,6 +24,9 @@
   ],
   "requiredCommands": {
     "python3": "python",
+    "ping": "iputils",
+    "gdbus": "glib2",
+    "busctl": "systemd",
     "jq": "jq",
     "curl": "curl",
     "nmcli": "networkmanager",
@@ -28,6 +35,10 @@
     "xdg-open": "xdg-utils",
     "notify-send": "libnotify",
     "wl-copy": "wl-clipboard"
+  },
+  "requiredHostCommands": {
+    "omarchy-bluetooth-device": "Retained Beta.13 Bluetooth device mutation path",
+    "omarchy-audio-output-set-default": "Retained Bluetooth audio-route compatibility path"
   },
   "requiredFonts": {
     "Material Symbols Rounded": "ttf-material-symbols-variable",

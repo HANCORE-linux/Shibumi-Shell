@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+concurrency:
+  group: shibumi-package-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   package-contract:
     runs-on: ubuntu-24.04
@@ -28,6 +35,7 @@ jobs:
           python3 tests/test_package_release.py
           python3 tests/test_shibumi_manager.py
           python3 tests/test_shibumi_suite.py
+          python3 tests/test_lifecycle_admission.py
           python3 tests/test_shibumi_health.py
           python3 tests/test_inc013_drain_contract.py
           python3 tests/quickshell-empty-registry-mutation.py
@@ -35,7 +43,9 @@ jobs:
       - name: Build the reproducible release asset
         run: |
           set -euo pipefail
-          scripts/build-release-archive --check-reproducible
+          scripts/build-release-archive \
+            --expected-commit "$GITHUB_SHA" \
+            --check-reproducible
 
       - name: Rehearse the built AUR package in Arch
         run: |
@@ -66,6 +76,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Verify the remote tag peels to the workflow commit
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          tag_output=$(git ls-remote --tags origin \
+            "refs/tags/$tag" "refs/tags/$tag^{}")
+          mapfile -t lines <<<"$tag_output"
+          test "${#lines[@]}" -ge 1
+          test "${#lines[@]}" -le 2
+          direct=
+          peeled=
+          for line in "${lines[@]}"; do
+            oid=${line%%$'\t'*}
+            ref=${line#*$'\t'}
+            case "$ref" in
+              "refs/tags/$tag") direct=$oid ;;
+              "refs/tags/$tag^{}") peeled=$oid ;;
+              *) exit 1 ;;
+            esac
+          done
+          test -n "$direct"
+          resolved=${peeled:-$direct}
+          test "$resolved" = "$GITHUB_SHA"
+          test "$(git rev-parse --verify "$tag^{commit}")" = "$GITHUB_SHA"
+
       - name: Run the revision-bound lifecycle and host gate
         env:
           SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH: ${{ vars.SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH }}
@@ -75,24 +110,52 @@ jobs:
           set -euo pipefail
           version=$(<VERSION)
           scripts/collect-release-evidence \
+            --expected-commit "$GITHUB_SHA" \
             --output "dist/shibumi-shell-$version.release-evidence.json"
-          tar -czf "dist/shibumi-shell-$version.release-evidence.logs.tar.gz" \
-            -C dist "shibumi-shell-$version.release-evidence.logs"
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
+            -C dist -cf - "shibumi-shell-$version.release-evidence.logs" \
+            | gzip -n -9 \
+            > "dist/shibumi-shell-$version.release-evidence.logs.tar.gz"
 
-      - name: Verify tag, version, and pinned archive checksum
+      - name: Verify version and exact local asset inventory
         run: |
           set -euo pipefail
           version=$(<VERSION)
           test "$GITHUB_REF_NAME" = "v$version"
           test -s ".github/release-notes/v$version.md"
-          scripts/build-release-archive --check-reproducible
+          scripts/build-release-archive \
+            --expected-commit "$GITHUB_SHA" \
+            --check-reproducible
           archive="dist/shibumi-shell-$version.tar.gz"
+          sidecar="$archive.sha256"
+          inventory="$archive.inventory.json"
+          evidence="dist/shibumi-shell-$version.release-evidence.json"
+          logs="dist/shibumi-shell-$version.release-evidence.logs.tar.gz"
           expected=$(sed -n 's/^_source_sha256=//p' packaging/aur/PKGBUILD)
           actual=$(sha256sum "$archive" | awk '{print $1}')
           test "$expected" != SKIP
           test "$actual" = "$expected"
+          test "$(<"$sidecar")" = "$actual  ${archive##*/}"
+          jq -e --arg version "$version" --arg sha "$actual" '
+            .version == $version and .sha256 == $sha and
+            (.files | type == "array" and length > 0)
+          ' "$inventory" >/dev/null
+          jq -e --arg commit "$GITHUB_SHA" --arg version "$version" '
+            .passed == true and
+            .candidate.kind == "clean-commit" and
+            .candidate.version == $version and
+            .candidate.baseCommit == $commit and
+            ([.commands[].id] | index("lifecycle-admission") != null)
+          ' "$evidence" >/dev/null
+          tar -tzf "$logs" >/dev/null
+          assets=("$archive" "$sidecar" "$inventory" "$evidence" "$logs")
+          : > dist/release-assets.sha256
+          for asset in "${assets[@]}"; do
+            test -f "$asset"
+            sha256sum "$asset" >> dist/release-assets.sha256
+          done
 
-      - name: Publish immutable GitHub release assets
+      - name: Upload declared assets to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -100,13 +163,112 @@ jobs:
           version=$(<VERSION)
           notes_file=".github/release-notes/v$version.md"
           release_channel=$(scripts/release-channel-flag "$version")
-          gh release create "v$version" \
-            "dist/shibumi-shell-$version.tar.gz" \
-            "dist/shibumi-shell-$version.tar.gz.sha256" \
-            "dist/shibumi-shell-$version.tar.gz.inventory.json" \
-            "dist/shibumi-shell-$version.release-evidence.json" \
-            "dist/shibumi-shell-$version.release-evidence.logs.tar.gz" \
-            --verify-tag \
+          assets=(
+            "dist/shibumi-shell-$version.tar.gz"
+            "dist/shibumi-shell-$version.tar.gz.sha256"
+            "dist/shibumi-shell-$version.tar.gz.inventory.json"
+            "dist/shibumi-shell-$version.release-evidence.json"
+            "dist/shibumi-shell-$version.release-evidence.logs.tar.gz"
+          )
+          tag="v$version"
+          release_json=$(mktemp)
+          if gh release view "$tag" --json isDraft,tagName >"$release_json" \
+              2>/dev/null; then
+            jq -e --arg tag "$tag" \
+              '.isDraft == true and .tagName == $tag' \
+              "$release_json" >/dev/null
+          else
+            gh release create "$tag" \
+              --verify-tag \
+              --draft \
+              "$release_channel" \
+              --notes-file "$notes_file" \
+              --title "Shibumi Shell $version"
+          fi
+          gh release edit "$tag" \
+            --draft \
             "$release_channel" \
             --notes-file "$notes_file" \
             --title "Shibumi Shell $version"
+          gh release upload "$tag" "${assets[@]}" --clobber
+
+      - name: Download and verify the remote draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          tag="v$version"
+          test "$(gh release view "$tag" --json isDraft --jq .isDraft)" = true
+          expected_names=$(mktemp)
+          remote_names=$(mktemp)
+          find dist -maxdepth 1 -type f \
+            \( -name "shibumi-shell-$version.tar.gz" \
+            -o -name "shibumi-shell-$version.tar.gz.sha256" \
+            -o -name "shibumi-shell-$version.tar.gz.inventory.json" \
+            -o -name "shibumi-shell-$version.release-evidence.json" \
+            -o -name "shibumi-shell-$version.release-evidence.logs.tar.gz" \) \
+            -printf '%f\n' | sort > "$expected_names"
+          gh release view "$tag" --json assets \
+            --jq '.assets[].name' | sort > "$remote_names"
+          diff -u "$expected_names" "$remote_names"
+          mkdir remote-assets
+          gh release download "$tag" --dir remote-assets
+          while IFS= read -r name; do
+            test -f "remote-assets/$name"
+            test "$(stat -c %s "dist/$name")" = \
+              "$(stat -c %s "remote-assets/$name")"
+            test "$(sha256sum "dist/$name" | awk '{print $1}')" = \
+              "$(sha256sum "remote-assets/$name" | awk '{print $1}')"
+          done < "$expected_names"
+
+      - name: Reverify and publish the remote draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          tag="v$version"
+          test "$(gh release view "$tag" --json isDraft --jq .isDraft)" = true
+          expected_names=$(mktemp)
+          remote_names=$(mktemp)
+          find dist -maxdepth 1 -type f \
+            \( -name "shibumi-shell-$version.tar.gz" \
+            -o -name "shibumi-shell-$version.tar.gz.sha256" \
+            -o -name "shibumi-shell-$version.tar.gz.inventory.json" \
+            -o -name "shibumi-shell-$version.release-evidence.json" \
+            -o -name "shibumi-shell-$version.release-evidence.logs.tar.gz" \) \
+            -printf '%f\n' | sort > "$expected_names"
+          gh release view "$tag" --json assets \
+            --jq '.assets[].name' | sort > "$remote_names"
+          diff -u "$expected_names" "$remote_names"
+          mkdir remote-assets-final
+          gh release download "$tag" --dir remote-assets-final
+          while IFS= read -r name; do
+            test -f "remote-assets-final/$name"
+            test "$(stat -c %s "dist/$name")" = \
+              "$(stat -c %s "remote-assets-final/$name")"
+            test "$(sha256sum "dist/$name" | awk '{print $1}')" = \
+              "$(sha256sum "remote-assets-final/$name" | awk '{print $1}')"
+          done < "$expected_names"
+          tag_output=$(git ls-remote --tags origin \
+            "refs/tags/$tag" "refs/tags/$tag^{}")
+          mapfile -t tag_lines <<<"$tag_output"
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          direct=
+          peeled=
+          for line in "${tag_lines[@]}"; do
+            oid=${line%%$'\t'*}
+            ref=${line#*$'\t'}
+            case "$ref" in
+              "refs/tags/$tag") direct=$oid ;;
+              "refs/tags/$tag^{}") peeled=$oid ;;
+              *) exit 1 ;;
+            esac
+          done
+          test -n "$direct"
+          test "${peeled:-$direct}" = "$GITHUB_SHA"
+          test "$(git rev-parse --verify "$tag^{commit}")" = "$GITHUB_SHA"
+          release_channel=$(scripts/release-channel-flag "$version")
+          gh release edit "$tag" --draft=false "$release_channel"

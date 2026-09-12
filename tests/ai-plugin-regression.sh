@@ -32,6 +32,7 @@ mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home/.claude" \
   "$tmpdir/home/.codex" "$tmpdir/state/omarchy/agents/usage" \
   "$tmpdir/omarchy/bin"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.ai" "$tmpdir/ai"
 install -m 0644 "$repo_root/tests/fixtures/AiPanelHost.qml" \
   "$tmpdir/ai/ShibumiPanel.qml"

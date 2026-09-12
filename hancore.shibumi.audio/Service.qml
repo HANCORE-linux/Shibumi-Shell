@@ -2,21 +2,30 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
-// Process-wide observable audio snapshot. The official Quattro audio widget
-// remains the PipeWire and action owner; screen-local Shibumi widgets only
-// report the state they already consume from that owner.
+// One process-wide AudioBackendAdapter owns PipeWire and actions. Widgets
+// report presentation state; neither output count nor IPC creates an owner.
 Item {
   id: root
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.Provider {
+    id: runtimeProvider
+    pluginId: "hancore.shibumi.audio"
+    implementationVersion: "0.1.1-beta.13"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
+  readonly property bool backendAdmitted: runtimeProvider.registered
   property var reports: []
   // Native AudioBackendAdapter is now the sole Shibumi PipeWire owner.
   property bool nativeBackendEnabled: true
   property var nativeBackendOverride: null
-  readonly property bool nativeBackendReady: root.nativeBackendEnabled
-    && nativeBackendLoader.item ? nativeBackendLoader.item.ready === true : false
+  readonly property bool nativeBackendReady: root.backendAdmitted
+    && root.nativeBackendEnabled && nativeBackendLoader.item ? nativeBackendLoader.item.ready === true : false
   readonly property var nativeAudioSinks: nativeBackendLoader.item
     ? nativeBackendLoader.item.audioSinks : []
   readonly property var nativeAudioSources: nativeBackendLoader.item
@@ -52,21 +61,28 @@ Item {
 
   Loader {
     id: peakBackendLoader
-    active: !root.nativeBackendEnabled
+    active: root.backendAdmitted && !root.nativeBackendEnabled
     source: Qt.resolvedUrl("AudioPeakMonitor.qml")
     onLoaded: item.clients = root.peakMonitorClients
   }
 
   Loader {
     id: nativeBackendLoader
-    active: root.nativeBackendEnabled
+    active: root.backendAdmitted && root.nativeBackendEnabled
     source: Qt.resolvedUrl("AudioBackendAdapter.qml")
     onLoaded: {
       // Apply test/native injection before activation so a fake backend never
       // briefly evaluates the real PipeWire service.
       item.backendOverride = root.nativeBackendOverride
       item.peakMonitoringClients = root.peakMonitorClients
-      item.active = true
+      item.active = root.backendAdmitted && root.nativeBackendEnabled
+    }
+  }
+
+  onBackendAdmittedChanged: {
+    if (!backendAdmitted) {
+      reports = []
+      syncSnapshot()
     }
   }
 
@@ -82,10 +98,11 @@ Item {
     if (!nativeBackendLoader.item) return
     nativeBackendLoader.item.active = false
     nativeBackendLoader.item.backendOverride = root.nativeBackendOverride
-    nativeBackendLoader.item.active = root.nativeBackendEnabled
+    nativeBackendLoader.item.active = root.backendAdmitted && root.nativeBackendEnabled
   }
 
   function acquirePeakMonitoring() {
+    if (!backendAdmitted) return false
     const owner = root.nativeBackendEnabled
       ? nativeBackendLoader.item : peakBackendLoader.item
     const method = root.nativeBackendEnabled
@@ -111,70 +128,70 @@ Item {
   }
 
   function nativeSetDefaultSink(id) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.setDefaultSink(id) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: String(id || ""), generation: 0
       })
   }
   function nativeSetDefaultSource(id) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.setDefaultSource(id) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: String(id || ""), generation: 0
       })
   }
   function nativeSetOutputVolume(value) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.setOutputVolume(value) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })
   }
   function nativeToggleOutputMute() {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.toggleOutputMute() : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })
   }
   function nativeSetInputVolume(value) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.setInputVolume(value) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })
   }
   function nativeToggleInputMute() {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.toggleInputMute() : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })
   }
   function nativeSetStreamVolume(id, value) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.setStreamVolume(id, value) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: String(id || ""), generation: 0
       })
   }
   function nativeToggleStreamMute(id) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.toggleStreamMute(id) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: String(id || ""), generation: 0
       })
   }
   function routeBluetoothDevice(request) {
-    return nativeBackendLoader.item
+    return backendAdmitted && nativeBackendLoader.item
       ? nativeBackendLoader.item.routeBluetoothDevice(request) : ({
         ok: false, code: "unavailable", message: "Audio backend is unavailable",
         entityId: "", generation: 0
       })
   }
   function report(owner, available, muted) {
-    if (!owner) return false
+    if (!backendAdmitted || !owner) return false
     const next = reports.filter(entry => entry.owner !== owner)
     next.push({ owner: owner, ready: available === true, muted: muted === true })
     reports = next
@@ -196,18 +213,30 @@ Item {
   }
 
   function openPanel() {
+    if (!backendAdmitted) return false
+    if (shell && "pluginId" in shell)
+      return typeof shell.summon === "function"
+        && shell.summon("hancore.shibumi.audio", "") === true
     const bar = activeBar()
     return bar && typeof bar.summonBarWidget === "function"
       ? bar.summonBarWidget("omarchy.audio") : false
   }
 
   function closePanel() {
+    if (!backendAdmitted) return false
+    if (shell && "pluginId" in shell)
+      return typeof shell.hide === "function"
+        && shell.hide("hancore.shibumi.audio") === true
     const bar = activeBar()
     return bar && typeof bar.hideBarWidget === "function"
       ? bar.hideBarWidget("omarchy.audio") : false
   }
 
   function togglePanel() {
+    if (!backendAdmitted) return false
+    if (shell && "pluginId" in shell)
+      return typeof shell.toggle === "function"
+        && shell.toggle("hancore.shibumi.audio", "") === true
     const bar = activeBar()
     if (!bar) return false
     return typeof bar.isBarWidgetOpen === "function"
@@ -216,6 +245,7 @@ Item {
   }
 
   IpcHandler {
+    enabled: root.backendAdmitted
     target: "omarchy.audio"
 
     function open(): void { root.openPanel() }
