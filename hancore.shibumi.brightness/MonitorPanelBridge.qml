@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import qs.Commons as Commons
 
 // Hosts Quattro's monitor component as the single process-wide state/action
 // owner. Shibumi owns only screen-local presentation and forwards mutations.
@@ -8,10 +9,12 @@ Item {
   id: root
 
   required property var bar
+  required property var ownerShell
   required property Item ownerWidget
   property Component panelComponent: null
   property url panelSource: ""
   property var panelSettings: ({})
+  property bool shuttingDown: false
 
   readonly property var panel: panelLoader.item
   readonly property bool ready: panel !== null
@@ -75,6 +78,12 @@ Item {
     return true
   }
 
+  function showBrightnessOsd(value) {
+    if (!ready || typeof panel.showBrightnessOsd !== "function") return false
+    panel.showBrightnessOsd(Math.max(1, Math.min(100, Number(value) || 1)))
+    return true
+  }
+
   function setScale(value) {
     if (!ready || typeof panel.setScale !== "function") return false
     panel.setScale(String(value || ""))
@@ -121,7 +130,7 @@ Item {
   }
 
   function injectPanel() {
-    if (!panel) return
+    if (shuttingDown || !panel) return
     if ("bar" in panel) panel.bar = hostProxy
     if ("moduleName" in panel) panel.moduleName = "omarchy.monitor"
     if ("settings" in panel) panel.settings = panelSettings
@@ -131,6 +140,7 @@ Item {
   }
 
   function syncPanelSource() {
+    if (shuttingDown) return
     panelLoader.sourceComponent = null
     panelLoader.source = ""
     if (panelComponent !== null) {
@@ -145,29 +155,48 @@ Item {
     }
   }
 
+  function schedulePanelSync() {
+    if (!shuttingDown) panelSync.restart()
+  }
+
+  function shutdown() {
+    if (shuttingDown) return
+    shuttingDown = true
+    panelSync.stop()
+    panelInjection.stop()
+    hiddenClose.stop()
+    if (panel && panel.opened === true && typeof panel.close === "function")
+      panel.close()
+    panelLoader.active = false
+    panelLoader.sourceComponent = null
+    panelLoader.source = ""
+  }
+
   onPanelSettingsChanged: injectPanel()
   onBarChanged: injectPanel()
-  onPanelComponentChanged: Qt.callLater(syncPanelSource)
-  onPanelSourceChanged: Qt.callLater(syncPanelSource)
-  Component.onCompleted: Qt.callLater(syncPanelSource)
-  Component.onDestruction: {
-    if (!panel || !bar) return
-    if (panel.opened === true && typeof panel.close === "function") panel.close()
+  onPanelComponentChanged: schedulePanelSync()
+  onPanelSourceChanged: schedulePanelSync()
+  Component.onCompleted: schedulePanelSync()
+  Component.onDestruction: shutdown()
+
+  function summonVisiblePanel() {
+    if (bar && typeof bar.summonBarWidget === "function"
+        && bar.summonBarWidget("omarchy.monitor") === true) return true
+    const host = ownerShell
+    const ownId = host && String(host.pluginId || "")
+    return ownId === "hancore.shibumi.brightness"
+      && typeof host.summon === "function" && host.summon(ownId, "") === true
   }
 
   // The official component owns the legacy IPC target. Redirect an IPC open
   // to Shibumi's screen-local presentation and never leave the stock popup
   // mapped behind it.
   Connections {
-    target: root.panel
+    target: root.shuttingDown ? null : root.panel
     function onOpenedChanged() {
       if (!root.panel || root.panel.opened !== true) return
-      if (root.bar && typeof root.bar.summonBarWidget === "function")
-        root.bar.summonBarWidget("omarchy.monitor")
-      Qt.callLater(function() {
-        if (root.panel && root.panel.opened === true
-            && typeof root.panel.close === "function") root.panel.close()
-      })
+      root.summonVisiblePanel()
+      hiddenClose.restart()
     }
   }
 
@@ -182,14 +211,17 @@ Item {
     readonly property string position: realBar ? String(realBar.position || "top") : "top"
     readonly property string fontFamily: realBar ? String(realBar.fontFamily || "monospace") : "monospace"
     readonly property color background: realBar && realBar.background !== undefined
-      ? realBar.background : "#111111"
+      ? realBar.background : Commons.Color.background
     readonly property color barBackground: background
-    readonly property color foreground: realBar ? realBar.foreground : "#ffffff"
+    readonly property color foreground: realBar && realBar.foreground !== undefined
+      ? realBar.foreground : Commons.Color.foreground
     readonly property color barForeground: foreground
-    readonly property color urgent: realBar ? realBar.urgent : foreground
+    readonly property color urgent: realBar && realBar.urgent !== undefined
+      ? realBar.urgent : Commons.Color.urgent
     readonly property bool foregroundAnimationEnabled: realBar
       ? realBar.foregroundAnimationEnabled !== false : false
-    readonly property var shell: realBar ? realBar.shell : null
+    readonly property var shell: realBar && realBar.shell !== undefined
+      ? realBar.shell : root.ownerShell
     readonly property var activePopout: realBar ? realBar.activePopout : null
     readonly property var clickTargets: realBar ? realBar.clickTargets : []
 
@@ -209,12 +241,32 @@ Item {
     }
   }
 
+  Timer {
+    id: panelSync
+    interval: 0
+    onTriggered: root.syncPanelSource()
+  }
+  Timer {
+    id: panelInjection
+    interval: 0
+    onTriggered: root.injectPanel()
+  }
+  Timer {
+    id: hiddenClose
+    interval: 0
+    onTriggered: {
+      if (root.panel && root.panel.opened === true
+          && typeof root.panel.close === "function") root.panel.close()
+    }
+  }
+
   Loader {
     id: panelLoader
     anchors.fill: parent
+    active: !root.shuttingDown
     onLoaded: {
       root.injectPanel()
-      Qt.callLater(root.injectPanel)
+      panelInjection.restart()
     }
   }
 }

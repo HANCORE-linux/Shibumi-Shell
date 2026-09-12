@@ -13,10 +13,16 @@ ShellRoot {
   function fail(message) {
     console.error("plugin-update-service-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
+
+  QtObject { id: legacyShell }
+  QtObject { id: scopedShell; property string pluginId: "hancore.shibumi.control-center" }
+  QtObject { id: widgetRegistry; property int revision: 0 }
 
   Control.PluginUpdateService {
     id: service
+    barWidgetRegistry: widgetRegistry
     timeoutSeconds: 1
   }
 
@@ -50,6 +56,15 @@ ShellRoot {
         if (statusProbe.shortStatusText !== "check failed")
           return root.fail("failure text is ambiguous")
 
+        if (service.available || service.check(true))
+          return root.fail("update worker started before host injection")
+        service.shell = 1
+        if (service.available || service.scopedHost || service.check(true))
+          return root.fail("numeric shell bypassed host admission")
+        service.shell = ({})
+        if (service.available || service.scopedHost || service.check(true))
+          return root.fail("plain-object shell bypassed host admission")
+        service.shell = legacyShell
         service.observePluginRevision(0, false)
         service.consumerCount = 1
         if (!service.check(true))
@@ -185,6 +200,49 @@ ShellRoot {
         if (root.ticks < 3) return
         if (service.running || service.rerunRequested)
           return root.fail("closed catalog started a deferred rerun")
+        service.shell = scopedShell
+        root.phase++
+        root.ticks = 0
+        return
+      }
+      if (root.phase === 10) {
+        if (service.available || service.check(true))
+          return root.fail("scoped update worker started before manifest admission")
+        service.manifest = {id: "hancore.shibumi.control-center",
+          version: "0.1.1-beta.12", kinds: ["service", "bar-widget"]}
+        root.phase++
+        root.ticks = 0
+        return
+      }
+      if (root.phase === 11) {
+        if (!service.available) {
+          if (root.ticks > 40) return root.fail("scoped update provider never registered")
+          return
+        }
+        widgetRegistry.revision = 7
+        service.observePluginRevision(9999, false)
+        if (service.observedPluginRevision !== 7)
+          return root.fail("caller revision replaced native snapshot revision")
+        if (!service.check(true)) return root.fail("admitted update scan did not start")
+        root.phase++
+        root.ticks = 0
+        return
+      }
+      if (root.phase === 12) {
+        if (root.ticks < 3) return
+        service.manifest = {id: "hancore.shibumi.control-center",
+          version: "wrong", kinds: ["service", "bar-widget"]}
+        root.phase++
+        root.ticks = 0
+        return
+      }
+      if (root.phase === 13) {
+        if (service.running) {
+          if (root.ticks > 40) return root.fail("revoked update worker did not stop")
+          return
+        }
+        if (service.available || service.check(true) || service.checked || service.checkedAt !== 0)
+          return root.fail("revoked update provider retained results or write authority")
         stop()
         console.log("plugin update service smoke passed")
         Qt.quit()

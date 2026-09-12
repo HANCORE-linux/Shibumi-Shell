@@ -3,19 +3,20 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.battery"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url panelSource: Qt.resolvedUrl("BatteryPanel.qml")
   property var powerServiceOverride: null
 
-  readonly property var powerService: powerServiceOverride
-    || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
-      ? bar.shell.serviceFor("hancore.shibumi.power-state") : null)
+  readonly property var powerService: powerServiceOverride !== null ? powerServiceOverride
+    : suiteShell.serviceFor("hancore.shibumi.power-state")
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -62,8 +63,7 @@ Ui.Panel {
     var wanted = opened && hasBattery ? powerService : null
     if (wanted === detailOwner) return
     if (detailOwner) detailOwner.releaseBatteryDetails()
-    detailOwner = wanted
-    if (detailOwner) detailOwner.acquireBatteryDetails()
+    detailOwner = wanted && wanted.acquireBatteryDetails() !== false ? wanted : null
   }
 
   function syncPanelLoader() {
@@ -73,13 +73,17 @@ Ui.Panel {
     }
     panelLoader.setSource(panelSource, {
       anchorItem: surface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      powerService: root.powerService
+      powerService: Qt.binding(function() { return root.powerService })
     })
   }
 
-  function activate() { toggle() }
+  function activate() {
+    if (!hasBattery) return false
+    toggle()
+    return true
+  }
 
   function openSystemMonitor() {
     if (!bar || typeof bar.run !== "function") return false
@@ -95,7 +99,11 @@ Ui.Panel {
     if (!hasBattery && opened) close()
     syncDetailLease()
   }
-  onPowerServiceChanged: syncDetailLease()
+  onPowerServiceChanged: {
+    syncDetailLease()
+    if (!powerService && opened) close()
+    if (opened && !panelLoader.item) syncPanelLoader()
+  }
   Component.onDestruction: {
     if (detailOwner) detailOwner.releaseBatteryDetails()
     detailOwner = null

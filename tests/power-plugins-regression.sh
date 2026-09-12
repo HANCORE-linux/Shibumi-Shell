@@ -6,6 +6,8 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
+python3 "$repo_root/tests/power-source-sync-regression.py"
+python3 "$repo_root/tests/power-deferred-regression.py"
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
 tmpdir=$(mktemp -d /tmp/shibumi-power-plugins.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
@@ -20,6 +22,10 @@ fail() {
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
+mkdir -p "$tmpdir/hancore.shibumi.state"
+cp -a -- "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  >"$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$repo_root/hancore.shibumi.battery" "$tmpdir/battery"
 cp -a -- "$repo_root/hancore.shibumi.power-profile" "$tmpdir/powerProfile"
 cp -a -- "$repo_root/hancore.shibumi.power-state" "$tmpdir/powerState"
@@ -27,6 +33,8 @@ cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
   "$tmpdir/powerProfile/ShibumiPanel.qml"
+install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+  "$tmpdir/battery/ShibumiPanel.qml"
 install -m 0644 "$repo_root/tests/power-plugins-smoke.qml" "$tmpdir/shell.qml"
 install -m 0644 "$repo_root/tests/fixtures/PowerTestService.qml" \
   "$repo_root/tests/fixtures/PowerTestPanel.qml" "$tmpdir/fixtures/"
@@ -46,6 +54,9 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'power plugins smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$output"; then
+  fail "component QML runtime error"
+fi
 
 mkdir -p "$tmpdir/power-runtime" "$tmpdir/power-bin"
 chmod 700 "$tmpdir/power-runtime"
@@ -69,8 +80,37 @@ printf '%s\n' "$service_output"
 [[ $service_rc -eq 0 ]] || fail "power-state service smoke exited $service_rc"
 grep -F 'power service runtime smoke passed' <<<"$service_output" >/dev/null \
   || fail "power-state service success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$service_output"; then
+  fail "service QML runtime error"
+fi
 [[ $(<"$tmpdir/power-state") == performance ]] \
   || fail "power-state service did not execute the validated profile action"
+
+mkdir -p "$tmpdir/scope-data"
+printf 'balanced\n' >"$tmpdir/scope-data/profile"
+: >"$tmpdir/scope-data/trace"
+: >"$tmpdir/scope-data/barrier"
+: >"$tmpdir/scope-data/startup"
+install -m 0644 "$repo_root/tests/fixtures/power-runtime-helper.py" "$tmpdir/fixtures/"
+for smoke in power-command power-runtime; do
+  mkdir -m 700 "$tmpdir/$smoke-runtime"
+  install -m 0644 "$repo_root/tests/$smoke-smoke.qml" "$tmpdir/shell.qml"
+  set +e
+  smoke_output=$(timeout 9 env \
+    SHIBUMI_POWER_SCOPE_DIR="$tmpdir/scope-data" \
+    QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$tmpdir/$smoke-runtime" \
+    QML_IMPORT_PATH="$omarchy_path/shell" QML2_IMPORT_PATH="$omarchy_path/shell" \
+    "$quickshell_bin" -p "$tmpdir" 2>&1)
+  smoke_rc=$?
+  set -e
+  printf '%s\n' "$smoke_output"
+  [[ $smoke_rc -eq 0 ]] || fail "$smoke exited $smoke_rc"
+  grep -F "${smoke//-/ } smoke passed" <<<"$smoke_output" >/dev/null || fail "$smoke marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$smoke_output"; then
+    fail "$smoke QML runtime error"
+  fi
+done
 
 for plugin in battery power-profile; do
   widget="$repo_root/hancore.shibumi.$plugin/BarWidget.qml"
@@ -115,7 +155,7 @@ fi
 rg -q 'function profileLabel\(profile\)' \
   "$repo_root/hancore.shibumi.power-state/Service.qml" \
   || fail "power-state service does not expose profile labels"
-rg -Fq 'command: ["busctl", "--system", "get-property",' \
+rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   "$repo_root/hancore.shibumi.power-state/Service.qml" \
   || fail "power-state service does not use the lightweight active-profile probe"
 rg -Fq 'onTriggered: root.refreshActiveProfile()' \
@@ -130,7 +170,7 @@ rg -Fq 'String(batteryInfo.time || "")' \
 rg -Fq "printf 'health\\\\t%s\\\\n'" \
   "$repo_root/hancore.shibumi.power-state/Service.qml" \
   || fail "power-state service does not retain the V1 sysfs health fallback"
-rg -q 'panel\.powerService\.batteryHealthText' \
+rg -q 'panel\.powerState\.batteryHealthText' \
   "$repo_root/hancore.shibumi.battery/BatteryPanel.qml" \
   || fail "battery panel does not render the shared health fallback"
 rg -q 'width: parent \? parent\.width : 0' \

@@ -52,6 +52,8 @@ Item {
   property string lastThemeName: ""
   property string lastNetworkMode: ""
   property bool muteBaselined: false
+  property var observedAudioOwner: null
+  property bool observedMute: false
   property bool dndBaselined: false
   property bool updateBaselined: false
   property int lastNotificationCount: -1
@@ -128,12 +130,14 @@ Item {
   }
 
   function clear() {
+    if (!active) return false
     eventHistory = []
     warningQueue = []
     warningDrain.stop()
     clearUrgent()
     serial++
     cleared()
+    return true
   }
 
   function workspaceChanged() {
@@ -146,11 +150,13 @@ Item {
   }
 
   function focusedScreenName() {
+    if (!active || !runtimeProbesEnabled) return ""
     const monitor = Hyprland.focusedMonitor
     return monitor ? String(monitor.name || "") : ""
   }
 
   function classForAddress(address) {
+    if (!active || !runtimeProbesEnabled) return ""
     const target = String(address || "")
     if (!target) return ""
     try {
@@ -246,12 +252,14 @@ Item {
   }
 
   function themeChanged() {
+    if (!active || !runtimeProbesEnabled) return
     themeNameReader.reload()
     themeDelay.restart()
   }
 
   function handleThemeText() {
-    const name = String(themeNameReader.text() || "").trim()
+    if (!themeNameReader.available) return
+    const name = String(themeNameReader.text || "").trim()
     if (!lastThemeName) {
       lastThemeName = name
       return
@@ -264,7 +272,7 @@ Item {
   function baselineExternal() {
     if (lastExternalTimestamp > 0) return
     let parsed = null
-    try { parsed = ReactorModel.parseExternal(externalEventReader.text(), 0, Date.now()) }
+    try { parsed = ReactorModel.parseExternal(externalEventReader.text, 0, Date.now()) }
     catch (_error) {}
     lastExternalTimestamp = parsed ? Math.min(parsed.timestamp, Date.now()) : Date.now()
   }
@@ -276,7 +284,7 @@ Item {
     }
     let parsed = null
     try {
-      parsed = ReactorModel.parseExternal(externalEventReader.text(),
+      parsed = ReactorModel.parseExternal(externalEventReader.text,
         lastExternalTimestamp, Date.now())
     } catch (_error) {}
     if (!parsed) return
@@ -330,15 +338,27 @@ Item {
   }
 
   function handleMute() {
-    if (!muteBaselined) {
+    const owner = audioService
+    if (!owner || owner.ready !== true) {
+      muteBaselined = false
+      observedAudioOwner = null
+      return
+    }
+    const muted = owner.outputMuted === true
+    if (!muteBaselined || observedAudioOwner !== owner) {
+      observedAudioOwner = owner
+      observedMute = muted
       muteBaselined = true
       return
     }
-    if (armed) pushText("VOLUME", outputMuted ? "MUTED" : "UNMUTED",
+    if (observedMute === muted) return
+    observedMute = muted
+    if (armed) pushText("VOLUME", muted ? "MUTED" : "UNMUTED",
       "short", false, "")
   }
 
   function handleDnd() {
+    if (!statusService) { dndBaselined = false; return }
     if (!dndBaselined) {
       dndBaselined = true
       return
@@ -444,7 +464,24 @@ Item {
     return pushText("REACTOR TEST", kind || "EVENT", "short", true, "")
   }
 
+  onActiveChanged: if (!active) {
+    armed = false
+    eventHistory = []
+    warningQueue = []
+    recentOpen = ({})
+    lastNetworkMode = ""
+    muteBaselined = false
+    dndBaselined = false
+    updateBaselined = false
+    themeDelay.stop()
+    urgentDelay.stop()
+    trackDelay.stop()
+    warningDrain.stop()
+    clearUrgent()
+  }
+
   onNetworkModeChanged: handleNetwork()
+  onAudioServiceChanged: handleMute()
   onOutputMutedChanged: handleMute()
   onUpdateAvailableChanged: handleUpdate()
   onNotificationCountChanged: announceNotification()
@@ -454,12 +491,17 @@ Item {
   onBatteryLowChanged: if (batteryLow) checkWarnings()
 
   Connections {
-    target: Hyprland
+    target: root.active && root.runtimeProbesEnabled ? Hyprland : null
     function onFocusedMonitorChanged() {
       if (root.armed) root.pushPulse("monsweep", 1, root.focusedScreenName(),
         { count: 36, gain: 0.82 })
     }
     function onRawEvent(event) { root.handleHyprlandEvent(event) }
+  }
+
+  Connections {
+    target: root.audioService
+    function onReadyChanged() { root.handleMute() }
   }
 
   Connections {
@@ -476,14 +518,11 @@ Item {
     }
   }
 
-  FileView {
+  BoundedTextSource {
     id: themeNameReader
-    path: root.runtimeProbesEnabled
-      ? root.home + "/.local/state/omarchy/current/theme.name" : ""
-    watchChanges: true
-    printErrors: false
-    onFileChanged: root.themeChanged()
-    onLoaded: root.handleThemeText()
+    kind: "theme"
+    active: root.runtimeProbesEnabled && root.active
+    onUpdated: root.handleThemeText()
   }
 
   Timer {
@@ -492,15 +531,11 @@ Item {
     onTriggered: root.handleThemeText()
   }
 
-  FileView {
+  BoundedTextSource {
     id: externalEventReader
-    path: root.runtimeProbesEnabled
-      ? root.home + "/.cache/qs-reactor-event" : ""
-    watchChanges: true
-    printErrors: false
-    onFileChanged: reload()
-    onLoaded: root.handleExternal()
-    onLoadFailed: root.baselineExternal()
+    kind: "event"
+    active: root.runtimeProbesEnabled && root.active
+    onUpdated: root.handleExternal()
   }
 
   Timer {
@@ -534,7 +569,7 @@ Item {
   Timer {
     interval: 30000
     repeat: true
-    running: root.runtimeProbesEnabled && root.armed
+    running: root.runtimeProbesEnabled && root.active && root.armed
     onTriggered: root.checkWarnings()
   }
 
@@ -545,6 +580,7 @@ Item {
     command: ["bash", "-c", "exec tail -n 0 -F /var/log/pacman.log 2>/dev/null"]
     stdout: SplitParser {
       onRead: function(line) {
+        if (!root.active) return
         if (line.indexOf("transaction started") >= 0) pacmanTail.changedPackages = 0
         else if (line.indexOf("] upgraded ") >= 0
             || line.indexOf("] installed ") >= 0
@@ -562,13 +598,14 @@ Item {
 
   Timer {
     interval: 3000
-    running: root.runtimeProbesEnabled
+    running: root.runtimeProbesEnabled && root.active
     onTriggered: {
+      if (!root.active) return
       root.lastNetworkMode = root.networkMode
       root.lastNotificationCount = root.notificationCount
       root.lastTrackSignature = root.mediaTitle + "|" + root.mediaArtist
         + "|" + root.mediaAlbum
-      root.muteBaselined = true
+      root.handleMute()
       root.dndBaselined = true
       root.updateBaselined = true
       root.armed = true

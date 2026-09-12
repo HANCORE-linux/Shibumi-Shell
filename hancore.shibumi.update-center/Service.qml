@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "Model.js" as Model
 
 Item {
@@ -9,6 +10,13 @@ Item {
   property var shell: null
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var manifest: null
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.update-center"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
 
   readonly property string packageStatusScript: String(
     Qt.resolvedUrl("scripts/package-status")).replace("file://", "")

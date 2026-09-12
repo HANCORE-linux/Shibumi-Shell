@@ -18,9 +18,18 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
+stage_media_runtime() {
+  local root=$1
+  mkdir -p "$root/hancore.shibumi.state"
+  cp -a "$repo_root/hancore.shibumi.state/runtime" "$root/hancore.shibumi.state/"
+  printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+    > "$root/hancore.shibumi.state/.shibumi-managed.json"
+}
+
 run_smoke() {
   local name=$1 test_file=$2 marker=$3
-  local smoke_root="$tmpdir/$name"
+  local smoke_root
+  smoke_root=$(mktemp -d "$tmpdir/$name.XXXX")
 
   mkdir -p "$smoke_root/runtime" "$smoke_root/fixtures"
   chmod 700 "$smoke_root/runtime"
@@ -29,11 +38,15 @@ run_smoke() {
   cp -a -- "$omarchy_path/shell/Ui" "$smoke_root/Ui"
   install -Dm0644 "$repo_root/tests/$test_file" "$smoke_root/shell.qml"
 
+  stage_media_runtime "$smoke_root"
   if [[ $name == audio ]]; then
     cp "$repo_root/tests/fixtures/AudioTestPanel.qml" \
-      "$repo_root/tests/fixtures/AudioTestView.qml" "$smoke_root/fixtures/"
+      "$repo_root/tests/fixtures/AudioTestView.qml" \
+      "$repo_root/tests/fixtures/AudioRuntimeBackend.qml" "$smoke_root/fixtures/"
+    cp "$repo_root/tests/fixtures/ShibumiPanelTest.qml" "$smoke_root/audio/ShibumiPanel.qml"
   else
-    cp "$repo_root/tests/fixtures/MediaTestPanel.qml" "$smoke_root/fixtures/"
+    # Exercise the actual MediaPanel body, substituting only its window shell.
+    cp "$repo_root/tests/fixtures/ShibumiPanelTest.qml" "$smoke_root/media/ShibumiPanel.qml"
   fi
 
   set +e
@@ -57,6 +70,7 @@ run_smoke() {
 run_smoke audio audio-plugin-smoke.qml 'audio plugin smoke passed'
 run_smoke audio audio-native-backend-seam-regression.qml \
   'audio native backend seam regression passed'
+run_smoke audio audio-runtime-smoke.qml 'audio runtime smoke passed'
 run_smoke media media-plugin-smoke.qml 'media plugin smoke passed'
 
 run_spectrum_smoke() {
@@ -66,6 +80,7 @@ run_spectrum_smoke() {
   mkdir -p "$smoke_root/runtime" "$smoke_root/bin"
   chmod 700 "$smoke_root/runtime"
   cp -a -- "$repo_root/hancore.shibumi.media" "$smoke_root/media"
+  stage_media_runtime "$smoke_root"
   cp -a -- "$omarchy_path/shell/Commons" "$smoke_root/Commons"
   cp -a -- "$omarchy_path/shell/Ui" "$smoke_root/Ui"
   install -Dm0644 "$repo_root/tests/media-spectrum-service-smoke.qml" \
@@ -187,9 +202,9 @@ rg -q 'readonly property int bandCount: 24' \
   || fail "G9 FULL presentation does not render 24 bands"
 rg -q 'audioBackend\.inputPeak' "$audio_panel" \
   || fail "audio panel does not consume the primitive microphone peak"
-rg -q 'audioBackend\.acquirePeakMonitoring\(\)' "$audio_panel" \
+rg -q 'next\.acquirePeakMonitoring\(\)' "$audio_panel" \
   || fail "audio panel does not acquire microphone peak monitoring"
-rg -q 'audioBackend\.releasePeakMonitoring\(\)' "$audio_panel" \
+rg -q 'backend\.releasePeakMonitoring\(\)' "$audio_panel" \
   || fail "audio panel does not release microphone peak monitoring"
 rg -q 'PwNodePeakMonitor \{' \
   "$repo_root/hancore.shibumi.audio/AudioBackendAdapter.qml" \

@@ -27,6 +27,8 @@ mappings=(
   "shared/telemetry/GpuTelemetry.qml:hancore.shibumi.cpu/GpuTelemetry.qml"
   "shared/power-state/Service.qml:services/PowerService.qml"
   "shared/power-state/Service.qml:hancore.shibumi.power-state/Service.qml"
+  "shared/power-state/PowerCommand.qml:services/PowerCommand.qml"
+  "shared/power-state/PowerCommand.qml:hancore.shibumi.power-state/PowerCommand.qml"
   "shared/power-state/PowerModel.js:services/PowerModel.js"
   "shared/power-state/PowerModel.js:hancore.shibumi.power-state/PowerModel.js"
   "shared/quick-access/PickerModel.js:services/PickerModel.js"
@@ -128,6 +130,13 @@ executable_mappings=(
   "shared/quick-access/shibumi-picker:hancore.shibumi.quick-access/scripts/shibumi-picker"
 )
 
+# Refuse invalid Power paths before earlier mappings can write through the same
+# services/plugin parent. Each actual write reopens no-follow descriptors.
+for power_target in services/PowerService.qml hancore.shibumi.power-state/Service.qml \
+    services/PowerCommand.qml hancore.shibumi.power-state/PowerCommand.qml; do
+  /usr/bin/python3 -I -S "$repo_root/scripts/sync-power-source.py" --paths "$repo_root" "$power_target"
+done
+
 failed=0
 for mapping in "${mappings[@]}"; do
   source_path=${mapping%%:*}
@@ -140,6 +149,15 @@ for mapping in "${mappings[@]}"; do
     failed=1
     continue
   }
+
+  # The canonical Power owner is one directory deeper than both maintained
+  # destinations. Only this exact import is rewritten; the runtime is not copied.
+  if [[ $source_path == shared/power-state/Service.qml || $source_path == shared/power-state/PowerCommand.qml ]]; then
+    if ! /usr/bin/python3 -I -S "$repo_root/scripts/sync-power-source.py" "$mode" "$repo_root" "$target_path"; then
+      failed=1
+    fi
+    continue
+  fi
 
   if [[ $mode == --write ]]; then
     install -Dm0644 -- "$source_file" "$target_file"

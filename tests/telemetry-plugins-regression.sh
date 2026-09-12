@@ -22,9 +22,12 @@ cp -a -- "$repo_root/hancore.shibumi.telemetry" "$tmpdir/telemetry"
 cp -a -- "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 cp -a -- "$repo_root/hancore.shibumi.cpu" "$tmpdir/cpu"
 cp -a -- "$repo_root/hancore.shibumi.gpu" "$tmpdir/gpu"
-cp -a -- "$repo_root/hancore.shibumi.state" "$tmpdir/state"
+cp -a -- "$repo_root/hancore.shibumi.state" "$tmpdir/hancore.shibumi.state"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$repo_root/hancore.shibumi.temperature" "$tmpdir/temperature"
-for plugin in gpu temperature; do
+cp -a -- "$repo_root/hancore.shibumi.storage" "$tmpdir/storage"
+for plugin in cpu memory gpu temperature storage; do
   install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
     "$tmpdir/$plugin/ShibumiPanel.qml"
 done
@@ -32,6 +35,16 @@ cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -Dm0644 "$repo_root/tests/telemetry-plugins-smoke.qml" "$tmpdir/shell.qml"
 mkdir -m 700 "$tmpdir/runtime"
+mkdir -p "$tmpdir/home"
+# All three QML entry points get private paths, including direct standalone use.
+export HOME="$tmpdir/home" XDG_CONFIG_HOME="$tmpdir/home/.config"
+export XDG_STATE_HOME="$tmpdir/home/.local/state" XDG_DATA_HOME="$tmpdir/home/.local/share"
+export XDG_CACHE_HOME="$tmpdir/home/.cache" XDG_DATA_DIRS="$tmpdir/data"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/absent-session"
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/absent-system"
+export HYPRLAND_INSTANCE_SIGNATURE='' WAYLAND_DISPLAY='' DISPLAY=''
+export QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME='' QT_QUICK_BACKEND=software
+export QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1
 
 set +e
 output=$(timeout 8 env \
@@ -56,8 +69,31 @@ fi
 install -m 0644 "$repo_root/tests/gpu-selection-state-smoke.qml" \
   "$tmpdir/state-shell.qml"
 mkdir -m 700 "$tmpdir/state-runtime"
+python3 - "$tmpdir/state-home/.config/omarchy/shell.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True)
+path.write_text(json.dumps({'version': 1,
+    'bar': {'layout': {'left': [], 'center': [], 'right': []}},
+    'plugins': [{'id': 'hancore.shibumi.state', 'shibumiStateSchemaVersion': 1,
+                 'shibumi': {'version': 1}, 'foreign': {'keep': 42}}]}))
+PY
 set +e
 state_output=$(timeout 8 env \
+  HOME="$tmpdir/state-home" \
+  XDG_CONFIG_HOME="$tmpdir/state-home/.config" \
+  XDG_STATE_HOME="$tmpdir/state-home/.local/state" \
+  XDG_DATA_HOME="$tmpdir/state-home/.local/share" \
+  XDG_CACHE_HOME="$tmpdir/state-home/.cache" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/absent-session" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/absent-system" \
+  HYPRLAND_INSTANCE_SIGNATURE= \
+  OMARCHY_PATH="$tmpdir/absent-native-defaults" \
+  QT_FORCE_STDERR_LOGGING=1 \
+  QML_DISABLE_DISK_CACHE=1 \
+  QT_QUICK_BACKEND=software \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/state-runtime" \
@@ -73,6 +109,24 @@ grep -F 'GPU selection state smoke passed' <<<"$state_output" >/dev/null \
 if grep -Eq 'gpu-selection-state-smoke:|TypeError|ReferenceError|Binding loop|Unable to assign' \
     <<<"$state_output"; then
   fail "GPU state QML runtime error detected"
+fi
+
+install -m 0644 "$repo_root/tests/telemetry-runtime-smoke.qml" "$tmpdir/runtime-shell.qml"
+mkdir -m 700 "$tmpdir/slice-runtime"
+set +e
+slice_output=$(timeout 8 env \
+  QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY= XDG_RUNTIME_DIR="$tmpdir/slice-runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir/runtime-shell.qml" 2>&1)
+slice_rc=$?
+set -e
+printf '%s\n' "$slice_output"
+[[ $slice_rc -eq 0 ]] || fail "scoped telemetry smoke exited $slice_rc"
+grep -F 'telemetry runtime smoke passed' <<<"$slice_output" >/dev/null \
+  || fail "scoped telemetry success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$slice_output"; then
+  fail "scoped telemetry QML runtime error detected"
 fi
 
 for plugin in memory cpu; do

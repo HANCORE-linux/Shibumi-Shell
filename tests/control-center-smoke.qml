@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import "state" as State
+import "hancore.shibumi.state" as State
 import "control" as Control
 
 ShellRoot {
@@ -24,6 +24,10 @@ ShellRoot {
   property real widestActiveBarStatus: 0
 
   Control.PluginUpdateTestService { id: pluginUpdateService }
+  Control.PluginUpdateTestService { id: replacementUpdateService }
+  property var selectedUpdateService: pluginUpdateService
+  property int updateRebindPhase: 0
+  property var updateRebindPanel: null
 
   function fail(message) {
     console.error("control-center-smoke:", message)
@@ -253,7 +257,7 @@ ShellRoot {
       Control.BarWidget {
         bar: fakeBar
         panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
-        pluginUpdateServiceOverride: pluginUpdateService
+        pluginUpdateServiceOverride: root.selectedUpdateService
       }
     }
   }
@@ -910,6 +914,7 @@ ShellRoot {
             || !appearance.widgetDetailOpen
             || appearance.selectedWidgetActive)
           return root.fail("Icons did not preserve inactive detail across V1/V2")
+        pluginUpdateService.scopedHost = false
         if (!panel.showSettingsPage("plugins"))
           return root.fail("Plugins page rejected")
         root.phase++
@@ -920,12 +925,63 @@ ShellRoot {
       if (root.phase === 3) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
-        if (!panel || !panel.settingsPageReady
-            || panel.settingsPage !== "plugins"
-            || !panel.settingsPageItem
-            || !panel.settingsPageItem.ready)
+        if (!panel || panel.settingsPage !== "plugins"
+            || !panel.settingsPageItem)
           return root.fail("Plugins page did not instantiate")
         const plugins = panel.settingsPageItem
+        if ((!panel.settingsPageReady || !plugins.ready)
+            && root.updateRebindPhase !== 2 && root.updateRebindPhase !== 3) {
+          if (root.ticks < 20) return
+          return root.fail("Plugins page did not become ready")
+        }
+        if (root.updateRebindPhase > 0 && panel !== root.updateRebindPanel)
+          return root.fail("update provider change recreated the Plugins panel")
+        if (root.updateRebindPhase === 0) {
+          if (!plugins.ready || pluginUpdateService.catalogConsumerCount !== 0
+              || plugins.catalogConsumerActive || plugins.catalogObservation !== null)
+            return root.fail("legacy Plugins page acquired a native catalog lease or lost readiness")
+          root.updateRebindPanel = panel
+          pluginUpdateService.scopedHost = true
+          root.updateRebindPhase++
+          return
+        }
+        if (root.updateRebindPhase === 1) {
+          if (pluginUpdateService.catalogConsumerCount !== 1
+              || !plugins.catalogConsumerActive
+              || plugins.catalogObservation === null)
+            return root.fail("scoped Plugins page did not acquire the catalog observation")
+          root.selectedUpdateService = null
+          root.updateRebindPhase++
+          return
+        }
+        if (root.updateRebindPhase === 2) {
+          if (pluginUpdateService.consumerCount !== 0
+              || pluginUpdateService.catalogConsumerCount !== 0
+              || plugins.pluginUpdateConsumerActive
+              || plugins.catalogConsumerActive)
+            return root.fail("revoked update provider retained a page consumer")
+          root.selectedUpdateService = replacementUpdateService
+          root.updateRebindPhase++
+          return
+        }
+        if (root.updateRebindPhase === 3) {
+          if (replacementUpdateService.consumerCount !== 1
+              || replacementUpdateService.catalogConsumerCount !== 1
+              || pluginUpdateService.consumerCount !== 0
+              || pluginUpdateService.catalogConsumerCount !== 0)
+            return root.fail("late update provider did not acquire the open catalog")
+          root.selectedUpdateService = pluginUpdateService
+          root.updateRebindPhase++
+          return
+        }
+        if (root.updateRebindPhase === 4) {
+          if (replacementUpdateService.consumerCount !== 0
+              || replacementUpdateService.catalogConsumerCount !== 0
+              || pluginUpdateService.consumerCount !== 1
+              || pluginUpdateService.catalogConsumerCount !== 1)
+            return root.fail("update provider replacement leaked a page consumer")
+          root.updateRebindPhase++
+        }
         if (plugins.activeCountColor !== panel.accentColor("color03")
             || plugins.availableCountColor !== panel.accentColor("color02"))
           return root.fail("plugin counts do not follow theme colors")
@@ -961,6 +1017,118 @@ ShellRoot {
             || plugins.feedbackProgressRenderedWidth !== 0)
           return root.fail("plugin feedback progress lower clamp")
         plugins.feedbackProgress = 0
+        panel.asyncPluginTransitions = true
+        const failedSettlements = [
+          "state-refused", "revoked", "native-indeterminate", "state-timeout"
+        ]
+        for (let failureIndex = 0;
+             failureIndex < failedSettlements.length; failureIndex++) {
+          const result = failedSettlements[failureIndex]
+          if (!plugins.togglePluginById("omarchy.audio")
+              || !plugins.transitionPending
+              || plugins.pendingPluginMutation === null
+              || plugins.feedbackTitle.indexOf("Updating") !== 0
+              || plugins.feedbackTitle.indexOf("activated") >= 0
+              || plugins.undoMode !== ""
+              || plugins.undoProviderSnapshot !== null
+              || !panel.settlePluginTransition(result, false)
+              || plugins.transitionPending
+              || plugins.undoMode !== ""
+              || plugins.undoProviderSnapshot !== null
+              || plugins.feedbackDetail === ""
+              || !panel.pluginEntries[0].installedInBar
+              || panel.pluginEntries[1].installedInBar)
+            return root.fail("failed async plugin settlement published success or Undo: "
+              + result)
+        }
+        if (!plugins.togglePluginById("omarchy.audio")
+            || !plugins.transitionPending
+            || plugins.undoMode !== ""
+            || !panel.settlePluginTransition("confirmed", true)
+            || plugins.transitionPending
+            || plugins.feedbackTitle !== "Omarchy Audio activated"
+            || plugins.undoMode !== "provider-snapshot"
+            || !plugins.undoProviderSnapshot
+            || !panel.pluginEntries[1].installedInBar)
+          return root.fail("confirmed async plugin settlement did not publish Undo")
+        const retainedSnapshot = JSON.stringify(
+          plugins.undoProviderSnapshot)
+        if (!plugins.undoLastChange()
+            || !plugins.transitionPending
+            || !panel.providerSnapshotTransitionBusy
+            || JSON.stringify(plugins.undoProviderSnapshot)
+              !== retainedSnapshot
+            || !panel.settleProviderSnapshotTransition(
+              "state-refused", false)
+            || plugins.transitionPending
+            || plugins.undoMode !== "provider-snapshot"
+            || JSON.stringify(plugins.undoProviderSnapshot)
+              !== retainedSnapshot
+            || plugins.feedbackTitle !== "Undo could not be completed"
+            || !plugins.feedbackCountdownRunning
+            || !panel.pluginEntries[1].installedInBar)
+          return root.fail("failed async provider Undo discarded its snapshot: pending="
+            + plugins.transitionPending + " mode=" + plugins.undoMode
+            + " same=" + (JSON.stringify(plugins.undoProviderSnapshot)
+              === retainedSnapshot)
+            + " title=" + plugins.feedbackTitle
+            + " countdown=" + plugins.feedbackCountdownRunning
+            + " shibumi=" + panel.pluginEntries[0].installedInBar
+            + " omarchy=" + panel.pluginEntries[1].installedInBar)
+        if (!plugins.undoLastChange()
+            || !plugins.transitionPending
+            || !panel.settleProviderSnapshotTransition("unchanged", true)
+            || plugins.transitionPending
+            || plugins.feedbackVisible
+            || plugins.undoMode !== ""
+            || plugins.undoProviderSnapshot !== null
+            || !panel.pluginEntries[0].installedInBar
+            || panel.pluginEntries[1].installedInBar)
+          return root.fail("confirmed async provider Undo did not clear its snapshot")
+        panel.asyncPluginTransitions = false
+        panel.asyncStateTransitions = true
+        for (const stateFailure of ["state-timeout", "revoked"]) {
+          if (!plugins.togglePluginById("hancore.shibumi.bluetooth")
+              || !plugins.transitionPending
+              || !panel.pluginStateTransitionBusy
+              || plugins.undoMode !== ""
+              || plugins.feedbackTitle.indexOf("Updating") !== 0
+              || !panel.settlePluginStateTransition(stateFailure, false)
+              || plugins.transitionPending || plugins.undoMode !== ""
+              || !panel.pluginEntries[3].installedInBar)
+            return root.fail("state-only plugin failure published success: "
+              + stateFailure)
+        }
+        if (!plugins.togglePluginById("hancore.shibumi.bluetooth")
+            || !plugins.transitionPending
+            || !panel.pluginStateTransitionBusy
+            || !panel.settlePluginStateTransition("confirmed", true)
+            || plugins.transitionPending
+            || plugins.feedbackTitle !== "Shibumi Bluetooth deactivated"
+            || plugins.undoMode !== "plugin-value"
+            || panel.pluginEntries[3].installedInBar)
+          return root.fail("confirmed state-only plugin toggle lacked settlement")
+        if (!plugins.undoLastChange() || !plugins.transitionPending
+            || !panel.pluginStateTransitionBusy
+            || !panel.settlePluginStateTransition("confirmed", true)
+            || plugins.transitionPending || plugins.feedbackVisible
+            || plugins.undoMode !== ""
+            || !panel.pluginEntries[3].installedInBar)
+          return root.fail("state-only plugin Undo lacked settlement")
+        if (!plugins.togglePluginById("hancore.shibumi.bluetooth")
+            || !plugins.transitionPending) {
+          return root.fail("controller replacement state-only setup failed")
+        }
+        // Model the detached owner identity that an already accepted request
+        // retains across controller replacement. A stale settlement must not
+        // publish success or Undo into the current page.
+        plugins.pendingPluginMutation.owner = fakeBar
+        panel.settlePluginStateTransition("confirmed", false)
+        if (plugins.transitionPending || plugins.undoMode !== ""
+            || plugins.feedbackTitle.indexOf("Updating") !== 0)
+          return root.fail("controller replacement published state-only success")
+        plugins.feedbackVisible = false
+        panel.asyncStateTransitions = false
         if (!plugins.togglePluginById("omarchy.audio")
             || !plugins.feedbackVisible
             || !plugins.feedbackCountdownRunning
@@ -1105,8 +1273,11 @@ ShellRoot {
             || plugins.entryById("acme.weather") !== null
             || plugins.feedbackTitle !== "Acme Weather removed")
           return root.fail("third-party plugin removal flow failed")
-        if (!panel.showSettingsPage("splits"))
-          return root.fail("Legacy layout route did not resolve")
+        panel.asyncPluginTransitions = true
+        if (!plugins.togglePluginById("omarchy.audio")
+            || !plugins.transitionPending
+            || !panel.showSettingsPage("splits"))
+          return root.fail("pending Plugins owner teardown setup failed")
         root.phase++
         root.ticks = 0
         return
@@ -1115,6 +1286,18 @@ ShellRoot {
       if (root.phase === 4) {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
+        if (panel && panel.pluginLayoutTransitionBusy) {
+          if (!panel.settlePluginTransition("revoked", false))
+            return root.fail("destroyed Plugins owner settlement setup failed")
+          root.ticks = 0
+          return
+        }
+        if (pluginUpdateService.catalogConsumerCount !== 0
+            || replacementUpdateService.catalogConsumerCount !== 0
+            || pluginUpdateService.catalogReleaseCount < 2
+            || pluginUpdateService.catalogWrongReleaseCount !== 0
+            || replacementUpdateService.catalogWrongReleaseCount !== 0)
+          return root.fail("leaving Plugins retained or misreleased its catalog lease")
         if (!panel || !panel.settingsPageReady
             || panel.settingsPage !== "bars")
           return root.fail("legacy layout route did not resolve to Bars")

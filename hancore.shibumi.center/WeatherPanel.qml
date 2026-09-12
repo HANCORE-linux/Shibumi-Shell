@@ -145,6 +145,10 @@ ShibumiPanel {
     }
     const location = WeatherLocationModel.locationCommit(locationField.text,
       locationSuggestions, suggestionIndex)
+    if (!location) {
+      locationError = "No matching location"
+      return false
+    }
     persistLocation(location.name, location.latitude, location.longitude)
     return true
   }
@@ -482,6 +486,7 @@ ShibumiPanel {
 
             TextField {
               id: locationField
+              maximumLength: WeatherLocationModel.maximumQueryLength()
               width: parent.width - saveLocationAction.width
                 - autoLocationAction.width - parent.spacing * 2
               height: parent.height

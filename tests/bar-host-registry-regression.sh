@@ -13,7 +13,8 @@ fail() {
   exit 1
 }
 
-for endpoint in 'function openControlCenter(): string' \
+for endpoint in 'function prepareShutdown(): string' \
+    'function openControlCenter(): string' \
     'function closeControlCenter(): string' \
     'function setWidgetAppearanceForVariant(groupId: string, variant: string,'; do
   rg -Fq "$endpoint" "$repo_root/hancore.shibumi.bar/Bar.qml" \
@@ -44,6 +45,13 @@ for provider_lifecycle_contract in \
   rg -Fq "$provider_lifecycle_contract" \
     "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "provider lifecycle contract drifted: $provider_lifecycle_contract"
+done
+for shutdown_contract in \
+    'function prepareForShutdown()' \
+    'outputWindowsEnabled = false' \
+    'if (!shutdownPrepared) applyBarConfig()'; do
+  rg -Fq "$shutdown_contract" "$repo_root/hancore.shibumi.bar/Bar.qml" \
+    || fail "bar shutdown contract drifted: $shutdown_contract"
 done
 
 for bar_host in \
@@ -85,9 +93,26 @@ done
 "$repo_root/scripts/sync-bar-host.sh" --check >/dev/null
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
-trap 'rm -rf -- "$tmpdir"' EXIT
+ipc_pid=""
+cleanup() {
+  if [[ -n $ipc_pid ]]; then
+    kill "$ipc_pid" 2>/dev/null || true
+    wait "$ipc_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$tmpdir"
+}
+trap cleanup EXIT
 mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/native"
 chmod 700 "$tmpdir/runtime"
+# Standalone and nested control runs must not inherit production XDG/bus paths.
+export HOME="$tmpdir/home" XDG_CONFIG_HOME="$tmpdir/home/.config"
+export XDG_STATE_HOME="$tmpdir/home/.local/state" XDG_DATA_HOME="$tmpdir/home/.local/share"
+export XDG_CACHE_HOME="$tmpdir/home/.cache" XDG_DATA_DIRS="$tmpdir/data"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/absent-session"
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/absent-system"
+export HYPRLAND_INSTANCE_SIGNATURE='' WAYLAND_DISPLAY='' DISPLAY=''
+export QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software
+export QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1
 
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
 cp -a "$omarchy_path/shell/Ui" "$tmpdir/"
@@ -96,10 +121,48 @@ cp "$repo_root/tests/fixtures/BarPanelStub.qml" "$tmpdir/core/BarPanel.qml"
 mkdir -p "$tmpdir/services"
 cp "$bar_root/services/HostWidgetResolver.qml" "$tmpdir/services/"
 cp -a "$bar_root/styles" "$tmpdir/"
-cp "$bar_root/Bar.qml" "$tmpdir/Bar.qml"
+# This fixture lays Bar.qml at its root, so use the canonical relative import.
+# sync-bar-host --check above verifies the sole deployment-path normalization.
+cp "$repo_root/Bar.qml" "$tmpdir/Bar.qml"
+# Calibrated controls alter only the captured fixture, never repository sources.
+python3 - "$tmpdir/Bar.qml" "${SHIBUMI_TEST_RESTORE_CONTROL:-none}" <<'PY'
+import sys
+from pathlib import Path
+path, mode = Path(sys.argv[1]), sys.argv[2]
+controls = {
+    'navigation-rollback': ('if (record.scheduled && live.restoreRevision !== record.restoreRevision) continue',
+        'if (record.scheduled && (live !== record.scheduled || live.restoreRevision !== record.restoreRevision)) continue'),
+    'output-dedup': ('if (Object.prototype.hasOwnProperty.call(outputs, screenName)) continue', ''),
+    'bar-admission': ('return root.restoreAdmitted && (!record.stateBound', 'return (!record.stateBound'),
+    'sync-settlement': ('activeRestoreCalls.push(call)', '// control: settlement not observed during callback'),
+    'rejected-existing': ('if (record.created === false) {', 'if (record.created === false) { continue'),
+    'window-reset': ('page: String(page || current.page || ""),\n        attempts: 0,',
+        'page: String(page || current.page || ""),\n        attempts: Number(current.attempts || 0),'),
+    'pending-window': ('if (record.waitingWrites && record.waitingWrites.length) continue', ''),
+    'native-window': ('if (record.waitingLayout) continue', ''),
+    'false-settlement': ('const changed = result === "confirmed" || (result === "unchanged"\n'
+        '        && completed.some(function(request) { return request.revision !== revision }))',
+        'const changed = true'),
+    'snapshot-replay': ('if (root.pendingWidgetRestores.length === 0) stop()',
+        'root.pendingWidgetRestores = records.filter(record => record.attempts < 20)\n'
+        '      if (root.pendingWidgetRestores.length === 0) stop()'),
+}
+if mode != 'none':
+    if mode not in controls:
+        raise SystemExit('unknown restore control')
+    old, new = controls[mode]
+    source = path.read_text()
+    if source.count(old) != 1:
+        raise SystemExit('restore control anchor drifted')
+    path.write_text(source.replace(old, new))
+PY
+mkdir -p "$tmpdir/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
 cp "$repo_root/tests/fixtures/ResolverTestWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/ResolverReplacementWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/CloneSelectionChecks.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/StateRestoreChecks.qml" "$tmpdir/fixtures/"
+cp "$repo_root/tests/fixtures/LayoutRestoreChecks.qml" "$tmpdir/fixtures/"
 cp "$omarchy_path/shell/services/PluginRegistry.qml" "$tmpdir/native/"
 python3 - "$repo_root" "$tmpdir" <<'PY'
 import sys
@@ -122,7 +185,6 @@ cp "$repo_root/tests/hosted-panel-loader-smoke.qml" "$tmpdir/shell.qml"
 set +e
 nested_output=$(timeout 8 env \
   HOME="$tmpdir/home" \
-  DBUS_SESSION_BUS_ADDRESS= \
   WAYLAND_DISPLAY= \
   QT_QPA_PLATFORM=offscreen \
   QT_QPA_PLATFORMTHEME= \
@@ -146,9 +208,8 @@ sed "s#testOmarchyPath#\"${omarchy_path//\\/\\\\}\"#" \
   > "$tmpdir/shell.qml"
 
 set +e
-output=$(timeout 6 env \
+output=$(timeout 15 env \
   HOME="$tmpdir/home" \
-  DBUS_SESSION_BUS_ADDRESS= \
   WAYLAND_DISPLAY= \
   QT_QPA_PLATFORM=offscreen \
   QT_QPA_PLATFORMTHEME= \
@@ -161,11 +222,77 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "smoke exited $rc"
 grep -q 'bar host registry smoke passed' <<<"$output" \
   || fail 'smoke did not reach its success marker'
+grep -q 'asynchronous output-local State restoration passed' <<<"$output" \
+  || fail 'asynchronous restore fixture did not reach its success marker'
+grep -q 'actual Bar restoration waited for separate native publication passed' <<<"$output" \
+  || fail 'native layout restore fixture did not reach its success marker'
 [[ $(<"$tmpdir/run-marker") == ok ]] \
   || fail 'bar run() did not execute through the Quattro host contract'
 if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load|rejected invalid bar style' \
     <<<"$output"; then
   fail 'runtime log contains a host composition error'
+fi
+
+# A fresh engine receives an admitted shared-runtime marker and controlled
+# scoped services. It has no live shell, network or platform mutation route.
+printf '%s\n' '{"suiteId":"hancore.shibumi","suitePayloadDigest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}' \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
+cp "$repo_root/tests/bar-catalog-consumer-smoke.qml" "$tmpdir/shell.qml"
+set +e
+catalog_output=$(timeout 8 env \
+  HOME="$tmpdir/home" \
+  WAYLAND_DISPLAY= \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  /usr/bin/quickshell -p "$tmpdir" 2>&1)
+catalog_rc=$?
+set -e
+printf '%s\n' "$catalog_output"
+[[ $catalog_rc -eq 0 ]] || fail "catalog consumer smoke exited $catalog_rc"
+grep -q 'bar catalog consumer smoke passed' <<<"$catalog_output" \
+  || fail 'catalog consumer smoke did not reach its success marker'
+if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load|rejected invalid bar style' \
+    <<<"$catalog_output"; then
+  fail 'catalog consumer runtime log contains a composition error'
+fi
+
+cp "$repo_root/tests/bar-shutdown-ipc-smoke.qml" "$tmpdir/shell.qml"
+ipc_log="$tmpdir/bar-shutdown-ipc.log"
+env HOME="$tmpdir/home" WAYLAND_DISPLAY= QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  /usr/bin/quickshell -p "$tmpdir" --no-color >"$ipc_log" 2>&1 &
+ipc_pid=$!
+ipc_response=""
+for _ in {1..80}; do
+  if ! kill -0 "$ipc_pid" 2>/dev/null; then
+    cat "$ipc_log" >&2
+    fail 'shutdown IPC smoke exited before the endpoint became ready'
+  fi
+  set +e
+  ipc_response=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+    /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+      shibumi-suite prepareShutdown 2>/dev/null)
+  ipc_rc=$?
+  set -e
+  [[ $ipc_rc -eq 0 && $ipc_response == ok ]] && break
+  sleep 0.05
+done
+[[ $ipc_response == ok ]] \
+  || fail 'shutdown IPC endpoint did not return ok'
+set +e
+wait "$ipc_pid"
+ipc_rc=$?
+set -e
+ipc_pid=""
+ipc_output=$(<"$ipc_log")
+printf '%s\n' "$ipc_output"
+[[ $ipc_rc -eq 0 ]] || fail "shutdown IPC smoke exited $ipc_rc"
+grep -q 'bar shutdown IPC smoke passed' <<<"$ipc_output" \
+  || fail 'shutdown IPC smoke did not observe the prepared bar'
+if grep -Eq 'another handler is registered for target shibumi-suite|Binding loop|TypeError|ReferenceError' \
+    <<<"$ipc_output"; then
+  fail 'shutdown IPC smoke log contains an ownership or binding error'
 fi
 
 printf 'bar host registry regression passed\n'

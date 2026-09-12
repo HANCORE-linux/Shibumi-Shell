@@ -170,6 +170,7 @@ fi
 
 mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 install -m 0644 "$repo_root/tests/update-center-model-smoke.qml" \
   "$tmpdir/shell.qml"
 install -m 0644 "$plugin/Model.js" "$tmpdir/Model.js"

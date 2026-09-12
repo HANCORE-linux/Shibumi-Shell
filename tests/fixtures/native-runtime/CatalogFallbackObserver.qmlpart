@@ -1,0 +1,47 @@
+
+  Item {
+    id: fixtureCatalogObserver
+    visible: false
+    property QtObject service: shell.serviceFor("hancore.shibumi.control-center")
+    property QtObject api: service ? service.shell : null
+    property QtObject recordedService: null
+    property QtObject recordedApi: null
+    property int hints: 0
+    property int registrySignals: 0
+    property int widgetSignals: 0
+    property var last: null
+    function capture() {
+      hints++
+      recordedService = service
+      recordedApi = api
+      last = {hints: hints, dto: JSON.parse(fixtureShellIpc.listPlugins())}
+    }
+    Connections {
+      target: fixtureCatalogObserver.api
+      function onBarConfigChanged() { fixtureCatalogObserver.capture() }
+    }
+    Connections {
+      target: fixtureCatalogObserver.service
+      function onPluginRevisionChanged() { fixtureCatalogObserver.capture() }
+    }
+    Connections {
+      target: shell.pluginRegistry
+      function onPluginsChanged() { fixtureCatalogObserver.registrySignals++ }
+    }
+    Connections {
+      target: shell.barWidgetRegistry
+      function onChanged() { fixtureCatalogObserver.widgetSignals++ }
+    }
+    IpcHandler {
+      target: "fixture-catalog-fallback"
+      function status(): string {
+        return JSON.stringify({hints: fixtureCatalogObserver.hints,
+          registrySignals: fixtureCatalogObserver.registrySignals,
+          widgetSignals: fixtureCatalogObserver.widgetSignals,
+          last: fixtureCatalogObserver.last,
+          live: JSON.parse(fixtureShellIpc.listPlugins()),
+          sameService: fixtureCatalogObserver.service === fixtureCatalogObserver.recordedService,
+          sameApi: fixtureCatalogObserver.api === fixtureCatalogObserver.recordedApi})
+      }
+    }
+  }

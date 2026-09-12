@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "AgentUsageModel.js" as AgentUsageModel
 
 // One process-wide provider owner. Current Omarchy agent collectors publish
@@ -15,6 +16,14 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.ai"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property bool runtimeProbesEnabled: true
   property var providerOverrides: []
   property string agentsSourceOverride: ""
@@ -22,9 +31,7 @@ Item {
   property string modelUsageSourceOverride: ""
 
   readonly property var bar: shell ? shell.bar : null
-  readonly property var stateService: shell
-    && typeof shell.serviceFor === "function"
-    ? shell.serviceFor("hancore.shibumi.state") : null
+  readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
 
   property bool detectionReady: false
   // Wall-clock expiry is rechecked at this bounded interval while Agents

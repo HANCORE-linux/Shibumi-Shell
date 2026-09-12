@@ -36,6 +36,11 @@ INVALID_EMPTY_REGISTRY_OUTPUTS = (
 )
 
 
+def settings(config):
+    return next(entry for entry in config["plugins"]
+                if entry["id"] == "hancore.shibumi.state")["shibumi"]
+
+
 class ContinuityManagerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="shibumi-manager-test.")
@@ -81,14 +86,6 @@ class ContinuityManagerTests(unittest.TestCase):
                 "id": "hancore.shibumi.bar",
                 "centerAnchor": "hancore.shibumi.center",
                 "style": "shibumi",
-                "shibumi": {
-                    "scale": 1.25,
-                    "picker": {
-                        "style": "hearthstone",
-                        "imageStyle": "hearthstone",
-                        "mediaStyle": "hearthstone",
-                    },
-                },
                 "layout": {
                     "left": [
                         {"id": "hancore.shibumi.control-center"},
@@ -100,7 +97,11 @@ class ContinuityManagerTests(unittest.TestCase):
             },
             "plugins": [
                 {"id": "user.service", "interval": 9},
-                {"id": "hancore.shibumi.state"},
+                {"id": "hancore.shibumi.state", "shibumiStateSchemaVersion": 1,
+                 "future": {"preserve": [0, False, "Malmö"]},
+                 "shibumi": {"version": 1, "scale": 1.25, "picker": {
+                     "style": "hearthstone", "imageStyle": "hearthstone",
+                     "mediaStyle": "hearthstone"}}},
             ],
         }
 
@@ -119,9 +120,10 @@ class ContinuityManagerTests(unittest.TestCase):
         )
         self.assertEqual(inactive["bar"].get("id", "omarchy.bar"), "omarchy.bar")
         self.assertEqual(inactive["bar"]["centerAnchor"], "omarchy.clock")
-        self.assertEqual(inactive["bar"]["shibumi"]["scale"], 1.25)
+        self.assertEqual(settings(inactive)["scale"], 1.25)
+        self.assertEqual(inactive["plugins"], self.active["plugins"])
         self.assertEqual(
-            inactive["bar"]["shibumi"]["picker"],
+            settings(inactive)["picker"],
             {
                 "style": "hearthstone",
                 "imageStyle": "hearthstone",
@@ -156,9 +158,10 @@ class ContinuityManagerTests(unittest.TestCase):
             inactive, self.state, shibumi_layout
         )
         self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
-        self.assertEqual(active["bar"]["shibumi"]["scale"], 1.25)
+        self.assertEqual(settings(active)["scale"], 1.25)
+        self.assertEqual(active["plugins"], self.active["plugins"])
         self.assertEqual(
-            active["bar"]["shibumi"]["picker"]["imageStyle"], "hearthstone"
+            settings(active)["picker"]["imageStyle"], "hearthstone"
         )
         user_widget = next(
             entry
@@ -187,14 +190,89 @@ class ContinuityManagerTests(unittest.TestCase):
             },
         )
 
+    def test_canonical_versions_match_native_json_number_semantics(self) -> None:
+        for key in ("shibumiStateSchemaVersion", "version"):
+            for value in (1, 1.0):
+                config = copy.deepcopy(self.active)
+                entry = config["plugins"][1]
+                (entry if key == "shibumiStateSchemaVersion" else entry["shibumi"])[key] = value
+                self.assertIs(self.module["state_settings"](config), entry["shibumi"])
+            for value in (True, "1", None, 2):
+                with self.subTest(key=key, value=repr(value)):
+                    config = copy.deepcopy(self.active)
+                    entry = config["plugins"][1]
+                    (entry if key == "shibumiStateSchemaVersion" else entry["shibumi"])[key] = value
+                    with self.assertRaises(self.module["ManagerError"]):
+                        self.module["state_settings"](config)
+        for mutation in ("duplicate", "layout", "missing"):
+            config = copy.deepcopy(self.active)
+            if mutation == "duplicate":
+                config["plugins"].append(copy.deepcopy(config["plugins"][1]))
+            elif mutation == "layout":
+                config["bar"]["layout"]["left"].append({"id": "hancore.shibumi.state"})
+            else:
+                config["plugins"][1].pop("shibumi")
+            with self.subTest(mutation=mutation), self.assertRaises(self.module["ManagerError"]):
+                self.module["state_settings"](config)
+
+    def test_public_paths_refuse_raw_state_document_before_switch_or_status(self) -> None:
+        state_dir = self.root / "state"
+        state_dir.mkdir()
+        runtime_paths = {"state": state_dir, "config": self.root / "shell.json",
+                         "defaults": self.root / "defaults.json", "lock": self.root / "switch.lock"}
+        (state_dir / "install.json").write_text(json.dumps(self.state))
+        runtime_paths["defaults"].write_text(json.dumps(self.defaults))
+        globals_map = self.module["perform"].__globals__
+        stop, reload_shell, write = Mock(), Mock(), Mock()
+        with patch.dict(globals_map, {"paths": lambda: runtime_paths, "stop_shell": stop,
+                                    "reload_shell": reload_shell, "atomic_write": write}), \
+                patch.object(subprocess, "Popen", side_effect=AssertionError("unexpected switch worker")) as launch:
+            for case in ("root-version", "root-bool", "root-string", "root-missing", "bar", "layout",
+                         "missing-region", "bad-region", "plugins-limit", "nan", "infinity",
+                         "negative-infinity", "parser-limit", "overflow-root", "overflow-entry", "overflow-settings",
+                         "integer-overflow-root", "integer-overflow-entry", "integer-overflow-settings"):
+                config = copy.deepcopy(self.active)
+                if case.startswith("root-"):
+                    config["version"] = {"root-version": 2, "root-bool": True, "root-string": "1", "root-missing": None}[case]
+                    if case == "root-missing": config.pop("version")
+                elif case == "bar": config.pop("bar")
+                elif case == "layout": config["bar"]["layout"] = []
+                elif case == "missing-region": config["bar"]["layout"].pop("center")
+                elif case == "bad-region": config["bar"]["layout"]["center"] = {}
+                elif case == "plugins-limit":
+                    config["plugins"] += [{"id": f"foreign.{i}"} for i in range(513 - len(config["plugins"]))]
+                elif case in ("nan", "infinity", "negative-infinity"):
+                    config["foreign"] = float({"nan": "nan", "infinity": "inf", "negative-infinity": "-inf"}[case])
+                elif "overflow-" in case:
+                    target = config if case.endswith("root") else config["plugins"][1] if case.endswith("entry") else settings(config)
+                    target["foreign"] = "__fixture_overflow__"
+                else: config["foreign"] = "x" * 1048576
+                token = "9" * 400 if case.startswith("integer-") else "1e309"
+                raw = json.dumps(config).replace('"__fixture_overflow__"', token).encode()
+                runtime_paths["config"].write_bytes(raw)
+                for action in ("perform", "show_status", "request"):
+                    with self.subTest(case=case, action=action), self.assertRaises(self.module["ManagerError"]):
+                        self.module[action](*(["v2"] if action != "show_status" else []))
+                    self.assertEqual(runtime_paths["config"].read_bytes(), raw)
+                    self.assertEqual(sorted(p.name for p in state_dir.iterdir()), ["install.json"])
+            stop.assert_not_called()
+            reload_shell.assert_not_called()
+            write.assert_not_called()
+            launch.assert_not_called()
+            config = copy.deepcopy(self.active)
+            config["version"] = 1.0
+            config["plugins"] += [{"id": f"foreign.{i}"} for i in range(512 - len(config["plugins"]))]
+            runtime_paths["config"].write_text(json.dumps(config))
+            self.assertEqual(self.module["current_config"](runtime_paths), config)
+
     def test_variant_round_trip_changes_only_shell_style(self) -> None:
         original = copy.deepcopy(self.active)
-        original["bar"]["shibumi"]["presentation"] = {
+        settings(original)["presentation"] = {
             "shellStyle": "shibumi",
             "accent": "color06",
             "radius": "small",
         }
-        original["bar"]["shibumi"]["groups"] = {
+        settings(original)["groups"] = {
             "G4": {
                 "displayMode": "text",
                 "color": "color05",
@@ -216,15 +294,15 @@ class ContinuityManagerTests(unittest.TestCase):
         )
         v1 = self.module["apply_shibumi_variant"](restored, "v1")
 
-        expected_shibumi = copy.deepcopy(original["bar"]["shibumi"])
+        expected_shibumi = copy.deepcopy(settings(original))
         expected_shibumi["presentation"]["v2ShellStyle"] = "full"
         self.assertEqual(
-            v2["bar"]["shibumi"]["presentation"]["shellStyle"], "full"
+            settings(v2)["presentation"]["shellStyle"], "full"
         )
         self.assertEqual(
-            v1["bar"]["shibumi"]["presentation"]["shellStyle"], "shibumi"
+            settings(v1)["presentation"]["shellStyle"], "shibumi"
         )
-        self.assertEqual(v1["bar"]["shibumi"], expected_shibumi)
+        self.assertEqual(settings(v1), expected_shibumi)
         self.assertEqual(
             v1["bar"]["layout"], original["bar"]["layout"]
         )
@@ -233,7 +311,7 @@ class ContinuityManagerTests(unittest.TestCase):
         for shell_style in ("full", "fit", "dock", "notch"):
             with self.subTest(shell_style=shell_style):
                 configured = copy.deepcopy(self.active)
-                configured["bar"]["shibumi"]["presentation"] = {
+                settings(configured)["presentation"] = {
                     "shellStyle": shell_style,
                     "v2ShellStyle": shell_style,
                     "accent": "color06",
@@ -255,8 +333,8 @@ class ContinuityManagerTests(unittest.TestCase):
                     restored, "v2"
                 )
                 self.assertEqual(
-                    returned["bar"]["shibumi"]["presentation"],
-                    configured["bar"]["shibumi"]["presentation"],
+                    settings(returned)["presentation"],
+                    settings(configured)["presentation"],
                 )
 
     def test_hybrid_service_does_not_need_direct_bar_placement(self) -> None:
@@ -976,6 +1054,7 @@ class ContinuityManagerTests(unittest.TestCase):
         state_dir.mkdir(parents=True)
         runtime.mkdir(parents=True)
         stock = copy.deepcopy(self.defaults)
+        stock["plugins"] = copy.deepcopy(self.active["plugins"])
         stock["bar"].pop("centerAnchor", None)
         config.write_text(json.dumps(stock) + "\n", encoding="utf-8")
         defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
@@ -1115,7 +1194,9 @@ class ContinuityManagerTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        environment = {"SHIBUMI_STATE_DIR": str(state_dir)}
+        config = self.root / "request-shell.json"
+        config.write_text(json.dumps(self.active))
+        environment = {"SHIBUMI_STATE_DIR": str(state_dir), "SHIBUMI_CONFIG_FILE": str(config)}
         globals_map = self.module["request"].__globals__
         with patch.dict("os.environ", environment, clear=False):
             with patch.object(globals_map["subprocess"], "Popen") as popen:
@@ -1165,26 +1246,32 @@ class ContinuityManagerTests(unittest.TestCase):
             ]),
             stderr="",
         )
+        not_prepared = Mock(
+            returncode=1, stdout="", stderr="target unavailable"
+        )
         killed = Mock(returncode=0, stdout="", stderr="")
         drained = Mock(returncode=0, stdout="[]", stderr="")
         globals_map = self.module["stop_shell"].__globals__
         with patch.object(
             globals_map["subprocess"],
             "run",
-            side_effect=[registered, killed, drained],
+            side_effect=[registered, not_prepared, killed, drained],
         ) as run:
             self.module["stop_shell"](runtime_paths, quiet_period=0)
-        kill = [
-            "quickshell",
-            "kill",
-            "-p",
-            str(omarchy_root / "shell"),
-            "--any-display",
-        ]
+        kill = ["quickshell", "kill", "--pid", "41001"]
         registry = ["quickshell", "list", "--all", "--json"]
+        prepare = [
+            "quickshell",
+            "ipc",
+            "--pid",
+            "41001",
+            "call",
+            "shibumi-suite",
+            "prepareShutdown",
+        ]
         self.assertEqual(
             [call.args[0] for call in run.call_args_list],
-            [registry, kill, registry],
+            [registry, prepare, kill, registry],
         )
 
     def test_empty_quickshell_registry_sentinel_is_an_empty_array(self) -> None:

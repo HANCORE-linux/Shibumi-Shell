@@ -4,6 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "ShibumiConfig.js" as ShibumiConfig
+import "StateStorageModel.js" as StorageModel
+import "runtime" as SuiteRuntime
 
 Item {
   id: root
@@ -11,15 +13,38 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
-  readonly property string pluginSourceDir: manifest
-    ? String(manifest.__sourceDir || "") : ""
+  SuiteRuntime.Provider {
+    id: runtimeProvider
+    pluginId: "hancore.shibumi.state"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
+  readonly property string suiteMarkerPath: {
+    const url = String(Qt.resolvedUrl(".shibumi-managed.json"))
+    if (url.indexOf("file:///") !== 0) return ""
+    // FileView takes a filesystem path, not a percent-encoded QML URL.
+    try { return decodeURIComponent(url.substring(7)) } catch (error) { return "" }
+  }
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
 
   readonly property int contractVersion: 1
-  readonly property bool ready: shell !== null
-  readonly property var sourceConfig: shell && shell.shellConfig
-    && shell.shellConfig.bar ? shell.shellConfig.bar.shibumi : null
+  readonly property bool ready: storage.ready
+  readonly property var sourceConfig: storage.value
+  readonly property bool writePending: storage.pending
+  readonly property string writeStatus: storage.writeStatus
+  readonly property int writeSerial: storage.requestSerial
+  signal persistenceSettled(int throughSerial, string result)
+  StateStorage {
+    id: storage
+    host: root.shell
+    authorityToken: runtimeProvider.lease
+    enabled: runtimeProvider.registered && root.omarchyPath !== ""
+    omarchyPath: root.omarchyPath
+    onSettled: function(throughSerial, result) { root.persistenceSettled(throughSerial, result) }
+  }
 
   property var config: ShibumiConfig.defaultConfig()
   property int revision: 0
@@ -37,7 +62,7 @@ Item {
   readonly property color selectedColor: palette.selectedColor
 
   function same(left, right) {
-    return JSON.stringify(left) === JSON.stringify(right)
+    return StorageModel.same(left, right)
   }
 
   function captureSuiteMarker(raw) {
@@ -63,21 +88,17 @@ Item {
   }
 
   function commit(mutator) {
-    if (!shell || typeof shell.mutateShellConfig !== "function"
-        || typeof mutator !== "function") return false
+    if (!ready || typeof mutator !== "function") return false
 
-    const current = ShibumiConfig.normalize(sourceConfig)
+    const current = storage.draft()
     const next = JSON.parse(JSON.stringify(current))
-    if (mutator(next) === false) return false
+    if (mutator(next) === false || !StorageModel.finiteNumbers(next)) return false
     const normalized = ShibumiConfig.normalize(next)
     if (same(current, normalized)) return false
 
-    shell.mutateShellConfig(function(shellConfig) {
-      if (!ShibumiConfig.isPlainObject(shellConfig.bar)) shellConfig.bar = {}
-      shellConfig.bar.shibumi = normalized
-    })
-    applySourceConfig(normalized)
-    return true
+    // A queued request is not a completed save. Publication and settled status
+    // come exclusively from file readback, never from the Bar or API return.
+    return storage.queue(normalized)
   }
 
   function groupSettings(groupId) {
@@ -246,17 +267,7 @@ Item {
           || typeof states.v1 !== "boolean"
           || typeof states.v2 !== "boolean") return false
     }
-    return commit(function(next) {
-      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
-      for (let index = 0; index < groups.length; index++) {
-        const group = groups[index]
-        const settings = ShibumiConfig.isPlainObject(next.widgets[group])
-          ? next.widgets[group] : {}
-        settings.enabledV1 = stateValues[group].v1
-        settings.enabledV2 = stateValues[group].v2
-        next.widgets[group] = settings
-      }
-    })
+    return setLayoutFamilyTransition({familyStates: stateValues})
   }
 
   function setGroupsEnabledForAllVariants(groupValues, enabled) {
@@ -621,7 +632,7 @@ Item {
   function setOrder(value) {
     const normalized = ShibumiConfig.normalizedOrder(value)
     const splits = normalized
-      ? ShibumiConfig.normalizedSplits(config.splits, normalized) : null
+      ? ShibumiConfig.normalizedSplits(storage.draft().splits, normalized) : null
     if (!normalized || !splits) return false
     return commit(function(next) {
       next.order = normalized
@@ -631,42 +642,171 @@ Item {
   }
 
   function setSplits(value) {
-    const order = ShibumiConfig.normalizedOrder(config.order)
+    const order = ShibumiConfig.normalizedOrder(storage.draft().order)
     const normalized = order
       ? ShibumiConfig.normalizedSplits(value, order) : null
     if (!normalized) return false
     return commit(function(next) { next.splits = normalized })
   }
 
-  function setLayout(order, splits) {
-    const normalizedOrder = ShibumiConfig.normalizedOrder(order)
-    const normalizedSplits = normalizedOrder
-      ? ShibumiConfig.normalizedSplits(splits, normalizedOrder) : null
-    if (!normalizedOrder || !normalizedSplits) return false
+  // A transition writes all affected State fields in one existing own-entry
+  // request. The caller still waits for persistenceSettled before native work.
+  function exactKeys(value, keys) {
+    return ShibumiConfig.isPlainObject(value)
+      && Object.keys(value).length === keys.length
+      && keys.every(key => Object.prototype.hasOwnProperty.call(value, key))
+  }
+
+  function transitionLayout(value, variant) {
+    const regions = ["left", "center", "right"]
+    if (!exactKeys(value, regions) || !regions.every(region =>
+        Array.isArray(value[region]) && value[region].every(id => typeof id === "string"))) return null
+    return variant === "v1" ? ShibumiConfig.normalizedOrder(value)
+      : ShibumiConfig.normalizedV2Layout(value)
+  }
+
+  function normalizedLayoutFamilyPatch(patch) {
+    if (!ShibumiConfig.isPlainObject(patch)) return null
+    const keys = Object.keys(patch)
+    const allowed = ["v1Layout", "v2Layout", "v2Boundaries", "separators", "familyStates"]
+    if (!keys.length || keys.some(key => allowed.indexOf(key) < 0)) return null
+    const result = {}
+    for (const key of keys) {
+      const value = patch[key]
+      if (key === "v1Layout") {
+        if (!exactKeys(value, ["order", "splits"])) return null
+        const order = transitionLayout(value.order, "v1")
+        if (!order || !exactKeys(value.splits, ["left", "right", "boundaries"])) return null
+        const splits = ShibumiConfig.normalizedSplits(value.splits, order)
+        if (!splits) return null
+        result[key] = {order: order, splits: splits}
+      } else if (key === "v2Layout") {
+        result[key] = transitionLayout(value, "v2")
+        if (!result[key]) return null
+      } else if (key === "v2Boundaries") {
+        result[key] = ShibumiConfig.normalizedV2Boundaries(value)
+        if (!result[key]) return null
+      } else {
+        if (!ShibumiConfig.isPlainObject(value)) return null
+        const groups = Object.keys(value)
+        if (!groups.length || groups.length > 512) return null
+        result[key] = {}
+        for (const group of groups) {
+          if (!ShibumiConfig.isGroupId(group)) return null
+          const item = value[group]
+          // null restores absence rather than inventing an explicit false.
+          if (key === "separators") {
+            if (item !== null && typeof item !== "boolean") return null
+            result[key][group] = item
+          } else {
+            if (!exactKeys(item, ["v1", "v2"])
+                || [item.v1, item.v2].some(flag => flag !== null && typeof flag !== "boolean")) return null
+            result[key][group] = {v1: item.v1, v2: item.v2}
+          }
+        }
+      }
+    }
+    return result
+  }
+
+  function layoutFamilyProjection(source, patch) {
+    const result = {}
+    for (const key of Object.keys(patch)) {
+      if (key === "v1Layout") result[key] = {order: source.order, splits: source.splits}
+      else if (key === "v2Layout" || key === "v2Boundaries") result[key] = source[key]
+      else {
+        result[key] = {}
+        for (const group of Object.keys(patch[key])) {
+          const settings = source.widgets && source.widgets[group] || {}
+          const field = name => Object.prototype.hasOwnProperty.call(settings, name) ? settings[name] : null
+          result[key][group] = key === "separators" ? field("separator")
+            : {v1: field("enabledV1"), v2: field("enabledV2")}
+        }
+      }
+    }
+    return JSON.parse(JSON.stringify(result))
+  }
+
+  function layoutFamilySnapshot(patch) {
+    const normalized = normalizedLayoutFamilyPatch(patch)
+    if (!ready || !normalized) return null
+    const snapshot = layoutFamilyProjection(config, normalized)
+    return normalizedLayoutFamilyPatch(snapshot)
+  }
+
+  function applyLayoutFamilyPatch(next, patch) {
+    if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
+    for (const key of Object.keys(patch)) {
+      const value = patch[key]
+      if (key === "v1Layout") {
+        next.order = value.order
+        next.splits = value.splits
+        next.v1SlotRoles = ShibumiConfig.slotRolesForOrder(value.order)
+      } else if (key === "v2Layout" || key === "v2Boundaries") next[key] = value
+      else {
+        for (const group of Object.keys(value)) {
+          const item = value[group]
+          const settings = ShibumiConfig.isPlainObject(next.widgets[group]) ? next.widgets[group] : {}
+          const assign = function(name, flag) {
+            if (flag === null) delete settings[name]
+            else settings[name] = flag
+          }
+          if (key === "separators") assign("separator", item)
+          else { assign("enabledV1", item.v1); assign("enabledV2", item.v2) }
+          // Removing an absent flag does not need to create an empty group.
+          if (Object.keys(settings).length || Object.prototype.hasOwnProperty.call(next.widgets, group))
+            next.widgets[group] = settings
+        }
+      }
+    }
+    // Existing bounded widget normalization may refuse a saturated settings
+    // object. Do not enqueue only the surviving portion of an atomic patch.
+    return same(layoutFamilyProjection(ShibumiConfig.normalize(next), patch), patch)
+  }
+
+  function setLayoutFamilyTransition(patch) {
+    const normalized = normalizedLayoutFamilyPatch(patch)
+    return normalized ? commit(next => applyLayoutFamilyPatch(next, normalized)) : false
+  }
+
+  function sameLayoutFamilyScope(left, right) {
+    if (!exactKeys(left, Object.keys(right))) return false
+    for (const key of ["separators", "familyStates"]) {
+      if (Object.prototype.hasOwnProperty.call(left, key)
+          && !exactKeys(left[key], Object.keys(right[key]))) return false
+    }
+    return true
+  }
+
+  function compensateLayoutFamilyTransition(expectedSerial, expectedPatch, rollbackPatch) {
+    if (!ready || writePending || !Number.isInteger(expectedSerial)
+        || expectedSerial !== writeSerial) return false
+    const expected = normalizedLayoutFamilyPatch(expectedPatch)
+    const rollback = normalizedLayoutFamilyPatch(rollbackPatch)
+    // Both patches cover exactly the same fields/groups. Serial and projected
+    // file truth protect this caller's local intent; this is not native CAS.
+    if (!expected || !rollback || !sameLayoutFamilyScope(expected, rollback)
+        || !same(layoutFamilyProjection(config, expected), expected)) return false
     return commit(function(next) {
-      next.order = normalizedOrder
-      next.v1SlotRoles = ShibumiConfig.slotRolesForOrder(normalizedOrder)
-      next.splits = normalizedSplits
+      if (writePending || writeSerial !== expectedSerial
+          || !same(layoutFamilyProjection(next, expected), expected)) return false
+      return applyLayoutFamilyPatch(next, rollback)
     })
+  }
+
+  function setLayout(order, splits) {
+    return setLayoutFamilyTransition({v1Layout: {order: order, splits: splits}})
   }
 
   function setV2Layout(value) {
-    const normalized = ShibumiConfig.normalizedV2Layout(value)
-    if (!normalized) return false
-    return commit(function(next) { next.v2Layout = normalized })
+    return setLayoutFamilyTransition({v2Layout: value})
   }
 
   function resetV2Layout() {
-    return commit(function(next) {
-      next.v2Layout = ShibumiConfig.defaultV2Layout()
-      next.v2Boundaries = ShibumiConfig.defaultV2Boundaries()
-      if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
-      for (let index = 0; index < ShibumiConfig.GroupIds.length; index++) {
-        const group = ShibumiConfig.GroupIds[index]
-        if (!ShibumiConfig.isPlainObject(next.widgets[group])) continue
-        delete next.widgets[group].separator
-      }
-    })
+    const separators = {}
+    for (const group of ShibumiConfig.GroupIds) separators[group] = null
+    return setLayoutFamilyTransition({v2Layout: ShibumiConfig.defaultV2Layout(),
+      v2Boundaries: ShibumiConfig.defaultV2Boundaries(), separators: separators})
   }
 
   function resetLayout() {
@@ -682,6 +822,9 @@ Item {
     function verifyPayload(expectedDigest: string): string {
       const expected = String(expectedDigest || "")
       return root.ready
+          && runtimeProvider.registered
+          && SuiteRuntime.Runtime.ready
+          && SuiteRuntime.Runtime.payloadDigest === root.suitePayloadDigest
           && root.suitePayloadLoaded
           && expected.length === 64
           && expected === root.suitePayloadDigest
@@ -695,8 +838,7 @@ Item {
   }
 
   FileView {
-    path: root.pluginSourceDir !== ""
-      ? root.pluginSourceDir + "/.shibumi-managed.json" : ""
+    path: root.suiteMarkerPath
     watchChanges: false
     printErrors: false
     onLoaded: root.captureSuiteMarker(text())

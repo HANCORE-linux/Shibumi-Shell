@@ -3,15 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.cpu"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
-
-  readonly property var hostShell: bar && bar.shell ? bar.shell : null
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var hostShell: suiteShell
   readonly property var telemetryService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.telemetry") : null
@@ -51,6 +52,7 @@ Ui.Panel {
   readonly property var history: telemetry ? telemetry.cpuHistory : []
   property url panelSource: Qt.resolvedUrl("CpuPanel.qml")
   property var acquiredTelemetry: null
+  readonly property var panelItem: panelLoader.item
 
   implicitWidth: bar && bar.vertical ? bar.barSize : cpuSurface.implicitWidth
   implicitHeight: bar && bar.vertical ? cpuSurface.implicitHeight : bar ? bar.barSize : 28
@@ -69,10 +71,10 @@ Ui.Panel {
     }
     panelLoader.setSource(panelSource, {
       anchorItem: cpuSurface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      systemTelemetry: root.telemetry,
-      gpuTelemetry: root.gpuTelemetry
+      systemTelemetry: Qt.binding(function() { return root.telemetry }),
+      gpuTelemetry: Qt.binding(function() { return root.gpuTelemetry })
     })
   }
 

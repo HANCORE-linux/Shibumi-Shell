@@ -6,6 +6,7 @@ Scope {
   id: root
 
   property int consumers: 0
+  property bool probeEnabled: true
   property string helperPath: String(Qt.resolvedUrl(
     "scripts/shibumi-gpu-probe")).replace("file://", "")
   property var devices: []
@@ -35,7 +36,7 @@ Scope {
   }
 
   function refresh() {
-    if (consumers <= 0 || probe.running) return
+    if (!probeEnabled || consumers <= 0 || probe.running) return
     probe.running = true
   }
 
@@ -177,6 +178,11 @@ Scope {
     probeFailed = false
   }
 
+  onProbeEnabledChanged: {
+    if (!probeEnabled) probe.running = false
+    else refresh()
+  }
+
   Process {
     id: probe
     command: ["timeout", "--signal=TERM",
@@ -189,7 +195,7 @@ Scope {
 
   Timer {
     interval: root.intervalMs
-    running: root.consumers > 0
+    running: root.probeEnabled && root.consumers > 0
     repeat: true
     onTriggered: root.refresh()
   }

@@ -7,6 +7,8 @@ ShellRoot {
 
   property int phase: 0
   property int waits: 0
+  property int rebindPhase: 0
+  property var openPanelReference: null
   property real activeWidth: 0
   property string mediaShellStyle: "shibumi"
   property var mediaSettings: ({ spectrum: false, mediaStyle: "default" })
@@ -14,6 +16,7 @@ ShellRoot {
   function fail(message) {
     console.error("media-plugin-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
@@ -58,8 +61,7 @@ ShellRoot {
     id: mediaState
     property var activePlayer: playerA
     property var sourcePlayers: [playerA, playerB]
-    readonly property bool hasMedia: activePlayer !== null
-      && (activePlayer.trackTitle !== "" || activePlayer.trackArtist !== "")
+    // Deliberately no hasMedia property: the native 4.0.3 proxy omits it.
     property string lastAction: ""
     property string lastTarget: ""
     property string selectedKey: ""
@@ -113,15 +115,34 @@ ShellRoot {
   }
 
   QtObject {
+    id: replacementSpectrum
+    property var clients: []
+    property var levels: fakeSpectrum.levels
+    property var themeColors: []
+    property string state: "running"
+    property bool workerRunning: false
+    readonly property int clientCount: clients.length
+    function beginSpectrum(owner) {
+      if (!owner || clients.indexOf(owner) >= 0) return false
+      clients = clients.concat([owner]); return true
+    }
+    function endSpectrum(owner) {
+      if (clients.indexOf(owner) < 0) return false
+      clients = clients.filter(function(value) { return value !== owner }); return true
+    }
+  }
+
+  QtObject {
     id: fakeShell
     property bool serviceAvailable: true
+    property var spectrumBackend: fakeSpectrum
     function firstPartyServiceFor(id) {
       return serviceAvailable && String(id || "") === "omarchy.media"
         ? mediaState : null
     }
     function serviceFor(id) {
       return String(id || "") === "hancore.shibumi.media"
-        ? fakeSpectrum : null
+        ? spectrumBackend : null
     }
   }
 
@@ -178,7 +199,6 @@ ShellRoot {
       Media.BarWidget {
         bar: fakeBar
         settings: root.mediaSettings
-        panelSource: Qt.resolvedUrl("fixtures/MediaTestPanel.qml")
       }
     }
   }
@@ -258,9 +278,52 @@ ShellRoot {
         if (media.fullMode || !media.defaultMode || !media.v1FullVisible
             || media.museVisible || fakeSpectrum.clientCount !== 0)
           return root.fail("shared default presentation")
+        fakeShell.spectrumBackend = null
         media.interactionTarget.triggerPress(Qt.RightButton)
       } else if (root.phase === 4) {
-        if (!media.opened || !media.panelLoaded || !media.panelItem) return
+        if (!media.opened || !media.panelLoaded || !media.panelItem) {
+          if (++root.waits > 45) return root.fail("real media panel did not load")
+          return
+        }
+        const panel = media.panelItem
+        if (root.rebindPhase > 0 && panel !== root.openPanelReference)
+          return root.fail("service refresh recreated the open media panel")
+        if (root.rebindPhase === 0) {
+          if (panel.spectrumService !== null)
+            return root.fail("panel did not open without a spectrum provider")
+          root.openPanelReference = panel
+          root.mediaSettings = ({ spectrum: true, mediaStyle: "default" })
+        } else if (root.rebindPhase === 1) {
+          if (!panel.spectrumEnabled || fakeSpectrum.clientCount !== 0)
+            return root.fail("open panel did not observe spectrum preference")
+          fakeShell.spectrumBackend = fakeSpectrum
+        } else if (root.rebindPhase === 2) {
+          if (panel.spectrumService !== fakeSpectrum || fakeSpectrum.clientCount !== 1)
+            return root.fail("open panel did not attach late spectrum provider")
+          root.mediaSettings = ({ spectrum: false, mediaStyle: "default" })
+        } else if (root.rebindPhase === 3) {
+          if (panel.spectrumEnabled || fakeSpectrum.clientCount !== 0)
+            return root.fail("open panel retained disabled spectrum lease")
+          fakeShell.spectrumBackend = replacementSpectrum
+          root.mediaSettings = ({ spectrum: true, mediaStyle: "default" })
+        } else if (root.rebindPhase === 4) {
+          if (panel.spectrumService !== replacementSpectrum
+              || fakeSpectrum.clientCount !== 0 || replacementSpectrum.clientCount !== 1)
+            return root.fail("open panel did not replace its spectrum provider")
+          fakeShell.serviceAvailable = false
+        } else if (root.rebindPhase === 5) {
+          if (panel.mediaService !== null || replacementSpectrum.clientCount !== 0)
+            return root.fail("open panel retained revoked media authority")
+          fakeShell.serviceAvailable = true
+          fakeShell.spectrumBackend = null
+        } else if (root.rebindPhase === 6) {
+          if (panel.mediaService !== mediaState || panel.spectrumService !== null
+              || replacementSpectrum.clientCount !== 0)
+            return root.fail("open panel did not recover current media authority")
+          root.mediaSettings = ({ spectrum: false, mediaStyle: "default" })
+          fakeShell.spectrumBackend = fakeSpectrum
+        }
+        if (root.rebindPhase++ < 7) return
         if (media.panelItem.renderedSourceCount !== 2
             || media.panelItem.spectrumWorkerRunning
             || media.panelItem.formatTime(61) !== "1:01"
@@ -285,7 +348,7 @@ ShellRoot {
         mediaLoader.active = false
       } else {
         if (fakeBar.clickTargets.length !== 0 || fakeBar.activePopout !== null
-            || fakeSpectrum.clientCount !== 0)
+            || fakeSpectrum.clientCount !== 0 || replacementSpectrum.clientCount !== 0)
           return root.fail("media teardown")
         stop()
         console.log("media plugin smoke passed")

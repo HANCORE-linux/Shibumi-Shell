@@ -18,6 +18,7 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from scripts.shibumi_suite.model import ContractError, Suite
+from scripts.shared_runtime_contract import approved_import_spans, invalid_imports
 
 
 CODE_SUFFIXES = {"", ".bash", ".js", ".json", ".mjs", ".py", ".qml", ".sh"}
@@ -603,7 +604,16 @@ def check_tree(root: Path, manifest_path: Path) -> list[str]:
         helper_allowed = Counter({rule["value"]: rule["count"] for rule in rules_for(manifest, relative, "helper")})
         compare_exact(findings, relative, "helper-backed state polling", helper_observed, helper_allowed, report_missing=complete_suite or relative.split("/", 1)[0] in present_plugins)
 
+        runtime_imports = approved_import_spans(root, path, text)
+        invalid_spans = set()
+        if path.suffix.lower() in {".qml", ".js", ".mjs"}:
+            for span, imported in invalid_imports(resolved_plugin, path, text):
+                invalid_spans.add(span)
+                add(findings, relative, "package escape",
+                    f"noncanonical or outside-plugin import: {imported!r}")
         for match in RELATIVE_LITERAL.finditer(text):
+            if match.span() in runtime_imports or match.span() in invalid_spans:
+                continue
             value = posixpath.normpath(match.group(1))
             if ".." not in value.split("/"):
                 continue

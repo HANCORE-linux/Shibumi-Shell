@@ -3,19 +3,21 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.power-profile"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url panelSource: Qt.resolvedUrl("PowerProfilePanel.qml")
   property var powerServiceOverride: null
 
-  readonly property var powerService: powerServiceOverride
-    || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
-      ? bar.shell.serviceFor("hancore.shibumi.power-state") : null)
+  readonly property var powerService: powerServiceOverride !== null ? powerServiceOverride
+    : suiteShell.serviceFor("hancore.shibumi.power-state")
+  readonly property var leaseService: powerService && powerService.ready === true ? powerService : null
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -49,10 +51,9 @@ Ui.Panel {
   }
 
   function syncProfileLease() {
-    if (powerService === profileOwner) return
+    if (leaseService === profileOwner) return
     if (profileOwner) profileOwner.releaseProfiles()
-    profileOwner = powerService
-    if (profileOwner) profileOwner.acquireProfiles()
+    profileOwner = leaseService && leaseService.acquireProfiles() !== false ? leaseService : null
   }
 
   function syncPanelLoader() {
@@ -62,14 +63,14 @@ Ui.Panel {
     }
     panelLoader.setSource(panelSource, {
       anchorItem: surface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      powerService: root.powerService
+      powerService: Qt.binding(function() { return root.powerService })
     })
   }
 
   function activate(button) {
-    if (!powerService) return false
+    if (!powerService || !profileAvailable) return false
     if (button === Qt.RightButton) return powerService.cycleProfile()
     toggle()
     return true
@@ -77,7 +78,11 @@ Ui.Panel {
 
   onOpenedChanged: syncPanelLoader()
   onProfileAvailableChanged: if (!profileAvailable && opened) close()
-  onPowerServiceChanged: syncProfileLease()
+  onLeaseServiceChanged: syncProfileLease()
+  onPowerServiceChanged: {
+    if (!powerService && opened) close()
+    if (opened && !panelLoader.item) syncPanelLoader()
+  }
   Component.onCompleted: syncProfileLease()
   Component.onDestruction: {
     if (profileOwner) profileOwner.releaseProfiles()

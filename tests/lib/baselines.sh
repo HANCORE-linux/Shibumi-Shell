@@ -712,3 +712,10 @@ shibumi_load_omarchy_baseline() {
   export SHIBUMI_OMARCHY_BASELINE_PROFILE SHIBUMI_OMARCHY_BASELINE_ID
   export SHIBUMI_OMARCHY_SOURCE_REVISION
 }
+
+shibumi_stage_suite_runtime() {
+  local repo_root=$1 fixture_root=$2
+  local state_root="$fixture_root/hancore.shibumi.state"
+  mkdir -p "$state_root"
+  cp -a -- "$repo_root/hancore.shibumi.state/runtime" "$state_root/"
+}

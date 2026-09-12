@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // One process-wide adapter over Quattro-owned status backends. Bar views never
 // instantiate their own pollers, so multiple monitors consume the same state.
@@ -11,6 +12,13 @@ Item {
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.status"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property var actionRunner: null
   property bool runtimeProbesEnabled: true
 

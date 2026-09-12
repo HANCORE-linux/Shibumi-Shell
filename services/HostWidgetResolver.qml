@@ -2,10 +2,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// Own the Component handles used by the replacement bar. Quattro's widget
-// registry can retain handles owned by a previously active bar after a hot
-// switch; resolving the same official manifest entry points here keeps their
-// lifetime tied to Shibumi instead.
+// Scoped hosts publish accepted Component handles. Render exact configured
+// IDs, with no original fallback or foreign manifest reconstruction. Legacy
+// full registries retain their previously tested component-ownership route.
 QtObject {
   id: root
 
@@ -13,8 +12,37 @@ QtObject {
   property var components: ({})
   property var componentUrls: ({})
   property int revision: 0
+  readonly property bool scoped: !!bar && !!bar.pluginRegistry
+    && "pluginId" in bar.pluginRegistry
+  readonly property var widgetRegistry: bar ? bar.barWidgetRegistry : null
+
+  function configured(id) {
+    const layout = bar && bar.barConfig ? bar.barConfig.layout : null
+    if (!layout) return false
+    for (const region of ["left", "center", "right"]) {
+      const entries = layout[region]
+      if (!Array.isArray(entries)) return false
+      for (const entry of entries)
+        if (entry === id || (entry && entry.id === id)) return true
+    }
+    return false
+  }
+
+  function metadataFor(widgetId) {
+    const selection = selectionFor(widgetId)
+    return selection ? selection.metadata || (selection.manifest
+      ? selection.manifest.barWidget : null) : null
+  }
 
   function selectionFor(widgetId) {
+    if (scoped) {
+      const key = String(widgetId || "")
+      const widgets = widgetRegistry ? widgetRegistry.widgets : null
+      const entry = widgets && Object.prototype.hasOwnProperty.call(widgets, key)
+        ? widgets[key] : null
+      return entry && entry.metadata && entry.metadata.pluginId === key
+        ? { id: key, component: entry.component, metadata: entry.metadata } : null
+    }
     const registry = bar ? bar.pluginRegistry : null
     const plugins = registry && registry.installedPlugins
       ? registry.installedPlugins : null
@@ -32,7 +60,7 @@ QtObject {
 
   function manifestFor(widgetId) {
     const selection = selectionFor(widgetId)
-    return selection ? selection.manifest : null
+    return selection ? selection.manifest || null : null
   }
 
   function entryPointUrl(widgetId) {
@@ -45,6 +73,12 @@ QtObject {
 
   function componentFor(widgetId) {
     const id = String(widgetId || "")
+    if (scoped) {
+      const selection = selectionFor(id)
+      const component = selection ? selection.component : null
+      return configured(id) && component && component.status === Component.Ready
+        ? component : null
+    }
     const existing = components[id]
     const url = entryPointUrl(id)
     return existing && existing.status === Component.Ready
@@ -52,6 +86,7 @@ QtObject {
   }
 
   function ensureComponent(widgetId) {
+    if (scoped) return componentFor(widgetId)
     const id = String(widgetId || "")
     const url = entryPointUrl(id)
     if (!id || !url) return null
@@ -115,8 +150,14 @@ QtObject {
     revision++
   }
 
+  onScopedChanged: clear()
+  property Connections widgetConnections: Connections {
+    target: root.scoped ? root.widgetRegistry : null
+    function onWidgetsChanged() { root.revision++ }
+    function onRevisionChanged() { root.revision++ }
+  }
   property Connections registryConnections: Connections {
-    target: root.bar ? root.bar.pluginRegistry : null
+    target: !root.scoped && root.bar ? root.bar.pluginRegistry : null
     function onPluginsChanged() { root.syncRegistry() }
   }
 }

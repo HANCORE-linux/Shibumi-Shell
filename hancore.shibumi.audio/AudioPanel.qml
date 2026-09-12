@@ -13,7 +13,8 @@ ShibumiPanel {
   property var displaySinks: []
   property var displaySources: []
   property var displayStreams: []
-  property bool peakLeaseHeld: false
+  property var leasedPeakBackend: null
+  readonly property bool peakLeaseHeld: leasedPeakBackend !== null
   readonly property real outputVolume: audioBackend
     ? Number(audioBackend.outputVolume || 0) : 0
   readonly property bool outputMuted: audioBackend
@@ -29,7 +30,7 @@ ShibumiPanel {
   readonly property int renderedStreamCount: displayStreams.length
 
   owner: ownerWidget
-  open: ownerWidget.opened && audioBackend && audioBackend.ready
+  open: ownerWidget && ownerWidget.opened && audioBackend && audioBackend.ready
   focusTarget: keyCatcher
   padding: 12
   contentWidth: fittedContentWidth(280)
@@ -90,17 +91,29 @@ ShibumiPanel {
     return Commons.Util.alpha(controlAccent, controlAccent.a * stateOpacity)
   }
 
+  function releasePeakLease() {
+    const backend = leasedPeakBackend
+    leasedPeakBackend = null
+    if (backend && typeof backend.releasePeakMonitoring === "function")
+      backend.releasePeakMonitoring()
+  }
+
+  function syncPeakLease() {
+    const next = open ? audioBackend : null
+    if (next === leasedPeakBackend) return
+    releasePeakLease()
+    if (next && typeof next.acquirePeakMonitoring === "function"
+        && typeof next.releasePeakMonitoring === "function"
+        && next.acquirePeakMonitoring() === true)
+      leasedPeakBackend = next
+  }
+
+  onAudioBackendChanged: {
+    syncPeakLease()
+    if (open) refreshModels()
+  }
   onOpenChanged: {
-    if (audioBackend
-        && typeof audioBackend.acquirePeakMonitoring === "function") {
-      if (open && !peakLeaseHeld
-          && audioBackend.acquirePeakMonitoring() === true) {
-        peakLeaseHeld = true
-      } else if (!open && peakLeaseHeld) {
-        audioBackend.releasePeakMonitoring()
-        peakLeaseHeld = false
-      }
-    }
+    syncPeakLease()
     if (open) {
       refreshModels()
       Qt.callLater(refreshModels)
@@ -109,12 +122,7 @@ ShibumiPanel {
     }
   }
 
-  Component.onDestruction: {
-    if (peakLeaseHeld && audioBackend
-        && typeof audioBackend.releasePeakMonitoring === "function")
-      audioBackend.releasePeakMonitoring()
-    peakLeaseHeld = false
-  }
+  Component.onDestruction: releasePeakLease()
 
   Item {
     width: 0

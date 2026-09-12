@@ -18,6 +18,7 @@ ShellRoot {
   function fail(message) {
     console.error("power-plugins-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   Fixtures.PowerTestService { id: power }

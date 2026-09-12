@@ -18,8 +18,18 @@ ShibumiPanel {
   contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(panelColumn.implicitHeight)
 
-  Component.onCompleted: if (gpuTelemetry) gpuTelemetry.acquire()
-  Component.onDestruction: if (gpuTelemetry) gpuTelemetry.release()
+  property var acquiredGpuTelemetry: null
+  function syncGpuLease() {
+    const next = open ? gpuTelemetry : null
+    if (acquiredGpuTelemetry === next) return
+    if (acquiredGpuTelemetry) acquiredGpuTelemetry.release()
+    acquiredGpuTelemetry = next
+    if (acquiredGpuTelemetry) acquiredGpuTelemetry.acquire()
+  }
+  onGpuTelemetryChanged: syncGpuLease()
+  onOpenChanged: syncGpuLease()
+  Component.onCompleted: syncGpuLease()
+  Component.onDestruction: if (acquiredGpuTelemetry) acquiredGpuTelemetry.release()
 
   Ui.PanelKeyCatcher {
     id: keyCatcher
@@ -81,7 +91,7 @@ ShibumiPanel {
       UsageRow {
         width: parent.width
         label: "CPU"
-        value: panel.systemTelemetry.cpuPercent
+        value: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
         bar: panel.bar
       }
 

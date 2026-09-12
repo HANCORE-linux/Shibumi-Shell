@@ -3,15 +3,16 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.storage"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
-
-  readonly property var hostShell: bar && bar.shell ? bar.shell : null
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  readonly property var hostShell: suiteShell
   readonly property var storageService: hostShell
     && typeof hostShell.serviceFor === "function"
     ? hostShell.serviceFor("hancore.shibumi.storage") : null
@@ -49,6 +50,7 @@ Ui.Panel {
     ? "Root filesystem"
     : selectedDrive ? String(selectedDrive.model || selectedDrive.name) : "Storage"
   property var acquiredStorage: null
+  readonly property var panelItem: panelLoader.item
 
   implicitWidth: bar && bar.vertical ? bar.barSize : surface.implicitWidth
   implicitHeight: bar && bar.vertical ? surface.implicitHeight
@@ -93,9 +95,9 @@ Ui.Panel {
     }
     panelLoader.setSource(Qt.resolvedUrl("StoragePanel.qml"), {
       anchorItem: surface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      storage: root.storage
+      storage: Qt.binding(function() { return root.storage })
     })
   }
 

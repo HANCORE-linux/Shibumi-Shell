@@ -60,6 +60,88 @@ class ProductionBoundaryRegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("production boundary check passed", result.stdout)
 
+    def test_runtime_exception_does_not_exempt_other_imports(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="shibumi-runtime-boundary.") as temporary:
+            root = Path(temporary)
+            self.copy_production_tree(root)
+            bar = root / "hancore.shibumi.bar/Bar.qml"
+            original = bar.read_text()
+            approved = 'import "../hancore.shibumi.state/runtime" as SuiteRuntime'
+            self.assertEqual(original.count(approved), 1)
+            cases = [
+                approved + "\n" + approved,
+                'property string code: `\n' + approved + '\n`',
+                approved.replace("SuiteRuntime", "Other"),
+                'import "/tmp/outside" as SuiteRuntime',
+                'import "file:///tmp/outside" as SuiteRuntime',
+                'import "%2e%2e/outside" as SuiteRuntime',
+                '/* comment */ import /* comment */ "/tmp/outside" as SuiteRuntime',
+                approved + '\nproperty string other: "../hancore.shibumi.state/runtime"',
+            ]
+            for replacement in cases:
+                with self.subTest(replacement=replacement):
+                    bar.write_text(original.replace(approved, replacement))
+                    result = self.run_linter(root)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn("package escape", result.stderr)
+            bar.write_text(original)
+            runtime = root / "hancore.shibumi.state/runtime/qmldir"
+            content = runtime.read_bytes()
+            runtime.unlink()
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("package escape", result.stderr)
+            runtime.write_bytes(content)
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_esm_imports_and_canonical_paths_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="shibumi-esm-boundary.") as temporary:
+            root = Path(temporary)
+            self.copy_production_tree(root)
+            plugin = root / "hancore.shibumi.fixture"
+            plugin.mkdir()
+            for name in ("consumer.mjs", "consumer.MJS", "consumer.js"):
+                source = plugin / name
+                for text in (
+                    'import value from "/tmp/outside.mjs";',
+                    'import {value} from "file:///tmp/outside.mjs";',
+                    'export * from "https://example.invalid/outside.mjs";',
+                    'import("/tmp/outside.mjs");', 'import(variable);',
+                    *[f'import value from "{path}";' for path in
+                      ("./local.mjs", "sub/../local.mjs", "local//file.mjs", "local/")],
+                ):
+                    source.write_text(text)
+                    result = self.run_linter(root)
+                    with self.subTest(name=name, text=text):
+                        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                        self.assertIn("package escape", result.stderr)
+                source.write_text('import value from "local.mjs"; export {value};')
+                result = self.run_linter(root)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                source.unlink()
+
+    def test_javascript_lexical_boundaries_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="shibumi-lexical-boundary.") as temporary:
+            root = Path(temporary)
+            self.copy_production_tree(root)
+            source = root / "hancore.shibumi.bar/lexical.mjs"
+            bad = [
+                'const pattern = /"/; import value from "/tmp/outside.mjs";',
+                'const value = `${import("/tmp/outside.mjs")}`;',
+                'const value = `${`${import("/tmp/outside.mjs")}`}`;',
+                'object.if(1) / "2"; import value from "/tmp/outside.mjs";',
+            ]
+            for text in bad:
+                source.write_text(text)
+                result = self.run_linter(root)
+                with self.subTest(text=text):
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn("package escape", result.stderr)
+            source.write_text('const pattern = /"/; import value from "local.mjs";')
+            result = self.run_linter(root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_direct_forbidden_boundaries_fail_closed(self) -> None:
         cases = {
             "absolute-component": (

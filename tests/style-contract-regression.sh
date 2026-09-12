@@ -345,8 +345,12 @@ done
 for widget in ai audio battery bluetooth brightness center control-center cpu gpu \
     media memory network power-profile quick-access status storage temperature \
     workspaces; do
-  rg -Fq 'HostTokens { id: hostTokens; bar: root.bar }' \
-    "hancore.shibumi.$widget/BarWidget.qml" \
+  token_injection='HostTokens { id: hostTokens; bar: root.bar }'
+  case "$widget" in
+    audio|media|control-center|cpu|memory|gpu|storage|temperature|workspaces|battery|power-profile)
+      token_injection='HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }' ;;
+  esac
+  rg -Fq "$token_injection" "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not provide standard-host visual tokens"
   rg -Fq 'if (value === "round") return pillHeight / 2' \
     "hancore.shibumi.$widget/HostTokens.qml" \

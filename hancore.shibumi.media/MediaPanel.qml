@@ -21,8 +21,7 @@ ShibumiPanel {
   readonly property var player: mediaService ? mediaService.activePlayer : null
   readonly property var sourcePlayers: mediaService && mediaService.sourcePlayers
     ? mediaService.sourcePlayers : []
-  readonly property bool active: mediaService
-    ? mediaService.hasMedia === true && player !== null : false
+  readonly property bool active: !!(player && (player.trackTitle || player.trackArtist))
   readonly property bool playing: active && player.isPlaying === true
   readonly property bool spectrumRequested: open && active && spectrumEnabled
   readonly property var levels: spectrumService && spectrumService.levels

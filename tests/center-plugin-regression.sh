@@ -18,8 +18,13 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
+python3 "$repo_root/tests/weather-location-regression.py"
+python3 "$repo_root/tests/weather-report-regression.py"
+python3 "$repo_root/tests/weather-panel-control-regression.py" --host-shell "$omarchy_path/shell"
+
 mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.center" "$tmpdir/center"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "WeatherReportModel.js" as WeatherReportModel
 
 Item {
   id: root
@@ -124,62 +125,29 @@ Item {
   }
 
   function parseReport(raw) {
-    const text = String(raw || "").trim()
-    if (!text) {
+    // Validate every consumed day/hour before changing any published field.
+    // This parser cap is NOT a bound on the still-unconverted collector below.
+    const candidate = WeatherReportModel.parse(raw)
+    if (!candidate) {
       unavailable = true
-      return
+      return false
     }
-
-    try {
-      const report = JSON.parse(text)
-      const current = report.current_condition && report.current_condition[0]
-        ? report.current_condition[0] : null
-      const area = report.nearest_area && report.nearest_area[0]
-        ? report.nearest_area[0] : null
-      const astronomy = report.weather && report.weather[0]
-        && report.weather[0].astronomy && report.weather[0].astronomy[0]
-        ? report.weather[0].astronomy[0] : null
-      if (!current) {
-        unavailable = true
-        return
-      }
-
-      icon = glyphForCode(current.weatherCode,
-        isNight(astronomy ? astronomy.sunrise : "", astronomy ? astronomy.sunset : ""))
-      tempC = String(current.temp_C || "")
-      tempF = String(current.temp_F || "")
-      feelsC = String(current.FeelsLikeC || "")
-      feelsF = String(current.FeelsLikeF || "")
-      description = current.weatherDesc && current.weatherDesc[0]
-        ? String(current.weatherDesc[0].value || "") : ""
-      place = area && area.areaName && area.areaName[0]
-        ? String(area.areaName[0].value || "") : ""
-      country = area && area.country && area.country[0]
-        ? String(area.country[0].value || "") : ""
-      humidity = String(current.humidity || "")
-      windKmh = String(current.windspeedKmph || "")
-      windMph = String(current.windspeedMiles || "")
-
-      const days = []
-      const reportDays = report.weather || []
-      for (let index = 0; index < reportDays.length && index < 3; index++) {
-        const day = reportDays[index]
-        days.push({
-          date: String(day.date || ""),
-          minC: String(day.mintempC || ""),
-          maxC: String(day.maxtempC || ""),
-          minF: String(day.mintempF || ""),
-          maxF: String(day.maxtempF || ""),
-          code: forecastCode(day),
-          rain: chanceOfRain(day)
-        })
-      }
-      forecastDays = days
-      loaded = true
-      unavailable = false
-    } catch (_error) {
-      unavailable = true
-    }
+    icon = glyphForCode(candidate.code,
+      isNight(candidate.sunrise, candidate.sunset))
+    tempC = candidate.tempC
+    tempF = candidate.tempF
+    feelsC = candidate.feelsC
+    feelsF = candidate.feelsF
+    description = candidate.description
+    place = candidate.place
+    country = candidate.country
+    humidity = candidate.humidity
+    windKmh = candidate.windKmh
+    windMph = candidate.windMph
+    forecastDays = candidate.forecastDays
+    loaded = true
+    unavailable = false
+    return true
   }
 
   Process {

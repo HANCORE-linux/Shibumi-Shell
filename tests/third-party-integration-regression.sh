@@ -77,12 +77,16 @@ assert_rejected competing-layer layer shibumi-bar
 
 tmpdir=$(mktemp -d /tmp/shibumi-third-party-integration.XXXXXX)
 mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/fixtures" \
-  "$tmpdir/owners/audio" "$tmpdir/owners/state"
+  "$tmpdir/owners/audio" "$tmpdir/owners/hancore.shibumi.state"
 chmod 700 "$tmpdir/runtime"
 cp -a "$fixture_root" "$tmpdir/fixtures/"
 cp -a "$OMARCHY_PATH/shell/Commons" "$tmpdir/"
 cp "$repo_root/hancore.shibumi.audio/Service.qml" "$tmpdir/owners/audio/"
-cp -a "$repo_root/hancore.shibumi.state/." "$tmpdir/owners/state/"
+# State and Audio import the same one physical runtime, not per-owner copies.
+cp -a "$repo_root/hancore.shibumi.state/." "$tmpdir/owners/hancore.shibumi.state/"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/owners/hancore.shibumi.state/.shibumi-managed.json"
+cp "$repo_root/tests/fixtures/AudioPeakTestMonitor.qml" "$tmpdir/owners/audio/AudioPeakMonitor.qml"
 cp "$repo_root/tests/third-party-integration-smoke.qml" "$tmpdir/shell.qml"
 
 QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY='' \

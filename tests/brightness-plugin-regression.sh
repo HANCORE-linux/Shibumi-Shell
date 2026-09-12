@@ -20,6 +20,7 @@ fail() {
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.brightness" "$tmpdir/brightness"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
@@ -42,6 +43,10 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'brightness plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Cannot assign|Unable to assign|Internal error' \
+    <<<"$output"; then
+  fail "component smoke emitted a QML runtime error"
+fi
 
 widget="$repo_root/hancore.shibumi.brightness/BarWidget.qml"
 service="$repo_root/hancore.shibumi.brightness/Service.qml"
@@ -52,10 +57,16 @@ rg -q 'serviceFor\("hancore\.shibumi\.brightness"\)' "$widget" \
 if rg -q 'bar\.monitorService' "$repo_root/hancore.shibumi.brightness"; then
   fail "brightness plugin depends on transitional bar-owned monitor state"
 fi
-rg -q 'property var bar: shell \? shell\.bar : null' "$service" \
-  || fail "monitor service does not use the versioned active bar facade"
+rg -Fq 'property var bar: Qt.isQtObject(shell) && "bar" in shell ? shell.bar : null' "$service" \
+  || fail "monitor service does not guard the versioned active bar facade"
 rg -q 'registeredComponent\("omarchy\.monitor"\)' "$service" \
   || fail "monitor service does not retain the official Omarchy owner"
+rg -Fq 'property var barWidgetRegistry: null' "$service" \
+  || fail "scoped monitor service cannot receive the accepted widget snapshot"
+rg -Fq 'if (injectedEntry && injectedEntry.component) return injectedEntry.component' "$service" \
+  || fail "scoped monitor service does not use the accepted native component"
+rg -Fq 'if (scopedHost) return null' "$service" \
+  || fail "scoped monitor service falls through to wider registry access"
 rg -Fq '"barWidgetRegistry" in bar' "$service" \
   || fail "monitor service cannot resolve the official owner on stock Quattro"
 [[ $(rg -c '^  MonitorPanelBridge \{' "$service") -eq 1 ]] \
@@ -68,6 +79,37 @@ rg -q 'readonly property color background: realBar && realBar\.background !== un
   || fail "monitor host facade does not provide Quattro panel background color"
 rg -q 'readonly property color barBackground: background' "$bridge" \
   || fail "monitor host facade does not provide the Quattro background alias"
+rg -Fq 'ownerWidget: root' "$service" \
+  || fail "scoped scalar bar state is still assigned to a visual Item property"
+rg -Fq '? realBar.foreground : Commons.Color.foreground' "$bridge" \
+  || fail "monitor host facade does not guard scoped missing foreground"
+rg -Fq '? realBar.urgent : Commons.Color.urgent' "$bridge" \
+  || fail "monitor host facade does not guard scoped missing urgent color"
+rg -Fq '? realBar.shell : root.ownerShell' "$bridge" \
+  || fail "monitor host facade does not retain the scoped shell fallback"
+rg -Fq 'host.summon(ownId, "") === true' "$bridge" \
+  || fail "scoped legacy IPC cannot summon the visible brightness widget"
+rg -Fq 'function acquireVisualBar(holder, candidate)' "$service" \
+  || fail "shared owner cannot acquire the active visual bar facade"
+rg -Fq 'VisualBarLease {}' "$service" \
+  || fail "visual bar registration is not holder-parented"
+rg -Fq 'Commons.Util.wheelSteps(wheelAccumulator' "$widget" \
+  || fail "brightness wheel does not accumulate high-resolution deltas"
+rg -Fq 'if (!brightnessAvailable) return false' "$widget" \
+  || fail "unavailable brightness still accumulates wheel deltas"
+rg -Fq 'monitorService.showBrightnessOsd(monitorService.brightnessPercent)' "$widget" \
+  || fail "effective brightness wheel changes do not forward native OSD"
+rg -Fq 'function showBrightnessOsd(value)' "$bridge" \
+  || fail "monitor bridge does not expose the native OSD action"
+rg -Fq 'const leases = _visualBarLeases.slice()' "$service" \
+  || fail "monitor service teardown does not retire external visual leases"
+rg -Fq 'bridge.shutdown()' "$service" \
+  || fail "monitor service does not drain its loaded backend before teardown"
+rg -Fq 'function shutdown()' "$bridge" \
+  || fail "monitor bridge has no explicit backend teardown path"
+if rg -Fq 'Qt.callLater' "$bridge"; then
+  fail "monitor bridge retains unowned delayed teardown callbacks"
+fi
 if rg -q 'Process \{|Quickshell\.Io|UPower' \
     "$widget" "$panel"; then
   fail "screen-local brightness presentation owns hardware work"

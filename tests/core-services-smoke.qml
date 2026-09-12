@@ -10,16 +10,24 @@ ShellRoot {
   id: root
 
   function check(condition, message) {
-    if (!condition) throw new Error(message)
+    if (!condition) {
+      Qt.exit(1)
+      throw new Error(message)
+    }
   }
 
   Telemetry.Service {
     id: telemetry
     shell: fakeShell
+    thermalProbeEnabled: false
+    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.12", kinds: ["service"]})
   }
 
   Cpu.Service {
     id: cpu
+    shell: fakeShell
+    gpuProbeEnabled: false
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.12", kinds: ["service"]})
   }
 
   QtObject {
@@ -31,12 +39,21 @@ ShellRoot {
 
   PowerState.Service {
     id: power
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.power-state", version: "0.1.1-beta.12", kinds: ["service"]})
+    batterySnapshotOverride: ({ready: false})
+    commandOverrides: ({}) // This pure projection smoke may never launch helpers.
   }
 
+  property int attempts: 0
   Timer {
-    interval: 0
+    interval: 20
     running: true
+    repeat: true
     onTriggered: {
+      root.check(++root.attempts < 100, "service admission timed out")
+      if (!telemetry.ready || !cpu.ready || !power.ready) return
+      stop()
       root.check(telemetry.contractVersion === 1 && telemetry.ready,
         "telemetry contract is not ready")
       root.check(telemetry.system !== null && cpu.gpu !== null,

@@ -47,14 +47,44 @@ chmod 0700 "$swap_script"
 install -Dm0644 "$repo_root/tests/theme-palette-runtime-smoke.qml" \
   "$tmpdir/shell.qml"
 cp -a -- "$repo_root/hancore.shibumi.state" "$tmpdir/plugin"
+python3 - "$tmpdir" <<'PY'
+import json
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+config = root / 'home/.config/omarchy'
+config.mkdir(parents=True)
+(config / 'shell.json').write_text(json.dumps({
+    'version': 1, 'bar': {'layout': {'left': [], 'center': [], 'right': []}},
+    'plugins': [{'id': 'hancore.shibumi.state', 'shibumiStateSchemaVersion': 1,
+                 'shibumi': {'version': 1, 'presentation': {'accent': 'color06'}}}]
+}))
+(root / 'plugin/.shibumi-managed.json').write_text(json.dumps({
+    'suiteId': 'hancore.shibumi', 'suitePayloadDigest': 'a' * 64
+}))
+PY
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 
 set +e
 output=$(timeout 8 env \
   HOME="$home" \
+  XDG_CONFIG_HOME="$home/.config" \
+  XDG_STATE_HOME="$home/.local/state" \
+  XDG_DATA_HOME="$home/.local/share" \
+  XDG_DATA_DIRS="$tmpdir/data" \
+  XDG_CACHE_HOME="$home/.cache" \
+  OMARCHY_PATH="$tmpdir/absent-native-defaults" \
   QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  QT_QUICK_BACKEND=software \
+  QT_FORCE_STDERR_LOGGING=1 \
+  QML_DISABLE_DISK_CACHE=1 \
   WAYLAND_DISPLAY= \
+  DISPLAY= \
+  HYPRLAND_INSTANCE_SIGNATURE= \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/absent-session" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/absent-system" \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
   SHIBUMI_THEME_SWAP_SCRIPT="$swap_script" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
@@ -65,6 +95,9 @@ set -e
 
 printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "Quickshell exited $rc"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error|ERROR' <<<"$output"; then
+  fail "unexpected QML runtime error"
+fi
 grep -F 'theme palette runtime smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 

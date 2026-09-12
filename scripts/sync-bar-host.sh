@@ -26,6 +26,7 @@ files=(
   core/GroupRegistry.js
   core/GroupSlot.qml
   core/LayoutController.qml
+  core/LayoutTransition.qml
   core/LayoutModel.js
   core/V2LayoutModel.js
   core/PanelRouting.js
@@ -48,6 +49,10 @@ files=(
   styles/shibumi/VisualTokens.qml
 )
 
+# Canonical Bar.qml is at the repository root, the deployed entry point one
+# level below it. Normalize only this exact declared shared-module import.
+rendered_bar=$(mktemp)
+trap 'rm -f -- "$rendered_bar"' EXIT
 failed=0
 for path in "${files[@]}"; do
   source_file="$repo_root/$path"
@@ -56,6 +61,18 @@ for path in "${files[@]}"; do
     printf 'Missing bar host source: %s\n' "$path" >&2
     failed=1
     continue
+  fi
+
+  if [[ $path == Bar.qml ]]; then
+    expected_import='import "hancore.shibumi.state/runtime" as SuiteRuntime'
+    if [[ $(grep -Fxc -- "$expected_import" "$source_file") != 1 ]]; then
+      printf 'Unexpected shared runtime import in canonical Bar.qml\n' >&2
+      failed=1
+      continue
+    fi
+    sed 's@^import "hancore.shibumi.state/runtime" as SuiteRuntime$@import "../hancore.shibumi.state/runtime" as SuiteRuntime@' \
+      "$source_file" > "$rendered_bar"
+    source_file=$rendered_bar
   fi
 
   if [[ $mode == --write ]]; then

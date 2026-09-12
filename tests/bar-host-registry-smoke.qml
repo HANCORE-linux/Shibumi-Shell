@@ -27,6 +27,17 @@ ShellRoot {
     fixtureDir: root.commandMarker.slice(0, root.commandMarker.lastIndexOf("/")) + "/fixtures"
   }
 
+  Fixtures.StateRestoreChecks {
+    id: restoreChecks
+    bar: hostBar
+    stateOwner: stateService
+  }
+
+  Fixtures.LayoutRestoreChecks {
+    id: layoutRestoreChecks
+    referenceBar: hostBar
+  }
+
   function fail(message) {
     console.error("bar-host-registry-smoke:", message)
     Qt.exit(1)
@@ -270,7 +281,10 @@ ShellRoot {
   QtObject {
     id: stateService
 
-    readonly property bool ready: true
+    property bool ready: true
+    property bool writePending: false
+    property int writeSerial: 0
+    signal persistenceSettled(int throughSerial, string result)
     property int revision: 0
     property var config: ({
       widgets: ({
@@ -656,6 +670,8 @@ ShellRoot {
     running: true
 
     onTriggered: {
+      if (restoreChecks.started && !restoreChecks.done) return
+      if (layoutRestoreChecks.started && !layoutRestoreChecks.done) return
       root.attempts++
       if ((!hostBar.hostReady || !hostBar.styleReady
            || !hostBar.barToggleStateLoaded
@@ -670,6 +686,8 @@ ShellRoot {
                          + hostBar.moduleSlots.length)
 
       if (root.screensaverStage === 0) {
+        if (hostBar.shell !== fakeShell)
+          return root.fail("legacy native widget shell was replaced by a narrower adapter")
         if (hostBar.barHidden)
           return root.fail("bar started hidden without a toggle or screensaver")
         hostBar.requestPopout(fakePopout)
@@ -756,6 +774,16 @@ ShellRoot {
             || hostBar.pendingWidgetRestores.length !== 0)
           return root.fail("output-local panel restore did not clean up")
         root.screensaverStage = 6
+      }
+
+      if (root.screensaverStage === 6 && !restoreChecks.done) {
+        restoreChecks.start()
+        return
+      }
+
+      if (restoreChecks.done && !layoutRestoreChecks.done) {
+        layoutRestoreChecks.start()
+        return
       }
 
       if (root.stage === 13) {
@@ -1072,7 +1100,10 @@ ShellRoot {
           || !stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("rejected provider install did not roll back")
 
-      if (!root.verifyV1FamilyCapacity() || !root.verifyV1RemovalAmbiguity()
+      if (!removalChecks.verifyScopedActive("example.scoped", [])
+          || !removalChecks.verifyScopedActive(
+            "example.scoped-provider", ["G6"])
+          || !root.verifyV1FamilyCapacity() || !root.verifyV1RemovalAmbiguity()
           || !cloneChecks.run()) return
       if (!hostBar.setBarWidgetInstalled(
             "omarchy.clock", true, "right"))
@@ -1587,6 +1618,15 @@ ShellRoot {
 
       if (!root.verifyTransparencyContract())
         return root.fail("transparency contract did not settle opaque")
+
+      const providerRevision = hostBar.providerRegistryRevision
+      if (!hostBar.prepareForShutdown() || !hostBar.prepareForShutdown()
+          || !hostBar.shutdownPrepared || hostBar.hostReady
+          || hostBar.outputWindowsEnabled)
+        return root.fail("bar shutdown preparation did not settle idempotently")
+      fakePluginRegistry.pluginsChanged()
+      if (hostBar.providerRegistryRevision !== providerRevision)
+        return root.fail("bar shutdown accepted a late registry reconciliation")
 
       stop()
       console.log("bar host registry smoke passed")

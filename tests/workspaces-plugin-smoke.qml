@@ -7,6 +7,7 @@ ShellRoot {
 
   property int phase: 0
   property int geometryWaits: 0
+  property int admissionWaits: 0
   property int animationWaits: 0
   property real preInterruptX: 0
   property real oldPacmanTargetX: 0
@@ -14,6 +15,7 @@ ShellRoot {
   function fail(message) {
     console.error("workspace-widget-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
@@ -119,14 +121,18 @@ ShellRoot {
 
   Workspaces.WorkspaceService {
     id: workspaceState
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.12", kinds: ["service"]})
     stateService: preferenceState
-    actionAdapter: actions
-    focusedWorkspaceSource: ({ id: 8 })
-    workspaceSource: [
-      { id: 2, toplevels: { values: [{}] } },
-      { id: 8, toplevels: { values: [{}, {}] } },
-      { id: -1, toplevels: { values: [{}] } }
-    ]
+    backendOverride: QtObject {
+      property var focusedWorkspace: ({ id: 8 })
+      property var workspaces: [
+        { id: 2, toplevels: { values: [{}] } },
+        { id: 8, toplevels: { values: [{}, {}] } },
+        { id: -1, toplevels: { values: [{}] } }
+      ]
+      function focusWorkspace(id) { return actions.focusWorkspace(id) }
+    }
   }
 
   QtObject {
@@ -139,12 +145,14 @@ ShellRoot {
   Workspaces.WorkspaceService {
     id: occupiedOutsidePersistState
     stateService: persistFiveState
-    actionAdapter: actions
-    focusedWorkspaceSource: ({ id: 2 })
-    workspaceSource: [
-      { id: 2, toplevels: { values: [{}] } },
-      { id: 7, toplevels: { values: [{}] } }
-    ]
+    backendOverride: QtObject {
+      property var focusedWorkspace: ({ id: 2 })
+      property var workspaces: [
+        { id: 2, toplevels: { values: [{}] } },
+        { id: 7, toplevels: { values: [{}] } }
+      ]
+      function focusWorkspace(id) { return actions.focusWorkspace(id) }
+    }
   }
 
   Workspaces.BarWidget {
@@ -167,6 +175,8 @@ ShellRoot {
     running: true
     onTriggered: {
       if (root.phase === 0) {
+        if (++root.admissionWaits > 100) return root.fail("service admission timed out")
+        if (!workspaceState.backendAdmitted) return
         if (workspaceState.entries.length !== 2
             || workspaceState.visibleWorkspaceIds.join(",") !== "1,2,3,4,5,8"
             || occupiedOutsidePersistState.visibleWorkspaceIds.join(",")
@@ -198,6 +208,10 @@ ShellRoot {
             || actions.focusWorkspace("1; reboot")
             || fakeBar.lastCommand.length !== 0)
           return root.fail("invalid workspace dispatch was not rejected")
+        actions.commandRunner = ({})
+        if (actions.focusWorkspace(2) !== false)
+          return root.fail("incomplete command fake fell through to native action")
+        actions.commandRunner = commandRecorder
         if (!workspaceState.setPreference("style", "magic")
             || !workspaceState.setPreference("mode", "active")
             || fakeBar.workspaceConfig.style !== "magic"
@@ -267,7 +281,7 @@ ShellRoot {
           return root.fail("V2 Pacman presentation geometry: " + widget.implicitWidth)
         }
         root.geometryWaits = 0
-        workspaceState.focusedWorkspaceSource = ({ id: 2 })
+        workspaceState.backendOverride.focusedWorkspace = ({ id: 2 })
       } else if (root.phase === 6) {
         if (!widget.pacmanTraveling
             || widget.pacmanTargetWorkspaceId !== 2
@@ -312,7 +326,7 @@ ShellRoot {
             + widget.implicitWidth)
         }
         root.geometryWaits = 0
-        workspaceState.focusedWorkspaceSource = ({ id: 8 })
+        workspaceState.backendOverride.focusedWorkspace = ({ id: 8 })
       } else if (root.phase === 9) {
         if (!widget.pacmanTraveling
             || widget.pacmanTargetWorkspaceId !== 8
@@ -329,7 +343,7 @@ ShellRoot {
             }))
         root.preInterruptX = widget.pacmanTravelX
         root.oldPacmanTargetX = widget.pacmanTravelTargetX
-        workspaceState.focusedWorkspaceSource = ({ id: 2 })
+        workspaceState.backendOverride.focusedWorkspace = ({ id: 2 })
       } else if (root.phase === 10) {
         if (!widget.pacmanTraveling
             || widget.pacmanTargetWorkspaceId !== 2

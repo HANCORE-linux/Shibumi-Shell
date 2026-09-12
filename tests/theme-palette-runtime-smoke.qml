@@ -13,15 +13,20 @@ ShellRoot {
 
   QtObject {
     id: fakeShell
+    property string pluginId: "hancore.shibumi.state"
+    // Deliberately disagree with canonical file truth; runtime must not revive it.
     property var shellConfig: ({
       version: 1,
-      bar: { shibumi: { version: 1, presentation: { accent: "color06" } } }
+      bar: { shibumi: { version: 1, presentation: { accent: "color02" } } }
     })
+    function updateEntryInline(id, settings) { root.fail("palette read attempted a write"); return false }
   }
 
   StatePlugin.Service {
     id: state
     shell: fakeShell
+    omarchyPath: Quickshell.env("OMARCHY_PATH")
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]})
   }
 
   function colorText(value) {
@@ -31,10 +36,12 @@ ShellRoot {
   function fail(message) {
     console.error("theme-palette-runtime-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   function paletteMatches(values) {
-    return root.colorText(state.color01) === values[0]
+    return state.ready && state.selectedAccent === "color06"
+      && root.colorText(state.color01) === values[0]
       && root.colorText(state.color02) === values[1]
       && root.colorText(state.color03) === values[2]
       && root.colorText(state.color04) === values[3]

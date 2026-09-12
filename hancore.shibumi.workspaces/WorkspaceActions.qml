@@ -20,8 +20,9 @@ Item {
       "dispatch",
       "hl.dsp.focus({ workspace = \"" + id + "\" })"
     ]
-    if (commandRunner && typeof commandRunner.run === "function")
-      return commandRunner.run(command) !== false
+    if (commandRunner !== null)
+      return commandRunner && typeof commandRunner.run === "function"
+        ? commandRunner.run(command) !== false : false
     launcher.command = command
     launcher.startDetached()
     return true

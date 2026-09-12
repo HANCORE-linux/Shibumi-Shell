@@ -4,20 +4,18 @@ import QtQuick
 import QtQuick.Shapes
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.workspaces"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   property url panelSource: Qt.resolvedUrl("WorkspacePanel.qml")
-  property var workspaceService: bar && bar.shell
-    && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor("hancore.shibumi.workspaces") : null
-  readonly property var stateService: bar && bar.shell
-    && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor("hancore.shibumi.state") : null
+  property var workspaceService: suiteShell.serviceFor("hancore.shibumi.workspaces")
+  readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -57,6 +55,7 @@ Ui.Panel {
     return workspaceIds.length > 0 ? [workspaceIds[0]] : []
   }
   readonly property int renderedWorkspaceCount: workspaceRepeater.count
+  readonly property var panelItem: panelLoader.item
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property bool panelLoaderReady: panelLoader.item
     ? panelLoader.item.ready === true : false
@@ -124,8 +123,9 @@ Ui.Panel {
     return total + Math.max(0, visibleCount - 1) * workspaceGap
   }
 
-  implicitWidth: bar && bar.vertical ? bar.barSize : workspaceSurface.implicitWidth
-  implicitHeight: bar && bar.vertical
+  visible: workspaceService !== null
+  implicitWidth: !visible ? 0 : bar && bar.vertical ? bar.barSize : workspaceSurface.implicitWidth
+  implicitHeight: !visible ? 0 : bar && bar.vertical
     ? workspaceSurface.implicitHeight : bar ? bar.barSize : 28
 
   function activateWorkspace(id) {
@@ -236,18 +236,24 @@ Ui.Panel {
   }
 
   function syncPanelLoader() {
-    if (!opened) {
+    if (!opened || !workspaceService) {
       panelLoader.source = ""
       return
     }
     panelLoader.setSource(panelSource, {
       anchorItem: workspaceSurface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
-      workspaceService: root.workspaceService
+      workspaceService: Qt.binding(function() { return root.workspaceService })
     })
   }
 
+  onWorkspaceServiceChanged: {
+    if (!workspaceService) {
+      if (opened) close()
+      syncPanelLoader()
+    } else if (opened && !panelLoader.item) syncPanelLoader()
+  }
   onOpenedChanged: syncPanelLoader()
   onFocusedWorkspaceIdChanged: observePacmanFocus()
   onRenderStyleChanged: resetPacmanTravel()
@@ -268,7 +274,12 @@ Ui.Panel {
       v1AppearanceEnabled: true
       anchors.fill: parent
       anchors.topMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
-      anchors.bottomMargin: Math.round((parent.height - root.tokens.pillHeight) / 2)
+      // Keep V1's exact pill height when the bar/pill difference is odd.
+      // Two rounded margins otherwise eat the bottom pixel (35 - 6 - 6 = 23).
+      // V2 retains its existing, hidden native-pill geometry.
+      anchors.bottomMargin: root.v2Mode
+        ? Math.round((parent.height - root.tokens.pillHeight) / 2)
+        : parent.height - root.tokens.pillHeight - anchors.topMargin
     }
 
     MouseArea {

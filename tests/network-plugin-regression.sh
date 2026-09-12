@@ -26,6 +26,7 @@ python3 -c 'import dbus' >/dev/null 2>&1 \
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
 chmod 700 "$tmpdir/runtime"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.network" "$tmpdir/network"
 cp -a -- "$repo_root/hancore.shibumi.network" \
   "$tmpdir/hancore.shibumi.network"

@@ -3,19 +3,22 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.audio"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url popupSource: Qt.resolvedUrl("AudioPanel.qml")
   readonly property url backendPanelSource: registeredSource("omarchy.audio")
   property Component panelComponent: !audioServiceResolved
     || nativeBackendAccessEnabled ? null
     : String(backendPanelSource) ? null : registeredComponent("omarchy.audio")
   property var backendReadyOverride: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  property var leasedReportService: null
   readonly property bool audioServiceLookupAvailable:
     backendReadyOverride !== null
     || (bar !== null && bar.shell !== null
@@ -34,9 +37,7 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property var audioStateService: bar && bar.shell
-    && typeof bar.shell.serviceFor === "function"
-    ? bar.shell.serviceFor("hancore.shibumi.audio") : null
+  readonly property var audioStateService: suiteShell.serviceFor("hancore.shibumi.audio")
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -100,8 +101,13 @@ Ui.Panel {
   }
 
   function reportAudioState() {
-    return audioStateService && typeof audioStateService.report === "function"
-      ? audioStateService.report(root, audioReady, muted) : false
+    if (leasedReportService !== audioStateService) {
+      if (leasedReportService && typeof leasedReportService.release === "function")
+        leasedReportService.release(root)
+      leasedReportService = audioStateService
+    }
+    return leasedReportService && typeof leasedReportService.report === "function"
+      ? leasedReportService.report(root, audioReady, muted) : false
   }
 
   function ownsPanelWidget(owner) {
@@ -132,7 +138,7 @@ Ui.Panel {
     if (!opened || !audioReady || !String(popupSource)) return
     popupLoader.setSource(popupSource, {
       anchorItem: audioSurface,
-      bar: root.bar,
+      bar: Qt.binding(function() { return root.bar }),
       ownerWidget: root,
       audioBackend: audioBridge
     })
@@ -152,13 +158,15 @@ Ui.Panel {
     }
     reportAudioState()
   }
+  onAudioStateServiceChanged: reportAudioState()
   onMutedChanged: reportAudioState()
   onPopupSourceChanged: if (opened) syncPanelLoader()
   Component.onCompleted: Qt.callLater(reportAudioState)
   Component.onDestruction: {
     close()
-    if (audioStateService && typeof audioStateService.release === "function")
-      audioStateService.release(root)
+    if (leasedReportService && typeof leasedReportService.release === "function")
+      leasedReportService.release(root)
+    leasedReportService = null
   }
 
   AudioPanelBridge {
@@ -176,12 +184,7 @@ Ui.Panel {
     nativeAudioService: root.nativeBackendAccessEnabled
       ? root.audioStateService : null
     peakValue: root.audioStateService ? root.audioStateService.inputPeak : 0
-    peakAcquire: root.audioStateService
-      ? function() { return root.audioStateService.acquirePeakMonitoring() }
-      : null
-    peakRelease: root.audioStateService
-      ? function() { return root.audioStateService.releasePeakMonitoring() }
-      : null
+    peakService: root.audioStateService
   }
 
   Loader { id: popupLoader }

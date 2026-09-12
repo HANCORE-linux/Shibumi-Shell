@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons as Commons
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "PickerModel.js" as PickerModel
 
 Item {
@@ -13,11 +14,17 @@ Item {
   property string omarchyPath: ""
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.quick-access"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property bool runtimeWorkersEnabled: true
   property bool presentationEnabled: true
-  readonly property var stateService: shell
-    && typeof shell.serviceFor === "function"
-    ? shell.serviceFor("hancore.shibumi.state") : null
+  readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
   readonly property var bar: shell ? shell.bar : null
   readonly property string home: Quickshell.env("HOME")
   readonly property string scriptPath: String(

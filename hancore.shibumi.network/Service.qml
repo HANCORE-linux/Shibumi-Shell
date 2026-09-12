@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "NetworkModel.js" as NetworkModel
 import "NetworkQrSecretModel.js" as QrSecretModel
 
@@ -12,6 +13,13 @@ Item {
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.Provider {
+    pluginId: "hancore.shibumi.network"
+    implementationVersion: "0.1.1-beta.12"
+    owner: root
+    host: root.shell
+    manifest: root.manifest
+  }
   property var bar: shell ? shell.bar : null
   property bool active: true
 

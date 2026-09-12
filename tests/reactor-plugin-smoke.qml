@@ -17,6 +17,7 @@ ShellRoot {
   function fail(message) {
     console.error("reactor-plugin-smoke:", message)
     Qt.exit(1)
+    throw new Error(message)
   }
 
   QtObject {
@@ -74,6 +75,8 @@ ShellRoot {
 
   Audio.Service {
     id: fakeAudio
+    shell: fakeShell
+    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.12", kinds: ["service"]})
     nativeBackendEnabled: false
   }
 
@@ -112,6 +115,7 @@ ShellRoot {
 
   Reactor.Service {
     id: reactorService
+    manifest: ({id: "hancore.shibumi.reactor", version: "0.1.1-beta.12", kinds: ["service"]})
     shell: fakeShell
     runtimeProbesEnabled: false
   }
@@ -145,7 +149,9 @@ ShellRoot {
             || reactorService.backendLoaded || reactorService.backendKind !== "none"
             || reactorService.runTest("text", "NO|BACKEND"))
           return root.fail("mode-zero gating")
-        fakeAudio.report(root, true, false)
+        if (!fakeAudio.backendAdmitted || fakeAudio.report(root, true, false) !== true
+            || !fakeAudio.ready)
+          return root.fail("Audio runtime admission or report rejected")
         reactorService.setMode(7)
         root.phase++
         root.ticks = 0
@@ -169,7 +175,7 @@ ShellRoot {
         root.phase++
         root.ticks = 0
       } else if (root.phase === 3) {
-        if (root.clearedCount !== 1 || reactorService.mode !== 8
+        if (root.clearedCount !== 2 || reactorService.mode !== 8
             || !reactorService.backendLoaded
             || reactorService.backendKind !== "quotes"
             || !reactorService.runTest("quote", ""))
@@ -188,8 +194,8 @@ ShellRoot {
         if (reactorService.mode !== 0 || reactorService.backendLoaded
             || reactorService.backendKind !== "none" || fakeState.revision !== 3)
           return root.fail("backend teardown")
-        fakeAudio.release(root)
-        if (fakeAudio.ready) return root.fail("audio snapshot cleanup")
+        if (fakeAudio.release(root) !== true || fakeAudio.ready)
+          return root.fail("audio snapshot cleanup")
         stop()
         watchdog.stop()
         console.log("reactor plugin smoke passed")

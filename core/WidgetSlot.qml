@@ -58,6 +58,12 @@ Item {
     moduleName.indexOf("hancore.shibumi.") === 0
   readonly property bool hostedModule: !suiteNativeModule
   readonly property string fallbackTooltipText: {
+    void(resolverRevision)
+    const resolver = bar && "hostWidgetResolver" in bar ? bar.hostWidgetResolver : null
+    const published = resolver && typeof resolver.metadataFor === "function"
+      ? resolver.metadataFor(moduleName) : null
+    if (published && String(published.displayName || "").trim() !== "")
+      return String(published.displayName).trim()
     const manifest = moduleManifest
     const metadata = manifest && manifest.barWidget
       && typeof manifest.barWidget === "object"

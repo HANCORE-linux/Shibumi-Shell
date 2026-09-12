@@ -18,11 +18,17 @@ fail() {
 mkdir -p "$tmpdir/control/manager" \
   "$tmpdir/home/.config/omarchy/plugins/hancore.shibumi.control-center/manager" \
   "$tmpdir/runtime"
-install -Dm0644 \
-  "$repo_root/hancore.shibumi.control-center/PluginUpdateService.qml" \
-  "$tmpdir/control/PluginUpdateService.qml"
+for catalog_source in PluginUpdateService.qml CatalogDemand.qml CatalogDemandRecord.qml NativeCatalog.qml \
+    NativeCatalogCommand.qml NativeCatalogModel.js manager/shibumi-native-catalog; do
+  install -Dm0644 "$repo_root/hancore.shibumi.control-center/$catalog_source" \
+    "$tmpdir/control/$catalog_source"
+done
 install -Dm0644 "$repo_root/tests/plugin-update-service-smoke.qml" \
   "$tmpdir/shell.qml"
+mkdir -p "$tmpdir/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 
 state_file="$tmpdir/state"
 printf '0\n' > "$state_file"
@@ -67,7 +73,7 @@ case $state in
       'PLUGIN_UNMANAGED_COUNT=0' \
       'PLUGIN_FETCH_FAILED_COUNT=0'
     ;;
-  5)
+  5|6)
     sleep 5
     ;;
   *)
@@ -96,6 +102,48 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "Quickshell exited $rc"
 grep -Fq 'plugin update service smoke passed' <<<"$output" \
   || fail 'success marker missing'
-[[ $(<"$state_file") == 6 ]] || fail 'fixture did not execute all six scans'
+[[ $(<"$state_file") == 7 ]] || fail 'fixture did not execute all seven scans'
+
+install -Dm0644 "$repo_root/tests/plugin-update-start-failure-smoke.qml" \
+  "$tmpdir/shell.qml"
+cat > "$tmpdir/control/manager/shibumi-plugin-updates" <<'SH'
+#!/bin/bash
+printf '%s\n' \
+  'PLUGIN_UPDATE_COUNT=0' \
+  'PLUGIN_CHECKED_COUNT=1' \
+  'PLUGIN_UNMANAGED_COUNT=0' \
+  'PLUGIN_FETCH_FAILED_COUNT=0'
+SH
+chmod +x "$tmpdir/control/manager/shibumi-plugin-updates"
+mkdir -p "$tmpdir/retry-bin"
+retry_ready="$tmpdir/retry-ready"
+(
+  /usr/bin/sleep 1.4
+  /usr/bin/ln -s /usr/bin/timeout "$tmpdir/retry-bin/timeout"
+  printf 'ready\n' > "$retry_ready"
+) &
+retry_preparer=$!
+set +e
+start_output=$(/usr/bin/timeout 7 /usr/bin/env \
+  PATH="$tmpdir/retry-bin" \
+  HOME="$tmpdir/home" \
+  SHIBUMI_START_RETRY_READY="$retry_ready" \
+  QT_QPA_PLATFORM=offscreen \
+  WAYLAND_DISPLAY= \
+  XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
+  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  "$quickshell_bin" -p "$tmpdir" 2>&1)
+start_rc=$?
+wait "$retry_preparer" 2>/dev/null || true
+set -e
+printf '%s\n' "$start_output"
+[[ $start_rc -eq 0 ]] || fail "start-failure Quickshell exited $start_rc"
+grep -Fq 'plugin update start failure settled and retry passed' <<<"$start_output" \
+  || fail 'start-failure retry marker missing'
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Cannot assign|Unable to assign|Internal error' \
+    <<<"$start_output"; then
+  fail 'start-failure retry emitted a QML runtime error'
+fi
 
 printf 'plugin update service regression passed\n'
