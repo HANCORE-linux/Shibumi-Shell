@@ -65,12 +65,24 @@ A source-managed installation moves to package ownership by installing the
 package and running `shibumi-shell update --yes`. User configuration, the
 active profile, external layouts, and unrelated plugins are preserved.
 
-Package rollback is deliberately two-step and opt-in:
+Intentional package rollback is supported only between releases that both use
+the canonical State service-entry storage contract. Beta.12 is the first package
+with that contract, so it has no older eligible package target. Do not install
+Beta.11 or an earlier package after Beta.12: Pacman replaces the current payload
+and lifecycle code before the user-level update runs, so Beta.12's storage guard
+cannot reject that package afterward. There is no reverse migration to legacy
+storage.
+
+For a future older release that explicitly retains the same storage contract,
+rollback remains two-step and opt-in:
 
 ```bash
-sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-<older-version>-any.pkg.tar.zst
+sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-compatible-older.pkg.tar.zst
 shibumi-shell update --allow-downgrade --yes
 ```
+
+The eligible target's lifecycle must still admit both release identities. Its
+transaction failure and recovery path restores complete original snapshots.
 
 Removal reverses the user lifecycle before dropping the immutable payload:
 

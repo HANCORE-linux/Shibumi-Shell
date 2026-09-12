@@ -186,20 +186,27 @@ authoritative origin. The old checkout is not deleted or modified.
 
 ### Roll back a package version
 
-Install a previously accepted package from Pacman's cache, then explicitly
+Roll back only to an accepted package that explicitly uses the same canonical
+State service-entry storage contract. Beta.12 is the first package with that
+contract, so it has no older eligible package target. Do not install Beta.11 or
+an earlier package after Beta.12. Pacman replaces the lifecycle code before the
+user-level update runs, and the older code cannot enforce Beta.12's one-way
+storage guard or export canonical settings back to legacy storage.
+
+For a future eligible release, install its package from Pacman's cache, then
 authorize staging its older payload:
 
 ```bash
-sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-<older-version>-any.pkg.tar.zst
+sudo pacman -U /var/cache/pacman/pkg/shibumi-shell-compatible-older.pkg.tar.zst
 shibumi-shell update --allow-downgrade --dry-run
 shibumi-shell update --allow-downgrade --yes
 ```
 
-Without `--allow-downgrade`, update and repair refuse to replace a newer staged
-suite with an older payload. The authorized rollback still uses the normal
-transaction, runtime verification, and automatic failure recovery, but only
-between identities explicitly admitted by that release. It is not a Step-6
-rollback mechanism.
+Without `--allow-downgrade`, compatible update and repair paths refuse to replace
+a newer staged suite with an older payload. The authorized rollback still uses
+the target release's normal transaction, runtime verification, and automatic
+failure recovery, but only between identities that release explicitly admits.
+It is not a Step-6 rollback mechanism.
 
 ## Status
 
@@ -265,8 +272,9 @@ The Control Center **Bars** page performs the same supported host switch and
 keeps both return paths visible.
 
 `omarchy bar reset` selects the stock bar while preserving the current layout.
-`omarchy bar defaults` replaces the complete `bar` object and removes
-`bar.shibumi`; use it only when that broader reset is intended.
+`omarchy bar defaults` replaces the complete `bar` object and its layout.
+Canonical settings in the State `plugins[]` service entry survive; activation
+restores the managed layout.
 
 ## Uninstall
 
@@ -303,12 +311,16 @@ The default uninstall restores the stock bar and removes Shibumi's managed
 configuration. Shibumi records the bar that was active before installation so
 its widgets and options can be restored as a complete layout. Install states
 created before this record existed fall back to Quattro's current stock-bar
-definition instead of leaving an empty bar. Preserve the `bar.shibumi`
-settings branch with:
+definition instead of leaving an empty bar. Preserve the complete canonical
+State service entry, including unknown fields and deep settings, with:
 
 ```bash
 ./scripts/shibumi-suite uninstall --keep-settings
 ```
+
+With `--keep-settings`, the retained State entry is dormant while its payload is
+absent and is reused on reinstall. Native per-plugin disable/removal is destructive
+and is not equivalent to this option.
 
 The adapter removes only suite-owned plugin directories. It refuses foreign or
 ambiguous targets.

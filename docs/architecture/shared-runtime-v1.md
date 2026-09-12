@@ -1,7 +1,8 @@
 # Shared Shibumi runtime V1
 
-Status: normative supporting contract, authorized 2026-09-09; implementation
-and 4.0.3 acceptance in progress. ARCHITECTURE.md remains authoritative.
+Status: normative supporting contract, authorized 2026-09-09; implemented in
+the Beta.12 candidate, with package-bound physical 4.0.3 acceptance pending.
+ARCHITECTURE.md remains authoritative.
 
 ## Scope
 
@@ -150,14 +151,15 @@ the full transition, not just the first State settlement. The rebuild window
 starts after that hold releases. Late completions cannot revive user-cancelled,
 revoked or replaced restore identities.
 
-The multi-step family/provider/catalog and clone flows are still unfinished.
-Their old synchronous chains refuse when the atomic State API is present;
-scoped hosts with an incomplete State API cannot fall back to them either.
-Only unscoped legacy presentation hosts retain that legacy route. This temporary
-fail-closed behavior is an explicit acceptance blocker, not a reduced release
-feature contract. Full V1/family/native restoration and catalogue integration
-remain separate work. All transition boolean returns mean request acceptance,
-not completed persistence.
+Family, provider and catalog changes use separate serialized transition
+channels. Fixed Shibumi groups settle through State without a native Bar write.
+Third-party bar widgets use the layout channel, while provider replacement
+captures the complete native Bar and affected State preimage. Undo restores
+that exact V1 or V2 preimage only when the observed postimage, owner and serial
+still match; stale or intervening changes fail closed. Scoped hosts with an
+incomplete State API cannot fall back to the old synchronous chains. Only
+unscoped legacy presentation hosts retain that route. All transition boolean
+returns mean request acceptance, not completed persistence.
 
 ## Public catalog service foundation
 
@@ -170,12 +172,13 @@ identity or mutation authority. Interest survives transient provider loss while
 the holder lives, but catalog publication and work are revoked immediately.
 The final holder release stops acquisition and reconciliation independently of
 the update-check worker and its separate consumers. At most 64 live catalog
-holders are admitted. The admitted scoped Bar now holds one persistent catalog
-consumer for native family read classification; the page-bound Control Center
-consumer remains separate and unwired. Provider loss releases the Bar's exact
-service/token pair, and replacement reacquires without consulting the legacy
-registry. Bar destruction releases the final demand. The complete mutation
-workflow and Control Center presentation remain acceptance blockers.
+holders are admitted. The admitted scoped Bar holds one persistent consumer for
+native family read classification, and the active Control Center page holds its
+own consumer for presentation and mutation preflight. Provider loss releases
+each exact service/token pair; replacement reacquires without consulting the
+legacy registry. Page or Bar destruction releases its demand. Mutations still
+require a current immutable observation and the serialized State/native writer;
+the catalog token alone grants no mutation authority.
 
 A read invokes only `quickshell ipc --pid <Quickshell.processId> call -- shell
 listPlugins`; separate bounded `/proc` checks bind that PID to the injected
@@ -243,10 +246,12 @@ and native tests show post-drain spacing and silence after release. The pinned
 resource gate bounds the one launcher/custodian/IPC acquisition tree to three
 processes, includes observed descendants in warm-cycle CPU accounting and checks
 host PSS retention with calibrated QML/helper CPU and retention counterexamples.
-Real-consumer resource acceptance remains open. The timer and incomplete Control Center consumer/mutation integration are not
-production release acceptance. Catalog publication can update the Bar's
-read-only family projection; it does not start a Bar mutation or layout
-reconciliation timer.
+The isolated native fixture exercises the actual Bar and page consumers;
+separate resource controls bound catalog acquisition, and the all-suite gate
+checks publication and retirement without output surfaces. They do not replace
+complete-host or physical resource acceptance. Catalog publication can update
+the Bar's read-only family projection; it does not start a Bar mutation or
+layout reconciliation timer.
 
 ## Remaining integration gates
 

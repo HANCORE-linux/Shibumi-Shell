@@ -124,12 +124,18 @@ baseline.
   require single-instance manifests: an `allowMultiple` family request is
   refused before layout, registry or family-state mutation. Existing layouts,
   unrelated multi-instance entries and V2 retain their behavior.
-  Admission uses the host-selected manifest, including clone selection. An
-  active clone retains its own provider ID and existing entry settings; the
-  original is not enabled in its place. Missing selections, conflicting
-  families and duplicate single-instance entries are refused before mutation.
-  Clone family inheritance follows only exact installed source manifests,
-  with cycle detection and a 32-entry traversal bound.
+  On scoped hosts, rendering uses the exact configured layout ID and its
+  accepted `barWidgetRegistry.widgets[id].component` and metadata. Missing
+  registration stays empty until the registry publishes it; an original must
+  never substitute for a clone. Clone ancestry comes from public `listPlugins`,
+  with cycle detection and a 32-entry traversal bound, not fabricated foreign
+  manifests or executable paths. Native IPC owns enable/disable and clone
+  restoration; the active Bar owns layout edits and confirms its injected
+  `barConfig`. No shared catalog/config revision or universal CAS is assumed.
+  Older full-registry hosts retain their admitted manifest route. Missing
+  selections, conflicting families and duplicate single-instance entries are
+  refused before mutation. The pinned 4.0.3 fixture covers scoped catalog and
+  selected-provider flows; package-bound physical acceptance remains open.
   Family replacement does not increase capacity; the separately approved
   optional V1 center slot follows
   the limits above. V2 layout semantics and the saved schema remain unchanged.
@@ -237,11 +243,18 @@ The lifecycle contract and uncompleted physical gates are defined in
   without discarding or recovering any journal. One admitted public journal may
   explain an exposed target/state mismatch; recovery consumes its validated
   snapshot and live identity is checked again before the requested operation.
-  Rollback and commit artifacts are role-bound to exact pre-mutation digests;
-  recovery atomically quarantines and revalidates backups, preserves the live
-  target until post-restore validation succeeds, and holds no-follow,
-  inode-bound archive directories through commit cleanup. More than one public
-  journal is ambiguous and fails closed.
+  Rollback and commit artifacts are role-bound to exact pre-mutation digests.
+  Schema-2 journals additionally bind the configuration parent by device and
+  inode. The lifecycle holds that parent descriptor, performs `shell.json`
+  reads and writes relative to it, and rechecks its path identity before
+  recovery, reconciliation, and retirement boundaries. Rollback snapshots are
+  bounded regular files opened without following symlinks and remain bound to
+  their admitted inode and digest. Recovery atomically quarantines and
+  revalidates backups, preserves the live target until post-restore validation
+  succeeds, and validates archive namespaces before commit cleanup. Detected
+  public-target, artifact, or configuration-parent authority loss stops the
+  operation without deleting a replacement. More than one public journal is
+  ambiguous and fails closed.
 - Step-6 development installations are not downgraded or migrated by Beta.12.
   They require a separately reviewed rollback that compares every target
   identity and preserves intervening foreign or user changes.
@@ -396,20 +409,46 @@ the saved preference.
 
 ### Configuration and reset behavior
 
-- Shibumi owns only its `bar.shibumi` extension inside the host-owned
-  `shell.json` document. The sibling `bar.transparent` preference remains
-  stock-bar-owned and survives install, update, activation, deactivation, and
-  migration unchanged.
+- Canonical settings live in the unique `plugins[]` service entry
+  `{id: "hancore.shibumi.state", shibumiStateSchemaVersion: 1, shibumi: {...}}`
+  inside the host-owned `shell.json`. State is the single runtime writer under
+  both bars, using its own scoped `updateEntryInline` capability and preserving
+  all unrelated entry fields. There is no Bar broker or second settings store.
+  The numeric schema value is 1 (JSON `1.0` is equivalent); booleans and strings
+  are invalid canonical versions. The sibling `bar.transparent` preference
+  remains stock-bar-owned and survives lifecycle operations unchanged.
+- The drained suite lifecycle migrates legacy `bar.shibumi` once when canonical
+  settings are absent. A bare State entry does not block that import; invalid
+  canonical data refuses rather than falling back. Runtime never migrates.
+  Installation metadata `settingsStorageVersion: 1` is bound to the admitted
+  payload identity and prevents current repair/update paths from resurrecting
+  legacy data after destructive native disable. The current lifecycle refuses a
+  legacy-storage target even with `--allow-downgrade`, and there is no reverse
+  export. This does not make a package-manager rollback to older lifecycle code
+  safe: Pacman replaces that guard before the user transaction runs. Beta.12 is
+  the first package with canonical storage and has no eligible older package
+  target. Transaction failure/recovery still restores its complete original
+  snapshots.
+- Two process-wide read-only FileViews watch the user document and official
+  defaults. Only a missing or zero-length user file falls back to defaults;
+  corrupt or unreadable data refuses. Reads spawn no subprocess. The 75 ms
+  debounce merges rapid setters against pending intent; a fresh complete entry
+  is read before dispatch. Each dispatch/readback has a two-second deadline.
+  Setter `true` means queued, not saved. Published config/revision remain
+  file-backed, with explicit pending/status/serial and settlement notification;
+  a native `false` can mean unchanged and requires matching file readback too.
+  Scope loss cancels queued work. Full-entry readback is not an fsync guarantee,
+  a generic CAS contract, or a bound on FileView's acquisition allocation.
 - The one-time migration renames `hancore.qsrise.*` IDs, `bar.qsrise`, nested
   plugin-keyed settings, and string references without changing unrelated
   configuration or the user's layout order.
 - `omarchy bar reset` selects `omarchy.bar` and retains the remaining bar
   configuration. `shibumi-suite status` reports Shibumi as inactive, and
   `shibumi-suite activate` selects it again.
-- `omarchy bar defaults` replaces the complete `bar` object. It therefore
-  removes Shibumi layout and personal `bar.shibumi` settings by host design.
-  `shibumi-suite activate` restores the managed default layout but cannot
-  reconstruct settings deleted by that command.
+- `omarchy bar defaults` replaces the complete `bar` object and removes its
+  layout, but canonical service-entry settings survive. `shibumi-suite activate`
+  restores the managed layout. Native disable/removal of the State entry is
+  destructive; it is not equivalent to suite `--keep-settings`.
 - Generic per-plugin enable, disable, and remove actions do not own Shibumi's
   suite lifecycle. Shibumi roots must be managed as one dependency set;
   `shibumi-suite repair` transactionally restores a partial payload and its
@@ -419,7 +458,9 @@ the saved preference.
   still fail closed.
 - Uninstall removes Shibumi plugin references, selects the built-in bar, and
   uses Quattro's full restart boundary before deleting the provider payload.
-  It removes `bar.shibumi` unless `--keep-settings` is explicit.
+  Normal uninstall removes canonical and legacy settings. `--keep-settings`
+  retains the complete canonical State entry, including unknown fields and deep
+  settings, dormant while its plugin payload is absent. Reinstall reuses it.
 
 ## Design Rules
 
@@ -472,11 +513,16 @@ scripts/                         sync, install, update, and uninstall tools
 tests/                           suite, contract, and regression tests
 ```
 
-Every runtime plugin is self-contained and may not import from a sibling or
-the repository root. Canonical helpers under `shared/` are deterministically
-vendored into plugin directories and checked for drift. Panels may consume
-services; services do not import panels. Widgets do not discover host paths or
-launch shell commands.
+The 24 runtime plugins remain separately registered and are installed and
+updated as one admitted suite. The explicitly authorized shared-runtime
+exception permits imports of `hancore.shibumi.state/runtime/` by cooperating
+Shibumi plugins; no other sibling or repository-root escape is allowed.
+The ownership, lifetime, version and publication rules are normative in
+[`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
+This is not a QML sandbox or an authorization to expose private host services.
+Other canonical helpers under `shared/` remain deterministically vendored and
+checked for drift. Panels may consume services; services do not import panels.
+Widgets do not discover host paths or launch shell commands.
 
 The Phase 2 owner for every V1 group and the notification and OSD boundaries
 are recorded in
@@ -803,7 +849,25 @@ Current Phase 2 foundation:
 - G12 and G14 are separate V1 battery and power-profile presentations over the
   process-wide `hancore.shibumi.power-state` service. Battery state stays event-driven through the
   shared UPower singleton, battery details are panel-lifecycle gated, and one
-  profile refresh/set owner serves every output. The combined `omarchy.power`
+  profile refresh/set owner serves every output. Beta.12 retains the existing
+  UPower, Omarchy helper, `busctl`, and `powerprofilesctl` backend ownership;
+  shared-runtime admission is not a Step-6 backend transition. Battery truth
+  requires `UPowerDevice.ready`, independently of profile availability on
+  batteryless machines. The four existing operation slots remain process-wide,
+  each with a ten-second one-shot deadline and exact admission lease/generation.
+  Scope loss cancels work and rejects stale publication; a started operation
+  drains its exit and stdout callbacks before its slot can be reused. A late
+  process-start signal rechecks cancellation and admission. Deferred refreshes
+  retain revocable demand until dispatch; last-consumer release, battery loss
+  and scope invalidation cancel it. Synchronous busy-state notifications are
+  rechecked before process dispatch and completion publication. Cancellation cannot
+  undo a platform action already applied before the process was stopped.
+  The existing 5-second active-profile/detail and 5-minute full-profile timers
+  require current admission and their respective consumer leases. Panels keep
+  their local Bar and reactive service references; native battery objects are
+  not deliberately exported. Canonical Power sources remain under
+  `shared/power-state/`; vendoring rewrites only their exact runtime import depth.
+  The combined `omarchy.power`
   alias is consumed so it cannot run beside the split views; G14 remains
   available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,
@@ -846,10 +910,16 @@ Current Phase 2 foundation:
   chrome without coupling presentation to persistence.
 - Reactor Modes 1-6 are style-owned, backend-free gap renderers. Mode 7 uses
   one process-wide lazy event service over existing Shibumi and Quattro owners;
-  Mode 8 uses one process-wide lazy quote reader. Modes 7-8 share the same
+  Mode 8 uses one process-wide lazy quote reader. Theme/event/quote file
+  contents are acquired through bounded no-follow regular-file reads, not
+  unbounded FileView content buffers. Metadata watchers trigger one coalesced
+  short-lived Python reader per active input (two in Mode 7, one in Mode 8),
+  initially and on observed changes, with a two-second one-shot deadline and
+  cancellation on backend loss; there is no acquisition polling timer.
+  The existing single pacman event tail remains Mode-7-only. Modes 7-8 share the same
   per-output swarm renderer, use physical run gaps, and create no service or
   renderer in Mode 0. The Control Center persists the selected mode through
-  host-owned `bar.shibumi.reactor` state. Controlled Mode 7/8 Wayland and CPU
+  the canonical State entry's `shibumi.reactor` data. Controlled Mode 7/8 Wayland and CPU
   acceptance remains open.
 
 ### Phase 3: Interaction Model

@@ -152,6 +152,60 @@ def main() -> None:
             if target is not None and not target.exists():
                 fail(f"broken local link in {relative}: {raw_target}")
 
+    # Runtime storage is the State service entry. Keep the retired spelling
+    # exactly once in each normative description of the one-time migration.
+    legacy_storage_contexts = {
+        "ARCHITECTURE.md": (
+            "The drained suite lifecycle migrates legacy `bar.shibumi` once"
+        ),
+        "docs/architecture/shared-runtime-v1.md": (
+            "Runtime never revives legacy `bar.shibumi`."
+        ),
+    }
+    markdown_sources = [
+        REPO_ROOT / "README.md",
+        REPO_ROOT / "ARCHITECTURE.md",
+        *sorted((REPO_ROOT / "docs").rglob("*.md")),
+    ]
+    markdown_content = {
+        source.relative_to(REPO_ROOT).as_posix(): source.read_text(
+            encoding="utf-8"
+        )
+        for source in markdown_sources
+    }
+
+    def legacy_storage_error(documents: dict[str, str]) -> str | None:
+        for relative, content in documents.items():
+            mention_count = content.count("bar.shibumi")
+            expected_context = legacy_storage_contexts.get(relative)
+            if expected_context is None:
+                if mention_count:
+                    return f"retired State storage outside migration docs: {relative}"
+                continue
+            normalized = " ".join(content.split())
+            if mention_count != 1 or normalized.count(expected_context) != 1:
+                return f"retired State migration description drifted: {relative}"
+        return None
+
+    storage_error = legacy_storage_error(markdown_content)
+    if storage_error:
+        fail(storage_error)
+    duplicate_control = dict(markdown_content)
+    duplicate_control["ARCHITECTURE.md"] += (
+        "\n" + legacy_storage_contexts["ARCHITECTURE.md"] + "\n"
+    )
+    if legacy_storage_error(duplicate_control) is None:
+        fail("retired State duplicate countercheck did not fail")
+    rewrap_control = dict(markdown_content)
+    rewrap_control["ARCHITECTURE.md"] = rewrap_control["ARCHITECTURE.md"].replace(
+        "legacy `bar.shibumi` once",
+        "legacy\n`bar.shibumi` once",
+        1,
+    )
+    rewrap_error = legacy_storage_error(rewrap_control)
+    if rewrap_error:
+        fail(f"retired State rewrap countercheck failed: {rewrap_error}")
+
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     private_project_root = "/home/" + "hancore/Projects/"
     if private_project_root + "Quickshell-Dots" in readme:
@@ -165,6 +219,41 @@ def main() -> None:
         if any(path in content for path in private_baseline_paths):
             fail(f"current documentation exposes a private baseline path: {relative}")
 
+    # This is an exact source-contract check, not a Markdown parser. Reviewers
+    # still verify rendered structure when changing either rollback section.
+    rollback_warning_blocks = {
+        "docs/install.md": (
+            "Roll back only to an accepted package that explicitly uses the "
+            "same canonical State service-entry storage contract. Beta.12 is "
+            "the first package with that contract, so it has no older eligible "
+            "package target. Do not install Beta.11 or an earlier package after "
+            "Beta.12. Pacman replaces the lifecycle code before the user-level "
+            "update runs, and the older code cannot enforce Beta.12's one-way "
+            "storage guard or export canonical settings back to legacy storage."
+        ),
+        "docs/development/packaging.md": (
+            "Intentional package rollback is supported only between releases "
+            "that both use the canonical State service-entry storage contract. "
+            "Beta.12 is the first package with that contract, so it has no older "
+            "eligible package target. Do not install Beta.11 or an earlier "
+            "package after Beta.12: Pacman replaces the current payload and "
+            "lifecycle code before the user-level update runs, so Beta.12's "
+            "storage guard cannot reject that package afterward. There is no "
+            "reverse migration to legacy storage."
+        ),
+    }
+    expected_pacman_command = (
+        "sudo pacman -U "
+        "/var/cache/pacman/pkg/shibumi-shell-compatible-older.pkg.tar.zst"
+    )
+    for relative, warning_block in rollback_warning_blocks.items():
+        content = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        normalized = " ".join(content.split())
+        if normalized.count(warning_block) != 1:
+            fail(f"package rollback source warning drifted in {relative}")
+        if content.splitlines().count(expected_pacman_command) != 1:
+            fail(f"package rollback source command drifted in {relative}")
+
     testing_guide = current_content["docs/development/testing.md"]
     for marker in (
         "contracts/baselines/omarchy-installed-package-v4.0.2.json",
@@ -175,9 +264,68 @@ def main() -> None:
         "./tests/omarchy-forward-compat-contract-regression.sh",
         "contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json",
         "Shibumi complete contract regression passed",
+        "python3 tests/native-catalog-regression.py --controls",
+        "python3 tests/native-catalog-instance-selection-regression.py",
+        "python3 tests/catalog-demand-regression.py --controls",
+        "python3 tests/native-catalog-fallback-regression.py",
+        "python3 tests/native-catalog-resource-regression.py",
+        "python3 tests/all24-scoped-service-regression.py",
+        "FixtureCatalogService.qml` only exposes observation IPC",
+        "exact 18 service owners",
+        "`--max-filesize 131072`",
+        "`--max-filesize 65536`",
+        "Loader destruction stops that timer",
     ):
         if marker not in testing_guide:
             fail(f"testing guide does not explain the baseline contract: {marker}")
+
+    for stale_claim in (
+        "remain separate unfinished work",
+        "consumer and mutation workflow remain unwired",
+        "does not yet exercise the Bar consumer",
+        "are not exercised as completed integrations",
+        "**not transfer-time byte limits**",
+        "all twenty-one current",
+        "Existing Weather transport and lifecycle gaps remain open",
+        "cross-plugin services, catalog/clone authority",
+    ):
+        if stale_claim in testing_guide:
+            fail(f"testing guide retained a completed-work claim: {stale_claim}")
+
+    contract_gate = (REPO_ROOT / "tests/contract-regression.sh").read_text(
+        encoding="utf-8"
+    )
+    for required_gate in (
+        'tests/native-catalog-regression.py" --controls',
+        'tests/native-catalog-instance-selection-regression.py"',
+        'tests/catalog-demand-regression.py" --controls',
+    ):
+        if contract_gate.count(required_gate) != 1:
+            fail(f"complete contract lost catalog gate: {required_gate}")
+
+    shared_runtime = (
+        REPO_ROOT / "docs/architecture/shared-runtime-v1.md"
+    ).read_text(encoding="utf-8")
+    catalog_ipc_commands = [
+        " ".join(command.split())
+        for command in re.findall(r"`(quickshell\s+ipc[^`]*)`", shared_runtime,
+                                  flags=re.DOTALL)
+    ]
+    expected_catalog_ipc = (
+        "quickshell ipc --pid <Quickshell.processId> call -- shell listPlugins"
+    )
+    if catalog_ipc_commands != [expected_catalog_ipc]:
+        fail("shared runtime must document only the exact catalog PID selector")
+    for catalog_contract in (
+        "PluginUpdateService` owns its local",
+        "At most 64 live catalog",
+        "quickshell ipc --pid <Quickshell.processId> call -- shell",
+        "includes observed descendants in warm-cycle CPU accounting",
+        "active Control Center page holds its",
+        "all-suite gate",
+    ):
+        if catalog_contract not in shared_runtime:
+            fail(f"shared runtime lost catalog integration contract: {catalog_contract}")
 
     readme_images = [
         match.group(1) or match.group(2)

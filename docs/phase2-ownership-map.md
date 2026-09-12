@@ -85,9 +85,10 @@ plugin, not a bar-style component.
 
 The final Shibumi layout requires V1 group order, splits, compact choices, and
 responsive behavior that the stock Omarchy `bar.layout` array cannot fully
-describe. Shibumi will store this state under the host-owned `bar.shibumi` object in
-`~/.config/omarchy/shell.json` and mutate it only through the injected shell
-API.
+describe. Shibumi stores this state in the unique `plugins[]` entry with
+`id: "hancore.shibumi.state"` and `shibumiStateSchemaVersion: 1` in
+`~/.config/omarchy/shell.json`. State writes its own complete entry through the
+scoped `updateEntryInline` API under either bar, preserving unrelated fields.
 
 Host-wide fields remain canonical:
 
@@ -101,14 +102,18 @@ bar.style
 Shibumi-owned fields are versioned and validated before use:
 
 ```text
-bar.shibumi.version
-bar.shibumi.order
-bar.shibumi.splits
-bar.shibumi.widgets
+shibumi.version
+shibumi.order
+shibumi.splits
+shibumi.widgets
 ```
 
-Missing or malformed Shibumi state resolves to compiled defaults. Shibumi does not
-silently rewrite `shell.json` during load. The group renderer consumes the QS
+These paths are relative to that State entry. Missing or malformed canonical
+storage makes State unavailable; it does not trigger a runtime migration or
+fallback to retired storage. Valid settings are normalized for presentation.
+State setters report queued acceptance, not persistence; config and revision
+publish only from file readback. Shibumi does not silently rewrite `shell.json`
+during load. The group renderer consumes the QS
 Rise order while retaining settings from `bar.layout`; unassigned custom host
 widgets remain regional extras instead of disappearing.
 

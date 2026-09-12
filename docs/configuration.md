@@ -13,8 +13,11 @@ The active bar, plugin activation, bar layout, and Shibumi settings live in:
 ~/.config/omarchy/shell.json
 ```
 
-Shibumi settings are stored under `bar.shibumi`. The state service validates
-and normalizes this branch before using it. It includes:
+Shibumi settings live in the unique `plugins[]` entry whose `id` is
+`hancore.shibumi.state`. That entry has `shibumiStateSchemaVersion: 1` and a
+`shibumi` object with `version: 1`. State validates the canonical envelope and
+normalizes its settings for presentation; invalid canonical storage makes State
+unavailable rather than silently falling back. The settings include:
 
 - V1 and V2 widget order, explicit V1 base/extra slot roles, and split
   boundaries;
@@ -31,7 +34,9 @@ and normalizes this branch before using it. It includes:
 - independent V1 and V2 layout-protection preferences.
 
 Use the Control Center for normal changes. Manual JSON edits can be rejected or
-normalized when they violate the schema.
+normalized when they violate the schema. Setters accept queued changes; only
+matching file readback confirms persistence. Unknown fields in the State entry,
+including nested settings, survive ordinary settings writes.
 
 ### Appearance IPC
 
@@ -173,8 +178,10 @@ layout snapshots through the suite's continuity manager.
 - `shibumi-suite deactivate` selects Omarchy while retaining Shibumi.
 - `shibumi-suite activate` restores Shibumi and its managed layout.
 - `omarchy bar reset` selects the stock host without a full defaults reset.
-- `omarchy bar defaults` replaces the complete `bar` object, including
-  `bar.shibumi`.
+- `omarchy bar defaults` replaces the complete `bar` object and its layout,
+  but retains canonical State service-entry settings.
+- Native disable/removal of State deletes its entry. Use suite lifecycle
+  commands; `uninstall --keep-settings` retains the complete dormant entry.
 
 `bar.transparent` belongs to the stock `omarchy.bar`. Shibumi V1 and V2 remain
 opaque regardless of that value and provide no transparency control. Suite

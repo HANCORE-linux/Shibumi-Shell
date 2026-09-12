@@ -46,8 +46,10 @@ same facade. It must reuse the existing feature plugins and state owners.
 ## State and lifecycle
 
 Omarchy's `shell.json` is the persistent user configuration. Shibumi's state
-service normalizes `bar.shibumi`, while the suite adapter owns installation
-metadata and transactional recovery.
+service owns the `.shibumi` settings in its canonical `plugins[]` service entry.
+It writes through the native own-entry API under either bar and publishes only
+file-backed settings. The suite adapter owns drained storage migration,
+installation metadata, and transactional recovery.
 
 One popout owner is active at a time for a bar context. Panels follow the
 invoking widget and output, close when the bar is hidden for an idle or

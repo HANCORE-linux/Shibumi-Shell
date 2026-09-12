@@ -98,6 +98,28 @@ A complete aggregate run ends with `Shibumi complete contract regression
 passed` and names the accepted baseline and full source revision. Absence of
 that marker is not complete-contract evidence.
 
+## Omarchy 4.0.3: candidate implemented, acceptance pending
+
+The Beta.12 candidate targets the exact `v4.0.3` host at commit
+`0534987009061cbe2dacdde4ad564092ab698d12`. Isolated tests cover own-file marker
+validation, permission-scoped State writes and readback under stock and suite
+bars, Control Center restoration through file-backed settlement, and the
+monitor's scalar-Bar bridge. They also exercise the PID-bound native catalog,
+independent Bar and page consumers, selected-provider changes and exact V1/V2
+undo, stale-snapshot refusal, and all 24 plugin roots with the exact 18 scoped
+service owners. The all-suite test withholds platform owners and creates no
+output surfaces.
+
+These fixture results do not make 4.0.3 supported. The public widget snapshot
+is not a global manifest or service registry; denied or missing capabilities
+must not be replaced by private host traversal, a guessed original provider,
+undeclared sibling imports, duplicate backends, or authentication access. Final
+acceptance still requires the package-bound lifecycle and recovery run, a
+coredump-free production restart, complete notification and idle/lock behavior,
+output lifetime, hardware-adjacent actions, and physical Top/Bottom and
+multi-output checks on unchanged 4.0.3. Existing 4.0.2 evidence does not
+transfer to this candidate.
+
 ## Recovery boundary
 
 Shibumi does not replace Omarchy's stock recovery path. The lifecycle

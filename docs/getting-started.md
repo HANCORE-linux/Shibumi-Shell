@@ -53,9 +53,10 @@ and retains its own geometry and interaction behavior.
 
 ## Understand saved state
 
-Shibumi stores its user-facing settings under `bar.shibumi` in Omarchy's
-`~/.config/omarchy/shell.json`. It keeps suite ownership, revision, hashes, and
-transaction recovery data in the XDG state directory.
+Shibumi stores its user-facing settings in the `.shibumi` object of the
+`hancore.shibumi.state` service entry in Omarchy's `shell.json` (`plugins[]`).
+The file lives at `~/.config/omarchy/shell.json`. Suite ownership, revision,
+hashes, and transaction recovery data live separately in the XDG state directory.
 
 Use the Control Center for normal changes. Read [configuration](configuration.md)
 before editing JSON or suite state by hand.
