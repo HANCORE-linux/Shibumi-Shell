@@ -458,13 +458,8 @@ class OmarchyRuntime:
             raise RuntimeFailure("shell drain timeout must be positive")
         if quiet_period < 0:
             raise RuntimeFailure("shell drain quiet period cannot be negative")
-        command = [
-            "quickshell",
-            "kill",
-            "-p",
-            str(shell_path),
-            "--any-display",
-        ]
+        prepare_settle = 0.2
+        kill_reserve = 0.05
         poll_interval = 0.05
         deadline = time.monotonic() + timeout
         evidence_deadline = deadline + 0.15
@@ -516,12 +511,53 @@ class OmarchyRuntime:
                     time.sleep(sleep_for)
                 continue
 
+            target = instances[0]
+            pid = target.get("pid")
+            if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+                raise RuntimeFailure(
+                    "matching Omarchy shell instance has no valid PID"
+                )
+            prepared = False
+            prepare_budget = (
+                deadline - time.monotonic() - prepare_settle - kill_reserve
+            )
+            if prepare_budget > 0:
+                try:
+                    result = self.run(
+                        [
+                            "quickshell",
+                            "ipc",
+                            "--pid",
+                            str(pid),
+                            "call",
+                            "shibumi-suite",
+                            "prepareShutdown",
+                        ],
+                        timeout=min(0.25, prepare_budget),
+                        check=False,
+                    )
+                except RuntimeFailure:
+                    pass
+                else:
+                    prepared = (
+                        result.returncode == 0
+                        and result.stdout.strip() == "ok"
+                    )
+            if prepared:
+                settle_budget = deadline - time.monotonic()
+                if settle_budget > 0:
+                    time.sleep(min(prepare_settle, settle_budget))
+
             kill_budget = deadline - time.monotonic()
             if kill_budget <= 0:
                 break
             empty_since = None
             try:
-                self.run(command, timeout=min(6, kill_budget), check=False)
+                self.run(
+                    ["quickshell", "kill", "--pid", str(pid)],
+                    timeout=min(6, kill_budget),
+                    check=False,
+                )
             except RuntimeFailure as error:
                 if time.monotonic() < deadline:
                     raise

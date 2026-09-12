@@ -97,6 +97,7 @@ JOURNAL_KEYS = {
     "phase",
     "pluginRoot",
     "configPath",
+    "configParentIdentity",
     "configExisted",
     "menuExtensionPath",
     "menuExtensionExisted",
@@ -116,6 +117,7 @@ REQUIRED_JOURNAL_KEYS = {
     "phase",
     "pluginRoot",
     "configPath",
+    "configParentIdentity",
     "configExisted",
     "menuExtensionPath",
     "menuExtensionExisted",
@@ -129,6 +131,26 @@ REQUIRED_JOURNAL_KEYS = {
 RECORD_KEYS = {"action", "pluginId", "target", "stage", "backup", "hadTarget"}
 RECORD_BOUND_KEYS = RECORD_KEYS | {"beforePayloadDigest"}
 RECORD_ACTIONS = {"replace", "remove", "remove-legacy"}
+MAX_FILESYSTEM_ID = (1 << 64) - 1
+JOURNAL_SCHEMA_VERSION = 2
+LEGACY_JOURNAL_SCHEMA_VERSION = 1
+
+
+def parse_config_parent_identity(value: Any) -> tuple[int, int]:
+    if not isinstance(value, dict) or set(value) != {"device", "inode"}:
+        raise ValueError("config parent identity must contain only device and inode")
+    device = value.get("device")
+    inode = value.get("inode")
+    if (
+        type(device) is not int
+        or type(inode) is not int
+        or device < 0
+        or inode <= 0
+        or device > MAX_FILESYSTEM_ID
+        or inode > MAX_FILESYSTEM_ID
+    ):
+        raise ValueError("config parent device/inode are out of range")
+    return device, inode
 
 
 def _reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -372,6 +394,10 @@ def classify_install_state(
         required_keys.add("sourceRoot")
     else:
         raise AdmissionError("installation authority metadata is inconsistent")
+    if "settingsStorageVersion" in state:
+        if type(state["settingsStorageVersion"]) is not int or state["settingsStorageVersion"] != 1:
+            raise AdmissionError("unsupported settings storage migration version")
+        required_keys.add("settingsStorageVersion")
     if "previousBar" in state:
         required_keys.add("previousBar")
     if "migratedFrom" in state:
@@ -451,7 +477,11 @@ def classify_install_state(
             "installation revision/digest identity is not an explicitly supported "
             "Beta.11 or Step-5 state; no recovery or mutation was attempted"
         )
-    return str(matches[0].get("id") or "supported")
+    identity = str(matches[0].get("id") or "supported")
+    expects_entry_storage = identity == "current-release" and suite.settings_storage_version == 1
+    if expects_entry_storage != (state.get("settingsStorageVersion") == 1):
+        raise AdmissionError("settings storage version does not match payload identity")
+    return identity
 
 
 def _validate_record(
@@ -750,6 +780,17 @@ def _classify_journal(
     errors: list[str] = []
     snapshots: dict[str, bytes] = {}
     artifact_bindings: list[dict[str, Any]] = []
+    schema = journal.get("schemaVersion")
+    if (
+        type(schema) is int
+        and schema == LEGACY_JOURNAL_SCHEMA_VERSION
+        and journal.get("suiteId") == SUITE_ID
+        and "configParentIdentity" not in journal
+    ):
+        return ([
+            "legacy schema-1 transaction lacks config parent identity; "
+            f"recovery is unsafe and the journal was retained: {directory}"
+        ], snapshots, artifact_bindings)
     unknown = set(journal) - JOURNAL_KEYS
     missing = REQUIRED_JOURNAL_KEYS - set(journal)
     if unknown:
@@ -764,8 +805,8 @@ def _classify_journal(
         )
     if errors:
         return errors, snapshots, artifact_bindings
-    if type(journal.get("schemaVersion")) is not int \
-            or journal.get("schemaVersion") != 1 \
+    if type(schema) is not int \
+            or schema != JOURNAL_SCHEMA_VERSION \
             or journal.get("suiteId") != SUITE_ID:
         errors.append(f"unknown transaction journal schema: {directory}")
     if journal.get("token") != token:
@@ -791,6 +832,12 @@ def _classify_journal(
     if Path(str(journal.get("configPath") or "")).resolve(strict=False) \
             != paths.config_file.resolve(strict=False):
         errors.append(f"transaction config path mismatch: {directory}")
+    try:
+        parse_config_parent_identity(journal.get("configParentIdentity"))
+    except ValueError:
+        errors.append(
+            f"transaction config parent identity is malformed: {directory}"
+        )
     menu_path = journal.get("menuExtensionPath")
     if (
         not isinstance(menu_path, str)
@@ -1201,20 +1248,12 @@ def _classify_journal(
                     plugin_id, (False, False, False)
                 )
                 had_target = bool(record["hadTarget"])
-                if phase == "committing" and (
-                    (had_target and not source_backup_exists)
-                    or archived_exists
-                    or partial_exists
-                ):
-                    errors.append(
-                        f"committing transaction backup topology is incomplete: {plugin_id}"
-                    )
-                elif phase == "committed" and archive_value is True and (
+                if phase in COMMIT_PHASES and archive_value is True and (
                     (had_target and not (source_backup_exists or archived_exists))
                     or (partial_exists and not source_backup_exists)
                 ):
                     errors.append(
-                        f"committed transaction archive topology is incomplete: {plugin_id}"
+                        f"committing transaction archive topology is incomplete: {plugin_id}"
                     )
                 if not had_target and (
                     source_backup_exists or archived_exists or partial_exists

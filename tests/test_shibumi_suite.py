@@ -5,8 +5,10 @@ from __future__ import annotations
 import copy
 import json
 import io
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -15,13 +17,19 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Callable
 from unittest.mock import Mock, patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from shibumi_suite.admission import preflight_lifecycle_state  # noqa: E402
+from shibumi_suite.admission import (  # noqa: E402
+    AdmissionError,
+    JOURNAL_SCHEMA_VERSION,
+    MAX_STATE_BYTES,
+    preflight_lifecycle_state,
+)
 from shibumi_suite.cli import (  # noqa: E402
     CliError,
     command_activate,
@@ -37,6 +45,9 @@ from shibumi_suite.cli import (  # noqa: E402
 )
 from shibumi_suite.config import (  # noqa: E402
     ConfigError,
+    state_entry,
+    migrate_state_settings,
+    validate_state_settings,
     apply_identity_contract,
     apply_profile,
     atomic_write,
@@ -56,6 +67,7 @@ from shibumi_suite.menu_extension import (  # noqa: E402
     remove_picker_routing,
 )
 from shibumi_suite.runtime import OmarchyRuntime, RuntimeFailure, RuntimePaths  # noqa: E402
+import shibumi_suite.config as config_module  # noqa: E402
 import shibumi_suite.transaction as transaction_module  # noqa: E402
 from shibumi_suite.transaction import (  # noqa: E402
     PluginTransaction,
@@ -420,6 +432,7 @@ class RuntimeProcessTests(unittest.TestCase):
         foreign = Path(self.temporary.name) / "foreign/shell.qml"
         self.runtime.run = Mock(side_effect=[
             self.result(self.instance_json(config, foreign)),
+            self.result(returncode=1, stderr="target unavailable"),
             self.result(),
             self.result(self.instance_json(foreign)),
         ])
@@ -427,15 +440,18 @@ class RuntimeProcessTests(unittest.TestCase):
         self.runtime.stop_shell(quiet_period=0)
 
         commands = [call.args[0] for call in self.runtime.run.call_args_list]
-        kill = [
-            "quickshell",
-            "kill",
-            "-p",
-            str(self.omarchy_root / "shell"),
-            "--any-display",
-        ]
+        kill = ["quickshell", "kill", "--pid", "100"]
         registry = ["quickshell", "list", "--all", "--json"]
-        self.assertEqual(commands, [registry, kill, registry])
+        prepare = [
+            "quickshell",
+            "ipc",
+            "--pid",
+            "100",
+            "call",
+            "shibumi-suite",
+            "prepareShutdown",
+        ]
+        self.assertEqual(commands, [registry, prepare, kill, registry])
 
     def test_empty_quickshell_registry_sentinel_is_an_empty_array(self) -> None:
         self.runtime.run = Mock(return_value=self.result(
@@ -662,6 +678,237 @@ class SuiteLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeFailure, "symlinked Omarchy plugin"):
             self.paths.validate()
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve\n")
+
+    def test_transaction_rejects_unsafe_or_unbounded_live_config(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        external = self.root / "external-shell.json"
+        external.write_text("{}\n", encoding="utf-8")
+        cases = ("symlink", "fifo", "directory", "oversized")
+        for case in cases:
+            with self.subTest(case=case):
+                if path.is_dir() and not path.is_symlink():
+                    path.rmdir()
+                elif path.exists() or path.is_symlink():
+                    path.unlink()
+                if case == "symlink":
+                    path.symlink_to(external)
+                elif case == "fifo":
+                    os.mkfifo(path)
+                elif case == "directory":
+                    path.mkdir()
+                else:
+                    path.write_bytes(b"x" * (1024 * 1024 + 1))
+
+                with self.assertRaisesRegex(
+                    TransactionError,
+                    "live shell config",
+                ):
+                    PluginTransaction(self.paths, self.runtime)
+                self.assertFalse(self.paths.state_dir.exists())
+
+    def test_transaction_fd_relative_config_replace_keeps_private_mode(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"generation":"before"}\n'
+        updated = b'{"version":1,"generation":"after"}\n'
+        path.write_bytes(original)
+        path.chmod(0o644)
+        transaction = PluginTransaction(self.paths, self.runtime)
+
+        transaction.write_config(updated)
+
+        self.assertEqual(path.read_bytes(), updated)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        transaction.rollback()
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_transaction_binds_config_parent_across_rename_and_symlink_swap(
+        self,
+    ) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"owner":"original"}\n'
+        foreign = b'{"version":1,"owner":"foreign"}\n'
+        path.write_bytes(original)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        journal_before = transaction.journal_file.read_bytes()
+        events_before = list(self.runtime.events)
+
+        authorized_parent = path.parent.with_name("authorized-omarchy")
+        path.parent.rename(authorized_parent)
+        foreign_parent = self.root / "foreign/omarchy"
+        foreign_parent.mkdir(parents=True)
+        foreign_path = foreign_parent / path.name
+        foreign_path.write_bytes(foreign)
+        path.parent.symlink_to(foreign_parent, target_is_directory=True)
+
+        with self.assertRaisesRegex(TransactionError, "config parent"):
+            transaction.stop_shell()
+        with self.assertRaisesRegex(TransactionError, "config parent"):
+            transaction.write_config(b'{"version":1,"owner":"transaction"}\n')
+        with self.assertRaisesRegex(TransactionError, "config parent"):
+            transaction.rollback()
+
+        original_path = authorized_parent / path.name
+        self.assertEqual(original_path.read_bytes(), original)
+        self.assertEqual(foreign_path.read_bytes(), foreign)
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertNotEqual(transaction.journal_file.read_bytes(), journal_before)
+        self.assertEqual(
+            json.loads(transaction.journal_file.read_text(encoding="utf-8"))["phase"],
+            "recovery-required",
+        )
+
+        with self.assertRaisesRegex(TransactionError, "config parent"):
+            recover_transactions(self.paths, self.runtime)
+        self.assertEqual(original_path.read_bytes(), original)
+        self.assertEqual(foreign_path.read_bytes(), foreign)
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertTrue(transaction.journal_file.is_file())
+
+    def test_admission_rejects_malformed_config_parent_identity(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"version":1}\n')
+        transaction = PluginTransaction(self.paths, self.runtime)
+        journal = json.loads(
+            transaction.journal_file.read_text(encoding="utf-8")
+        )
+        journal["configParentIdentity"]["inode"] = True
+        atomic_write(
+            transaction.journal_file,
+            (json.dumps(journal, sort_keys=True) + "\n").encode("utf-8"),
+        )
+
+        with self.assertRaisesRegex(AdmissionError, "parent identity is malformed"):
+            preflight_lifecycle_state(
+                self.paths, self.suite, allow_pending_recovery=True
+            )
+
+        self.assertTrue(transaction.journal_file.is_file())
+        self.assertEqual(path.read_bytes(), b'{"version":1}\n')
+        self.assertEqual(self.runtime.events, [])
+        transaction._close_config_parent()
+
+    def test_recovery_rejects_regular_config_parent_swap_before_mutation(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"owner":"original"}\n'
+        updated = b'{"version":1,"owner":"transaction"}\n'
+        foreign = b'{"version":1,"owner":"foreign"}\n'
+        path.write_bytes(original)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stop_shell()
+        transaction.write_config(updated)
+        transaction._close_config_parent()
+
+        admitted_parent = path.parent.with_name("admitted-omarchy")
+        path.parent.rename(admitted_parent)
+        path.parent.mkdir()
+        path.write_bytes(foreign)
+        events_before = list(self.runtime.events)
+
+        with self.assertRaisesRegex(TransactionError, "config parent identity"):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual((admitted_parent / path.name).read_bytes(), updated)
+        self.assertEqual(path.read_bytes(), foreign)
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertTrue(transaction.journal_file.is_file())
+        self.assertEqual(list(path.parent.glob(f".{path.name}.*")), [])
+
+    def test_config_write_limit_precedes_mutation_and_accepts_exact_boundary(
+        self,
+    ) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1}\n'
+        path.write_bytes(original)
+
+        exact = PluginTransaction(self.paths, self.runtime)
+        exact.write_config(b"x" * MAX_STATE_BYTES)
+        self.assertEqual(path.stat().st_size, MAX_STATE_BYTES)
+        exact.rollback()
+        self.assertEqual(path.read_bytes(), original)
+
+        compact = json.dumps(
+            {
+                "version": 1,
+                "plugins": [],
+                "bar": {"layout": {"left": [], "center": [], "right": []}},
+                "foreign": [0] * 180000,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        encoded = encode_config(json.loads(compact))
+        self.assertLessEqual(len(compact), MAX_STATE_BYTES)
+        self.assertGreater(len(encoded), MAX_STATE_BYTES)
+        path.write_bytes(compact)
+        transaction = PluginTransaction(self.paths, self.runtime)
+        journal_before = transaction.journal_file.read_bytes()
+        entries_before = sorted(item.name for item in path.parent.iterdir())
+        events_before = list(self.runtime.events)
+
+        with self.assertRaisesRegex(TransactionError, "payload exceeds"):
+            transaction.write_config(encoded)
+
+        self.assertEqual(path.read_bytes(), compact)
+        self.assertEqual(transaction.journal_file.read_bytes(), journal_before)
+        self.assertEqual(
+            sorted(item.name for item in path.parent.iterdir()), entries_before
+        )
+        self.assertEqual(self.runtime.events, events_before)
+        transaction.rollback()
+
+    def test_atomic_config_replace_defensively_rejects_oversized_payload(
+        self,
+    ) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1}\n'
+        path.write_bytes(original)
+        parent_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            with self.assertRaisesRegex(TransactionError, "payload exceeds"):
+                transaction_module._atomic_replace_at(
+                    parent_fd, path.name, b"x" * (MAX_STATE_BYTES + 1)
+                )
+        finally:
+            os.close(parent_fd)
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(list(path.parent.glob(f".{path.name}.*")), [])
+
+    def test_transaction_rejects_live_config_changed_during_bounded_read(
+        self,
+    ) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"x" * 70000)
+        original_read = transaction_module.os.read
+        changed = False
+
+        def read_then_change(descriptor: int, size: int) -> bytes:
+            nonlocal changed
+            block = original_read(descriptor, size)
+            if not changed:
+                with path.open("ab") as stream:
+                    stream.write(b"foreign")
+                changed = True
+            return block
+
+        with (
+            patch.object(transaction_module.os, "read", side_effect=read_then_change),
+            self.assertRaisesRegex(TransactionError, "changed or exceeded bounds"),
+        ):
+            PluginTransaction(self.paths, self.runtime)
+        self.assertTrue(changed)
+        self.assertFalse(self.paths.state_dir.exists())
 
     def test_normal_package_install_is_admitted_for_its_next_lifecycle(self) -> None:
         shutil.copy2(
@@ -1153,7 +1400,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
         self.assertEqual(
-            updated_config["bar"]["shibumi"]["layoutProtection"],
+            state_entry(updated_config)["shibumi"]["layoutProtection"],
             {"v1": True, "v2": False},
         )
         control_plugin = self.runtime.list_plugins()[control_id]
@@ -1873,7 +2120,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(config["bar"]["style"], "shibumi")
         self.assertIs(config["bar"]["transparent"], True)
         self.assertNotIn("qsrise", config["bar"])
-        settings = config["bar"]["shibumi"]
+        settings = state_entry(config)["shibumi"]
         self.assertEqual(settings["iconSize"], 17)
         self.assertEqual(settings["identityVersion"], 3)
         self.assertEqual(settings["launcher"]["text"], "shibumi")
@@ -1916,6 +2163,138 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(len(archived_legacy), 1)
         self.assertFalse(self.hidden_transaction_paths())
 
+    def test_status_refuses_invalid_canonical_storage_without_mutation(self) -> None:
+        self.install()
+        original = json.loads(self.paths.config_file.read_text())
+        for case in ("absent", "bare", "duplicate", "layout", "schema", "payload", "version", "string-entry",
+                     "root-version", "root-bool", "root-string", "missing-region", "bad-region", "plugins-limit",
+                     "nan", "infinity", "negative-infinity", "parser-limit",
+                     "overflow-root", "overflow-entry", "overflow-settings",
+                     "integer-overflow-root", "integer-overflow-entry", "integer-overflow-settings"):
+            config = copy.deepcopy(original)
+            entry = state_entry(config)
+            if case == "absent":
+                config["plugins"].remove(entry)
+            elif case == "bare":
+                entry.pop("shibumi")
+            elif case == "duplicate":
+                config["plugins"].append(copy.deepcopy(entry))
+            elif case == "layout":
+                config["bar"]["layout"]["left"].append(copy.deepcopy(entry))
+            elif case == "schema":
+                entry["shibumiStateSchemaVersion"] = 2
+            elif case == "payload":
+                entry["shibumi"] = []
+            elif case == "version":
+                entry["shibumi"]["version"] = True
+            elif case == "string-entry":
+                config["plugins"][config["plugins"].index(entry)] = "hancore.shibumi.state"
+            elif case.startswith("root-"):
+                config["version"] = {"root-version": 2, "root-bool": True, "root-string": "1"}[case]
+            elif case == "missing-region":
+                config["bar"]["layout"].pop("center")
+            elif case == "bad-region":
+                config["bar"]["layout"]["center"] = {}
+            elif case == "plugins-limit":
+                config["plugins"] += [{"id": f"foreign.{i}"} for i in range(513 - len(config["plugins"]))]
+            elif case in ("nan", "infinity", "negative-infinity"):
+                config["foreign"] = float({"nan": "nan", "infinity": "inf", "negative-infinity": "-inf"}[case])
+            elif "overflow-" in case:
+                target = config if case.endswith("root") else entry if case.endswith("entry") else entry["shibumi"]
+                target["foreign"] = "__fixture_overflow__"
+            else:
+                config["foreign"] = "x" * 1048576
+            # Deliberately malformed raw input; production encoding refuses NaN.
+            token = "9" * 400 if case.startswith("integer-") else "1e309"
+            raw = json.dumps(config).replace('"__fixture_overflow__"', token).encode()
+            atomic_write(self.paths.config_file, raw)
+            before = self.paths.config_file.read_bytes()
+            output = io.StringIO()
+            with self.subTest(case=case), redirect_stdout(output):
+                self.assertEqual(command_status(self.suite, self.paths), 1)
+                self.assertIn("Config: invalid", output.getvalue())
+                self.assertIn("shibumi-suite repair", output.getvalue())
+                self.assertEqual(self.paths.config_file.read_bytes(), before)
+
+    def test_canonical_migration_refuses_raw_envelope_before_normalizing(self) -> None:
+        base = migrate_state_settings({"version": 1, "plugins": [], "bar": {}})
+        for case in ("root-version", "root-bool", "root-string", "region", "missing-region", "plugins-limit"):
+            config = copy.deepcopy(base)
+            if case.startswith("root-"):
+                config["version"] = {"root-version": 2, "root-bool": True, "root-string": "1"}[case]
+            elif case == "region":
+                config["bar"]["layout"]["right"] = None
+            elif case == "missing-region":
+                config["bar"]["layout"].pop("right")
+            else:
+                config["plugins"] += [{"id": f"foreign.{i}"} for i in range(512)]
+            before = copy.deepcopy(config)
+            with self.subTest(case=case), self.assertRaises(ConfigError):
+                migrate_state_settings(config)
+            self.assertEqual(config, before)
+        base["version"] = 1.0
+        base["plugins"] += [{"id": f"foreign.{i}"} for i in range(511)]
+        self.assertEqual(migrate_state_settings(base), base)
+
+    def test_state_schema_numbers_match_native_and_manager_semantics(self) -> None:
+        base = {"version": 1, "bar": {"id": "hancore.shibumi.bar"}, "plugins": []}
+        for value in (1, 1.0, True, "1", None, 2):
+            for key in ("shibumiStateSchemaVersion", "version"):
+                config = migrate_state_settings(base)
+                entry = state_entry(config)
+                (entry if key == "shibumiStateSchemaVersion" else entry["shibumi"])[key] = value
+                with self.subTest(key=key, value=repr(value)):
+                    if type(value) in (int, float) and value == 1:
+                        self.assertEqual(validate_state_settings(config), entry["shibumi"])
+                        self.assertEqual(migrate_state_settings(config), config)
+                    else:
+                        with self.assertRaises(ConfigError):
+                            migrate_state_settings(config)
+        for value in (1, 1.0, "1", True):
+            config = copy.deepcopy(base)
+            config["bar"]["shibumi"] = {"version": value}
+            if value is True:
+                with self.assertRaises(ConfigError):
+                    migrate_state_settings(config)
+            else:
+                self.assertIs(type(state_entry(migrate_state_settings(config))["shibumi"]["version"]), int)
+
+    def test_state_storage_keeps_complete_entry_through_uninstall_reinstall(self) -> None:
+        self.install()
+        config = json.loads(self.paths.config_file.read_text())
+        entry = state_entry(config)
+        entry["foreignFuture"] = {"nested": [1, False, {"label": "Malmö"}]}
+        entry["shibumi"]["picker"] = {"imageStyle": "tanzaku", "mediaStyle": "hearthstone"}
+        entry["shibumi"]["widgets"] = {"G8": {"omarchy.clock": {"format": "HH:mm", "deep": [3, 2, 1]}}}
+        retained = copy.deepcopy(entry)
+        atomic_write(self.paths.config_file, encode_config(config))
+        self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
+        kept = json.loads(self.paths.config_file.read_text())
+        self.assertEqual(state_entry(kept), retained)
+        self.assertFalse((self.paths.plugin_dir / "hancore.shibumi.state").exists())
+        self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
+        self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text())), retained)
+
+    def test_state_migration_refuses_corruption_and_does_not_resurrect_legacy(self) -> None:
+        config = {"version": 1, "bar": {"id": "omarchy.bar", "shibumi": {"version": 1, "legacy": True}},
+                  "plugins": [{"id": "hancore.shibumi.state", "foreign": {"value": 7}}]}
+        migrated = migrate_state_settings(config)
+        self.assertEqual(state_entry(migrated)["foreign"], {"value": 7})
+        self.assertEqual(migrate_state_settings(migrated), migrated)
+        corrupt = copy.deepcopy(migrated)
+        state_entry(corrupt)["shibumiStateSchemaVersion"] = 2
+        with self.assertRaises(ConfigError):
+            migrate_state_settings(corrupt)
+        duplicate = copy.deepcopy(config)
+        duplicate["plugins"].append(copy.deepcopy(duplicate["plugins"][0]))
+        with self.assertRaises(ConfigError):
+            migrate_state_settings(duplicate)
+        # A current installation's migration stamp prohibits re-import after
+        # raw native disable removed the canonical entry.
+        reset = migrate_state_settings(config, import_legacy=False)
+        self.assertNotIn("legacy", state_entry(reset)["shibumi"])
+        self.assertEqual(reset["bar"]["shibumi"], config["bar"]["shibumi"])
+
     def test_identity_contract_migrates_once_and_preserves_later_choice(self) -> None:
         config = json.loads(self.defaults.read_text(encoding="utf-8"))
         config["bar"]["shibumi"] = {
@@ -1930,7 +2309,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             },
         }
         migrated = apply_identity_contract(config)
-        settings = migrated["bar"]["shibumi"]
+        settings = state_entry(migrated)["shibumi"]
         self.assertEqual(settings["identityVersion"], 3)
         self.assertEqual(settings["launcher"]["text"], "shibumi")
         self.assertNotIn("menu", settings)
@@ -1938,7 +2317,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         settings["launcher"]["text"] = "omarchy"
         preserved = apply_identity_contract(migrated)
         self.assertEqual(
-            preserved["bar"]["shibumi"]["launcher"]["text"],
+            state_entry(preserved)["shibumi"]["launcher"]["text"],
             "omarchy",
         )
 
@@ -2163,7 +2542,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         self.assertFalse(self.hidden_transaction_paths())
 
-    def test_external_drift_rollback_skips_disabled_payload_provider(self) -> None:
+    def test_external_drift_rollback_uses_drained_restart_without_payload_reload(self) -> None:
         external_args = self.args(no_activate=True, keep_layout=True)
         self.assertEqual(
             command_install(external_args, self.suite, self.paths, self.runtime), 0
@@ -2188,14 +2567,57 @@ class SuiteLifecycleTests(unittest.TestCase):
                 command_repair(self.args(), self.suite, self.paths, self.runtime)
 
         self.assertEqual(self.paths.config_file.read_bytes(), original_config)
-        # The attempted external repair performs one payload reload while the
-        # provider is enabled; rollback must not issue a second call after the
-        # restored drift configuration unloads it.
-        self.assertEqual(self.runtime.payload_reloads, reloads_before + 1)
+        # External repair now shares the drained full-restart path. Neither the
+        # failed attempt nor rollback asks a potentially disabled provider to
+        # hot-reload payload.
+        self.assertEqual(self.runtime.payload_reloads, reloads_before)
         self.assertTrue(
             (self.paths.plugin_dir / "hancore.shibumi.state").is_dir()
         )
         self.assertFalse(self.hidden_transaction_paths())
+
+    def test_external_update_transforms_the_post_stop_config_and_restarts(self) -> None:
+        external_args = self.args(no_activate=True, keep_layout=True)
+        self.assertEqual(
+            command_install(external_args, self.suite, self.paths, self.runtime), 0
+        )
+        original_stop = self.runtime.stop_shell
+        saved_bar: dict[str, object] = {}
+        saved = False
+
+        def stop_after_external_save() -> None:
+            nonlocal saved_bar, saved
+            original_stop()
+            if not saved:
+                config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+                config["bar"]["id"] = "third.party.after-stop"
+                config["bar"]["layout"]["left"].append(
+                    {"id": "user.after-stop", "options": {"size": 19}}
+                )
+                config["bar"]["design"] = {"radius": 13, "variant": "user"}
+                saved_bar = copy.deepcopy(config["bar"])
+                atomic_write(self.paths.config_file, encode_config(config))
+                saved = True
+
+        original_expose = PluginTransaction.expose
+
+        def recording_expose(transaction: PluginTransaction) -> None:
+            self.runtime.events.append("expose")
+            original_expose(transaction)
+
+        self.runtime.events.clear()
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_external_save
+        ), patch.object(PluginTransaction, "expose", recording_expose):
+            self.assertEqual(
+                command_update(self.args(), self.suite, self.paths, self.runtime), 0
+            )
+
+        updated = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(updated["bar"], saved_bar)
+        self.assertEqual(self.runtime.events, ["stop", "expose", "restart"])
+        state = load_install_state(self.paths, self.suite)
+        self.assertEqual(state["activation"]["configuredBar"], "third.party.after-stop")
 
     def test_external_install_update_repair_and_activate_preserve_host_layout(
         self,
@@ -2219,6 +2641,9 @@ class SuiteLifecycleTests(unittest.TestCase):
             ),
             0,
         )
+        self.assertEqual(self.runtime.events, ["stop", "restart"])
+        self.assertEqual(self.runtime.reloads, 0)
+        self.assertEqual(self.runtime.payload_reloads, 0)
 
         installed = json.loads(
             self.paths.config_file.read_text(encoding="utf-8")
@@ -2246,17 +2671,19 @@ class SuiteLifecycleTests(unittest.TestCase):
         reloads_before = self.runtime.reloads
         payload_reloads_before = self.runtime.payload_reloads
         restarts_before = self.runtime.restarts
+        stops_before = self.runtime.stops
         self.assertEqual(
             command_update(
                 self.args(), self.suite, self.paths, self.runtime
             ),
             0,
         )
-        self.assertEqual(self.runtime.reloads, reloads_before + 1)
+        self.assertEqual(self.runtime.reloads, reloads_before)
         self.assertEqual(
-            self.runtime.payload_reloads, payload_reloads_before + 1
+            self.runtime.payload_reloads, payload_reloads_before
         )
-        self.assertEqual(self.runtime.restarts, restarts_before)
+        self.assertEqual(self.runtime.restarts, restarts_before + 1)
+        self.assertEqual(self.runtime.stops, stops_before + 1)
         updated = json.loads(
             self.paths.config_file.read_text(encoding="utf-8")
         )
@@ -2265,12 +2692,20 @@ class SuiteLifecycleTests(unittest.TestCase):
         shutil.rmtree(
             self.paths.plugin_dir / "hancore.shibumi.bluetooth"
         )
+        reloads_before = self.runtime.reloads
+        payload_reloads_before = self.runtime.payload_reloads
+        restarts_before = self.runtime.restarts
+        stops_before = self.runtime.stops
         self.assertEqual(
             command_repair(
                 self.args(), self.suite, self.paths, self.runtime
             ),
             0,
         )
+        self.assertEqual(self.runtime.reloads, reloads_before)
+        self.assertEqual(self.runtime.payload_reloads, payload_reloads_before)
+        self.assertEqual(self.runtime.restarts, restarts_before + 1)
+        self.assertEqual(self.runtime.stops, stops_before + 1)
         repaired = json.loads(
             self.paths.config_file.read_text(encoding="utf-8")
         )
@@ -2295,6 +2730,17 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(active_state["activation"]["mode"], "managed")
         self.assertEqual(
             active_state["activation"]["layoutPolicy"], "managed"
+        )
+        self.assertEqual(active_state["previousBar"], expected_bar)
+
+        # Activating an already managed bar must not replace the external
+        # predecessor with a self-snapshot.
+        self.assertEqual(
+            command_activate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        self.assertEqual(
+            load_install_state(self.paths, self.suite)["previousBar"],
+            expected_bar,
         )
 
     def test_external_install_flags_must_be_used_together(self) -> None:
@@ -2417,6 +2863,38 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         self.assertFalse(self.hidden_transaction_paths())
 
+    def test_managed_install_uses_post_stop_bar_metadata(self) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["id"] = "third.party.before-stop"
+        atomic_write(self.paths.config_file, encode_config(base))
+        original_stop = self.runtime.stop_shell
+        final_bar: dict[str, object] = {}
+
+        def stop_after_bar_save() -> None:
+            nonlocal final_bar
+            original_stop()
+            config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+            config["bar"]["id"] = "third.party.after-stop"
+            config["bar"]["foreignOwnerState"] = {"serial": 23}
+            final_bar = copy.deepcopy(config["bar"])
+            atomic_write(self.paths.config_file, encode_config(config))
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_bar_save
+        ):
+            self.assertEqual(
+                command_install(self.args(), self.suite, self.paths, self.runtime),
+                0,
+            )
+
+        installed = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        state = load_install_state(self.paths, self.suite)
+        self.assertEqual(state["previousBar"], final_bar)
+        self.assertEqual(
+            state["activation"]["configuredBar"], installed["bar"]["id"]
+        )
+        self.assertEqual(installed["bar"]["foreignOwnerState"], {"serial": 23})
+
     def test_managed_install_drains_before_publish_without_rescan(self) -> None:
         original_expose = PluginTransaction.expose
 
@@ -2451,16 +2929,401 @@ class SuiteLifecycleTests(unittest.TestCase):
                 0,
             )
 
-        self.assertIn("stop", self.runtime.events)
-        self.assertIn("expose", self.runtime.events)
-        self.assertLess(
-            self.runtime.events.index("stop"), self.runtime.events.index("expose")
-        )
-        self.assertEqual(self.runtime.events.count("restart"), 1)
+        self.assertEqual(self.runtime.events, ["stop", "expose", "restart"])
         self.assertNotIn("rescan", self.runtime.events)
         self.assertNotIn("reload-config", self.runtime.events)
         self.assertNotIn("reload-payload", self.runtime.events)
         self.assertEqual(command_status(self.suite, self.paths), 0)
+
+    def test_managed_update_transforms_post_stop_state(self) -> None:
+        self.install()
+        original_stop = self.runtime.stop_shell
+        saved = False
+
+        def stop_after_state_save() -> None:
+            nonlocal saved
+            original_stop()
+            if not saved:
+                config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+                state_entry(config)["shibumi"]["lateManagedState"] = {
+                    "serial": 17,
+                    "enabled": True,
+                }
+                config["foreignPostStop"] = {"preserve": [1, 2, 3]}
+                atomic_write(self.paths.config_file, encode_config(config))
+                saved = True
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_state_save
+        ):
+            self.assertEqual(
+                command_update(self.args(), self.suite, self.paths, self.runtime),
+                0,
+            )
+
+        updated = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(
+            state_entry(updated)["shibumi"]["lateManagedState"],
+            {"serial": 17, "enabled": True},
+        )
+        self.assertEqual(updated["foreignPostStop"], {"preserve": [1, 2, 3]})
+        install_state = load_install_state(self.paths, self.suite)
+        self.assertEqual(
+            install_state["activation"]["configuredBar"],
+            updated["bar"]["id"],
+        )
+
+    def test_failed_managed_update_rolls_back_to_post_stop_baseline(self) -> None:
+        self.install()
+        original_stop = self.runtime.stop_shell
+        post_stop_payload = b""
+        saved = False
+
+        def stop_after_foreign_save() -> None:
+            nonlocal post_stop_payload, saved
+            original_stop()
+            if not saved:
+                config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+                config["savedDuringDrain"] = {"generation": 29}
+                post_stop_payload = encode_config(config)
+                atomic_write(self.paths.config_file, post_stop_payload)
+                saved = True
+
+        self.runtime.fail_restart_count = 1
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_foreign_save
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure, "injected shell restart failure"
+            ):
+                command_update(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(self.paths.config_file.read_bytes(), post_stop_payload)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_interrupted_drain_recovery_preserves_late_config_save(self) -> None:
+        self.install()
+        transaction = PluginTransaction(
+            self.paths,
+            self.runtime,
+            restart_on_reconcile=True,
+        )
+        original_stop = self.runtime.stop_shell
+        post_stop_payload = b""
+
+        def interrupt_after_foreign_save() -> None:
+            nonlocal post_stop_payload
+            original_stop()
+            config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+            config["savedBeforeInterruptedDrain"] = {"generation": 31}
+            post_stop_payload = encode_config(config)
+            atomic_write(self.paths.config_file, post_stop_payload)
+            raise RuntimeFailure("injected interruption after late config save")
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=interrupt_after_foreign_save
+        ):
+            with self.assertRaisesRegex(
+                RuntimeFailure, "injected interruption after late config save"
+            ):
+                transaction.stop_shell()
+
+        self.assertEqual(
+            recover_transactions(
+                self.paths, self.runtime, suite=self.suite
+            ),
+            1,
+        )
+        self.assertEqual(self.paths.config_file.read_bytes(), post_stop_payload)
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def _assert_bound_snapshot_parse_swap_rejected(self, kind: str) -> None:
+        self.install()
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stop_shell()
+        live_before = self.paths.config_file.read_bytes()
+        events_before = list(self.runtime.events)
+        original_replace = transaction._replace_config_baseline
+
+        def replace_then_swap() -> None:
+            original_replace()
+            transaction.snapshot_file.unlink()
+            if kind == "symlink":
+                external = self.root / "foreign-snapshot.json"
+                external.write_text(
+                    '{"version":1,"owner":"foreign"}\n', encoding="utf-8"
+                )
+                transaction.snapshot_file.symlink_to(external)
+            elif kind == "regular":
+                transaction.snapshot_file.write_text(
+                    '{"version":1,"owner":"foreign"}\n', encoding="utf-8"
+                )
+            elif kind == "oversize":
+                transaction.snapshot_file.write_bytes(
+                    b"x" * (MAX_STATE_BYTES + 1)
+                )
+            else:
+                raise AssertionError(f"unknown snapshot swap: {kind}")
+
+        with (
+            patch.object(
+                transaction,
+                "_replace_config_baseline",
+                side_effect=replace_then_swap,
+            ),
+            self.assertRaisesRegex(
+                TransactionError,
+                "snapshot (was replaced|is missing or unsafe|is malformed or exceeds)",
+            ),
+        ):
+            transaction.refresh_config_after_stop()
+
+        self.assertEqual(self.paths.config_file.read_bytes(), live_before)
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertFalse(transaction.live_mutation_started)
+        self.assertFalse(transaction.commit_point_reached)
+
+    def test_bound_snapshot_regular_swap_is_rejected_before_transform(self) -> None:
+        self._assert_bound_snapshot_parse_swap_rejected("regular")
+
+    def test_bound_snapshot_symlink_swap_is_rejected_before_transform(self) -> None:
+        self._assert_bound_snapshot_parse_swap_rejected("symlink")
+
+    def test_bound_snapshot_oversize_swap_is_rejected_before_transform(self) -> None:
+        self._assert_bound_snapshot_parse_swap_rejected("oversize")
+
+    def _assert_defaults_fallback_is_bounded(self, kind: str) -> None:
+        self.paths.config_file.parent.mkdir(parents=True)
+        self.paths.config_file.write_bytes(b"")
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stop_shell()
+        events_before = list(self.runtime.events)
+        original_replace = transaction._replace_config_baseline
+
+        def replace_then_swap_defaults() -> None:
+            original_replace()
+            if kind == "symlink":
+                external = self.root / "foreign-defaults.json"
+                external.write_text(
+                    '{"version":1,"owner":"foreign"}\n', encoding="utf-8"
+                )
+                self.defaults.unlink()
+                self.defaults.symlink_to(external)
+            elif kind == "oversize":
+                self.defaults.write_bytes(b"x" * (MAX_STATE_BYTES + 1))
+            else:
+                raise AssertionError(f"unknown defaults swap: {kind}")
+
+        with (
+            patch.object(
+                transaction,
+                "_replace_config_baseline",
+                side_effect=replace_then_swap_defaults,
+            ),
+            self.assertRaisesRegex(
+                TransactionError,
+                "shell config defaults.*(Too many levels|limit)",
+            ),
+        ):
+            transaction.refresh_config_after_stop()
+
+        self.assertEqual(self.paths.config_file.read_bytes(), b"")
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertFalse(transaction.live_mutation_started)
+
+    def test_defaults_fallback_rejects_symlink_swap(self) -> None:
+        self._assert_defaults_fallback_is_bounded("symlink")
+
+    def test_defaults_fallback_rejects_oversize_swap(self) -> None:
+        self._assert_defaults_fallback_is_bounded("oversize")
+
+    def test_journal_publish_has_no_redundant_post_write_flush(self) -> None:
+        transaction = PluginTransaction(self.paths, self.runtime)
+        desired = {"marker": "desired"}
+        with patch.object(
+            transaction_module,
+            "_fsync_directory",
+            side_effect=AssertionError("redundant post-publish flush"),
+        ):
+            transaction._write_journal(
+                "committing", desired_state=desired, archive_previous=True
+            )
+
+        journal = json.loads(
+            transaction.journal_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(transaction.phase, "committing")
+        self.assertEqual(journal["phase"], "committing")
+        self.assertEqual(journal["desiredState"], desired)
+        self.assertTrue(journal["archivePrevious"])
+
+    def test_post_durable_committing_error_preserves_roll_forward(self) -> None:
+        self.install()
+        plugin_id = "hancore.shibumi.memory"
+        target_file = self.paths.plugin_dir / plugin_id / "BarWidget.qml"
+        old_payload = target_file.read_bytes()
+        source_file = self.source / plugin_id / "BarWidget.qml"
+        source_file.write_text(
+            source_file.read_text(encoding="utf-8")
+            + "\n// post-durable committing fault\n",
+            encoding="utf-8",
+        )
+        suite = Suite.load(self.source)
+        expected_payload = source_file.read_bytes()
+        install_state_before = (
+            self.paths.state_dir / "install.json"
+        ).read_bytes()
+        observed: PluginTransaction | None = None
+        durable_fault_injected = False
+        original_fsync_directory = config_module._fsync_directory
+        original_finish = PluginTransaction.finish
+
+        def fail_after_committing_sync(
+            path: Path,
+            *,
+            on_durable: Callable[[], None] | None = None,
+        ) -> None:
+            nonlocal durable_fault_injected
+            original_fsync_directory(path, on_durable=on_durable)
+            if on_durable is not None and not durable_fault_injected:
+                durable_fault_injected = True
+                raise OSError("injected post-durable committing failure")
+
+        def recording_finish(
+            transaction: PluginTransaction,
+            desired_state: dict[str, object] | None,
+            *,
+            archive_previous: bool,
+        ) -> None:
+            nonlocal observed
+            observed = transaction
+            original_finish(
+                transaction,
+                desired_state,
+                archive_previous=archive_previous,
+            )
+
+        with (
+            patch.object(
+                config_module,
+                "_fsync_directory",
+                side_effect=fail_after_committing_sync,
+            ),
+            patch.object(PluginTransaction, "finish", recording_finish),
+            self.assertRaisesRegex(
+                OSError, "injected post-durable committing failure"
+            ),
+        ):
+            command_update(self.args(), suite, self.paths, self.runtime)
+
+        self.assertTrue(durable_fault_injected)
+        self.assertIsNotNone(observed)
+        assert observed is not None
+        self.assertTrue(observed.commit_point_reached)
+        self.assertFalse(observed.finished)
+        self.assertTrue(observed.journal_file.is_file())
+        journal = json.loads(
+            observed.journal_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(journal["phase"], "committing")
+        self.assertEqual(target_file.read_bytes(), expected_payload)
+        self.assertNotEqual(target_file.read_bytes(), old_payload)
+        self.assertEqual(
+            (self.paths.state_dir / "install.json").read_bytes(),
+            install_state_before,
+        )
+
+        self.assertEqual(
+            recover_transactions(self.paths, self.runtime), 1
+        )
+        self.assertEqual(
+            json.loads(
+                (self.paths.state_dir / "install.json").read_text(
+                    encoding="utf-8"
+                )
+            ),
+            journal["desiredState"],
+        )
+        self.assertEqual(target_file.read_bytes(), expected_payload)
+        self.assertFalse(self.hidden_transaction_paths())
+
+    def test_recovery_preserves_config_created_before_baseline_publication(
+        self,
+    ) -> None:
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stop_shell()
+        foreign = b'{"version":1,"foreign":"created-during-drain"}\n'
+        atomic_write(self.paths.config_file, foreign)
+        original_atomic_write = transaction_module.atomic_write
+
+        def write_snapshot_then_crash(path: Path, payload: bytes) -> None:
+            original_atomic_write(path, payload)
+            if path == transaction.snapshot_file:
+                raise OSError("injected crash after created baseline snapshot")
+
+        with (
+            patch.object(
+                transaction_module,
+                "atomic_write",
+                side_effect=write_snapshot_then_crash,
+            ),
+            self.assertRaisesRegex(OSError, "created baseline snapshot"),
+        ):
+            transaction.refresh_config_after_stop()
+
+        journal = json.loads(transaction.journal_file.read_text(encoding="utf-8"))
+        self.assertIs(journal["configExisted"], False)
+        self.assertIs(journal["liveMutationStarted"], False)
+        self.assertEqual(
+            recover_transactions(self.paths, self.runtime, suite=self.suite), 1
+        )
+        self.assertEqual(self.paths.config_file.read_bytes(), foreign)
+        self.assertTrue(self.runtime.shell_running)
+
+    def test_recovery_preserves_config_removed_before_baseline_publication(
+        self,
+    ) -> None:
+        original = b'{"version":1,"foreign":"removed-during-drain"}\n'
+        self.paths.config_file.parent.mkdir(parents=True)
+        self.paths.config_file.write_bytes(original)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        transaction.stop_shell()
+        self.paths.config_file.unlink()
+        original_unlink = transaction_module._durable_unlink
+
+        def unlink_snapshot_then_crash(path: Path) -> None:
+            original_unlink(path)
+            if path == transaction.snapshot_file:
+                raise OSError("injected crash after removed baseline snapshot")
+
+        with (
+            patch.object(
+                transaction_module,
+                "_durable_unlink",
+                side_effect=unlink_snapshot_then_crash,
+            ),
+            self.assertRaisesRegex(OSError, "removed baseline snapshot"),
+        ):
+            transaction.refresh_config_after_stop()
+
+        journal = json.loads(transaction.journal_file.read_text(encoding="utf-8"))
+        self.assertIs(journal["configExisted"], False)
+        self.assertIs(journal["liveMutationStarted"], False)
+        self.assertEqual(
+            recover_transactions(self.paths, self.runtime, suite=self.suite), 1
+        )
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertTrue(self.runtime.shell_running)
 
     def test_managed_repair_stops_before_publish_and_restarts_once(self) -> None:
         self.install()
@@ -2699,7 +3562,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             {"id": "user.weather", "custom": {"city": "Berlin"}}
         )
         config["plugins"].append({"id": "user.service", "interval": 17})
-        config["bar"].setdefault("shibumi", {})["testSetting"] = "retained"
+        state_entry(config)["shibumi"]["testSetting"] = "retained"
         atomic_write(self.paths.config_file, encode_config(config))
 
         self.assertEqual(
@@ -2708,7 +3571,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         inactive = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
         self.assertEqual(inactive["bar"].get("id", "omarchy.bar"), "omarchy.bar")
-        self.assertEqual(inactive["bar"]["shibumi"]["testSetting"], "retained")
+        self.assertEqual(state_entry(inactive)["shibumi"]["testSetting"], "retained")
         self.assertIn(
             "user.weather",
             {
@@ -2739,7 +3602,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         active = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
         self.assertEqual(active["bar"]["id"], "hancore.shibumi.bar")
-        self.assertEqual(active["bar"]["shibumi"]["testSetting"], "retained")
+        self.assertEqual(state_entry(active)["shibumi"]["testSetting"], "retained")
         user_weather = next(
             entry
             for entry in active["bar"]["layout"]["right"]
@@ -3007,6 +3870,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         events: list[tuple[str, Path]] = []
         original_fsync_directory = transaction_module._fsync_directory
         original_replace = transaction_module.os.replace
+        original_atomic_write = transaction_module.atomic_write
         original_write_journal = PluginTransaction._write_journal
 
         def recording_fsync_directory(path: Path) -> None:
@@ -3025,6 +3889,13 @@ class SuiteLifecycleTests(unittest.TestCase):
             elif destination_path.name.startswith(".shibumi-backup."):
                 events.append(("mutation", destination_path))
 
+        def recording_atomic_write(
+            path: Path, payload: bytes, mode: int = 0o600
+        ) -> None:
+            original_atomic_write(path, payload, mode)
+            if path.name == "journal.json":
+                events.append(("journal-durable", path))
+
         def recording_write_journal(
             transaction: PluginTransaction, *args: object, **kwargs: object
         ) -> None:
@@ -3042,6 +3913,11 @@ class SuiteLifecycleTests(unittest.TestCase):
                 transaction_module.os,
                 "replace",
                 side_effect=recording_replace,
+            ),
+            patch.object(
+                transaction_module,
+                "atomic_write",
+                side_effect=recording_atomic_write,
             ),
             patch.object(
                 PluginTransaction,
@@ -3082,7 +3958,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             index
             for index, event in enumerate(events)
             if index < record_journal
-            and event == ("fsync", transaction.transaction_dir)
+            and event == ("journal-durable", transaction.journal_file)
         )
         mutation_index = next(
             index for index, event in enumerate(events) if event[0] == "mutation"
@@ -3285,6 +4161,28 @@ class SuiteLifecycleTests(unittest.TestCase):
                     self.assertFalse(private.exists())
                     self.assertEqual(self.runtime.events, events_before)
 
+    def test_private_transaction_is_retained_when_public_recovery_fails(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"version":1,"owner":"before"}\n')
+        transaction = PluginTransaction(self.paths, self.runtime)
+        transaction.write_config(b'{"version":1,"owner":"live"}\n')
+        transaction._close_config_parent()
+        transaction.snapshot_file.write_bytes(b"x" * (MAX_STATE_BYTES + 1))
+        private = transaction.transaction_dir.parent / (
+            f"{transaction_module.PREPARATION_PREFIX}1700000000-1-42424242"
+        )
+        private.mkdir()
+        sentinel = private / "sentinel"
+        sentinel.write_bytes(b"retain\n")
+
+        with self.assertRaisesRegex(TransactionError, "snapshot.*byte limit"):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual(sentinel.read_bytes(), b"retain\n")
+        self.assertTrue(private.is_dir())
+        self.assertTrue(transaction.transaction_dir.is_dir())
+
     def test_recovery_rejects_symlinked_transaction_root_without_traversal(self) -> None:
         external = self.root / "external-transactions"
         private = external / f"{transaction_module.CLEANUP_PREFIX}foreign"
@@ -3299,6 +4197,61 @@ class SuiteLifecycleTests(unittest.TestCase):
             recover_transactions(self.paths, self.runtime)
 
         self.assertEqual(marker.read_text(encoding="utf-8"), "do not remove\n")
+
+    def test_recovery_rejects_oversized_config_snapshot_without_mutation(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"version":1,"owner":"before"}\n')
+        transaction = PluginTransaction(self.paths, self.runtime)
+        transaction.write_config(b'{"version":1,"owner":"live"}\n')
+        transaction._close_config_parent()
+        transaction.snapshot_file.write_bytes(b"x" * (MAX_STATE_BYTES + 1))
+        live_before = path.read_bytes()
+        journal_before = transaction.journal_file.read_bytes()
+        events_before = list(self.runtime.events)
+
+        with self.assertRaisesRegex(TransactionError, "snapshot.*byte limit"):
+            recover_transactions(self.paths, self.runtime)
+
+        self.assertEqual(path.read_bytes(), live_before)
+        self.assertEqual(transaction.journal_file.read_bytes(), journal_before)
+        self.assertEqual(self.runtime.events, events_before)
+        self.assertEqual(list(path.parent.glob(f".{path.name}.*")), [])
+
+    def test_in_process_rollback_rejects_replaced_symlinked_or_oversized_snapshot(
+        self,
+    ) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"owner":"before"}\n'
+        live = b'{"version":1,"owner":"live"}\n'
+
+        for scenario in ("replacement", "symlink", "oversize"):
+            with self.subTest(scenario=scenario):
+                atomic_write(path, original)
+                transaction = PluginTransaction(self.paths, self.runtime)
+                transaction.write_config(live)
+                transaction.snapshot_file.unlink()
+                if scenario == "replacement":
+                    transaction.snapshot_file.write_bytes(original)
+                elif scenario == "symlink":
+                    external = self.root / f"{scenario}.json"
+                    external.write_bytes(original)
+                    transaction.snapshot_file.symlink_to(external)
+                else:
+                    transaction.snapshot_file.write_bytes(
+                        b"x" * (MAX_STATE_BYTES + 1)
+                    )
+
+                events_before = list(self.runtime.events)
+                with self.assertRaisesRegex(TransactionError, "snapshot"):
+                    transaction.rollback()
+
+                self.assertEqual(path.read_bytes(), live)
+                self.assertEqual(self.runtime.events, events_before)
+                self.assertTrue(transaction.transaction_dir.is_dir())
+                transaction._close_config_parent()
+                shutil.rmtree(self.paths.state_dir / "transactions")
 
     def test_recovery_validates_complete_journal_before_any_mutation(self) -> None:
         self.install()
@@ -3319,6 +4272,9 @@ class SuiteLifecycleTests(unittest.TestCase):
             "invalid late boolean",
             "invalid live mutation boolean",
             "inconsistent pre-exposure phase",
+            "missing parent identity",
+            "boolean parent device",
+            "extra parent identity field",
             "boolean schema",
             "float schema",
             "array journal",
@@ -3348,12 +4304,16 @@ class SuiteLifecycleTests(unittest.TestCase):
                         }
                     )
                 journal: object = {
-                    "schemaVersion": 1,
+                    "schemaVersion": JOURNAL_SCHEMA_VERSION,
                     "suiteId": "hancore.shibumi",
                     "token": token,
                     "phase": "prepared",
                     "pluginRoot": str(self.paths.plugin_dir.resolve()),
                     "configPath": str(self.paths.config_file.resolve()),
+                    "configParentIdentity": {
+                        "device": self.paths.config_file.parent.stat().st_dev,
+                        "inode": self.paths.config_file.parent.stat().st_ino,
+                    },
                     "configExisted": True,
                     "restartOnReconcile": False,
                     "shellStopped": False,
@@ -3372,6 +4332,17 @@ class SuiteLifecycleTests(unittest.TestCase):
                     assert isinstance(journal, dict)
                     journal["phase"] = "exposed"
                     journal["liveMutationStarted"] = False
+                elif scenario == "missing parent identity":
+                    assert isinstance(journal, dict)
+                    journal.pop("configParentIdentity")
+                elif scenario == "boolean parent device":
+                    assert isinstance(journal, dict)
+                    journal["configParentIdentity"]["device"] = True
+                elif scenario == "extra parent identity field":
+                    assert isinstance(journal, dict)
+                    journal["configParentIdentity"]["path"] = str(
+                        self.paths.config_file.parent
+                    )
                 elif scenario == "boolean schema":
                     assert isinstance(journal, dict)
                     journal["schemaVersion"] = True
@@ -3409,6 +4380,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         plugin_ids = ("hancore.shibumi.memory", "hancore.shibumi.cpu")
 
         for boundary in (
+            "install state post-write",
             "committed journal",
             "backup archival",
             "partial backup archival",
@@ -3448,17 +4420,43 @@ class SuiteLifecycleTests(unittest.TestCase):
                     "plugins": list(plugin_ids),
                 }
 
-                if boundary == "committed journal":
+                if boundary == "install state post-write":
+                    original_atomic_write = transaction_module.atomic_write
+
+                    def fail_after_state_write(
+                        path: Path,
+                        payload: bytes,
+                        mode: int = 0o600,
+                        *,
+                        on_durable: Callable[[], None] | None = None,
+                    ) -> None:
+                        original_atomic_write(
+                            path, payload, mode, on_durable=on_durable
+                        )
+                        if path == self.paths.state_dir / "install.json":
+                            raise OSError("injected post-write state failure")
+
+                    fault = patch.object(
+                        transaction_module,
+                        "atomic_write",
+                        side_effect=fail_after_state_write,
+                    )
+                    expected_phase = "committing"
+                elif boundary == "committed journal":
                     original_write_journal = transaction._write_journal
 
                     def fail_committed(
                         phase: str,
                         desired: object = "unchanged",
                         archive: object = "unchanged",
+                        *,
+                        on_durable: Callable[[], None] | None = None,
                     ) -> None:
                         if phase == "committed":
                             raise OSError("injected committed journal failure")
-                        original_write_journal(phase, desired, archive)
+                        original_write_journal(
+                            phase, desired, archive, on_durable=on_durable
+                        )
 
                     fault = patch.object(
                         transaction, "_write_journal", side_effect=fail_committed
@@ -3721,7 +4719,6 @@ class SuiteLifecycleTests(unittest.TestCase):
             transaction.write_menu_extension(b'{"broken":true}\n')
             return transaction
 
-        original_atomic_write = transaction_module.atomic_write
         faults = (
             (
                 "plugin restoration",
@@ -3735,14 +4732,8 @@ class SuiteLifecycleTests(unittest.TestCase):
                 "configuration restoration",
                 lambda transaction: patch.object(
                     transaction_module,
-                    "atomic_write",
-                    side_effect=lambda path, payload: (
-                        (_ for _ in ()).throw(
-                            OSError("injected configuration restore failure")
-                        )
-                        if Path(path) == self.paths.config_file
-                        else original_atomic_write(path, payload)
-                    ),
+                    "_atomic_replace_at",
+                    side_effect=OSError("injected configuration restore failure"),
                 ),
             ),
             (

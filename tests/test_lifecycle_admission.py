@@ -17,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from shibumi_suite.admission import (  # noqa: E402
     AdmissionError,
+    JOURNAL_SCHEMA_VERSION,
     classify_install_state,
     inventory_transactions,
     preflight_lifecycle_state,
@@ -90,6 +91,8 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 "createdFile": True,
             },
         }
+        if identity["id"] == "current-release" and self.suite.settings_storage_version == 1:
+            state["settingsStorageVersion"] = 1
         if package:
             state["packageName"] = "shibumi-shell"
             state["packageVersion"] = revision.removeprefix("package:")
@@ -97,19 +100,36 @@ class LifecycleAdmissionTests(unittest.TestCase):
             state["sourceRoot"] = str(REPO_ROOT)
         return state
 
+    def test_storage_metadata_must_match_payload_identity(self) -> None:
+        for identity in self.identities:
+            state = self.state_for(identity)
+            if identity["id"] == "current-release":
+                state.pop("settingsStorageVersion", None)
+            else:
+                state["settingsStorageVersion"] = 1
+            with self.subTest(identity=identity["id"]), self.assertRaisesRegex(
+                    AdmissionError, "settings storage version does not match"):
+                classify_install_state(state, self.suite, self.identities)
+
     def write_state(self, state: dict[str, object]) -> None:
         (self.paths.state_dir / "install.json").write_text(
             json.dumps(state, sort_keys=True) + "\n", encoding="utf-8"
         )
 
     def journal(self, token: str, phase: str = "prepared") -> dict[str, object]:
+        self.paths.config_file.parent.mkdir(parents=True, exist_ok=True)
+        config_parent = self.paths.config_file.parent.stat()
         return {
-            "schemaVersion": 1,
+            "schemaVersion": JOURNAL_SCHEMA_VERSION,
             "suiteId": "hancore.shibumi",
             "token": token,
             "phase": phase,
             "pluginRoot": str(self.paths.plugin_dir.resolve(strict=False)),
             "configPath": str(self.paths.config_file.resolve(strict=False)),
+            "configParentIdentity": {
+                "device": config_parent.st_dev,
+                "inode": config_parent.st_ino,
+            },
             "configExisted": False,
             "menuExtensionPath": str(
                 self.paths.menu_extension_file.resolve(strict=False)
@@ -229,6 +249,21 @@ class LifecycleAdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(AdmissionError, "Step-6 installation state"):
             preflight_lifecycle_state(self.paths, self.suite)
         self.assertTrue(private.is_dir())
+
+    def test_schema1_without_config_parent_identity_is_retained(self) -> None:
+        token = "1700000000-1-10101010"
+        journal = self.journal(token)
+        journal["schemaVersion"] = 1
+        journal.pop("configParentIdentity")
+        directory = self.write_journal(token, journal)
+
+        with self.assertRaisesRegex(
+            AdmissionError, "schema-1 transaction lacks config parent identity"
+        ):
+            recover_transactions(self.paths, Mock(), suite=self.suite)
+
+        self.assertTrue(directory.is_dir())
+        self.assertTrue((directory / "journal.json").is_file())
 
     def test_all_journals_are_classified_before_recovery_or_discard(self) -> None:
         valid_token = "1700000000-1-11111111"
@@ -628,6 +663,40 @@ class LifecycleAdmissionTests(unittest.TestCase):
             json.loads((self.paths.state_dir / "install.json").read_text()),
             desired,
         )
+
+    def test_committing_partial_archive_resumes_from_mixed_backups(self) -> None:
+        identity = next(
+            item for item in self.identities if item["id"] == "current-release"
+        )
+        desired = self.state_for(identity)
+        self.materialize_live_state(desired, "1700000000-1-93939393")
+        transaction = PluginTransaction(self.paths, Mock())
+        transaction.stage(
+            tuple(self.suite.plugins.values()),
+            revision=str(identity["sourceRevisions"][0]),
+            suite_version=str(identity["suiteVersion"]),
+        )
+        transaction.expose()
+        transaction._write_journal(
+            "committing", desired_state=desired, archive_previous=True
+        )
+        first = transaction.records[0]
+        archived = (
+            self.paths.state_dir / "backups" / transaction.token / first["pluginId"]
+        )
+        archived.parent.mkdir(parents=True)
+        Path(first["backup"]).rename(archived)
+
+        self.assertEqual(
+            recover_transactions(self.paths, Mock(), suite=self.suite), 1
+        )
+        archive = self.paths.state_dir / "backups" / transaction.token
+        self.assertTrue(all((archive / record["pluginId"]).is_dir()
+                            for record in transaction.records))
+        self.assertEqual(
+            json.loads((self.paths.state_dir / "install.json").read_text()), desired
+        )
+        self.assertFalse(transaction.transaction_dir.exists())
 
     def test_backup_replacement_at_quarantine_fails_before_mutation(self) -> None:
         plugin_id = "hancore.shibumi.bar"

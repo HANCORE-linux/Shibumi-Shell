@@ -6,7 +6,7 @@ import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .model import PluginSpec, ProfileSpec
 
@@ -208,20 +208,25 @@ def _finite_json_int(raw: str) -> int:
     return int(raw)
 
 
-def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
-    source = path if path.is_file() and path.stat().st_size > 0 else defaults_path
+def parse_config_bytes(
+    payload: bytes,
+    source: Path,
+    *,
+    user_config_exists: bool,
+) -> tuple[dict[str, Any], bool]:
+    """Parse already acquired config bytes with the canonical JSON rules."""
     try:
-        raw = source.read_text(encoding="utf-8")
-        # Same parser budget as StateStorageModel; not an acquisition bound.
+        raw = payload.decode("utf-8")
+        # Same parser budget as StateStorageModel; acquisition callers must
+        # impose their own byte and file-type bounds before invoking this.
         if len(raw.encode("utf-16-le")) // 2 > 1048576:
             raise ValueError("shell config exceeds State parser budget")
         data = json.loads(raw, parse_constant=_reject_json_constant,
                           parse_float=_finite_json_float, parse_int=_finite_json_int)
-    except (OSError, ValueError) as error:
+    except (UnicodeError, ValueError) as error:
         raise ConfigError(f"cannot read shell config {source}: {error}") from error
     if not isinstance(data, dict):
         raise ConfigError(f"shell config must be a JSON object: {source}")
-    user_config_exists = source == path
     if not user_config_exists:
         # Host defaults provide a construction fallback, not a saved stock-bar
         # transparency preference. Do not materialize that preference merely
@@ -230,6 +235,17 @@ def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
         if isinstance(bar, dict):
             bar.pop("transparent", None)
     return data, user_config_exists
+
+
+def read_config(path: Path, defaults_path: Path) -> tuple[dict[str, Any], bool]:
+    source = path if path.is_file() and path.stat().st_size > 0 else defaults_path
+    try:
+        payload = source.read_bytes()
+    except OSError as error:
+        raise ConfigError(f"cannot read shell config {source}: {error}") from error
+    return parse_config_bytes(
+        payload, source, user_config_exists=source == path
+    )
 
 
 def _normalize(config: dict[str, Any]) -> dict[str, Any]:
@@ -445,10 +461,16 @@ def encode_config(config: dict[str, Any]) -> bytes:
     return (json.dumps(config, indent=2, sort_keys=True, allow_nan=False) + "\n").encode("utf-8")
 
 
-def _fsync_directory(path: Path) -> None:
+def _fsync_directory(
+    path: Path,
+    *,
+    on_durable: Callable[[], None] | None = None,
+) -> None:
     descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(descriptor)
+        if on_durable is not None:
+            on_durable()
     finally:
         os.close(descriptor)
 
@@ -469,7 +491,13 @@ def _durable_mkdir(path: Path) -> None:
         _fsync_directory(directory.parent)
 
 
-def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
+def atomic_write(
+    path: Path,
+    payload: bytes,
+    mode: int = 0o600,
+    *,
+    on_durable: Callable[[], None] | None = None,
+) -> None:
     _durable_mkdir(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
@@ -480,6 +508,6 @@ def atomic_write(path: Path, payload: bytes, mode: int = 0o600) -> None:
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         os.replace(temporary, path)
-        _fsync_directory(path.parent)
+        _fsync_directory(path.parent, on_durable=on_durable)
     finally:
         temporary.unlink(missing_ok=True)

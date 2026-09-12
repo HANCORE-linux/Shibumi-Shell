@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import errno
 import fcntl
+import hashlib
 import json
 import os
 import shutil
@@ -8,15 +10,18 @@ import stat
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from . import MANAGED_MARKER, STATE_SCHEMA_VERSION, SUITE_ID
 from .admission import (
+    JOURNAL_SCHEMA_VERSION,
+    MAX_STATE_BYTES,
     inventory_transactions,
+    parse_config_parent_identity,
     supported_install_identities,
     verify_transaction_artifact_bindings,
 )
-from .config import atomic_write
+from .config import atomic_write, parse_config_bytes, read_config
 from .model import (
     ContractError,
     PluginSpec,
@@ -223,6 +228,241 @@ def _open_absolute_directory(
     except Exception:
         os.close(descriptor)
         raise
+
+
+def _open_config_parent(path: Path, *, create: bool) -> int:
+    """Open an absolute directory component-wise without following symlinks."""
+    if not path.is_absolute() or ".." in path.parts:
+        raise TransactionError(f"unsafe live shell config parent: {path}")
+    descriptor = os.open(
+        "/", os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW
+    )
+    try:
+        for part in path.parts[1:]:
+            created: os.stat_result | None = None
+            try:
+                child = os.open(
+                    part,
+                    os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=descriptor,
+                )
+            except FileNotFoundError as error:
+                if not create:
+                    raise TransactionError(
+                        f"live shell config parent is missing: {path}"
+                    ) from error
+                try:
+                    os.mkdir(part, mode=0o777, dir_fd=descriptor)
+                except FileExistsError as race:
+                    raise TransactionError(
+                        f"live shell config parent changed while binding: {path}"
+                    ) from race
+                os.fsync(descriptor)
+                created = os.stat(part, dir_fd=descriptor, follow_symlinks=False)
+                try:
+                    child = os.open(
+                        part,
+                        os.O_RDONLY
+                        | os.O_CLOEXEC
+                        | os.O_DIRECTORY
+                        | os.O_NOFOLLOW,
+                        dir_fd=descriptor,
+                    )
+                except OSError as open_error:
+                    raise TransactionError(
+                        f"cannot bind live shell config parent {path}: {open_error}"
+                    ) from open_error
+            except OSError as error:
+                raise TransactionError(
+                    f"cannot bind live shell config parent {path}: {error}"
+                ) from error
+            if created is not None:
+                metadata = os.fstat(child)
+                if (
+                    metadata.st_dev != created.st_dev
+                    or metadata.st_ino != created.st_ino
+                ):
+                    os.close(child)
+                    raise TransactionError(
+                        f"live shell config parent changed while binding: {path}"
+                    )
+                os.fsync(child)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _open_verified_config_parent(
+    path: Path, expected_device: int, expected_inode: int
+) -> int:
+    descriptor = _open_config_parent(path, create=False)
+    try:
+        metadata = os.fstat(descriptor)
+        if (
+            metadata.st_dev != expected_device
+            or metadata.st_ino != expected_inode
+        ):
+            raise TransactionError(
+                f"live shell config parent identity changed: {path}"
+            )
+        return descriptor
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def _require_open_config_parent_identity(
+    path: Path, expected_device: int, expected_inode: int, descriptor: int
+) -> None:
+    try:
+        held = os.fstat(descriptor)
+    except OSError as error:
+        raise TransactionError(
+            f"open live shell config parent binding failed: {path}: {error}"
+        ) from error
+    if held.st_dev != expected_device or held.st_ino != expected_inode:
+        raise TransactionError(
+            f"open live shell config parent identity changed: {path}"
+        )
+    current = _open_verified_config_parent(path, expected_device, expected_inode)
+    os.close(current)
+
+
+def _read_bounded_regular_at(
+    parent_fd: int,
+    name: str,
+    path: Path,
+    *,
+    label: str = "live shell config",
+) -> tuple[bool, bytes | None]:
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=parent_fd,
+        )
+    except OSError as error:
+        if error.errno == errno.ENOENT:
+            return False, None
+        raise TransactionError(
+            f"cannot read {label} {path}: {error}"
+        ) from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise TransactionError(f"{label} is not a regular file: {path}")
+        if before.st_size > MAX_STATE_BYTES:
+            raise TransactionError(
+                f"{label} exceeds the {MAX_STATE_BYTES}-byte limit: {path}"
+            )
+        payload = bytearray()
+        while len(payload) <= MAX_STATE_BYTES:
+            block = os.read(
+                descriptor,
+                min(65536, MAX_STATE_BYTES + 1 - len(payload)),
+            )
+            if not block:
+                break
+            payload.extend(block)
+        after = os.fstat(descriptor)
+        if (
+            len(payload) > MAX_STATE_BYTES
+            or len(payload) != after.st_size
+            or before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or before.st_size != after.st_size
+            or before.st_mtime_ns != after.st_mtime_ns
+            or before.st_ctime_ns != after.st_ctime_ns
+        ):
+            raise TransactionError(
+                f"{label} changed or exceeded bounds while reading: {path}"
+            )
+        return True, bytes(payload)
+    except OSError as error:
+        raise TransactionError(
+            f"cannot read {label} {path}: {error}"
+        ) from error
+    finally:
+        os.close(descriptor)
+
+
+def _read_bounded_regular_path(path: Path, label: str) -> bytes:
+    parent_fd = _open_config_parent(path.parent, create=False)
+    try:
+        existed, payload = _read_bounded_regular_at(
+            parent_fd, path.name, path, label=label
+        )
+    finally:
+        os.close(parent_fd)
+    if not existed or payload is None:
+        raise TransactionError(f"{label} is missing: {path}")
+    return payload
+
+
+def _atomic_replace_at(
+    parent_fd: int,
+    name: str,
+    payload: bytes,
+    *,
+    mode: int = 0o600,
+) -> None:
+    _require_bounded_config_payload(payload)
+    temporary_name = f".{name}.{uuid.uuid4().hex}"
+    descriptor = os.open(
+        temporary_name,
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | os.O_CLOEXEC
+        | os.O_NOFOLLOW,
+        0o600,
+        dir_fd=parent_fd,
+    )
+    try:
+        view = memoryview(payload)
+        written = 0
+        while written < len(view):
+            count = os.write(descriptor, view[written:])
+            if count <= 0:
+                raise OSError(errno.EIO, "short write while replacing shell config")
+            written += count
+        os.fchmod(descriptor, mode)
+        os.fsync(descriptor)
+        os.close(descriptor)
+        descriptor = -1
+        os.replace(
+            temporary_name,
+            name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        os.fsync(parent_fd)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            os.unlink(temporary_name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+
+
+def _require_bounded_config_payload(payload: bytes) -> None:
+    if len(payload) > MAX_STATE_BYTES:
+        raise TransactionError(
+            f"shell config payload exceeds the {MAX_STATE_BYTES}-byte limit"
+        )
+
+
+def _durable_unlink_at(parent_fd: int, name: str) -> None:
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    os.unlink(name, dir_fd=parent_fd)
+    os.fsync(parent_fd)
 
 
 def _open_directory_child(
@@ -442,10 +682,12 @@ def preflight_removal_ids(plugin_dir: Path, plugin_ids: Iterable[str]) -> None:
             )
 
 
-def _config_enables_plugin(config_file: Path, plugin_id: str) -> bool:
+def _config_payload_enables_plugin(payload: bytes | None, plugin_id: str) -> bool:
+    if payload is None:
+        return False
     try:
-        config = json.loads(config_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        config = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
         return False
     if not isinstance(config, dict):
         return False
@@ -507,43 +749,53 @@ class PluginTransaction:
             preparation_dir / "omarchy-menu.jsonc.before"
         )
         self.records: list[dict[str, Any]] = []
+        self.phase = "prepared"
         self.finished = False
         self.commit_point_reached = False
         self.shell_stopped = False
         self.restore_requires_drain = False
         self.live_mutation_started = False
-        self.payload_reload_expected = (
-            paths.plugin_dir / "hancore.shibumi.state"
-        ).is_dir() and _config_enables_plugin(
-            paths.config_file, "hancore.shibumi.state"
+        self._config_snapshot_identity: tuple[int, int, str] | None = None
+        self._config_path = paths.config_file
+        self._config_parent_fd = _open_config_parent(
+            self._config_path.parent, create=True
         )
-        self.config_existed = paths.config_file.is_file()
-        self.menu_extension_existed = paths.menu_extension_file.is_file()
-
-        _durable_mkdir(transaction_root)
-        preparation_dir.mkdir(exist_ok=False)
         try:
-            if self.config_existed:
-                atomic_write(
-                    self.snapshot_file,
-                    paths.config_file.read_bytes(),
-                )
-            if self.menu_extension_existed:
-                atomic_write(
-                    self.menu_extension_snapshot_file,
-                    paths.menu_extension_file.read_bytes(),
-                )
-            self._write_journal("prepared")
-            _fsync_directory(preparation_dir)
-            os.replace(preparation_dir, self.transaction_dir)
-            _fsync_directory(transaction_root)
+            self._config_parent_identity = os.fstat(self._config_parent_fd)
+            self.config_existed, config_payload = self._live_config()
+            self.payload_reload_expected = (
+                paths.plugin_dir / "hancore.shibumi.state"
+            ).is_dir() and _config_payload_enables_plugin(
+                config_payload, "hancore.shibumi.state"
+            )
+            self.menu_extension_existed = paths.menu_extension_file.is_file()
+
+            _durable_mkdir(transaction_root)
+            preparation_dir.mkdir(exist_ok=False)
+            try:
+                if self.config_existed:
+                    assert config_payload is not None
+                    atomic_write(self.snapshot_file, config_payload)
+                    self._bind_config_snapshot(config_payload)
+                if self.menu_extension_existed:
+                    atomic_write(
+                        self.menu_extension_snapshot_file,
+                        paths.menu_extension_file.read_bytes(),
+                    )
+                self._write_journal("prepared")
+                _fsync_directory(preparation_dir)
+                os.replace(preparation_dir, self.transaction_dir)
+                _fsync_directory(transaction_root)
+            except Exception:
+                # Before the directory rename no lifecycle mutation has happened,
+                # so an in-process preparation failure can be discarded. If the
+                # rename already succeeded, keep the complete public transaction
+                # as the durable recovery path.
+                if preparation_dir.exists() and not preparation_dir.is_symlink():
+                    shutil.rmtree(preparation_dir)
+                raise
         except Exception:
-            # Before the directory rename no lifecycle mutation has happened,
-            # so an in-process preparation failure can be discarded. If the
-            # rename already succeeded, keep the complete public transaction
-            # as the durable recovery path.
-            if preparation_dir.exists() and not preparation_dir.is_symlink():
-                shutil.rmtree(preparation_dir)
+            self._close_config_parent()
             raise
         self.journal_file = self.transaction_dir / "journal.json"
         self.snapshot_file = self.transaction_dir / "shell.json.before"
@@ -558,12 +810,16 @@ class PluginTransaction:
         archive_previous: Any = "unchanged",
     ) -> dict[str, Any]:
         value: dict[str, Any] = {
-            "schemaVersion": 1,
+            "schemaVersion": JOURNAL_SCHEMA_VERSION,
             "suiteId": SUITE_ID,
             "token": self.token,
             "phase": phase,
             "pluginRoot": str(self.paths.plugin_dir.resolve(strict=False)),
-            "configPath": str(self.paths.config_file.resolve(strict=False)),
+            "configPath": str(self._config_path),
+            "configParentIdentity": {
+                "device": self._config_parent_identity.st_dev,
+                "inode": self._config_parent_identity.st_ino,
+            },
             "configExisted": self.config_existed,
             "menuExtensionPath": str(
                 self.paths.menu_extension_file.resolve(strict=False)
@@ -587,18 +843,26 @@ class PluginTransaction:
         phase: str,
         desired_state: Any = "unchanged",
         archive_previous: Any = "unchanged",
+        *,
+        on_durable: Callable[[], None] | None = None,
     ) -> None:
         payload = json.dumps(
             self._journal(phase, desired_state, archive_previous),
             indent=2,
             sort_keys=True,
         ).encode("utf-8") + b"\n"
-        atomic_write(self.journal_file, payload)
-        # The next operation may rename live plugin targets. Persist the
-        # record-bearing journal replacement before crossing that boundary.
-        _fsync_directory(self.journal_file.parent)
+        # The optional transition runs at the parent-fsync boundary, before
+        # descriptor close or temporary cleanup can report a late error.
+        if on_durable is None:
+            atomic_write(self.journal_file, payload)
+        else:
+            atomic_write(
+                self.journal_file, payload, on_durable=on_durable
+            )
+        self.phase = phase
 
     def _begin_live_mutation(self, phase: str) -> None:
+        self._require_config_parent_identity()
         if self.live_mutation_started:
             return
         # Persist this boundary before touching a live path. Recovery can then
@@ -609,6 +873,7 @@ class PluginTransaction:
         self._write_journal(phase)
 
     def stop_shell(self) -> None:
+        self._require_config_parent_identity()
         # A drain can kill the shell before the caller regains control. Record
         # that uncertainty first so an interruption can never be recovered as
         # a no-op while leaving the production shell stopped.
@@ -625,8 +890,111 @@ class PluginTransaction:
             self.shell_stopped = previous_shell_stopped
             self.restore_requires_drain = previous_restore_requires_drain
             raise
+        self._require_config_parent_identity()
         self.runtime.stop_shell()
+        self._require_config_parent_identity()
         self._write_journal("shell-stopped")
+
+    def _close_config_parent(self) -> None:
+        descriptor = self._config_parent_fd
+        if descriptor >= 0:
+            os.close(descriptor)
+            self._config_parent_fd = -1
+
+    def _require_config_parent_identity(self) -> None:
+        if self._config_parent_fd < 0:
+            raise TransactionError("live shell config parent binding is closed")
+        expected = self._config_parent_identity
+        _require_open_config_parent_identity(
+            self._config_path.parent,
+            expected.st_dev,
+            expected.st_ino,
+            self._config_parent_fd,
+        )
+
+    def _bind_config_snapshot(self, expected_payload: bytes) -> None:
+        payload, identity = _snapshot_bytes_and_identity(
+            self.snapshot_file, "config", self.snapshot_file.parent
+        )
+        if payload != expected_payload:
+            raise TransactionError(
+                "transaction config snapshot differs from its source"
+            )
+        self._config_snapshot_identity = identity
+
+    def _config_snapshot_payload(self) -> bytes:
+        if self._config_snapshot_identity is None:
+            raise TransactionError("transaction config snapshot identity is unavailable")
+        return _snapshot_bytes_and_identity(
+            self.snapshot_file,
+            "config",
+            self.snapshot_file.parent,
+            expected_identity=self._config_snapshot_identity,
+        )[0]
+
+    def _live_config(self) -> tuple[bool, bytes | None]:
+        """Read one bounded regular file relative to the admitted parent FD."""
+        self._require_config_parent_identity()
+        return _read_bounded_regular_at(
+            self._config_parent_fd, self._config_path.name, self._config_path
+        )
+
+    def _replace_live_config(self, payload: bytes) -> None:
+        self._require_config_parent_identity()
+        _atomic_replace_at(
+            self._config_parent_fd, self._config_path.name, payload
+        )
+
+    def _unlink_live_config(self) -> None:
+        self._require_config_parent_identity()
+        _durable_unlink_at(self._config_parent_fd, self._config_path.name)
+
+    def _replace_config_baseline(self) -> None:
+        existed, payload = self._live_config()
+        self.payload_reload_expected = (
+            self.paths.plugin_dir / "hancore.shibumi.state"
+        ).is_dir() and _config_payload_enables_plugin(
+            payload, "hancore.shibumi.state"
+        )
+        if existed:
+            assert payload is not None
+            # Publishing bytes before the existence bit is safe: recovery of
+            # the old absent journal ignores the unadmitted extra snapshot.
+            atomic_write(self.snapshot_file, payload)
+            self._bind_config_snapshot(payload)
+            self.config_existed = True
+            self._write_journal(self.phase)
+        else:
+            # Publish absence before unlinking an old snapshot. A crash on
+            # either side leaves recovery with a complete journal/snapshot pair
+            # and, while liveMutationStarted is false, foreign config is kept.
+            self.config_existed = False
+            self._config_snapshot_identity = None
+            self._write_journal(self.phase)
+            _durable_unlink(self.snapshot_file)
+
+    def refresh_config_after_stop(self) -> dict[str, Any]:
+        """Make the drained shell document the durable rollback baseline."""
+        if not self.restore_requires_drain or not self.shell_stopped:
+            raise TransactionError("config baseline refresh requires a drained shell")
+        self._replace_config_baseline()
+        snapshot_payload = (
+            self._config_snapshot_payload() if self.config_existed else b""
+        )
+        if snapshot_payload:
+            return parse_config_bytes(
+                snapshot_payload,
+                self.snapshot_file,
+                user_config_exists=True,
+            )[0]
+        defaults_payload = _read_bounded_regular_path(
+            self.paths.defaults_file, "shell config defaults"
+        )
+        return parse_config_bytes(
+            defaults_payload,
+            self.paths.defaults_file,
+            user_config_exists=False,
+        )[0]
 
     def mark_shell_started(self) -> None:
         self.shell_stopped = False
@@ -766,6 +1134,7 @@ class PluginTransaction:
                 "beforePayloadDigest": plugin_payload_digest(target),
             }
             self.records.append(record)
+            self._require_config_parent_identity()
             self.live_mutation_started = True
             self._write_journal("prepared-removal")
             os.replace(target, backup)
@@ -793,6 +1162,7 @@ class PluginTransaction:
                 "beforePayloadDigest": plugin_payload_digest(target),
             }
             self.records.append(record)
+            self._require_config_parent_identity()
             self.live_mutation_started = True
             self._write_journal("prepared-legacy-removal")
             os.replace(target, backup)
@@ -800,8 +1170,9 @@ class PluginTransaction:
             self._write_journal("legacy-removed")
 
     def write_config(self, payload: bytes) -> None:
+        _require_bounded_config_payload(payload)
         self._begin_live_mutation("configuring")
-        atomic_write(self.paths.config_file, payload)
+        self._replace_live_config(payload)
         self._write_journal("configured")
 
     def write_menu_extension(self, payload: bytes | None) -> None:
@@ -831,13 +1202,28 @@ class PluginTransaction:
         if self.finished or self.commit_point_reached:
             return
         try:
-            if not self.live_mutation_started and not self.shell_stopped:
-                # Validation and lifecycle preflights may fail after the full
-                # payload has been staged but before any live path changed.
-                # Discard those hidden stages without causing a needless
-                # rescan, reload, restart, or rewrite of unchanged config.
+            self._require_config_parent_identity()
+            snapshot_payload = (
+                self._config_snapshot_payload() if self.config_existed else None
+            )
+            if not self.live_mutation_started:
+                # Validation and lifecycle preflights may fail after staging or
+                # after a managed drain, but before any live path changed. The
+                # shell may have saved config while draining, so never replace
+                # that live document with the transaction-init snapshot.
+                if self.restore_requires_drain:
+                    self._require_config_parent_identity()
+                    self.runtime.stop_shell()
+                    self._require_config_parent_identity()
+                    self.runtime.reconcile_rollback(
+                        restart_required=self.restart_on_reconcile,
+                        shell_was_stopped=True,
+                        payload_reload_expected=self.payload_reload_expected,
+                    )
+                self._require_config_parent_identity()
                 self._cleanup_transaction()
                 self.finished = True
+                self._close_config_parent()
                 return
             # A managed transaction records a monotonic restore drain before
             # its first stop. A later start may succeed before verification or
@@ -848,13 +1234,19 @@ class PluginTransaction:
                 _preflight_restore_records(
                     self.paths.plugin_dir, self.token, self.records
                 )
+                self._require_config_parent_identity()
                 self.runtime.stop_shell()
+                self._require_config_parent_identity()
+            self._require_config_parent_identity()
             _restore_records(self.paths.plugin_dir, self.token, self.records)
             if self.config_existed:
-                atomic_write(self.paths.config_file, self.snapshot_file.read_bytes())
+                assert snapshot_payload is not None
+                self._replace_live_config(snapshot_payload)
             else:
-                _durable_unlink(self.paths.config_file)
+                self._unlink_live_config()
+            self._require_config_parent_identity()
             self._restore_menu_extension()
+            self._require_config_parent_identity()
             self.runtime.reconcile_rollback(
                 restart_required=self.restart_on_reconcile,
                 shell_was_stopped=(
@@ -874,8 +1266,10 @@ class PluginTransaction:
                 pass
             raise
         else:
+            self._require_config_parent_identity()
             self._cleanup_transaction()
             self.finished = True
+            self._close_config_parent()
 
     def finish(
         self,
@@ -883,7 +1277,21 @@ class PluginTransaction:
         *,
         archive_previous: bool,
     ) -> None:
-        self._write_journal("committing", desired_state, archive_previous)
+        self._require_config_parent_identity()
+
+        def mark_commit_point() -> None:
+            self.commit_point_reached = True
+
+        # The durable committing journal is sufficient to roll forward. Mark
+        # that boundary inside the atomic publisher: close or cleanup may still
+        # report a late error after the parent directory has reached storage.
+        self._write_journal(
+            "committing",
+            desired_state,
+            archive_previous,
+            on_durable=mark_commit_point,
+        )
+        self._require_config_parent_identity()
         state_file = self.paths.state_dir / "install.json"
         if desired_state is None:
             _durable_unlink(state_file)
@@ -894,11 +1302,6 @@ class PluginTransaction:
                     "utf-8"
                 ),
             )
-        # install.json is the roll-forward commit point. Once it has changed,
-        # rolling payloads back would make durable state describe the wrong
-        # bytes. Any later failure retains the committing/committed journal so
-        # recover_transactions() can idempotently finish the new state.
-        self.commit_point_reached = True
         self._write_journal("committed", desired_state, archive_previous)
 
         if archive_previous:
@@ -912,8 +1315,10 @@ class PluginTransaction:
                     removed_backup = True
             if removed_backup:
                 _fsync_directory(self.paths.plugin_dir)
+        self._require_config_parent_identity()
         self._cleanup_transaction()
         self.finished = True
+        self._close_config_parent()
 
     def _archive_backups(self) -> None:
         _archive_transaction_backups(
@@ -948,12 +1353,15 @@ class PluginTransaction:
         return self
 
     def __exit__(self, exception_type: Any, *_: object) -> None:
-        if (
-            exception_type is not None
-            and not self.finished
-            and not self.commit_point_reached
-        ):
-            self.rollback()
+        try:
+            if (
+                exception_type is not None
+                and not self.finished
+                and not self.commit_point_reached
+            ):
+                self.rollback()
+        finally:
+            self._close_config_parent()
 
 
 def _safe_record_paths(
@@ -1413,17 +1821,76 @@ def _quarantine_recovery_backups(
     return quarantined
 
 
-def _snapshot_bytes(path: Path, label: str, directory: Path) -> bytes:
-    if path.is_symlink() or not path.is_file():
-        raise TransactionError(
-            f"transaction {label} snapshot is missing or unsafe: {directory}"
-        )
+def _snapshot_bytes_and_identity(
+    path: Path,
+    label: str,
+    directory: Path,
+    *,
+    expected_identity: tuple[int, int, str] | None = None,
+) -> tuple[bytes, tuple[int, int, str]]:
     try:
-        return path.read_bytes()
+        descriptor = os.open(
+            path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+        )
+    except OSError as error:
+        raise TransactionError(
+            f"transaction {label} snapshot is missing or unsafe in "
+            f"{directory}: {error}"
+        ) from error
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_STATE_BYTES:
+            raise TransactionError(
+                f"transaction {label} snapshot is malformed or exceeds the "
+                f"{MAX_STATE_BYTES}-byte limit: {directory}"
+            )
+        if expected_identity is not None and (
+            before.st_dev != expected_identity[0]
+            or before.st_ino != expected_identity[1]
+        ):
+            raise TransactionError(
+                f"transaction {label} snapshot was replaced: {directory}"
+            )
+        payload = bytearray()
+        while len(payload) <= MAX_STATE_BYTES:
+            block = os.read(
+                descriptor,
+                min(65536, MAX_STATE_BYTES + 1 - len(payload)),
+            )
+            if not block:
+                break
+            payload.extend(block)
+        after = os.fstat(descriptor)
+        if (
+            len(payload) > MAX_STATE_BYTES
+            or len(payload) != after.st_size
+            or before.st_dev != after.st_dev
+            or before.st_ino != after.st_ino
+            or before.st_size != after.st_size
+            or before.st_mtime_ns != after.st_mtime_ns
+            or before.st_ctime_ns != after.st_ctime_ns
+        ):
+            raise TransactionError(
+                f"transaction {label} snapshot changed or exceeded bounds: "
+                f"{directory}"
+            )
+        result = bytes(payload)
+        digest = hashlib.sha256(result).hexdigest()
+        if expected_identity is not None and digest != expected_identity[2]:
+            raise TransactionError(
+                f"transaction {label} snapshot content changed: {directory}"
+            )
+        return result, (before.st_dev, before.st_ino, digest)
     except OSError as error:
         raise TransactionError(
             f"cannot read transaction {label} snapshot {directory}: {error}"
         ) from error
+    finally:
+        os.close(descriptor)
+
+
+def _snapshot_bytes(path: Path, label: str, directory: Path) -> bytes:
+    return _snapshot_bytes_and_identity(path, label, directory)[0]
 
 
 def recover_transactions(
@@ -1474,15 +1941,6 @@ def recover_transactions(
                     f"transaction directory changed after lifecycle admission: {directory}"
                 )
             validated_by_directory[directory] = item
-        private = [
-            item["directory"]
-            for item in validated_inventory
-            if item["kind"] == "private"
-        ]
-        for directory in private:
-            shutil.rmtree(directory)
-        if private:
-            _fsync_directory(root)
         entries = sorted(
             (
                 item["directory"]
@@ -1492,13 +1950,16 @@ def recover_transactions(
             key=lambda item: item.name,
         )
     else:
-        _discard_private_transactions(root)
-        entries = sorted(root.iterdir())
-        for entry in entries:
+        all_entries = sorted(root.iterdir())
+        for entry in all_entries:
             if entry.is_symlink() or not entry.is_dir():
                 raise TransactionError(
                     f"refusing malformed transaction namespace entry: {entry}"
                 )
+        entries = [
+            entry for entry in all_entries
+            if not entry.name.startswith((PREPARATION_PREFIX, CLEANUP_PREFIX))
+        ]
     recovered = 0
     for directory in entries:
         validated = validated_by_directory.get(directory)
@@ -1526,9 +1987,19 @@ def recover_transactions(
                 )
         schema = journal.get("schemaVersion")
         if (
+            type(schema) is int
+            and schema == 1
+            and journal.get("suiteId") == SUITE_ID
+            and "configParentIdentity" not in journal
+        ):
+            raise TransactionError(
+                "legacy schema-1 transaction lacks config parent identity; "
+                f"recovery is unsafe and the journal was retained: {directory}"
+            )
+        if (
             journal.get("suiteId") != SUITE_ID
             or type(schema) is not int
-            or schema != 1
+            or schema != JOURNAL_SCHEMA_VERSION
         ):
             raise TransactionError(f"refusing unknown transaction journal: {directory}")
         token = str(journal.get("token") or "")
@@ -1536,6 +2007,16 @@ def recover_transactions(
             raise TransactionError(f"transaction token mismatch: {directory}")
         plugin_root = Path(str(journal.get("pluginRoot") or ""))
         config_path = Path(str(journal.get("configPath") or ""))
+        try:
+            config_parent_device, config_parent_inode = (
+                parse_config_parent_identity(
+                    journal.get("configParentIdentity")
+                )
+            )
+        except ValueError as error:
+            raise TransactionError(
+                f"transaction config parent identity is malformed: {directory}"
+            ) from error
         menu_extension_value = journal.get("menuExtensionPath")
         menu_extension_path = (
             Path(str(menu_extension_value))
@@ -1679,19 +2160,31 @@ def recover_transactions(
                 raise TransactionError(
                     f"transaction archive intent is malformed: {directory}"
                 )
-            quarantined = _quarantine_recovery_backups(
-                plugin_root,
-                token,
-                records,
-                artifact_bindings,
-                artifact_identities,
-            ) if artifact_bindings else {}
-            backup_overrides = {
-                plugin_id: quarantine
-                for plugin_id, (_, quarantine) in quarantined.items()
-            }
+            config_parent_fd = _open_verified_config_parent(
+                config_path.parent,
+                config_parent_device,
+                config_parent_inode,
+            )
+            quarantined: dict[str, tuple[Path, Path]] = {}
             archive_descriptors: tuple[int, int, int] | None = None
             try:
+                _require_open_config_parent_identity(
+                    config_path.parent,
+                    config_parent_device,
+                    config_parent_inode,
+                    config_parent_fd,
+                )
+                quarantined = _quarantine_recovery_backups(
+                    plugin_root,
+                    token,
+                    records,
+                    artifact_bindings,
+                    artifact_identities,
+                ) if artifact_bindings else {}
+                backup_overrides = {
+                    plugin_id: quarantine
+                    for plugin_id, (_, quarantine) in quarantined.items()
+                }
                 archive_descriptors = _open_archive_descriptors(
                     paths, token, artifact_bindings or None
                 ) if archive_value else None
@@ -1753,26 +2246,64 @@ def recover_transactions(
                         os.close(descriptor)
                 _restore_quarantined_backups(plugin_root, quarantined)
                 raise
+            finally:
+                os.close(config_parent_fd)
         else:
             restart_on_reconcile = restart_value
-            if live_mutation_value is False and not shell_stopped_value:
-                _discard_pre_exposure_records(plugin_root, token, records)
+            if live_mutation_value is False:
+                config_parent_fd = _open_verified_config_parent(
+                    config_path.parent,
+                    config_parent_device,
+                    config_parent_inode,
+                )
+                try:
+                    # No lifecycle path changed yet. In particular, preserve any
+                    # config the shell saved between transaction preparation and
+                    # its drain instead of replaying the stale initial snapshot.
+                    _require_open_config_parent_identity(
+                        config_path.parent,
+                        config_parent_device,
+                        config_parent_inode,
+                        config_parent_fd,
+                    )
+                    _discard_pre_exposure_records(plugin_root, token, records)
+                    if restore_requires_drain_value:
+                        runtime.stop_shell()
+                        _require_open_config_parent_identity(
+                            config_path.parent,
+                            config_parent_device,
+                            config_parent_inode,
+                            config_parent_fd,
+                        )
+                        runtime.reconcile_rollback(
+                            restart_required=restart_on_reconcile,
+                            shell_was_stopped=True,
+                            payload_reload_expected=bool(payload_reload_value),
+                        )
+                finally:
+                    os.close(config_parent_fd)
             else:
                 # Atomically move each admitted backup out of its replaceable
                 # public name, validate the moved object, and consume only
                 # those quarantined objects after all preflights succeed.
-                quarantined = _quarantine_recovery_backups(
-                    plugin_root,
-                    token,
-                    records,
-                    artifact_bindings,
-                    artifact_identities,
-                ) if artifact_bindings else {}
-                backup_overrides = {
-                    plugin_id: quarantine
-                    for plugin_id, (_, quarantine) in quarantined.items()
-                }
+                config_parent_fd = _open_verified_config_parent(
+                    config_path.parent,
+                    config_parent_device,
+                    config_parent_inode,
+                )
+                quarantined: dict[str, tuple[Path, Path]] = {}
                 try:
+                    quarantined = _quarantine_recovery_backups(
+                        plugin_root,
+                        token,
+                        records,
+                        artifact_bindings,
+                        artifact_identities,
+                    ) if artifact_bindings else {}
+                    backup_overrides = {
+                        plugin_id: quarantine
+                        for plugin_id, (_, quarantine) in quarantined.items()
+                    }
                     # A managed transaction keeps restoreRequiresDrain monotonic
                     # after its first stop. A later start may have succeeded even
                     # when shellStopped is false, so re-establish the stopped state
@@ -1782,6 +2313,18 @@ def recover_transactions(
                             plugin_root, token, records, backup_overrides
                         )
                         runtime.stop_shell()
+                        _require_open_config_parent_identity(
+                            config_path.parent,
+                            config_parent_device,
+                            config_parent_inode,
+                            config_parent_fd,
+                        )
+                    _require_open_config_parent_identity(
+                        config_path.parent,
+                        config_parent_device,
+                        config_parent_inode,
+                        config_parent_fd,
+                    )
                     _restore_records(
                         plugin_root,
                         token,
@@ -1790,13 +2333,20 @@ def recover_transactions(
                         artifact_bindings,
                         artifact_identities,
                     )
+                    if config_existed_value:
+                        assert config_snapshot_payload is not None
+                        _atomic_replace_at(
+                            config_parent_fd,
+                            config_path.name,
+                            config_snapshot_payload,
+                        )
+                    else:
+                        _durable_unlink_at(config_parent_fd, config_path.name)
                 except Exception:
                     _restore_quarantined_backups(plugin_root, quarantined)
                     raise
-                if config_existed_value:
-                    atomic_write(config_path, config_snapshot_payload)
-                else:
-                    _durable_unlink(config_path)
+                finally:
+                    os.close(config_parent_fd)
                 if menu_extension_value:
                     if journal["menuExtensionExisted"]:
                         atomic_write(menu_extension_path, menu_snapshot_payload)
@@ -1811,10 +2361,15 @@ def recover_transactions(
                 if payload_reload_value is None:
                     payload_reload_value = (
                         (paths.plugin_dir / "hancore.shibumi.state").is_dir()
-                        and _config_enables_plugin(
-                            paths.config_file, "hancore.shibumi.state"
+                        and _config_payload_enables_plugin(
+                            config_snapshot_payload,
+                            "hancore.shibumi.state",
                         )
                     )
+                check = _open_verified_config_parent(
+                    config_path.parent, config_parent_device, config_parent_inode
+                )
+                os.close(check)
                 runtime.reconcile_rollback(
                     restart_required=restart_on_reconcile,
                     # Schema-v1 journals predating the live-mutation field are
@@ -1826,8 +2381,13 @@ def recover_transactions(
                     ),
                     payload_reload_expected=payload_reload_value,
                 )
+        check = _open_verified_config_parent(
+            config_path.parent, config_parent_device, config_parent_inode
+        )
+        os.close(check)
         _retire_transaction_directory(root, directory, token)
         recovered += 1
+    _discard_private_transactions(root)
     if root.is_dir() and not any(root.iterdir()):
         root.rmdir()
         if paths.state_dir.is_dir():
