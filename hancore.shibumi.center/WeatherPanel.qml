@@ -204,6 +204,7 @@ ShibumiPanel {
     geocodeOutput = ""
     locationError = ""
     geocodeProc.command = ["curl", "-fsS", "--max-time", "5",
+      "--max-filesize", "65536",
       "https://geocoding-api.open-meteo.com/v1/search?name="
         + encodeURIComponent(geocodeActiveQuery)
         + "&count=5&language=" + panel.geocodeLanguage + "&format=json"]

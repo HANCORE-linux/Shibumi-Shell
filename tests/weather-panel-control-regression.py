@@ -75,8 +75,11 @@ def main():
             if not good or ERROR.search(text):
                 print(text)
                 raise RuntimeError('weather panel control failed: ' + label)
-            if diagnostic is None and read_regular(root / 'location.log', 4096) != b'--set|Berlin|52.52,13.405\n--clear\n':
-                raise RuntimeError('weather panel helper calls changed')
+            if diagnostic is None:
+                helper_calls = read_regular(root / 'location.log', 4096)
+                if helper_calls != b'--set|Berlin|52.52,13.405\n--clear\n':
+                    raise RuntimeError(
+                        'weather panel helper calls changed: ' + repr(helper_calls))
             print('weather panel control passed:', label)
     print('weather panel controls passed; window stub and inert helpers, not desktop acceptance')
 

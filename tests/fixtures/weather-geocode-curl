@@ -2,7 +2,11 @@
 
 set -euo pipefail
 
-url=${!#}
+[[ $# -eq 6 ]] || exit 4
+[[ $1 == -fsS ]] || exit 4
+[[ $2 == --max-time && $3 == 5 ]] || exit 4
+[[ $4 == --max-filesize && $5 == 65536 ]] || exit 4
+url=$6
 [[ $url == https://geocoding-api.open-meteo.com/* ]] || exit 2
 [[ $url == *language=de* ]] || exit 3
 

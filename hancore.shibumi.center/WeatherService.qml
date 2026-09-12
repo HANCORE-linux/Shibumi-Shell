@@ -28,7 +28,12 @@ Item {
   property bool loaded: false
   property bool unavailable: false
   property bool refreshPending: false
+  property string weatherOutput: ""
+  property bool weatherCollected: false
+  property bool weatherExited: false
+  property bool weatherExitOk: false
   readonly property bool refreshing: weatherProc.running
+    || weatherCollected || weatherExited
   readonly property string locationQuery: {
     const latitude = parseFloat(String(configuredLocation.latitude))
     const longitude = parseFloat(String(configuredLocation.longitude))
@@ -113,11 +118,30 @@ Item {
 
   function refresh(force) {
     if (!enabled) return
-    if (weatherProc.running) {
+    if (refreshing) {
       if (force === true) refreshPending = true
       return
     }
+    weatherOutput = ""
+    weatherCollected = false
+    weatherExited = false
+    weatherExitOk = false
     weatherProc.running = true
+  }
+
+  function finishWeather() {
+    if (!weatherCollected || !weatherExited) return
+    const output = weatherOutput
+    const ok = weatherExitOk
+    const pending = refreshPending
+    weatherOutput = ""
+    weatherCollected = false
+    weatherExited = false
+    weatherExitOk = false
+    refreshPending = false
+    if (ok) parseReport(output)
+    else unavailable = true
+    if (pending) pendingRefresh.restart()
   }
 
   function reloadLocation() {
@@ -152,16 +176,27 @@ Item {
 
   Process {
     id: weatherProc
-    command: ["curl", "-fsS", "--max-time", "5", root.requestUrl]
+    command: ["curl", "-fsS", "--max-time", "5",
+      "--max-filesize", "131072", root.requestUrl]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.parseReport(text)
+      onStreamFinished: {
+        root.weatherOutput = text
+        root.weatherCollected = true
+        root.finishWeather()
+      }
     }
-    onRunningChanged: {
-      if (running || !root.refreshPending) return
-      root.refreshPending = false
-      Qt.callLater(function() { root.refresh(false) })
+    onExited: function(exitCode, exitStatus) {
+      root.weatherExitOk = exitCode === 0 && exitStatus === 0
+      root.weatherExited = true
+      root.finishWeather()
     }
+  }
+
+  Timer {
+    id: pendingRefresh
+    interval: 0
+    onTriggered: root.refresh(false)
   }
 
   FileView {
@@ -182,6 +217,7 @@ Item {
   }
 
   onLocationQueryChanged: refresh(true)
+  Component.onDestruction: pendingRefresh.stop()
 
   Timer {
     interval: 15 * 60 * 1000
