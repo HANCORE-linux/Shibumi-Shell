@@ -1207,6 +1207,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/ai-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/quick-access-plugin-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/reactor-plugin-regression.sh"
+  "$repo_root/tests/host-registry-prime-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/bar-host-registry-regression.sh"
   OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/state-restore-control-regression.py"
   OMARCHY_PATH="$OMARCHY_PATH" python3 "$repo_root/tests/layout-transition-regression.py" --controls

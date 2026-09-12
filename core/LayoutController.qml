@@ -50,7 +50,11 @@ Item {
   height: 0
 
   readonly property bool legacyMutationAllowed: !bar || bar.legacyLayoutMutationAllowed !== false
-  readonly property bool mutationBusy: !!(bar && bar.layoutTransitionBusy === true)
+  readonly property bool mutationAdmitted: !bar
+    || !("mutationAdmissionReady" in bar)
+    || bar.mutationAdmissionReady === true
+  readonly property bool mutationBusy: !mutationAdmitted
+    || !!(bar && bar.layoutTransitionBusy === true)
     || !!(stateService && stateService.writePending === true)
 
   function interactiveMutationAllowed(editingValue) {

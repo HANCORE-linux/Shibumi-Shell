@@ -1,6 +1,7 @@
 pragma Singleton
 
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
 // Cooperative suite wiring, not a QML security boundary. Native backends and
@@ -29,6 +30,18 @@ QtObject {
   // Internal coordination only. Underscores are API conventions, not access
   // control: QML imports are cooperative, not a sandbox.
   property var _leases: []
+  // Omarchy 4.0.3's first registry generation can revoke a configured
+  // bar-only widget on the first shell.json mutation. Prime that public host
+  // registry exactly once per Quickshell process, before the Bar is admitted.
+  property string hostRegistryPrimePhase: "idle"
+  property int hostRegistryPrimePid: 0
+  property int hostRegistryPrimeAttemptCount: 0
+  property int hostRegistryPrimeRevision: 0
+  property int hostRegistryPrimeTimeoutMs: 7000
+  property var _hostRegistryPrimeInitialOwner: null
+  property int _hostRegistryPrimeInitialSerial: 0
+  property bool _hostRegistryPrimeAcknowledged: false
+  property var _hostRegistryPrimeReplacementOwner: null
   readonly property bool hasActiveBar: _selected("hancore.shibumi.bar") !== null
   readonly property var publishedBarConfig: {
     const lease = _selected("hancore.shibumi.bar")
@@ -88,7 +101,113 @@ QtObject {
     retired = true
     payloadDigest = ""
     _leases = []
+    hostRegistryPrimeDeadline.stop()
+    if (["dispatching", "acknowledged"].indexOf(
+        hostRegistryPrimePhase) >= 0) {
+      hostRegistryPrimePhase = "failed"
+      hostRegistryPrimeRevision++
+    }
+    if (hostRegistryPrimeProcess.running)
+      hostRegistryPrimeProcess.running = false
     revision++
+  }
+
+  function scopedBarLease(owner) {
+    const lease = _selected("hancore.shibumi.bar")
+    return lease && lease.owner === owner && lease.host
+        && "pluginId" in lease.host
+        && lease.host.pluginId === "hancore.shibumi.bar"
+      ? lease : null
+  }
+
+  function hostRegistryPrimeReadyFor(owner, processId) {
+    void(hostRegistryPrimeRevision)
+    return hostRegistryPrimePhase === "ready"
+      && hostRegistryPrimePid === processId
+      && processId === Quickshell.processId
+      && scopedBarLease(owner) !== null
+  }
+
+  function evaluateHostRegistryPrime() {
+    if (["dispatching", "acknowledged"].indexOf(
+        hostRegistryPrimePhase) < 0) return
+    const lease = _selected("hancore.shibumi.bar")
+    if (lease && lease.serial > _hostRegistryPrimeInitialSerial
+        && lease.owner !== _hostRegistryPrimeInitialOwner)
+      _hostRegistryPrimeReplacementOwner = lease.owner
+    if (!_hostRegistryPrimeAcknowledged
+        || !_hostRegistryPrimeReplacementOwner || !lease
+        || lease.owner !== _hostRegistryPrimeReplacementOwner) return
+    hostRegistryPrimeDeadline.stop()
+    hostRegistryPrimePhase = "ready"
+    hostRegistryPrimeRevision++
+  }
+
+  function failHostRegistryPrime() {
+    if (["dispatching", "acknowledged"].indexOf(
+        hostRegistryPrimePhase) < 0) return
+    hostRegistryPrimeDeadline.stop()
+    hostRegistryPrimePhase = "failed"
+    hostRegistryPrimeRevision++
+    if (hostRegistryPrimeProcess.running)
+      hostRegistryPrimeProcess.running = false
+  }
+
+  function requestHostRegistryPrime(owner, processId) {
+    const pid = Number(processId)
+    const lease = scopedBarLease(owner)
+    if (!ready || !lease
+        || serviceFor("hancore.shibumi.state") === null
+        || !Number.isInteger(pid) || pid <= 1
+        || pid !== Quickshell.processId) return false
+    if (hostRegistryPrimePhase === "ready")
+      return hostRegistryPrimeReadyFor(owner, pid)
+    if (hostRegistryPrimePhase !== "idle"
+        || hostRegistryPrimeAttemptCount !== 0
+        || hostRegistryPrimePid !== 0) {
+      evaluateHostRegistryPrime()
+      return hostRegistryPrimeReadyFor(owner, pid)
+    }
+
+    hostRegistryPrimePid = pid
+    hostRegistryPrimeAttemptCount = 1
+    _hostRegistryPrimeInitialOwner = owner
+    _hostRegistryPrimeInitialSerial = lease.serial
+    _hostRegistryPrimeAcknowledged = false
+    _hostRegistryPrimeReplacementOwner = null
+    // Publish the one-shot claim before dispatch. The expected plugin-Bar
+    // rebuild destroys its requester synchronously.
+    hostRegistryPrimePhase = "dispatching"
+    hostRegistryPrimeRevision++
+    hostRegistryPrimeDeadline.interval = hostRegistryPrimeTimeoutMs
+    hostRegistryPrimeDeadline.restart()
+    hostRegistryPrimeProcess.command = [
+      "/usr/bin/quickshell", "ipc", "--pid", String(pid),
+      "call", "--", "shell", "rescanPlugins"
+    ]
+    hostRegistryPrimeProcess.running = true
+    return false
+  }
+
+  property Process hostRegistryPrimeProcess: Process {
+    running: false
+    onExited: function(exitCode, _exitStatus) {
+      if (runtime.hostRegistryPrimePhase !== "dispatching") return
+      if (exitCode !== 0) {
+        runtime.failHostRegistryPrime()
+        return
+      }
+      runtime._hostRegistryPrimeAcknowledged = true
+      runtime.hostRegistryPrimePhase = "acknowledged"
+      runtime.hostRegistryPrimeRevision++
+      runtime.evaluateHostRegistryPrime()
+    }
+  }
+
+  property Timer hostRegistryPrimeDeadline: Timer {
+    interval: runtime.hostRegistryPrimeTimeoutMs
+    repeat: false
+    onTriggered: runtime.failHostRegistryPrime()
   }
 
   function validLease(lease) {
@@ -151,6 +270,7 @@ QtObject {
       // an overlapping provider selectable in synchronous signal handlers.
       _leases = next ? others.concat([next]) : others
       revision++
+      evaluateHostRegistryPrime()
     }
     return next
   }
@@ -159,6 +279,7 @@ QtObject {
     if (!lease || _leases.indexOf(lease) < 0) return
     _leases = _leases.filter(function(current) { return current !== lease })
     revision++
+    evaluateHostRegistryPrime()
   }
 
   function serviceFor(id) {

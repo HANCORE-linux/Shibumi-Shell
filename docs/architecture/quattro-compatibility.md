@@ -107,7 +107,11 @@ bars, Control Center restoration through file-backed settlement, and the
 monitor's scalar-Bar bridge. They also exercise the PID-bound native catalog,
 independent Bar and page consumers, selected-provider changes and exact V1/V2
 undo, stale-snapshot refusal, and all 24 plugin roots with the exact 18 scoped
-service owners. The all-suite test withholds platform owners and creates no
+service owners. It also proves the one-shot exact-PID public registry prime:
+the pre-prime Bar remains unavailable, a replacement Bar is required, and a
+missing replacement fails bounded and without retry. This works around the
+pinned host's first-mutation loss without retaining a revoked Component or
+patching Omarchy. The all-suite test withholds platform owners and creates no
 output surfaces.
 
 These fixture results do not make 4.0.3 supported. The public widget snapshot

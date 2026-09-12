@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import "hancore.shibumi.state" as State
 import "control" as Control
+import "control/HostIdentity.js" as HostIdentity
 
 ShellRoot {
   id: root
@@ -40,6 +41,7 @@ ShellRoot {
 
     property int writes: 0
     property string activeBarId: "hancore.shibumi.bar"
+    property var barConfig: ({ id: "hancore.shibumi.bar" })
     property var shellConfig: ({ version: 1, bar: { shibumi: { version: 1 } } })
 
     function mutateShellConfig(mutator) {
@@ -201,6 +203,45 @@ ShellRoot {
       resetWrites++
       return true
     }
+  }
+
+  // Omarchy's built-in bar gives a third-party widget this capability shape,
+  // not the live Bar object. The selected barConfig can still name a custom
+  // bar when its Loader failed and the built-in bar became the active host.
+  QtObject {
+    id: scopedStockBar
+
+    property string pluginId: "hancore.shibumi.control-center"
+    property string moduleName: "hancore.shibumi.control-center"
+    readonly property var foreignPopoutMarker: ({ foreign: true })
+    property var shell: fakeShell
+    property var layoutConfig: ({})
+    property bool vertical: false
+    property int barSize: 35
+    property string position: "top"
+    property string fontFamily: "monospace"
+    property color foreground: "#eeeeee"
+    property color barForeground: foreground
+    property color background: "#111111"
+    property color urgent: "#d75f5f"
+    property var activePopout: null
+    property var clickTargets: root.clickTargets
+
+    function registerClickTarget(target) {
+      if (root.clickTargets.indexOf(target) < 0)
+        root.clickTargets = root.clickTargets.concat([target])
+    }
+    function unregisterClickTarget(target) {
+      root.clickTargets = root.clickTargets.filter(item => item !== target)
+    }
+    function showTooltip(_target, _text) {}
+    function hideTooltip(_target) {}
+    function requestPopout(owner) { activePopout = owner }
+    function releasePopout(owner) {
+      if (activePopout === owner) activePopout = null
+    }
+    function switchPanelFrom(_owner, _direction) { return false }
+    function targetBelongsToWindow(_target, _window) { return true }
   }
 
   QtObject {
@@ -1767,7 +1808,9 @@ ShellRoot {
             + " required=" + requiredV2)
         appearance.controller.resetGroupAppearance("G4")
         panel.v2LayoutActive = false
-        panel.activeShell = "omarchy"
+        fakeShell.activeBarId = ""
+        fakeShell.barConfig = ({ id: "hancore.shibumi.bar" })
+        widget.bar = scopedStockBar
         root.phase++
         root.ticks = 0
         return
@@ -1790,7 +1833,9 @@ ShellRoot {
           schemaVersion: 1, target: "v1", phase: "complete", detail: "",
           updatedEpoch: Math.floor(Date.now() / 1000)
         }
-        panel.activeShell = "shibumi"
+        fakeShell.activeBarId = "hancore.shibumi.bar"
+        fakeShell.barConfig = ({ id: "hancore.shibumi.bar" })
+        widget.bar = fakeBar
         widget.close()
         root.phase++
         root.ticks = 0
@@ -1801,7 +1846,9 @@ ShellRoot {
         if (!widget || root.ticks < 3) return
         if (widget.opened || widget.panelLoaded || fakeBar.activePopout !== null)
           return root.fail("panel did not release on close")
-        fakeShell.activeBarId = "omarchy.bar"
+        fakeShell.activeBarId = ""
+        fakeShell.barConfig = ({ position: "top" })
+        widget.bar = scopedStockBar
         root.phase++
         root.ticks = 0
         return
@@ -1809,9 +1856,10 @@ ShellRoot {
 
       if (root.phase === 12) {
         if (!widget || root.ticks < 2) return
-        if (!widget.stockOmarchyHost || !widget.iconMode
+        if (HostIdentity.shellName(scopedStockBar) !== "omarchy"
+            || !widget.stockOmarchyHost || !widget.iconMode
             || widget.nativePillSurfaceVisible)
-          return root.fail("stock Omarchy return icon was not neutral")
+          return root.fail("scoped stock Omarchy return icon was not neutral")
         widgetLoader.active = false
         root.phase++
         root.ticks = 0

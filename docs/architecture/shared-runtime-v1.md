@@ -59,6 +59,28 @@ mandatory. Registration is a wiring/lifetime check, not independent proof of
 all source-file hashes. Full payload identity remains the installer's and
 activation checks' responsibility.
 
+## Scoped host registry prime
+
+Omarchy 4.0.3 can publish a complete initial scoped widget registry and then
+revoke a configured bar-only widget during the first `shell.json` mutation.
+The Runtime therefore owns one process-bound startup prime for an admitted
+scoped Bar. After the State service, payload marker, exact Bar provider, and
+host facade are admitted, it runs the public host call
+`/usr/bin/quickshell ipc --pid <own-pid> call -- shell rescanPlugins` with a
+fixed argument vector. It does not interpret command output as authority.
+
+The first Bar remains not ready and has no output or catalog consumer. Its
+shared mutation admission also rejects shell-config, layout, State appearance,
+family-provider, and public IPC mutation paths, including direct controller
+calls. A successful child exit alone is insufficient: a later Bar lease with a
+higher serial and different owner must be the uniquely selected Bar before the
+prime becomes ready. The Runtime marker survives the expected plugin-Bar rebuild, so
+the replacement cannot dispatch a second prime. Settings and layout changes do
+not rescan. Timeout, nonzero exit, missing replacement, Runtime retirement, or
+scope loss is terminal for that process; recovery requires a normal complete
+shell restart. No missing registry Component is cached, reconstructed from a
+manifest, or replaced by an original provider.
+
 ## State writes
 
 State owns schema-1 settings in its unique `plugins[]` entry, marked by

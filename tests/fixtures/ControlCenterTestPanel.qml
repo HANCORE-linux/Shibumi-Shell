@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import "../control" as Control
+import "../control/HostIdentity.js" as HostIdentity
 
 Item {
   id: root
@@ -59,7 +60,7 @@ Item {
       || "tanzaku") : "tanzaku"
   readonly property int reactorMode: stateConfig.reactor
     ? Number(stateConfig.reactor.mode || 0) : 0
-  property string activeShell: "shibumi"
+  readonly property string activeShell: HostIdentity.shellName(bar)
   readonly property bool stockOmarchyHost: activeShell === "omarchy"
   readonly property string switchPhase: switchService
     ? String(switchService.phase || "idle") : "idle"

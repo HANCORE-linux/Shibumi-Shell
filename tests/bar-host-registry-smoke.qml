@@ -9,10 +9,21 @@ ShellRoot {
   property int attempts: 0
   property int stage: 0
   property int screensaverStage: 0
+  property bool mutationAdmissionChecked: false
   property var retainedItems: []
   property var inlineStateItem: null
   property var inlineStateSlot: null
   property string commandMarker: testCommandMarker
+
+  QtObject {
+    id: admissionLayoutSession
+    property string screenName: "admission-screen"
+    property int calls: 0
+    function setEditing(_enabled) {
+      calls++
+      return true
+    }
+  }
 
   Fixtures.PluginRemovalChecks {
     id: removalChecks
@@ -42,6 +53,63 @@ ShellRoot {
     console.error("bar-host-registry-smoke:", message)
     Qt.exit(1)
     throw new Error(message)
+  }
+
+  function verifyMutationAdmission() {
+    const originalLayout = JSON.parse(JSON.stringify(hostBar.layoutConfig))
+    const originalShell = JSON.parse(JSON.stringify(fakeShell.shellConfig))
+    const configuredLayout = JSON.parse(JSON.stringify(originalLayout))
+    configuredLayout.center = [{ id: "omarchy.clock", shibumiModule: true }]
+    hostBar.layoutConfig = configuredLayout
+    const configuredShell = JSON.parse(JSON.stringify(originalShell))
+    configuredShell.bar.layout = JSON.parse(JSON.stringify(configuredLayout))
+    fakeShell.shellConfig = configuredShell
+    const stateBefore = JSON.stringify(stateService.config)
+    const shellBefore = JSON.stringify(fakeShell.shellConfig)
+    const stateRevisionBefore = stateService.revision
+    const configWritesBefore = fakeShell.configWrites
+    const enableCallsBefore = fakePluginRegistry.enableCalls
+    const editingCallsBefore = admissionLayoutSession.calls
+    let callbackCalled = false
+    hostBar.registerLayoutSession(admissionLayoutSession)
+    hostBar.shutdownPrepared = true
+    const rejected = !hostBar.mutationAdmissionReady
+      && hostBar.setWidgetAppearance("G1", "separator", "true")
+        === "not-ready"
+      && hostBar.setWidgetAppearanceForVariant(
+        "G1", "v1", "compact", "true") === "not-ready"
+      && !hostBar.setStyle("shibumi")
+      && !hostBar.setBarPosition("bottom")
+      && !hostBar.setLayoutEditing(true, "admission-screen")
+      && !hostBar.setAllSplits(true)
+      && !hostBar.addV1Slot("center")
+      && !hostBar.removeV1Slot("left")
+      && !hostBar.layoutController.moveGroupToSlot("G1", "right", 0)
+      && !hostBar.resetBarLayout()
+      && !hostBar.setWidgetGroupVariantStates({
+        G1: { v1: false, v2: false }
+      })
+      && !hostBar.setBarWidgetInstalled("omarchy.clock", true, "right")
+      && !hostBar.removeWidgetFamilyAlternatives("G8")
+      && !hostBar.restoreWidgetFamilyProviderStates({
+        G8: { v1: true, v2: true }
+      })
+      && !hostBar.runWithControlCenterRestore(function() {
+        callbackCalled = true
+        return true
+      }, "bars", false, null, "")
+    hostBar.shutdownPrepared = false
+    const preserved = rejected && hostBar.mutationAdmissionReady && !callbackCalled
+      && JSON.stringify(stateService.config) === stateBefore
+      && JSON.stringify(fakeShell.shellConfig) === shellBefore
+      && stateService.revision === stateRevisionBefore
+      && fakeShell.configWrites === configWritesBefore
+      && fakePluginRegistry.enableCalls === enableCallsBefore
+      && admissionLayoutSession.calls === editingCallsBefore
+    hostBar.unregisterLayoutSession(admissionLayoutSession)
+    hostBar.layoutConfig = originalLayout
+    fakeShell.shellConfig = originalShell
+    return preserved
   }
 
   function verifyTransparencyContract() {
@@ -684,6 +752,13 @@ ShellRoot {
       if (hostBar.moduleSlots.length !== 16)
         return root.fail("expected 16 registry slots, got "
                          + hostBar.moduleSlots.length)
+
+      if (!root.mutationAdmissionChecked) {
+        root.mutationAdmissionChecked = true
+        if (!root.verifyMutationAdmission())
+          return root.fail("inactive Bar mutation escaped the admission guard")
+        return
+      }
 
       if (root.screensaverStage === 0) {
         if (hostBar.shell !== fakeShell)

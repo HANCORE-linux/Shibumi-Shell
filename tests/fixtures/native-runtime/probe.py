@@ -197,7 +197,13 @@ with (BASE / "native.log").open("xb") as log:
         check(ipc("shell", "enablePlugin", "hancore.shibumi.bar", "{}") == (0, "ok"),
               "suite selection after cold-stock entry write failed")
         initial = wait_status("native-runtime-probe", lambda value:
-            value["runtimeReady"] and value["stateReady"] and value["barRegistered"], timeout=12)
+            value["runtimeReady"] and value["stateReady"] and value["barRegistered"]
+            and value["hostRegistryPrimePhase"] == "ready"
+            and value["hostRegistryPrimeAttempts"] == 1
+            and value["hostReady"] and value["mutationAdmissionReady"], timeout=12)
+        check(ipc("native-runtime-probe", "checkSynchronousScopeLoss")
+              == (0, "scope-loss-refused"),
+              "synchronous scoped-Bar ambiguity admitted mutation")
         state_entry = own_entry_write("suite-bar", state_entry)
         check(ipc("native-runtime-probe", "compact", "true") == (0, "queued"), "native State request refused")
         current = wait_status("native-runtime-probe", lambda value:

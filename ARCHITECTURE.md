@@ -190,6 +190,14 @@ ownership is [`docs/multi-bar-extension-plan.md`](docs/multi-bar-extension-plan.
 
 ### Runtime, Outputs, And Lifecycle
 
+- On the scoped 4.0.3 host, the admitted shared Runtime performs one exact-PID
+  public `shell.rescanPlugins` prime per Quickshell process before the Shibumi
+  bar becomes ready or visible. The first Bar owner stays unavailable; success
+  requires IPC acknowledgement and a newly admitted Bar owner after the host
+  rebuild. Missing replacement, timeout, nonzero exit, payload retirement, or
+  scope loss fails terminally for that process. There is no automatic retry,
+  settings-time rescan, stale Component retention, private registry access, or
+  second shell process.
 - One shared controller creates one bar per real output and rejects placeholder
   or zero-sized outputs.
 - Screen-local panels, pickers, tooltips, focus, input masks, and drag state

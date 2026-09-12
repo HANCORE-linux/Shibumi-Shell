@@ -236,6 +236,7 @@ fi
 # A fresh engine receives an admitted shared-runtime marker and controlled
 # scoped services. It has no live shell, network or platform mutation route.
 printf '%s\n' '{"suiteId":"hancore.shibumi","suitePayloadDigest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}' \
+  | tee "$tmpdir/.shibumi-managed.json" \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp "$repo_root/tests/bar-catalog-consumer-smoke.qml" "$tmpdir/shell.qml"
 set +e

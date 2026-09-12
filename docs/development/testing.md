@@ -14,7 +14,15 @@ Run the smallest affected regression first. For a bar-host change:
 ```bash
 cd /path/to/shibumi
 OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
+./tests/host-registry-prime-regression.sh
 ```
+
+The registry-prime regression uses the real exact-PID Quickshell IPC transport.
+Its positive case requires one replacement Bar lease and rejects a duplicate
+dispatch; its negative case acknowledges the host call without rebuilding and
+must time out fail-closed. The pinned native all-24 and runtime probes separately
+prove that the Runtime singleton survives the real host rescan and publishes
+exactly one successful attempt.
 
 For a Bluetooth change:
 

@@ -54,7 +54,12 @@ Item {
   property string suitePayloadDigest: ""
   property bool suitePayloadLoaded: false
   property bool hostReady: false
+  readonly property bool mutationAdmissionReady:
+    hostReady && startupAdmissionSatisfied && !shutdownPrepared
   property bool outputWindowsEnabled: true
+  // No-output fixtures can opt out while the deployed scoped Bar performs
+  // the one process-bound native registry prime before becoming visible.
+  property bool nativeRegistryPrimeEnabled: outputWindowsEnabled
   property bool shutdownPrepared: false
   readonly property bool suiteRuntimeReady: SuiteRuntime.Runtime.contractVersion === 1
     && SuiteRuntime.Runtime.ready
@@ -62,6 +67,17 @@ Item {
     && SuiteRuntime.Runtime.publishedBarConfig !== null
     && SuiteRuntime.Runtime.payloadDigest === suitePayloadDigest
     && SuiteRuntime.Runtime.serviceFor("hancore.shibumi.state") !== null
+  readonly property bool nativeRegistryPrimeRequired:
+    nativeRegistryPrimeEnabled && suiteHostShell.scoped
+  readonly property bool nativeRegistryPrimeReady: {
+    void(SuiteRuntime.Runtime.hostRegistryPrimeRevision)
+    return !nativeRegistryPrimeRequired
+      || SuiteRuntime.Runtime.hostRegistryPrimeReadyFor(
+        root, Quickshell.processId)
+  }
+  readonly property bool startupAdmissionSatisfied: injectionComplete
+    && (!suiteHostShell.scoped || suiteRuntimeReady)
+    && nativeRegistryPrimeReady
 
   property string home: Quickshell.env("HOME")
   property var fallbackBarConfig: ({
@@ -97,7 +113,8 @@ Item {
   property int providerRegistryRevision: 0
   readonly property var catalogConsumerCandidate: {
     void(SuiteRuntime.Runtime.revision)
-    if (!suiteHostShell.scoped || !barRuntimeProvider.registered) return null
+    if (!root.hostReady || !suiteHostShell.scoped
+        || !barRuntimeProvider.registered) return null
     const candidate = suiteHostShell.serviceFor(
       "hancore.shibumi.control-center")
     try {
@@ -193,7 +210,7 @@ Item {
   property var pendingWidgetRestores: []
   property int nextWidgetRestoreId: 0
   readonly property var restoreStateService: layoutStateController.stateService
-  readonly property bool restoreAdmitted: hostReady
+  readonly property bool restoreAdmitted: mutationAdmissionReady
     && (!suiteHostShell.scoped || suiteRuntimeReady)
   property var activeRestoreCalls: []
   property var lastProviderUndoReceipt: null
@@ -304,6 +321,7 @@ Item {
   }
 
   function setWidgetAppearance(groupId, key, valueJson) {
+    if (!mutationAdmissionReady) return "not-ready"
     const name = String(key || "")
     // The legacy endpoint only owns appearance shared by both variants.
     // Variant-scoped values must never report success after writing a
@@ -325,6 +343,7 @@ Item {
 
   function setWidgetAppearanceForVariant(groupId, variantValue, key,
       valueJson) {
+    if (!mutationAdmissionReady) return "not-ready"
     const variant = String(variantValue || "").toLowerCase()
     if (["v1", "v2"].indexOf(variant) < 0) return "invalid-variant"
     const state = pluginService("hancore.shibumi.state")
@@ -451,7 +470,7 @@ Item {
   }
 
   function setBarPosition(value, ownerValue, screenName) {
-    if (layoutTransitionBusy) return false
+    if (!mutationAdmissionReady || layoutTransitionBusy) return false
     const next = String(value || "")
     if (["top", "bottom"].indexOf(next) < 0 || !shell
         || typeof shell.mutateShellConfig !== "function") return false
@@ -465,6 +484,7 @@ Item {
   }
 
   function setAllSplits(value) {
+    if (!mutationAdmissionReady) return false
     return typeof value === "boolean"
       ? layoutStateController.setAllSplits(value) : false
   }
@@ -521,6 +541,7 @@ Item {
   }
 
   function setStyle(value) {
+    if (!mutationAdmissionReady) return false
     const next = styleRegistry.normalizeId(value)
     if (!styleRegistry.hasStyle(next)) return false
 
@@ -989,12 +1010,14 @@ Item {
   }
 
   function requestV2LayoutTransition(patch) {
+    if (!mutationAdmissionReady) return false
     return layoutTransition.request(patch, {
       kind: "v2-layout", slots: patch && patch.v2Layout
     })
   }
 
   function syncV2DynamicLayout(slotsValue) {
+    if (!mutationAdmissionReady) return false
     if (layoutTransitionsSupported)
       return requestV2LayoutTransition({v2Layout: slotsValue})
     // Legacy presentation fixtures without the settlement API. Scoped hosts
@@ -1095,11 +1118,12 @@ Item {
   function legacyFamilyMutationAllowed() {
     // These multi-step provider/catalog flows still need native-authoritative
     // sequencing. Never run their synchronous chain with queued State setters.
-    return legacyLayoutMutationAllowed && !layoutTransitionsSupported && !layoutTransitionBusy
+    return mutationAdmissionReady && legacyLayoutMutationAllowed
+      && !layoutTransitionsSupported && !layoutTransitionBusy
   }
 
   function restoreProviderLayoutSnapshot(snapshotValue) {
-    if (!Util.isPlainObject(snapshotValue)
+    if (!mutationAdmissionReady || !Util.isPlainObject(snapshotValue)
         || !Util.isPlainObject(snapshotValue.layout)
         || !Util.isPlainObject(snapshotValue.groupStates)) return false
     const layout = snapshotValue.layout
@@ -1192,7 +1216,7 @@ Item {
   }
 
   function setWidgetGroupVariantStates(stateValues) {
-    if (layoutTransitionBusy) return false
+    if (!mutationAdmissionReady || layoutTransitionBusy) return false
     if (!Util.isPlainObject(stateValues)) return false
     const sourceGroups = Object.keys(stateValues)
     const groups = normalizedProviderGroups(sourceGroups)
@@ -1252,6 +1276,7 @@ Item {
   }
 
   function requestWidgetGroupStateTransition(groupId, variantValue, enabled) {
+    if (!mutationAdmissionReady) return false
     const group = String(groupId || "")
     const variant = String(variantValue || "").toLowerCase()
     if (!layoutTransitionsSupported
@@ -1378,6 +1403,7 @@ Item {
   }
 
   function canSetBarWidgetInstalled(widgetId, installed) {
+    if (!mutationAdmissionReady) return false
     const id = String(widgetId || "")
     if (!suiteHostShell.scoped || !layoutTransitionsSupported
         || layoutTransitionBusy || providerSnapshotTransitionBusy
@@ -1410,6 +1436,7 @@ Item {
 
   function setBarWidgetInstalled(widgetId, installed, region,
       observationValue) {
+    if (!mutationAdmissionReady) return false
     if (suiteHostShell.scoped)
       return requestCatalogLayoutTransition(
         widgetId, installed, region, observationValue)
@@ -1619,7 +1646,7 @@ Item {
   }
 
   function restoreWidgetFamilyProviderStates(stateValues) {
-    if (!Util.isPlainObject(stateValues)) return false
+    if (!mutationAdmissionReady || !Util.isPlainObject(stateValues)) return false
     if (suiteHostShell.scoped) {
       if (!layoutTransitionsSupported || layoutTransitionBusy
           || providerSnapshotTransitionBusy || stateTransitionBusy
@@ -1725,6 +1752,7 @@ Item {
   }
 
   function removeWidgetFamilyAlternatives(groupId) {
+    if (!mutationAdmissionReady) return false
     const family = WidgetFamilies.familyForGroup(
       groupId, pluginRegistry, catalogObservation, suiteHostShell.scoped)
     if (!family || !shell || typeof shell.mutateShellConfig !== "function")
@@ -2057,6 +2085,7 @@ Item {
   }
 
   function setLayoutEditing(enabled, screenName) {
+    if (!mutationAdmissionReady) return false
     const requested = String(screenName || "") || focusedOutputName()
     let changed = false
     for (let index = 0; index < layoutSessions.length; index++) {
@@ -2231,7 +2260,8 @@ Item {
   // style change can destroy. Queue acceptance is not persistence completion.
   function runWithControlCenterRestore(callback, page, needsReplacement,
       preferredOwner, preferredScreenName) {
-    if (typeof callback !== "function" || !restoreAdmitted) return false
+    if (!mutationAdmissionReady
+        || typeof callback !== "function" || !restoreAdmitted) return false
     const writer = restoreStateService
     const serial = writer && "writeSerial" in writer ? writer.writeSerial : -1
     const revision = writer && "revision" in writer ? writer.revision : -1
@@ -2639,6 +2669,7 @@ Item {
   function prepareForShutdown() {
     if (shutdownPrepared) return true
     shutdownPrepared = true
+    startupAdmissionTimer.stop()
     hostReadyDelay.stop()
     v1PluginReconcileTimer.stop()
     tooltipDelay.stop()
@@ -2656,23 +2687,39 @@ Item {
   onLayoutConfigChanged: {
     if (!shutdownPrepared) v1PluginReconcileTimer.restart()
   }
-  onInjectionCompleteChanged: {
+  function scheduleStartupAdmission() {
     if (shutdownPrepared) return
-    if (injectionComplete) {
-      hostReadyDelay.restart()
-      v1PluginReconcileTimer.restart()
-    } else {
+    startupAdmissionTimer.restart()
+  }
+
+  function advanceStartupAdmission() {
+    if (shutdownPrepared) return
+    if (!injectionComplete
+        || (suiteHostShell.scoped && !suiteRuntimeReady)) {
       hostReadyDelay.stop()
       hostReady = false
+      return
     }
+    if (nativeRegistryPrimeRequired && !nativeRegistryPrimeReady) {
+      SuiteRuntime.Runtime.requestHostRegistryPrime(
+        root, Quickshell.processId)
+      hostReadyDelay.stop()
+      hostReady = false
+      return
+    }
+    hostReadyDelay.restart()
   }
+
+  onInjectionCompleteChanged: scheduleStartupAdmission()
+  onSuiteRuntimeReadyChanged: scheduleStartupAdmission()
+  onNativeRegistryPrimeReadyChanged: scheduleStartupAdmission()
   onCatalogConsumerCandidateChanged: {
     if (!shutdownPrepared) rebindCatalogConsumer()
   }
   Component.onCompleted: {
     applyBarConfig()
     rebindCatalogConsumer()
-    v1PluginReconcileTimer.restart()
+    scheduleStartupAdmission()
   }
   Component.onDestruction: {
     prepareForShutdown()
@@ -2680,11 +2727,18 @@ Item {
   }
 
   Timer {
+    id: startupAdmissionTimer
+    interval: 0
+    repeat: false
+    onTriggered: root.advanceStartupAdmission()
+  }
+
+  Timer {
     id: v1PluginReconcileTimer
     interval: 1
     repeat: false
     onTriggered: {
-      if (!root.shutdownPrepared && root.injectionComplete)
+      if (!root.shutdownPrepared && root.hostReady)
         root.reconcileActivePluginGroupsAndProviders()
     }
   }
@@ -3059,8 +3113,10 @@ Item {
     id: hostReadyDelay
     interval: 0
     onTriggered: {
-      if (!root.shutdownPrepared)
-        root.hostReady = root.injectionComplete
+      if (!root.shutdownPrepared) {
+        root.hostReady = root.startupAdmissionSatisfied
+        if (root.hostReady) v1PluginReconcileTimer.restart()
+      }
     }
   }
 

@@ -6,9 +6,11 @@ import "../hancore.shibumi.state/runtime" as Shared
 Bar {
   id: probe
   outputWindowsEnabled: false
+  nativeRegistryPrimeEnabled: true
   property var controlWidget: null
   property var transitionTarget: null
   property var capturedCatalogObservation: null
+  QtObject { id: duplicateBarOwner }
   QtObject {
     id: incompleteState
     property var source: null
@@ -61,6 +63,14 @@ Bar {
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
       return JSON.stringify({runtimeReady: Shared.Runtime.ready,
         barRegistered: Shared.Runtime.isActiveBar(probe),
+        hostRegistryPrimePhase: Shared.Runtime.hostRegistryPrimePhase,
+        hostRegistryPrimeAttempts: Shared.Runtime.hostRegistryPrimeAttemptCount,
+        mutationAdmissionReady: probe.mutationAdmissionReady,
+        widgetRegistryMemoryReady: !!probe.barWidgetRegistry
+          && !!probe.barWidgetRegistry.widgets
+          && !!probe.barWidgetRegistry.widgets["hancore.shibumi.memory"]
+          && !!probe.barWidgetRegistry.widgets[
+            "hancore.shibumi.memory"].component,
         hostReady: probe.hostReady, styleReady: probe.styleReady,
         stateReady: !!state && state.ready,
         stateSerial: lease ? lease.serial : 0,
@@ -131,6 +141,34 @@ Bar {
             && lease.host.pluginId === id})
       }
       return JSON.stringify(rows)
+    }
+    function checkSynchronousScopeLoss(): string {
+      if (!probe.hostReady || !probe.mutationAdmissionReady) return "not-ready"
+      const initial = Shared.Runtime._selected("hancore.shibumi.bar")
+      if (!initial || initial.owner !== probe) return "not-ready"
+      const before = JSON.stringify(probe.shell.barConfig)
+      let duplicate = null
+      let refused = false
+      try {
+        duplicate = Shared.Runtime.refreshProvider(null,
+          "hancore.shibumi.bar", duplicateBarOwner, initial.host,
+          {id: "hancore.shibumi.bar", kinds: ["bar"],
+            version: Shared.Runtime.suiteVersion},
+          Shared.Runtime.suiteVersion)
+        refused = duplicate !== null
+          && Shared.Runtime._selected("hancore.shibumi.bar") === null
+          && !probe.suiteRuntimeReady
+          && !probe.startupAdmissionSatisfied
+          && !probe.mutationAdmissionReady
+          && !probe.setBarPosition(probe.position === "top" ? "bottom" : "top")
+          && JSON.stringify(probe.shell.barConfig) === before
+      } finally {
+        if (duplicate) Shared.Runtime.unregisterProvider(duplicate)
+      }
+      const restored = Shared.Runtime.isActiveBar(probe)
+        && probe.suiteRuntimeReady && probe.startupAdmissionSatisfied
+        && probe.mutationAdmissionReady
+      return refused && restored ? "scope-loss-refused" : "failed"
     }
     function checkIncompleteState(): string {
       const original = probe.layoutController.stateService

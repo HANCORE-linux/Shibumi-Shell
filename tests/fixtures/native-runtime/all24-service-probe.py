@@ -76,6 +76,9 @@ with (BASE / "native.log").open("xb") as log:
                 by_id = {entry["id"]: entry for entry in catalog_rows}
                 ready = (len(by_id) == len(catalog_rows) == 24
                          and status.get("barRegistered")
+                         and status.get("hostRegistryPrimePhase") == "ready"
+                         and status.get("hostRegistryPrimeAttempts") == 1
+                         and status.get("widgetRegistryMemoryReady") is True
                          and status.get("stateReady")
                          and exact_services(services, True))
                 if ready:
@@ -95,6 +98,25 @@ with (BASE / "native.log").open("xb") as log:
                    if not entry.get("enabled")]
         if missing:
             raise RuntimeError("all-suite configured roots not enabled: " + repr(missing))
+
+        reply = run_bounded([
+            "/usr/bin/quickshell", "ipc", "-p", "/fixture/omarchy/shell",
+            "call", "--", "shibumi-suite", "setBarPosition", "bottom",
+        ], timeout=5, maximum=65536)
+        if reply.returncode != 0 or reply.stdout.strip() != b"ok":
+            raise RuntimeError("post-prime position mutation failed: "
+                               + repr((reply.returncode, reply.stdout, reply.stderr)))
+        for _ in range(50):
+            position_status = ipc("native-runtime-probe", "status")
+            if (isinstance(position_status, dict)
+                    and position_status.get("hostBar", {}).get("position") == "bottom"
+                    and position_status.get("widgetRegistryMemoryReady") is True
+                    and position_status.get("hostRegistryPrimeAttempts") == 1):
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError("first post-prime config mutation revoked Memory")
+        print("ALL24 HOST REGISTRY PRIME/FIRST MUTATION PASSED", flush=True)
 
         marker = (BASE / "home/.config/omarchy/plugins"
                   / "hancore.shibumi.state/.shibumi-managed.json")
