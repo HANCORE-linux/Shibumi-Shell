@@ -26,7 +26,7 @@ ShellRoot {
     id: state
     shell: fakeShell
     omarchyPath: Quickshell.env("OMARCHY_PATH")
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
   }
 
   function colorText(value) {

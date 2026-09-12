@@ -16,7 +16,7 @@ ShellRoot {
   property int beforeLoss: 0
   property var cachedMode: null
   property var cachedTest: null
-  readonly property var manifest: ({id: "hancore.shibumi.reactor", version: "0.1.1-beta.12", kinds: ["service"]})
+  readonly property var manifest: ({id: "hancore.shibumi.reactor", version: "0.1.1-beta.13", kinds: ["service"]})
   function check(value, message) {
     if (value) return
     console.error("reactor-runtime:", message)
@@ -44,14 +44,14 @@ ShellRoot {
     property bool outputMuted: true
   }
   SuiteRuntime.Provider {
-    pluginId: "hancore.shibumi.state"; implementationVersion: "0.1.1-beta.12"
+    pluginId: "hancore.shibumi.state"; implementationVersion: "0.1.1-beta.13"
     owner: state; host: root.stateEnabled ? stateHost : null
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
   }
   SuiteRuntime.Provider {
-    pluginId: "hancore.shibumi.audio"; implementationVersion: "0.1.1-beta.12"
+    pluginId: "hancore.shibumi.audio"; implementationVersion: "0.1.1-beta.13"
     owner: audio; host: root.audioEnabled ? audioHost : null
-    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.12", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"]})
   }
   Reactor.Service { id: service; runtimeProbesEnabled: false }
   Reactor.Service { id: duplicate; runtimeProbesEnabled: false }

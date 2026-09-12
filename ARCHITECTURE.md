@@ -245,7 +245,7 @@ The lifecycle contract and uncompleted physical gates are defined in
 - Before recovery or any other lifecycle mutation, the release lifecycle
   inventories every public and private transaction journal and classifies the
   install by revision, complete plugin digests, activation metadata, and
-  journal schema. Beta.12 admits only the exact public Beta.11, Step-5-tip, and
+  journal schema. Beta.13 admits only the exact public Beta.11, Step-5-tip, and
   current-release identities. Step-6 Power registration, Step-6 journal fields
   or phases, partial cross-release markers, and unknown states fail closed
   without discarding or recovering any journal. One admitted public journal may
@@ -263,7 +263,7 @@ The lifecycle contract and uncompleted physical gates are defined in
   public-target, artifact, or configuration-parent authority loss stops the
   operation without deleting a replacement. More than one public journal is
   ambiguous and fails closed.
-- Step-6 development installations are not downgraded or migrated by Beta.12.
+- Step-6 development installations are not downgraded or migrated by Beta.13.
   They require a separately reviewed rollback that compares every target
   identity and preserves intervening foreign or user changes.
 
@@ -857,7 +857,7 @@ Current Phase 2 foundation:
 - G12 and G14 are separate V1 battery and power-profile presentations over the
   process-wide `hancore.shibumi.power-state` service. Battery state stays event-driven through the
   shared UPower singleton, battery details are panel-lifecycle gated, and one
-  profile refresh/set owner serves every output. Beta.12 retains the existing
+  profile refresh/set owner serves every output. Beta.13 retains the existing
   UPower, Omarchy helper, `busctl`, and `powerprofilesctl` backend ownership;
   shared-runtime admission is not a Step-6 backend transition. Battery truth
   requires `UPowerDevice.ready`, independently of profile availability on
@@ -886,7 +886,7 @@ Current Phase 2 foundation:
   address, adapter identity, and monotonic device/adapter incarnations. Every
   mutation resolves exactly one current entity immediately before dispatch;
   stale, malformed, ambiguous, unavailable, or state-conflicting requests
-  return typed failures and dispatch nothing. Beta.12 deliberately retains one
+  return typed failures and dispatch nothing. Beta.13 deliberately retains one
   `omarchy-bluetooth-device` helper path per device action and never invokes a
   native device method in parallel. Because the 4.0.2 helper accepts only an
   action/address pair, production fails closed with more than one adapter; the

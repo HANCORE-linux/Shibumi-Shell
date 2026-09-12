@@ -54,7 +54,7 @@ ShellRoot {
     id: state
     shell: stateApi
     omarchyPath: Quickshell.env("OMARCHY_PATH")
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
   }
   BarProbe.Marker { id: markerBar }
   Item {
@@ -66,10 +66,10 @@ ShellRoot {
     Shared.Provider {
       id: barProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.1.1-beta.12"
+      implementationVersion: "0.1.1-beta.13"
       owner: barOwner
       host: barOwner.injectedHost
-      manifest: ({id: "hancore.shibumi.bar", version: "0.1.1-beta.12", kinds: ["bar"]})
+      manifest: ({id: "hancore.shibumi.bar", version: "0.1.1-beta.13", kinds: ["bar"]})
     }
   }
   Shared.HostShell { id: client; host: stateApi }
@@ -82,7 +82,7 @@ ShellRoot {
       property int value: 0
       Shared.Provider {
         pluginId: "hancore.shibumi.audio"
-        implementationVersion: "0.1.1-beta.12"
+        implementationVersion: "0.1.1-beta.13"
         owner: peer
         host: peer.injectedHost
         manifest: peer.injectedManifest
@@ -152,7 +152,7 @@ ShellRoot {
       check(left.state === null && right.state === null && !state.ready && !state.writePending,
         "version drift retained State authority or queued intent")
       check(!state.setGroupSetting("G4", "compact", true), "revoked State accepted intent")
-      state.manifest = {id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]}
+      state.manifest = {id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]}
       check(left.state === state && Shared.Runtime._selected("hancore.shibumi.state") !== oldLease,
         "State did not register a new lifetime")
       Shared.Runtime.unregisterProvider(oldLease)
@@ -161,10 +161,10 @@ ShellRoot {
       check(first !== null && client.serviceFor("hancore.shibumi.audio") === null,
         "parentless service published before injection")
       first.injectedHost = audioApi
-      first.injectedManifest = {id: "hancore.shibumi.audio", version: "0.1.1-beta.12", kinds: ["service"]}
+      first.injectedManifest = {id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"]}
       check(client.serviceFor("hancore.shibumi.audio") === first, "provider registration failed")
       second = serviceFactory.createObject(null, {injectedHost: audioApi,
-        injectedManifest: {id: "hancore.shibumi.audio", version: "0.1.1-beta.12", kinds: ["service"]}})
+        injectedManifest: {id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"]}})
       check(client.serviceFor("hancore.shibumi.audio") === null,
         "duplicate provider was last-writer-wins: second=" + JSON.stringify({
           manifest: second.injectedManifest, kindsArray: Array.isArray(second.injectedManifest.kinds),
@@ -192,7 +192,7 @@ ShellRoot {
       first.injectedHost = audioApi
       check(client.serviceFor("hancore.shibumi.audio") === first, "scope recovery stayed unavailable")
       let getterReached = false
-      const malformed = {version: "0.1.1-beta.12", kinds: ["service"]}
+      const malformed = {version: "0.1.1-beta.13", kinds: ["service"]}
       Object.defineProperty(malformed, "id", {get: function() {
         getterReached = true
         throw new Error("controlled malformed metadata getter")

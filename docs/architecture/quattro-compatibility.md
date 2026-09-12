@@ -1,6 +1,6 @@
 # Shibumi host compatibility record
 
-Status: beta-candidate reference (updated 2026-09-05)
+Status: beta-candidate reference (updated 2026-09-12)
 
 Shibumi Shell is built exclusively for Omarchy Quattro. This record ties each
 Shibumi candidate to a measured host baseline. Versions not listed here have
@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The `0.1.1-beta.12` candidate is reviewed against the current official
+The `0.1.1-beta.13` candidate is reviewed against the current official
 Omarchy Quattro baseline:
 
 | Component | Observed value |
@@ -100,7 +100,7 @@ that marker is not complete-contract evidence.
 
 ## Omarchy 4.0.3: candidate implemented, acceptance pending
 
-The Beta.12 candidate targets the exact `v4.0.3` host at commit
+The Beta.13 candidate targets the exact `v4.0.3` host at commit
 `0534987009061cbe2dacdde4ad564092ab698d12`. Isolated tests cover own-file marker
 validation, permission-scoped State writes and readback under stock and suite
 bars, Control Center restoration through file-backed settlement, and the

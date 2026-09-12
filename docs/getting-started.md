@@ -63,7 +63,7 @@ before editing JSON or suite state by hand.
 
 ## Know the beta boundary
 
-Version `0.1.1-beta.12` is the current local Arch-package candidate. Its
+Version `0.1.1-beta.13` is the current local Arch-package candidate. Its
 package and Omarchy 4.0.2 source contracts are tested locally; fresh physical
 acceptance, publication, and the complete package lifecycle remain release
 gates. Shibumi supports Omarchy Quattro

@@ -621,6 +621,24 @@ class SuiteLifecycleTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def close_transaction_descriptors(
+        self, transaction: PluginTransaction
+    ) -> None:
+        descriptors = {
+            descriptor
+            for descriptor in (
+                transaction._config_snapshot_fd,
+                transaction._config_parent_fd,
+            )
+            if descriptor >= 0
+        }
+        transaction._close_config_parent()
+        self.assertEqual(transaction._config_snapshot_fd, -1)
+        self.assertEqual(transaction._config_parent_fd, -1)
+        for descriptor in descriptors:
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
+
     @staticmethod
     def args(**values: object) -> SimpleNamespace:
         defaults = {
@@ -715,6 +733,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         path.write_bytes(original)
         path.chmod(0o644)
         transaction = PluginTransaction(self.paths, self.runtime)
+        snapshot_descriptor = transaction._config_snapshot_fd
+        self.assertGreaterEqual(snapshot_descriptor, 0)
 
         transaction.write_config(updated)
 
@@ -723,6 +743,24 @@ class SuiteLifecycleTests(unittest.TestCase):
         transaction.rollback()
         self.assertEqual(path.read_bytes(), original)
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        self.assertEqual(transaction._config_snapshot_fd, -1)
+        with self.assertRaises(OSError):
+            os.fstat(snapshot_descriptor)
+
+    def test_transaction_finish_closes_config_snapshot_binding(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'{"version":1}\n')
+        transaction = PluginTransaction(self.paths, self.runtime)
+        snapshot_descriptor = transaction._config_snapshot_fd
+        self.assertGreaterEqual(snapshot_descriptor, 0)
+
+        transaction.finish(None, archive_previous=False)
+
+        self.assertTrue(transaction.finished)
+        self.assertEqual(transaction._config_snapshot_fd, -1)
+        with self.assertRaises(OSError):
+            os.fstat(snapshot_descriptor)
 
     def test_transaction_binds_config_parent_across_rename_and_symlink_swap(
         self,
@@ -763,6 +801,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             "recovery-required",
         )
 
+        self.close_transaction_descriptors(transaction)
         with self.assertRaisesRegex(TransactionError, "config parent"):
             recover_transactions(self.paths, self.runtime)
         self.assertEqual(original_path.read_bytes(), original)
@@ -1303,8 +1342,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.12")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.12")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.13")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.13")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -1323,7 +1362,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.12")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.13")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_sandbox_update_advances_beta_7_to_beta_9(self) -> None:
@@ -1395,7 +1434,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             plugin_id: spec.payload_digest()
             for plugin_id, spec in self.suite.plugins.items()
         }
-        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.12")
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.13")
         self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
@@ -1413,7 +1452,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], "0.1.1-beta.12")
+            self.assertEqual(manifest["version"], "0.1.1-beta.13")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -1563,6 +1602,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertIs(observed_journal["liveMutationStarted"], False)
         self.assertFalse(self.runtime.shell_running)
 
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
 
         expected_activity = dict(activity_before)
@@ -1621,7 +1661,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.12+installed.9"
+                state["suiteVersion"] = "0.1.1-beta.13+installed.9"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -1630,7 +1670,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.12")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.13")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -1693,9 +1733,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.12")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.12")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.12")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.13")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.13")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.13")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()
@@ -3029,6 +3069,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             ):
                 transaction.stop_shell()
 
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(
             recover_transactions(
                 self.paths, self.runtime, suite=self.suite
@@ -3086,6 +3127,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, events_before)
         self.assertFalse(transaction.live_mutation_started)
         self.assertFalse(transaction.commit_point_reached)
+        self.close_transaction_descriptors(transaction)
 
     def test_bound_snapshot_regular_swap_is_rejected_before_transform(self) -> None:
         self._assert_bound_snapshot_parse_swap_rejected("regular")
@@ -3136,6 +3178,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.paths.config_file.read_bytes(), b"")
         self.assertEqual(self.runtime.events, events_before)
         self.assertFalse(transaction.live_mutation_started)
+        self.close_transaction_descriptors(transaction)
 
     def test_defaults_fallback_rejects_symlink_swap(self) -> None:
         self._assert_defaults_fallback_is_bounded("symlink")
@@ -3162,6 +3205,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(journal["phase"], "committing")
         self.assertEqual(journal["desiredState"], desired)
         self.assertTrue(journal["archivePrevious"])
+        self.close_transaction_descriptors(transaction)
 
     def test_post_durable_committing_error_preserves_roll_forward(self) -> None:
         self.install()
@@ -3282,6 +3326,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         journal = json.loads(transaction.journal_file.read_text(encoding="utf-8"))
         self.assertIs(journal["configExisted"], False)
         self.assertIs(journal["liveMutationStarted"], False)
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(
             recover_transactions(self.paths, self.runtime, suite=self.suite), 1
         )
@@ -3319,6 +3364,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         journal = json.loads(transaction.journal_file.read_text(encoding="utf-8"))
         self.assertIs(journal["configExisted"], False)
         self.assertIs(journal["liveMutationStarted"], False)
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(
             recover_transactions(self.paths, self.runtime, suite=self.suite), 1
         )
@@ -3845,6 +3891,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         transaction.expose()
         transaction.write_config(b'{"version":1,"bar":{"id":"broken"}}\n')
 
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
         self.assertEqual(target_file.read_bytes(), old_payload)
         config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
@@ -4096,15 +4143,36 @@ class SuiteLifecycleTests(unittest.TestCase):
                     if calls == fail_after_write:
                         raise OSError("injected preparation failure")
 
-                with patch.object(
-                    transaction_module,
-                    "atomic_write",
-                    side_effect=faulting_atomic_write,
+                opened_snapshot_descriptors: list[int] = []
+                original_open_snapshot = (
+                    transaction_module._open_snapshot_descriptor
+                )
+
+                def recording_open_snapshot(*args: object) -> int:
+                    descriptor = original_open_snapshot(*args)
+                    opened_snapshot_descriptors.append(descriptor)
+                    return descriptor
+
+                with (
+                    patch.object(
+                        transaction_module,
+                        "atomic_write",
+                        side_effect=faulting_atomic_write,
+                    ),
+                    patch.object(
+                        transaction_module,
+                        "_open_snapshot_descriptor",
+                        side_effect=recording_open_snapshot,
+                    ),
                 ):
                     with self.assertRaisesRegex(
                         OSError, "injected preparation failure"
                     ):
                         PluginTransaction(self.paths, self.runtime)
+
+                for descriptor in opened_snapshot_descriptors:
+                    with self.assertRaises(OSError):
+                        os.fstat(descriptor)
 
                 transaction_root = self.paths.state_dir / "transactions"
                 self.assertFalse(
@@ -4230,10 +4298,24 @@ class SuiteLifecycleTests(unittest.TestCase):
             with self.subTest(scenario=scenario):
                 atomic_write(path, original)
                 transaction = PluginTransaction(self.paths, self.runtime)
+                bound_descriptor = transaction._config_snapshot_fd
+                bound_identity = transaction._config_snapshot_identity
+                self.assertGreaterEqual(bound_descriptor, 0)
+                self.assertIsNotNone(bound_identity)
+                held = os.fstat(bound_descriptor)
+                assert bound_identity is not None
+                self.assertEqual(
+                    (held.st_dev, held.st_ino), bound_identity[:2]
+                )
                 transaction.write_config(live)
                 transaction.snapshot_file.unlink()
                 if scenario == "replacement":
                     transaction.snapshot_file.write_bytes(original)
+                    replacement = transaction.snapshot_file.stat()
+                    self.assertNotEqual(
+                        (replacement.st_dev, replacement.st_ino),
+                        bound_identity[:2],
+                    )
                 elif scenario == "symlink":
                     external = self.root / f"{scenario}.json"
                     external.write_bytes(original)
@@ -4251,7 +4333,77 @@ class SuiteLifecycleTests(unittest.TestCase):
                 self.assertEqual(self.runtime.events, events_before)
                 self.assertTrue(transaction.transaction_dir.is_dir())
                 transaction._close_config_parent()
+                self.assertEqual(transaction._config_snapshot_fd, -1)
+                with self.assertRaises(OSError):
+                    os.fstat(bound_descriptor)
                 shutil.rmtree(self.paths.state_dir / "transactions")
+
+    def test_in_process_rollback_rejects_in_place_snapshot_change(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"owner":"before"}\n'
+        live = b'{"version":1,"owner":"live"}\n'
+        atomic_write(path, original)
+        transaction = PluginTransaction(self.paths, self.runtime)
+        bound_identity = transaction._config_snapshot_identity
+        assert bound_identity is not None
+        transaction.write_config(live)
+
+        transaction.snapshot_file.write_bytes(
+            b'{"version":1,"owner":"foreign"}\n'
+        )
+        changed = transaction.snapshot_file.stat()
+        self.assertEqual((changed.st_dev, changed.st_ino), bound_identity[:2])
+        events_before = list(self.runtime.events)
+
+        with self.assertRaisesRegex(TransactionError, "snapshot content changed"):
+            transaction.rollback()
+
+        self.assertEqual(path.read_bytes(), live)
+        self.assertEqual(self.runtime.events, events_before)
+        transaction._close_config_parent()
+        shutil.rmtree(self.paths.state_dir / "transactions")
+
+    def test_config_snapshot_rebinds_after_drained_baseline_refresh(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        original = b'{"version":1,"owner":"before"}\n'
+        post_stop = b'{"version":1,"owner":"post-stop"}\n'
+        path.write_bytes(original)
+        transaction = PluginTransaction(
+            self.paths, self.runtime, restart_on_reconcile=True
+        )
+        first_descriptor = transaction._config_snapshot_fd
+        first_identity = transaction._config_snapshot_identity
+        assert first_identity is not None
+
+        transaction.stop_shell()
+        atomic_write(path, post_stop)
+        refreshed = transaction.refresh_config_after_stop()
+
+        second_descriptor = transaction._config_snapshot_fd
+        second_identity = transaction._config_snapshot_identity
+        assert second_identity is not None
+        self.assertEqual(refreshed["owner"], "post-stop")
+        self.assertEqual(transaction._config_snapshot_payload(), post_stop)
+        self.assertNotEqual(second_descriptor, first_descriptor)
+        self.assertNotEqual(second_identity[:2], first_identity[:2])
+        with self.assertRaises(OSError):
+            os.fstat(first_descriptor)
+
+        transaction.snapshot_file.unlink()
+        transaction.snapshot_file.write_bytes(post_stop)
+        replacement = transaction.snapshot_file.stat()
+        self.assertNotEqual(
+            (replacement.st_dev, replacement.st_ino), second_identity[:2]
+        )
+        with self.assertRaisesRegex(TransactionError, "snapshot was replaced"):
+            transaction.rollback()
+
+        transaction._close_config_parent()
+        with self.assertRaises(OSError):
+            os.fstat(second_descriptor)
+        shutil.rmtree(self.paths.state_dir / "transactions")
 
     def test_recovery_validates_complete_journal_before_any_mutation(self) -> None:
         self.install()
@@ -4594,6 +4746,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertIs(journal["restoreRequiresDrain"], True)
         stops_before = self.runtime.stops
 
+        self.close_transaction_descriptors(transaction)
         self.assertEqual(recover_transactions(self.paths, self.runtime), 1)
 
         self.assertEqual(self.runtime.stops, stops_before + 1)
@@ -4623,6 +4776,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         (target / "external.txt").write_text("foreign\n", encoding="utf-8")
         stops_before = self.runtime.stops
 
+        self.close_transaction_descriptors(transaction)
         with self.assertRaisesRegex(
             TransactionError, "externally changed target"
         ):
@@ -4658,6 +4812,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         (target / "external.txt").write_text("foreign\n", encoding="utf-8")
         stops_before = self.runtime.stops
 
+        self.close_transaction_descriptors(transaction)
         with self.assertRaisesRegex(
             TransactionError, "externally changed target"
         ):
@@ -4692,6 +4847,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         reloads_before = self.runtime.payload_reloads
         self.runtime.fail_restart_count = 1
 
+        self.close_transaction_descriptors(transaction)
         with self.assertRaisesRegex(RuntimeFailure, "injected shell restart failure"):
             recover_transactions(self.paths, self.runtime)
 
@@ -4768,6 +4924,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                 self.assertEqual(journal["phase"], "recovery-required")
                 self.assertFalse(transaction.finished)
 
+                self.close_transaction_descriptors(transaction)
                 self.assertEqual(
                     recover_transactions(self.paths, self.runtime), 1
                 )

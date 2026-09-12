@@ -5,7 +5,7 @@ import Quickshell.Services.UPower
 import "PowerModel.js" as PowerModel
 import "../../hancore.shibumi.state/runtime" as SuiteRuntime
 
-// Beta.12 retains UPower plus the existing Omarchy/powerprofilesctl helpers.
+// Beta.13 retains UPower plus the existing Omarchy/powerprofilesctl helpers.
 // This is runtime admission, not a Power backend ownership transition.
 Item {
   id: root
@@ -23,7 +23,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.power-state"
-    implementationVersion: "0.1.1-beta.12"
+    implementationVersion: "0.1.1-beta.13"
     owner: root
     host: root.shell
     manifest: root.manifest

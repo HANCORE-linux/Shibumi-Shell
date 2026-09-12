@@ -42,7 +42,7 @@ ShellRoot {
   Media.Service {
     id: spectrum
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.media", version: "0.1.1-beta.12", kinds: ["service", "bar-widget"]})
+    manifest: ({id: "hancore.shibumi.media", version: "0.1.1-beta.13", kinds: ["service", "bar-widget"]})
   }
 
   Timer {

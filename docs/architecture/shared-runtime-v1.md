@@ -1,7 +1,8 @@
 # Shared Shibumi runtime V1
 
 Status: normative supporting contract, authorized 2026-09-09; implemented in
-the Beta.12 candidate, with package-bound physical 4.0.3 acceptance pending.
+the tagged but unreleased Beta.12 candidate and retained by Beta.13, with
+package-bound physical 4.0.3 acceptance pending.
 ARCHITECTURE.md remains authoritative.
 
 ## Scope

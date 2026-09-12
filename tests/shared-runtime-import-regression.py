@@ -100,7 +100,7 @@ class RuntimeImports(unittest.TestCase):
                 self.assertEqual(len(owned), 1)
                 for contract in ("owner: root", "host: root.shell",
                                  "manifest: root.manifest",
-                                 'implementationVersion: "0.1.1-beta.12"'):
+                                 'implementationVersion: "0.1.1-beta.13"'):
                     self.assertIn(contract, owned[0])
 
     def test_near_neighbors_receive_no_exception(self):

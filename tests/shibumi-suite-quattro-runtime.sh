@@ -296,7 +296,7 @@ first_digest=$(jq -r '.payloadDigest // empty' "$state_file")
   || fail 'installed state service did not confirm the first payload digest'
 suite_cli status >/dev/null || fail 'installed suite status is not clean'
 
-# Replace the exact Step-5 source with the reviewed Beta.12 candidate. This
+# Replace the exact Step-5 source with the reviewed Beta.13 candidate. This
 # exercises the admitted predecessor transition instead of manufacturing an
 # uncontracted locally modified source identity.
 rm -rf -- "$source_root"

@@ -38,14 +38,14 @@ ShellRoot {
   AudioOwner.Service {
     shell: fakeShell
     nativeBackendEnabled: false // Controlled peak stub; this fixture tests IPC.
-    manifest: ({ id: "hancore.shibumi.audio", version: "0.1.1-beta.12", kinds: ["service"] })
+    manifest: ({ id: "hancore.shibumi.audio", version: "0.1.1-beta.13", kinds: ["service"] })
   }
 
   StateOwner.Service {
     shell: fakeShell
     omarchyPath: ""
     manifest: ({
-      id: "hancore.shibumi.state", version: "0.1.1-beta.12", kinds: ["service"]
+      id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]
     })
   }
 

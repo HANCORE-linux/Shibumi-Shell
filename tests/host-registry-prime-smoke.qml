@@ -32,11 +32,11 @@ ShellRoot {
   Shared.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.12"
+    implementationVersion: "0.1.1-beta.13"
     owner: stateOwner
     host: stateHost
     manifest: ({ id: "hancore.shibumi.state",
-      version: "0.1.1-beta.12", kinds: ["service"] })
+      version: "0.1.1-beta.13", kinds: ["service"] })
   }
 
   QtObject {
@@ -50,11 +50,11 @@ ShellRoot {
       id: owner
       Shared.Provider {
         pluginId: "hancore.shibumi.bar"
-        implementationVersion: "0.1.1-beta.12"
+        implementationVersion: "0.1.1-beta.13"
         owner: owner
         host: barHost
         manifest: ({ id: "hancore.shibumi.bar",
-          version: "0.1.1-beta.12", kinds: ["bar"] })
+          version: "0.1.1-beta.13", kinds: ["bar"] })
       }
     }
   }

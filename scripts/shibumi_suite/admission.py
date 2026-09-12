@@ -378,7 +378,7 @@ def classify_install_state(
     activation = state.get("activation")
     if isinstance(activation, dict) and "powerRegistration" in activation:
         raise AdmissionError(
-            "Step-6 installation state is unsupported by this Beta.12 release; "
+            "Step-6 installation state is unsupported by this Beta.13 release; "
             "use the separately reviewed Step-6 rollback procedure"
         )
     if type(state.get("schemaVersion")) is not int \

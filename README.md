@@ -16,7 +16,7 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-The current `0.1.1-beta.12` candidate is reviewed against Omarchy and
+The current `0.1.1-beta.13` candidate is reviewed against Omarchy and
 Omarchy Settings `4.0.2-1` (source tag `v4.0.2`, revision `346e69e1`) and
 Quickshell `0.3.1-1`. See the
 [Shibumi host compatibility record](docs/architecture/quattro-compatibility.md)
@@ -58,7 +58,7 @@ for the latest validated host versions.
 ## Install
 
 > [!IMPORTANT]
-> `0.1.1-beta.12` is a local package candidate. Publication is still gated,
+> `0.1.1-beta.13` is a local package candidate. Publication is still gated,
 > so the package is not available from AUR yet.
 > Until its release asset and AUR package are published, use the source path
 > below. Shibumi supports Omarchy Quattro only.

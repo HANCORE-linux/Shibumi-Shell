@@ -94,7 +94,7 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_audio / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.audio", "name": "Shibumi Audio",
-        "version": "0.1.1-beta.12", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.13", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi Audio", "category": "Audio",

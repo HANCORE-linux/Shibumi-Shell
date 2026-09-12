@@ -1,12 +1,32 @@
-# Is Shibumi 0.1.1-beta.12 ready for prerelease testing?
+# Is Shibumi 0.1.1-beta.13 ready for prerelease testing?
 
 > **Document status: Local release-candidate gate.** This page records evidence
 > and open acceptance. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Beta.12 is based directly on Step-5 tip
-`5154c020a44d71139a6614a183ec91021b9772c1`. It contains the 24-plugin native
+Beta.13 supersedes Beta.12, which was tagged but not published as a GitHub
+release or AUR package, and retains its 24-plugin, Omarchy 4.0.3 runtime, bar,
+and lifecycle work. It contains no Step-6 product functionality and no
+automatic Step-6 migration.
+
+## Beta.13 snapshot hotfix status (2026-09-12)
+
+The current uncommitted worktree keeps each admitted `shell.json` snapshot open
+through transaction end as a no-follow regular-file descriptor. Pathname,
+held-object, size, and digest checks reject replacement and in-place mutation,
+including inode reuse.
+
+Focused Python regressions cover replacement, mutation, descriptor cleanup,
+drained-baseline rebind, and crash simulation. Those regressions and an
+independent review passed in the uncommitted worktree. Exact-commit Beta.13
+archive and package-bound gates, Machine 2, physical acceptance, and publication
+remain open.
+
+## Superseded Beta.12 candidate history
+
+Beta.12 was based directly on Step-5 tip
+`5154c020a44d71139a6614a183ec91021b9772c1`. It contained the 24-plugin native
 Network payload, the Bluetooth ST-01 identity fix, and Omarchy 4.0.2
-compatibility work. It contains no Step-6 product functionality and no
+compatibility work. It contained no Step-6 product functionality and no
 automatic Step-6 migration.
 
 Candidate `98faf6a7117b3dd22675ceedf597f8b887a41363` was rejected during its
@@ -52,7 +72,7 @@ The normal lifecycle supports only these predecessor identities:
   `adbb11068e9c77561ff0c3d1b8fca5212653ae3c`, including its package identity;
 - the exact Step-5 tip at
   `5154c020a44d71139a6614a183ec91021b9772c1`;
-- the exact current Beta.12 payload after installation.
+- the exact current Beta.13 payload after installation.
 
 The version string is not authority. Admission also compares source revision,
 complete suite and plugin digests, activation metadata, managed markers, and
@@ -110,13 +130,14 @@ helper remains declared debt. Helper removal is not part of this hotfix.
 | Forward-compatibility baseline | Passed locally |
 | Bluetooth detached-record and stale-identity regression | Passed locally |
 | Lifecycle predecessor and all-journal admission regression | Passed locally |
+| Snapshot FD identity, cleanup, rebind, and crash-simulation regressions | Passed with independent review in the current uncommitted worktree; exact-commit evidence remains open |
 | Full Python, QML, shell, documentation, and package suites | Required on final commit |
 | Reproducible exact-commit archive and checksum | Required after final commit |
 | AUR package rehearsal with exact installed inventory | Required after checksum pinning |
 | Fresh physical Network acceptance | **Open; public-beta blocker** |
 | Fresh physical Bluetooth acceptance | **Open; public-beta blocker** |
-| Live install, activation, update, rollback, and uninstall | Rejected candidate exposed managed-install rescan/stop race; full replacement-RC rerun required |
-| Machine 2 | Exact package staging prepared; physical activation deferred until the replacement RC passes automated gates |
+| Live install, activation, update, rollback, and uninstall | Beta.12 rejected candidate exposed managed-install rescan/stop race; full Beta.13 package rerun required |
+| Machine 2 | Beta.12 package staging was prepared; no Beta.13 package staging or activation has passed |
 | Push, tag, GitHub release, or AUR publication | Not authorized |
 
 Fixtures prove deterministic boundaries but do not replace physical Network,
@@ -150,6 +171,6 @@ retry closed.
 
 ## Publication decision
 
-Beta.12 is a local candidate, not an authorized release. Publication remains
+Beta.13 is a local candidate, not an authorized release. Publication remains
 blocked until the final clean-commit automated gates, AUR rehearsal, and fresh
 physical Network/Bluetooth acceptance pass and separate authorization is given.

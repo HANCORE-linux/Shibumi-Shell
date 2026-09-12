@@ -20,7 +20,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> `0.1.1-beta.12` is a local candidate and is not published to AUR. This is
+> `0.1.1-beta.13` is a local candidate and is not published to AUR. This is
 > the supported flow only after the release gates pass and publication is
 > separately authorized.
 
@@ -161,13 +161,13 @@ discards staging, and leaves the live plugins unchanged; unlock the active
 session and retry. For an external-bar installation, update preserves the
 active bar and layout.
 
-Beta.12 inventories every existing journal before recovery and admits only the
-exact public Beta.11, Step-5-tip, or current Beta.12 revision/digest identity.
+Beta.13 inventories every existing journal before recovery and admits only the
+exact public Beta.11, Step-5-tip, or current Beta.13 revision/digest identity.
 A shared version string is not sufficient. Step-6 Power registration, Step-6
 journal metadata, mixed live markers, or any unknown state abort before
 recovery and before mutation. One fully admitted interrupted journal may be
 recovered before live payload identity is checked again; multiple public
-journals fail as ambiguous. Do not install Beta.12 over a Step-6 development
+journals fail as ambiguous. Do not install Beta.13 over a Step-6 development
 installation; use its separately reviewed rollback procedure.
 
 ### Move from a checkout to the package

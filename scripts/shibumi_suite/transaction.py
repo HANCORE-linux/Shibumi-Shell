@@ -756,6 +756,7 @@ class PluginTransaction:
         self.restore_requires_drain = False
         self.live_mutation_started = False
         self._config_snapshot_identity: tuple[int, int, str] | None = None
+        self._config_snapshot_fd = -1
         self._config_path = paths.config_file
         self._config_parent_fd = _open_config_parent(
             self._config_path.parent, create=True
@@ -895,11 +896,20 @@ class PluginTransaction:
         self._require_config_parent_identity()
         self._write_journal("shell-stopped")
 
-    def _close_config_parent(self) -> None:
-        descriptor = self._config_parent_fd
+    def _close_config_snapshot(self) -> None:
+        descriptor = self._config_snapshot_fd
         if descriptor >= 0:
+            self._config_snapshot_fd = -1
             os.close(descriptor)
-            self._config_parent_fd = -1
+
+    def _close_config_parent(self) -> None:
+        try:
+            self._close_config_snapshot()
+        finally:
+            descriptor = self._config_parent_fd
+            if descriptor >= 0:
+                os.close(descriptor)
+                self._config_parent_fd = -1
 
     def _require_config_parent_identity(self) -> None:
         if self._config_parent_fd < 0:
@@ -913,23 +923,45 @@ class PluginTransaction:
         )
 
     def _bind_config_snapshot(self, expected_payload: bytes) -> None:
-        payload, identity = _snapshot_bytes_and_identity(
+        descriptor = _open_snapshot_descriptor(
             self.snapshot_file, "config", self.snapshot_file.parent
         )
-        if payload != expected_payload:
-            raise TransactionError(
-                "transaction config snapshot differs from its source"
+        try:
+            payload, identity = _snapshot_bytes_and_identity_from_descriptor(
+                descriptor, "config", self.snapshot_file.parent
             )
+            if payload != expected_payload:
+                raise TransactionError(
+                    "transaction config snapshot differs from its source"
+                )
+        except Exception:
+            os.close(descriptor)
+            raise
+        previous = self._config_snapshot_fd
+        self._config_snapshot_fd = descriptor
         self._config_snapshot_identity = identity
+        if previous >= 0:
+            os.close(previous)
 
     def _config_snapshot_payload(self) -> bytes:
-        if self._config_snapshot_identity is None:
+        identity = self._config_snapshot_identity
+        if identity is None or self._config_snapshot_fd < 0:
             raise TransactionError("transaction config snapshot identity is unavailable")
+        try:
+            held = os.fstat(self._config_snapshot_fd)
+        except OSError as error:
+            raise TransactionError(
+                "transaction config snapshot binding is unavailable"
+            ) from error
+        if (held.st_dev, held.st_ino) != identity[:2]:
+            raise TransactionError(
+                "transaction config snapshot binding changed"
+            )
         return _snapshot_bytes_and_identity(
             self.snapshot_file,
             "config",
             self.snapshot_file.parent,
-            expected_identity=self._config_snapshot_identity,
+            expected_identity=identity,
         )[0]
 
     def _live_config(self) -> tuple[bool, bytes | None]:
@@ -970,6 +1002,7 @@ class PluginTransaction:
             # and, while liveMutationStarted is false, foreign config is kept.
             self.config_existed = False
             self._config_snapshot_identity = None
+            self._close_config_snapshot()
             self._write_journal(self.phase)
             _durable_unlink(self.snapshot_file)
 
@@ -1821,15 +1854,9 @@ def _quarantine_recovery_backups(
     return quarantined
 
 
-def _snapshot_bytes_and_identity(
-    path: Path,
-    label: str,
-    directory: Path,
-    *,
-    expected_identity: tuple[int, int, str] | None = None,
-) -> tuple[bytes, tuple[int, int, str]]:
+def _open_snapshot_descriptor(path: Path, label: str, directory: Path) -> int:
     try:
-        descriptor = os.open(
+        return os.open(
             path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
         )
     except OSError as error:
@@ -1837,7 +1864,17 @@ def _snapshot_bytes_and_identity(
             f"transaction {label} snapshot is missing or unsafe in "
             f"{directory}: {error}"
         ) from error
+
+
+def _snapshot_bytes_and_identity_from_descriptor(
+    descriptor: int,
+    label: str,
+    directory: Path,
+    *,
+    expected_identity: tuple[int, int, str] | None = None,
+) -> tuple[bytes, tuple[int, int, str]]:
     try:
+        os.lseek(descriptor, 0, os.SEEK_SET)
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode) or before.st_size > MAX_STATE_BYTES:
             raise TransactionError(
@@ -1885,6 +1922,23 @@ def _snapshot_bytes_and_identity(
         raise TransactionError(
             f"cannot read transaction {label} snapshot {directory}: {error}"
         ) from error
+
+
+def _snapshot_bytes_and_identity(
+    path: Path,
+    label: str,
+    directory: Path,
+    *,
+    expected_identity: tuple[int, int, str] | None = None,
+) -> tuple[bytes, tuple[int, int, str]]:
+    descriptor = _open_snapshot_descriptor(path, label, directory)
+    try:
+        return _snapshot_bytes_and_identity_from_descriptor(
+            descriptor,
+            label,
+            directory,
+            expected_identity=expected_identity,
+        )
     finally:
         os.close(descriptor)
 

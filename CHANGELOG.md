@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.1-beta.13] - 2026-09-12
+
+### Fixed
+
+- Kept the admitted `shell.json` rollback snapshot bound through transaction end
+  to a no-follow regular-file file descriptor (FD)
+- Checked the snapshot name, held object, size, and digest before restore,
+  rejecting replacement and in-place mutation, including inode reuse
+- Added regressions for descriptor cleanup, drained-baseline rebinding, and
+  crash-simulation recovery paths
+
 ## 0.1.1-beta.12: Step 5 release line and Bluetooth identity fix
 
 Local release candidate; publication remains gated on fresh physical acceptance.
@@ -335,3 +346,5 @@ Released 2026-07-29.
 - The repository remains private
 - Physical multi-monitor, enterprise Wi-Fi, and Bluetooth-device gates remain open
 - Shibumi source updates require a trusted checkout and `shibumi-suite update`
+
+[0.1.1-beta.13]: https://github.com/HANCORE-linux/Shibumi-Shell/compare/v0.1.1-beta.12...v0.1.1-beta.13

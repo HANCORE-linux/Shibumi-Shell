@@ -2,7 +2,7 @@
 
 Status: reference
 
-Shibumi `0.1.1-beta.12` contains 24 independently registered Omarchy plugins. The
+Shibumi `0.1.1-beta.13` contains 24 independently registered Omarchy plugins. The
 default suite profile installs all of them as one verified transaction.
 
 The authoritative inventory is
@@ -54,7 +54,7 @@ actions, including media, notifications, tray, background, monitor, weather,
 idle, and system-update services. Shibumi owns native Audio and Network state.
 Its Bluetooth adapter keeps BlueZ QObjects private, publishes detached
 identity-bound records, and retains one declared Omarchy helper mutation path
-per device action for Beta.12.
+per device action for Beta.13.
 
 Shibumi owns its presentation and adds a narrow adapter only where the host
 contract cannot produce the approved behavior. It must not create a duplicate

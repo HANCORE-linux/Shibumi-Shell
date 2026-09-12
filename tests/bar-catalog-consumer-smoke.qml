@@ -53,10 +53,10 @@ ShellRoot {
   SuiteRuntime.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.12"
+    implementationVersion: "0.1.1-beta.13"
     owner: stateService
     host: stateHost
-    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.12",
+    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.13",
       kinds: ["service"] })
   }
 
@@ -105,11 +105,11 @@ ShellRoot {
       property int catalogReadSerial: currentObservation ? currentObservation.serial : 0
       property int catalogGeneration: currentObservation ? currentObservation.generation : 0
       property var providerManifest: ({ id: "hancore.shibumi.control-center",
-        version: "0.1.1-beta.12", kinds: ["service"] })
+        version: "0.1.1-beta.13", kinds: ["service"] })
       QtObject { id: serviceHost; property string pluginId: "hancore.shibumi.control-center" }
       SuiteRuntime.Provider {
         pluginId: "hancore.shibumi.control-center"
-        implementationVersion: "0.1.1-beta.12"
+        implementationVersion: "0.1.1-beta.13"
         owner: service
         host: serviceHost
         manifest: service.providerManifest
@@ -159,7 +159,7 @@ ShellRoot {
         root.bar = barFactory.createObject(root, {
           omarchyPath: "/fixture/omarchy",
           shell: scopedBarHost,
-          manifest: ({ id: "hancore.shibumi.bar", version: "0.1.1-beta.12",
+          manifest: ({ id: "hancore.shibumi.bar", version: "0.1.1-beta.13",
             kinds: ["bar"] }),
           pluginRegistry: fakePluginRegistry,
           barWidgetRegistry: fakeWidgetRegistry,
@@ -217,7 +217,7 @@ ShellRoot {
       } else if (root.stage === 4) {
         if (root.firstService.acquireCalls !== 2) return
         root.firstService.providerManifest = ({ id: "invalid",
-          version: "0.1.1-beta.12", kinds: ["service"] })
+          version: "0.1.1-beta.13", kinds: ["service"] })
         root.stage = 5; root.waits = 0
       } else if (root.stage === 5) {
         if (root.firstService.releaseCalls !== 2) return
