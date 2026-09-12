@@ -31,6 +31,6 @@ pkgbase = shibumi-shell
 	optdepends = nvidia-utils: NVIDIA GPU telemetry
 	optdepends = git: source-checkout diagnostics and migration
 	source = shibumi-shell-0.1.1-beta.12.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.12/shibumi-shell-0.1.1-beta.12.tar.gz
-	sha256sums = e00c99bcee3673361bf619ce479e9188d296ee8f90ee3887f9d5c6ac5e2ec903
+	sha256sums = b09e134d2745a7c4a1441a6739456011909fc8334d8cee431f7aa3a8ea8935d7
 
 pkgname = shibumi-shell
