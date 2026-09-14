@@ -8,7 +8,7 @@ A bar style is a presentation package, not a second implementation of Shibumi.
 Adding a style must not copy services, widget behavior, panel state, output
 lifecycle, split logic, drag-and-drop, or persistence.
 
-Each production style lives under `styles/<id>/` and provides:
+Each production style lives under `hancore.shibumi.bar/styles/<id>/` and provides:
 
 ```text
 Style.qml
@@ -50,7 +50,7 @@ To add a style:
 
 1. Add its directory and the three contract files.
 2. Register its id, display name, and `Style.qml` source in
-   `StyleRegistry.qml`.
+   `hancore.shibumi.bar/styles/StyleRegistry.qml`.
 3. Run `tests/style-contract-regression.sh` and the normal contract suite.
 4. Execute the full position, scaling, multi-monitor, panel, and lifecycle
    matrix for the new style.

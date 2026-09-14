@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.temperature",
   "name": "Shibumi Temperature",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Demand-driven hardware temperature widget and sensor panel.",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
@@ -21,7 +23,10 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G16",
-    "requires": ["hancore.shibumi.telemetry"],
+    "requires": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.telemetry"
+    ],
     "recommends": []
   }
 }

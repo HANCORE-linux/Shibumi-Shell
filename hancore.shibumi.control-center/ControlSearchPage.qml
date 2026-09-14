@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import "SearchEngine.js" as SearchEngine
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Column {
   id: root
@@ -70,7 +71,7 @@ Column {
         anchors.rightMargin: Commons.Style.space(8)
         spacing: Commons.Style.space(9)
 
-        IconText {
+        Presentation.ControlCenterIconText {
           anchors.verticalCenter: parent.verticalCenter
           width: Commons.Style.space(22)
           text: resultRow.modelData.glyph

@@ -55,7 +55,7 @@ ShellRoot {
     id: state
     omarchyPath: Quickshell.env("OMARCHY_PATH")
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14", kinds: ["service"]})
   }
   Component.onCompleted: steps = [
     function() {

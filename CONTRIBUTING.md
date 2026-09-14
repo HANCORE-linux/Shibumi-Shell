@@ -6,14 +6,15 @@ JavaScript, shell, and Python.
 ## Ground rules
 
 - Keep one production Quickshell process. No plugin may start another shell.
-- Keep every installed plugin self-contained. Do not depend on repository-root
-  runtime imports or another plugin's private files.
+- Keep every installed plugin self-contained except for the exact, declared
+  State runtime and passive-presentation modules. Do not depend on repository-
+  root imports or another plugin's private files.
 - Reuse Quattro's authoritative services when they provide the required state
   and actions.
 - Keep platform commands, validation, parsing, cancellation, and timeouts in
   services rather than views.
-- Update canonical and vendored copies together; parity checks are part of the
-  full contract.
+- Update the canonical active `ShibumiPanel.qml` and its checked vendored
+  copies together; parity checks are part of the full contract.
 - Preserve unrelated user changes in a dirty worktree.
 
 ## Development workflow

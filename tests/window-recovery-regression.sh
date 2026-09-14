@@ -5,10 +5,12 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tmpdir=$(mktemp -d /tmp/shibumi-window-recovery.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
-mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/core"
+mkdir -p "$tmpdir/home" "$tmpdir/runtime" \
+  "$tmpdir/hancore.shibumi.bar/core"
 chmod 700 "$tmpdir/runtime"
-cp "$repo_root/core/WindowRecovery.qml" "$tmpdir/core/"
-sed 's#import "../core" as Core#import "core" as Core#' \
+cp "$repo_root/hancore.shibumi.bar/core/WindowRecovery.qml" \
+  "$tmpdir/hancore.shibumi.bar/core/"
+sed 's#import "../hancore.shibumi.bar/core" as Core#import "hancore.shibumi.bar/core" as Core#' \
   "$repo_root/tests/window-recovery-regression.qml" >"$tmpdir/shell.qml"
 
 set +e

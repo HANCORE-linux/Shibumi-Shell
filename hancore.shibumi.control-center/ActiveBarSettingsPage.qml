@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Column {
   id: root
@@ -778,7 +779,7 @@ Column {
       anchors.margins: Commons.Style.space(9)
       spacing: Commons.Style.space(8)
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(20)
         text: actionCard.glyph

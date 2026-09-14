@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import "SearchEngine.js" as SearchEngine
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -94,7 +95,7 @@ Item {
     return "clear"
   }
 
-  IconText {
+  Presentation.ControlCenterIconText {
     id: searchGlyph
     anchors.left: parent.left
     anchors.leftMargin: Commons.Style.space(10)
@@ -207,7 +208,7 @@ Item {
       font.letterSpacing: 0.8
     }
 
-    IconText {
+    Presentation.ControlCenterIconText {
       id: clearAction
       anchors.centerIn: parent
       visible: searchInput.text !== ""

@@ -25,6 +25,7 @@ python3 "$repo_root/tests/isolated-process-regression.py"
 python3 "$repo_root/tests/source-snapshot-regression.py"
 python3 "$repo_root/tests/isolated-files-regression.py"
 python3 "$repo_root/tests/test_package_release.py"
+python3 "$repo_root/tests/native-catalog-resource-contract.py"
 python3 "$repo_root/tests/test_shibumi_manager.py"
 python3 "$repo_root/tests/test_shibumi_suite.py"
 python3 "$repo_root/tests/test_lifecycle_admission.py"
@@ -49,27 +50,53 @@ fi
 if [[ ${SHIBUMI_RUN_WAYLAND_LIFECYCLE:-0} == 1 ]]; then
   "$repo_root/tests/group-section-wayland-lifecycle.sh"
 fi
+[[ -x $repo_root/tests/widget-pipeline-diagnostics-regression.sh ]] \
+  || fail "widget pipeline diagnostics regression is missing"
+[[ -x $repo_root/tests/widget-pipeline-wayland-regression.sh ]] \
+  || fail "widget pipeline Wayland regression is missing"
+[[ -f $repo_root/tests/widget-pipeline-wayland-shell.qml ]] \
+  || fail "widget pipeline Wayland fixture is missing"
+"$repo_root/tests/widget-pipeline-diagnostics-regression.sh"
+python3 "$repo_root/tests/widget-pipeline-classifier-regression.py"
+if [[ ${SHIBUMI_RUN_WAYLAND_LIFECYCLE:-0} == 1 ]]; then
+  "$repo_root/tests/widget-pipeline-wayland-regression.sh"
+fi
 
 [[ ! -e manifest.json ]] \
   || fail "repository root must not masquerade as one native Omarchy plugin"
 
 for retired_root_copy in \
+  Bar.qml \
+  core \
+  services \
+  styles/StyleRegistry.qml \
+  styles/shibumi \
+  shared/state \
+  shared/telemetry \
+  shared/power-state \
+  shared/quick-access \
+  shared/reactor \
+  scripts/sync-bar-host.sh \
+  scripts/sync-power-source.py \
+  scripts/shibumi-gpu-probe \
+  scripts/shibumi-picker \
   adapters/BluetoothBackendAdapter.qml \
   adapters/BluetoothDiscoveryGuard.qml \
   adapters/BluetoothModel.js \
   adapters/WorkspaceActions.qml \
-  services/GpuTelemetry.qml \
-  services/OpenCodeProvider.qml \
-  scripts/opencode-usage \
-  scripts/shibumi-gpu-probe; do
+  scripts/opencode-usage; do
   [[ ! -e $retired_root_copy ]] \
-    || fail "plugin-canonical source regained a root copy: $retired_root_copy"
+    || fail "plugin-canonical source regained a root/shared copy: $retired_root_copy"
 done
-unexpected_root_sources=$(find adapters assets services widgets -type f 2>/dev/null \
-  | grep -Ev '^(services/(HostWidgetResolver\.qml|PickerModel\.js|PowerModel\.js|PowerService\.qml|PowerCommand\.qml|QuoteDefaults\.js|ReactorModel\.js|SystemTelemetry\.qml|ThemePalette\.qml|ThemePaletteModel\.js|ThermalTelemetry\.qml)|widgets/(IconText\.qml|PacmanWorkspaceMarker\.qml|PillSurface\.qml|ShibumiButtonGroup\.qml|ShibumiPanel\.qml|ShibumiPanelToolTip\.qml|ShibumiSlider\.qml))$' \
+if rg -q 'shared/(state|telemetry|power-state|quick-access|reactor)/' \
+    scripts/sync-shared.sh; then
+  fail "shared sync regained an owner-local source mapping"
+fi
+unexpected_root_sources=$(find adapters assets widgets -type f 2>/dev/null \
+  | grep -Ev '^widgets/ShibumiPanel\.qml$' \
   || true)
 [[ -z $unexpected_root_sources ]] || fail \
-  "historical root implementation remains outside declared vendoring maps: $unexpected_root_sources"
+  "historical root implementation remains outside declared presentation maps: $unexpected_root_sources"
 
 jq -e '
   .schemaVersion == 1 and
@@ -92,102 +119,102 @@ jq -e '
 ' contracts/plugin-suite-v1.json >/dev/null \
   || fail "suite still installs or exposes the retired Shibumi App Menu"
 
-rg -q '^Item \{' Bar.qml || fail "Bar.qml must use Item as its root"
-if rg -q '^ShellRoot \{' Bar.qml; then
+rg -q '^Item \{' hancore.shibumi.bar/Bar.qml || fail "hancore.shibumi.bar/Bar.qml must use Item as its root"
+if rg -q '^ShellRoot \{' hancore.shibumi.bar/Bar.qml; then
   fail "a native full-bar plugin must not create a ShellRoot"
 fi
 
 for property_name in omarchyPath shell manifest pluginRegistry barWidgetRegistry barConfig; do
-  rg -q "^[[:space:]]*property (string|var) ${property_name}:" Bar.qml \
+  rg -q "^[[:space:]]*property (string|var) ${property_name}:" hancore.shibumi.bar/Bar.qml \
     || fail "missing optional host property: $property_name"
-  if rg -q "^[[:space:]]*required property .* ${property_name}" Bar.qml; then
+  if rg -q "^[[:space:]]*required property .* ${property_name}" hancore.shibumi.bar/Bar.qml; then
     fail "asynchronously injected host property is required: $property_name"
   fi
 done
 
-rg -q 'typeof Util\.execDetached === "function"' Bar.qml \
+rg -q 'typeof Util\.execDetached === "function"' hancore.shibumi.bar/Bar.qml \
   || fail "bar command launcher does not follow Quattro's current host contract"
-rg -Fq 'Quickshell.execDetached(["bash", "-lc", text])' Bar.qml \
+rg -Fq 'Quickshell.execDetached(["bash", "-lc", text])' hancore.shibumi.bar/Bar.qml \
   || fail "bar command launcher has no compatibility fallback"
-if rg -q 'omarchy-hyprland-launch|commandLauncher' Bar.qml; then
+if rg -q 'omarchy-hyprland-launch|commandLauncher' hancore.shibumi.bar/Bar.qml; then
   fail "bar command launcher still depends on the removed legacy launcher"
 fi
 
-rg -Uq 'model: root\.outputWindowsEnabled && !root\.shutdownPrepared\n[[:space:]]*\? Quickshell\.screens : \[\]' Bar.qml \
+rg -Uq 'model: root\.outputWindowsEnabled && !root\.shutdownPrepared\n[[:space:]]*\? Quickshell\.screens : \[\]' hancore.shibumi.bar/Bar.qml \
   || fail "bar variants must preserve the shutdown-gated native Quickshell screen model"
-if rg -q 'model: .*barScreens' Bar.qml; then
+if rg -q 'model: .*barScreens' hancore.shibumi.bar/Bar.qml; then
   fail "bar variants must not use a JavaScript copy of Quickshell.screens"
 fi
 if ! {
-  rg -q 'screen\.name !== ""' core/BarPanel.qml \
-    && rg -q 'screen\.width > 0' core/BarPanel.qml \
-    && rg -q 'screen\.height > 0' core/BarPanel.qml
+  rg -q 'screen\.name !== ""' hancore.shibumi.bar/core/BarPanel.qml \
+    && rg -q 'screen\.width > 0' hancore.shibumi.bar/core/BarPanel.qml \
+    && rg -q 'screen\.height > 0' hancore.shibumi.bar/core/BarPanel.qml
 }; then
   fail "bar must reject invalid Wayland placeholder screens"
 fi
-rg -q '^PanelWindow \{' core/BarPanel.qml \
+rg -q '^PanelWindow \{' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
 rg -Fq 'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
-  core/BarPanel.qml \
+  hancore.shibumi.bar/core/BarPanel.qml \
   || fail "horizontal host must stay screen-sized to avoid edit resize flashes"
 rg -Fq 'WlrLayershell.keyboardFocus: dragSession.editing' \
-  core/BarPanel.qml \
+  hancore.shibumi.bar/core/BarPanel.qml \
   || fail "stable bar surface must own temporary edit focus"
-rg -q '^  mask: Region \{' core/BarPanel.qml \
+rg -q '^  mask: Region \{' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "screen-sized bar surface must constrain its locked input region"
-rg -Fq 'onClicked: dragSession.setEditing(false)' core/BarPanel.qml \
+rg -Fq 'onClicked: dragSession.setEditing(false)' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "stable edit surface does not dismiss from outside clicks"
-rg -q '^PanelWindow \{' core/DragGhostPanel.qml \
+rg -q '^PanelWindow \{' hancore.shibumi.bar/core/DragGhostPanel.qml \
   || fail "drag ghost must be isolated from the edge-local bar window"
-rg -q 'mask: Region \{\}' core/DragGhostPanel.qml \
+rg -q 'mask: Region \{\}' hancore.shibumi.bar/core/DragGhostPanel.qml \
   || fail "drag ghost overlay must remain input-transparent"
-rg -Fq 'DragGhostVisual {' core/DragGhostPanel.qml \
+rg -Fq 'DragGhostVisual {' hancore.shibumi.bar/core/DragGhostPanel.qml \
   || fail "drag layer must use the render-tested visual"
-if rg -q 'barOrigin[XY]' core/DragGhostPanel.qml core/DragGhostVisual.qml; then
+if rg -q 'barOrigin[XY]' hancore.shibumi.bar/core/DragGhostPanel.qml hancore.shibumi.bar/core/DragGhostVisual.qml; then
   fail "drag ghost must not add an edge offset to full-window coordinates"
 fi
 rg -Fq 'y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
-  core/BarPanel.qml \
+  hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bottom bar surface must use stable explicit placement"
-if rg -q 'anchors\.(top|bottom):.*barWindow\.bar\.position' core/BarPanel.qml; then
+if rg -q 'anchors\.(top|bottom):.*barWindow\.bar\.position' hancore.shibumi.bar/core/BarPanel.qml; then
   fail "bar surface must not switch conditional vertical anchors at runtime"
 fi
-rg -q '^Scope \{' core/WindowRecovery.qml \
+rg -q '^Scope \{' hancore.shibumi.bar/core/WindowRecovery.qml \
   || fail "per-output window recovery scope is missing"
-rg -q 'function onResourcesLost\(\)' core/WindowRecovery.qml \
+rg -q 'function onResourcesLost\(\)' hancore.shibumi.bar/core/WindowRecovery.qml \
   || fail "window recovery does not handle resourcesLost"
-rg -q 'function onClosed\(\)' core/WindowRecovery.qml \
+rg -q 'function onClosed\(\)' hancore.shibumi.bar/core/WindowRecovery.qml \
   || fail "window recovery does not handle closed"
-if rg -q 'targetWindow\.visible[[:space:]]*=' core/WindowRecovery.qml; then
+if rg -q 'targetWindow\.visible[[:space:]]*=' hancore.shibumi.bar/core/WindowRecovery.qml; then
   fail "window recovery imperatively destroys the bar visibility binding"
 fi
-rg -q 'visible: bar\.hostReady && bar\.styleReady && validScreen && !bar\.barHidden' core/BarPanel.qml \
+rg -q 'visible: bar\.hostReady && bar\.styleReady && validScreen && !bar\.barHidden' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "output must wait for host and style readiness and honor bar-off"
-rg -q 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady' core/BarPanel.qml \
+rg -q 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface may instantiate before host injection completes"
 rg -Uq 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady\n[[:space:]]*&& barWindow\.validScreen && barWindow\.bar\.visualTokens !== null' \
-  core/BarPanel.qml \
+  hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface may instantiate for an invalid Wayland placeholder"
-rg -q 'Services\.HostWidgetResolver' Bar.qml \
+rg -q 'Services\.HostWidgetResolver' hancore.shibumi.bar/Bar.qml \
   || fail "replacement bar does not own stable host widget components"
-rg -Fq 'function inlineSettingsDelta(current, next)' Bar.qml \
+rg -Fq 'function inlineSettingsDelta(current, next)' hancore.shibumi.bar/Bar.qml \
   || fail "bar host cannot distinguish inline state from structural layout changes"
-rg -Fq 'function applyInlineSettingsDelta(changes)' Bar.qml \
+rg -Fq 'function applyInlineSettingsDelta(changes)' hancore.shibumi.bar/Bar.qml \
   || fail "bar host recreates widgets for inline state persistence"
-rg -Fq 'function applyInlineSettings(nextEntry)' core/WidgetSlot.qml \
+rg -Fq 'function applyInlineSettings(nextEntry)' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "widget slots cannot receive inline state without replacing their entry binding"
-rg -Fq 'function hostEntryFor(moduleValue, layout)' core/GroupRegistry.js \
+rg -Fq 'function hostEntryFor(moduleValue, layout)' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "grouped widgets do not expose their host settings layer"
 rg -Fq 'function settingsOverridesFor(groupValue, moduleValue, groupValueSettings,' \
-  core/GroupRegistry.js \
+  hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "grouped widgets do not expose explicit local settings overrides"
-if rg -Fq 'slot.entry = change.entry' Bar.qml; then
+if rg -Fq 'slot.entry = change.entry' hancore.shibumi.bar/Bar.qml; then
   fail "inline state persistence overwrites the delegate-owned slot entry binding"
 fi
-if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|WeatherService|ThemePalette|AiUsageService|PickerService|ReactorService|QuoteService|WorkspaceService|ClockService|NetworkService|MonitorService|BluetoothService)|Adapters\.(SystemActions|WorkspaceActions)|Widgets\.WidgetRegistry' Bar.qml; then
+if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|WeatherService|ThemePalette|AiUsageService|PickerService|ReactorService|QuoteService|WorkspaceService|ClockService|NetworkService|MonitorService|BluetoothService)|Adapters\.(SystemActions|WorkspaceActions)|Widgets\.WidgetRegistry' hancore.shibumi.bar/Bar.qml; then
   fail "registry-only bar host still instantiates a feature owner"
 fi
-rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' services/HostWidgetResolver.qml \
+rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' hancore.shibumi.bar/services/HostWidgetResolver.qml \
   || fail "host widget resolver does not load official manifest entry points"
 [[ $(rg -l 'bar\.registeredWidgetComponent' \
   hancore.shibumi.{audio,status,center}/BarWidget.qml | wc -l) -eq 3 ]] \
@@ -202,22 +229,32 @@ if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' \
     hancore.shibumi.bluetooth/Service.qml; then
   fail "shipped Bluetooth owner must not instantiate the complete host widget"
 fi
-if rg -U -q 'visible: root\.anchorIndex < 0\n[[:space:]]*bar: root\.bar\n[[:space:]]*region: "center"\n[[:space:]]*entries: root\.entries' core/CenterSection.qml; then
+if rg -U -q 'visible: root\.anchorIndex < 0\n[[:space:]]*bar: root\.bar\n[[:space:]]*region: "center"\n[[:space:]]*entries: root\.entries' hancore.shibumi.bar/core/CenterSection.qml; then
   fail "inactive center fallback must not instantiate duplicate widgets"
 fi
-[[ $(rg -c 'entries: root\.anchorIndex < 0 \? root\.entries : \[\]' core/CenterSection.qml) -eq 2 ]] \
+[[ $(rg -c 'entries: root\.anchorIndex < 0 \? root\.entries : \[\]' hancore.shibumi.bar/core/CenterSection.qml) -eq 2 ]] \
   || fail "both center orientations must suppress the inactive fallback model"
-rg -q 'bar\.registeredWidgetComponent\(moduleName\)' core/WidgetSlot.qml \
+rg -q 'bar\.registeredWidgetComponent\(moduleName\)' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "widget slots do not resolve exclusively through the plugin registry"
 if rg -q 'internalWidgetRegistry|internalComponent|registryComponent' \
-    Bar.qml core/WidgetSlot.qml; then
+    hancore.shibumi.bar/Bar.qml hancore.shibumi.bar/core/WidgetSlot.qml; then
   fail "registry-only widget resolution retains a local component owner"
 fi
-rg -q 'sourceComponent: root\.resolvedComponent' core/WidgetSlot.qml \
-  || fail "widget slots must load the resolved component"
-rg -q 'active: root\.moduleEnabled && root\.resolvedComponent !== null' \
-  core/WidgetSlot.qml \
-  || fail "disabled widgets remain instantiated"
+[[ $(rg -c 'widgetLoader\.sourceComponent = nextSource' \
+  hancore.shibumi.bar/core/WidgetSlot.qml) -eq 1 ]] \
+  || fail "widget slots must have one provenance-recorded Loader source setter"
+rg -Fq 'function submitLoaderSource(candidate)' \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
+  && rg -Fq 'const nextSource = slotComplete && moduleEnabled ? candidate : null' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  && rg -Fq 'submitLoaderSource(resolvedComponent)' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "widget slots must submit the resolved component through the controlled setter"
+rg -q 'active: root\.slotComplete && root\.moduleEnabled' \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
+  && rg -q 'root\._submission\.source !== null' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "disabled, unregistered, or source-less widgets remain instantiated"
 for compatibility_contract in \
     'fallbackTooltipText' \
     'compatibilityPanelCandidate' \
@@ -238,141 +275,141 @@ for compatibility_contract in \
     'compatibilityOpenMeasureTimer' \
     'hostedCardOrigin' \
     'publishCompatibilityConnection'; do
-  rg -Fq "$compatibility_contract" core/WidgetSlot.qml \
+  rg -Fq "$compatibility_contract" hancore.shibumi.bar/core/WidgetSlot.qml \
     || fail "third-party host compatibility lost $compatibility_contract"
 done
 rg -q 'readonly property bool hostedModule: !suiteNativeModule' \
-  core/WidgetSlot.qml \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "hosted panel adapter is restricted to one external provider"
 rg -Fq 'if (root.bar.pendingTooltipTarget || root.bar.tooltipTarget) return' \
-  core/WidgetSlot.qml \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "manifest tooltip fallback can override a plugin tooltip"
-rg -Fq 'Binding.RestoreBindingOrValue' core/WidgetSlot.qml \
+rg -Fq 'Binding.RestoreBindingOrValue' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "third-party panel chrome cannot restore native bindings"
 [[ $(rg -c 'value: root\.hostedCardOrigin\(root\.compatibilityPanel\)' \
-  core/WidgetSlot.qml) -eq 2 ]] \
+  hancore.shibumi.bar/core/WidgetSlot.qml) -eq 2 ]] \
   || fail "hosted panels do not translate both card axes to the visible bar"
-rg -Fq 'y = barThickness + gap' core/WidgetSlot.qml \
+rg -Fq 'y = barThickness + gap' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "top hosted panels still derive their offset from the host window"
-rg -Fq 'property: "contentHeight"' core/WidgetSlot.qml \
+rg -Fq 'property: "contentHeight"' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "screen-sized hosted panels do not repair KeyboardPanel height"
-rg -Fq 'screenHeight - barThickness - gap - margin' core/WidgetSlot.qml \
+rg -Fq 'screenHeight - barThickness - gap - margin' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "hosted panel height is not capped at the visible bar edge"
 rg -Fq 'Math.min(compatibilityNativeContentHeight, currentNativeHeight)' \
-  core/WidgetSlot.qml \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "opening a hosted panel can recapture its repaired height as native"
-rg -Fq 'item.mapToItem(holder, 0, 0)' core/WidgetSlot.qml \
+rg -Fq 'item.mapToItem(holder, 0, 0)' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "hosted panel height does not follow rendered child geometry"
-rg -q '^PanelWindow \{' core/HostedPanelConnector.qml \
+rg -q '^PanelWindow \{' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret overlay is missing"
-rg -q 'mask: Region \{\}' core/HostedPanelConnector.qml \
+rg -q 'mask: Region \{\}' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret overlay must remain input-transparent"
-rg -q 'width: 26' core/HostedPanelConnector.qml \
+rg -q 'width: 26' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret does not retain the native panel-edge span"
-rg -q 'joinStyle: ShapePath\.MiterJoin' core/HostedPanelConnector.qml \
+rg -q 'joinStyle: ShapePath\.MiterJoin' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret does not retain the native panel join"
 awk '
   /Rectangle \{/ { bridge = 1 }
   bridge && /z: 1/ { found = 1; exit }
   END { exit(found ? 0 : 1) }
-' core/HostedPanelConnector.qml \
+' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret bridge must remain below the replacement edge"
 awk '
   /Shape \{/ { shape = 1 }
   shape && /z: 2/ { found = 1; exit }
   END { exit(found ? 0 : 1) }
-' core/HostedPanelConnector.qml \
+' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret must remain above the foreign-border bridge"
 connector_path_count="$(
   awk '
     /ShapePath \{/ { count += 1 }
     END { print count + 0 }
-  ' core/HostedPanelConnector.qml
+  ' hancore.shibumi.bar/core/HostedPanelConnector.qml
 )"
 [[ "$connector_path_count" -eq 1 ]] \
   || fail "hosted V2 caret must be one continuous panel-edge path"
-rg -Fq 'HostedPanelConnector {' core/BarPanel.qml \
+rg -Fq 'HostedPanelConnector {' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar output does not own its screen-local hosted connector"
-rg -Fq 'connectedPanelHostCaret' Bar.qml \
+rg -Fq 'connectedPanelHostCaret' hancore.shibumi.bar/Bar.qml \
   || fail "bar facade does not distinguish host-drawn panel carets"
-rg -q 'active: root\.groupEnabled' core/GroupSlot.qml \
+rg -q 'active: root\.groupEnabled' hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "disabled multi-module groups remain instantiated"
 rg -Fq 'readonly property bool appearanceFill: v2Shell &&' \
-  core/GroupSlot.qml \
+  hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "V2 group appearance settings leak into the V1 pill surface"
 rg -Fq 'customDecorated: shellStyle !== "shibumi"' \
-  widgets/PillSurface.qml \
+  hancore.shibumi.state/lib/presentation/PillSurface.qml \
   || fail "V2 widget appearance settings suppress the V1 native pill"
 rg -Fq 'presentation.v2Border === undefined' \
-  styles/shibumi/VisualTokens.qml \
+  hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
   || fail "V1 and V2 still share one mutable bar-border state"
 if rg -Fq 'pillBorderWidth > 0 ? 0.5 : 0' \
-    styles/shibumi/RunChrome.qml; then
+    hancore.shibumi.bar/styles/shibumi/RunChrome.qml; then
   fail "V1 run borders are shifted off their original integer geometry"
 fi
-if rg -q 'visible: activeItem' core/WidgetSlot.qml; then
+if rg -q 'visible: activeItem' hancore.shibumi.bar/core/WidgetSlot.qml; then
   fail "widget slot visibility must not depend on child effective visibility"
 fi
 
 for injected_name in bar moduleName hostGroupId settings; do
-  rg -q "if \(\"${injected_name}\" in target\)" core/WidgetSlot.qml \
+  rg -q "if \(\"${injected_name}\" in target\)" hancore.shibumi.bar/core/WidgetSlot.qml \
     || fail "widget slot does not inject $injected_name"
 done
-rg -q 'if \("availableWidth" in target\)' core/WidgetSlot.qml \
+rg -q 'if \("availableWidth" in target\)' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "widget slots do not inject the monitor-local width budget"
-rg -q 'onAvailableWidthChanged: injectProperties\(\)' core/WidgetSlot.qml \
+rg -q 'onAvailableWidthChanged: injectProperties\(\)' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "center width changes are not forwarded reactively"
-rg -Fq 'availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)' styles/shibumi/BarSurface.qml \
+rg -Fq 'availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)' hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "center width budget is not monitor-local or becomes unconstrained"
 rg -Fq '+ leftExtras.width + centerExtras.width + rightExtras.width' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "responsive staging omits unassigned provider widths"
 rg -Fq 'centerGap, measuredCenterSpan, centerExtras.width)' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "center extras do not reduce the grouped center budget"
 rg -Fq 'ResponsiveLayout.centerAvailableWidth(compactShell, width,' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "compact V2 shells measure the center against their own fitted width"
 rg -Fq 'readonly property real responsiveCapacity: compactShell' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "compact V2 shells do not retain the monitor responsive capacity"
 rg -Fq 'responsiveCapacity, narrowCandidateWidths' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "responsive staging still feeds back the content-sized V2 shell width"
-rg -Fq 'void(root.stateRevision)' styles/shibumi/GroupSection.qml \
+rg -Fq 'void(root.stateRevision)' hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "V2 separator geometry does not react to state-service commits"
-rg -Fq 'void(root.stateConfig)' styles/shibumi/GroupSection.qml \
+rg -Fq 'void(root.stateConfig)' hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "V2 separator geometry does not bind to the replaced state config"
 rg -Fq 'if (persistentSeparators) return appearanceSeparator' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "V2 separators still inherit V1 positional split state"
 for shell_contract in shellStyle shellWidth shellX shellContentInset; do
-  rg -Fq "$shell_contract" styles/shibumi/BarSurface.qml \
+  rg -Fq "$shell_contract" hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
     || fail "Shibumi surface lost V2 shell geometry: $shell_contract"
 done
-[[ $(rg -c 'horizontalSurface\.shellContentInset' styles/shibumi/BarSurface.qml) -eq 2 ]] \
+[[ $(rg -c 'horizontalSurface\.shellContentInset' hancore.shibumi.bar/styles/shibumi/BarSurface.qml) -eq 2 ]] \
   || fail "Shibumi side rows do not follow the active shell inset"
-rg -q 'color: root\.bar\.background' styles/shibumi/TooltipSurface.qml \
+rg -q 'color: root\.bar\.background' hancore.shibumi.bar/styles/shibumi/TooltipSurface.qml \
   || fail "Shibumi tooltip does not follow the bar surface color"
-rg -q 'radius: root\.bar\.visualTokens\.tooltipRadius' styles/shibumi/TooltipSurface.qml \
+rg -q 'radius: root\.bar\.visualTokens\.tooltipRadius' hancore.shibumi.bar/styles/shibumi/TooltipSurface.qml \
   || fail "Shibumi tooltip does not use the V1 radius token"
-rg -q 'active: !root\.bar\.barHidden' styles/shibumi/BarSurface.qml \
+rg -q 'active: !root\.bar\.barHidden' hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "Reactor renderer remains active while the bar is hidden"
 rg -q 'root\.reactorMode >= 1 && root\.reactorMode <= 8' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "Mode 0 does not prevent Reactor renderer construction"
 rg -q 'root\.reactorMode >= 7 \? reactorEventComponent' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "Modes 7-8 do not select the shared swarm renderer"
-if rg -q '\b(Process|FileView)\b' styles/shibumi/GapEffectsLayer.qml; then
+if rg -q '\b(Process|FileView)\b' hancore.shibumi.bar/styles/shibumi/GapEffectsLayer.qml; then
   fail "style-owned Reactor modes 1-6 must not own backend workers"
 fi
-[[ $(rg -c 'Timer \{' styles/shibumi/GapEffectsLayer.qml) -eq 1 ]] \
+[[ $(rg -c 'Timer \{' hancore.shibumi.bar/styles/shibumi/GapEffectsLayer.qml) -eq 1 ]] \
   || fail "Reactor visual layer must own exactly one frame timer"
-if rg -q '\b(Process|FileView)\b' styles/shibumi/ReactorEventLayer.qml; then
+if rg -q '\b(Process|FileView)\b' hancore.shibumi.bar/styles/shibumi/ReactorEventLayer.qml; then
   fail "style-owned Reactor mode 7 must not own backend workers"
 fi
-[[ $(rg -c 'Timer \{' styles/shibumi/ReactorEventLayer.qml) -eq 1 ]] \
+[[ $(rg -c 'Timer \{' hancore.shibumi.bar/styles/shibumi/ReactorEventLayer.qml) -eq 1 ]] \
   || fail "Mode 7 renderer must own exactly one adaptive frame timer"
 rg -q 'target: "shibumi-reactor"' hancore.shibumi.reactor/Service.qml \
   || fail "Reactor control IPC target is missing"
@@ -422,34 +459,34 @@ rg -q 'firstPartyService\("omarchy\.media"\)' hancore.shibumi.reactor/ReactorSer
   || fail "Reactor media events bypass Quattro media ownership"
 rg -q 'statusService\.notificationService' hancore.shibumi.reactor/ReactorService.qml \
   || fail "Reactor notification events bypass Quattro notification ownership"
-rg -q 'item\.screenName = barWindow\.screen' core/BarPanel.qml \
+rg -q 'item\.screenName = barWindow\.screen' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "Reactor renderer does not receive its physical output name"
-rg -q 'G8: \["hancore.shibumi.center"\]' core/GroupRegistry.js \
+rg -q 'G8: \["hancore.shibumi.center"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G8 is not owned by the Shibumi center composite"
-rg -q 'G2: \["hancore.shibumi.workspaces"\]' core/GroupRegistry.js \
+rg -q 'G2: \["hancore.shibumi.workspaces"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G2 is not owned by the extracted Shibumi workspace plugin"
-rg -q 'PanelRouting.findPanelWidget' Bar.qml \
+rg -q 'PanelRouting.findPanelWidget' hancore.shibumi.bar/Bar.qml \
   || fail "nested panel routing is not active"
-rg -q 'PanelRouting.findPanelWidgetForScreen' Bar.qml \
+rg -q 'PanelRouting.findPanelWidgetForScreen' hancore.shibumi.bar/Bar.qml \
   || fail "bar-widget IPC does not route to a requested output"
-rg -q 'Hyprland.focusedMonitor' Bar.qml \
+rg -q 'Hyprland.focusedMonitor' hancore.shibumi.bar/Bar.qml \
   || fail "bar-widget IPC does not prefer the focused output"
-rg -q 'property string screenName:' core/WidgetSlot.qml \
+rg -q 'property string screenName:' hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "widget slots do not accept explicit output identity"
-rg -q 'screenName: root\.screenName' core/GroupSlot.qml core/BarSection.qml \
+rg -q 'screenName: root\.screenName' hancore.shibumi.bar/core/GroupSlot.qml hancore.shibumi.bar/core/BarSection.qml \
   || fail "bar/group sections do not propagate explicit output identity"
 rg -Fq 'screenName: root ? root.screenName : ""' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "group renderer does not propagate guarded output identity"
 rg -q 'function childPanelWidget\(pluginId\)' hancore.shibumi.center/BarWidget.qml \
   || fail "center composite does not expose nested weather routing"
-rg -q 'G3: \["hancore.shibumi.status"\]' core/GroupRegistry.js \
+rg -q 'G3: \["hancore.shibumi.status"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G3 is not owned by the Shibumi status composite"
 for consumed_alias in omarchy.audio omarchy.clock omarchy.network omarchy.power; do
-  rg -Fq "\"$consumed_alias\"" core/GroupRegistry.js \
+  rg -Fq "\"$consumed_alias\"" hancore.shibumi.bar/core/GroupRegistry.js \
     || fail "stock Omarchy alias leaks into Shibumi: $consumed_alias"
 done
-rg -Fq 'entry.shibumiModule === true' core/GroupRegistry.js \
+rg -Fq 'entry.shibumiModule === true' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "explicit Quattro modules cannot opt into the Shibumi bar"
 rg -q 'hancore\.shibumi\.status' contracts/plugin-suite-v1.json \
   || fail "Shibumi status composite is not registered"
@@ -473,7 +510,7 @@ if rg -q 'Process \{|Timer \{|IpcHandler \{' hancore.shibumi.center/SystemUpdate
 fi
 rg -q 'onTabRequested' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar is missing sibling-panel keyboard routing"
-rg -q 'ShibumiPanelToolTip \{' hancore.shibumi.center/CalendarPanel.qml \
+rg -q 'Presentation\.ShibumiPillToolTip \{' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar navigation bypasses the Shibumi tooltip"
 if rg -q 'registeredSource\("omarchy\.indicators"\)' hancore.shibumi.center/BarWidget.qml; then
   fail "G8 must not instantiate Quattro's stock indicator presentation"
@@ -502,7 +539,7 @@ rg -q 'trayBackend: root\.trayWidget' hancore.shibumi.status/BarWidget.qml \
   || fail "G3 tray presentation is not bound to the official tray owner"
 rg -q 'notificationService: root\.notificationService' hancore.shibumi.status/BarWidget.qml \
   || fail "G3 notification presentation is not bound to the official service"
-rg -q 'G6: \["hancore.shibumi.audio"\]' core/GroupRegistry.js \
+rg -q 'G6: \["hancore.shibumi.audio"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G6 is not owned by the Shibumi audio composite"
 rg -q 'hancore\.shibumi\.audio' contracts/plugin-suite-v1.json \
   || fail "Shibumi audio composite is not registered"
@@ -567,7 +604,7 @@ rg -q 'displaySources = \[\]' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not release source rows on close"
 rg -q 'displayStreams = \[\]' hancore.shibumi.audio/AudioPanel.qml \
   || fail "audio panel does not release stream rows on close"
-rg -q 'G9: \["hancore.shibumi.media"\]' core/GroupRegistry.js \
+rg -q 'G9: \["hancore.shibumi.media"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G9 is not owned by the Shibumi media presentation"
 rg -q 'hancore\.shibumi\.media' contracts/plugin-suite-v1.json \
   || fail "Shibumi media presentation is not registered"
@@ -602,7 +639,7 @@ if rg -q 'Process \{|FileView \{' hancore.shibumi.media/MediaPanel.qml \
   hancore.shibumi.media/MediaPanel.qml; then
   fail "screen-local media panels must not own spectrum workers"
 fi
-rg -q 'G10: \["hancore.shibumi.quick-access"\]' core/GroupRegistry.js \
+rg -q 'G10: \["hancore.shibumi.quick-access"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G10 is not owned by the Shibumi quick-access presentation"
 rg -q 'hancore\.shibumi\.quick-access' contracts/plugin-suite-v1.json \
   || fail "Shibumi quick-access presentation is not registered"
@@ -615,8 +652,11 @@ rg -q 'target: "shibumi-picker"' hancore.shibumi.quick-access/Service.qml \
   || fail "G10 picker/media IPC target is missing"
 rg -q 'Hyprland\.focusedMonitor' hancore.shibumi.quick-access/Service.qml \
   || fail "G10 IPC picker does not resolve the focused output"
-rg -q 'function screenForName\(value\)' Bar.qml \
-  || fail "G10 IPC picker cannot resolve host output objects"
+rg -Fq ': Quickshell.screens' hancore.shibumi.quick-access/Service.qml \
+  || fail "G10 IPC picker does not use the public reactive screen collection"
+if rg -Fq 'bar.screenForName' hancore.shibumi.quick-access/Service.qml; then
+  fail "G10 IPC picker traverses the private/full bar for output objects"
+fi
 if rg -q 'Commons\.Style\.font\.size\.' hancore.shibumi.quick-access/PickerOverlay.qml \
   hancore.shibumi.quick-access/PickerImage.qml hancore.shibumi.quick-access/TanzakuPickerView.qml \
   hancore.shibumi.quick-access/HearthstonePickerView.qml; then
@@ -644,7 +684,7 @@ rg -q 'stdinEnabled: true' hancore.shibumi.media/Service.qml \
 if rg -q 'mktemp|/tmp/|<\(printf' hancore.shibumi.media/Service.qml; then
   fail "media spectrum worker must not create temporary config artifacts"
 fi
-rg -q 'G11: \["hancore.shibumi.network"\]' core/GroupRegistry.js \
+rg -q 'G11: \["hancore.shibumi.network"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G11 is not owned by the Shibumi network presentation"
 rg -q 'hancore\.shibumi\.network' contracts/plugin-suite-v1.json \
   || fail "Shibumi network presentation is not registered"
@@ -682,7 +722,7 @@ if rg -q 'InlineSpeedTestRunner|omarchy-network-|\bnmcli\b' \
 fi
 rg -q 'childPanelWidget\("omarchy\.network"\)' tests/network-plugin-smoke.qml \
   || fail "network alias routing is not regression-tested"
-rg -q 'G13: \["hancore.shibumi.brightness"\]' core/GroupRegistry.js \
+rg -q 'G13: \["hancore.shibumi.brightness"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G13 is not owned by the Shibumi brightness presentation"
 rg -q 'hancore\.shibumi\.brightness' contracts/plugin-suite-v1.json \
   || fail "Shibumi brightness presentation is not registered"
@@ -722,9 +762,9 @@ if rg -q '^[[:space:]]*selected:' hancore.shibumi.brightness/BrightnessPanel.qml
 fi
 rg -q 'childPanelWidget\("omarchy\.monitor"\)' tests/brightness-plugin-smoke.qml \
   || fail "monitor alias routing is not regression-tested"
-rg -q 'G12: \["hancore.shibumi.battery"\]' core/GroupRegistry.js \
+rg -q 'G12: \["hancore.shibumi.battery"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G12 is not owned by the Shibumi battery presentation"
-rg -q 'G14: \["hancore.shibumi.power-profile"\]' core/GroupRegistry.js \
+rg -q 'G14: \["hancore.shibumi.power-profile"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G14 is not owned by the Shibumi power-profile presentation"
 for power_widget in hancore.shibumi.battery hancore.shibumi.power-profile; do
   rg -q "$power_widget" contracts/plugin-suite-v1.json \
@@ -732,25 +772,25 @@ for power_widget in hancore.shibumi.battery hancore.shibumi.power-profile; do
 done
 rg -q '"service": "Service.qml"' hancore.shibumi.power-state/manifest.json \
   || fail "battery/profile state must have one process-wide power owner"
-rg -q 'Quickshell.Services.UPower' services/PowerService.qml \
+rg -q 'Quickshell.Services.UPower' hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not consume the event-driven UPower singleton"
 rg -Fq 'commandFor("profiles", ["omarchy-powerprofiles-list", "--active-state"])' \
-  services/PowerService.qml \
+  hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not use the Quattro profile contract"
 rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
-  services/PowerService.qml \
+  hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not use the lightweight active-profile probe"
 rg -Fq 'onTriggered: root.refreshActiveProfile()' \
-  services/PowerService.qml \
+  hancore.shibumi.power-state/Service.qml \
   || fail "power hot path still refreshes the complete profile list"
-rg -Fq 'interval: 5 * 60 * 1000' services/PowerService.qml \
+rg -Fq 'interval: 5 * 60 * 1000' hancore.shibumi.power-state/Service.qml \
   || fail "power profile list does not have a bounded reconcile fallback"
 rg -q 'omarchy-battery-status --shell' \
-  services/PowerService.qml \
+  hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not use the Quattro battery detail contract"
-[[ $(rg -c 'PowerCommand \{' services/PowerService.qml) -eq 4 ]] \
+[[ $(rg -c 'PowerCommand \{' hancore.shibumi.power-state/Service.qml) -eq 4 ]] \
   || fail "power owner must retain exactly four operation slots"
-[[ $(rg -c 'Process \{' services/PowerCommand.qml) -eq 1 ]] \
+[[ $(rg -c 'Process \{' hancore.shibumi.power-state/PowerCommand.qml) -eq 1 ]] \
   || fail "each power operation slot must own exactly one process"
 if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|Timer \{|FileView \{' \
   hancore.shibumi.battery/BarWidget.qml hancore.shibumi.battery/BatteryPanel.qml \
@@ -775,7 +815,7 @@ rg -q 'acquireProfiles' hancore.shibumi.power-profile/BarWidget.qml \
   || fail "profile state does not use the shared service lease"
 rg -q 'releaseProfiles' hancore.shibumi.power-profile/BarWidget.qml \
   || fail "profile state lease is not released"
-rg -q 'G15: \["hancore.shibumi.bluetooth"\]' core/GroupRegistry.js \
+rg -q 'G15: \["hancore.shibumi.bluetooth"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G15 is not owned by the Shibumi bluetooth presentation"
 jq -e '
   .id == "hancore.shibumi.bluetooth" and
@@ -879,7 +919,7 @@ rg -Fq 'result.ok === true' "$bluetooth_panel" \
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
-if rg -q 'Process \{' services/SystemTelemetry.qml; then
+if rg -q 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml; then
   fail "system telemetry must read procfs without child processes"
 fi
 rg -q '"service": "WorkspaceService.qml"' hancore.shibumi.workspaces/manifest.json \
@@ -899,23 +939,23 @@ rg -q 'Ui\.WidgetButton \{' hancore.shibumi.center/ClockWidget.qml \
   || fail "clock interaction is not registered for overlay click forwarding"
 [[ $(rg -c 'WorkspaceActions \{' hancore.shibumi.workspaces/WorkspaceService.qml) -eq 1 ]] \
   || fail "workspace actions must have exactly one root adapter"
-[[ $(rg -c 'Core\.LayoutController \{' Bar.qml) -eq 1 ]] \
+[[ $(rg -c 'Core\.LayoutController \{' hancore.shibumi.bar/Bar.qml) -eq 1 ]] \
   || fail "layout persistence must have exactly one root controller"
-[[ $(rg -c '^  DragSession \{' core/BarPanel.qml) -eq 1 ]] \
+[[ $(rg -c '^  DragSession \{' hancore.shibumi.bar/core/BarPanel.qml) -eq 1 ]] \
   || fail "each output must own exactly one transient drag session"
-rg -q 'stateService: root\.pluginService\("hancore\.shibumi\.state"\)' Bar.qml \
+rg -q 'stateService: root\.pluginService\("hancore\.shibumi\.state"\)' hancore.shibumi.bar/Bar.qml \
   || fail "layout controller is not bound to normalized Shibumi state"
-rg -q 'stateService\.setLayout' core/LayoutController.qml \
+rg -q 'stateService\.setLayout' hancore.shibumi.bar/core/LayoutController.qml \
   || fail "layout mutations bypass the process-wide state owner"
-rg -q 'layoutController: barWindow\.bar\.layoutController' core/BarPanel.qml \
+rg -q 'layoutController: barWindow\.bar\.layoutController' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "per-output drag session does not consume shared layout state"
-rg -q 'item\.layoutSession = dragSession' core/BarPanel.qml \
+rg -q 'item\.layoutSession = dragSession' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface does not receive its per-output drag session"
 if rg -q 'LayoutController \{|DragSession \{' styles; then
   fail "styles must not own layout persistence or drag sessions"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' core/LayoutController.qml \
-  core/DragSession.qml; then
+if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.bar/core/LayoutController.qml \
+  hancore.shibumi.bar/core/DragSession.qml; then
   fail "layout and drag core must remain event-driven and worker-free"
 fi
 rg -q 'serviceFor\("hancore\.shibumi\.workspaces"\)' "$workspace_widget" \
@@ -943,7 +983,7 @@ rg -q 'hancore\.shibumi\.memory' contracts/plugin-suite-v1.json \
   || fail "internal memory widget is not registered"
 rg -q 'hancore\.shibumi\.cpu' contracts/plugin-suite-v1.json \
   || fail "internal CPU widget is not registered"
-rg -q 'G7: \["hancore\.shibumi\.ai"\]' core/GroupRegistry.js \
+rg -q 'G7: \["hancore\.shibumi\.ai"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G7 is not owned by the Shibumi AI facade"
 rg -q '"service": "Service.qml"' hancore.shibumi.ai/manifest.json \
   || fail "AI provider state must have one shipped owner"
@@ -958,7 +998,7 @@ if rg -q 'Process \{|Timer \{|FileView \{' \
     hancore.shibumi.ai/AiUsagePanel.qml; then
   fail "AI views must not own provider polling or file watchers"
 fi
-rg -q 'G1: \["hancore.shibumi.control-center"\]' core/GroupRegistry.js \
+rg -q 'G1: \["hancore.shibumi.control-center"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G1 does not resolve the extracted Control Center plugin"
 rg -q 'function setGroupSetting\(groupId, key, value\)' \
   hancore.shibumi.state/Service.qml \
@@ -966,9 +1006,9 @@ rg -q 'function setGroupSetting\(groupId, key, value\)' \
 rg -q 'function setPresentationSetting\(key, value\)' \
   hancore.shibumi.state/Service.qml \
   || fail "G1 cannot persist Shibumi presentation settings"
-rg -q 'function setBarPosition\(value, ownerValue, screenName\)' Bar.qml \
+rg -q 'function setBarPosition\(value, ownerValue, screenName\)' hancore.shibumi.bar/Bar.qml \
   || fail "G1 cannot persist output-local top/bottom position"
-rg -q 'function setAllSplits\(value\)' Bar.qml \
+rg -q 'function setAllSplits\(value\)' hancore.shibumi.bar/Bar.qml \
   || fail "G1 cannot persist split presets"
 detail_panel_count=$(find hancore.shibumi.* -maxdepth 1 -type f \
   -name '*Panel.qml' ! -name ShibumiPanel.qml | wc -l)
@@ -1025,37 +1065,37 @@ rg -q 'themeNamePath' hancore.shibumi.state/ThemePalette.qml \
 if rg -q 'Process \{|Timer \{' hancore.shibumi.state/ThemePalette.qml; then
   fail "theme palette bridge must remain event-driven"
 fi
-rg -q 'omarchy\.clock' core/GroupRegistry.js \
+rg -q 'omarchy\.clock' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "Shibumi clock does not override the host clock slot"
 rg -q 'hancore\.shibumi\.center' contracts/plugin-suite-v1.json \
   || fail "Shibumi center composite is not registered"
-rg -q 'GroupSection' styles/shibumi/BarSurface.qml \
+rg -q 'GroupSection' hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "Shibumi surface does not render persisted groups"
 rg -Uq 'id: leftGroups[[:space:][:print:]]*visibilityStage: horizontalSurface\.narrowStage' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "left groups do not receive the responsive visibility stage"
 rg -Uq 'id: rightGroups[[:space:][:print:]]*visibilityStage: horizontalSurface\.narrowStage' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "right groups do not receive the responsive visibility stage"
-rg -q 'GroupRegistry\.unassignedEntries' Bar.qml \
+rg -q 'GroupRegistry\.unassignedEntries' hancore.shibumi.bar/Bar.qml \
   || fail "custom host layout entries are not preserved"
-if rg -q 'Process \{|FileView \{' core/GroupSlot.qml \
-  styles/shibumi/GroupSection.qml; then
+if rg -q 'Process \{|FileView \{' hancore.shibumi.bar/core/GroupSlot.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml; then
   fail "group renderer must remain event-driven and worker-free"
 fi
-if rg -q 'Timer \{' core/GroupSlot.qml; then
+if rg -q 'Timer \{' hancore.shibumi.bar/core/GroupSlot.qml; then
   fail "group slots must not own timers"
 fi
-[[ $(rg -c 'Timer \{' styles/shibumi/GroupSection.qml) -eq 2 ]] \
+[[ $(rg -c 'Timer \{' hancore.shibumi.bar/styles/shibumi/GroupSection.qml) -eq 2 ]] \
   || fail "group sections must own exactly two lifecycle-bound timers"
 rg -U -q 'Timer \{\n[[:space:]]*id: layoutTimer\n[[:space:]]*interval: 0\n[[:space:]]*onTriggered: \{\n[[:space:]]*if \(horizontalRow\) horizontalRow\.forceLayout\(\)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "group layout work is not owned by the horizontal row lifecycle"
-if rg -Fq 'Qt.callLater' styles/shibumi/GroupSection.qml; then
+if rg -Fq 'Qt.callLater' hancore.shibumi.bar/styles/shibumi/GroupSection.qml; then
   fail "group layout work can outlive its horizontal row context"
 fi
 rg -U -q 'Timer \{\n[[:space:]]*id: registrationTimer\n[[:space:]]*interval: 0\n' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "group lifecycle timer must be the zero-delay target registration sync"
 for teardown_contract in \
   'const owner = root' \
@@ -1065,14 +1105,14 @@ for teardown_contract in \
   'if (horizontalRow) horizontalRow.scheduleLayout()' \
   '? horizontalRow.nextShownIndex(index) : -1' \
   '? root.separatorCenterOffset(horizontalCell.separated) : 0'; do
-  rg -Fq "$teardown_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$teardown_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "group teardown guard is missing: $teardown_contract"
 done
 for unsafe_teardown_access in \
   'const nextAsSlot = root.slotEditing' \
   'onWidthChanged: horizontalRow.scheduleLayout()' \
   'onVisibleChanged: horizontalRow.scheduleLayout()'; do
-  if rg -Fq "$unsafe_teardown_access" styles/shibumi/GroupSection.qml; then
+  if rg -Fq "$unsafe_teardown_access" hancore.shibumi.bar/styles/shibumi/GroupSection.qml; then
     fail "group teardown retains an unsafe owner access: $unsafe_teardown_access"
   fi
 done
@@ -1089,15 +1129,15 @@ for facade_name in \
   position vertical barSize barHidden fontFamily foreground barForeground \
   background urgent foregroundAnimationEnabled activePopout \
   centerSectionRevealHeld centerHoverRevealSuppressed; do
-  rg -q "^[[:space:]]*(readonly )?property .* ${facade_name}([: ])" Bar.qml \
+  rg -q "^[[:space:]]*(readonly )?property .* ${facade_name}([: ])" hancore.shibumi.bar/Bar.qml \
     || fail "missing stock-widget bar facade property: $facade_name"
 done
 
 for facade_function in \
   run showTooltip hideTooltip requestPopout releasePopout \
   registerClickTarget unregisterClickTarget switchPanelFrom openConfigPanel \
-  debugBarGeometry; do
-  rg -q "^[[:space:]]*function ${facade_function}\(" Bar.qml \
+  debugBarGeometry debugWidgetPipeline; do
+  rg -q "^[[:space:]]*function ${facade_function}\(" hancore.shibumi.bar/Bar.qml \
     || fail "missing stock-widget bar facade function: $facade_function"
 done
 
@@ -1296,7 +1336,7 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     esac
     host_has_module "$module_id" \
       || fail "group registry references unavailable Quattro widget: $module_id"
-  done < <(rg -o '"omarchy\.[a-z0-9-]+"' core/GroupRegistry.js \
+  done < <(rg -o '"omarchy\.[a-z0-9-]+"' hancore.shibumi.bar/core/GroupRegistry.js \
     | tr -d '"' | sort -u)
 
   smoke_root=$(mktemp -d)
@@ -1306,17 +1346,19 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   chmod 700 "$smoke_root/runtime"
   cp -a "${OMARCHY_PATH}/shell/Commons" "$smoke_root/"
   cp -a "${OMARCHY_PATH}/shell/Ui" "$smoke_root/"
-  cp widgets/ShibumiPanel.qml widgets/PillSurface.qml "$smoke_root/widgets/"
-  cp core/BarSection.qml core/GroupRegistry.js core/GroupSlot.qml \
-    core/LayoutController.qml core/LayoutModel.js core/V2LayoutModel.js \
-    core/PanelRouting.js \
-    core/ResponsiveLayout.js core/RunGeometry.js \
-    core/WidgetSlot.qml "$smoke_root/core/"
-  cp core/DragSession.qml "$smoke_root/core/"
-  cp styles/shibumi/BarSurface.qml styles/shibumi/DragGhost.qml \
-    styles/shibumi/GroupSection.qml styles/shibumi/RunChrome.qml \
-    styles/shibumi/VisualTokens.qml styles/shibumi/GapEffectsLayer.qml \
-    styles/shibumi/ReactorEventLayer.qml \
+  cp widgets/ShibumiPanel.qml \
+    hancore.shibumi.state/lib/presentation/PillSurface.qml \
+    "$smoke_root/widgets/"
+  cp hancore.shibumi.bar/core/BarSection.qml hancore.shibumi.bar/core/GroupRegistry.js hancore.shibumi.bar/core/GroupSlot.qml \
+    hancore.shibumi.bar/core/LayoutController.qml hancore.shibumi.bar/core/LayoutModel.js hancore.shibumi.bar/core/V2LayoutModel.js \
+    hancore.shibumi.bar/core/PanelRouting.js \
+    hancore.shibumi.bar/core/ResponsiveLayout.js hancore.shibumi.bar/core/RunGeometry.js \
+    hancore.shibumi.bar/core/WidgetSlot.qml "$smoke_root/core/"
+  cp hancore.shibumi.bar/core/DragSession.qml "$smoke_root/core/"
+  cp hancore.shibumi.bar/styles/shibumi/BarSurface.qml hancore.shibumi.bar/styles/shibumi/DragGhost.qml \
+    hancore.shibumi.bar/styles/shibumi/GroupSection.qml hancore.shibumi.bar/styles/shibumi/RunChrome.qml \
+    hancore.shibumi.bar/styles/shibumi/VisualTokens.qml hancore.shibumi.bar/styles/shibumi/GapEffectsLayer.qml \
+    hancore.shibumi.bar/styles/shibumi/ReactorEventLayer.qml \
     "$smoke_root/styles/shibumi/"
   cp tests/group-renderer-regression.qml "$smoke_root/shell.qml"
 
@@ -1367,9 +1409,8 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
 
   # Shared presentation is exercised through shipped capability smokes.
 
+  shibumi_stage_suite_runtime "$repo_root" "$smoke_root"
   cp hancore.shibumi.workspaces/WorkspacePanelContent.qml \
-    hancore.shibumi.workspaces/ShibumiPanelToolTip.qml \
-    hancore.shibumi.workspaces/IconText.qml \
     "$smoke_root/widgets/"
   cp tests/workspace-panel-smoke.qml "$smoke_root/shell.qml"
   set +e

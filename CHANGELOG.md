@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.1.1-beta.14] - 2026-09-13
+
+### Added
+
+- Added a passive owner-local presentation library for shared Shibumi surfaces,
+  replacing per-plugin copies without adding a runtime owner or process
+- Added bounded widget-pipeline census and warning evidence that observes Loader
+  provenance without triggering recovery
+
+### Changed
+
+- Kept the Native Catalog warm-PSS ceiling at 512 KiB while recording three
+  cold reconstruction cycles separately, baselining after them, and checking
+  exactly three warm cycles; exact Beta.13 and the candidate pass, while the
+  synthetic 2 MiB-per-cycle retention mutant still fails
+- Removed unused root/shared compatibility copies and retired synchronization
+  scripts while retaining the 24-plugin, 18-owner, one-process architecture
+- Updated the primary installed-package and source-parity contracts to Omarchy
+  4.0.3, retaining 4.0.2 as an explicit optional compatibility baseline
+
+### Fixed
+
+- Guarded hosted-widget popout release during live teardown, preventing the
+  three-output `releasePopout` warning reported in #51
+- Admitted the exact published Beta.13 source and package identities and made
+  unsupported status diagnostics read-only and redaction-safe, addressing #53
+- Restored Quick Access picker presentation and output ownership when the
+  service has a scoped host rather than a direct Bar reference
+- Preserved normalized AI usage shape and freshness through empty, malformed,
+  stale, and restored provider data
+- Submitted current registry Components through one provenance-recorded Loader
+  setter, restoring widgets after hard monitor output loss without a recovery
+  rescan (#54)
+
+### Validation
+
+- The native three-cycle output-return comparison measured one startup prime
+  and no later rescan for the candidate; the Beta.13 control required three
+  explicit recovery rescans, four rescans total including its startup prime
+- The maintained Native Catalog 3+3 gate measured 0 KiB warm growth for exact
+  Beta.13 and the candidate in its first accepted run; the 512 KiB assertion is
+  unchanged
+
+### Known limits
+
+- Local and Machine 2 package installation, physical monitor-power acceptance,
+  coredump checks, and reporter confirmation for #54 remain separate gates
+- The tcmalloc allocation diagnostic was aborted without a product finding;
+  general responsiveness attribution remains paused
+- Physical multi-output acceptance and AUR publication remain deferred
+
 ## [0.1.1-beta.13] - 2026-09-12
 
 ### Fixed
@@ -347,4 +398,5 @@ Released 2026-07-29.
 - Physical multi-monitor, enterprise Wi-Fi, and Bluetooth-device gates remain open
 - Shibumi source updates require a trusted checkout and `shibumi-suite update`
 
+[0.1.1-beta.14]: https://github.com/HANCORE-linux/Shibumi-Shell/compare/v0.1.1-beta.13...v0.1.1-beta.14
 [0.1.1-beta.13]: https://github.com/HANCORE-linux/Shibumi-Shell/compare/v0.1.1-beta.12...v0.1.1-beta.13

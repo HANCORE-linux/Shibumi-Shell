@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -13,7 +14,7 @@ Item {
   property var settings: ({})
   property var quickAccessServiceOverride: null
   property var targetScreenOverride: null
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -82,11 +83,13 @@ Item {
   }
 
   onOpenedChanged: {
-    if (!opened && bar) bar.releasePopout(root)
+    if (!opened && bar && typeof bar.releasePopout === "function")
+      bar.releasePopout(root)
   }
   Component.onDestruction: {
     if (opened) close()
-    if (bar) bar.releasePopout(root)
+    if (bar && typeof bar.releasePopout === "function")
+      bar.releasePopout(root)
   }
 
   IdleInhibitor {
@@ -94,7 +97,7 @@ Item {
     enabled: root.targetWindow !== null && root.idleInhibited
   }
 
-  PillSurface {
+  Presentation.PillSurface {
     tokenSource: root.tokens
     settings: root.settings
     v1AppearanceEnabled: true
@@ -185,7 +188,7 @@ Item {
     implicitWidth: Commons.Style.space(22)
     implicitHeight: root.tokens ? root.tokens.slotHeight : Commons.Style.space(28)
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       visible: !action.nerdGlyph
       text: action.icon

@@ -12,12 +12,15 @@ QtObject {
   property var components: ({})
   property var componentUrls: ({})
   property int revision: 0
-  readonly property bool scoped: !!bar && !!bar.pluginRegistry
-    && "pluginId" in bar.pluginRegistry
+  readonly property var hostRegistry: bar ? bar.pluginRegistry : null
+  readonly property bool scoped: !!hostRegistry
+    && "pluginId" in hostRegistry
   readonly property var widgetRegistry: bar ? bar.barWidgetRegistry : null
+  readonly property var configuredLayout: bar && bar.barConfig
+    ? bar.barConfig.layout : null
 
   function configured(id) {
-    const layout = bar && bar.barConfig ? bar.barConfig.layout : null
+    const layout = configuredLayout
     if (!layout) return false
     for (const region of ["left", "center", "right"]) {
       const entries = layout[region]
@@ -71,12 +74,21 @@ QtObject {
     return String(registry.entryPointUrl(manifest, "barWidget") || "")
   }
 
+  function isComponentHandle(candidate) {
+    // Scoped native registry handles can lose their JavaScript `status`
+    // projection while remaining valid QQmlComponents accepted by Loader.
+    // Check the installed Qt type itself; Ready-shaped data and arbitrary
+    // QObjects must never reach Loader.sourceComponent.
+    try { return !!candidate && candidate instanceof Component }
+    catch (error) { return false }
+  }
+
   function componentFor(widgetId) {
     const id = String(widgetId || "")
     if (scoped) {
       const selection = selectionFor(id)
       const component = selection ? selection.component : null
-      return configured(id) && component && component.status === Component.Ready
+      return configured(id) && isComponentHandle(component)
         ? component : null
     }
     const existing = components[id]
@@ -151,6 +163,9 @@ QtObject {
   }
 
   onScopedChanged: clear()
+  onHostRegistryChanged: clear()
+  onWidgetRegistryChanged: clear()
+  onConfiguredLayoutChanged: revision++
   property Connections widgetConnections: Connections {
     target: root.scoped ? root.widgetRegistry : null
     function onWidgetsChanged() { root.revision++ }

@@ -103,9 +103,10 @@ A minimal manifest shape is:
 ```
 
 The plugin may contain reviewed vendored host code from canonical development
-sources. The only sibling-import exception is the exact State `runtime/` module
-and approved importer roster in [shared-runtime-v1.md](architecture/shared-runtime-v1.md).
-A new bar requires explicit roster admission; no other sibling or repository-root
+sources. The only sibling-import exceptions are the exact State `runtime/` and
+passive `lib/presentation/` modules and their approved importer rosters in
+[shared-runtime-v1.md](architecture/shared-runtime-v1.md). A new bar requires
+explicit roster and dependency admission; no other sibling or repository-root
 import is allowed. No plugin payload may contain a symlink.
 
 ## Shared host facade and state

@@ -3,13 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.bluetooth"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("BluetoothPanel.qml")
   property var bluetoothServiceOverride: null
   property var sessionService: null
@@ -123,7 +124,7 @@ Ui.Panel {
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
-        PillSurface {
+        Presentation.PillSurface {
           tokenSource: root.tokens
           anchors.fill: parent
           bar: root.bar
@@ -185,7 +186,7 @@ Ui.Panel {
         width: root.iconSlotSize
         height: root.iconSlotSize
 
-        IconText {
+        Presentation.IconText {
           anchors.centerIn: parent
           text: root.stateIcon
           color: root.widgetInk
@@ -220,7 +221,7 @@ Ui.Panel {
         width: root.iconSlotSize
         height: root.iconSlotSize
 
-        IconText {
+        Presentation.IconText {
           anchors.centerIn: parent
           text: root.stateIcon
           color: root.widgetInk

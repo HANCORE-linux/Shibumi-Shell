@@ -22,6 +22,7 @@ fail() {
 mkdir -p "$tmpdir/runtime" "$tmpdir/status"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.status/." "$tmpdir/status/"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 cp -- "$repo_root/tests/notification-adapter-smoke.qml" "$tmpdir/shell.qml"

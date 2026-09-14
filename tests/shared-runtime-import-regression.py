@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Near-neighbor checks for the narrow shared-runtime dependency exception."""
+import json
 import re
 import shutil
 import subprocess
@@ -9,9 +10,19 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.shared_runtime_contract import IMPORTERS, MODULE, MODULE_FILES, approved_import_spans
+from scripts.shared_runtime_contract import (
+    IMPORTERS,
+    MODULE,
+    MODULE_FILES,
+    PRESENTATION_IMPORTERS,
+    PRESENTATION_MODULE,
+    PRESENTATION_MODULE_FILES,
+    approved_import_spans,
+)
 
 LINE = 'import "../hancore.shibumi.state/runtime" as SuiteRuntime\n'
+PRESENTATION_LINE = (
+    'import "../hancore.shibumi.state/lib/presentation" as Presentation\n')
 CHECKER = Path(__file__).resolve().with_name("plugin-import-boundary.py")
 ROOT = Path(__file__).resolve().parents[1]
 SCOPED_SERVICE_IDS = (
@@ -100,7 +111,7 @@ class RuntimeImports(unittest.TestCase):
                 self.assertEqual(len(owned), 1)
                 for contract in ("owner: root", "host: root.shell",
                                  "manifest: root.manifest",
-                                 'implementationVersion: "0.1.1-beta.13"'):
+                                 'implementationVersion: "0.1.1-beta.14"'):
                     self.assertIn(contract, owned[0])
 
     def test_near_neighbors_receive_no_exception(self):
@@ -253,6 +264,128 @@ class RuntimeImports(unittest.TestCase):
         self.assertTrue(self.allowed(source=source))
         shutil.rmtree(self.root / MODULE)
         self.assertEqual(self.allowed(source=source), set())
+
+
+class PresentationImports(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(
+            prefix="presentation-import-contract-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        module = self.root / PRESENTATION_MODULE
+        module.mkdir(parents=True)
+        for name in PRESENTATION_MODULE_FILES:
+            (module / name).write_text("// inert fixture\n")
+        self.source = self.root / "hancore.shibumi.ai/AiUsagePanel.qml"
+        self.source.parent.mkdir()
+        self.source.write_text(PRESENTATION_LINE)
+
+    def allowed(self, text=PRESENTATION_LINE, source=None):
+        return approved_import_spans(
+            self.root, source or self.source, text)
+
+    def test_production_roster_and_direct_state_dependency_are_exact(self):
+        actual = set()
+        for source in ROOT.glob("hancore.shibumi.*/*.qml"):
+            if PRESENTATION_LINE.strip() in source.read_text(encoding="utf-8"):
+                actual.add(source.relative_to(ROOT).as_posix())
+        self.assertEqual(actual, PRESENTATION_IMPORTERS)
+        self.assertEqual(len(actual), 60)
+
+        contract = json.loads(
+            (ROOT / "contracts/plugin-suite-v1.json").read_text())
+        by_id = {row["id"]: row for row in contract["plugins"]}
+        consumers = {name.split("/", 1)[0] for name in actual}
+        self.assertEqual(len(consumers), 19)
+        self.assertLess(
+            [row["id"] for row in contract["plugins"]].index(
+                "hancore.shibumi.state"),
+            min([row["id"] for row in contract["plugins"]].index(plugin)
+                for plugin in consumers))
+        for plugin in consumers:
+            with self.subTest(plugin=plugin):
+                self.assertIn("hancore.shibumi.state", by_id[plugin]["requires"])
+                manifest = json.loads(
+                    (ROOT / plugin / "manifest.json").read_text())
+                self.assertIn("hancore.shibumi.state",
+                              manifest["x-shibumi"]["requires"])
+
+    def test_exact_import_and_alias_only(self):
+        spans = self.allowed()
+        self.assertEqual(len(spans), 1)
+        start, end = next(iter(spans))
+        self.assertEqual(
+            PRESENTATION_LINE[start:end],
+            '"../hancore.shibumi.state/lib/presentation"')
+        for text in (
+            PRESENTATION_LINE * 2,
+            PRESENTATION_LINE.replace("Presentation", "Other"),
+            PRESENTATION_LINE.replace("/presentation", "/presentation/"),
+            PRESENTATION_LINE.replace("../", "../../"),
+            PRESENTATION_LINE.replace("../", "%2e%2e/"),
+            PRESENTATION_LINE.replace("../", "file:///"),
+            "// " + PRESENTATION_LINE,
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self.allowed(text), set())
+
+    def test_undeclared_importer_and_incomplete_or_nonregular_module_refuse(self):
+        undeclared = self.source.with_name("Undeclared.qml")
+        undeclared.write_text(PRESENTATION_LINE)
+        self.assertEqual(self.allowed(source=undeclared), set())
+
+        module = self.root / PRESENTATION_MODULE
+        member = module / "HostTokens.qml"
+        member.unlink()
+        self.assertEqual(self.allowed(), set())
+        member.write_text("// restored\n")
+        self.assertTrue(self.allowed())
+        extra = module / "Unexpected.qml"
+        extra.write_text("// extra\n")
+        self.assertEqual(self.allowed(), set())
+        extra.unlink()
+        member.unlink()
+        member.symlink_to("IconText.qml")
+        self.assertEqual(self.allowed(), set())
+
+    def test_public_checker_accepts_only_the_declared_complete_module(self):
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), str(self.source.parent)],
+            capture_output=True, text=True, timeout=4)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.source.write_text(PRESENTATION_LINE.replace(
+            " as Presentation", " as Other"))
+        result = subprocess.run(
+            [sys.executable, str(CHECKER), str(self.source.parent)],
+            capture_output=True, text=True, timeout=4)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Plugin imports escape", result.stderr)
+
+    def test_library_remains_passive(self):
+        module = ROOT / PRESENTATION_MODULE
+        self.assertEqual(
+            {path.name for path in module.iterdir()},
+            set(PRESENTATION_MODULE_FILES))
+        self.assertEqual(
+            (module / "qmldir").read_text(encoding="utf-8"),
+            "module Shibumi.Presentation\n"
+            "ControlCenterIconText 1.0 ControlCenterIconText.qml\n"
+            "HostTokens 1.0 HostTokens.qml\n"
+            "IconText 1.0 IconText.qml\n"
+            "PacmanWorkspaceMarker 1.0 PacmanWorkspaceMarker.qml\n"
+            "PillSurface 1.0 PillSurface.qml\n"
+            "ShibumiPanelToolTip 1.0 ShibumiPanelToolTip.qml\n"
+            "ShibumiPillToolTip 1.0 ShibumiPillToolTip.qml\n")
+        forbidden = re.compile(
+            r"\b(Process|FileView|Timer|WorkerScript|PersistentProperties)\s*\{")
+        for source in module.glob("*.qml"):
+            with self.subTest(source=source.name):
+                text = source.read_text(encoding="utf-8")
+                self.assertIsNone(forbidden.search(text))
+                self.assertNotIn("pragma Singleton", text)
+                self.assertNotIn(".pragma library", text)
+                self.assertNotIn("import Quickshell", text)
+                self.assertNotIn("import qs.Services", text)
 
 
 if __name__ == "__main__":

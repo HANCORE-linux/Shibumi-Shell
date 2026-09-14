@@ -30,10 +30,11 @@ after display sleep or resume is the output/layer-window lifecycle above.
 
 Implemented:
 
-- `Bar.qml` keeps the native `Quickshell.screens` model in `Variants` and creates
-  one `BarPanel` per output.
-- `BarPanel.qml` rejects nameless and 0x0 placeholder screens.
-- `WindowRecovery.qml` handles `resourcesLost` and `closed`, retries the
+- `hancore.shibumi.bar/Bar.qml` keeps the native `Quickshell.screens` model in
+  `Variants` and creates one `BarPanel` per output.
+- `hancore.shibumi.bar/core/BarPanel.qml` rejects nameless and 0x0 placeholder
+  screens.
+- `hancore.shibumi.bar/core/WindowRecovery.qml` handles `resourcesLost` and `closed`, retries the
   affected layer window up to three times, and leaves other outputs running.
 - Every output owns its own widget instances, panel anchors, tooltip window,
   and `DragSession`; destruction unregisters module slots, tooltip ownership,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -18,13 +19,37 @@ class AdmissionError(RuntimeError):
     pass
 
 
+class UnsupportedInstallIdentity(AdmissionError):
+    def __init__(
+        self,
+        diagnostic: dict[str, Any],
+        supported_labels: tuple[str, ...],
+    ) -> None:
+        self.diagnostic = copy.deepcopy(diagnostic)
+        self.supported_labels = supported_labels
+        labels = ", ".join(supported_labels)
+        super().__init__(
+            "installation revision/digest identity is not one of the "
+            f"contract-supported identities ({labels}); no recovery or mutation "
+            "was attempted"
+        )
+
+
 MAX_STATE_BYTES = 1024 * 1024
 MAX_JOURNAL_BYTES = 4 * 1024 * 1024
 MAX_TRANSACTION_ENTRIES = 128
 MAX_RECORDS = 256
+MAX_PREDECESSOR_STATES = 32
+MAX_IDENTITY_REVISIONS = 8
 MAX_PLUGIN_PAYLOAD_ENTRIES = 16384
 MAX_PLUGIN_PAYLOAD_BYTES = 64 * 1024 * 1024
 PLUGIN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,199}")
+SUITE_VERSION_PATTERN = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+)
+SOURCE_REVISION_PATTERN = re.compile(r"[0-9a-f]{40}")
 TRANSACTION_TOKEN_PATTERN = re.compile(r"[0-9]{1,20}-[0-9]{1,20}-[0-9a-f]{8}")
 STATE_BASE_KEYS = {
     "schemaVersion",
@@ -225,7 +250,7 @@ def _load_predecessors(suite: Suite) -> list[dict[str, Any]]:
         or value.get("schemaVersion") != 1
         or value.get("contractId") != "hancore.shibumi.lifecycle-predecessors"
         or not isinstance(states, list)
-        or len(states) != 2
+        or not 1 <= len(states) <= MAX_PREDECESSOR_STATES
         or any(not isinstance(item, dict) for item in states)
     ):
         raise AdmissionError(f"invalid lifecycle predecessor contract: {path}")
@@ -236,41 +261,47 @@ def _load_predecessors(suite: Suite) -> list[dict[str, Any]]:
         "payloadDigest",
         "pluginDigests",
         "pluginIds",
+        "settingsStorageVersion",
     }
-    expected_revisions = {
-        "public-beta.11": {
-            "adbb11068e9c77561ff0c3d1b8fca5212653ae3c",
-            "package:0.1.1-beta.11",
-        },
-        "step-5-tip": {"5154c020a44d71139a6614a183ec91021b9772c1"},
-    }
-    expected_ids = set(expected_revisions)
-    if {item.get("id") for item in states} != expected_ids:
-        raise AdmissionError(f"invalid lifecycle predecessor identities: {path}")
+    expected_plugin_ids = list(suite.profile("default").install)
+    seen_ids: set[str] = set()
+    seen_revisions: set[str] = set()
     for item in states:
+        identity_id = item.get("id")
+        suite_version = item.get("suiteVersion")
         revisions = item.get("sourceRevisions")
         plugin_ids = item.get("pluginIds")
         plugin_digests = item.get("pluginDigests")
-        if (
-            set(item) != expected_keys
-            or item.get("suiteVersion") != "0.1.1-beta.11"
-            or not isinstance(revisions, list)
-            or not revisions
-            or len(revisions) != len(set(revisions))
-            or set(revisions) != expected_revisions.get(str(item.get("id")), set())
-            or any(
-                not isinstance(revision, str)
-                or not re.fullmatch(r"(?:[0-9a-f]{40}|package:0\.1\.1-beta\.11)", revision)
+        storage_version = item.get("settingsStorageVersion")
+        revisions_are_valid = (
+            isinstance(revisions, list)
+            and 1 <= len(revisions) <= MAX_IDENTITY_REVISIONS
+            and all(
+                isinstance(revision, str)
+                and (
+                    SOURCE_REVISION_PATTERN.fullmatch(revision)
+                    or (
+                        revision == f"package:{suite_version}"
+                        and len(revision) <= 136
+                    )
+                )
                 for revision in revisions
             )
-            or not isinstance(plugin_ids, list)
-            or len(plugin_ids) != 24
-            or len(plugin_ids) != len(set(plugin_ids))
-            or any(
-                not isinstance(plugin_id, str)
-                or not PLUGIN_ID_PATTERN.fullmatch(plugin_id)
-                for plugin_id in plugin_ids
-            )
+        )
+        if (
+            set(item) != expected_keys
+            or not isinstance(identity_id, str)
+            or not PLUGIN_ID_PATTERN.fullmatch(identity_id)
+            or identity_id in seen_ids
+            or not isinstance(suite_version, str)
+            or len(suite_version) > 128
+            or not SUITE_VERSION_PATTERN.fullmatch(suite_version)
+            or not revisions_are_valid
+            or len(revisions) != len(set(revisions))
+            or bool(seen_revisions.intersection(revisions))
+            or type(storage_version) is not int
+            or storage_version not in (0, 1)
+            or plugin_ids != expected_plugin_ids
             or not isinstance(plugin_digests, dict)
             or set(plugin_digests) != set(plugin_ids)
             or any(
@@ -281,6 +312,8 @@ def _load_predecessors(suite: Suite) -> list[dict[str, Any]]:
             or item.get("payloadDigest") != suite_payload_digest(plugin_digests)
         ):
             raise AdmissionError(f"invalid lifecycle predecessor identity: {path}")
+        seen_ids.add(identity_id)
+        seen_revisions.update(revisions)
     return states
 
 
@@ -289,13 +322,19 @@ def _current_identity(suite: Suite) -> dict[str, Any]:
         plugin_id: spec.payload_digest()
         for plugin_id, spec in suite.plugins.items()
     }
+    revision = suite.revision()
+    revisions = [revision] if (
+        SOURCE_REVISION_PATTERN.fullmatch(revision)
+        or revision == f"package:{suite.version}"
+    ) else []
     return {
         "id": "current-release",
         "suiteVersion": suite.version,
-        "sourceRevisions": [suite.revision()],
+        "sourceRevisions": revisions,
         "payloadDigest": suite_payload_digest(plugin_digests),
         "pluginDigests": plugin_digests,
         "pluginIds": list(suite.profile("default").install),
+        "settingsStorageVersion": suite.settings_storage_version,
     }
 
 
@@ -308,7 +347,57 @@ def _identity_matches(state: dict[str, Any], identity: dict[str, Any]) -> bool:
         and state.get("payloadDigest") == identity.get("payloadDigest")
         and state.get("pluginDigests") == identity.get("pluginDigests")
         and state.get("plugins") == identity.get("pluginIds")
+        and state.get("settingsStorageVersion", 0)
+        == identity.get("settingsStorageVersion")
     )
+
+
+def _identity_diagnostic(state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "suiteVersion": state["suiteVersion"],
+        "sourceRevision": state["sourceRevision"],
+        "suitePayloadDigest": state["payloadDigest"],
+        "pluginIds": list(state["plugins"]),
+        "pluginDigests": dict(state["pluginDigests"]),
+        "settingsStorageVersion": state.get("settingsStorageVersion"),
+        "profile": state["profile"],
+        "activeBar": state["activeBar"],
+    }
+
+
+def _validate_identity_tuple(state: dict[str, Any], suite: Suite) -> None:
+    suite_version = state.get("suiteVersion")
+    plugin_ids = state.get("plugins")
+    plugin_digests = state.get("pluginDigests")
+    expected_plugin_ids = set(suite.profile(str(state["profile"])).install)
+    if (
+        not isinstance(suite_version, str)
+        or len(suite_version) > 128
+        or not SUITE_VERSION_PATTERN.fullmatch(suite_version)
+        or not isinstance(plugin_ids, list)
+        or len(plugin_ids) != len(expected_plugin_ids)
+        or any(
+            not isinstance(plugin_id, str)
+            or not PLUGIN_ID_PATTERN.fullmatch(plugin_id)
+            for plugin_id in plugin_ids
+        )
+        or len(plugin_ids) != len(set(plugin_ids))
+        or set(plugin_ids) != expected_plugin_ids
+        or not isinstance(plugin_digests, dict)
+        or set(plugin_digests) != set(plugin_ids)
+        or any(
+            not isinstance(digest, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", digest)
+            for digest in plugin_digests.values()
+        )
+        or not isinstance(state.get("payloadDigest"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", state["payloadDigest"])
+        or suite_payload_digest(plugin_digests) != state["payloadDigest"]
+    ):
+        raise AdmissionError(
+            "installation revision/digest identity is malformed or internally "
+            "inconsistent; no recovery or mutation was attempted"
+        )
 
 
 def _validate_activation(state: dict[str, Any], suite: Suite) -> None:
@@ -454,11 +543,14 @@ def classify_install_state(
         ):
             raise AdmissionError("migration continuity metadata is malformed")
     if origin == "package":
+        package_version = state.get("packageVersion")
         if (
             not isinstance(revision, str)
-            or not revision.startswith("package:")
+            or not isinstance(package_version, str)
+            or len(package_version) > 128
+            or not SUITE_VERSION_PATTERN.fullmatch(package_version)
+            or revision != f"package:{package_version}"
             or state.get("packageName") != "shibumi-shell"
-            or state.get("packageVersion") != revision.removeprefix("package:")
         ):
             raise AdmissionError("package installation authority metadata is inconsistent")
     elif (
@@ -470,18 +562,15 @@ def classify_install_state(
     ):
         raise AdmissionError("checkout installation authority metadata is inconsistent")
     _validate_activation(state, suite)
+    _validate_identity_tuple(state, suite)
 
     matches = [item for item in identities if _identity_matches(state, item)]
     if len(matches) != 1:
-        raise AdmissionError(
-            "installation revision/digest identity is not an explicitly supported "
-            "Beta.11 or Step-5 state; no recovery or mutation was attempted"
+        raise UnsupportedInstallIdentity(
+            _identity_diagnostic(state),
+            tuple(str(item["id"]) for item in identities),
         )
-    identity = str(matches[0].get("id") or "supported")
-    expects_entry_storage = identity == "current-release" and suite.settings_storage_version == 1
-    if expects_entry_storage != (state.get("settingsStorageVersion") == 1):
-        raise AdmissionError("settings storage version does not match payload identity")
-    return identity
+    return str(matches[0].get("id") or "supported")
 
 
 def _validate_record(
@@ -1618,7 +1707,43 @@ def _validate_live_markers(
 
 
 def supported_install_identities(suite: Suite) -> list[dict[str, Any]]:
-    return _load_predecessors(suite) + [_current_identity(suite)]
+    identities = _load_predecessors(suite)
+    current = _current_identity(suite)
+    if not current["sourceRevisions"]:
+        return identities
+    current_revision = current["sourceRevisions"][0]
+    revision_is_contract_bound = any(
+        current_revision in identity["sourceRevisions"]
+        for identity in identities
+    )
+    # A published revision is authoritative only with its contract payload.
+    # Never let caller-local bytes create a second identity for the same source
+    # commit or package alias.
+    return identities if revision_is_contract_bound else identities + [current]
+
+
+def require_current_payload_identity(suite: Suite) -> str:
+    identities = supported_install_identities(suite)
+    current = _current_identity(suite)
+    revisions = current["sourceRevisions"]
+    matches = [
+        identity
+        for identity in identities
+        if revisions
+        and revisions[0] in identity["sourceRevisions"]
+        and current["suiteVersion"] == identity["suiteVersion"]
+        and current["payloadDigest"] == identity["payloadDigest"]
+        and current["pluginDigests"] == identity["pluginDigests"]
+        and current["pluginIds"] == identity["pluginIds"]
+        and current["settingsStorageVersion"]
+        == identity["settingsStorageVersion"]
+    ]
+    if len(matches) != 1:
+        raise AdmissionError(
+            "caller checkout/package payload is dirty, ambiguous, or not the exact "
+            "declared revision identity; no lifecycle mutation was attempted"
+        )
+    return str(matches[0]["id"])
 
 
 def preflight_lifecycle_state(

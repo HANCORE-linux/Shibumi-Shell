@@ -1,6 +1,6 @@
 import QtQuick
-import "../core/LayoutModel.js" as Layout
-import "../core/ShibumiConfig.js" as Config
+import "../hancore.shibumi.bar/core/LayoutModel.js" as Layout
+import "../hancore.shibumi.state/ShibumiConfig.js" as Config
 
 QtObject {
   function require(value, message) {

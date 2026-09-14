@@ -125,8 +125,11 @@ baseline.
   refused before layout, registry or family-state mutation. Existing layouts,
   unrelated multi-instance entries and V2 retain their behavior.
   On scoped hosts, rendering uses the exact configured layout ID and its
-  accepted `barWidgetRegistry.widgets[id].component` and metadata. Missing
-  registration stays empty until the registry publishes it; an original must
+  accepted `barWidgetRegistry.widgets[id].component` and metadata. The scoped
+  resolver checks the actual Component type, not its JavaScript `status`
+  projection. Success requires the current Loader's Ready state and exact
+  submitted-source/completed-item provenance; a handle alone is not readiness.
+  Missing registration stays empty until the registry publishes it; an original must
   never substitute for a clone. Clone ancestry comes from public `listPlugins`,
   with cycle detection and a 32-entry traversal bound, not fabricated foreign
   manifests or executable paths. Native IPC owns enable/disable and clone
@@ -195,9 +198,15 @@ ownership is [`docs/multi-bar-extension-plan.md`](docs/multi-bar-extension-plan.
   bar becomes ready or visible. The first Bar owner stays unavailable; success
   requires IPC acknowledgement and a newly admitted Bar owner after the host
   rebuild. Missing replacement, timeout, nonzero exit, payload retirement, or
-  scope loss fails terminally for that process. There is no automatic retry,
-  settings-time rescan, stale Component retention, private registry access, or
-  second shell process.
+  scope loss fails terminally for that startup prime. No second rescan is
+  dispatched after output loss: valid current host Components are submitted
+  directly to the output-local Loader, including when their JavaScript status
+  projection is unavailable. A proved `>0 -> 0 -> >0` transition and exhaustion
+  of the existing resolution retries for a previously loaded, still-configured
+  and enabled widget may emit one passive sanitized warning per process. This
+  starts no work and cannot replenish the startup-prime budget. There is no
+  retry, settings-time rescan, stale Component retention, private registry
+  access, lock IPC probe, or second shell process.
 - One shared controller creates one bar per real output and rejects placeholder
   or zero-sized outputs.
 - Screen-local panels, pickers, tooltips, focus, input masks, and drag state
@@ -515,21 +524,31 @@ hancore.shibumi.bar/              default bar host and composition
 hancore.shibumi.bar.<variant>/    future independently selectable bar hosts
 hancore.shibumi.control-center/   reusable G1 widget and settings panel
 hancore.shibumi.<feature>/        complete widget/panel/service slices
-hancore.shibumi.state/            narrow shared live-state service
-shared/                          canonical development sources only
-scripts/                         sync, install, update, and uninstall tools
+hancore.shibumi.state/            shared live-state service, runtime, and passive presentation library
+shared/presentation/             canonical active ShibumiPanel source for checked vendoring
+scripts/                         panel drift check, install, update, and uninstall tools
 tests/                           suite, contract, and regression tests
 ```
 
 The 24 runtime plugins remain separately registered and are installed and
-updated as one admitted suite. The explicitly authorized shared-runtime
-exception permits imports of `hancore.shibumi.state/runtime/` by cooperating
-Shibumi plugins; no other sibling or repository-root escape is allowed.
+updated as one admitted suite. Two explicitly authorized exceptions permit
+exact, declared imports from cooperating plugins into
+`hancore.shibumi.state/runtime/` and the passive
+`hancore.shibumi.state/lib/presentation/` module. No other sibling or
+repository-root escape is allowed. The presentation module contains only
+visual components: no service, Process, Timer, poller, worker, backend,
+persistence, singleton, or mutable runtime authority. Consumers declare State
+directly and State precedes them in suite order.
+
 The ownership, lifetime, version and publication rules are normative in
 [`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
 This is not a QML sandbox or an authorization to expose private host services.
-Other canonical helpers under `shared/` remain deterministically vendored and
-checked for drift. Panels may consume services; services do not import panels.
+`ShibumiPanel.qml` retains three UI-lifecycle timers and therefore remains the
+only canonical source under `shared/presentation/`; its existing plugin and
+`widgets/` copies stay deterministically vendored and drift-checked. Bar-host
+and feature-owner sources are maintained directly in their
+`hancore.shibumi.*` plugin roots. Panels may consume services; services do not
+import panels.
 Widgets do not discover host paths or launch shell commands.
 
 The Phase 2 owner for every V1 group and the notification and OSD boundaries
@@ -711,7 +730,7 @@ group complete when the approved V1 presentation or workflow is still absent.
 
 Current Phase 2 foundation:
 
-- the active `Bar.qml` owns only output windows, layout, split/drag interaction,
+- the active `hancore.shibumi.bar/Bar.qml` owns only output windows, layout, split/drag interaction,
   panel/tooltip routing, style selection, and registered widget composition;
   feature data and workers live in independently validated plugins;
 - fail-closed schema-1 parser for V1 group order, splits, and resource-bounded
@@ -873,9 +892,9 @@ Current Phase 2 foundation:
   The existing 5-second active-profile/detail and 5-minute full-profile timers
   require current admission and their respective consumer leases. Panels keep
   their local Bar and reactive service references; native battery objects are
-  not deliberately exported. Canonical Power sources remain under
-  `shared/power-state/`; vendoring rewrites only their exact runtime import depth.
-  The combined `omarchy.power`
+  not deliberately exported. Canonical Power sources live directly in
+  `hancore.shibumi.power-state/`; `Service.qml` keeps its plugin-local
+  `../hancore.shibumi.state/runtime` import. The combined `omarchy.power`
   alias is consumed so it cannot run beside the split views; G14 remains
   available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,

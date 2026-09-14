@@ -6,7 +6,6 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
-python3 "$repo_root/tests/power-source-sync-regression.py"
 python3 "$repo_root/tests/power-deferred-regression.py"
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
 tmpdir=$(mktemp -d /tmp/shibumi-power-plugins.XXXXXX)
@@ -22,8 +21,7 @@ fail() {
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
-mkdir -p "$tmpdir/hancore.shibumi.state"
-cp -a -- "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   >"$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$repo_root/hancore.shibumi.battery" "$tmpdir/battery"

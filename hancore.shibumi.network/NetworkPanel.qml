@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -606,7 +607,7 @@ ShibumiPanel {
               }
             }
 
-            IconText {
+            Presentation.IconText {
               visible: panel.networkService.kind !== "ethernet"
               anchors.verticalCenter: parent.verticalCenter
               text: panel.networkService.kind === "wifi"
@@ -877,7 +878,7 @@ ShibumiPanel {
                   width: parent.width
                   spacing: Commons.Style.space(7)
 
-                  IconText {
+                  Presentation.IconText {
                     anchors.verticalCenter: parent.verticalCenter
                     text: networkRow.modelData.visible === false ? "bookmark"
                       : panel.signalIcon(networkRow.modelData.signal)
@@ -900,7 +901,7 @@ ShibumiPanel {
                     renderType: Text.NativeRendering
                   }
 
-                  IconText {
+                  Presentation.IconText {
                     id: expandIcon
                     anchors.verticalCenter: parent.verticalCenter
                     text: networkRow.expanded ? "expand_less" : "expand_more"
@@ -1365,7 +1366,7 @@ ShibumiPanel {
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: action.icon
       color: !action.enabled
@@ -1385,7 +1386,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPanelToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip

@@ -211,6 +211,16 @@ if kill -0 -- "-$lifecycle_group" 2>/dev/null \
 fi
 lifecycle_group=""
 
+missing_backend_root="$tmpdir/missing-backend-omarchy"
+mkdir -p "$missing_backend_root/bin"
+set +e
+HOME="$tmpdir/home" XDG_STATE_HOME="$tmpdir/state" \
+  "$wrapper" "$missing_backend_root" --probe-only >/dev/null 2>&1
+missing_backend_rc=$?
+set -e
+[[ $missing_backend_rc -eq 66 ]] \
+  || fail "missing current agents backend did not select the legacy fallback status"
+
 missing_root="$tmpdir/missing-collector-omarchy"
 mkdir -p "$missing_root/bin"
 install -m 0755 "$tmpdir/omarchy/bin/omarchy-agent-usage-update" \
@@ -280,8 +290,11 @@ if rg -q 'bar\.(aiUsageService|setWidgetSetting)' \
     "$repo_root/hancore.shibumi.ai" --glob '*.qml'; then
   fail "AI plugin consumes transitional bar-owned feature state"
 fi
-rg -q 'standardWidgetSource\("omarchy\.agents"\)' "$service" \
-  || fail "AI service does not prefer the current Omarchy agents contract"
+rg -Uq 'readonly property bool agentsBackendActive: !agentsBackendUnavailable(.|\n)*omarchyPath' \
+  "$service" \
+  || fail "AI service still requires an unavailable host-registry traversal"
+rg -q 'Number\(exitCode\) === 66' "$service" \
+  || fail "AI service does not fall back when the current agents backend is absent"
 rg -q 'registeredWidgetSource\("omarchy\.model-usage"\)' "$service" \
   || fail "AI service does not retain the pinned model-usage fallback"
 rg -q 'AgentUsageModel\.parseRecord' "$service" \
@@ -310,7 +323,7 @@ rg -q 'providerEmptyStateText' "$panel" \
   || fail "AI panel does not render the provider no-current-data/auth state"
 rg -q 'implicitWidth: Commons\.Style\.space\(28\)' "$panel" \
   || fail "AI header actions lost NetworkPanel geometry"
-rg -q 'ShibumiPanelToolTip' "$panel" \
+rg -q 'Presentation\.ShibumiPillToolTip' "$panel" \
   || fail "AI header actions lost panel-local tooltips"
 rg -q 'renderType: Text\.NativeRendering' "$panel" \
   || fail "AI panel text does not request native rendering"

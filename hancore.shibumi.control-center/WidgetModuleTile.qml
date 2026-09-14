@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Rectangle {
   id: root
@@ -67,7 +68,7 @@ Rectangle {
       border.width: 1
       border.color: root.controller.controlBorderColor
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.centerIn: parent
         text: root.glyph
         color: root.inserted ? root.accent : root.foreground
@@ -158,7 +159,7 @@ Rectangle {
             renderType: Text.NativeRendering
           }
 
-          IconText {
+          Presentation.ControlCenterIconText {
             anchors.centerIn: parent
             visible: !root.favorite
             text: root.favoriteGlyphText
@@ -192,7 +193,7 @@ Rectangle {
         border.width: removePointer.containsMouse ? 1 : 0
         border.color: Commons.Util.alpha(Commons.Color.urgent, 0.62)
 
-        IconText {
+        Presentation.ControlCenterIconText {
           anchors.centerIn: parent
           text: root.removalBusy ? "hourglass_top" : "delete"
           color: Commons.Color.urgent

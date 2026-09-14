@@ -15,7 +15,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.bluetooth"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: root.shell
     manifest: root.manifest

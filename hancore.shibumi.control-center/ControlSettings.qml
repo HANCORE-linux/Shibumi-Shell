@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Io
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -1231,7 +1232,7 @@ Item {
                     width: parent.width - arrow.width
                     spacing: Commons.Style.space(8)
 
-                    IconText {
+                    Presentation.ControlCenterIconText {
                       anchors.verticalCenter: parent.verticalCenter
                       width: Commons.Style.space(18)
                       text: "download"

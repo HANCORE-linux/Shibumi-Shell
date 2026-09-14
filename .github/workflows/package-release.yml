@@ -19,6 +19,9 @@ concurrency:
 jobs:
   package-contract:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - name: Check out the exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,12 +66,13 @@ jobs:
               su builder -c ./scripts/rehearse-aur-package
             '
 
-  github-release:
+  release-validation:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package-contract
     runs-on: [self-hosted, linux, shibumi-validation]
+    timeout-minutes: 240
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Check out the tagged revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,7 +149,10 @@ jobs:
             .candidate.kind == "clean-commit" and
             .candidate.version == $version and
             .candidate.baseCommit == $commit and
-            ([.commands[].id] | index("lifecycle-admission") != null)
+            .finalInputValidation.status == "passed" and
+            ([.commands[].id] | index("lifecycle-admission") != null) and
+            (([.commands[] | select(.id == "native-catalog-resource")] | length) == 1) and
+            ([.commands[] | select(.id == "native-catalog-resource")][0].status == "passed")
           ' "$evidence" >/dev/null
           tar -tzf "$logs" >/dev/null
           assets=("$archive" "$sidecar" "$inventory" "$evidence" "$logs")
@@ -154,6 +161,61 @@ jobs:
             test -f "$asset"
             sha256sum "$asset" >> dist/release-assets.sha256
           done
+
+      - name: Preserve the validated release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-assets-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            dist/shibumi-shell-*.tar.gz
+            dist/shibumi-shell-*.tar.gz.sha256
+            dist/shibumi-shell-*.tar.gz.inventory.json
+            dist/shibumi-shell-*.release-evidence.json
+            dist/shibumi-shell-*.release-evidence.logs.tar.gz
+            dist/release-assets.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release-validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the tagged revision for publication
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the validated release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-assets-${{ github.sha }}-${{ github.run_attempt }}
+          path: dist
+
+      - name: Verify the transferred release assets
+        run: |
+          set -euo pipefail
+          version=$(<VERSION)
+          test "$GITHUB_REF_NAME" = "v$version"
+          expected_names=$(mktemp)
+          actual_names=$(mktemp)
+          printf '%s\n' \
+            "release-assets.sha256" \
+            "shibumi-shell-$version.tar.gz" \
+            "shibumi-shell-$version.tar.gz.sha256" \
+            "shibumi-shell-$version.tar.gz.inventory.json" \
+            "shibumi-shell-$version.release-evidence.json" \
+            "shibumi-shell-$version.release-evidence.logs.tar.gz" \
+            | sort > "$expected_names"
+          find dist -maxdepth 1 -type f -printf '%f\n' \
+            | sort > "$actual_names"
+          diff -u "$expected_names" "$actual_names"
+          sha256sum --check dist/release-assets.sha256
 
       - name: Upload declared assets to a draft release
         env:

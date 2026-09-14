@@ -45,7 +45,7 @@ For host-facing changes, run all four pinned compatibility gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.2 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.3 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh

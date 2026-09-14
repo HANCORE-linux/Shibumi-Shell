@@ -4,13 +4,14 @@ import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.cpu"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   readonly property var hostShell: suiteShell
   readonly property var telemetryService: hostShell
@@ -102,7 +103,7 @@ Ui.Panel {
     width: implicitWidth
     height: implicitHeight
 
-  PillSurface {
+  Presentation.PillSurface {
     id: cpuPill
     tokenSource: root.tokens
     bar: root.bar
@@ -163,7 +164,7 @@ Ui.Panel {
         accent: root.widgetInk
       }
 
-      IconText {
+      Presentation.IconText {
         visible: root.displayMode === "icon"
           || (root.tokens.v2Shell === true && root.displayMode === "full")
         anchors.verticalCenter: parent.verticalCenter

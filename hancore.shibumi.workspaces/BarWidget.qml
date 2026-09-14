@@ -5,13 +5,14 @@ import QtQuick.Shapes
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.workspaces"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   property url panelSource: Qt.resolvedUrl("WorkspacePanel.qml")
   property var workspaceService: suiteShell.serviceFor("hancore.shibumi.workspaces")
@@ -267,7 +268,7 @@ Ui.Panel {
     width: implicitWidth
     height: implicitHeight
 
-    PillSurface {
+    Presentation.PillSurface {
       tokenSource: root.tokens
       bar: root.bar
       settings: root.settings
@@ -528,7 +529,7 @@ Ui.Panel {
             }
           }
 
-          PacmanWorkspaceMarker {
+          Presentation.PacmanWorkspaceMarker {
             visible: root.renderStyle === "pacman"
             anchors.centerIn: parent
             focused: cell.focused && !(root.pacmanTraveling

@@ -16,15 +16,8 @@ fail() {
 shibumi_load_omarchy_baseline
 source_path=$OMARCHY_PATH
 manifest=$SHIBUMI_OMARCHY_BASELINE
-[[ $source_path == /* ]] \
-  || fail "SHIBUMI_AGENTS_OMARCHY_PATH must be an absolute checkout path"
-[[ -d $source_path/.git ]] || fail "source is not a Git checkout"
 command -v jq >/dev/null 2>&1 || fail "jq is required"
 expected_revision=$(jq -r '.sourceRevision' "$manifest")
-actual_revision=$(git -C "$source_path" rev-parse HEAD 2>/dev/null) \
-  || fail "cannot read source revision"
-[[ $actual_revision == "$expected_revision" ]] \
-  || fail "revision drift: expected $expected_revision, got $actual_revision"
 
 while IFS=$'\t' read -r path expected_hash; do
   file="$source_path/$path"

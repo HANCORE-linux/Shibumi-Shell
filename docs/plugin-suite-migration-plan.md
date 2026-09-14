@@ -40,7 +40,8 @@ Omarchy provides a native multi-plugin source command on the supported release.
 
 Consequences:
 
-- every runtime plugin is a self-contained top-level directory;
+- every runtime plugin is a top-level directory with only the two declared
+  State-module import exceptions;
 - the repository installer validates and stages the selected plugin set;
 - Omarchy Shell still owns discovery, enablement, bar selection, and runtime
   lifecycle after staging;
@@ -59,9 +60,11 @@ shibumi/
     manifest.json
   hancore.shibumi.<feature>/
     manifest.json
-    <self-contained payload>
+    <owned payload>
+  hancore.shibumi.state/lib/presentation/
+    <passive shared visual components>
   contracts/plugin-suite-v1.json
-  shared/
+  shared/presentation/ShibumiPanel.qml
   scripts/
   tests/
 ```
@@ -86,22 +89,31 @@ own directory.
   configuration panel. Omarchy exclusively owns the application menu.
 - Notification and OSD replacements remain separate plugins and may activate
   only when duplicate first-party ownership is prevented.
-- Every plugin must remain self-contained at runtime. It may not import QML
-  from a sibling plugin or the repository root.
+- Plugins may not import QML from a sibling plugin or repository root except
+  for the exact, declared State runtime and passive-presentation modules.
+  Every such consumer depends directly on State; all other paths remain
+  self-contained and fail closed.
 
 ## Shared Code Contract
 
-`shared/` is the canonical development source for host-neutral helpers,
-contracts, and generated assets. Runtime plugins receive reviewed vendored
-copies under their own directories.
+Reusable visual primitives live in the passive
+`hancore.shibumi.state/lib/presentation/` module. It has no service, Process,
+Timer, poller, worker, backend, persistence, singleton, or mutable runtime
+authority. Its exact file and importer rosters are enforced alongside the
+shared-runtime exception. Every consumer declares a direct State dependency,
+and State precedes those consumers in suite order.
 
-A deterministic sync tool and regression test must prove that vendored files
-match the canonical source. This avoids sibling imports that work in a source
-checkout but fail after an individual plugin is installed.
+`ShibumiPanel.qml` is intentionally excluded because its focus and popout
+lifecycle still owns three timers. `shared/presentation/` retains only that
+canonical active source. `scripts/sync-shared.sh` maps it into the existing
+`widgets/` and plugin copies and proves byte parity; it must not grow into a
+second source authority for passive components.
 
-Shared state is not a reason to create a global V1-style object. Reusable live
-state belongs in a narrow service plugin, such as `hancore.shibumi.state`, and
-is consumed through the Omarchy service contract.
+Bar-host and feature-owner implementation sources are canonical in their
+`hancore.shibumi.*` plugin roots. They have no root or `shared/` owner mirrors
+and require no source-sync transform. Shared state is not a reason to create a
+global V1-style object: reusable live state remains in the narrow State service
+and is consumed through the Omarchy service contract.
 
 ## Multi-Bar Host Contract
 

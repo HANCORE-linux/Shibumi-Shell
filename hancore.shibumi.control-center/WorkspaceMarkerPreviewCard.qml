@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Rectangle {
   id: root
@@ -169,7 +170,7 @@ Rectangle {
           antialiasing: true
         }
 
-        PacmanWorkspaceMarker {
+        Presentation.PacmanWorkspaceMarker {
           visible: root.styleValue === "pacman"
           anchors.centerIn: parent
           focused: marker.focused

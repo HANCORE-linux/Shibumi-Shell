@@ -2,11 +2,14 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.bluetooth",
   "name": "Shibumi Bluetooth",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi Bluetooth presentation with a native BlueZ and audio backend.",
-  "kinds": ["bar-widget", "service"],
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
   "keepLoaded": true,
   "entryPoints": {
     "barWidget": "BarWidget.qml",
@@ -23,9 +26,13 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G15",
-    "capabilities": ["bluetooth"],
+    "capabilities": [
+      "bluetooth"
+    ],
     "preferredRegion": "right",
-    "requires": [],
+    "requires": [
+      "hancore.shibumi.state"
+    ],
     "recommends": []
   }
 }

@@ -7,12 +7,14 @@ import os
 import runpy
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 
+sys.dont_write_bytecode = True
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HEALTH = (
     REPO_ROOT
@@ -85,8 +87,23 @@ class HealthDiagnosticsTests(unittest.TestCase):
             "bar": {
                 "id": "hancore.shibumi.bar",
                 "position": "top",
-                "shibumi": {"presentation": {"shellStyle": "full"}},
+                "style": "shibumi",
+                "layout": {"left": [], "center": [], "right": []},
+                "shibumi": {
+                    "version": 1,
+                    "presentation": {"shellStyle": "shibumi"},
+                },
             },
+            "plugins": [
+                {
+                    "id": "hancore.shibumi.state",
+                    "shibumiStateSchemaVersion": 1,
+                    "shibumi": {
+                        "version": 1,
+                        "presentation": {"shellStyle": "full"},
+                    },
+                }
+            ],
         }
         self.config_path = self.config_home / "omarchy/shell.json"
         self.write_config(self.config)
@@ -107,6 +124,7 @@ class HealthDiagnosticsTests(unittest.TestCase):
                 "layout": {"left": [], "center": [], "right": []},
                 "enableServices": ["hancore.shibumi.state"],
             },
+            "settingsStorageVersion": 1,
         }
         self.write_state(self.state)
 
@@ -316,11 +334,88 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(checks["bar-runtime"]["status"], "ok")
         self.assertEqual(checks["bar-runtime"]["label"], "Active bar")
         self.assertEqual(checks["bar-runtime"]["value"], "Shibumi V2")
+        self.assertEqual(
+            checks["bar-geometry"]["value"], "Full · Top · 1 output(s)"
+        )
+        self.assertIn("State service", checks["configuration"]["detail"])
         self.assertEqual(checks["managed-plugins"]["label"], "Shibumi plugins")
         self.assertEqual(checks["managed-plugins"]["value"], "2/2 installed")
         self.assertEqual(checks["source-status"]["value"], "Current · clean")
         self.assertEqual(checks["source-update"]["value"], "Not checked")
         self.assertEqual(payload["installOrigin"], "checkout")
+
+    def test_state_service_shell_style_reports_v1(self) -> None:
+        state_entry = self.config["plugins"][0]
+        state_entry["shibumi"]["presentation"]["shellStyle"] = "shibumi"
+        self.config["bar"]["shibumi"]["presentation"]["shellStyle"] = "full"
+        self.write_config(self.config)
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["bar-runtime"]["value"], "Shibumi V1")
+        self.assertEqual(
+            checks["bar-geometry"]["value"], "Islands · Top · 1 output(s)"
+        )
+
+    def test_state_service_notch_overrides_legacy_and_bar_style(self) -> None:
+        state_entry = self.config["plugins"][0]
+        state_entry["shibumi"]["presentation"]["shellStyle"] = "notch"
+        self.config["bar"]["shibumi"] = ["malformed legacy decoy"]
+        self.config["bar"]["style"] = "shibumi"
+        self.write_config(self.config)
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["bar-runtime"]["value"], "Shibumi V2")
+        self.assertEqual(
+            checks["bar-geometry"]["value"], "Notch · Top · 1 output(s)"
+        )
+
+    def test_missing_canonical_state_does_not_default_to_v1(self) -> None:
+        self.config["plugins"] = []
+        self.config["bar"]["shibumi"]["presentation"]["shellStyle"] = "notch"
+        self.write_config(self.config)
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["configuration"]["status"], "error")
+        self.assertIn("State service entry is missing", checks["configuration"]["detail"])
+        self.assertEqual(
+            checks["bar-runtime"]["value"], "Shibumi (form unknown)"
+        )
+        self.assertEqual(
+            checks["bar-geometry"]["value"], "Unknown · Top · 1 output(s)"
+        )
+
+    def test_malformed_canonical_state_refuses_legacy_fallback(self) -> None:
+        state_entry = self.config["plugins"][0]
+        state_entry["shibumiStateSchemaVersion"] = 2
+        self.config["bar"]["shibumi"]["presentation"]["shellStyle"] = "notch"
+        self.write_config(self.config)
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["configuration"]["status"], "error")
+        self.assertIn("refusing legacy fallback", checks["configuration"]["detail"])
+        self.assertEqual(
+            checks["bar-runtime"]["value"], "Shibumi (form unknown)"
+        )
+
+    def test_valid_legacy_config_remains_reportable(self) -> None:
+        self.state.pop("settingsStorageVersion")
+        self.write_state(self.state)
+        self.config["plugins"] = []
+        self.config["bar"]["shibumi"]["presentation"]["shellStyle"] = "notch"
+        self.write_config(self.config)
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["configuration"]["status"], "ok")
+        self.assertIn("legacy bar settings", checks["configuration"]["detail"])
+        self.assertEqual(checks["bar-runtime"]["value"], "Shibumi V2")
+        self.assertEqual(
+            checks["bar-geometry"]["value"], "Notch · Top · 1 output(s)"
+        )
 
     def test_package_health_uses_pacman_metadata_and_skips_git(self) -> None:
         self.use_package_install()
@@ -511,6 +606,9 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(checks["quickshell-process"]["status"], "error")
         self.assertEqual(checks["managed-plugins"]["status"], "error")
         self.assertIn("modified/stale", checks["managed-plugins"]["detail"])
+        self.assertEqual(checks["runtime-errors"]["status"], "warning")
+        self.assertEqual(checks["runtime-errors"]["value"], "Log unavailable")
+        self.assertIn("ambiguous", checks["runtime-errors"]["detail"])
 
     def test_argumentless_crash_relaunch_uses_registered_config(self) -> None:
         self.write_json(
@@ -542,10 +640,14 @@ class HealthDiagnosticsTests(unittest.TestCase):
             ],
         )
         payload = self.run_health()
-        check = self.by_id(payload)["quickshell-process"]
+        checks = self.by_id(payload)
+        process = checks["quickshell-process"]
         self.assertEqual(payload["overall"], "error")
-        self.assertEqual(check["status"], "error")
-        self.assertEqual(check["value"], "0 production processes")
+        self.assertEqual(process["status"], "error")
+        self.assertEqual(process["value"], "0 production processes")
+        self.assertEqual(checks["runtime-errors"]["status"], "warning")
+        self.assertEqual(checks["runtime-errors"]["value"], "Log unavailable")
+        self.assertIn("No exact production process", checks["runtime-errors"]["detail"])
 
     def test_registered_but_unresponsive_instance_is_an_error(self) -> None:
         self.environment["SHIBUMI_HEALTH_PROCESS_LIVE"] = "false"
@@ -564,6 +666,10 @@ class HealthDiagnosticsTests(unittest.TestCase):
         ]
         self.assertEqual(len(process_checks), 1)
         self.assertEqual(process_checks[0]["value"], "Check failed")
+        log_check = self.by_id(payload)["runtime-errors"]
+        self.assertEqual(log_check["status"], "warning")
+        self.assertEqual(log_check["value"], "Log unavailable")
+        self.assertIn("selection failed", log_check["detail"])
 
     def test_empty_quickshell_registry_sentinel_reports_zero_processes(self) -> None:
         probe = self.process_probe_from_stdout(QUICKSHELL_EMPTY_REGISTRY)
@@ -798,6 +904,122 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(check["value"], "Details redacted")
         self.assertNotIn("secret-value", check["detail"])
 
+    def test_warning_only_log_reports_bounded_sample_without_a_rate(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "WARN scene: file:///home/test/.config/omarchy/plugins/"
+            "hancore.shibumi.control-center/Thing.qml:4: fixture warning\n",
+            encoding="utf-8",
+        )
+
+        payload = self.run_health()
+        checks = self.by_id(payload)
+        warning = checks["runtime-warnings"]
+
+        self.assertEqual(payload["overall"], "warning")
+        self.assertEqual(warning["status"], "warning")
+        self.assertEqual(warning["owner"], "shibumi")
+        self.assertFalse(warning["issueEligible"])
+        self.assertEqual(warning["value"], "1 warning(s) in 1 sampled line(s)")
+        self.assertIn("after the latest reload marker", warning["detail"])
+        self.assertIn("Boot/hour rate: unavailable", warning["detail"])
+        self.assertNotIn("runtime-errors", checks)
+        self.assertNotIn("None detected", json.dumps(payload))
+
+    def test_unable_to_assign_qcolor_is_a_shibumi_runtime_error(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "WARN scene: file:///home/test/.config/omarchy/plugins/"
+            "hancore.shibumi.control-center/Thing.qml:9: "
+            "Unable to assign [undefined] to QColor\n",
+            encoding="utf-8",
+        )
+
+        checks = self.by_id(self.run_health())
+        error = checks["runtime-errors"]
+
+        self.assertEqual(error["status"], "error")
+        self.assertEqual(error["owner"], "shibumi")
+        self.assertTrue(error["issueEligible"])
+        self.assertIn("Unable to assign [undefined] to QColor", error["detail"])
+        self.assertNotIn("runtime-warnings", checks)
+
+    def test_unknown_and_foreign_warnings_are_not_attributed_to_shibumi(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "WARN: compositor capability is unavailable\n"
+            "WARN scene: /usr/share/omarchy/shell/plugins/bar/widgets/"
+            "ActiveWindow.qml:8: host fixture warning\n"
+            "WARN scene: /home/test/.config/omarchy/plugins/OmaConnect/"
+            "Main.qml:3: extension fixture warning\n",
+            encoding="utf-8",
+        )
+
+        checks = self.by_id(self.run_health())
+        unknown = checks["runtime-warnings-unknown"]
+        omarchy = checks["runtime-warnings-omarchy"]
+        third_party = checks["runtime-warnings-third-party"]
+
+        self.assertEqual(unknown["owner"], "unknown")
+        self.assertIn("not attributed to Shibumi", unknown["action"])
+        self.assertFalse(unknown["issueEligible"])
+        self.assertEqual(omarchy["owner"], "omarchy")
+        self.assertFalse(omarchy["issueEligible"])
+        self.assertEqual(third_party["owner"], "third-party")
+        self.assertEqual(third_party["pluginId"], "OmaConnect")
+        self.assertFalse(third_party["issueEligible"])
+
+    def test_sensitive_runtime_warning_is_redacted_and_not_clean(self) -> None:
+        self.log_file.write_text(
+            "INFO Configuration Loaded\n"
+            "WARN qml: token=private-value\n",
+            encoding="utf-8",
+        )
+
+        payload = self.run_health()
+        checks = self.by_id(payload)
+        check = checks["runtime-errors-sensitive"]
+
+        self.assertEqual(payload["overall"], "warning")
+        self.assertEqual(check["value"], "Details redacted")
+        self.assertNotIn("private-value", json.dumps(payload))
+        self.assertNotIn("runtime-errors", checks)
+        self.assertNotIn("runtime-warnings", checks)
+
+    def test_warning_before_latest_reload_is_not_reported(self) -> None:
+        self.log_file.write_text(
+            "WARN: warning from old configuration\n"
+            "INFO Configuration Loaded\n"
+            "INFO current configuration settled\n",
+            encoding="utf-8",
+        )
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(checks["runtime-errors"]["value"], "None detected")
+        self.assertFalse(any(check_id.startswith("runtime-warnings") for check_id in checks))
+
+    def test_truncated_warning_sample_does_not_infer_boot_or_hour_rate(self) -> None:
+        lines = [
+            "WARN: warning outside the bounded tail",
+            "INFO Configuration Loaded",
+            *[f"INFO filler {index}" for index in range(400)],
+            *[f"WARN: warning inside the bounded tail {index}" for index in range(20)],
+        ]
+        self.log_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        check = self.by_id(self.run_health())["runtime-warnings"]
+
+        self.assertEqual(check["owner"], "unknown")
+        self.assertEqual(check["value"], "20 warning(s) in 400 sampled line(s)")
+        self.assertIn("reload boundary was not present", check["detail"])
+        self.assertIn("Boot/hour rate: unavailable", check["detail"])
+        self.assertIn("12 earlier matching warning(s) omitted", check["detail"])
+        self.assertNotIn("outside the bounded tail", check["detail"])
+        self.assertNotIn("bounded tail 0", check["detail"])
+        self.assertIn("bounded tail 19", check["detail"])
+        self.assertLessEqual(len(check["detail"]), 900)
+
     def test_logs_are_filtered_redacted_and_bounded(self) -> None:
         self.log_file.write_text(
             "TypeError from the previous configuration\n"
@@ -835,11 +1057,19 @@ class HealthDiagnosticsTests(unittest.TestCase):
             stdout="",
             stderr=f"registry unavailable at {self.home}/private.log",
         )
+        runner = Mock(return_value=failed)
         with patch.dict(os.environ, environment, clear=True):
             probe = probe_class(fetch=False)
             probe.production_pids = [4242]
-            with patch.dict(globals_map, {"run": Mock(return_value=failed)}):
+            with patch.dict(globals_map, {"run": runner}):
                 probe.check_logs()
+        runner.assert_called_once_with(
+            [
+                "qs", "log", "--pid", "4242", "--tail", "400",
+                "--no-color", "--log-times",
+            ],
+            timeout=5,
+        )
         checks = [
             check for check in probe.checks if check.id == "runtime-errors"
         ]
@@ -871,6 +1101,28 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(check.status, "warning")
         self.assertEqual(check.detail, "qs log exited with 9")
         self.assertNotIn("private-value", check.detail)
+
+    def test_empty_runtime_log_query_never_reports_clean(self) -> None:
+        environment = dict(self.environment)
+        environment.pop("SHIBUMI_HEALTH_LOG_FILE", None)
+        probe_class = self.module["Probe"]
+        globals_map = probe_class.check_logs.__globals__
+        for stdout in ("", "\n \t\n"):
+            with self.subTest(stdout=stdout):
+                completed = Mock(returncode=0, stdout=stdout, stderr="")
+                with patch.dict(os.environ, environment, clear=True):
+                    probe = probe_class(fetch=False)
+                    probe.production_pids = [4242]
+                    with patch.dict(globals_map, {"run": Mock(return_value=completed)}):
+                        probe.check_logs()
+
+                check = next(
+                    check for check in probe.checks if check.id == "runtime-errors"
+                )
+                self.assertEqual(check.status, "warning")
+                self.assertEqual(check.value, "Log unavailable")
+                self.assertIn("empty sample", check.detail)
+                self.assertNotEqual(check.value, "None detected")
 
     def test_manual_fetch_refreshes_only_remote_refs(self) -> None:
         before = subprocess.run(

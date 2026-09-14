@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Rectangle {
   id: root
@@ -86,7 +87,7 @@ Rectangle {
     onClicked: root.clicked()
   }
 
-  ShibumiPanelToolTip {
+  Presentation.ShibumiPanelToolTip {
     panel: root.panel
     visible: root.tooltipText !== "" && pointer.containsMouse
     text: root.tooltipText

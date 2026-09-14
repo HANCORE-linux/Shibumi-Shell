@@ -1,6 +1,6 @@
 import QtQuick
-import "../core" as Core
-import "../core/ShibumiConfig.js" as ShibumiConfig
+import "../hancore.shibumi.bar/core" as Core
+import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
 
 Window {
   id: root

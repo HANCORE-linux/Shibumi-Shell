@@ -4,13 +4,14 @@ import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.audio"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url popupSource: Qt.resolvedUrl("AudioPanel.qml")
   readonly property url backendPanelSource: registeredSource("omarchy.audio")
   property Component panelComponent: !audioServiceResolved
@@ -260,7 +261,7 @@ Ui.Panel {
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
-        PillSurface {
+        Presentation.PillSurface {
           tokenSource: root.tokens
           settings: root.settings
           v1AppearanceEnabled: true
@@ -352,7 +353,7 @@ Ui.Panel {
         }
       }
 
-      IconText {
+      Presentation.IconText {
         visible: root.displayMode === "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: "graphic_eq"
@@ -386,7 +387,7 @@ Ui.Panel {
     Row {
       spacing: root.tokens.compactGap
 
-      IconText {
+      Presentation.IconText {
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
         text: "graphic_eq"
@@ -420,7 +421,7 @@ Ui.Panel {
     Column {
       spacing: Commons.Style.space(2)
 
-      IconText {
+      Presentation.IconText {
         anchors.horizontalCenter: parent.horizontalCenter
         text: "graphic_eq"
         color: root.widgetInk

@@ -1,5 +1,5 @@
 import QtQuick
-import "../core/PanelRouting.js" as PanelRouting
+import "../hancore.shibumi.bar/core/PanelRouting.js" as PanelRouting
 
 Item {
   id: root

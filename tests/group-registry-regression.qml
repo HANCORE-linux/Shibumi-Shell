@@ -1,8 +1,8 @@
 import QtQuick
-import "../core/GroupRegistry.js" as GroupRegistry
-import "../core/ShibumiConfig.js" as ShibumiConfig
-import "../core/WidgetFamilies.js" as WidgetFamilies
-import "../core/LayoutModel.js" as LayoutModel
+import "../hancore.shibumi.bar/core/GroupRegistry.js" as GroupRegistry
+import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
+import "../hancore.shibumi.bar/core/WidgetFamilies.js" as WidgetFamilies
+import "../hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
 
 QtObject {
   function fail(message) {

@@ -1,6 +1,6 @@
 import QtQuick
-import "../services/QuoteDefaults.js" as QuoteDefaults
-import "../services/ReactorModel.js" as ReactorModel
+import "../hancore.shibumi.reactor/QuoteDefaults.js" as QuoteDefaults
+import "../hancore.shibumi.reactor/ReactorModel.js" as ReactorModel
 
 Item {
   function fail(message) {

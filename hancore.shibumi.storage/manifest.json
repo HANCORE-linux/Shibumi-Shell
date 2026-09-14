@@ -2,11 +2,14 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.storage",
   "name": "Shibumi Storage",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Read-only root usage and physical drive inventory.",
-  "kinds": ["bar-widget", "service"],
+  "kinds": [
+    "bar-widget",
+    "service"
+  ],
   "keepLoaded": true,
   "entryPoints": {
     "barWidget": "BarWidget.qml",
@@ -23,7 +26,9 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G18",
-    "requires": [],
+    "requires": [
+      "hancore.shibumi.state"
+    ],
     "recommends": []
   }
 }

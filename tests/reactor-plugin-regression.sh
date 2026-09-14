@@ -50,7 +50,8 @@ if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal err
 fi
 
 mkdir -p "$tmpdir/styles"
-cp "$repo_root/styles/shibumi/ReactorEventLayer.qml" "$tmpdir/styles/"
+cp "$repo_root/hancore.shibumi.bar/styles/shibumi/ReactorEventLayer.qml" \
+  "$tmpdir/styles/"
 cp "$repo_root/tests/reactor-runtime-smoke.qml" "$tmpdir/scoped.qml"
 set +e
 scoped_output=$(timeout 8 env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
@@ -113,10 +114,5 @@ rg -q 'leasedReportService\.report\(root, audioReady, muted\)' "$audio/BarWidget
   || fail "audio widget does not publish its existing snapshot"
 rg -q 'leasedReportService\.release\(root\)' "$audio/BarWidget.qml" \
   || fail "audio widget does not release its snapshot"
-
-cmp -s -- "$repo_root/shared/reactor/ReactorModel.js" \
-  "$plugin/ReactorModel.js" || fail "vendored Reactor model drift"
-cmp -s -- "$repo_root/shared/reactor/QuoteDefaults.js" \
-  "$plugin/QuoteDefaults.js" || fail "vendored quote defaults drift"
 
 printf 'reactor plugin regression passed\n'

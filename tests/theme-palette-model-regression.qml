@@ -1,5 +1,5 @@
 import QtQuick
-import "../services/ThemePaletteModel.js" as ThemePaletteModel
+import "../hancore.shibumi.state/ThemePaletteModel.js" as ThemePaletteModel
 
 QtObject {
   function fail(message) {

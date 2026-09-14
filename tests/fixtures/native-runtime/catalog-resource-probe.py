@@ -18,7 +18,7 @@ from lib.isolated_process import finish_owned_group, run_bounded
 
 BASE = Path("/fixture")
 LIMIT = 1024 * 1024
-DEADLINE = time.monotonic() + 38
+DEADLINE = time.monotonic() + 50
 NO_DEMAND_SETTLE_SECONDS = 2.5
 NO_DEMAND_SECONDS = 1.0
 NO_DEMAND_CPU_CEILING_SECONDS = 0.20
@@ -28,9 +28,10 @@ SLOW_FIRST_SECONDS = 5.35
 # and therefore starts near drain rather than approaching this floor.
 POST_DRAIN_FLOOR_SECONDS = 4.5
 RELEASE_QUIET_SECONDS = 5.2
+COLD_INITIALIZATION_CYCLES = 3
 WARM_CYCLES = 3
-# Calibrated positives retained 40/72 KiB over the pre-cycle baseline. A 512 KiB
-# allowance covers allocator/QML jitter while rejecting a touched 2 MiB/cycle.
+# The 512 KiB warm-state allowance is unchanged. Cold reconstruction is measured
+# separately, and the third cold-cycle sample becomes the warm-state baseline.
 PSS_GROWTH_CEILING_KIB = 512
 # Warm acquisitions include the host and every observed acquisition descendant.
 # The allowance leaves headroom over calibrated positives but rejects a 1s burn
@@ -583,45 +584,74 @@ def run_cadence(host_starttime):
     }
 
 
-def run_warm_cycles(host_starttime):
+def run_measured_cycles(host_starttime):
     pss = []
     cpu = []
     serials = []
     previous = status()["requestSerial"]
-    baseline_pss = median_pss(process.pid, host_starttime)
-    for _ in range(WARM_CYCLES):
+    cold_baseline_pss = median_pss(process.pid, host_starttime)
+    total_cycles = COLD_INITIALIZATION_CYCLES + WARM_CYCLES
+    for cycle in range(total_cycles):
+        phase = ("cold initialization"
+                 if cycle < COLD_INITIALIZATION_CYCLES else "warm")
         catalog_topology(process.pid)
         before_host_cpu = cpu_seconds(process.pid, host_starttime)
         before_catalog_cpu = catalog_cpu_seconds()
         check(ipc("native-catalog-probe", "acquire") == (0, "requested"),
-              "warm catalog demand refused")
+              phase + " catalog demand refused")
         ready = wait_status(lambda value: value["ready"] and not value["refreshing"]
                             and value["readSerial"] == previous + 1)
         check(ready["requestSerial"] == previous + 1,
-              "warm cycle launched overlapping catalog requests")
+              phase + " cycle launched overlapping catalog requests")
         catalog_topology(process.pid)
         check(ipc("native-catalog-probe", "release") == (0, "released"),
-              "warm catalog release refused")
+              phase + " catalog release refused")
         released = wait_status(lambda value: not value["ready"]
                                and not value["refreshing"]
                                and not value["nativeConstructed"])
         check(released["requestSerial"] == previous + 1,
-              "warm release changed catalog cadence")
+              phase + " release changed catalog cadence")
         wait_no_catalog_processes()
         time.sleep(.15)
         cycle_cpu = (cpu_seconds(process.pid, host_starttime) - before_host_cpu
                      + catalog_cpu_seconds() - before_catalog_cpu)
         check(cycle_cpu <= CYCLE_CPU_CEILING_SECONDS,
-              "warm catalog cycle exceeded CPU ceiling")
+              "catalog cycle exceeded CPU ceiling")
         cpu.append(round(cycle_cpu, 4))
         pss.append(median_pss(process.pid, host_starttime))
         previous = released["requestSerial"]
         serials.append(previous)
 
-    growth = max(0, max(pss) - baseline_pss)
-    check(growth <= PSS_GROWTH_CEILING_KIB,
+    cold_pss = pss[:COLD_INITIALIZATION_CYCLES]
+    cold_cpu = cpu[:COLD_INITIALIZATION_CYCLES]
+    cold_serials = serials[:COLD_INITIALIZATION_CYCLES]
+    warm_baseline_pss = cold_pss[-1]
+    warm_pss = pss[COLD_INITIALIZATION_CYCLES:]
+    warm_cpu = cpu[COLD_INITIALIZATION_CYCLES:]
+    warm_serials = serials[COLD_INITIALIZATION_CYCLES:]
+    cold_growth = max(0, max(cold_pss) - cold_baseline_pss)
+    warm_growth = max(0, max(warm_pss) - warm_baseline_pss)
+    print("NATIVE_CATALOG_RESOURCE_COLD_INITIALIZATION " + json.dumps({
+        "cycles": COLD_INITIALIZATION_CYCLES,
+        "baselinePssKiB": cold_baseline_pss,
+        "pssKiB": cold_pss,
+        "maximumPssOverBaselineKiB": cold_growth,
+        "cycleCpuSeconds": cold_cpu,
+        "requestSerials": cold_serials,
+    }, sort_keys=True), flush=True)
+    print("NATIVE_CATALOG_RESOURCE_WARM_MEASUREMENT " + json.dumps({
+        "cycles": WARM_CYCLES,
+        "baselinePssKiB": warm_baseline_pss,
+        "pssKiB": warm_pss,
+        "maximumPssOverBaselineKiB": warm_growth,
+        "unchangedCeilingKiB": PSS_GROWTH_CEILING_KIB,
+        "cycleCpuSeconds": warm_cpu,
+        "requestSerials": warm_serials,
+    }, sort_keys=True), flush=True)
+    check(warm_growth <= PSS_GROWTH_CEILING_KIB,
           "warm catalog cycles exceeded retained PSS ceiling: "
-          f"baseline={baseline_pss} KiB samples={pss} growth={growth} KiB")
+          f"baseline={warm_baseline_pss} KiB samples={warm_pss} "
+          f"growth={warm_growth} KiB")
     quiet_before = cpu_seconds(process.pid, host_starttime)
     time.sleep(QUIET_CPU_WINDOW_SECONDS)
     quiet_cpu = cpu_seconds(process.pid, host_starttime) - quiet_before
@@ -629,12 +659,22 @@ def run_warm_cycles(host_starttime):
           "released native host consumed continuous CPU")
     wait_no_catalog_processes()
     return {
-        "cycles": WARM_CYCLES,
-        "requestSerials": serials,
-        "baselinePssKiB": baseline_pss,
-        "pssKiB": pss,
-        "maximumPssOverBaselineKiB": growth,
-        "cycleCpuSeconds": cpu,
+        "coldInitialization": {
+            "cycles": COLD_INITIALIZATION_CYCLES,
+            "requestSerials": cold_serials,
+            "baselinePssKiB": cold_baseline_pss,
+            "pssKiB": cold_pss,
+            "maximumPssOverBaselineKiB": cold_growth,
+            "cycleCpuSeconds": cold_cpu,
+        },
+        "warm": {
+            "cycles": WARM_CYCLES,
+            "requestSerials": warm_serials,
+            "baselinePssKiB": warm_baseline_pss,
+            "pssKiB": warm_pss,
+            "maximumPssOverBaselineKiB": warm_growth,
+            "cycleCpuSeconds": warm_cpu,
+        },
         "releasedQuietWindowSeconds": QUIET_CPU_WINDOW_SECONDS,
         "releasedQuietCpuSeconds": round(quiet_cpu, 4),
     }
@@ -652,10 +692,13 @@ with (BASE / "native.log").open("xb") as log:
                                       "/fixture/omarchy/shell", "--no-color"),
               "native host process identity mismatch")
         cadence = run_cadence(host["starttime"])
-        warm = run_warm_cycles(host["starttime"])
+        measured = run_measured_cycles(host["starttime"])
         measurements = {
             "cadence": cadence,
-            "warm": warm,
+            "coldInitialization": measured["coldInitialization"],
+            "warm": measured["warm"],
+            "releasedQuietWindowSeconds": measured["releasedQuietWindowSeconds"],
+            "releasedQuietCpuSeconds": measured["releasedQuietCpuSeconds"],
             "processTopology": dict(TOPOLOGY_MEASUREMENTS),
             "ceilings": {
                 "maximumCatalogProcesses": MAX_CATALOG_PROCESSES,

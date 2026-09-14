@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -218,7 +219,7 @@ ShibumiPanel {
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
     opacity: enabled ? 1 : 0.35
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -235,7 +236,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPanelToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip

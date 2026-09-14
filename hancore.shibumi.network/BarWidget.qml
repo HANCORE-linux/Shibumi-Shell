@@ -3,13 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.network"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("NetworkPanel.qml")
   property var networkServiceOverride: null
   property var sessionService: null
@@ -333,7 +334,7 @@ Ui.Panel {
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
-        PillSurface {
+        Presentation.PillSurface {
           tokenSource: root.tokens
           anchors.fill: parent
           bar: root.bar
@@ -497,7 +498,7 @@ Ui.Panel {
         }
       }
 
-      IconText {
+      Presentation.IconText {
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -524,7 +525,7 @@ Ui.Panel {
     Row {
       spacing: 4
 
-      IconText {
+      Presentation.IconText {
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -533,7 +534,7 @@ Ui.Panel {
         Behavior on color { ColorAnimation { duration: 160 } }
       }
 
-      IconText {
+      Presentation.IconText {
         visible: root.mode !== "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -671,7 +672,7 @@ Ui.Panel {
   Component {
     id: compactContent
 
-    IconText {
+    Presentation.IconText {
       text: root.stateGlyph
       color: root.v2Presentation ? (root.mode === "none"
           ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
@@ -702,7 +703,7 @@ Ui.Panel {
   Component {
     id: verticalContent
 
-    IconText {
+    Presentation.IconText {
       text: root.stateGlyph
       color: root.widgetInk
       opacity: root.mode === "none" ? 0.58 : 1

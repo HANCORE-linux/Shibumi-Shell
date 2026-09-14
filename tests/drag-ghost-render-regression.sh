@@ -6,7 +6,8 @@ shibumi_load_omarchy_baseline
 fixture=$(mktemp -d /tmp/sb-ghost.XXXXXXXX)
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir -m 700 "$fixture/home" "$fixture/run" "$fixture/core"
-cp "$repo_root/core/DragSession.qml" "$repo_root/core/DragGhostVisual.qml" "$fixture/core/"
+cp "$repo_root/hancore.shibumi.bar/core/DragSession.qml" \
+  "$repo_root/hancore.shibumi.bar/core/DragGhostVisual.qml" "$fixture/core/"
 cp -a "$OMARCHY_PATH/shell/Commons" "$OMARCHY_PATH/shell/Ui" "$fixture/"
 python3 - "$repo_root/tests/drag-ghost-render-regression.qml" "$fixture" <<'PY'
 from pathlib import Path

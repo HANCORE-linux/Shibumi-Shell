@@ -311,7 +311,7 @@
     {"source":"hancore.shibumi.bar/Bar.qml","kind":"token","value":"firstPartyServiceFor","count":2,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
     {"source":"hancore.shibumi.bar/Bar.qml","kind":"token","value":"registeredWidgetComponent","count":1,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
     {"source":"hancore.shibumi.bar/Bar.qml","kind":"token","value":"registeredWidgetSource","count":1,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
-    {"source":"hancore.shibumi.bar/core/WidgetSlot.qml","kind":"token","value":"registeredWidgetComponent","count":4,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
+    {"source":"hancore.shibumi.bar/core/WidgetSlot.qml","kind":"token","value":"registeredWidgetComponent","count":6,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
     {"source":"hancore.shibumi.bar/services/HostWidgetResolver.qml","kind":"token","value":"Qt.createComponent","count":1,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
     {"source":"hancore.shibumi.bar/services/HostWidgetResolver.qml","kind":"token","value":"entryPointUrl","count":6,"category":"hostIntegration","owner":"hancore.shibumi.bar","capability":"bar-host-routing"},
     {"source":"hancore.shibumi.brightness/Service.qml","kind":"token","value":"entryPointUrl","count":2,"category":"hostIntegration","owner":"hancore.shibumi.brightness","capability":"displays"},

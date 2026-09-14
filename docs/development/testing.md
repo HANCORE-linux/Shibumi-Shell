@@ -18,11 +18,13 @@ OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
 ```
 
 The registry-prime regression uses the real exact-PID Quickshell IPC transport.
-Its positive case requires one replacement Bar lease and rejects a duplicate
-dispatch; its negative case acknowledges the host call without rebuilding and
-must time out fail-closed. The pinned native all-24 and runtime probes separately
-prove that the Runtime singleton survives the real host rescan and publishes
-exactly one successful attempt.
+It covers success, transport refusal, acknowledged timeout, post-prime Bar-owner
+change, changed-process refusal, and scope loss/recovery. Every case remains
+fail-closed until a replacement owner is observed, dispatches at most one native
+rescan, and checks the exact bounded observation vocabulary, event cardinality,
+monotonic elapsed milliseconds, and four-field redacted JSON shape. The pinned
+native all-24 and runtime probes separately prove that the Runtime singleton
+survives the real host rescan and publishes exactly one successful attempt.
 
 For a Bluetooth change:
 
@@ -37,12 +39,23 @@ baseline jobs. The installed-package job defaults to the package-managed host:
 ./tests/omarchy-installed-package-contract-regression.sh
 ```
 
-The installed-source-parity job requires an explicit Git checkout of the
-official `v4.0.2` source revision used by the installed package:
+The installed-source-parity job requires an explicit clean Git checkout of the
+official `v4.0.3` source revision used by the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.3 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
+```
+
+For an additional 4.0.2 compatibility run, invoke the aggregate contract with
+the historical selector and its exact checkout. Release jobs themselves pin
+4.0.3 and never inherit this selector:
+
+```bash
+OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
+SHIBUMI_OMARCHY_BASELINE_PROFILE=installed-source-parity \
+SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2 \
+  ./tests/contract-regression.sh
 ```
 
 The forward-compat job separately requires the immutable upstream snapshot used
@@ -68,10 +81,12 @@ Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The complete-host jobs select three repository-owned manifests with
 non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-v4.0.2.json` validates the
-  package-managed `omarchy 4.0.2-1`, `omarchy-settings 4.0.2-1` layout;
-- `contracts/baselines/omarchy-installed-source-parity-v4.0.2.json` proves that
-  the official `v4.0.2` source form satisfies the same complete suite;
+- `contracts/baselines/omarchy-installed-package-v4.0.3.json` validates the
+  package-managed `omarchy 4.0.3-1`, `omarchy-settings 4.0.3-1` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.0.3.json` proves that
+  the official `v4.0.3` source form satisfies the same complete suite;
+- the corresponding 4.0.2 manifests remain immutable optional compatibility
+  baselines selected only with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
 - `contracts/baselines/omarchy-forward-compat-ed7bae4a.json` proves forward
   compatibility with the recorded upstream snapshot.
 
@@ -108,14 +123,78 @@ The full contract covers:
 - V1 and V2 source evidence;
 - embedded V2 difference classification;
 - Quattro version and plugin contracts;
-- self-contained plugin payloads and vendored parity;
+- plugin import boundaries, exact State-module exceptions, and active-panel
+  vendored parity;
 - host-facade and suite lifecycle behavior;
 - QML component and service smokes;
 - Control Center, Omarchy menu continuity, bar, panel, and widget behavior;
 - transactional installer and updater regressions.
 
 The bar gates also run `tests/v1-center-slot-regression.qml` and the two-output
-slot-interaction fixture. `tests/drag-ghost-render-regression.sh` renders only
+slot-interaction fixture. `tests/widget-pipeline-diagnostics-regression.sh`
+exercises the read-only `debugWidgetPipeline` IPC against unresolved real
+`WidgetSlot` ownership. It proves that `debugBarGeometry()` can remain empty
+while an unresolved slot exists, and checks the fixed output/expected/slot and
+registry-count bounds plus metadata/path redaction. The IPC returns only scalar
+facade, selection, component, Loader and output-session state; it does not
+acquire data or retain events.
+
+With `SHIBUMI_RUN_WAYLAND_LIFECYCLE=1` and
+`SHIBUMI_NATIVE_SHELL_PATH` set to the pinned 4.0.3 `shell` directory,
+`tests/widget-pipeline-wayland-regression.sh` runs the focused full-native-host
+check (it can also be invoked directly):
+
+```bash
+SHIBUMI_NATIVE_SHELL_PATH=/tmp/shibumi-omarchy-0534987/shell \
+  ./tests/widget-pipeline-wayland-regression.sh
+```
+
+The Python staging driver first admits the complete 183-file native fingerprint.
+It runs the native `PluginRegistry`, `BarWidgetRegistry`,
+`PluginBarWidgetRegistryApi` and plugin-Bar loader. A disclosed observation-only
+counter in `shell.qml` measures public rescan calls; both the overlay digest and
+staged native fingerprint are recorded. Unrelated native manifests are withheld. The private plugin directory contains
+the real State and Shibumi Bar payloads plus one inert marker widget; native
+platform services and every other suite plugin are absent. Quickshell receives
+private HOME/XDG/runtime, disconnected buses, a minimal command path, an empty
+network namespace, a two-MiB log bound, a process-group deadline, and one nested
+Hyprland output. No production desktop output or DPMS state is changed.
+
+A missing marker entry point is the deliberate negative control and must stop
+at the `registry-selection` stage while the native Bar, `BarPanel`, V2 Notch
+`BarSurface`, `GroupSlot`, and unresolved `WidgetSlot` remain observable. Beta.13
+is materialized from commit `2760cdb8272255790d5e4613fed8a48cb63c3555`, with a
+read-only census/IPC overlay and three scalar Loader aliases. Unavailable
+historical lifecycle/provenance is explicit, not synthesized as success. Original
+commit payload fingerprints and the overlay digest remain distinct.
+
+Beta.13 and the candidate each exercise three real nested Wayland-output
+removal/return cycles through private compositor configuration. Beta.13 must
+reproduce the scoped component-admission failure each time; only that historical
+control receives a repair rescan. A staged candidate mutant restores only the
+retired JavaScript `Component.Ready` guard, must remain empty after return, emit
+one passive warning and dispatch no second rescan. The actual candidate must
+retain current Loader/item/submission identity and restore the marked widget on
+a mapped valid output on every cycle, with exactly one startup rescan total and
+no passive warning. The `instanceof Component` production check is exercised
+unchanged. An absent JavaScript status is not itself a failed or successful load.
+The maintained `widget-pipeline-classifier-regression.py` tests distinguish
+missing selection/handle, Loader.Error, missing item and stale provenance, and
+require latched output chronology across later flaps.
+
+`scoped-loader-admission-regression.sh` additionally exercises the real resolver
+and Loader with inert local objects: type refusal, replacement, unregister,
+disable, removed configuration, facade loss/replacement, asynchronous Load error,
+registration-before-load and completion/injection reentrancy. Only the exact
+submitted-source/generation/completed-item tuple can report current success;
+the native sourceComponent getter is not used as readback authority. The real
+legacy resolver retains its original Component readiness tests.
+
+This is deterministic nested-output evidence through the production host and
+render chain. It is not physical hotplug, DPMS, multi-output, GPU, platform
+backend, package, or live-desktop acceptance.
+
+`tests/drag-ghost-render-regression.sh` renders only
 controlled fixture content offscreen at scale factors 1 and 1.5, checks capture
 pixels with the installed `/usr/bin/magick`, and tests cancellation/image lifetime.
 It also tests already hidden source-window refusal and cancellation when the
@@ -326,13 +405,10 @@ filesystem-path freshness guarantee.
 
 ## Power cooperative runtime
 
-The canonical owner and operation controller live in `shared/power-state/`.
-The sync script copies the controller unchanged and transforms only the exact
-runtime-import depth for the two maintained Service destinations. The focused
-sync regression checks regular atomic replacement, exact import spelling,
-missing/drifted input, symlinked sources/targets/parents, FIFO refusal and input
-size, preserving an external sentinel. It does not certify the old generic
-vendoring paths as a malicious-checkout sandbox.
+The canonical owner and operation controller live directly in
+`hancore.shibumi.power-state/`. The service retains its plugin-local
+`../hancore.shibumi.state/runtime` import; there is no Power source-vendoring
+transform or root/shared mirror.
 
 `tests/power-plugins-regression.sh` retains the legacy presentation and helper
 smokes, and adds the actual Power service, two Battery and two Power Profile
@@ -364,10 +440,7 @@ return indicates queued launch, not observed profile application. Synchronous
 busy-state notifications additionally test cancellation before process dispatch
 and generation revocation before completion publication.
 
-`power-deferred-regression.py` first checks all four maintained Power destinations
-against canonical sources; an inert entrypoint regression proves that canonical-only
-Service or controller changes refuse before QML starts. It then runs captured actual
-Power sources with controlled
+`power-deferred-regression.py` runs captured actual Power sources with controlled
 settlement/action-completion signals on the fixture's four operation children.
 It tests cancellation between scheduling and dispatch: final lease release,
 revocation followed by re-admission, battery loss/recovery, and action follow-up.

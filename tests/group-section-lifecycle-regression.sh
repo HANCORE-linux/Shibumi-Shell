@@ -27,7 +27,8 @@ command -v timeout >/dev/null 2>&1 || fail "timeout is required"
 fixture_root=$(mktemp -d "${TMPDIR:-/tmp}/shibumi-group-lifecycle.XXXXXX")
 mkdir -p "$fixture_root"/{home,config,cache,data,state,runtime,fixture}
 chmod 700 "$fixture_root/runtime"
-cp -a "$repo_root/core" "$repo_root/styles" "$fixture_root/fixture/"
+cp -a "$repo_root/hancore.shibumi.bar/core" \
+  "$repo_root/hancore.shibumi.bar/styles" "$fixture_root/fixture/"
 cp -a "$omarchy_path/shell/Commons" "$fixture_root/fixture/"
 cp "$repo_root/tests/incidents/inc012/SectionHost.qml" "$fixture_root/fixture/"
 

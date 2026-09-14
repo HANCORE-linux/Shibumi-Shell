@@ -55,7 +55,6 @@ for shutdown_contract in \
 done
 
 for bar_host in \
-    "$repo_root/Bar.qml" \
     "$repo_root/hancore.shibumi.bar/Bar.qml"; do
   for fixed_property in \
       'readonly property bool requestedTransparent: false' \
@@ -78,7 +77,6 @@ for bar_host in \
 done
 
 for bar_surface in \
-    "$repo_root/styles/shibumi/BarSurface.qml" \
     "$repo_root/hancore.shibumi.bar/styles/shibumi/BarSurface.qml"; do
   rg -Fq 'visible: true' "$bar_surface" \
     || fail "V1/V2 chrome is not explicitly opaque in ${bar_surface#"$repo_root"/}"
@@ -90,7 +88,6 @@ done
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'
 [[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'
-"$repo_root/scripts/sync-bar-host.sh" --check >/dev/null
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
 ipc_pid=""
@@ -116,16 +113,14 @@ export QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1
 
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
 cp -a "$omarchy_path/shell/Ui" "$tmpdir/"
-cp -a "$bar_root/core" "$tmpdir/"
-cp "$repo_root/tests/fixtures/BarPanelStub.qml" "$tmpdir/core/BarPanel.qml"
-mkdir -p "$tmpdir/services"
-cp "$bar_root/services/HostWidgetResolver.qml" "$tmpdir/services/"
-cp -a "$bar_root/styles" "$tmpdir/"
-# This fixture lays Bar.qml at its root, so use the canonical relative import.
-# sync-bar-host --check above verifies the sole deployment-path normalization.
-cp "$repo_root/Bar.qml" "$tmpdir/Bar.qml"
+cp -a "$bar_root" "$tmpdir/hancore.shibumi.bar"
+cp "$repo_root/tests/fixtures/BarPanelStub.qml" \
+  "$tmpdir/hancore.shibumi.bar/core/BarPanel.qml"
+# Preserve the deployed plugin depth so Bar.qml keeps its canonical
+# ../hancore.shibumi.state/runtime import unchanged in the fixture.
 # Calibrated controls alter only the captured fixture, never repository sources.
-python3 - "$tmpdir/Bar.qml" "${SHIBUMI_TEST_RESTORE_CONTROL:-none}" <<'PY'
+python3 - "$tmpdir/hancore.shibumi.bar/Bar.qml" \
+  "${SHIBUMI_TEST_RESTORE_CONTROL:-none}" <<'PY'
 import sys
 from pathlib import Path
 path, mode = Path(sys.argv[1]), sys.argv[2]
@@ -236,7 +231,7 @@ fi
 # A fresh engine receives an admitted shared-runtime marker and controlled
 # scoped services. It has no live shell, network or platform mutation route.
 printf '%s\n' '{"suiteId":"hancore.shibumi","suitePayloadDigest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}' \
-  | tee "$tmpdir/.shibumi-managed.json" \
+  | tee "$tmpdir/hancore.shibumi.bar/.shibumi-managed.json" \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp "$repo_root/tests/bar-catalog-consumer-smoke.qml" "$tmpdir/shell.qml"
 set +e
@@ -295,5 +290,8 @@ if grep -Eq 'another handler is registered for target shibumi-suite|Binding loop
     <<<"$ipc_output"; then
   fail 'shutdown IPC smoke log contains an ownership or binding error'
 fi
+
+OMARCHY_PATH="$omarchy_path" \
+  "$repo_root/tests/scoped-loader-admission-regression.sh"
 
 printf 'bar host registry regression passed\n'

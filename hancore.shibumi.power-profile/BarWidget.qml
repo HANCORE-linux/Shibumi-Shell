@@ -4,6 +4,7 @@ import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
@@ -11,7 +12,7 @@ Ui.Panel {
   moduleName: "hancore.shibumi.power-profile"
   manageIpc: false
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url panelSource: Qt.resolvedUrl("PowerProfilePanel.qml")
   property var powerServiceOverride: null
 
@@ -101,7 +102,7 @@ Ui.Panel {
     width: implicitWidth
     height: implicitHeight
 
-    PillSurface {
+    Presentation.PillSurface {
       tokenSource: root.tokens
       settings: root.settings
       v1AppearanceEnabled: true

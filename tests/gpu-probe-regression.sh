@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-helper="$repo_root/shared/telemetry/shibumi-gpu-probe"
+helper="$repo_root/hancore.shibumi.cpu/scripts/shibumi-gpu-probe"
 fixture_bin="$repo_root/tests/fixtures/gpu-bin"
 fixture_root=$(mktemp -d /tmp/shibumi-gpu-probe.XXXXXX)
 trap 'rm -rf -- "$fixture_root"' EXIT

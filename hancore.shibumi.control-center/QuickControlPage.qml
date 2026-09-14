@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Column {
   id: root
@@ -218,7 +219,7 @@ Column {
       spacing: Commons.Style.space(8)
       visible: !actionTile.confirmation
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(18)
         text: actionTile.modelData.glyph

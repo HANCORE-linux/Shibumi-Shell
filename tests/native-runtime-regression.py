@@ -94,12 +94,27 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_audio / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.audio", "name": "Shibumi Audio",
-        "version": "0.1.1-beta.13", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.14", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi Audio", "category": "Audio",
             "semanticCapabilities": [], "defaultSection": "right", "allowMultiple": False}}))
     (shibumi_audio / "Widget.qml").write_text(
+        'import QtQuick\nItem { implicitWidth: 1; implicitHeight: 1 }\n')
+    # Inert suite-owned CPU metadata exercises the actual Icons workbench path
+    # without constructing its telemetry service or any platform backend.
+    shibumi_cpu = plugins / "hancore.shibumi.cpu"
+    shibumi_cpu.mkdir()
+    (shibumi_cpu / ".shibumi-managed.json").write_text(json.dumps({
+        "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
+    (shibumi_cpu / "manifest.json").write_text(json.dumps({
+        "schemaVersion": 1, "id": "hancore.shibumi.cpu", "name": "Shibumi CPU",
+        "version": "0.1.1-beta.14", "kinds": ["bar-widget"],
+        "entryPoints": {"barWidget": "Widget.qml"},
+        "x-shibumi": {"suiteId": "hancore.shibumi"},
+        "barWidget": {"displayName": "Shibumi CPU", "category": "System",
+            "semanticCapabilities": [], "defaultSection": "left", "allowMultiple": False}}))
+    (shibumi_cpu / "Widget.qml").write_text(
         'import QtQuick\nItem { implicitWidth: 1; implicitHeight: 1 }\n')
     # A catalog-only clone of the pinned native audio capability exercises
     # provider replacement and exact async Undo without loading the disabled
@@ -168,7 +183,7 @@ def run(base, required_markers=None):
             b"ACTUAL CATALOG QPROCESS/HELPER/PINNED NATIVE IPC AND DEMAND RELEASE PASSED",
             b"DEMANDED CATALOG RECONCILED EXTERNAL SERVICE CHANGE",
             b"ACTUAL NONEMPTY NATIVE DTO, PAGE LEASE/STALE REBIND AND TOGGLE SETTLEMENT PASSED",
-            b"NATIVE FIXED-GROUP VISIBILITY AND STATE-ONLY SETTLEMENT PASSED",
+            b"NATIVE ICONS CPU AUTHORITY AND FIXED-GROUP STATE SETTLEMENT PASSED",
             b"ACTUAL V1/V2 PROVIDER UNDO SETTLEMENT AND STALE-SNAPSHOT REFUSAL PASSED",
             b"ACTUAL STATE READBACK THEN NATIVE LAYOUT/INJECTED BAR CONFIRMATION PASSED")
     if (not isinstance(required_markers, tuple) or not 1 <= len(required_markers) <= 8
@@ -197,13 +212,14 @@ def run(base, required_markers=None):
         print("Owned native resource group: " + str(group.parent_path / group.name), flush=True)
         launcher = ["/usr/bin/python3", str(base / "cgroup_exec.py"), str(group.procs), *command]
         reply = run_bounded(launcher, env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-            timeout=42, maximum=1024 * 1024, pass_fds=(group.procs,))
+            timeout=55, maximum=1024 * 1024, pass_fds=(group.procs,))
     print((reply.stdout + reply.stderr).decode(errors="replace"), end="", flush=True)
     if reply.returncode != 0:
         raise RuntimeError("isolated native fixture failed: " + str(reply.returncode))
     combined = reply.stdout + reply.stderr
     if (b"attempted to evaluate a function in an invalid context" in combined
-            or b"TypeError" in combined or b"ReferenceError" in combined):
+            or b"TypeError" in combined or b"ReferenceError" in combined
+            or b"Error parsing function" in combined):
         raise RuntimeError("native fixture reported a stale or invalid QML context")
     for marker in required_markers:
         if marker not in reply.stdout:

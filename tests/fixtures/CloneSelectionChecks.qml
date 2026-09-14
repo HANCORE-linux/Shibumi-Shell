@@ -1,6 +1,6 @@
 import QtQuick
 import "../native" as Native
-import "../core/LayoutModel.js" as Layout
+import "../hancore.shibumi.bar/core/LayoutModel.js" as Layout
 
 Item {
   id: checks

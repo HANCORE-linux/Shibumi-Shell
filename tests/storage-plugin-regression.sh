@@ -21,8 +21,7 @@ fail() {
 mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.storage" "$tmpdir/storage"
-mkdir -p "$tmpdir/hancore.shibumi.state"
-cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \

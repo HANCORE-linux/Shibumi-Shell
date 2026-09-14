@@ -210,8 +210,9 @@ Transient cache data lives under:
 ${XDG_CACHE_HOME:-$HOME/.cache}/shibumi/
 ```
 
-Do not copy repository-relative imports or state paths into installed plugins.
-Every plugin must be self-contained at runtime.
+Do not add repository-root imports, private sibling imports, or undeclared
+state paths to installed plugins. The only cross-plugin QML imports are the
+exact, declared State runtime and passive-presentation modules.
 
 ## Theme ownership
 

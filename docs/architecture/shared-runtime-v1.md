@@ -1,16 +1,27 @@
 # Shared Shibumi runtime V1
 
 Status: normative supporting contract, authorized 2026-09-09; implemented in
-the tagged but unreleased Beta.12 candidate and retained by Beta.13, with
-package-bound physical 4.0.3 acceptance pending.
+Beta.12, retained by Beta.13, and extended by the Beta.14 candidate. Beta.14
+package-bound physical 4.0.3 acceptance remains pending.
 ARCHITECTURE.md remains authoritative.
 
 ## Scope
 
 The suite retains its 24 separately registered plugin IDs and one production
-Quickshell process. The sole production shared module lives at
-`hancore.shibumi.state/runtime/`. It is maintained there directly, not copied
-into every plugin. Other canonical/vendored sources still use the sync scripts.
+Quickshell process. Its two narrowly admitted cross-plugin modules live at
+`hancore.shibumi.state/runtime/` and
+`hancore.shibumi.state/lib/presentation/`. They are maintained there directly,
+not copied into every plugin. The runtime module owns only the coordination
+specified below. The presentation module is passive and contains only visual
+components: no service, Process, Timer, poller, worker, backend, persistence,
+singleton, or mutable runtime authority. Every presentation consumer declares
+a direct State dependency, and State precedes those consumers in suite order.
+
+`ShibumiPanel.qml` is not passive because it retains three focus/popout
+lifecycle timers. It therefore remains the sole canonical source under
+`shared/presentation/`; `scripts/sync-shared.sh` continues to drift-check its
+existing plugin and `widgets/` copies. Bar-host and feature-owner sources
+otherwise live directly in their plugin roots.
 Installation, update, repair and removal continue to operate on the complete
 admitted suite. This dependency does not grant permission to weaken admission,
 load a partial mixed-version set, or import arbitrary sibling/repository paths.
@@ -29,11 +40,13 @@ service-entry persistence directly; the coordinator has no State write broker.
 Underscore-prefixed internals are conventions,
 not an enforceable access-control boundary.
 
-The exact importer roster is maintained in `scripts/shared_runtime_contract.py`.
-Both source-boundary checks permit only its literal QML import directives and
-require the complete, non-symlinked sibling module. This is the sole exception
-to plugin self-containment; arbitrary sibling paths and alternate copies are
-not granted an import exception.
+The exact runtime and presentation importer rosters are maintained in
+`scripts/shared_runtime_contract.py`. Both source-boundary checks permit only
+their literal QML import directives with fixed aliases and require the complete,
+non-symlinked sibling module with its exact file roster. These are the only two
+exceptions to plugin self-containment; arbitrary sibling paths, undeclared
+importers, incomplete modules, and alternate copies are not granted an import
+exception.
 
 ## Lifetime and version
 
@@ -65,8 +78,9 @@ activation checks' responsibility.
 Omarchy 4.0.3 can publish a complete initial scoped widget registry and then
 revoke a configured bar-only widget during the first `shell.json` mutation.
 The Runtime therefore owns one process-bound startup prime for an admitted
-scoped Bar. After the State service, payload marker, exact Bar provider, and
-host facade are admitted, it runs the public host call
+scoped Bar. There is no later output-recovery rescan or lock IPC probe. After
+the State service, payload marker, exact Bar provider, and host facade are
+admitted, the startup prime runs the public host call
 `/usr/bin/quickshell ipc --pid <own-pid> call -- shell rescanPlugins` with a
 fixed argument vector. It does not interpret command output as authority.
 
@@ -77,10 +91,39 @@ calls. A successful child exit alone is insufficient: a later Bar lease with a
 higher serial and different owner must be the uniquely selected Bar before the
 prime becomes ready. The Runtime marker survives the expected plugin-Bar rebuild, so
 the replacement cannot dispatch a second prime. Settings and layout changes do
-not rescan. Timeout, nonzero exit, missing replacement, Runtime retirement, or
-scope loss is terminal for that process; recovery requires a normal complete
-shell restart. No missing registry Component is cached, reconstructed from a
-manifest, or replaced by an original provider.
+not rescan. Startup-prime timeout, nonzero exit, missing replacement, Runtime
+retirement, or scope loss is terminal for that process.
+
+After output loss, the scoped resolver accepts only the exact currently
+configured registry ID, matching metadata identity and actual Component type.
+The JavaScript `status` projection may be absent while the native Loader can
+still instantiate that Component. The typed `Loader.sourceComponent` getter
+can also project null in this state. One controlled setter records the submitted
+handle and generation; `onLoaded` confirms the exact item, and readiness
+revalidates this tuple against the current resolver after property injection.
+Replacing or revoking the source invalidates completion. Legacy locally created
+Components retain their original status checks. No missing Component is cached,
+reconstructed from a manifest, or replaced by an original provider.
+
+The Runtime may emit one passive sanitized exhaustion warning per process,
+only after a real positive/zero/positive output sequence, a previously confirmed
+load and ten exhausted resolution attempts for a still-configured/enabled
+widget. It revalidates the active Bar and own PID, then claims the warning budget
+before logging. Later slots, flaps and replacement Bars cannot replenish it.
+This diagnostic never starts a process, timer, registry mutation or lock query.
+The read-only census separates missing handles from unavailable status
+projections and reports current load provenance; see
+[Beta.14 validation](../development/beta14-validation.md).
+
+The startup prime emits at most four structured observation lines per process.
+Each line contains exactly `processId`, `phase`, `attemptNumber`, and
+`elapsedMilliseconds`. The phase vocabulary is fixed to `request-accepted`,
+`native-rescan-acknowledged`, `native-rescan-refused`,
+`replacement-bar-observed`, `ready`, `failed`, and `timed-out`; all values are
+owned by the Runtime. Command output, paths, plugin metadata, shell
+configuration, and user data are never projected. Refusal is followed by the
+terminal `failed` event, while expiry publishes terminal `timed-out`. Passive
+output diagnostics add no acquisition, Process, poller, worker, retry or Timer.
 
 ## State writes
 
@@ -142,7 +185,8 @@ preconditions do not provide a host-wide or filesystem compare-and-swap.
 
 ### V2 State-to-native layout sequencing
 
-The persistent Bar owns one `core/LayoutTransition.qml`. V2 layout edits,
+The persistent Bar owns one
+`hancore.shibumi.bar/core/LayoutTransition.qml`. V2 layout edits,
 reconciliation with native sync, and reset submit one patch through it. Busy
 transitions reject competing layout edits; they do not queue stale plans. Each
 operation captures exact State/native writer identities, State serial, affected

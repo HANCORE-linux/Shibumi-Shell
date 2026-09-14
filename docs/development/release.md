@@ -55,18 +55,33 @@ This is a read-only source review, not runtime acceptance.
 
 ## Validate on the internal validation system
 
-Run the complete contract against all four pinned Quattro proof axes:
+Run the complete contract against all four pinned Quattro proof axes. Every
+external baseline variable must name a clean, canonical, absolute Git checkout
+root at the revision pinned by its baseline manifest. In particular,
+`SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` must be a clean absolute checkout at
+`0534987009061cbe2dacdde4ad564092ab698d12`; tracked, staged, untracked, or
+submodule dirt fails the gate.
 
 ```bash
 cd /path/to/shibumi
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.3 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.3 \
+  python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
 SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
+
+The release-evidence runner preflights all three external checkouts before any long host gate. Every path component must be canonical and must not be a symbolic link. The runner passes the accepted canonical paths to every gate. It verifies each checkout root, pinned HEAD commit, Git tree, cleanliness, complete tracked/untracked working-tree digest, file count, file type, and mode. Malformed, relative, missing, dirty, or wrong-revision inputs fail closed. The NativeCatalog resource regression is a required gate and resolves its unchanged pinned 4.0.3 shell assertion from `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH/shell`; its existing warmup and resource ceilings are not release-runner overrides.
+
+The candidate and all external-baseline identities are revalidated immediately before and after every evidence gate and once more after the final gate. Candidate content, mode, staged-state, untracked-state, commit, or tree drift and baseline cleanliness, revision, tree, content, or mode drift invalidate the evidence. These checks detect drift present at a validation boundary; they do not detect an input that is changed and restored entirely while one gate is running. The validation runner therefore remains a trusted, access-controlled system, and concurrent writers must be excluded for the full run.
+
+Every evidence gate has a 15-minute process-group timeout. Raw output and retained redacted output are each limited to 8,388,608 bytes per gate and 67,108,864 bytes per run. Redaction occurs while the runner reads output. A start failure, nonzero exit, timeout, byte-limit breach, or input-identity failure fails the release evidence. Each gate prints one start, result, and duration line. Detailed output remains in that gate's checksummed evidence log. Publication separately requires exactly one passing `native-catalog-resource` command record, so an absent or failed resource record cannot be admitted even if the top-level evidence status is malformed.
+
+The hosted package job has a 60-minute timeout. The read-only self-hosted validation job has a 240-minute timeout. It transfers the checksummed assets to a separate 30-minute publication job. Only the publication job receives `contents: write` permission.
 
 Preview and perform the exact suite update:
 
@@ -117,10 +132,8 @@ not available.
 5. Tag the exact accepted commit as `v<version>`.
 6. Push the branch and tag to `HANCORE-linux/Shibumi-Shell`.
 7. Verify the remote tag peels to the intended commit.
-8. Confirm the workflow builds from `GITHUB_SHA`, uploads only the declared
-   assets to a draft, downloads them, verifies every remote name, size, and
-   SHA-256, and repeats remote direct/peeled tag-to-commit verification
-   immediately before publishing.
+8. Confirm the workflow builds from `GITHUB_SHA` in the read-only validation job.
+9. Confirm the publication job verifies the transferred checksums, uploads only the declared assets to a draft, downloads them, verifies every remote name, size, and SHA-256, and repeats remote direct/peeled tag-to-commit verification immediately before publishing.
 
 A failed upload or remote verification must remain a draft. A retry may reuse
 that same verified draft, refresh its notes, and replace only the five declared

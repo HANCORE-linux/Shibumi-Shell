@@ -68,6 +68,7 @@ ShellRoot {
 
   function agentsContractMatches() {
     if (!agentsService.agentsBackendActive
+        || agentsService.agentsSource !== ""
         || agentsService.modelUsageSource !== ""
         || agentsService.providers.length !== 2
         || agentsService.selectedTool !== fakeState.selectedTool) return false
@@ -753,7 +754,6 @@ ShellRoot {
     shell: agentsShell
     agentRecordExpiryCheckIntervalMs: 20
     omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
-    agentsSourceOverride: "file:///fixture/agents/Panel.qml"
     agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
   }
 
@@ -1025,14 +1025,13 @@ ShellRoot {
         const backendGeneration = agentsService.providerSettingsGeneration
         agentsService.modelUsageSourceOverride =
           Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
-        agentsService.agentsSourceOverride = ""
+        agentsService.agentsBackendUnavailable = true
         if (agentsService.agentsBackendActive
             || agentsService.modelUsageSource === ""
             || agentsService.providerSettingsGeneration <= backendGeneration
             || agentsService.backendProcessKind !== "legacy-detection")
           return root.fail("Agents to legacy transition was not reconciled")
-        agentsService.agentsSourceOverride =
-          "file:///fixture/agents/Panel.qml"
+        agentsService.agentsBackendUnavailable = false
         if (!agentsService.agentsBackendActive
             || agentsService.modelUsageSource !== ""
             || !agentsService.pendingBackendRefresh)

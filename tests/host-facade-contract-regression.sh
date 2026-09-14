@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 contract="$repo_root/contracts/host-facade-v1.json"
-bar_source="$repo_root/Bar.qml"
+bar_source="$repo_root/hancore.shibumi.bar/Bar.qml"
 strict_ownership=false
 
 fail() {
@@ -30,7 +30,7 @@ while (($#)); do
       fail "unknown option: $1"
       ;;
     *)
-      [[ $bar_source == "$repo_root/Bar.qml" ]] \
+      [[ $bar_source == "$repo_root/hancore.shibumi.bar/Bar.qml" ]] \
         || fail "only one bar source may be supplied"
       bar_source=$1
       ;;

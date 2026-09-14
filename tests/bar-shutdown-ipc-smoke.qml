@@ -1,12 +1,13 @@
 import QtQuick
 import Quickshell
+import "hancore.shibumi.bar" as BarPlugin
 
 ShellRoot {
   id: root
 
   property int waits: 0
 
-  Bar {
+  BarPlugin.Bar {
     id: bar
     outputWindowsEnabled: false
   }

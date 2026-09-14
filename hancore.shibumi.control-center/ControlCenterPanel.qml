@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -179,18 +180,19 @@ ShibumiPanel {
     && "stateTransitionBusy" in bar
     ? bar.stateTransitionBusy === true : false
   readonly property var pluginCatalogObservation: {
+    if (!nativeCatalogRequired) return null
     const page = settingsPageItem
-    if (!nativeCatalogRequired || !page
-        || !("catalogObservation" in page)) return null
-    const observation = page.catalogObservation
-    if (!observation || typeof observation !== "object"
-        || !Object.isFrozen(observation)
-        || !observation.snapshot
-        || !Object.isFrozen(observation.snapshot)
-        || observation.snapshot.catalogKind !== "native-listPlugins"
-        || !Array.isArray(observation.snapshot.entries)
-        || !Object.isFrozen(observation.snapshot.entries)) return null
-    return observation
+    // Plugins owns its page-scoped lease; every other page may reuse only the
+    // Bar's existing durable observation, never acquire another consumer.
+    const pageOwnsObservation = page && ("catalogObservation" in page)
+    const source = pageOwnsObservation ? page
+      : bar && ("catalogObservation" in bar) ? bar : null
+    if (!source) return null
+    try {
+      const observation = source.catalogObservation
+      return validPluginCatalogObservation(observation)
+          && observation === source.catalogObservation ? observation : null
+    } catch (error) { return null }
   }
   readonly property var pluginCatalogSnapshot: pluginCatalogObservation
     ? pluginCatalogObservation.snapshot : null
@@ -669,6 +671,64 @@ ShibumiPanel {
       && bar.canSetBarWidgetInstalled(id, entry.installedInBar !== true)
   }
 
+  function validPluginCatalogObservation(observation) {
+    try {
+      if (!observation || typeof observation !== "object"
+          || !Object.isFrozen(observation)
+          || (Object.getPrototypeOf(observation) !== Object.prototype
+            && Object.getPrototypeOf(observation) !== null)
+          || !Object.prototype.hasOwnProperty.call(observation, "serial")
+          || !Object.prototype.hasOwnProperty.call(observation, "generation")
+          || !Object.prototype.hasOwnProperty.call(observation, "snapshot")
+          || !Number.isInteger(observation.serial) || observation.serial <= 0
+          || !Number.isInteger(observation.generation)
+          || observation.generation <= 0) return false
+      const snapshot = observation.snapshot
+      if (!snapshot || typeof snapshot !== "object"
+          || !Object.isFrozen(snapshot)
+          || (Object.getPrototypeOf(snapshot) !== Object.prototype
+            && Object.getPrototypeOf(snapshot) !== null)
+          || !Object.prototype.hasOwnProperty.call(snapshot, "catalogKind")
+          || !Object.prototype.hasOwnProperty.call(snapshot, "entries")
+          || !Object.prototype.hasOwnProperty.call(snapshot, "byId")
+          || snapshot.catalogKind !== "native-listPlugins"
+          || !Array.isArray(snapshot.entries)
+          || !Object.isFrozen(snapshot.entries)
+          || !snapshot.byId || typeof snapshot.byId !== "object"
+          || !Object.isFrozen(snapshot.byId)
+          || Object.getPrototypeOf(snapshot.byId) !== null
+          || Object.keys(snapshot.byId).length !== snapshot.entries.length)
+        return false
+      const seen = Object.create(null)
+      for (let index = 0; index < snapshot.entries.length; index++) {
+        const row = snapshot.entries[index]
+        if (!row || typeof row !== "object" || !Object.isFrozen(row)
+            || (Object.getPrototypeOf(row) !== Object.prototype
+              && Object.getPrototypeOf(row) !== null)
+            || !Object.prototype.hasOwnProperty.call(row, "id")
+            || !Object.prototype.hasOwnProperty.call(row, "kinds")
+            || !Object.prototype.hasOwnProperty.call(row, "enabled")
+            || !Object.prototype.hasOwnProperty.call(row, "barWidget")
+            || typeof row.id !== "string" || row.id === ""
+            || row.id.length > 160
+            || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(row.id)
+            || /\.\./.test(row.id)
+            || Object.prototype.hasOwnProperty.call(seen, row.id)
+            || !Array.isArray(row.kinds) || !Object.isFrozen(row.kinds)
+            || row.kinds.some(function(kind) {
+              return typeof kind !== "string" || kind === ""
+            })
+            || typeof row.enabled !== "boolean"
+            || !row.barWidget || typeof row.barWidget !== "object"
+            || !Object.isFrozen(row.barWidget)
+            || !Object.prototype.hasOwnProperty.call(snapshot.byId, row.id)
+            || snapshot.byId[row.id] !== row) return false
+        seen[row.id] = true
+      }
+      return true
+    } catch (error) { return false }
+  }
+
   function setPluginEnabled(pluginId, enabled) {
     pluginActionError = ""
     if (!nativeCatalogRequired && (!pluginRegistry
@@ -677,11 +737,20 @@ ShibumiPanel {
       return false
     }
     const id = String(pluginId || "")
-    const manifest = nativeCatalogRequired && pluginCatalogSnapshot
-      && pluginCatalogSnapshot.byId
-      ? pluginCatalogSnapshot.byId[id]
+    const observation = nativeCatalogRequired ? pluginCatalogObservation : null
+    if (nativeCatalogRequired && !observation) {
+      pluginActionError = "The plugin catalog is not ready."
+      return false
+    }
+    const manifest = nativeCatalogRequired && observation.snapshot.byId
+      ? observation.snapshot.byId[id]
       : pluginRegistry && pluginRegistry.installedPlugins
         ? pluginRegistry.installedPlugins[id] : null
+    if (nativeCatalogRequired && (!manifest || manifest.id !== id
+        || observation !== pluginCatalogObservation)) {
+      pluginActionError = "The plugin catalog is not ready."
+      return false
+    }
     const kinds = manifest && Array.isArray(manifest.kinds)
       ? manifest.kinds : []
     if (kinds.indexOf("bar") >= 0) {
@@ -1523,7 +1592,7 @@ ShibumiPanel {
     foreground: panel.marketText
     accent: panel.marketAccent
 
-    IconText {
+    Presentation.ControlCenterIconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -1539,7 +1608,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPillToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip

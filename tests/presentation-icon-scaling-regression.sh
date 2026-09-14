@@ -23,7 +23,7 @@ chmod 700 "$tmpdir/runtime"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 install -m 0644 "$repo_root/hancore.shibumi.gpu/GpuCardIcon.qml" \
   "$tmpdir/gpu/GpuCardIcon.qml"
-install -m 0644 "$repo_root/shared/presentation/PacmanWorkspaceMarker.qml" \
+install -m 0644 "$repo_root/hancore.shibumi.state/lib/presentation/PacmanWorkspaceMarker.qml" \
   "$tmpdir/presentation/PacmanWorkspaceMarker.qml"
 install -m 0644 "$repo_root/tests/presentation-icon-scaling-smoke.qml" \
   "$tmpdir/shell.qml"

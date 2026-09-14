@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -128,7 +129,7 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(6)
 
-          IconText {
+          Presentation.ControlCenterIconText {
             id: primaryActionIcon
             visible: root.actionGlyph !== ""
             anchors.verticalCenter: parent.verticalCenter
@@ -192,7 +193,7 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(6)
 
-          IconText {
+          Presentation.ControlCenterIconText {
             id: secondaryActionIcon
             visible: root.secondaryActionGlyph !== ""
             anchors.verticalCenter: parent.verticalCenter
@@ -217,7 +218,7 @@ Item {
           }
         }
 
-        ShibumiPanelToolTip {
+        Presentation.ShibumiPillToolTip {
           panel: root.controller
           visible: secondaryPointer.containsMouse
             && root.secondaryActionDescription !== ""

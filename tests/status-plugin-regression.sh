@@ -97,7 +97,7 @@ rg -U -q 'function closeTrayDrawer\(\) \{[^}]*trayDrawerOpen = false[^}]*closeCh
 rg -U -q 'function openTrayDrawer\(\) \{[^}]*closeNotificationPanel\(\)[^}]*trayDrawerOpen = true' \
   "$status_widget" \
   || fail "tray drawer does not expose a deterministic screen-local open path"
-for bar_host in "$repo_root/Bar.qml" "$repo_root/hancore.shibumi.bar/Bar.qml"; do
+for bar_host in "$repo_root/hancore.shibumi.bar/Bar.qml"; do
   rg -Fq 'function openStatusTray(screenName: string): string' "$bar_host" \
     || fail "$bar_host does not expose the screen-local status tray route"
   rg -Fq 'function openStatusNotifications(screenName: string): string' \

@@ -4,13 +4,14 @@ import QtQuick
 import Quickshell
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.brightness"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url popupSource: Qt.resolvedUrl("BrightnessPanel.qml")
   property var monitorServiceOverride: null
 
@@ -154,7 +155,7 @@ Ui.Panel {
         ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
       active: root.bar !== null && root.tokens !== null
       sourceComponent: Component {
-        PillSurface {
+        Presentation.PillSurface {
           tokenSource: root.tokens
           anchors.fill: parent
           bar: root.bar

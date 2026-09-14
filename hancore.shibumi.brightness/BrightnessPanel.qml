@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -181,7 +182,7 @@ ShibumiPanel {
           width: parent.width
           spacing: Commons.Style.space(10)
 
-          IconText {
+          Presentation.IconText {
             anchors.verticalCenter: parent.verticalCenter
             text: panel.monitorService.displays.length > 1
               ? "desktop_windows" : "monitor"
@@ -550,7 +551,7 @@ ShibumiPanel {
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -566,7 +567,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPanelToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip
@@ -652,7 +653,7 @@ ShibumiPanel {
       anchors.verticalCenter: parent.verticalCenter
       spacing: Commons.Style.space(7)
 
-      IconText {
+      Presentation.IconText {
         anchors.verticalCenter: parent.verticalCenter
         text: "monitor"
         color: displayRow.focusedDisplay || displayRow.highlighted
@@ -691,7 +692,7 @@ ShibumiPanel {
         }
       }
 
-      IconText {
+      Presentation.IconText {
         id: stateIcon
         anchors.verticalCenter: parent.verticalCenter
         text: displayRow.enabledDisplay ? "check_circle" : "radio_button_unchecked"

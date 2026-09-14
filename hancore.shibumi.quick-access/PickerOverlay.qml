@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons as Commons
 import "PickerModel.js" as PickerModel
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 PanelWindow {
   id: root
@@ -449,7 +450,7 @@ PanelWindow {
       anchors.centerIn: parent
       spacing: Commons.Style.space(5)
 
-      IconText {
+      Presentation.IconText {
         anchors.verticalCenter: parent.verticalCenter
         text: action.icon
         color: action.urgent ? root.bar.urgent : root.bar.foreground

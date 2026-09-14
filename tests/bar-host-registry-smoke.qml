@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
-import "core/LayoutModel.js" as LayoutModel
+import "hancore.shibumi.bar" as BarPlugin
+import "hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
 import "fixtures" as Fixtures
 
 ShellRoot {
@@ -700,7 +701,7 @@ ShellRoot {
     property var widgets: ({})
   }
 
-  Bar {
+  BarPlugin.Bar {
     id: hostBar
 
     omarchyPath: testOmarchyPath

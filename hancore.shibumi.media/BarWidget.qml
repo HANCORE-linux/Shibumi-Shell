@@ -5,13 +5,14 @@ import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.media"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url panelSource: Qt.resolvedUrl("MediaPanel.qml")
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   readonly property var mediaService: suiteShell.firstPartyServiceFor("omarchy.media")
@@ -139,7 +140,7 @@ Ui.Panel {
     width: implicitWidth
     height: implicitHeight
 
-    PillSurface {
+    Presentation.PillSurface {
       tokenSource: root.tokens
       settings: root.settings
       v1AppearanceEnabled: true
@@ -174,7 +175,7 @@ Ui.Panel {
       }
     }
 
-    IconText {
+    Presentation.IconText {
       id: idleIcon
       anchors.centerIn: parent
       visible: !root.active
@@ -320,7 +321,7 @@ Ui.Panel {
       }
     }
 
-    IconText {
+    Presentation.IconText {
       id: activeIcon
       visible: root.active && root.iconMode
         && (!root.bar || !root.bar.vertical)
@@ -353,7 +354,7 @@ Ui.Panel {
       anchors.centerIn: parent
       spacing: Commons.Style.space(2)
 
-      IconText {
+      Presentation.IconText {
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.playing ? "pause" : "play_arrow"
         color: root.widgetInk
@@ -381,7 +382,7 @@ Ui.Panel {
     implicitHeight: mediaSurface.height
     opacity: enabled ? 1 : 0.28
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: parent.icon
       color: parent.accent ? root.widgetInk

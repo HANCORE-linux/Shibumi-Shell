@@ -6,12 +6,14 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "hancore.shibumi.ai" / "scripts" / "opencode-usage"
 

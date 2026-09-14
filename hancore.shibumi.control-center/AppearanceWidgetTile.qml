@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Rectangle {
   id: root
@@ -30,7 +31,7 @@ Rectangle {
     anchors.margins: Commons.Style.space(8)
     spacing: Commons.Style.space(8)
 
-    IconText {
+    Presentation.ControlCenterIconText {
       anchors.verticalCenter: parent.verticalCenter
       width: Commons.Style.space(22)
       text: root.glyph

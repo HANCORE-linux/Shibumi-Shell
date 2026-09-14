@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.gpu",
   "name": "Shibumi GPU",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Lazy GPU load, hardware, driver, temperature, and VRAM widget.",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
@@ -21,7 +23,10 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G17",
-    "requires": ["hancore.shibumi.cpu"],
+    "requires": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.cpu"
+    ],
     "recommends": []
   }
 }

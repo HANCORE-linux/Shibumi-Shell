@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.audio",
   "name": "Shibumi Audio",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi audio presentation over Omarchy's PipeWire owner.",
@@ -26,9 +26,13 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G6",
-    "capabilities": ["audio"],
+    "capabilities": [
+      "audio"
+    ],
     "preferredRegion": "left",
-    "requires": [],
+    "requires": [
+      "hancore.shibumi.state"
+    ],
     "recommends": []
   }
 }

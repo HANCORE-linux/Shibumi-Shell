@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -348,7 +349,7 @@ Item {
       anchors.rightMargin: 6
       spacing: 7
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         width: 22
         text: root.iconPreviewOptions[1].glyph
@@ -412,7 +413,7 @@ Item {
         border.width: 1
         border.color: Commons.Util.alpha(root.accent, 0.28)
 
-        IconText {
+        Presentation.ControlCenterIconText {
           anchors.centerIn: parent
           text: String(compactPluginCard.plugin.glyph || "extension")
           color: root.accent
@@ -620,7 +621,7 @@ Item {
           anchors.rightMargin: 6
           spacing: 7
 
-          IconText {
+          Presentation.ControlCenterIconText {
             anchors.verticalCenter: parent.verticalCenter
             width: 23
             text: modelData.glyph
@@ -701,7 +702,7 @@ Item {
             }
           }
 
-          IconText {
+          Presentation.ControlCenterIconText {
             anchors.centerIn: parent
             text: String(modelData.glyph || "extension")
             color: root.accent

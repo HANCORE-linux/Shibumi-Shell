@@ -3,7 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-helper=${PICKER_HELPER:-$repo_root/scripts/shibumi-picker}
+helper=${PICKER_HELPER:-$repo_root/hancore.shibumi.quick-access/scripts/shibumi-picker}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

@@ -1,5 +1,5 @@
 import QtQuick
-import "../core/RunGeometry.js" as RunGeometry
+import "../hancore.shibumi.bar/core/RunGeometry.js" as RunGeometry
 
 QtObject {
   function fail(message) {
