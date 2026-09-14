@@ -19,6 +19,11 @@ ShellRoot {
   property var firstItem: null
   property var disabledItem: null
   property int stablePairChecks: 0
+  property bool sameHandleBurstStarted: false
+  property int sameHandleChecks: 0
+  property int sameHandleResolverBaseline: 0
+  property int sameHandleGenerationBaseline: 0
+  property int replacementGenerationBaseline: 0
   property string injectionMode: ""
   property int injectionTransitions: 0
   property bool completionReplacementArmed: false
@@ -27,6 +32,7 @@ ShellRoot {
   property int invalidationReplacements: 0
   property var invalidationItem: null
   property int invalidationStableChecks: 0
+  property int staleDirectDispatches: 0
   property var errorComponent: null
   property bool observedErrorLoading: false
 
@@ -62,10 +68,8 @@ ShellRoot {
     injectionTransitions++
     if (mode === "revoke") {
       clearRegistry(registryA)
-      slot.resolvedComponent = null
     } else if (mode === "replace") {
       publish(registryA, widgetB, pluginId)
-      slot.resolvedComponent = widgetB
     } else {
       fail("unexpected property-injection transition " + mode)
     }
@@ -214,7 +218,6 @@ ShellRoot {
       root.completionReplacementArmed = false
       root.completionReplacements++
       root.publish(registryA, widgetB, root.pluginId)
-      slot.resolvedComponent = widgetB
     }
 
     function onLoadedSourceComponentChanged() {
@@ -226,7 +229,13 @@ ShellRoot {
       // latest authorized source, so the stale outer B request must never
       // reach the Loader setter. Reusing A also exercises a no-op native setter.
       root.publish(registryA, widgetA, root.pluginId)
-      slot.resolvedComponent = widgetA
+    }
+
+    function on_DispatchedSubmissionChanged() {
+      const dispatch = slot._dispatchedSubmission
+      if (root.stage >= 17 && dispatch && dispatch.source === widgetB
+          && slot.resolvedComponent === widgetA)
+        root.staleDirectDispatches++
     }
   }
 
@@ -237,7 +246,12 @@ ShellRoot {
     onTriggered: {
       root.stageAttempts++
       if (root.stageAttempts > 150)
-        return root.fail("timed out at stage " + root.stage)
+        return root.fail("timed out at stage " + root.stage + " "
+          + JSON.stringify({enabled: slot.moduleEnabled,
+            resolved: slot.resolvedComponent !== null,
+            active: slot.loaderActive, status: slot.loaderStatus,
+            item: slot.loaderHasItem, generation: slot._submission.generation,
+            readyCalls: root.readyCalls, invalidReadyCalls: root.invalidReadyCalls}))
 
       if (root.stage === 0) {
         if (!root.loaded(widgetA, "A", 1)) return
@@ -249,16 +263,40 @@ ShellRoot {
         if (!root.loaded(widgetA, "A", 1)
             || slot.activeItem !== root.firstItem)
           return root.fail("delayed alias notification lost exact success")
-        root.stablePairChecks++
-        if (root.stablePairChecks < 3) return
+        if (!root.sameHandleBurstStarted) {
+          root.stablePairChecks++
+          if (root.stablePairChecks < 3) return
+          root.sameHandleBurstStarted = true
+          root.sameHandleResolverBaseline = resolver.revision
+          root.sameHandleGenerationBaseline = slot._submission.generation
+          fakeBar.barConfig = {
+            layout: {
+              left: [{ id: root.pluginId, enabled: true,
+                fixtureState: 1 }],
+              center: [], right: []
+            }
+          }
+          for (let index = 0; index < 42; index++)
+            root.publish(registryA, widgetA, root.pluginId)
+          return
+        }
+        root.sameHandleChecks++
+        if (root.sameHandleChecks < 3) return
+        if (resolver.revision !== root.sameHandleResolverBaseline
+            || slot._submission.generation
+              !== root.sameHandleGenerationBaseline
+            || slot.activeItem !== root.firstItem
+            || !root.loaded(widgetA, "A", 1))
+          return root.fail("same-handle State/registry fan-out touched Loader")
+        root.replacementGenerationBaseline = slot._submission.generation
         root.publish(registryA, widgetB, root.pluginId)
-        if (slot.currentLoadReady())
-          return root.fail("replacement retained current success before reload")
         root.stage = 2
       } else if (root.stage === 2) {
         if (!root.loaded(widgetB, "B", 2)) return
-        if (slot.activeItem === root.firstItem)
-          return root.fail("A to B replacement retained the old item")
+        if (slot.activeItem === root.firstItem
+            || slot._submission.generation
+              !== root.replacementGenerationBaseline + 1)
+          return root.fail("A to B replacement did not produce exactly one Loader change")
         root.clearRegistry(registryA)
         root.stage = 3
       } else if (root.stage === 3) {
@@ -393,16 +431,16 @@ ShellRoot {
             || root.completionReplacementArmed)
           return root.fail("completion publication reentrancy was not bounded")
         root.publish(registryA, widgetA, root.pluginId)
-        slot.resolvedComponent = widgetA
         root.stage = 17
       } else if (root.stage === 17) {
         if (!root.loaded(widgetA, "A", 10)) return
         root.invalidationItem = slot.activeItem
         root.invalidationReplacementArmed = true
         root.publish(registryA, widgetB, root.pluginId)
-        slot.resolvedComponent = widgetB
         root.stage = 18
       } else if (root.stage === 18) {
+        if (root.staleDirectDispatches > 0)
+          return root.fail("invalidation reentry dispatched stale source B")
         if (root.invalidationReplacements !== 1
             || root.invalidationReplacementArmed) return
         if ((slot._dispatchedSubmission

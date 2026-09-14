@@ -35,6 +35,10 @@ Item {
   property int localGeneration: 0
   property int _epoch: 0
   property var _publication: null
+  // Public authority is revoked through _publication. Keep only the last
+  // bounded, validated value for content comparison across demand/source/read
+  // gaps so an identical recovery cannot manufacture an inventory change.
+  property var _retainedSnapshot: null
   property var _operation: null
   // A QObject-typed guard emits loss when a replaced backend is destroyed.
   // A QObject nested only in the plain JS operation record has no such notify.
@@ -52,6 +56,7 @@ Item {
   readonly property int readSerial: _publication ? _publication.serial : 0
   readonly property bool nativeConstructed: nativeLoader.item !== null
   signal settled(int serial, string result)
+  signal contentChanged()
 
   function observation() { return ready && active ? _publication : null }
 
@@ -156,8 +161,13 @@ Item {
     if (op.accepted && !op.drained) return
     var value = op.accepted && op.event && op.event.ok ? Model.parse(op.event.output) : null
     if (value) {
-      var retained = Model.same(snapshot, value) ? snapshot : value
+      var changed = !Model.same(_retainedSnapshot, value)
+      var retained = changed ? value : _retainedSnapshot
       localGeneration++
+      if (current(op)) {
+        _retainedSnapshot = retained
+        if (changed) contentChanged()
+      }
       if (current(op)) _publication = Object.freeze({ serial: op.serial,
         generation: localGeneration, snapshot: retained })
       if (current(op)) _ready = true

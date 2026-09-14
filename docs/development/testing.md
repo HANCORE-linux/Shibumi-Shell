@@ -182,13 +182,17 @@ The maintained `widget-pipeline-classifier-regression.py` tests distinguish
 missing selection/handle, Loader.Error, missing item and stale provenance, and
 require latched output chronology across later flaps.
 
-`scoped-loader-admission-regression.sh` additionally exercises the real resolver
-and Loader with inert local objects: type refusal, replacement, unregister,
-disable, removed configuration, facade loss/replacement, asynchronous Load error,
-registration-before-load and completion/injection reentrancy. Only the exact
+`scoped-loader-admission-regression.sh` additionally exercises the production
+direct scoped binding and Loader with inert local objects: 42 repeated
+publications of one Component handle, one exact A→B replacement, type refusal,
+unregister, disable, removed configuration, facade loss/replacement,
+asynchronous Load error, registration-before-load and completion/injection
+reentrancy. The 42 equal publications retain one item and submission generation;
+the replacement advances that generation exactly once. Only the exact
 submitted-source/generation/completed-item tuple can report current success;
-the native sourceComponent getter is not used as readback authority. The real
-legacy resolver retains its original Component readiness tests.
+the native sourceComponent getter is not used as readback authority. The
+separately activated legacy resolver retains its original Component readiness
+tests.
 
 This is deterministic nested-output evidence through the production host and
 render chain. It is not physical hotplug, DPMS, multi-output, GPU, platform
@@ -571,8 +575,14 @@ claim.
 
 The demand gate covers exact token identity, reentrant release/acquire, holder
 and service destruction, the 64-holder bound, scoped admission/revocation,
-source replacement, public hint coalescing, primitive observations and separation
-from update scans. Seven calibrated controls and restored positives exercise these
+source replacement, suppression of State/config and widget-registry fan-out,
+explicit refresh, five-second reconcile, primitive observations and separation
+from update scans. It also proves that equal catalog content across demand and
+failed-read gaps does not invalidate update results, while changed content does
+so exactly once. A cached update result that predates the first catalog read is
+invalidated by that first changed publication, and no retained snapshot crosses
+the declared `PluginUpdateService` facade after revocation. Seven calibrated
+controls and restored positives exercise these
 contracts with an inert backend. In the pinned native fixture below,
 `FixtureCatalogService.qml` only exposes observation IPC over the production
 service facade; native injection supplies its shell/path. That separate run uses

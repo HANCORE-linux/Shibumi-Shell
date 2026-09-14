@@ -124,11 +124,16 @@ baseline.
   require single-instance manifests: an `allowMultiple` family request is
   refused before layout, registry or family-state mutation. Existing layouts,
   unrelated multi-instance entries and V2 retain their behavior.
-  On scoped hosts, rendering uses the exact configured layout ID and its
-  accepted `barWidgetRegistry.widgets[id].component` and metadata. The scoped
-  resolver checks the actual Component type, not its JavaScript `status`
-  projection. Success requires the current Loader's Ready state and exact
-  submitted-source/completed-item provenance; a handle alone is not readiness.
+  On scoped hosts, each `WidgetSlot` binds the exact configured layout ID
+  directly to its accepted `barWidgetRegistry.widgets[id].component` and
+  metadata. It checks the actual Component type, not its JavaScript `status`
+  projection. Republication of the same handle leaves the Loader item intact;
+  replacing the handle produces one controlled Loader submission. Success
+  still requires the current Loader's Ready state and exact submitted-source/
+  completed-item provenance; a handle alone is not readiness. State
+  publication, structural layout, and catalog acquisition are separate
+  reaction paths. Scoped bar/config and registry fan-out do not start catalog
+  reads; explicit requests and the five-second demanded reconcile do.
   Missing registration stays empty until the registry publishes it; an original must
   never substitute for a clone. Clone ancestry comes from public `listPlugins`,
   with cycle detection and a 32-entry traversal bound, not fabricated foreign
@@ -233,6 +238,11 @@ The lifecycle contract and uncompleted physical gates are defined in
   audio owner, network owner, media owner, or equivalent platform backend.
 - Views do not execute platform commands directly. Services own commands,
   validation, cancellation, timeouts, and structured parsing.
+- All QML loaded into the single Quickshell process is inside one trust boundary.
+  Service facades are ownership and supported-API boundaries, not a sandbox:
+  same-process plugin code can traverse and mutate the QObject tree. Containing
+  malicious installed QML is a host concern and a non-goal for these facades;
+  external command output still crosses bounded, validated parsers.
 - Polling, file watching, and worker processes are process-wide and shared
   unless the state is genuinely output-specific.
 - Closed panels and pickers release UI-only timers, scanners, peak monitors,

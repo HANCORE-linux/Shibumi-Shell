@@ -25,7 +25,7 @@ MARKER_DIGEST = "0123456789abcdef" * 4
 MAX_GIT_TREE = 256 * 1024
 MAX_GIT_BLOB = 1024 * 1024
 MAX_GIT_FILES = 256
-MUTANT_RESOLVER = "services/HostWidgetResolver.qml"
+MUTANT_SLOT = "core/WidgetSlot.qml"
 
 
 def copied_payloads(payloads):
@@ -68,25 +68,19 @@ def candidate_status_guard_mutant(candidate):
     files = copied_payloads(candidate)
     bar_files = files["hancore.shibumi.bar"]
 
-    resolver_source, resolver_executable = bar_files[MUTANT_RESOLVER]
-    resolver = resolver_source.decode("utf-8")
-    start = resolver.find("  function componentFor(widgetId) {\n")
-    end = resolver.find("    const existing = components[id]\n", start)
-    if start < 0 or end < 0:
-        raise ValueError("candidate scoped resolver anchor is missing")
-    scoped = resolver[start:end]
-    ternary = "? component : null"
-    if scoped.count(ternary) != 1 or "component.status" in scoped:
-        raise ValueError("candidate scoped resolver is not the unguarded admission")
-    question = scoped.index(ternary)
-    scoped_mutant = (scoped[:question]
-        + "&& component.status === Component.Ready\n        "
-        + scoped[question:])
-    resolver = resolver[:start] + scoped_mutant + resolver[end:]
-    bar_files[MUTANT_RESOLVER] = (resolver.encode(), resolver_executable)
+    slot_source, slot_executable = bar_files[MUTANT_SLOT]
+    slot = slot_source.decode("utf-8")
+    direct = ("    try { return candidate && candidate instanceof Component "
+              "? candidate : null }\n")
+    guarded = ("    try { return candidate && candidate instanceof Component\n"
+               "        && candidate.status === Component.Ready "
+               "? candidate : null }\n")
+    if slot.count(direct) != 1 or "candidate.status" in slot:
+        raise ValueError("candidate direct scoped binding anchor is missing")
+    slot = slot.replace(direct, guarded)
+    bar_files[MUTANT_SLOT] = (slot.encode(), slot_executable)
     return files, {
-        "scopedStatusGuardSha256": hashlib.sha256(
-            scoped_mutant.encode()).hexdigest(),
+        "scopedStatusGuardSha256": hashlib.sha256(guarded.encode()).hexdigest(),
     }
 
 

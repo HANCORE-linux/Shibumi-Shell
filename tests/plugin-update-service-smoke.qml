@@ -221,8 +221,9 @@ ShellRoot {
         }
         widgetRegistry.revision = 7
         service.observePluginRevision(9999, false)
-        if (service.observedPluginRevision !== 7)
-          return root.fail("caller revision replaced native snapshot revision")
+        if (service.pluginRevision !== 0
+            || service.observedPluginRevision !== 0)
+          return root.fail("scoped widget fan-out became update/catalog revision")
         if (!service.check(true)) return root.fail("admitted update scan did not start")
         root.phase++
         root.ticks = 0

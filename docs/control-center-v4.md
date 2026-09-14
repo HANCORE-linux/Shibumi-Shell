@@ -341,8 +341,9 @@ every independently installed Git-managed plugin. A compact text line below
 the button reports the result, for example `0 available`, while the tooltip
 and accessibility description spell out checked, unmanaged, and failed totals
 without duplicating the provider inventory above. The scan is shared across
-outputs, invalidated when the plugin registry changes, and stopped when no
-plugin catalog is visible.
+outputs, invalidated when the native catalog publishes a content-different
+plugin inventory, and stopped when no plugin catalog is visible. Ordinary
+scoped bar/config and widget-registry fan-out is not an inventory change.
 
 The terminal reports the number of available updates and offers a
 multi-selection. Only the selected plugins are then passed individually to

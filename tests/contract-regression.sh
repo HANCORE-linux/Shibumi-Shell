@@ -196,7 +196,7 @@ rg -Uq 'active: barWindow\.bar\.hostReady && barWindow\.bar\.styleReady\n[[:spac
   hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface may instantiate for an invalid Wayland placeholder"
 rg -q 'Services\.HostWidgetResolver' hancore.shibumi.bar/Bar.qml \
-  || fail "replacement bar does not own stable host widget components"
+  || fail "replacement bar does not retain its isolated legacy widget path"
 rg -Fq 'function inlineSettingsDelta(current, next)' hancore.shibumi.bar/Bar.qml \
   || fail "bar host cannot distinguish inline state from structural layout changes"
 rg -Fq 'function applyInlineSettingsDelta(changes)' hancore.shibumi.bar/Bar.qml \
@@ -235,7 +235,18 @@ fi
 [[ $(rg -c 'entries: root\.anchorIndex < 0 \? root\.entries : \[\]' hancore.shibumi.bar/core/CenterSection.qml) -eq 2 ]] \
   || fail "both center orientations must suppress the inactive fallback model"
 rg -q 'bar\.registeredWidgetComponent\(moduleName\)' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "widget slots do not resolve exclusively through the plugin registry"
+  || fail "legacy widget slots lost their isolated host resolver"
+rg -Fq 'const widgets = registry ? registry.widgets : null' \
+  hancore.shibumi.bar/core/WidgetSlot.qml \
+  && rg -Fq 'const candidate = scopedEntry.component' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  && rg -Uq 'readonly property var resolvedComponent:\n[[:space:]]*scopedHost \? scopedComponent : legacyComponent' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "scoped WidgetSlot does not bind the exact host Component directly"
+if rg -q 'target: root\.scoped \? root\.widgetRegistry' \
+    hancore.shibumi.bar/services/HostWidgetResolver.qml; then
+  fail "scoped widget snapshots still fan out through the legacy resolver"
+fi
 if rg -q 'internalWidgetRegistry|internalComponent|registryComponent' \
     hancore.shibumi.bar/Bar.qml hancore.shibumi.bar/core/WidgetSlot.qml; then
   fail "registry-only widget resolution retains a local component owner"

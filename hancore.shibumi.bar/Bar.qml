@@ -3149,9 +3149,8 @@ Item {
 
     function onPluginsChanged() {
       if (root.shutdownPrepared) return
-      // Component creation also changes the resolver revision. Do not use it
-      // as a family dependency: a new projected slot would invalidate its
-      // own binding while its provider component is being constructed.
+      // Family classification follows the host/catalog domains, not the
+      // separately activated legacy Component cache.
       root.providerRegistryRevision++
       v1PluginReconcileTimer.restart()
     }

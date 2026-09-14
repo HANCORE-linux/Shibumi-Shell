@@ -74,7 +74,7 @@ prepare_fixture() {
   printf '%s\n' "$fixture_dir"
 }
 
-install_invalidation_before_claim_mutant() {
+install_stale_direct_source_mutant() {
   local source_path=$1
   python3 - "$source_path" <<'PY'
 from pathlib import Path
@@ -82,17 +82,18 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-fixed = """    _submission = request
-    if (_submission !== request) return
-    if (!invalidateCompletedLoad(request)) return
-    if (_submission !== request) return
+fixed = """    if (resolvedComponent !== nextSource) {
+      requestLoaderSourceSync()
+      return
+    }
 """
-mutant = """    invalidateCompletedLoad()
-    _submission = request
-    if (_submission !== request) return
+mutant = """    if (false) {
+      requestLoaderSourceSync()
+      return
+    }
 """
 if source.count(fixed) != 1:
-    raise SystemExit("fixed submit sequence was not found exactly once")
+    raise SystemExit("direct source revalidation was not found exactly once")
 path.write_text(source.replace(fixed, mutant))
 PY
 }
@@ -106,10 +107,10 @@ run_fixture() {
   local rc
 
   fixture_dir=$(prepare_fixture "$variant")
-  if [[ $variant == invalidation-before-claim ]]; then
-    # Mutate only the private copy. This recreates the reviewed ordering bug
-    # without rewriting the production source between fixture arms.
-    install_invalidation_before_claim_mutant \
+  if [[ $variant == stale-direct-source ]]; then
+    # Mutate only the private copy. This lets a superseded direct binding reach
+    # the Loader after reentrant completion invalidation.
+    install_stale_direct_source_mutant \
       "$fixture_dir/hancore.shibumi.bar/core/WidgetSlot.qml"
   fi
 
@@ -153,6 +154,6 @@ run_fixture() {
   fi
 }
 
-run_fixture invalidation-before-claim 1 \
+run_fixture stale-direct-source 1 \
   'invalidation reentry dispatched stale source B'
 run_fixture candidate 0 'scoped loader admission regression passed'

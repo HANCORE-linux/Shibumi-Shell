@@ -10,7 +10,7 @@ from lib.source_snapshot import snapshot, materialize
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = 'catalog demand ownership/reentry/capacity passed'
-SERVICE_MARKER = 'production catalog service leases/admission/hints passed; inert backend'
+SERVICE_MARKER = 'production catalog service leases/admission/reconcile passed; inert backend'
 
 
 def run_case(sources, service=False, diagnostic=''):
@@ -85,12 +85,14 @@ def main():
             controls += [
                 ('PluginUpdateService.qml', b'admitted: root.available && root.scopedHost',
                  b'admitted: root.scopedHost', 'provider loss retained read authority', True),
-                ('PluginUpdateService.qml', b'function onBarConfigChanged() { nativeCatalog.requestRefresh() }',
-                 b'function onBarConfigChanged() {}', 'public shell hint did not refresh', True),
-                ('PluginUpdateService.qml', b'function onRevisionChanged() { nativeCatalog.requestRefresh() }',
-                 b'function onRevisionChanged() {}', 'widget hint did not refresh', True),
+                ('PluginUpdateService.qml', b'  readonly property string command:',
+                 b'  Connections {\n    target: root.shell\n    ignoreUnknownSignals: true\n    function onBarConfigChanged() { nativeCatalog.requestRefresh() }\n  }\n  readonly property string command:',
+                 'State/config signal started or invalidated the catalog', True),
+                ('PluginUpdateService.qml', b'  readonly property string command:',
+                 b'  Connections {\n    target: root.barWidgetRegistry\n    ignoreUnknownSignals: true\n    function onRevisionChanged() { nativeCatalog.requestRefresh() }\n  }\n  readonly property string command:',
+                 'widget-registry signal started or invalidated the catalog', True),
                 ('PluginUpdateService.qml', b'demand: catalogDemand.count > 0',
-                 b'demand: root.available', 'destroyed last consumer retained catalog', True),
+                 b'demand: root.available', 'last explicit release retained catalog authority', True),
             ]
         for name, old, new, diagnostic, service in controls:
             key = 'catalog/' + name

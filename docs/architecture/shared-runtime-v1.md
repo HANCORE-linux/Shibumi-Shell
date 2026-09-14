@@ -94,16 +94,20 @@ the replacement cannot dispatch a second prime. Settings and layout changes do
 not rescan. Startup-prime timeout, nonzero exit, missing replacement, Runtime
 retirement, or scope loss is terminal for that process.
 
-After output loss, the scoped resolver accepts only the exact currently
-configured registry ID, matching metadata identity and actual Component type.
+After output loss, each scoped `WidgetSlot` binds the exact currently
+configured registry ID and matching metadata identity directly from
+`barWidgetRegistry.widgets[id].component`. It admits the actual Component type.
 The JavaScript `status` projection may be absent while the native Loader can
 still instantiate that Component. The typed `Loader.sourceComponent` getter
 can also project null in this state. One controlled setter records the submitted
 handle and generation; `onLoaded` confirms the exact item, and readiness
-revalidates this tuple against the current resolver after property injection.
-Replacing or revoking the source invalidates completion. Legacy locally created
-Components retain their original status checks. No missing Component is cached,
-reconstructed from a manifest, or replaced by an original provider.
+revalidates this tuple against the current direct host binding after property
+injection. Repeated host snapshots carrying the same handle leave that tuple
+and item intact; replacing or revoking the source invalidates completion and
+produces one new submission. The separately activated legacy route retains
+locally created Components and their original status checks. No missing scoped
+Component is cached, reconstructed from a manifest, or replaced by an original
+provider.
 
 The Runtime may emit one passive sanitized exhaustion warning per process,
 only after a real positive/zero/positive output sequence, a previously confirmed
@@ -302,14 +306,21 @@ is launched; these are IPC acquisition/cleanup processes only.
 
 One demand/admission-bound five-second single-shot reconciliation starts only
 after the preceding operation has drained and is stopped on final demand release
-or owner loss. Queued explicit refreshes remain separate. Public scoped
-`barConfigChanged` and widget-registry revision are non-authoritative refresh
-hints, not a catalog revision. An isolated pinned-native test proves that async
-bar-loader fallback can change effective active-Bar DTO fields after the final
-public hint; a calibrated staged-host counterexample supplies the otherwise
-missing later hint and makes that gap assertion fail. This justifies a bounded
-fallback, but does not establish that five seconds is optimal. Isolated cadence
-and native tests show post-drain spacing and silence after release. The pinned
+or owner loss. Queued explicit refreshes remain separate. Public scoped `barConfigChanged` and widget-registry revision are not catalog
+triggers: Omarchy 4.0.3 republishes them during ordinary State persistence.
+Catalog reads start only on initial demand, an explicit current-consumer request,
+or the demand-bound five-second post-drain reconcile. An isolated pinned-native
+test proves that async bar-loader fallback can change effective active-Bar DTO
+fields without an authoritative public catalog event. This justifies the
+bounded fallback, but does not establish that five seconds is optimal. A
+last bounded, validated snapshot is retained privately for comparison across
+demand, source and failed-read gaps while public observation is still revoked;
+only a genuinely changed published inventory invalidates the separate
+plugin-update result. The retained value is internal state, not part of the
+supported `PluginUpdateService` facade. As with every QML object in the one
+Quickshell process, this API boundary does not sandbox malicious same-process
+code or QObject-tree mutation.
+Isolated cadence and native tests show post-drain spacing and silence after release. The pinned
 resource gate bounds the one launcher/custodian/IPC acquisition tree to three
 processes, includes observed descendants in warm-cycle CPU accounting and checks
 host PSS retention with calibrated QML/helper CPU and retention counterexamples.

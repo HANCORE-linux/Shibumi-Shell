@@ -65,7 +65,9 @@ the installable Quattro presentation alternatives for that family are
 `omarchy.indicators` and `omarchy.tray`.
 
 Registry mutations may briefly make an otherwise valid entry point
-unavailable. Every Shibumi `WidgetSlot` observes the host resolver revision and
-performs a bounded retry. A later successful resolution publishes another
-revision, so both current and future third-party widgets recover without
-waiting for an unrelated configuration change.
+unavailable. On scoped hosts every Shibumi `WidgetSlot` binds the exact
+`barWidgetRegistry.widgets[id].component` directly and performs the existing
+bounded missing-component retry. Repeated snapshots with an identical handle
+do not touch the Loader; a real handle replacement makes one new submission.
+Older full-registry hosts use the separately activated URL resolver and its
+legacy revision/retry path.

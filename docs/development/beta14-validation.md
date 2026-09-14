@@ -81,15 +81,19 @@ Shibumi additionally required the JavaScript property `component.status` to equa
 becoming `undefined` while the Component remains instantiable. Restoring that
 extra guard in a staged candidate reproduces the failure.
 
-The scoped resolver now checks exact current configuration/metadata identity and
-`instanceof Component`, then lets the Loader determine load success. The actual
-`instanceof` implementation, not a guard-free substitute, is exercised by the
-native regression. Legacy locally created Components retain their status checks.
+Each scoped `WidgetSlot` now checks exact current configuration/metadata
+identity and binds the actual `barWidgetRegistry.widgets[id].component` directly
+using `instanceof Component`; the Loader determines load success. Equal host
+Component publications retain the existing Loader item. One exact handle
+replacement creates one new Loader submission. The actual `instanceof`
+implementation, not a guard-free substitute, is exercised by the native
+regression. Separately activated legacy locally created Components retain their
+status checks.
 
 The typed `Loader.sourceComponent` getter also projects null after output loss
 in this fixture. One controlled source setter therefore records actual submission
 provenance. Only `onLoaded`, real `Loader.Ready`, the exact completed item and
-current submitted/resolved/registry identity may establish success. Source
+current submitted/direct-binding identity may establish success. Source
 replacement, disable, revocation and reentrant injection invalidate stale loads.
 Slots register before source submission. The [focused review](../audits/beta14-loader-admission-review-2026-09-13.md)
 found and rechecked a correction for reentry during completion invalidation.
@@ -98,6 +102,15 @@ source. Returning to the same still-resident, already confirmed item does not
 require an invented `onLoaded` event or duplicate Ready report. Why these
 JavaScript projections are lost remains unexplained; the fix does not depend on
 an assumed Qt root cause.
+
+An isolated proof against the admitted installed Omarchy 4.0.3 source used its
+production `WidgetSlot` and a real `StateStorage` write. The recorded host wave
+contained all 42 `syncPluginWidgets()` registrations. State publication
+completed in 165 ms. Registry revision advanced by 42 while resolver revision
+stayed 4→4, catalog
+starts stayed 1→1, Component and resolved-Component change counts stayed zero,
+and Loader submission generation stayed unchanged. The same Loader item
+remained current. This proof did not modify or signal the live shell.
 
 The second rescan, its lock probe and recovery state machine have been removed.
 Only the existing exact-PID startup prime remains, at most once per process.

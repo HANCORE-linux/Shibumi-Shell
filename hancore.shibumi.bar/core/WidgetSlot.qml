@@ -27,15 +27,59 @@ Item {
     return result
   }
   readonly property bool moduleEnabled: moduleSettings.enabled !== false
-  // Make the component binding observe the resolver explicitly. A registry
-  // refresh may briefly remove an entry point; the resolver publishes another
-  // revision once that component can be created again.
-  readonly property int resolverRevision: bar && "hostWidgetResolver" in bar
-    && bar.hostWidgetResolver ? bar.hostWidgetResolver.revision : 0
-  // Component handles are synchronized imperatively. Binding this property to
-  // resolverRevision makes component creation publish a dependency change
-  // while the same binding is still being evaluated on a fresh shell start.
-  property var resolvedComponent: null
+  readonly property bool scopedHost: {
+    const registry = bar ? bar.pluginRegistry : null
+    return !!registry && "pluginId" in registry
+  }
+  // Bar.layoutConfig changes only for structural layout edits. A top-level
+  // State write republishes barConfig but leaves this structure and every live
+  // slot untouched.
+  readonly property var structuralLayout: bar
+    ? "layoutConfig" in bar ? bar.layoutConfig
+      : bar.barConfig ? bar.barConfig.layout : null
+    : null
+  function configuredInStructuralLayout(widgetId) {
+    const id = String(widgetId || "")
+    const layout = structuralLayout
+    if (id === "" || !layout) return false
+    for (const section of ["left", "center", "right"]) {
+      const entries = layout[section]
+      if (!Array.isArray(entries)) return false
+      for (let index = 0; index < entries.length; index++) {
+        const candidate = bar.entryId(entries[index])
+        if (candidate === id) return true
+      }
+    }
+    return false
+  }
+  readonly property bool scopedConfigured:
+    scopedHost && configuredInStructuralLayout(moduleName)
+  // Omarchy 4.0.3 republishes a detached widgets object for every registration.
+  // Bind the exact configured ID directly; equal Component handles do not emit
+  // scopedComponentChanged and therefore do not touch the Loader.
+  readonly property var scopedEntry: {
+    const registry = bar ? bar.barWidgetRegistry : null
+    const widgets = registry ? registry.widgets : null
+    return widgets && Object.prototype.hasOwnProperty.call(widgets, moduleName)
+      ? widgets[moduleName] : null
+  }
+  readonly property var scopedMetadata: scopedEntry && scopedEntry.metadata
+    && scopedEntry.metadata.pluginId === moduleName
+      ? scopedEntry.metadata : null
+  readonly property var scopedComponent: {
+    if (!scopedConfigured || !scopedMetadata || !scopedEntry) return null
+    const candidate = scopedEntry.component
+    // A valid native QQmlComponent may not expose a JavaScript status value.
+    try { return candidate && candidate instanceof Component ? candidate : null }
+    catch (error) { return null }
+  }
+  property var legacyComponent: null
+  readonly property var resolvedComponent:
+    scopedHost ? scopedComponent : legacyComponent
+  // Only the separately activated legacy URL resolver publishes revisions.
+  readonly property int resolverRevision: !scopedHost && bar
+    && "hostWidgetResolver" in bar && bar.hostWidgetResolver
+      ? bar.hostWidgetResolver.revision : 0
   property bool slotComplete: false
   // Loader.sourceComponent readback can lose its JavaScript projection for a
   // valid native QQmlComponent. Keep request, dispatch, resident item and
@@ -43,6 +87,7 @@ Item {
   // cannot observe or take ownership through a half-published tuple.
   property var _submission: ({ source: null, generation: 0 })
   property var _dispatchedSubmission: null
+  property bool _loaderSubmissionActive: false
   property var _residentLoad: null
   property var _completedLoad: null
   property var loadedComponent: null
@@ -58,6 +103,7 @@ Item {
   readonly property var containingWindow: activeItem && activeItem.QsWindow
     ? activeItem.QsWindow.window : null
   readonly property var moduleManifest: {
+    if (scopedHost) return null
     void(resolverRevision)
     const resolver = bar && "hostWidgetResolver" in bar
       ? bar.hostWidgetResolver : null
@@ -77,8 +123,9 @@ Item {
   readonly property string fallbackTooltipText: {
     void(resolverRevision)
     const resolver = bar && "hostWidgetResolver" in bar ? bar.hostWidgetResolver : null
-    const published = resolver && typeof resolver.metadataFor === "function"
-      ? resolver.metadataFor(moduleName) : null
+    const published = scopedHost ? scopedMetadata
+      : resolver && typeof resolver.metadataFor === "function"
+        ? resolver.metadataFor(moduleName) : null
     if (published && String(published.displayName || "").trim() !== "")
       return String(published.displayName).trim()
     const manifest = moduleManifest
@@ -187,7 +234,12 @@ Item {
   onModuleSettingsChanged: injectProperties()
   onModuleNameChanged: {
     inlineHostEntry = null
-    resolvedComponent = null
+    legacyComponent = null
+    resolutionAttempts = 0
+    ensureResolvedComponent()
+  }
+  onScopedHostChanged: {
+    if (scopedHost) legacyComponent = null
     resolutionAttempts = 0
     ensureResolvedComponent()
   }
@@ -198,16 +250,16 @@ Item {
     } else {
       resolutionRetry.stop()
     }
-    synchronizeLoaderSource()
+    requestLoaderSourceSync()
   }
   onResolvedComponentChanged: {
     if (resolvedComponent !== null) {
       resolutionAttempts = 0
       resolutionRetry.stop()
     }
-    synchronizeLoaderSource()
+    requestLoaderSourceSync()
   }
-  onSlotCompleteChanged: synchronizeLoaderSource()
+  onSlotCompleteChanged: requestLoaderSourceSync()
   onAvailableWidthChanged: injectProperties()
   onActiveItemChanged: {
     // A binding notification for the resident item can arrive after onLoaded.
@@ -329,15 +381,16 @@ Item {
       ? bar.hostWidgetResolver : null
     let current = null
     try {
-      current = resolver && typeof resolver.componentFor === "function"
-        ? resolver.componentFor(moduleName)
-        : bar && typeof bar.registeredWidgetComponent === "function"
-          ? bar.registeredWidgetComponent(moduleName) : null
+      current = scopedHost ? scopedComponent
+        : resolver && typeof resolver.componentFor === "function"
+          ? resolver.componentFor(moduleName)
+          : bar && typeof bar.registeredWidgetComponent === "function"
+            ? bar.registeredWidgetComponent(moduleName) : null
     } catch (error) {
       current = null
     }
-    // Resolver access and foreign metadata getters can re-enter QML. Recheck
-    // both the atomic completion record and current registry identity.
+    // Direct host-snapshot access and legacy metadata getters can re-enter QML.
+    // Recheck both the atomic completion record and current source identity.
     return current !== null && current === source
       && _completedLoad === completion
       && completedLoadMatches(source, generation, item)
@@ -356,10 +409,21 @@ Item {
       generation: previousSubmission
         ? previousSubmission.generation + 1 : 1
     }
+    const activationRequired = nextSource !== null
+      && (!previousSubmission || previousSubmission.source === null)
+    if (activationRequired || nextSource === null)
+      _loaderSubmissionActive = false
     _submission = request
     if (_submission !== request) return
     if (!invalidateCompletedLoad(request)) return
     if (_submission !== request) return
+    // Direct scoped bindings can change while completion invalidation emits.
+    // Never dispatch the request that was current before that reentrant host
+    // publication; the next-turn sync owns the newest exact handle.
+    if (resolvedComponent !== nextSource) {
+      requestLoaderSourceSync()
+      return
+    }
 
     // If reentry returns to the still-resident source before another setter was
     // dispatched, adopt that exact confirmed item under the new request. The
@@ -384,20 +448,33 @@ Item {
     _residentLoad = null
     if (_submission !== request || _dispatchedSubmission !== request) return
     widgetLoader.sourceComponent = nextSource
+    if (_submission !== request || _dispatchedSubmission !== request) return
+    _loaderSubmissionActive = nextSource !== null
   }
 
   function synchronizeLoaderSource() {
     submitLoaderSource(resolvedComponent)
   }
 
+  function requestLoaderSourceSync() {
+    // A synchronous Loader can inject properties before a scoped Component
+    // binding has unwound. One next-turn setter preserves direct host identity
+    // without evaluating that binding reentrantly; same-turn changes coalesce.
+    if (scopedHost) scopedLoaderSync.restart()
+    else synchronizeLoaderSource()
+  }
+
   function ensureResolvedComponent() {
-    const resolver = bar && "hostWidgetResolver" in bar
-      ? bar.hostWidgetResolver : null
-    const component = resolver && typeof resolver.ensureComponent === "function"
-      ? resolver.ensureComponent(moduleName)
-      : bar && typeof bar.registeredWidgetComponent === "function"
-        ? bar.registeredWidgetComponent(moduleName) : null
-    if (resolvedComponent !== component) resolvedComponent = component
+    let component = resolvedComponent
+    if (!scopedHost) {
+      const resolver = bar && "hostWidgetResolver" in bar
+        ? bar.hostWidgetResolver : null
+      component = resolver && typeof resolver.ensureComponent === "function"
+        ? resolver.ensureComponent(moduleName)
+        : bar && typeof bar.registeredWidgetComponent === "function"
+          ? bar.registeredWidgetComponent(moduleName) : null
+      if (legacyComponent !== component) legacyComponent = component
+    }
     if (component || !moduleEnabled) {
       resolutionAttempts = 0
       resolutionRetry.stop()
@@ -415,9 +492,13 @@ Item {
   }
 
   function refreshResolvedComponent() {
+    if (scopedHost) {
+      if (resolvedComponent === null && moduleEnabled) ensureResolvedComponent()
+      return
+    }
     const component = bar && typeof bar.registeredWidgetComponent === "function"
       ? bar.registeredWidgetComponent(moduleName) : null
-    if (resolvedComponent !== component) resolvedComponent = component
+    if (legacyComponent !== component) legacyComponent = component
     if (component === null && moduleEnabled) ensureResolvedComponent()
   }
 
@@ -862,13 +943,19 @@ Item {
 
 
   Connections {
-    target: root.bar && "hostWidgetResolver" in root.bar
+    target: !root.scopedHost && root.bar && "hostWidgetResolver" in root.bar
       ? root.bar.hostWidgetResolver : null
-    // A registry refresh publishes its revision from inside the resolver.
-    // Re-entering ensureComponent() from that signal can publish a second
-    // revision while resolvedComponent is still being evaluated. Defer the
-    // lookup to the next event-loop turn so component resolution stays acyclic.
+    // Legacy component creation can publish while a URL lookup is still being
+    // evaluated. Defer that cache refresh to keep the fallback acyclic.
     function onRevisionChanged() { resolverRefresh.restart() }
+  }
+
+  Timer {
+    id: scopedLoaderSync
+
+    interval: 0
+    repeat: false
+    onTriggered: root.synchronizeLoaderSource()
   }
 
   Timer {
@@ -963,6 +1050,7 @@ Item {
     // is registered. sourceComponent has no binding: submitLoaderSource() is
     // its single assignment path and records provenance before setter dispatch.
     active: root.slotComplete && root.moduleEnabled
+      && root._loaderSubmissionActive
       && root._submission !== null
       && root._submission.source !== null
     onLoaded: {

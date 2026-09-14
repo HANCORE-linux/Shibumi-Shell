@@ -1034,7 +1034,7 @@ ShellRoot {
             || root.inlineStateSlot.activeItem.settings.collision
               !== "host-later")
           return root.fail("property reinjection restored stale inline settings")
-        root.inlineStateSlot.resolvedComponent = null
+        root.inlineStateSlot.legacyComponent = null
         root.stage = 13
         root.attempts = 0
         return
