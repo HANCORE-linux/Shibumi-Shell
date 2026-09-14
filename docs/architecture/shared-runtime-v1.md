@@ -157,6 +157,15 @@ by equal full-entry readback; `unchanged` also requires equality, because the
 native false result is ambiguous between refusal and no-op. Timeout, conflict,
 invalid input and revocation are not successful settlement.
 
+`requestedConfig` is a separate unconfirmed presentation-preview surface. It
+reflects the latest admitted, normalized request synchronously and falls back to
+file truth when a request is refused, conflicts, times out or loses admission.
+Only reversible visual feedback currently consumes it: Control Center
+workspace/launcher choices and active/inactive classification, the rendered
+workspace mode/style, the launcher mark, and AI provider selection. Backend
+activation, host mutation, structural transition sequencing, completion status,
+and `config`/`revision` consumers remain readback-backed.
+
 Comparison is structural JSON equality: object-key ordering is insignificant,
 array ordering and values remain significant. Observed publication is not an
 fsync/crash-durability guarantee or host-wide CAS. No direct runtime file writes,

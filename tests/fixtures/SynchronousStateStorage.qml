@@ -13,6 +13,9 @@ Item {
   readonly property bool ready: !!host
   readonly property bool pending: false
   readonly property var value: Config.normalize(host ? host.shellConfig.bar.shibumi : null)
+  readonly property var requestedValue: host
+    && "requestedStateOverride" in host && host.requestedStateOverride
+    ? Config.normalize(host.requestedStateOverride) : value
   property string writeStatus: "idle"
   property int requestSerial: 0
   signal settled(int throughSerial, string result)

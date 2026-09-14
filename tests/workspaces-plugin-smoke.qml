@@ -39,12 +39,15 @@ ShellRoot {
 
   QtObject {
     id: preferenceState
-    property var config: ({ workspace: fakeBar.workspaceConfig })
+    property var config: ({
+      workspace: ({ version: 1, mode: "5", style: "numbers" })
+    })
+    property var requestedConfig: config
     function setWorkspacePreference(name, value) {
       const next = JSON.parse(JSON.stringify(fakeBar.workspaceConfig))
       next[name] = value
       fakeBar.workspaceConfig = next
-      config = ({ workspace: next })
+      requestedConfig = ({ workspace: next })
       return true
     }
   }
@@ -216,6 +219,8 @@ ShellRoot {
             || !workspaceState.setPreference("mode", "active")
             || fakeBar.workspaceConfig.style !== "magic"
             || fakeBar.workspaceConfig.mode !== "active"
+            || preferenceState.requestedConfig.workspace.style !== "magic"
+            || preferenceState.config.workspace.style !== "numbers"
             || workspaceState.setPreference("mode", "unsafe"))
           return root.fail("workspace preference persistence")
         widget.open()

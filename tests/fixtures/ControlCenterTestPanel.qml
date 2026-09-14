@@ -22,6 +22,8 @@ Item {
   readonly property string healthFailure: healthService.failure
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
+  readonly property var requestedStateConfig: stateService
+    && stateService.requestedConfig ? stateService.requestedConfig : stateConfig
   readonly property var rawBarPresentation: stateConfig.presentation || ({})
   readonly property var barPresentation: {
     const source = rawBarPresentation
@@ -33,7 +35,7 @@ Item {
     if (!v2LayoutActive) effective.panelBorder = effective.border
     return effective
   }
-  readonly property var workspaceConfig: stateConfig.workspace || ({})
+  readonly property var workspaceConfig: requestedStateConfig.workspace || ({})
   readonly property var layoutProtection: stateConfig.layoutProtection
     || ({ v1: false, v2: false })
   readonly property bool v1LayoutProtected: layoutProtection.v1 === true
@@ -41,7 +43,7 @@ Item {
   readonly property var pluginConfig: stateConfig.plugins || ({})
   readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
     ? pluginConfig.favorites : []
-  readonly property var launcherConfig: stateConfig.launcher
+  readonly property var launcherConfig: requestedStateConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
@@ -346,11 +348,15 @@ Item {
   }
 
   function groupEnabled(groupId) {
-    return stateService && typeof stateService.groupEnabledForVariant
-      === "function"
-      ? stateService.groupEnabledForVariant(groupId,
+    void(requestedStateConfig)
+    return stateService
+      && typeof stateService.requestedGroupEnabledForVariant === "function"
+      ? stateService.requestedGroupEnabledForVariant(groupId,
           v2LayoutActive ? "v2" : "v1")
-      : groupSetting(groupId, "enabled", true) !== false
+      : stateService && typeof stateService.groupEnabledForVariant === "function"
+        ? stateService.groupEnabledForVariant(groupId,
+            v2LayoutActive ? "v2" : "v1")
+        : groupSetting(groupId, "enabled", true) !== false
   }
 
   function setGroupEnabled(groupId, enabled) {

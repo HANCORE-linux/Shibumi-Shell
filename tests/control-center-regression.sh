@@ -85,6 +85,21 @@ rg -q 'root\.toggle\(\)' "$control_dir/BarWidget.qml" \
 rg -Fq 'readonly property bool animationActive: pointer.containsMouse' \
   "$control_dir/BarWidget.qml" \
   || fail "G1 background motion is not hover-only"
+rg -Fq '&& stateService.requestedConfig ? stateService.requestedConfig' \
+  "$control_dir/BarWidget.qml" \
+  || fail "G1 launcher does not consume requested presentation state"
+for preview_panel in \
+    "$control_dir/ControlCenterPanel.qml" \
+    "$repo_root/tests/fixtures/ControlCenterTestPanel.qml"; do
+  for preview_contract in \
+      'readonly property var requestedStateConfig:' \
+      'readonly property var workspaceConfig: requestedStateConfig.workspace' \
+      'readonly property var launcherConfig: requestedStateConfig.launcher' \
+      'requestedGroupEnabledForVariant'; do
+    rg -Fq "$preview_contract" "$preview_panel" \
+      || fail "Control Center requested-state fixture drifted: $preview_contract"
+  done
+done
 rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost' \
   "$control_dir/BarWidget.qml" \
   || fail "stock Omarchy return icon inherits a Shibumi pill surface"

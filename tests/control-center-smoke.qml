@@ -15,6 +15,7 @@ ShellRoot {
   property int barsRouteStep: 0
   property int iconsNoScrollStep: 0
   property bool panelIdempotenceStarted: false
+  property bool requestedPreviewChecked: false
   property var stablePanelItem: null
   property int healthLifecycleStep: 0
   property var lifecycleHealthService: null
@@ -40,6 +41,7 @@ ShellRoot {
     id: fakeShell
 
     property int writes: 0
+    property var requestedStateOverride: null
     property string activeBarId: "hancore.shibumi.bar"
     property var barConfig: ({ id: "hancore.shibumi.bar" })
     property var shellConfig: ({ version: 1, bar: { shibumi: { version: 1 } } })
@@ -386,6 +388,35 @@ ShellRoot {
             || panel.barPosition !== "top"
             || fakeBar.activePopout !== widget)
           return root.fail("panel injection, layout, or popout ownership")
+
+        if (!root.requestedPreviewChecked) {
+          const confirmed = JSON.parse(JSON.stringify(stateService.config))
+          const requested = JSON.parse(JSON.stringify(confirmed))
+          requested.workspace.mode = "active"
+          requested.workspace.style = "rings"
+          requested.launcher = ({ mode: "icon", text: "omarchy", icon: "rebel" })
+          if (!requested.widgets) requested.widgets = ({})
+          if (!requested.widgets.G4) requested.widgets.G4 = ({})
+          requested.widgets.G4.enabledV1 = false
+          fakeShell.requestedStateOverride = requested
+          if (panel.workspaceConfig.mode !== "active"
+              || panel.workspaceConfig.style !== "rings"
+              || panel.launcherConfig.icon !== "rebel"
+              || panel.groupEnabled("G4")
+              || !widget.iconMode || widget.launcherConfig.icon !== "rebel"
+              || stateService.config.workspace.mode === "active"
+              || !stateService.groupEnabledForVariant("G4", "v1")
+              || fakeShell.writes !== 0)
+            return root.fail("requested presentation state did not preview independently")
+          fakeShell.requestedStateOverride = null
+          if (panel.workspaceConfig.mode === "active"
+              || panel.launcherConfig.icon === "rebel"
+              || !panel.groupEnabled("G4") || widget.iconMode
+              || JSON.stringify(stateService.config) !== JSON.stringify(confirmed)
+              || fakeShell.writes !== 0)
+            return root.fail("requested presentation preview did not roll back")
+          root.requestedPreviewChecked = true
+        }
 
         if (!panel.setGroupSetting("G4", "compact", true)
             || !panel.setBarPresentation("accent", "color06")

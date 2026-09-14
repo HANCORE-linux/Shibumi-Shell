@@ -20,6 +20,10 @@ Item {
   readonly property alias pending: root._pending
   property bool _pending: false
   property var value: Config.defaultConfig()
+  // Presentation consumers may render the latest accepted request immediately,
+  // while value remains authoritative file readback. A refused, conflicting or
+  // revoked write automatically falls back to value when its queue is cleared.
+  readonly property var requestedValue: draft()
   property string writeStatus: "idle"
   property int requestSerial: 0
   signal settled(int throughSerial, string result)

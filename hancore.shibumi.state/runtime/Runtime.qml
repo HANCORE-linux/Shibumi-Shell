@@ -50,6 +50,26 @@ QtObject {
   // cannot emit more than one passive exhaustion diagnostic.
   property bool hostWidgetResolutionWarningEmitted: false
   readonly property bool hasActiveBar: _selected("hancore.shibumi.bar") !== null
+  readonly property var visibilityBarOwner: {
+    const lease = _selected("hancore.shibumi.bar")
+    if (!lease || !lease.owner) return null
+    const owner = lease.owner
+    if (!("visibilityIpcReady" in owner)) return null
+    void(owner.visibilityIpcReady)
+    return owner.visibilityIpcReady === true ? owner : null
+  }
+  // Process-singleton compatibility endpoint for the host bar-toggle command.
+  // Keeping the handler here prevents overlapping Bar lifetimes from ever
+  // registering duplicate omarchy.bar targets.
+  property IpcHandler visibilityIpc: IpcHandler {
+    enabled: runtime.visibilityBarOwner !== null
+    target: "omarchy.bar"
+
+    function syncHidden(): void {
+      const owner = runtime.visibilityBarOwner
+      if (owner && typeof owner.syncHidden === "function") owner.syncHidden()
+    }
+  }
   readonly property var publishedBarConfig: {
     const lease = _selected("hancore.shibumi.bar")
     if (!lease || lease.owner.injectionComplete !== true

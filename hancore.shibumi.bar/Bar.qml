@@ -56,6 +56,12 @@ Item {
   property bool hostReady: false
   readonly property bool mutationAdmissionReady:
     hostReady && startupAdmissionSatisfied && !shutdownPrepared
+  // Consumed only by the process-singleton runtime IPC handler. A handler is
+  // admitted after complete host injection and startup, and is revoked before
+  // this Bar begins shutdown or whenever Bar ownership overlaps.
+  readonly property bool visibilityIpcReady: barRuntimeProvider.registered
+    && SuiteRuntime.Runtime.isActiveBar(root)
+    && injectionComplete && hostReady && !shutdownPrepared
   property bool outputWindowsEnabled: true
   // No-output fixtures can opt out while the deployed scoped Bar performs
   // the one process-bound native registry prime before becoming visible.
@@ -101,6 +107,9 @@ Item {
   readonly property bool transparent: false
   property bool barToggledOff: false
   property bool barToggleStateLoaded: false
+  property bool barHiddenProbeQueued: false
+  readonly property bool barHiddenProbeBusy:
+    barHiddenProbe.running || barHiddenProbeQueued
   readonly property var idleService: root.shell
     && typeof root.shell.firstPartyServiceFor === "function"
     ? root.shell.firstPartyServiceFor("omarchy.idle") : null
@@ -3047,6 +3056,22 @@ Item {
     return geometry
   }
 
+  function requestBarHiddenProbe() {
+    if (!hostReady || shutdownPrepared) return false
+    if (barHiddenProbe.running) {
+      // A later marker mutation arrived while an earlier sample was running.
+      // Drain one coalesced follow-up so the final published state is current.
+      barHiddenProbeQueued = true
+      return true
+    }
+    barHiddenProbe.running = true
+    return true
+  }
+
+  function syncHidden() {
+    return visibilityIpcReady && requestBarHiddenProbe()
+  }
+
   function prepareForShutdown() {
     if (shutdownPrepared) return true
     shutdownPrepared = true
@@ -3054,6 +3079,7 @@ Item {
     hostReadyDelay.stop()
     v1PluginReconcileTimer.stop()
     tooltipDelay.stop()
+    barHiddenProbeQueued = false
     barHiddenProbe.running = false
     hideTooltip(null)
     hostReady = false
@@ -3484,13 +3510,18 @@ Item {
         root.barToggleStateLoaded = true
       }
     }
+    onExited: {
+      if (!root.barHiddenProbeQueued) return
+      root.barHiddenProbeQueued = false
+      Qt.callLater(function() { root.requestBarHiddenProbe() })
+    }
   }
 
   FileView {
     path: root.hostReady ? root.home + "/.local/state/omarchy/toggles" : ""
     watchChanges: true
     printErrors: false
-    onFileChanged: barHiddenProbe.running = true
+    onFileChanged: root.requestBarHiddenProbe()
   }
 
   Timer {

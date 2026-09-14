@@ -17,6 +17,9 @@ OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
 ./tests/host-registry-prime-regression.sh
 ```
 
+The bar-host regression also exercises the process-singleton `omarchy.bar`
+visibility nudge in an isolated HOME, proving both host-owned marker directions
+and rejecting duplicate target registration across overlapping Bar fixtures.
 The registry-prime regression uses the real exact-PID Quickshell IPC transport.
 It covers success, transport refusal, acknowledged timeout, post-prime Bar-owner
 change, changed-process refusal, and scope loss/recovery. Every case remains
@@ -699,7 +702,10 @@ isolated native-host flows, not rendered desktop or physical-output evidence.
 `tests/state-storage-regression.py` isolates the actual controller with an explicit
 own-entry writer and private configuration files. It exercises debounce, in-flight
 composition, preservation, foreign conflicts, false/no-op convergence, readback
-failure, and synchronous revocation from pending/status/value notifications.
+failure, synchronous revocation from pending/status/value notifications, and
+immediate requested-state preview with rollback to file truth. The corresponding
+service gate proves that activation, nested AI selection, workspace and launcher
+requests preview before authoritative publication.
 `tests/state-service-regression.sh` exercises the actual public State setters with
 file-backed assertions after settlement: bulk V1/V2 enablement, nested settings,
 appearance resets, variant memory, pickers, launcher, layouts, optional center,

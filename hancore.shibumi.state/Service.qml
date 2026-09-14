@@ -33,6 +33,9 @@ Item {
   readonly property int contractVersion: 1
   readonly property bool ready: storage.ready
   readonly property var sourceConfig: storage.value
+  // Unconfirmed requested state is a presentation-preview surface only. The
+  // canonical config/revision contract below remains file-readback-backed.
+  readonly property var requestedConfig: storage.requestedValue
   readonly property bool writePending: storage.pending
   readonly property string writeStatus: storage.writeStatus
   readonly property int writeSerial: storage.requestSerial
@@ -101,11 +104,20 @@ Item {
     return storage.queue(normalized)
   }
 
-  function groupSettings(groupId) {
+  function groupSettingsFrom(sourceConfigValue, groupId) {
     const group = String(groupId || "")
     if (!ShibumiConfig.isGroupId(group)) return ({})
-    return config && config.widgets && ShibumiConfig.isPlainObject(config.widgets[group])
-      ? config.widgets[group] : ({})
+    return sourceConfigValue && sourceConfigValue.widgets
+        && ShibumiConfig.isPlainObject(sourceConfigValue.widgets[group])
+      ? sourceConfigValue.widgets[group] : ({})
+  }
+
+  function groupSettings(groupId) {
+    return groupSettingsFrom(config, groupId)
+  }
+
+  function requestedGroupSettings(groupId) {
+    return groupSettingsFrom(requestedConfig, groupId)
   }
 
   function groupSetting(groupId, key, fallback) {
@@ -225,14 +237,22 @@ Item {
       ? "v1" : "v2"
   }
 
-  function groupEnabledForVariant(groupId, variantValue) {
-    const settings = groupSettings(groupId)
+  function groupEnabledForVariantFrom(sourceConfigValue, groupId, variantValue) {
+    const settings = groupSettingsFrom(sourceConfigValue, groupId)
     const variant = String(variantValue || "").toLowerCase()
     const key = variant === "v2" ? "enabledV2" : "enabledV1"
     if (Object.prototype.hasOwnProperty.call(settings, key))
       return settings[key] !== false
     return Object.prototype.hasOwnProperty.call(settings, "enabled")
       ? settings.enabled !== false : true
+  }
+
+  function groupEnabledForVariant(groupId, variantValue) {
+    return groupEnabledForVariantFrom(config, groupId, variantValue)
+  }
+
+  function requestedGroupEnabledForVariant(groupId, variantValue) {
+    return groupEnabledForVariantFrom(requestedConfig, groupId, variantValue)
   }
 
   function groupEnabled(groupId) {

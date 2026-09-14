@@ -96,8 +96,25 @@ Item {
       : configuredEntrySettings("hancore.shibumi.ai")
     return mergeSettings(aliasSettings, localSettings)
   }
-  readonly property string requestedTool: String(
-    settings.aiTool || settings.tool || "claude").toLowerCase()
+  // Tool choice is presentation state. Reflect the latest admitted request so
+  // pointer/keyboard selection is immediate, while provider enablement and all
+  // backend work continue to follow confirmed settings above.
+  readonly property string requestedTool: {
+    const requested = stateService && stateService.requestedConfig
+      ? stateService.requestedConfig : null
+    const group = requested && requested.widgets
+      ? requested.widgets.G7 : null
+    const local = group && typeof group === "object"
+      && !Array.isArray(group)
+      && group["hancore.shibumi.ai"]
+      && typeof group["hancore.shibumi.ai"] === "object"
+      && !Array.isArray(group["hancore.shibumi.ai"])
+        ? group["hancore.shibumi.ai"] : null
+    const value = local
+      && Object.prototype.hasOwnProperty.call(local, "aiTool")
+        ? local.aiTool : settings.aiTool || settings.tool || "claude"
+    return String(value).toLowerCase()
+  }
   readonly property int agentsRefreshInterval: Math.max(30,
     Number(settings.refreshIntervalSec) || 900) * 1000
   readonly property string agentsUpdateScript: String(

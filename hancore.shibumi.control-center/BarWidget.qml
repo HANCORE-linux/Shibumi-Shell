@@ -59,10 +59,11 @@ Ui.Panel {
   readonly property bool v1TintedLauncherIconVisible:
     v1TintedLauncherIcon.visible
   readonly property bool animationActive: pointer.containsMouse
-  readonly property var launcherConfig: stateService && stateService.config
-    && stateService.config.launcher
-    ? stateService.config.launcher
-    : ({ mode: "text", text: "shibumi", icon: "omarchy" })
+  readonly property var launcherStateConfig: stateService
+    && stateService.requestedConfig ? stateService.requestedConfig
+    : stateService && stateService.config ? stateService.config : ({})
+  readonly property var launcherConfig: launcherStateConfig.launcher
+    || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property bool iconMode: stockOmarchyHost
     || String(launcherConfig.mode || "text") === "icon"
   readonly property string effectiveLauncherText:

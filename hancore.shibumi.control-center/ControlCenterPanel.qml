@@ -48,6 +48,10 @@ ShibumiPanel {
 
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
+  // Selection feedback follows the latest admitted request. Host mutation,
+  // layout sequencing and persistence settlement still consume stateConfig.
+  readonly property var requestedStateConfig: stateService
+    && stateService.requestedConfig ? stateService.requestedConfig : stateConfig
   readonly property var rawBarPresentation: stateConfig.presentation || ({})
   readonly property var barPresentation: {
     const source = rawBarPresentation
@@ -59,7 +63,7 @@ ShibumiPanel {
     if (!v2LayoutActive) effective.panelBorder = effective.border
     return effective
   }
-  readonly property var workspaceConfig: stateConfig.workspace || ({})
+  readonly property var workspaceConfig: requestedStateConfig.workspace || ({})
   readonly property var layoutProtection: stateConfig.layoutProtection
     || ({ v1: false, v2: false })
   readonly property bool v1LayoutProtected: layoutProtection.v1 === true
@@ -67,7 +71,7 @@ ShibumiPanel {
   readonly property var pluginConfig: stateConfig.plugins || ({})
   readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
     ? pluginConfig.favorites : []
-  readonly property var launcherConfig: stateConfig.launcher
+  readonly property var launcherConfig: requestedStateConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
@@ -1027,12 +1031,17 @@ ShibumiPanel {
   }
 
   function groupEnabledForVariant(groupId, variantValue) {
+    // Keep local model bindings attached to the primitive facade publication;
+    // nested service method calls are not a reliable dependency surface.
+    void(requestedStateConfig)
     const variant = String(variantValue || "").toLowerCase()
     if (["v1", "v2"].indexOf(variant) < 0) return false
-    return stateService && typeof stateService.groupEnabledForVariant
-      === "function"
-      ? stateService.groupEnabledForVariant(groupId, variant)
-      : groupSetting(groupId, "enabled", true) !== false
+    return stateService
+      && typeof stateService.requestedGroupEnabledForVariant === "function"
+      ? stateService.requestedGroupEnabledForVariant(groupId, variant)
+      : stateService && typeof stateService.groupEnabledForVariant === "function"
+        ? stateService.groupEnabledForVariant(groupId, variant)
+        : groupSetting(groupId, "enabled", true) !== false
   }
 
   function groupEnabled(groupId) {

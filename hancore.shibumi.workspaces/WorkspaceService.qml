@@ -25,8 +25,12 @@ Item {
   // An explicit fake replaces models AND actions; incomplete fakes never
   // fall through to Hyprland or the native action adapter.
   property var backendOverride: null
-  property var config: stateService && stateService.config
-    ? stateService.config.workspace : ({})
+  // Workspace mode/style are presentation-only and may preview an admitted
+  // request; persistence authority remains stateService.config/revision.
+  property var requestedStateConfig: stateService && stateService.requestedConfig
+    ? stateService.requestedConfig
+    : stateService && stateService.config ? stateService.config : ({})
+  property var config: requestedStateConfig.workspace || ({})
   readonly property int focusedId: backend.focusedId
   readonly property var entries: backend.entries
   readonly property string mode: config && ["10", "5", "active"].indexOf(

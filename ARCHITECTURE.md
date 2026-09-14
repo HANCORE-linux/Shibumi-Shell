@@ -411,6 +411,12 @@ checks pass.
   properties.
 - A third-party bar must therefore provide safe construction defaults instead
   of `required` host properties.
+- The shared runtime owns one process-singleton `omarchy.bar`
+  visibility-nudge handler, enabled only for the one fully admitted active
+  Shibumi bar. It exposes only `syncHidden`, which asks that owner to re-read
+  Omarchy's host-owned `bar-off` marker after `omarchy-toggle-bar` changes it;
+  the directory watcher remains the ordinary update path. Overlapping or
+  shutting-down Bar lifetimes fail closed instead of registering two targets.
 - Omarchy falls back to `omarchy.bar` when a selected third-party entry point
   fails to load.
 - Plugin code is unsandboxed and executes inside the Omarchy Shell process.

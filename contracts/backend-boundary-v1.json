@@ -363,7 +363,7 @@
     {"target":"omarchy.active-window","count":2,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"target":"omarchy.agents","count":10,"category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","backend":"omarchy.agents","removalStep":"Step 8","reason":"Remove private Agents provider identifiers after the Shibumi provider adapter is authoritative."},
     {"target":"omarchy.audio","count":13,"category":"omarchyBackend","owner":"hancore.shibumi.audio","capability":"audio","backend":"omarchy.audio","removalStep":"Step 4A","reason":"Remove the official audio component and its compatibility identity after native Audio activation."},
-    {"target":"omarchy.bar","count":11,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
+    {"target":"omarchy.bar","count":12,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"target":"omarchy.bluetooth","count":8,"category":"hostIntegration","owner":"hancore.shibumi.bluetooth","capability":"bluetooth"},
     {"target":"omarchy.clock","count":7,"category":"hostIntegration","owner":"hancore.shibumi.center","capability":"bar-host-routing"},
     {"target":"omarchy.dropbox","count":1,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
