@@ -113,13 +113,56 @@ jobs:
         run: |
           set -euo pipefail
           version=$(<VERSION)
+          evidence="dist/shibumi-shell-$version.release-evidence.json"
+          logs_dir="dist/shibumi-shell-$version.release-evidence.logs"
           scripts/collect-release-evidence \
             --expected-commit "$GITHUB_SHA" \
-            --output "dist/shibumi-shell-$version.release-evidence.json"
+            --output "$evidence"
+          logs_manifest=$(mktemp)
+          trap 'rm -f "$logs_manifest"' EXIT
+          python3 - "$evidence" "$logs_dir" "$logs_manifest" <<'PY'
+          import json
+          import os
+          import stat
+          import sys
+          from pathlib import Path
+
+          evidence_path, logs_path, manifest_path = map(Path, sys.argv[1:])
+          archive_root = Path("dist")
+          relative_logs = logs_path.relative_to(archive_root)
+          document = json.loads(evidence_path.read_text(encoding="utf-8"))
+          expected = []
+          for command in document.get("commands", []):
+              gate_id = command.get("id")
+              relative = Path(str(command.get("log", "")))
+              if (
+                  not isinstance(gate_id, str)
+                  or relative.is_absolute()
+                  or relative.parent != relative_logs
+                  or relative.name != f"{gate_id}.log"
+              ):
+                  raise SystemExit("release evidence contains an invalid log path")
+              expected.append(relative)
+          if not expected or len(expected) != len(set(expected)):
+              raise SystemExit("release evidence contains missing or duplicate logs")
+          actual = list(logs_path.iterdir())
+          if {path.relative_to(archive_root) for path in actual} != set(expected):
+              raise SystemExit("release evidence log inventory is incomplete or stale")
+          for path in actual:
+              metadata = path.lstat()
+              if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                  raise SystemExit("release evidence log inventory is unsafe")
+          manifest_path.write_bytes(
+              b"".join(os.fsencode(str(path)) + b"\0" for path in sorted(expected))
+          )
+          PY
           tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-            -C dist -cf - "shibumi-shell-$version.release-evidence.logs" \
+            --no-recursion --null --verbatim-files-from -C dist -cf - \
+            --files-from="$logs_manifest" \
             | gzip -n -9 \
             > "dist/shibumi-shell-$version.release-evidence.logs.tar.gz"
+          rm -f "$logs_manifest"
+          trap - EXIT
 
       - name: Verify version and exact local asset inventory
         run: |

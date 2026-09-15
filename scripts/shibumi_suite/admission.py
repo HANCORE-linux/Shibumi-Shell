@@ -1716,9 +1716,11 @@ def supported_install_identities(suite: Suite) -> list[dict[str, Any]]:
         current_revision in identity["sourceRevisions"]
         for identity in identities
     )
-    # A published revision is authoritative only with its contract payload.
-    # Never let caller-local bytes create a second identity for the same source
-    # commit or package alias.
+    # A published package is authoritative only with its contract payload.
+    # Clean source checkouts may describe their current commit dynamically, but
+    # package metadata alone must never authorize caller-local package bytes.
+    if current_revision.startswith("package:"):
+        return identities
     return identities if revision_is_contract_bound else identities + [current]
 
 

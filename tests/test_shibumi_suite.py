@@ -950,55 +950,47 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertTrue(changed)
         self.assertFalse(self.paths.state_dir.exists())
 
-    def test_normal_package_install_is_admitted_for_its_next_lifecycle(self) -> None:
-        metadata_path = self.source / "PACKAGE-METADATA.json"
-        shutil.copy2(
-            REPO_ROOT / "packaging/package-metadata.json",
-            metadata_path,
+    def test_exact_beta14_package_identity_is_admitted(self) -> None:
+        packaged_suite = self.packaged_suite()
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.14"
         )
-        suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
-        suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
-        suite_contract["suiteVersion"] = "0.1.1-beta.13"
-        suite_contract_path.write_text(
-            json.dumps(suite_contract, indent=2) + "\n", encoding="utf-8"
+        self.assertEqual(
+            command_install(self.args(), packaged_suite, self.paths, self.runtime),
+            0,
         )
-        package_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        package_metadata["version"] = "0.1.1-beta.13"
-        metadata_path.write_text(
-            json.dumps(package_metadata, indent=2) + "\n", encoding="utf-8"
+        self.assertEqual(
+            preflight_lifecycle_state(self.paths, packaged_suite),
+            "public-beta.14",
         )
-        drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
-        drift_path.write_bytes(drift_path.read_bytes() + b"\n// package drift fixture\n")
 
-        mismatched_public_package = Suite.load(self.source)
+    def test_mutated_beta14_package_identity_is_rejected(self) -> None:
+        drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
+        payload = drift_path.read_bytes()
+        replacement = b" " if payload[-1:] != b" " else b"\n"
+        drift_path.write_bytes(payload[:-1] + replacement)
+        packaged_suite = self.packaged_suite()
+
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
         ):
-            require_current_payload_identity(mismatched_public_package)
+            require_current_payload_identity(packaged_suite)
         self.assertFalse(self.paths.state_dir.exists())
         self.assertFalse(self.paths.plugin_dir.exists())
         self.assertFalse(self.paths.config_file.exists())
         self.assertEqual(self.runtime.events, [])
 
-        suite_contract["suiteVersion"] = "0.1.1-beta.14-fixture"
-        suite_contract_path.write_text(
-            json.dumps(suite_contract, indent=2) + "\n", encoding="utf-8"
-        )
-        package_metadata["version"] = "0.1.1-beta.14-fixture"
-        metadata_path.write_text(
-            json.dumps(package_metadata, indent=2) + "\n", encoding="utf-8"
-        )
-        packaged_suite = Suite.load(self.source)
-        self.assertEqual(
-            command_install(
-                self.args(), packaged_suite, self.paths, self.runtime
-            ),
-            0,
-        )
-        self.assertEqual(
-            preflight_lifecycle_state(self.paths, packaged_suite),
-            "current-release",
-        )
+    def test_unknown_future_package_identity_is_rejected(self) -> None:
+        packaged_suite = self.packaged_suite("0.1.1-beta.15")
+
+        with self.assertRaisesRegex(
+            AdmissionError, "exact declared revision identity"
+        ):
+            require_current_payload_identity(packaged_suite)
+        self.assertFalse(self.paths.state_dir.exists())
+        self.assertFalse(self.paths.plugin_dir.exists())
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertEqual(self.runtime.events, [])
 
     def test_fresh_install_does_not_create_stock_transparency_preference(
         self,
@@ -1112,10 +1104,19 @@ class SuiteLifecycleTests(unittest.TestCase):
         config["plugins"].append({"id": plugin_id, "custom": "old"})
         atomic_write(self.paths.config_file, encode_config(config))
 
-    def packaged_suite(self) -> Suite:
-        shutil.copy2(
-            REPO_ROOT / "packaging/package-metadata.json",
-            self.source / "PACKAGE-METADATA.json",
+    def packaged_suite(self, version: str = "0.1.1-beta.14") -> Suite:
+        metadata_path = self.source / "PACKAGE-METADATA.json"
+        shutil.copy2(REPO_ROOT / "packaging/package-metadata.json", metadata_path)
+        suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
+        suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
+        suite_contract["suiteVersion"] = version
+        suite_contract_path.write_text(
+            json.dumps(suite_contract, indent=2) + "\n", encoding="utf-8"
+        )
+        package_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        package_metadata["version"] = version
+        metadata_path.write_text(
+            json.dumps(package_metadata, indent=2) + "\n", encoding="utf-8"
         )
         return Suite.load(self.source)
 

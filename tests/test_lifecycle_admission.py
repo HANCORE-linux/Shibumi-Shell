@@ -192,6 +192,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
             "step-5-tip",
             "public-beta.12",
             "public-beta.13",
+            "public-beta.14",
         ):
             identity = next(
                 item for item in self.identities if item["id"] == identity_id

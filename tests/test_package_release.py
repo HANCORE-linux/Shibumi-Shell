@@ -132,6 +132,12 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "84f25408c8068c839884415a0a48c85922f54e22c782a6b19791e07903278c69",
             },
+            "public-beta.14": {
+                "suiteVersion": "0.1.1-beta.14",
+                "sourceRevisions": ["package:0.1.1-beta.14"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "e2e96e5acf84df210220743370e5dcaacd90011f68e941b4edc8f927a186452d",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():
@@ -327,6 +333,13 @@ puts JSON.generate(workflow.fetch("jobs"))
             "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
             workflow,
         )
+        self.assertIn("--no-recursion --null --verbatim-files-from", workflow)
+        self.assertIn('--files-from="$logs_manifest"', workflow)
+        self.assertNotIn(
+            '-C dist -cf - "shibumi-shell-$version.release-evidence.logs"',
+            workflow,
+        )
+        self.assertIn("validate_log_inventory(log_dir, results)", collector)
         self.assertIn(
             "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
             workflow,
@@ -640,12 +653,93 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertRegex(accepted["gitTree"], r"^[0-9a-f]{40}$")
             self.assertRegex(accepted["statusSha256"], r"^[0-9a-f]{64}$")
             self.assertRegex(accepted["workingTreeSha256"], r"^[0-9a-f]{64}$")
+
+            hostile_git_environment = {
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(Path(temporary) / "objects"),
+                "GIT_CONFIG": str(Path(temporary) / "config"),
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.fsmonitor",
+                "GIT_CONFIG_VALUE_0": "hostile",
+                "GIT_DIR": str(Path(temporary) / "hostile.git"),
+                "GIT_INDEX_FILE": str(Path(temporary) / "index"),
+                "GIT_OBJECT_DIRECTORY": str(Path(temporary) / "objects"),
+                "GIT_REPLACE_REF_BASE": "refs/hostile-replacements/",
+                "GIT_WORK_TREE": str(Path(temporary) / "hostile-worktree"),
+            }
+            with patch.dict(os.environ, hostile_git_environment):
+                hardened = module.preflight_git_checkout(
+                    "SHIBUMI_TEST_BASELINE", str(checkout), revision
+                )
+            self.assertEqual(
+                module.comparable_identity(hardened),
+                module.comparable_identity(accepted),
+            )
+            self.assertFalse(
+                any(name.startswith("GIT_") for name in module.checkout_git_environment())
+            )
+
+            tracked.write_text("replacement\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(checkout), "add", "tracked"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "replacement",
+                ],
+                check=True,
+            )
+            replacement_revision = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "-C", str(checkout), "checkout", "-q", revision], check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "replace",
+                    revision,
+                    replacement_revision,
+                ],
+                check=True,
+            )
+            try:
+                with self.assertRaisesRegex(ValueError, "replacement objects"):
+                    module.preflight_git_checkout(
+                        "SHIBUMI_TEST_BASELINE", str(checkout), revision
+                    )
+                with self.assertRaisesRegex(ValueError, "replacement objects"):
+                    module.capture_git_checkout_identity(checkout)
+            finally:
+                subprocess.run(
+                    ["git", "-C", str(checkout), "replace", "-d", revision],
+                    check=True,
+                    capture_output=True,
+                )
+
             gate_environment, evidence_preflights = module.prepare_gate_environment(
-                {"SHIBUMI_TEST_BASELINE": "untrusted-alias"}, [accepted]
+                {
+                    "SHIBUMI_TEST_BASELINE": "untrusted-alias",
+                    **hostile_git_environment,
+                },
+                [accepted],
             )
             self.assertEqual(
                 gate_environment["SHIBUMI_TEST_BASELINE"], str(checkout.resolve())
             )
+            self.assertFalse(any(name.startswith("GIT_") for name in gate_environment))
             self.assertNotIn("path", evidence_preflights[0])
             self.assertNotIn(str(checkout.resolve()), json.dumps(evidence_preflights))
 
@@ -1002,6 +1096,73 @@ time.sleep(30)
                     break
                 time.sleep(0.01)
             self.assertFalse(child_active, "timed-out child survived its process group")
+
+    def test_release_evidence_refuses_reused_or_unsafe_output_paths(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_outputs", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-evidence-outputs."
+        ) as temporary:
+            temporary_path = Path(temporary)
+            log_dir = temporary_path / "logs"
+            module.create_fresh_log_directory(log_dir)
+            self.assertEqual(log_dir.stat().st_mode & 0o777, 0o700)
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                module.create_fresh_log_directory(log_dir)
+
+            result = module.run_evidence_gate(
+                "fixture-pass",
+                (sys.executable, "-c", "print('bounded')"),
+                log_dir / "fixture-pass.log",
+                [],
+                timeout_seconds=2,
+            )
+            module.validate_log_inventory(log_dir, [result])
+            stale = log_dir / "stale.log"
+            stale.write_bytes(b"stale\n")
+            with self.assertRaisesRegex(ValueError, "stale files"):
+                module.validate_log_inventory(log_dir, [result])
+
+            victim = temporary_path / "victim"
+            victim.write_bytes(b"preserve\n")
+            linked_log = temporary_path / "linked.log"
+            linked_log.symlink_to(victim)
+            with patch.object(module.subprocess, "Popen") as popen:
+                with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                    module.run_evidence_gate(
+                        "fixture-linked",
+                        (sys.executable, "-c", "print('must not run')"),
+                        linked_log,
+                        [],
+                        timeout_seconds=2,
+                    )
+            popen.assert_not_called()
+            self.assertEqual(victim.read_bytes(), b"preserve\n")
+
+            existing_log = temporary_path / "existing.log"
+            existing_log.write_bytes(b"preserve-existing\n")
+            with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                module.run_evidence_gate(
+                    "fixture-existing",
+                    (sys.executable, "-c", "print('must not run')"),
+                    existing_log,
+                    [],
+                    timeout_seconds=2,
+                )
+            self.assertEqual(existing_log.read_bytes(), b"preserve-existing\n")
+
+            linked_output = temporary_path / "evidence.json"
+            linked_output.symlink_to(victim)
+            with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                module.write_new_file(linked_output, b"replacement\n")
+            self.assertEqual(victim.read_bytes(), b"preserve\n")
 
     def test_release_evidence_streams_redaction_and_enforces_log_budgets(self) -> None:
         path = ROOT / "scripts/collect-release-evidence"
