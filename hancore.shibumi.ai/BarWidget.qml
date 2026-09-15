@@ -3,13 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.ai"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url panelSource: Qt.resolvedUrl("AiUsagePanel.qml")
   property var aiServiceOverride: null
   readonly property var aiService: aiServiceOverride
@@ -103,7 +104,7 @@ Ui.Panel {
     width: implicitWidth
     height: implicitHeight
 
-    PillSurface {
+    Presentation.PillSurface {
       tokenSource: root.tokens
       settings: root.settings
       v1AppearanceEnabled: true

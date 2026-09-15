@@ -209,7 +209,7 @@ ShellRoot {
         if (service.available || service.check(true))
           return root.fail("scoped update worker started before manifest admission")
         service.manifest = {id: "hancore.shibumi.control-center",
-          version: "0.1.1-beta.13", kinds: ["service", "bar-widget"]}
+          version: "0.1.1-beta.14", kinds: ["service", "bar-widget"]}
         root.phase++
         root.ticks = 0
         return
@@ -221,8 +221,9 @@ ShellRoot {
         }
         widgetRegistry.revision = 7
         service.observePluginRevision(9999, false)
-        if (service.observedPluginRevision !== 7)
-          return root.fail("caller revision replaced native snapshot revision")
+        if (service.pluginRevision !== 0
+            || service.observedPluginRevision !== 0)
+          return root.fail("scoped widget fan-out became update/catalog revision")
         if (!service.check(true)) return root.fail("admitted update scan did not start")
         root.phase++
         root.ticks = 0

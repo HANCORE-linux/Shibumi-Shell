@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
-import "../core/ShibumiConfig.js" as Config
-import "../core/V2LayoutModel.js" as V2Layout
+import "../hancore.shibumi.state/ShibumiConfig.js" as Config
+import "../hancore.shibumi.bar/core/V2LayoutModel.js" as V2Layout
 
 TestCase {
   name: "ShibumiConfig"

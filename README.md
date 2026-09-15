@@ -16,9 +16,11 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-The current `0.1.1-beta.13` candidate is reviewed against Omarchy and
-Omarchy Settings `4.0.2-1` (source tag `v4.0.2`, revision `346e69e1`) and
-Quickshell `0.3.1-1`. See the
+The published `0.1.1-beta.13` prerelease passed physical single-output
+acceptance on Omarchy `4.0.3`. The current pinned host contracts use Omarchy
+and Omarchy Settings `4.0.3-1` (source tag `v4.0.3`, revision `05349870`) with
+Quickshell `0.3.1-1`; the 4.0.2 manifests remain an optional compatibility
+baseline. Multi-output acceptance was not run. See the
 [Shibumi host compatibility record](docs/architecture/quattro-compatibility.md)
 for the latest validated host versions.
 
@@ -58,10 +60,10 @@ for the latest validated host versions.
 ## Install
 
 > [!IMPORTANT]
-> `0.1.1-beta.13` is a local package candidate. Publication is still gated,
-> so the package is not available from AUR yet.
-> Until its release asset and AUR package are published, use the source path
-> below. Shibumi supports Omarchy Quattro only.
+> `0.1.1-beta.13` is published as a GitHub prerelease, but AUR publication is
+> deferred and the package is not available from AUR yet. Until the AUR package
+> is published, use the source path below. Shibumi supports Omarchy Quattro
+> only.
 
 After AUR publication, the supported one-command installation is:
 

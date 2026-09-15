@@ -53,13 +53,14 @@ def main():
     args = parser.parse_args()
     sources = {}
     for name in ("LayoutTransition.qml", "LayoutController.qml", "LayoutModel.js", "V2LayoutModel.js", "GroupRegistry.js"):
-        sources["core/" + name] = (read_regular(ROOT / "core" / name, 131072), False)
+        sources["core/" + name] = (
+            read_regular(ROOT / "hancore.shibumi.bar/core" / name, 131072), False)
     sources["StateStorageModel.js"] = (read_regular(ROOT / "hancore.shibumi.state/StateStorageModel.js", 65536), False)
     sources["cgroup_exec.py"] = (read_regular(ROOT / "tests/lib/cgroup_exec.py", 65536), False)
     commons = Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell/Commons"
     sources["Commons/Util.qml"] = (read_regular(commons / "Util.qml", 65536), False)
     sources["Commons/qmldir"] = (b"singleton Util 1.0 Util.qml\n", False)
-    bar = read_regular(ROOT / "Bar.qml", 131072)
+    bar = read_regular(ROOT / "hancore.shibumi.bar/Bar.qml", 262144)
     fragments = []
     for start, end in ((b"  function planV2DynamicLayout(", b"  function requestV2LayoutTransition("),
                        (b"  function entryId(", b"  function entrySettings(")):

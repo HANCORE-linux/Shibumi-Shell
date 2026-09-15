@@ -20,8 +20,7 @@ fail() {
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 cp -a -- "$repo_root/hancore.shibumi.workspaces" "$tmpdir/workspaces"
-mkdir -p "$tmpdir/hancore.shibumi.state"
-cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
+shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
@@ -70,7 +69,8 @@ fi
 cp -a "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 mkdir -p "$tmpdir/geometry" "$tmpdir/geometry-runtime"
 chmod 700 "$tmpdir/geometry-runtime"
-cp "$repo_root/styles/shibumi/VisualTokens.qml" "$tmpdir/geometry/VisualTokens.qml"
+cp "$repo_root/hancore.shibumi.bar/styles/shibumi/VisualTokens.qml" \
+  "$tmpdir/geometry/VisualTokens.qml"
 cp "$repo_root/tests/workspaces-geometry-regression.qml" "$tmpdir/geometry-shell.qml"
 set +e
 geometry_output=$(timeout 8 env \
@@ -118,7 +118,7 @@ for v2_style in kanji rings aurora pacman; do
     "$repo_root/hancore.shibumi.workspaces/BarWidget.qml" \
     || fail "V2 workspace style is missing: $v2_style"
 done
-pacman_marker="$repo_root/shared/presentation/PacmanWorkspaceMarker.qml"
+pacman_marker="$repo_root/hancore.shibumi.state/lib/presentation/PacmanWorkspaceMarker.qml"
 rg -Fq 'text: root.focused ? "󰮯" : "󰊠"' \
   "$pacman_marker" \
   || fail "Pacman/ghost state glyphs drifted from the V2.1-2 reference"

@@ -15,7 +15,7 @@
       "id": "bar-slot-layout",
       "strategy": "adapt",
       "sources": ["BarSlot.qml"],
-      "implementation": ["core/GroupSlot.qml", "core/WidgetSlot.qml", "core/LayoutController.qml"],
+      "implementation": ["hancore.shibumi.bar/core/GroupSlot.qml", "hancore.shibumi.bar/core/WidgetSlot.qml", "hancore.shibumi.bar/core/LayoutController.qml"],
       "evidence": ["tests/group-renderer-regression.qml", "tests/shibumi-config-regression.qml"]
     },
     {
@@ -29,7 +29,7 @@
       "id": "icon-semantics",
       "strategy": "adapt",
       "sources": ["IconMap.js"],
-      "implementation": ["shared/presentation/IconText.qml", "hancore.shibumi.control-center/ControlSettings.qml"],
+      "implementation": ["hancore.shibumi.state/lib/presentation/IconText.qml", "hancore.shibumi.control-center/ControlSettings.qml"],
       "evidence": ["tests/group-renderer-regression.qml", "tests/control-center-smoke.qml"]
     },
     {
@@ -43,7 +43,7 @@
       "id": "connected-surfaces",
       "strategy": "port",
       "sources": ["modules/AiBarInset.qml", "modules/AiPanelSurface.qml", "modules/ConnectedBarInset.qml", "modules/ConnectedPanelSurface.qml", "modules/PanelPointer.qml"],
-      "implementation": ["styles/shibumi/RunChrome.qml", "shared/presentation/ShibumiPanel.qml"],
+      "implementation": ["hancore.shibumi.bar/styles/shibumi/RunChrome.qml", "shared/presentation/ShibumiPanel.qml"],
       "evidence": ["tests/group-renderer-regression.qml", "tests/panel-surface-smoke.qml", "tests/panel-routing-regression.qml"]
     },
     {
@@ -120,7 +120,7 @@
       "id": "shared-text",
       "strategy": "port",
       "sources": ["modules/IconText.qml", "modules/UiText.qml"],
-      "implementation": ["shared/presentation/IconText.qml"],
+      "implementation": ["hancore.shibumi.state/lib/presentation/IconText.qml"],
       "evidence": ["tests/group-renderer-regression.qml", "tests/style-contract-regression.sh"]
     },
     {
@@ -197,7 +197,7 @@
       "id": "surface-shadow",
       "strategy": "port",
       "sources": ["modules/PillShadow.qml"],
-      "implementation": ["shared/presentation/PillSurface.qml", "styles/shibumi/RunChrome.qml"],
+      "implementation": ["hancore.shibumi.state/lib/presentation/PillSurface.qml", "hancore.shibumi.bar/styles/shibumi/RunChrome.qml"],
       "evidence": ["tests/group-renderer-regression.qml", "tests/run-geometry-regression.qml"]
     },
     {
@@ -218,7 +218,7 @@
       "id": "tooltip",
       "strategy": "port",
       "sources": ["modules/TooltipMixin.qml", "panels/TooltipOverlay.qml"],
-      "implementation": ["shared/presentation/ShibumiPanelToolTip.qml", "hancore.shibumi.bar/Bar.qml"],
+      "implementation": ["hancore.shibumi.state/lib/presentation/ShibumiPanelToolTip.qml", "hancore.shibumi.bar/Bar.qml"],
       "evidence": ["tests/panel-surface-smoke.qml", "tests/group-renderer-regression.qml"]
     },
     {

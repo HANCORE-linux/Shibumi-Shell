@@ -1,16 +1,27 @@
 # Shared Shibumi runtime V1
 
 Status: normative supporting contract, authorized 2026-09-09; implemented in
-the tagged but unreleased Beta.12 candidate and retained by Beta.13, with
-package-bound physical 4.0.3 acceptance pending.
+Beta.12, retained by Beta.13, and extended by the Beta.14 candidate. Beta.14
+package-bound physical 4.0.3 acceptance remains pending.
 ARCHITECTURE.md remains authoritative.
 
 ## Scope
 
 The suite retains its 24 separately registered plugin IDs and one production
-Quickshell process. The sole production shared module lives at
-`hancore.shibumi.state/runtime/`. It is maintained there directly, not copied
-into every plugin. Other canonical/vendored sources still use the sync scripts.
+Quickshell process. Its two narrowly admitted cross-plugin modules live at
+`hancore.shibumi.state/runtime/` and
+`hancore.shibumi.state/lib/presentation/`. They are maintained there directly,
+not copied into every plugin. The runtime module owns only the coordination
+specified below. The presentation module is passive and contains only visual
+components: no service, Process, Timer, poller, worker, backend, persistence,
+singleton, or mutable runtime authority. Every presentation consumer declares
+a direct State dependency, and State precedes those consumers in suite order.
+
+`ShibumiPanel.qml` is not passive because it retains three focus/popout
+lifecycle timers. It therefore remains the sole canonical source under
+`shared/presentation/`; `scripts/sync-shared.sh` continues to drift-check its
+existing plugin and `widgets/` copies. Bar-host and feature-owner sources
+otherwise live directly in their plugin roots.
 Installation, update, repair and removal continue to operate on the complete
 admitted suite. This dependency does not grant permission to weaken admission,
 load a partial mixed-version set, or import arbitrary sibling/repository paths.
@@ -29,11 +40,13 @@ service-entry persistence directly; the coordinator has no State write broker.
 Underscore-prefixed internals are conventions,
 not an enforceable access-control boundary.
 
-The exact importer roster is maintained in `scripts/shared_runtime_contract.py`.
-Both source-boundary checks permit only its literal QML import directives and
-require the complete, non-symlinked sibling module. This is the sole exception
-to plugin self-containment; arbitrary sibling paths and alternate copies are
-not granted an import exception.
+The exact runtime and presentation importer rosters are maintained in
+`scripts/shared_runtime_contract.py`. Both source-boundary checks permit only
+their literal QML import directives with fixed aliases and require the complete,
+non-symlinked sibling module with its exact file roster. These are the only two
+exceptions to plugin self-containment; arbitrary sibling paths, undeclared
+importers, incomplete modules, and alternate copies are not granted an import
+exception.
 
 ## Lifetime and version
 
@@ -52,6 +65,13 @@ Semantically equivalent retained-manifest refreshes keep the same lease.
 Actual replacements publish a final lease set atomically, never an intermediate
 set that briefly exposes an overlapping provider.
 
+The Runtime also owns the suite's one `omarchy.bar` compatibility handler.
+An admitted incoming Bar waits one second before the endpoint is armed so the
+outgoing stock/default handler can drain. If the host-injected `barConfig.id`
+stops naming Shibumi, ownership and the endpoint are revoked synchronously
+before the stock Bar takes over. Overlap, shutdown and retirement remain
+fail-closed; the ordinary marker watcher covers the bounded handoff gap.
+
 The runtime uses the suite marker at its own State plugin location. Marker
 failure or a marker change retires the runtime for that engine; it does not
 silently upgrade an existing engine to different installed bytes. The existing
@@ -65,8 +85,9 @@ activation checks' responsibility.
 Omarchy 4.0.3 can publish a complete initial scoped widget registry and then
 revoke a configured bar-only widget during the first `shell.json` mutation.
 The Runtime therefore owns one process-bound startup prime for an admitted
-scoped Bar. After the State service, payload marker, exact Bar provider, and
-host facade are admitted, it runs the public host call
+scoped Bar. There is no later output-recovery rescan or lock IPC probe. After
+the State service, payload marker, exact Bar provider, and host facade are
+admitted, the startup prime runs the public host call
 `/usr/bin/quickshell ipc --pid <own-pid> call -- shell rescanPlugins` with a
 fixed argument vector. It does not interpret command output as authority.
 
@@ -77,10 +98,46 @@ calls. A successful child exit alone is insufficient: a later Bar lease with a
 higher serial and different owner must be the uniquely selected Bar before the
 prime becomes ready. The Runtime marker survives the expected plugin-Bar rebuild, so
 the replacement cannot dispatch a second prime. Settings and layout changes do
-not rescan. Timeout, nonzero exit, missing replacement, Runtime retirement, or
-scope loss is terminal for that process; recovery requires a normal complete
-shell restart. No missing registry Component is cached, reconstructed from a
-manifest, or replaced by an original provider.
+not rescan. Startup-prime timeout, nonzero exit, missing replacement, Runtime
+retirement, or scope loss is terminal for that process.
+
+After output loss, each scoped `WidgetSlot` binds the exact currently
+configured registry ID and matching metadata identity directly from
+`barWidgetRegistry.widgets[id].component`. It admits the actual Component type.
+The JavaScript `status` projection may be absent while the native Loader can
+still instantiate that Component. The typed `Loader.sourceComponent` getter
+can also project null in this state. One controlled setter records the submitted
+handle and generation; `onLoaded` confirms the exact item, and readiness
+revalidates this tuple against the current direct host binding after property
+injection. Repeated host snapshots carrying the same handle leave that tuple
+and item intact; replacing or revoking the source invalidates completion and
+produces one new submission. The separately activated legacy route retains
+locally created Components and their original status checks. No missing scoped
+Component is cached, reconstructed from a manifest, or replaced by an original
+provider. G3's composite presentation uses a separate owner-bound lookup: a
+configured `hancore.shibumi.status` may consume only the scoped
+`hancore.shibumi.update-center` and `omarchy.tray` Components. Ordinary lookup
+still refuses both while they are not directly configured.
+
+The Runtime may emit one passive sanitized exhaustion warning per process,
+only after a real positive/zero/positive output sequence, a previously confirmed
+load and ten exhausted resolution attempts for a still-configured/enabled
+widget. It revalidates the active Bar and own PID, then claims the warning budget
+before logging. Later slots, flaps and replacement Bars cannot replenish it.
+This diagnostic never starts a process, timer, registry mutation or lock query.
+The read-only census separates missing handles from unavailable status
+projections and reports current load provenance; see
+[Beta.14 validation](../development/beta14-validation.md).
+
+The startup prime emits at most four structured observation lines per process.
+Each line contains exactly `processId`, `phase`, `attemptNumber`, and
+`elapsedMilliseconds`. The phase vocabulary is fixed to `request-accepted`,
+`native-rescan-acknowledged`, `native-rescan-refused`,
+`replacement-bar-observed`, `ready`, `failed`, and `timed-out`; all values are
+owned by the Runtime. Command output, paths, plugin metadata, shell
+configuration, and user data are never projected. Refusal is followed by the
+terminal `failed` event, while expiry publishes terminal `timed-out`. Passive
+output diagnostics add no acquisition, Process, poller, worker, retry or Timer.
 
 ## State writes
 
@@ -109,6 +166,18 @@ expose completion separately. `confirmed` means a changed native call followed
 by equal full-entry readback; `unchanged` also requires equality, because the
 native false result is ambiguous between refusal and no-op. Timeout, conflict,
 invalid input and revocation are not successful settlement.
+
+`requestedConfig` is a separate unconfirmed presentation-preview surface. It
+reflects the latest admitted, normalized request synchronously and falls back to
+file truth when a request is refused, conflicts, times out or loses admission.
+Only reversible visual feedback currently consumes it: Control Center
+workspace/launcher choices and active/inactive classification, the rendered
+workspace mode/style, the launcher mark, and AI provider selection. The Icons
+Active/Inactive organizer submits through that coalescing State route, so a
+second intent can replace a pending request instead of waiting behind the
+structural Bar transition. Provider replacement, backend activation, host
+mutation, structural transition sequencing, completion status, and
+`config`/`revision` consumers remain readback-backed.
 
 Comparison is structural JSON equality: object-key ordering is insignificant,
 array ordering and values remain significant. Observed publication is not an
@@ -142,7 +211,8 @@ preconditions do not provide a host-wide or filesystem compare-and-swap.
 
 ### V2 State-to-native layout sequencing
 
-The persistent Bar owns one `core/LayoutTransition.qml`. V2 layout edits,
+The persistent Bar owns one
+`hancore.shibumi.bar/core/LayoutTransition.qml`. V2 layout edits,
 reconciliation with native sync, and reset submit one patch through it. Busy
 transitions reject competing layout edits; they do not queue stale plans. Each
 operation captures exact State/native writer identities, State serial, affected
@@ -258,14 +328,21 @@ is launched; these are IPC acquisition/cleanup processes only.
 
 One demand/admission-bound five-second single-shot reconciliation starts only
 after the preceding operation has drained and is stopped on final demand release
-or owner loss. Queued explicit refreshes remain separate. Public scoped
-`barConfigChanged` and widget-registry revision are non-authoritative refresh
-hints, not a catalog revision. An isolated pinned-native test proves that async
-bar-loader fallback can change effective active-Bar DTO fields after the final
-public hint; a calibrated staged-host counterexample supplies the otherwise
-missing later hint and makes that gap assertion fail. This justifies a bounded
-fallback, but does not establish that five seconds is optimal. Isolated cadence
-and native tests show post-drain spacing and silence after release. The pinned
+or owner loss. Queued explicit refreshes remain separate. Public scoped `barConfigChanged` and widget-registry revision are not catalog
+triggers: Omarchy 4.0.3 republishes them during ordinary State persistence.
+Catalog reads start only on initial demand, an explicit current-consumer request,
+or the demand-bound five-second post-drain reconcile. An isolated pinned-native
+test proves that async bar-loader fallback can change effective active-Bar DTO
+fields without an authoritative public catalog event. This justifies the
+bounded fallback, but does not establish that five seconds is optimal. A
+last bounded, validated snapshot is retained privately for comparison across
+demand, source and failed-read gaps while public observation is still revoked;
+only a genuinely changed published inventory invalidates the separate
+plugin-update result. The retained value is internal state, not part of the
+supported `PluginUpdateService` facade. As with every QML object in the one
+Quickshell process, this API boundary does not sandbox malicious same-process
+code or QObject-tree mutation.
+Isolated cadence and native tests show post-drain spacing and silence after release. The pinned
 resource gate bounds the one launcher/custodian/IPC acquisition tree to three
 processes, includes observed descendants in warm-cycle CPU accounting and checks
 host PSS retention with calibrated QML/helper CPU and retention counterexamples.

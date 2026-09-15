@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 import subprocess
+import sys
 import tarfile
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -62,7 +66,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.13")
+        self.assertEqual(version, "0.1.1-beta.14")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -84,6 +88,91 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertEqual(count, 24)
         self.assertIn(f'value: "{count} / {count}"', preview)
         self.assertNotIn('value: "25 / 25"', preview)
+
+    def test_lifecycle_contract_pins_exact_public_release_identities(self) -> None:
+        contract = json.loads(
+            (ROOT / "contracts/lifecycle-predecessors-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        states = {item["id"]: item for item in contract["states"]}
+        expected = {
+            "public-beta.11": {
+                "suiteVersion": "0.1.1-beta.11",
+                "sourceRevisions": [
+                    "adbb11068e9c77561ff0c3d1b8fca5212653ae3c",
+                    "package:0.1.1-beta.11",
+                ],
+                "settingsStorageVersion": 0,
+                "payloadDigest": "27f092d27e772bb33ccddc79de28079759c3f666f293c346e6a974039529c032",
+            },
+            "step-5-tip": {
+                "suiteVersion": "0.1.1-beta.11",
+                "sourceRevisions": [
+                    "5154c020a44d71139a6614a183ec91021b9772c1"
+                ],
+                "settingsStorageVersion": 0,
+                "payloadDigest": "418544f59ac78c6dce84badf99c19931c586c2b441eb484a44b57556c8295226",
+            },
+            "public-beta.12": {
+                "suiteVersion": "0.1.1-beta.12",
+                "sourceRevisions": [
+                    "3c6d0696f98f2953b2d7b434e3c0728bd6f86369"
+                ],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "3c5c59b359b2ef6afad7e8c898682e20b38c940ab7479bb04ca164d13cabbc6f",
+            },
+            "public-beta.13": {
+                "suiteVersion": "0.1.1-beta.13",
+                "sourceRevisions": [
+                    "2760cdb8272255790d5e4613fed8a48cb63c3555",
+                    "3cb7f6d26df47b0e2d697575e4b42ba48e405c1d",
+                    "package:0.1.1-beta.13",
+                ],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "84f25408c8068c839884415a0a48c85922f54e22c782a6b19791e07903278c69",
+            },
+            "public-beta.14": {
+                "suiteVersion": "0.1.1-beta.14",
+                "sourceRevisions": ["package:0.1.1-beta.14"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "70a76ad6ba877381a2663c1ac76b6eaf7883bb724dfa0d2c017e113ec1946577",
+            },
+        }
+        self.assertEqual(set(states), set(expected))
+        for identity_id, pinned in expected.items():
+            with self.subTest(identity=identity_id):
+                state = states[identity_id]
+                for field, value in pinned.items():
+                    self.assertEqual(state[field], value)
+                self.assertEqual(len(state["pluginIds"]), 24)
+                self.assertEqual(
+                    set(state["pluginDigests"]), set(state["pluginIds"])
+                )
+                digest = hashlib.sha256(b"shibumi-suite-payload-v1\0")
+                for plugin_id, plugin_digest in sorted(
+                    state["pluginDigests"].items()
+                ):
+                    digest.update(plugin_id.encode("utf-8"))
+                    digest.update(b"\0")
+                    digest.update(plugin_digest.encode("ascii"))
+                    digest.update(b"\0")
+                self.assertEqual(digest.hexdigest(), state["payloadDigest"])
+        self.assertNotIn(
+            "package:0.1.1-beta.12",
+            states["public-beta.12"]["sourceRevisions"],
+        )
+
+        aur_check = (ROOT / "scripts/check-aur-package").read_text(
+            encoding="utf-8"
+        )
+        state_list_marker = "and (.states | map(.id)) == ["
+        self.assertEqual(aur_check.count(state_list_marker), 1)
+        aur_state_list = aur_check.split(state_list_marker, 1)[1].split("]", 1)[0]
+        self.assertEqual(
+            json.loads(f"[{aur_state_list}]"),
+            [item["id"] for item in contract["states"]],
+        )
 
     def test_package_boundary_has_no_user_mutation_hook(self) -> None:
         pkgbuild = (ROOT / "packaging/aur/PKGBUILD").read_text(encoding="utf-8")
@@ -178,8 +267,8 @@ class PackageReleaseTests(unittest.TestCase):
             "uses: actions/checkout@"
             "3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
         )
-        self.assertEqual(checkout_uses, [expected, expected])
-        self.assertEqual(workflow.count("persist-credentials: false"), 2)
+        self.assertEqual(checkout_uses, [expected, expected, expected])
+        self.assertEqual(workflow.count("persist-credentials: false"), 3)
         self.assertNotIn("persist-credentials: true", workflow)
 
     def test_release_workflow_rehearses_the_installed_aur_package(self) -> None:
@@ -218,15 +307,53 @@ class PackageReleaseTests(unittest.TestCase):
             "tests/shibumi-suite-quattro-runtime.sh",
             "omarchy-installed-package-contract-regression.sh",
             "omarchy-installed-source-parity-contract-regression.sh",
+            "native-catalog-resource-regression.py",
             "omarchy-agents-contract-regression.sh",
             "omarchy-forward-compat-contract-regression.sh",
         ):
             self.assertIn(gate, collector)
-        self.assertIn(
-            "needs: package-contract", workflow
+        ruby_parser = """
+require "json"
+require "yaml"
+workflow = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: false)
+puts JSON.generate(workflow.fetch("jobs"))
+"""
+        parsed = subprocess.run(
+            ["ruby", "-e", ruby_parser, str(ROOT / ".github/workflows/package-release.yml")],
+            check=True,
+            capture_output=True,
+            text=True,
         )
+        jobs = json.loads(parsed.stdout)
+        self.assertEqual(set(jobs), {"package-contract", "release-validation", "github-release"})
+        self.assertEqual(jobs["package-contract"]["timeout-minutes"], 60)
+        self.assertEqual(jobs["package-contract"]["permissions"], {"contents": "read"})
+        self.assertEqual(jobs["release-validation"]["needs"], "package-contract")
+        self.assertEqual(jobs["release-validation"]["timeout-minutes"], 240)
+        self.assertEqual(jobs["release-validation"]["permissions"], {"contents": "read"})
+        self.assertEqual(
+            jobs["release-validation"]["runs-on"],
+            ["self-hosted", "linux", "shibumi-validation"],
+        )
+        self.assertEqual(jobs["github-release"]["needs"], "release-validation")
+        self.assertEqual(jobs["github-release"]["timeout-minutes"], 30)
+        self.assertEqual(jobs["github-release"]["permissions"], {"contents": "write"})
+        self.assertEqual(jobs["github-release"]["runs-on"], "ubuntu-24.04")
+        self.assertIn("cancel-in-progress: true", workflow)
         self.assertIn(
-            "runs-on: [self-hosted, linux, shibumi-validation]", workflow
+            "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            workflow,
+        )
+        self.assertIn("--no-recursion --null --verbatim-files-from", workflow)
+        self.assertIn('--files-from="$logs_manifest"', workflow)
+        self.assertNotIn(
+            '-C dist -cf - "shibumi-shell-$version.release-evidence.logs"',
+            workflow,
+        )
+        self.assertIn("validate_log_inventory(log_dir, results)", collector)
+        self.assertIn(
+            "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+            workflow,
         )
         self.assertIn('--expected-commit "$GITHUB_SHA"', workflow)
         self.assertEqual(workflow.count('tag_output=$(git ls-remote --tags origin'), 2)
@@ -241,6 +368,87 @@ class PackageReleaseTests(unittest.TestCase):
             workflow.rindex('gh release download "$tag"'),
             workflow.index('gh release edit "$tag" --draft=false'),
         )
+
+    def test_publication_admission_requires_the_resource_gate_to_pass(self) -> None:
+        workflow_path = ROOT / ".github/workflows/package-release.yml"
+        ruby_parser = """
+require "json"
+require "yaml"
+workflow = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: false)
+puts JSON.generate(workflow.fetch("jobs"))
+"""
+        parsed = subprocess.run(
+            ["ruby", "-e", ruby_parser, str(workflow_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        jobs = json.loads(parsed.stdout)
+        validation_steps = jobs["release-validation"]["steps"]
+        inventory_step = next(
+            step for step in validation_steps
+            if step.get("name") == "Verify version and exact local asset inventory"
+        )
+        run = inventory_step["run"]
+        prefix = 'jq -e --arg commit "$GITHUB_SHA" --arg version "$version" \'\n'
+        filter_start = run.index(prefix) + len(prefix)
+        filter_end = run.index('\n\' "$evidence"', filter_start)
+        admission_filter = run[filter_start:filter_end]
+        self.assertIn('select(.id == "native-catalog-resource")', admission_filter)
+
+        commit = "a" * 40
+        base_evidence = {
+            "passed": True,
+            "candidate": {
+                "kind": "clean-commit",
+                "version": "0.1.1-beta.test",
+                "baseCommit": commit,
+            },
+            "finalInputValidation": {"status": "passed"},
+        }
+        cases = (
+            (
+                "passed-control",
+                [
+                    {"id": "lifecycle-admission", "status": "passed"},
+                    {"id": "native-catalog-resource", "status": "passed"},
+                ],
+                True,
+            ),
+            (
+                "absent",
+                [{"id": "lifecycle-admission", "status": "passed"}],
+                False,
+            ),
+            (
+                "failed",
+                [
+                    {"id": "lifecycle-admission", "status": "passed"},
+                    {"id": "native-catalog-resource", "status": "failed"},
+                ],
+                False,
+            ),
+        )
+        for name, commands, expected in cases:
+            with self.subTest(case=name):
+                evidence = {**base_evidence, "commands": commands}
+                admitted = subprocess.run(
+                    [
+                        "jq",
+                        "-e",
+                        "--arg",
+                        "commit",
+                        commit,
+                        "--arg",
+                        "version",
+                        "0.1.1-beta.test",
+                        admission_filter,
+                    ],
+                    input=json.dumps(evidence),
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
     def test_quattro_cleanup_rejects_foreign_units_without_systemctl(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
@@ -340,6 +548,10 @@ class PackageReleaseTests(unittest.TestCase):
         ids = [row[0] for row in rows]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(
+            dict(rows)["native-catalog-resource"],
+            "python3 tests/native-catalog-resource-regression.py",
+        )
+        self.assertEqual(
             set(ids),
             {
                 "package-tests",
@@ -352,6 +564,7 @@ class PackageReleaseTests(unittest.TestCase):
                 "quattro-dry-run",
                 "installed-package-contract",
                 "installed-source-parity-contract",
+                "native-catalog-resource",
                 "agents-contract",
                 "forward-compat-contract",
                 "quattro-runtime",
@@ -396,12 +609,806 @@ class PackageReleaseTests(unittest.TestCase):
                     )
 
         private_root = "/srv/private/omarchy-source"
-        redacted = module.redact_log(
-            f"{ROOT} {Path.home()} {private_root}".encode(), [private_root]
-        ).decode()
-        self.assertNotIn(str(ROOT), redacted)
-        self.assertNotIn(str(Path.home()), redacted)
-        self.assertNotIn(private_root, redacted)
+        replacements = dict(module.log_replacements([private_root]))
+        self.assertEqual(replacements[str(ROOT).encode()], b"<repository>")
+        self.assertEqual(replacements[str(Path.home()).encode()], b"<home>")
+        self.assertEqual(replacements[private_root.encode()], b"<baseline:1>")
+
+    def test_release_evidence_preflights_clean_exact_git_checkouts(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_preflight", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-baseline-preflight."
+        ) as temporary:
+            checkout = Path(temporary) / "checkout"
+            checkout.mkdir()
+            subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+            tracked = checkout / "tracked"
+            tracked.write_text("baseline\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(checkout), "add", "tracked"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "baseline",
+                ],
+                check=True,
+            )
+            revision = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+            accepted = module.preflight_git_checkout(
+                "SHIBUMI_TEST_BASELINE", str(checkout), revision
+            )
+            self.assertEqual(accepted["path"], str(checkout.resolve()))
+            self.assertEqual(accepted["revision"], revision)
+            self.assertEqual(accepted["status"], "clean")
+            self.assertRegex(accepted["gitTree"], r"^[0-9a-f]{40}$")
+            self.assertRegex(accepted["statusSha256"], r"^[0-9a-f]{64}$")
+            self.assertRegex(accepted["workingTreeSha256"], r"^[0-9a-f]{64}$")
+
+            hostile_git_environment = {
+                "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(Path(temporary) / "objects"),
+                "GIT_CONFIG": str(Path(temporary) / "config"),
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "core.fsmonitor",
+                "GIT_CONFIG_VALUE_0": "hostile",
+                "GIT_DIR": str(Path(temporary) / "hostile.git"),
+                "GIT_INDEX_FILE": str(Path(temporary) / "index"),
+                "GIT_OBJECT_DIRECTORY": str(Path(temporary) / "objects"),
+                "GIT_REPLACE_REF_BASE": "refs/hostile-replacements/",
+                "GIT_WORK_TREE": str(Path(temporary) / "hostile-worktree"),
+            }
+            with patch.dict(os.environ, hostile_git_environment):
+                hardened = module.preflight_git_checkout(
+                    "SHIBUMI_TEST_BASELINE", str(checkout), revision
+                )
+            self.assertEqual(
+                module.comparable_identity(hardened),
+                module.comparable_identity(accepted),
+            )
+            self.assertFalse(
+                any(name.startswith("GIT_") for name in module.checkout_git_environment())
+            )
+
+            tracked.write_text("replacement\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(checkout), "add", "tracked"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "replacement",
+                ],
+                check=True,
+            )
+            replacement_revision = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "-C", str(checkout), "checkout", "-q", revision], check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "replace",
+                    revision,
+                    replacement_revision,
+                ],
+                check=True,
+            )
+            try:
+                with self.assertRaisesRegex(ValueError, "replacement objects"):
+                    module.preflight_git_checkout(
+                        "SHIBUMI_TEST_BASELINE", str(checkout), revision
+                    )
+                with self.assertRaisesRegex(ValueError, "replacement objects"):
+                    module.capture_git_checkout_identity(checkout)
+            finally:
+                subprocess.run(
+                    ["git", "-C", str(checkout), "replace", "-d", revision],
+                    check=True,
+                    capture_output=True,
+                )
+
+            gate_environment, evidence_preflights = module.prepare_gate_environment(
+                {
+                    "SHIBUMI_TEST_BASELINE": "untrusted-alias",
+                    **hostile_git_environment,
+                },
+                [accepted],
+            )
+            self.assertEqual(
+                gate_environment["SHIBUMI_TEST_BASELINE"], str(checkout.resolve())
+            )
+            self.assertEqual(
+                {
+                    name: value
+                    for name, value in gate_environment.items()
+                    if name.startswith("GIT_")
+                },
+                {"GIT_NO_REPLACE_OBJECTS": "1"},
+            )
+            self.assertNotIn("path", evidence_preflights[0])
+            self.assertNotIn(str(checkout.resolve()), json.dumps(evidence_preflights))
+
+            helper = ROOT / "tests/lib/baselines.sh"
+            shell_preflight = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; shibumi_preflight_clean_git_checkout "$2" "$3" test; printf "%s\\n" "$SHIBUMI_PREFLIGHT_OMARCHY_PATH"',
+                    "shibumi-preflight-test",
+                    str(helper),
+                    str(checkout),
+                    revision,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(shell_preflight.returncode, 0, shell_preflight.stderr)
+            self.assertEqual(shell_preflight.stdout.strip(), str(checkout.resolve()))
+
+            linked_checkout = Path(temporary) / "linked-checkout"
+            linked_checkout.symlink_to(checkout, target_is_directory=True)
+            linked_parent = Path(temporary) / "linked-parent"
+            linked_parent.symlink_to(Path(temporary), target_is_directory=True)
+            noncanonical_checkout = str(checkout / ".." / checkout.name)
+            invalid_cases = (
+                ("", revision, "malformed checkout path"),
+                ("relative/checkout", revision, "must be absolute"),
+                (str(Path(temporary) / "missing"), revision, "is missing"),
+                (str(linked_checkout), revision, "symlink component"),
+                (
+                    str(linked_parent / checkout.name),
+                    revision,
+                    "symlink component",
+                ),
+                (noncanonical_checkout, revision, "canonical and unlinked"),
+                (str(checkout) + "/", revision, "canonical and unlinked"),
+                (str(checkout), "malformed", "malformed expected revision"),
+                (str(checkout), "0" * 40, "Git inspection failed"),
+            )
+            for checkout_path, expected, message in invalid_cases:
+                with self.subTest(checkout_path=checkout_path, expected=expected):
+                    with self.assertRaisesRegex(ValueError, message):
+                        module.preflight_git_checkout(
+                            "SHIBUMI_TEST_BASELINE", checkout_path, expected
+                        )
+
+            for checkout_path in (
+                str(linked_checkout),
+                str(linked_parent / checkout.name),
+                noncanonical_checkout,
+            ):
+                with self.subTest(shell_checkout_path=checkout_path):
+                    shell_alias = subprocess.run(
+                        [
+                            "bash",
+                            "-c",
+                            'source "$1"; shibumi_preflight_clean_git_checkout "$2" "$3" test',
+                            "shibumi-preflight-test",
+                            str(helper),
+                            checkout_path,
+                            revision,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertNotEqual(shell_alias.returncode, 0)
+                    self.assertRegex(shell_alias.stderr, r"linked|canonical")
+
+            (checkout / "untracked").write_text("dirty\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "checkout is dirty"):
+                module.preflight_git_checkout(
+                    "SHIBUMI_TEST_BASELINE", str(checkout), revision
+                )
+            shell_dirty = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; shibumi_preflight_clean_git_checkout "$2" "$3" test',
+                    "shibumi-preflight-test",
+                    str(helper),
+                    str(checkout),
+                    revision,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(shell_dirty.returncode, 0)
+            self.assertIn("checkout is dirty", shell_dirty.stderr)
+
+        with self.assertRaises(ValueError) as missing:
+            module.preflight_external_baselines({})
+        for environment_name, _manifest in module.EXTERNAL_BASELINES:
+            self.assertIn(environment_name, str(missing.exception))
+
+        helper_text = (ROOT / "tests/lib/baselines.sh").read_text(encoding="utf-8")
+        self.assertIn("shibumi_preflight_clean_git_checkout", helper_text)
+        self.assertIn("--untracked-files=all --ignore-submodules=none", helper_text)
+
+    def test_release_evidence_revalidates_inputs_around_every_gate(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_identity", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        def create_checkout(parent: Path, name: str) -> tuple[Path, str]:
+            checkout = parent / name
+            checkout.mkdir()
+            subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+            tracked = checkout / "tracked"
+            tracked.write_text(f"{name}\n", encoding="utf-8")
+            tracked.chmod(0o644)
+            subprocess.run(["git", "-C", str(checkout), "add", "tracked"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "fixture",
+                ],
+                check=True,
+            )
+            revision = subprocess.run(
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            return checkout, revision
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-release-identities."
+        ) as temporary:
+            temporary_path = Path(temporary)
+            candidate, _candidate_revision = create_checkout(
+                temporary_path, "candidate"
+            )
+            baseline, baseline_revision = create_checkout(
+                temporary_path, "baseline"
+            )
+            expected_candidate = module.capture_git_checkout_identity(candidate)
+            expected_baseline = module.preflight_git_checkout(
+                "SHIBUMI_TEST_BASELINE", str(baseline), baseline_revision
+            )
+            baselines = [expected_baseline]
+            baseline_paths = [str(baseline)]
+            environment, _evidence = module.prepare_gate_environment(
+                os.environ.copy(), baselines
+            )
+            self.assertEqual(environment["GIT_NO_REPLACE_OBJECTS"], "1")
+
+            unchanged = module.run_guarded_evidence_gate(
+                "unchanged-control",
+                (sys.executable, "-c", "pass"),
+                temporary_path / "unchanged.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertEqual(unchanged["status"], "passed")
+            self.assertEqual(
+                unchanged["inputValidation"],
+                {"status": "passed", "phase": "before-and-after"},
+            )
+
+            candidate_tracked = candidate / "tracked"
+            candidate_tracked.write_text("replacement\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(candidate), "add", "tracked"], check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(candidate),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "replacement",
+                ],
+                check=True,
+            )
+            replacement_revision = subprocess.run(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "-C", str(candidate), "checkout", "-q", _candidate_revision],
+                check=True,
+            )
+            replacement_program = "\n".join((
+                "import subprocess",
+                f"repo = {str(candidate)!r}",
+                f"original = {_candidate_revision!r}",
+                f"replacement = {replacement_revision!r}",
+                "subprocess.run(['git', '-C', repo, 'replace', original, replacement], check=True)",
+                "try:",
+                "    content = subprocess.run(['git', '-C', repo, 'show', 'HEAD:tracked'], check=True, capture_output=True, text=True).stdout",
+                "    print(content, end='')",
+                "finally:",
+                "    subprocess.run(['git', '-C', repo, 'replace', '-d', original], check=True, capture_output=True)",
+            ))
+            transient_replacement = module.run_guarded_evidence_gate(
+                "transient-replacement",
+                (sys.executable, "-c", replacement_program),
+                temporary_path / "transient-replacement.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertEqual(transient_replacement["status"], "passed")
+            self.assertEqual(
+                (temporary_path / "transient-replacement.log").read_text(
+                    encoding="utf-8"
+                ),
+                "candidate\n",
+            )
+            self.assertEqual(module.checkout_git(candidate, "replace", "-l"), "")
+
+            untracked = baseline / "untracked"
+            untracked.write_text("drift\n", encoding="utf-8")
+            gate_marker = temporary_path / "refused-gate-ran"
+            refused = module.run_guarded_evidence_gate(
+                "baseline-precheck-drift",
+                (
+                    sys.executable,
+                    "-c",
+                    f"from pathlib import Path; Path({str(gate_marker)!r}).touch()",
+                ),
+                temporary_path / "baseline-precheck.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertFalse(gate_marker.exists())
+            self.assertEqual(refused["status"], "input-drift")
+            self.assertEqual(refused["inputValidation"]["phase"], "before")
+            untracked.unlink()
+
+            baseline_program = (
+                "from pathlib import Path; "
+                f"Path({str(baseline / 'tracked')!r}).write_text('changed\\n')"
+            )
+            baseline_during = module.run_guarded_evidence_gate(
+                "baseline-during-gate",
+                (sys.executable, "-c", baseline_program),
+                temporary_path / "baseline-during.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertEqual(baseline_during["status"], "input-drift")
+            self.assertEqual(baseline_during["inputValidation"]["phase"], "after")
+            (baseline / "tracked").write_text("baseline\n", encoding="utf-8")
+
+            candidate_program = (
+                "from pathlib import Path; "
+                f"Path({str(candidate / 'tracked')!r}).chmod(0o600)"
+            )
+            candidate_during = module.run_guarded_evidence_gate(
+                "candidate-mode-during-gate",
+                (sys.executable, "-c", candidate_program),
+                temporary_path / "candidate-during.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertEqual(candidate_during["status"], "input-drift")
+            self.assertEqual(candidate_during["inputValidation"]["phase"], "after")
+            (candidate / "tracked").chmod(0o644)
+
+            module.validate_release_input_identities(
+                candidate, expected_candidate, baselines
+            )
+
+            (candidate / "tracked").write_text("staged drift\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(candidate), "add", "tracked"], check=True
+            )
+            with self.assertRaisesRegex(ValueError, "candidate identity drift"):
+                module.validate_release_input_identities(
+                    candidate, expected_candidate, baselines
+                )
+
+    def test_release_evidence_gate_progress_and_timeout_are_bounded(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_progress", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-evidence-progress."
+        ) as temporary:
+            temporary_path = Path(temporary)
+            log_path = temporary_path / "pass.log"
+            progress = io.StringIO()
+            with contextlib.redirect_stdout(progress):
+                result = module.run_evidence_gate(
+                    "fixture-pass",
+                    (sys.executable, "-c", "print('detailed output')"),
+                    log_path,
+                    [],
+                    timeout_seconds=2,
+                )
+            lines = progress.getvalue().splitlines()
+            self.assertEqual(len(lines), 3)
+            self.assertEqual(sum("gate start:" in line for line in lines), 1)
+            self.assertEqual(sum("gate result:" in line for line in lines), 1)
+            self.assertEqual(sum("gate duration:" in line for line in lines), 1)
+            self.assertNotIn("detailed output", progress.getvalue())
+            self.assertEqual(log_path.read_text(encoding="utf-8"), "detailed output\n")
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["exitCode"], 0)
+            self.assertFalse(result["timedOut"])
+
+            nonzero_log = temporary_path / "nonzero.log"
+            nonzero = module.run_evidence_gate(
+                "fixture-nonzero",
+                (sys.executable, "-c", "raise SystemExit(7)"),
+                nonzero_log,
+                [],
+                timeout_seconds=2,
+            )
+            self.assertEqual(nonzero["status"], "failed")
+            self.assertEqual(nonzero["exitCode"], 7)
+            self.assertFalse(nonzero["timedOut"])
+
+            start_log = temporary_path / "start.log"
+            start_error = module.run_evidence_gate(
+                "fixture-start-error",
+                (str(temporary_path / "missing-command"),),
+                start_log,
+                [],
+                timeout_seconds=2,
+            )
+            self.assertEqual(start_error["status"], "start-error")
+            self.assertIsNone(start_error["exitCode"])
+            self.assertIn("could not start gate", start_log.read_text(encoding="utf-8"))
+
+            timeout_log = temporary_path / "timeout.log"
+            timeout_progress = io.StringIO()
+            timeout_program = """
+import signal
+import subprocess
+import sys
+import time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = subprocess.Popen([
+    sys.executable,
+    "-c",
+    "import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(30)",
+])
+print(child.pid, flush=True)
+time.sleep(30)
+"""
+            started = time.monotonic()
+            with contextlib.redirect_stdout(timeout_progress):
+                timeout_result = module.run_evidence_gate(
+                    "fixture-timeout",
+                    (sys.executable, "-c", timeout_program),
+                    timeout_log,
+                    [],
+                    timeout_seconds=0.1,
+                    termination_grace_seconds=0.1,
+                )
+            self.assertLess(time.monotonic() - started, 2)
+            self.assertEqual(len(timeout_progress.getvalue().splitlines()), 3)
+            self.assertNotEqual(timeout_result["exitCode"], 0)
+            self.assertTrue(timeout_result["timedOut"])
+            self.assertEqual(timeout_result["status"], "timed-out")
+            self.assertIn("timed-out", timeout_progress.getvalue())
+            child_pid = int(timeout_log.read_text(encoding="utf-8").strip())
+            child_active = True
+            for _attempt in range(50):
+                status_path = Path(f"/proc/{child_pid}/stat")
+                if not status_path.exists():
+                    child_active = False
+                    break
+                fields = status_path.read_text(encoding="utf-8").rsplit(") ", 1)
+                if len(fields) == 2 and fields[1].startswith("Z "):
+                    child_active = False
+                    break
+                time.sleep(0.01)
+            self.assertFalse(child_active, "timed-out child survived its process group")
+
+    def test_release_evidence_refuses_reused_or_unsafe_output_paths(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_outputs", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-evidence-outputs."
+        ) as temporary:
+            temporary_path = Path(temporary)
+            log_dir = temporary_path / "logs"
+            module.create_fresh_log_directory(log_dir)
+            self.assertEqual(log_dir.stat().st_mode & 0o777, 0o700)
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                module.create_fresh_log_directory(log_dir)
+
+            result = module.run_evidence_gate(
+                "fixture-pass",
+                (sys.executable, "-c", "print('bounded')"),
+                log_dir / "fixture-pass.log",
+                [],
+                timeout_seconds=2,
+            )
+            module.validate_log_inventory(log_dir, [result])
+            stale = log_dir / "stale.log"
+            stale.write_bytes(b"stale\n")
+            with self.assertRaisesRegex(ValueError, "stale files"):
+                module.validate_log_inventory(log_dir, [result])
+
+            victim = temporary_path / "victim"
+            victim.write_bytes(b"preserve\n")
+            linked_log = temporary_path / "linked.log"
+            linked_log.symlink_to(victim)
+            with patch.object(module.subprocess, "Popen") as popen:
+                with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                    module.run_evidence_gate(
+                        "fixture-linked",
+                        (sys.executable, "-c", "print('must not run')"),
+                        linked_log,
+                        [],
+                        timeout_seconds=2,
+                    )
+            popen.assert_not_called()
+            self.assertEqual(victim.read_bytes(), b"preserve\n")
+
+            existing_log = temporary_path / "existing.log"
+            existing_log.write_bytes(b"preserve-existing\n")
+            with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                module.run_evidence_gate(
+                    "fixture-existing",
+                    (sys.executable, "-c", "print('must not run')"),
+                    existing_log,
+                    [],
+                    timeout_seconds=2,
+                )
+            self.assertEqual(existing_log.read_bytes(), b"preserve-existing\n")
+
+            linked_output = temporary_path / "evidence.json"
+            linked_output.symlink_to(victim)
+            with self.assertRaisesRegex(ValueError, "unsafe or already exists"):
+                module.write_new_file(linked_output, b"replacement\n")
+            self.assertEqual(victim.read_bytes(), b"preserve\n")
+
+    def test_release_evidence_streams_redaction_and_enforces_log_budgets(self) -> None:
+        path = ROOT / "scripts/collect-release-evidence"
+        loader = importlib.machinery.SourceFileLoader(
+            "release_evidence_limits", str(path)
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-evidence-limits."
+        ) as temporary:
+            temporary_path = Path(temporary)
+            private_path = "/srv/private/omarchy-source"
+            redacted_log = temporary_path / "redacted.log"
+            with patch.object(module, "LOG_READ_CHUNK_BYTES", 3):
+                redacted = module.run_evidence_gate(
+                    "fixture-redaction",
+                    (
+                        sys.executable,
+                        "-c",
+                        f"import os; os.write(1, {private_path.encode()!r})",
+                    ),
+                    redacted_log,
+                    [private_path],
+                    timeout_seconds=2,
+                )
+            self.assertEqual(redacted["status"], "passed")
+            self.assertEqual(redacted_log.read_bytes(), b"<baseline:1>")
+            self.assertNotIn(private_path.encode(), redacted_log.read_bytes())
+
+            for output_bytes in (63, 64):
+                with self.subTest(raw_output_bytes=output_bytes):
+                    bounded_log = temporary_path / f"bounded-{output_bytes}.log"
+                    bounded = module.run_evidence_gate(
+                        f"fixture-bounded-{output_bytes}",
+                        (
+                            sys.executable,
+                            "-c",
+                            f"import os; os.write(1, b'x' * {output_bytes})",
+                        ),
+                        bounded_log,
+                        [],
+                        timeout_seconds=2,
+                        raw_byte_limit=64,
+                        log_byte_limit=64,
+                    )
+                    self.assertEqual(bounded["status"], "passed")
+                    self.assertEqual(bounded["rawLogBytes"], output_bytes)
+                    self.assertEqual(bounded_log.stat().st_size, output_bytes)
+
+            per_gate_log = temporary_path / "per-gate.log"
+            per_gate = module.run_evidence_gate(
+                "fixture-per-gate-limit",
+                (sys.executable, "-c", "import os; os.write(1, b'x' * 65)"),
+                per_gate_log,
+                [],
+                timeout_seconds=2,
+                raw_byte_limit=64,
+                log_byte_limit=64,
+                termination_grace_seconds=0.1,
+            )
+            self.assertEqual(per_gate["status"], "output-limit")
+            self.assertTrue(per_gate["outputLimitExceeded"])
+            self.assertEqual(per_gate["rawLogBytes"], 64)
+            self.assertLessEqual(per_gate_log.stat().st_size, 64)
+
+            redacted_limit_log = temporary_path / "redacted-limit.log"
+            redacted_limit = module.run_evidence_gate(
+                "fixture-redacted-limit",
+                (sys.executable, "-c", "import os; os.write(1, b'/x')"),
+                redacted_limit_log,
+                ["/x"],
+                timeout_seconds=2,
+                raw_byte_limit=64,
+                log_byte_limit=len(b"<baseline:1>") - 1,
+                termination_grace_seconds=0.1,
+            )
+            self.assertEqual(redacted_limit["status"], "output-limit")
+            self.assertEqual(redacted_limit["rawLogBytes"], 2)
+            self.assertLessEqual(
+                redacted_limit_log.stat().st_size, len(b"<baseline:1>") - 1
+            )
+
+            budget = module.EvidenceLogBudget(
+                total_raw_bytes=10,
+                total_redacted_bytes=10,
+                per_gate_raw_bytes=6,
+                per_gate_redacted_bytes=6,
+            )
+            first_limits = budget.gate_limits()
+            first = module.run_evidence_gate(
+                "fixture-total-first",
+                (sys.executable, "-c", "import os; os.write(1, b'123456')"),
+                temporary_path / "total-first.log",
+                [],
+                timeout_seconds=2,
+                raw_byte_limit=first_limits[0],
+                log_byte_limit=first_limits[1],
+            )
+            self.assertEqual(first["status"], "passed")
+            budget.consume(first)
+            second_limits = budget.gate_limits()
+            self.assertEqual(second_limits, (4, 4))
+            second = module.run_evidence_gate(
+                "fixture-total-second",
+                (sys.executable, "-c", "import os; os.write(1, b'12345')"),
+                temporary_path / "total-second.log",
+                [],
+                timeout_seconds=2,
+                raw_byte_limit=second_limits[0],
+                log_byte_limit=second_limits[1],
+                termination_grace_seconds=0.1,
+            )
+            self.assertEqual(second["status"], "output-limit")
+            budget.consume(second)
+            self.assertEqual(budget.gate_limits(), (0, 4))
+            exhausted_limits = budget.gate_limits()
+            with patch.object(module.subprocess, "Popen") as popen:
+                exhausted = module.run_evidence_gate(
+                    "fixture-total-raw-exhausted",
+                    (sys.executable, "-c", "print('must not run')"),
+                    temporary_path / "total-raw-exhausted.log",
+                    [],
+                    timeout_seconds=2,
+                    raw_byte_limit=exhausted_limits[0],
+                    log_byte_limit=exhausted_limits[1],
+                )
+            popen.assert_not_called()
+            self.assertEqual(exhausted["status"], "output-limit")
+
+            redacted_budget = module.EvidenceLogBudget(
+                total_raw_bytes=10,
+                total_redacted_bytes=10,
+                per_gate_raw_bytes=10,
+                per_gate_redacted_bytes=10,
+            )
+            redacted_first = module.run_evidence_gate(
+                "fixture-total-redacted-first",
+                (sys.executable, "-c", "import os; os.write(1, b'123456')"),
+                temporary_path / "total-redacted-first.log",
+                [],
+                timeout_seconds=2,
+                raw_byte_limit=10,
+                log_byte_limit=10,
+            )
+            redacted_budget.consume(redacted_first)
+            redacted_limits = redacted_budget.gate_limits()
+            self.assertEqual(redacted_limits, (4, 4))
+            redacted_second = module.run_evidence_gate(
+                "fixture-total-redacted-second",
+                (sys.executable, "-c", "import os; os.write(1, b'/x')"),
+                temporary_path / "total-redacted-second.log",
+                ["/x"],
+                timeout_seconds=2,
+                raw_byte_limit=redacted_limits[0],
+                log_byte_limit=redacted_limits[1],
+            )
+            self.assertEqual(redacted_second["status"], "output-limit")
+            redacted_budget.consume(redacted_second)
+            self.assertEqual(redacted_budget.gate_limits(), (2, 0))
 
     def test_release_evidence_accepts_omarchy_dev_as_diagnostic_fallback(self) -> None:
         path = ROOT / "scripts/collect-release-evidence"

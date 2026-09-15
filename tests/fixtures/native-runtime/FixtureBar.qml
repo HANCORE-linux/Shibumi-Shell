@@ -42,6 +42,33 @@ Bar {
       if (children[index].objectName === "native-fixture-control-widget") count++
     return count
   }
+  function visibleItemWithText(owner, text, depth) {
+    if (!owner || depth > 12) return null
+    try {
+      if (owner.visible && "text" in owner
+          && String(owner.text) === text) return owner
+    } catch (error) { return null }
+    const values = owner.children || []
+    for (let index = 0; index < values.length; index++) {
+      const match = visibleItemWithText(values[index], text, depth + 1)
+      if (match) return match
+    }
+    return null
+  }
+  function visibleAccessibleAction(owner, name, depth) {
+    if (!owner || depth > 12) return null
+    try {
+      if (owner.visible && owner.width > 0 && owner.height > 0
+          && String(owner.Accessible.name || "") === name
+          && typeof owner.requested === "function") return owner
+    } catch (error) { return null }
+    const values = owner.children || []
+    for (let index = 0; index < values.length; index++) {
+      const match = visibleAccessibleAction(values[index], name, depth + 1)
+      if (match) return match
+    }
+    return null
+  }
   Ui.PluginBarApi {
     id: controlApi
     pluginId: "hancore.shibumi.control-center"
@@ -84,6 +111,12 @@ Bar {
         layoutSerial: probe.layoutTransitionSerial,
         layoutResult: probe.layoutTransitionResult,
         v2Mode: probe.layoutController.v2Mode,
+        cpuV1Enabled: !!state && state.groupEnabledForVariant("G5", "v1"),
+        cpuV2Enabled: !!state && state.groupEnabledForVariant("G5", "v2"),
+        cpuV1Requested: !!state
+          && state.requestedGroupEnabledForVariant("G5", "v1"),
+        cpuV2Requested: !!state
+          && state.requestedGroupEnabledForVariant("G5", "v2"),
         audioV1Enabled: !!state && state.groupEnabledForVariant("G6", "v1"),
         audioV2Enabled: !!state && state.groupEnabledForVariant("G6", "v2"),
         providerSnapshotBusy: probe.providerSnapshotTransitionBusy,
@@ -120,6 +153,7 @@ Bar {
         panelPageReady: !!panel && panel.settingsPageReady,
         panelCatalog: panel && panel.pluginCatalogSnapshot
           ? panel.pluginCatalogSnapshot : null,
+        panelActionError: panel ? panel.pluginActionError : "",
         injectedBar: probe.barConfig,
         panelLoaded: !!panel,
         panelStateMatches: !!panel && panel.stateService === state,
@@ -232,6 +266,147 @@ Bar {
     function openPlugins(): string {
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
       return panel && panel.showSettingsPage("plugins") ? "ok" : "not-ready"
+    }
+    function openIcons(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      return panel && panel.showSettingsPage("functions") ? "ok" : "not-ready"
+    }
+    function setCpuVisible(enabled: bool): string {
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const variant = probe.layoutController.v2Mode ? "v2" : "v1"
+      return state && state.setGroupEnabledForVariant("G5", variant, enabled)
+        ? "queued" : "not-ready"
+    }
+    function activateCpuFromIcons(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const variant = probe.layoutController.v2Mode ? "v2" : "v1"
+      const section = probe.visibleItemWithText(
+        page, "INACTIVE WIDGETS", 0)
+      const action = probe.visibleAccessibleAction(page, "Activate CPU", 0)
+      const beforeConfig = state ? JSON.stringify(state.config) : ""
+      const beforeBar = JSON.stringify(probe.barConfig)
+      if (!section || !action) return "visible-action-missing"
+      action.requested()
+      return state && !probe.stateTransitionBusy
+          && !probe.layoutTransitionBusy
+          && !probe.providerSnapshotTransitionBusy && state.writePending
+          && state.requestedGroupEnabledForVariant("G5", variant)
+          && JSON.stringify(state.config) === beforeConfig
+          && JSON.stringify(probe.barConfig) === beforeBar
+        ? "queued-without-native-mutation" : "failed"
+    }
+    function coalesceCpuFromIcons(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const variant = probe.layoutController.v2Mode ? "v2" : "v1"
+      const action = probe.visibleAccessibleAction(page, "Activate CPU", 0)
+      const beforeConfig = state ? JSON.stringify(state.config) : ""
+      const beforeBar = JSON.stringify(probe.barConfig)
+      const beforeSerial = state ? state.writeSerial : 0
+      if (!panel || !action || !state) return "visible-action-missing"
+      action.requested()
+      const firstPreview = state.requestedGroupEnabledForVariant(
+        "G5", variant)
+      const secondAccepted = panel.setPluginEnabled(
+        "hancore.shibumi.cpu", false, true)
+      return firstPreview && secondAccepted && state.writePending
+          && state.writeSerial === beforeSerial + 2
+          && !state.requestedGroupEnabledForVariant("G5", variant)
+          && !probe.stateTransitionBusy && !probe.layoutTransitionBusy
+          && !probe.providerSnapshotTransitionBusy
+          && JSON.stringify(state.config) === beforeConfig
+          && JSON.stringify(probe.barConfig) === beforeBar
+        ? "coalesced-without-native-mutation" : "failed"
+    }
+    function malformedCatalogObservationsRefused(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      if (!panel || !state || !panel.pluginCatalogObservation
+          || !panel.validPluginCatalogObservation(
+            panel.pluginCatalogObservation)) return "not-ready"
+      const beforeConfig = JSON.stringify(state.config)
+      const beforeBar = JSON.stringify(probe.barConfig)
+      const validRow = Object.freeze({
+        id: "fixture.valid", kinds: Object.freeze(["bar-widget"]),
+        enabled: false, barWidget: Object.freeze({})
+      })
+      const plainById = Object.freeze({"fixture.valid": validRow})
+      const nullByIdValue = Object.create(null)
+      nullByIdValue[validRow.id] = Object.freeze({
+        id: validRow.id, kinds: validRow.kinds,
+        enabled: validRow.enabled, barWidget: validRow.barWidget
+      })
+      const mismatchedById = Object.freeze(nullByIdValue)
+      const invalidIdRow = Object.freeze({
+        id: "fixture..invalid", kinds: Object.freeze(["bar-widget"]),
+        enabled: false, barWidget: Object.freeze({})
+      })
+      const invalidIdMapValue = Object.create(null)
+      invalidIdMapValue[invalidIdRow.id] = invalidIdRow
+      const observations = [
+        {serial: 1, generation: 1, snapshot: {}},
+        Object.freeze({serial: 1, generation: 1,
+          snapshot: Object.freeze({catalogKind: "native-listPlugins",
+            entries: Object.freeze([validRow]), byId: plainById})}),
+        Object.freeze({serial: 1, generation: 1,
+          snapshot: Object.freeze({catalogKind: "native-listPlugins",
+            entries: Object.freeze([validRow]), byId: mismatchedById})}),
+        Object.freeze({serial: 1, generation: 1,
+          snapshot: Object.freeze({catalogKind: "native-listPlugins",
+            entries: Object.freeze([invalidIdRow]),
+            byId: Object.freeze(invalidIdMapValue)})})
+      ]
+      const refused = observations.every(function(observation) {
+        return !panel.validPluginCatalogObservation(observation)
+      })
+      return refused && JSON.stringify(state.config) === beforeConfig
+          && JSON.stringify(probe.barConfig) === beforeBar
+          && !state.writePending && !probe.stateTransitionBusy
+          && !probe.layoutTransitionBusy
+        ? "malformed-no-mutation" : "failed"
+    }
+    function releaseBarCatalogAndRefuseCpu(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      if (!panel || !page || !state || !probe.releaseCatalogConsumer())
+        return "not-ready"
+      const beforeConfig = JSON.stringify(state.config)
+      const beforeBar = JSON.stringify(probe.barConfig)
+      const accepted = page.setWidgetEnabled("G5", true)
+      return !accepted && !state.writePending && !probe.stateTransitionBusy
+          && !probe.layoutTransitionBusy
+          && JSON.stringify(state.config) === beforeConfig
+          && JSON.stringify(probe.barConfig) === beforeBar
+          && panel.pluginActionError === "The plugin catalog is not ready."
+          && panel.pluginCatalogObservation === null
+        ? "catalog-not-ready-no-mutation" : "failed"
+    }
+    function rebindBarCatalog(): string {
+      return probe.rebindCatalogConsumer() ? "requested" : "refused"
+    }
+    function releasePluginPageCatalogAndRefuseCpu(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      if (!panel || !page || !state
+          || typeof page.releaseCatalogConsumer !== "function"
+          || !page.releaseCatalogConsumer()) return "not-ready"
+      const beforeConfig = JSON.stringify(state.config)
+      const beforeBar = JSON.stringify(probe.barConfig)
+      const accepted = panel.setPluginEnabled("hancore.shibumi.cpu", false)
+      const refused = !accepted && !state.writePending
+        && !probe.stateTransitionBusy && !probe.layoutTransitionBusy
+        && JSON.stringify(state.config) === beforeConfig
+        && JSON.stringify(probe.barConfig) === beforeBar
+        && panel.pluginActionError === "The plugin catalog is not ready."
+        && panel.pluginCatalogObservation === null
+        && probe.catalogObservation !== null
+      page.syncCatalogConsumer()
+      return refused ? "page-authoritative-no-fallback" : "failed"
     }
     function captureCatalog(): string {
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null

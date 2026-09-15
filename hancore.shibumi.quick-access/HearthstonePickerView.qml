@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Shapes
 import qs.Commons as Commons
 import "PickerModel.js" as PickerModel
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -146,7 +147,7 @@ Item {
             sourceSize.height: Math.round(root.cardHeight * 2)
           }
 
-          IconText {
+          Presentation.IconText {
             anchors.centerIn: parent
             visible: !root.controller.isThumbnailReady(card.modelData)
             text: root.controller.videoMode ? "movie" : "image"

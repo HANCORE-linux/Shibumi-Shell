@@ -124,10 +124,22 @@ baseline.
   require single-instance manifests: an `allowMultiple` family request is
   refused before layout, registry or family-state mutation. Existing layouts,
   unrelated multi-instance entries and V2 retain their behavior.
-  On scoped hosts, rendering uses the exact configured layout ID and its
-  accepted `barWidgetRegistry.widgets[id].component` and metadata. Missing
-  registration stays empty until the registry publishes it; an original must
-  never substitute for a clone. Clone ancestry comes from public `listPlugins`,
+  On scoped hosts, each `WidgetSlot` binds the exact configured layout ID
+  directly to its accepted `barWidgetRegistry.widgets[id].component` and
+  metadata. It checks the actual Component type, not its JavaScript `status`
+  projection. Republication of the same handle leaves the Loader item intact;
+  replacing the handle produces one controlled Loader submission. Success
+  still requires the current Loader's Ready state and exact submitted-source/
+  completed-item provenance; a handle alone is not readiness. State
+  publication, structural layout, and catalog acquisition are separate
+  reaction paths. Scoped bar/config and registry fan-out do not start catalog
+  reads; explicit requests and the five-second demanded reconcile do.
+  Missing registration stays empty until the registry publishes it; an original must
+  never substitute for a clone. Composite G3 is the sole nested-Component
+  exception: only while `hancore.shibumi.status` is configured may its explicit
+  owner-bound route consume scoped `hancore.shibumi.update-center` and
+  `omarchy.tray` Components. They remain unavailable through ordinary
+  unconfigured lookup. Clone ancestry comes from public `listPlugins`,
   with cycle detection and a 32-entry traversal bound, not fabricated foreign
   manifests or executable paths. Native IPC owns enable/disable and clone
   restoration; the active Bar owns layout edits and confirms its injected
@@ -195,9 +207,15 @@ ownership is [`docs/multi-bar-extension-plan.md`](docs/multi-bar-extension-plan.
   bar becomes ready or visible. The first Bar owner stays unavailable; success
   requires IPC acknowledgement and a newly admitted Bar owner after the host
   rebuild. Missing replacement, timeout, nonzero exit, payload retirement, or
-  scope loss fails terminally for that process. There is no automatic retry,
-  settings-time rescan, stale Component retention, private registry access, or
-  second shell process.
+  scope loss fails terminally for that startup prime. No second rescan is
+  dispatched after output loss: valid current host Components are submitted
+  directly to the output-local Loader, including when their JavaScript status
+  projection is unavailable. A proved `>0 -> 0 -> >0` transition and exhaustion
+  of the existing resolution retries for a previously loaded, still-configured
+  and enabled widget may emit one passive sanitized warning per process. This
+  starts no work and cannot replenish the startup-prime budget. There is no
+  retry, settings-time rescan, stale Component retention, private registry
+  access, lock IPC probe, or second shell process.
 - One shared controller creates one bar per real output and rejects placeholder
   or zero-sized outputs.
 - Screen-local panels, pickers, tooltips, focus, input masks, and drag state
@@ -224,6 +242,11 @@ The lifecycle contract and uncompleted physical gates are defined in
   audio owner, network owner, media owner, or equivalent platform backend.
 - Views do not execute platform commands directly. Services own commands,
   validation, cancellation, timeouts, and structured parsing.
+- All QML loaded into the single Quickshell process is inside one trust boundary.
+  Service facades are ownership and supported-API boundaries, not a sandbox:
+  same-process plugin code can traverse and mutate the QObject tree. Containing
+  malicious installed QML is a host concern and a non-goal for these facades;
+  external command output still crosses bounded, validated parsers.
 - Polling, file watching, and worker processes are process-wide and shared
   unless the state is genuinely output-specific.
 - Closed panels and pickers release UI-only timers, scanners, peak monitors,
@@ -392,6 +415,15 @@ checks pass.
   properties.
 - A third-party bar must therefore provide safe construction defaults instead
   of `required` host properties.
+- The shared runtime owns one process-singleton `omarchy.bar`
+  visibility-nudge handler, enabled only for the one fully admitted active
+  Shibumi bar. It exposes only `syncHidden`, which asks that owner to re-read
+  Omarchy's host-owned `bar-off` marker after `omarchy-toggle-bar` changes it;
+  the directory watcher remains the ordinary update path. Incoming ownership
+  arms only after the bounded host-handler handoff window; changing the
+  host-injected bar identity revokes outgoing ownership synchronously.
+  Overlapping or shutting-down Bar lifetimes fail closed instead of registering
+  two targets.
 - Omarchy falls back to `omarchy.bar` when a selected third-party entry point
   fails to load.
 - Plugin code is unsandboxed and executes inside the Omarchy Shell process.
@@ -445,8 +477,11 @@ the saved preference.
   Setter `true` means queued, not saved. Published config/revision remain
   file-backed, with explicit pending/status/serial and settlement notification;
   a native `false` can mean unchanged and requires matching file readback too.
-  Scope loss cancels queued work. Full-entry readback is not an fsync guarantee,
-  a generic CAS contract, or a bound on FileView's acquisition allocation.
+  Scope loss cancels queued work. Reversible Active/Inactive organizer intents
+  use the requested-state/coalescing path directly while structural layout and
+  provider transitions remain serialized; file readback still owns canonical
+  config and rollback. Full-entry readback is not an fsync guarantee, a generic
+  CAS contract, or a bound on FileView's acquisition allocation.
 - The one-time migration renames `hancore.qsrise.*` IDs, `bar.qsrise`, nested
   plugin-keyed settings, and string references without changing unrelated
   configuration or the user's layout order.
@@ -515,21 +550,31 @@ hancore.shibumi.bar/              default bar host and composition
 hancore.shibumi.bar.<variant>/    future independently selectable bar hosts
 hancore.shibumi.control-center/   reusable G1 widget and settings panel
 hancore.shibumi.<feature>/        complete widget/panel/service slices
-hancore.shibumi.state/            narrow shared live-state service
-shared/                          canonical development sources only
-scripts/                         sync, install, update, and uninstall tools
+hancore.shibumi.state/            shared live-state service, runtime, and passive presentation library
+shared/presentation/             canonical active ShibumiPanel source for checked vendoring
+scripts/                         panel drift check, install, update, and uninstall tools
 tests/                           suite, contract, and regression tests
 ```
 
 The 24 runtime plugins remain separately registered and are installed and
-updated as one admitted suite. The explicitly authorized shared-runtime
-exception permits imports of `hancore.shibumi.state/runtime/` by cooperating
-Shibumi plugins; no other sibling or repository-root escape is allowed.
+updated as one admitted suite. Two explicitly authorized exceptions permit
+exact, declared imports from cooperating plugins into
+`hancore.shibumi.state/runtime/` and the passive
+`hancore.shibumi.state/lib/presentation/` module. No other sibling or
+repository-root escape is allowed. The presentation module contains only
+visual components: no service, Process, Timer, poller, worker, backend,
+persistence, singleton, or mutable runtime authority. Consumers declare State
+directly and State precedes them in suite order.
+
 The ownership, lifetime, version and publication rules are normative in
 [`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
 This is not a QML sandbox or an authorization to expose private host services.
-Other canonical helpers under `shared/` remain deterministically vendored and
-checked for drift. Panels may consume services; services do not import panels.
+`ShibumiPanel.qml` retains three UI-lifecycle timers and therefore remains the
+only canonical source under `shared/presentation/`; its existing plugin and
+`widgets/` copies stay deterministically vendored and drift-checked. Bar-host
+and feature-owner sources are maintained directly in their
+`hancore.shibumi.*` plugin roots. Panels may consume services; services do not
+import panels.
 Widgets do not discover host paths or launch shell commands.
 
 The Phase 2 owner for every V1 group and the notification and OSD boundaries
@@ -711,7 +756,7 @@ group complete when the approved V1 presentation or workflow is still absent.
 
 Current Phase 2 foundation:
 
-- the active `Bar.qml` owns only output windows, layout, split/drag interaction,
+- the active `hancore.shibumi.bar/Bar.qml` owns only output windows, layout, split/drag interaction,
   panel/tooltip routing, style selection, and registered widget composition;
   feature data and workers live in independently validated plugins;
 - fail-closed schema-1 parser for V1 group order, splits, and resource-bounded
@@ -873,9 +918,9 @@ Current Phase 2 foundation:
   The existing 5-second active-profile/detail and 5-minute full-profile timers
   require current admission and their respective consumer leases. Panels keep
   their local Bar and reactive service references; native battery objects are
-  not deliberately exported. Canonical Power sources remain under
-  `shared/power-state/`; vendoring rewrites only their exact runtime import depth.
-  The combined `omarchy.power`
+  not deliberately exported. Canonical Power sources live directly in
+  `hancore.shibumi.power-state/`; `Service.qml` keeps its plugin-local
+  `../hancore.shibumi.state/runtime` import. The combined `omarchy.power`
   alias is consumed so it cannot run beside the split views; G14 remains
   available on batteryless desktops. the validation system passes a real
   discharging-to-charging transition with matching kernel, UPower, helper,

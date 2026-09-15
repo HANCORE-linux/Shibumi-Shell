@@ -14,6 +14,7 @@ import types
 import unittest.mock
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "hancore.shibumi.network/scripts/network-speed-test"
 

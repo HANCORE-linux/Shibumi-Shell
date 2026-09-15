@@ -5,13 +5,14 @@ import QtQuick.Effects
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.control-center"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
 
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   readonly property var hostShell: suiteShell
@@ -58,10 +59,11 @@ Ui.Panel {
   readonly property bool v1TintedLauncherIconVisible:
     v1TintedLauncherIcon.visible
   readonly property bool animationActive: pointer.containsMouse
-  readonly property var launcherConfig: stateService && stateService.config
-    && stateService.config.launcher
-    ? stateService.config.launcher
-    : ({ mode: "text", text: "shibumi", icon: "omarchy" })
+  readonly property var launcherStateConfig: stateService
+    && stateService.requestedConfig ? stateService.requestedConfig
+    : stateService && stateService.config ? stateService.config : ({})
+  readonly property var launcherConfig: launcherStateConfig.launcher
+    || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property bool iconMode: stockOmarchyHost
     || String(launcherConfig.mode || "text") === "icon"
   readonly property string effectiveLauncherText:

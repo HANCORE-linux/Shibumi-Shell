@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -128,7 +129,7 @@ Item {
       width: implicitWidth
       height: implicitHeight
 
-      IconText {
+      Presentation.IconText {
         id: dndIcon
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root.dndOpticalCenterOffset
@@ -223,7 +224,7 @@ Item {
       width: implicitWidth
       height: implicitHeight
 
-      IconText {
+      Presentation.IconText {
         id: voxtypeIcon
         anchors.centerIn: parent
         text: root.statusService && root.statusService.voxtypeState === "recording"

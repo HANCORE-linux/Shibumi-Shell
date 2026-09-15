@@ -1,0 +1,2609 @@
+{
+  "candidateBaseCommit": "3cb7f6d26df47b0e2d697575e4b42ba48e405c1d",
+  "candidateDirty": true,
+  "census": [
+    {
+      "build": "beta13",
+      "phase": "initial",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": 1,
+              "componentStatusKind": "number",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "number",
+              "resolvedStatus": 1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-1-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-1-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": false,
+              "loaderItem": false,
+              "loaderStatus": 0,
+              "moduleEnabled": true,
+              "resolutionAttempts": 3,
+              "resolvedComponentPresent": false,
+              "resolvedComponentStatusKind": "missing",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-2-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 7,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-2-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 7,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": false,
+              "loaderItem": false,
+              "loaderStatus": 0,
+              "moduleEnabled": true,
+              "resolutionAttempts": 3,
+              "resolvedComponentPresent": false,
+              "resolvedComponentStatusKind": "missing",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-3-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 9,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "cycle-3-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 9,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": false,
+              "loaderItem": false,
+              "loaderStatus": 0,
+              "moduleEnabled": true,
+              "resolutionAttempts": 3,
+              "resolvedComponentPresent": false,
+              "resolvedComponentStatusKind": "missing",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "beta13",
+      "phase": "final",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": 1,
+              "componentStatusKind": "number",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": false,
+          "previouslyReadyWidgetCount": 0,
+          "returnObserved": false,
+          "sequence": "unavailable",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 11,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "number",
+              "resolvedStatus": 1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate-status-guard-mutant",
+      "phase": "initial",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": 1,
+              "componentStatusKind": "number",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": false,
+          "sequence": "positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "number",
+              "resolvedStatus": 1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate-status-guard-mutant",
+      "phase": "cycle-1-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": false,
+          "sequence": "positive-zero",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate-status-guard-mutant",
+      "phase": "cycle-1-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": false,
+              "loaderItem": false,
+              "loaderStatus": 0,
+              "moduleEnabled": true,
+              "resolutionAttempts": 3,
+              "resolvedComponentPresent": false,
+              "resolvedComponentStatusKind": "missing",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate-status-guard-mutant",
+      "phase": "final",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": true
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": false,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": false,
+              "loaderItem": false,
+              "loaderStatus": 0,
+              "moduleEnabled": true,
+              "resolutionAttempts": 10,
+              "resolvedComponentPresent": false,
+              "resolvedComponentStatusKind": "missing",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "initial",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": 1,
+              "componentStatusKind": "number",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": false,
+          "lossReadyWidgetCount": 0,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": false,
+          "sequence": "positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "number",
+              "resolvedStatus": 1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-1-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": false,
+          "sequence": "positive-zero",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-1-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "undefined",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-2-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-2-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "undefined",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-3-output-absent",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "FALLBACK"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 0
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 0,
+          "entries": [],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "cycle-3-output-returned",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "undefined",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    },
+    {
+      "build": "candidate",
+      "phase": "final",
+      "state": {
+        "expected": {
+          "entries": [
+            {
+              "componentPresent": true,
+              "componentStatus": -1,
+              "componentStatusKind": "undefined",
+              "configured": true,
+              "id": "hancore.shibumi.cpu",
+              "selection": true
+            }
+          ],
+          "truncated": false
+        },
+        "facades": {
+          "pluginRegistryScoped": true,
+          "shellScoped": true,
+          "widgetRegistryPresent": true
+        },
+        "outputLifecycle": {
+          "lossObserved": true,
+          "lossReadyWidgetCount": 1,
+          "presenceObserved": true,
+          "previouslyReadyWidgetCount": 1,
+          "returnObserved": true,
+          "sequence": "positive-zero-positive",
+          "warningEmitted": false
+        },
+        "outputs": {
+          "barPanelCount": 1,
+          "layoutSessionCount": 1,
+          "sessions": [
+            {
+              "barPanel": true,
+              "layoutSession": true,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false,
+          "validOutputCount": 1
+        },
+        "registry": {
+          "revision": 5,
+          "snapshotKeyCount": 1,
+          "snapshotKeyCountTruncated": false
+        },
+        "version": 2,
+        "widgetSlots": {
+          "count": 1,
+          "entries": [
+            {
+              "currentLoadReady": true,
+              "id": "hancore.shibumi.cpu",
+              "loaderActive": true,
+              "loaderItem": true,
+              "loaderStatus": 1,
+              "moduleEnabled": true,
+              "resolutionAttempts": 0,
+              "resolvedComponentPresent": true,
+              "resolvedComponentStatusKind": "undefined",
+              "resolvedStatus": -1,
+              "screen": "WAYLAND-1"
+            }
+          ],
+          "truncated": false
+        }
+      }
+    }
+  ],
+  "comparison": {
+    "beta13": {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 2,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 7
+          },
+          "cycle": 2,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 3,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 7,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 9
+          },
+          "cycle": 3,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 4,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 9,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "beta13",
+      "cycles": 3,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": {
+        "cycle": 1,
+        "stage": "component-resolution",
+        "transition": "restore",
+        "validOutputs": 1
+      },
+      "harnessProved": true,
+      "harnessRescans": 3,
+      "markerCreations": 4,
+      "markerDestructions": 3,
+      "nativeRescanCountFinal": 4,
+      "nativeRescanCountInitial": 1,
+      "outcome": "measured",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 0,
+      "registryIdentityStable": false,
+      "reports": 488,
+      "startupPrimeRetained": true
+    },
+    "candidate": {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": false,
+              "sequence": "positive-zero",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 2,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 2,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 3,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 3,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 4,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "candidate",
+      "cycles": 3,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": null,
+      "harnessProved": true,
+      "harnessRescans": 0,
+      "markerCreations": 4,
+      "markerDestructions": 3,
+      "nativeRescanCountFinal": 1,
+      "nativeRescanCountInitial": 1,
+      "outcome": "measured",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 0,
+      "registryIdentityStable": true,
+      "reports": 8,
+      "startupPrimeRetained": true
+    },
+    "candidateFingerprints": {
+      "hancore.shibumi.bar": "47a55ff9721697a2545918f55193430e2ba6c1abc0224e8cc3e96c59c7609f24",
+      "hancore.shibumi.state": "75db305ea666f5997ef39875e371ae094a06bd7b95948f4166b195600e4bbba3"
+    },
+    "candidateStatusGuardMutant": {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": false,
+              "sequence": "positive-zero",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 1,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": true
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": false,
+            "currentLoadReady": false,
+            "item": false,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": true
+            },
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1,
+            "status": 0
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "candidate-status-guard-mutant",
+      "cycles": 1,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": {
+        "cycle": 1,
+        "stage": "component-resolution",
+        "transition": "restore",
+        "validOutputs": 1
+      },
+      "harnessProved": true,
+      "harnessRescans": 0,
+      "markerCreations": 1,
+      "markerDestructions": 1,
+      "nativeRescanCountFinal": 1,
+      "nativeRescanCountInitial": 1,
+      "outcome": "expected-failure",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 1,
+      "registryIdentityStable": true,
+      "reports": 163,
+      "startupPrimeRetained": true
+    },
+    "candidateStatusGuardMutantFingerprints": {
+      "hancore.shibumi.bar": "168a1b069519549ee7330ae4d69b6cfdce0c5fbfdb6341b136872cfacc0b7598",
+      "hancore.shibumi.state": "75db305ea666f5997ef39875e371ae094a06bd7b95948f4166b195600e4bbba3"
+    },
+    "firstMeasuredDivergence": {
+      "beta13": {
+        "cycle": 1,
+        "stage": "component-resolution",
+        "transition": "restore",
+        "validOutputs": 1
+      },
+      "candidate": null
+    },
+    "nativeManifestsWithheld": 37
+  },
+  "date": "2026-09-13",
+  "input": {
+    "beta13Commit": "2760cdb8272255790d5e4613fed8a48cb63c3555",
+    "beta13ReadOnlyDiagnosticOverlay": "fae0e20395086b95129cd37b389a1f6b42728113ecafc3bfc1d3ed2119b08574",
+    "beta13SourceFingerprints": {
+      "hancore.shibumi.bar": "1bf2e3db92cb554cd562f8cf980f6c1f7beacb170969d0c01d2a685d54c276e8",
+      "hancore.shibumi.state": "238dbc5ade3e378da0d39f90380c8a61a1fef241b13928c99c1559108b043df9"
+    },
+    "candidateStatusGuardMutantFingerprints": {
+      "hancore.shibumi.bar": "168a1b069519549ee7330ae4d69b6cfdce0c5fbfdb6341b136872cfacc0b7598",
+      "hancore.shibumi.state": "75db305ea666f5997ef39875e371ae094a06bd7b95948f4166b195600e4bbba3"
+    },
+    "candidateStatusGuardMutantOverlays": {
+      "scopedStatusGuardSha256": "276a43a79fd3e5e1b277f7e88cad97c6776d505a83d7b91a4b724459c1b4b2ea"
+    },
+    "candidateWorktreeFingerprints": {
+      "hancore.shibumi.bar": "47a55ff9721697a2545918f55193430e2ba6c1abc0224e8cc3e96c59c7609f24",
+      "hancore.shibumi.state": "75db305ea666f5997ef39875e371ae094a06bd7b95948f4166b195600e4bbba3"
+    },
+    "markerSha256": "06931c74e11f3aff058ea85dffe2472944a7f8d986b1055840957dbcd9399c28",
+    "nativeCommit": "0534987009061cbe2dacdde4ad564092ab698d12",
+    "nativeFingerprint": "2cd0ffb0c38f31868e28c3556f0efc530f4fcd04765856ec157bc070eac748a0",
+    "nativeObservationOverlay": "6ec019c167b6238277365c134285a1c5f0c9d27d9b669809a0ca0e9c7b7bd33b",
+    "stagedNativeFingerprint": "a59f9a6833847862af40fbf37b03b6c301272214a901058b6e81c3f91db9e8d0"
+  },
+  "issue": 54,
+  "limits": [
+    "One inert widget is not full-suite or complete desktop acceptance.",
+    "The cause of lost JavaScript status/sourceComponent projections remains unexplained.",
+    "No timings from the earlier rescan workaround are attributed to this fix.",
+    "The original PSS release gate remains open; no performance claim is made."
+  ],
+  "rawLog": {
+    "bytes": 54691,
+    "name": "native-final-r5.log",
+    "sha256": "b8c167459fd7e34f581ed96f8ca8d2a6538eae8930b547b2df28d8bacc6455d1"
+  },
+  "results": [
+    {
+      "build": "beta13-negative-control",
+      "harnessProved": true,
+      "initialObservation": {
+        "barPanelCount": 1,
+        "expected": {
+          "componentPresent": false,
+          "componentStatus": -1,
+          "componentStatusKind": "missing",
+          "configured": true,
+          "id": "hancore.shibumi.cpu",
+          "selection": false
+        },
+        "slot": {
+          "currentLoadReady": false,
+          "id": "hancore.shibumi.cpu",
+          "loaderActive": false,
+          "loaderItem": false,
+          "loaderStatus": 0,
+          "moduleEnabled": true,
+          "resolutionAttempts": 3,
+          "resolvedComponentPresent": false,
+          "resolvedComponentStatusKind": "missing",
+          "resolvedStatus": -1,
+          "screen": "WAYLAND-1"
+        },
+        "validOutputs": 1
+      },
+      "nativeRescanCountFinal": 1,
+      "nativeRescanCountInitial": 1,
+      "outcome": "expected-failure",
+      "passiveWarnings": 0,
+      "stage": "registry-selection",
+      "startupPrimeRetained": true
+    },
+    {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 2,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 7
+          },
+          "cycle": 2,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 3,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 7,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 9
+          },
+          "cycle": 3,
+          "harnessControlRescan": true,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 4,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 9,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": false,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": false,
+              "lossReadyWidgetCount": 0,
+              "presenceObserved": false,
+              "previouslyReadyWidgetCount": 0,
+              "returnObserved": false,
+              "sequence": "unavailable",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "number",
+            "resolvedStatus": 1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "beta13",
+      "cycles": 3,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": {
+        "cycle": 1,
+        "stage": "component-resolution",
+        "transition": "restore",
+        "validOutputs": 1
+      },
+      "harnessProved": true,
+      "harnessRescans": 3,
+      "markerCreations": 4,
+      "markerDestructions": 3,
+      "nativeRescanCountFinal": 4,
+      "nativeRescanCountInitial": 1,
+      "outcome": "measured",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 0,
+      "registryIdentityStable": false,
+      "reports": 488,
+      "startupPrimeRetained": true
+    },
+    {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": false,
+              "sequence": "positive-zero",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 1,
+          "returned": {
+            "classification": "component-resolution",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": false,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": true
+            },
+            "loaderActive": false,
+            "loaderItem": false,
+            "loaderStatus": 0,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": false,
+            "currentLoadReady": false,
+            "item": false,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": true
+            },
+            "resolvedComponentPresent": false,
+            "resolvedComponentStatusKind": "missing",
+            "resolvedStatus": -1,
+            "status": 0
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "candidate-status-guard-mutant",
+      "cycles": 1,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": {
+        "cycle": 1,
+        "stage": "component-resolution",
+        "transition": "restore",
+        "validOutputs": 1
+      },
+      "harnessProved": true,
+      "harnessRescans": 0,
+      "markerCreations": 1,
+      "markerDestructions": 1,
+      "nativeRescanCountFinal": 1,
+      "nativeRescanCountInitial": 1,
+      "outcome": "expected-failure",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 1,
+      "registryIdentityStable": true,
+      "reports": 163,
+      "startupPrimeRetained": true
+    },
+    {
+      "actualTransitions": [
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": false,
+              "sequence": "positive-zero",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 1,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 2,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 2,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 3,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        },
+        {
+          "absent": {
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "registryKeys": 1,
+            "registryRevision": 5
+          },
+          "cycle": 3,
+          "harnessControlRescan": false,
+          "identity": {
+            "configured": true,
+            "id": "hancore.shibumi.cpu",
+            "selected": true
+          },
+          "markerReadyCount": 4,
+          "returned": {
+            "classification": "ok",
+            "componentPresent": true,
+            "componentStatus": -1,
+            "componentStatusKind": "undefined",
+            "currentLoadReady": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "loaderActive": true,
+            "loaderItem": true,
+            "loaderStatus": 1,
+            "registryKeys": 1,
+            "registryRevision": 5,
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1
+          },
+          "settledLoader": {
+            "active": true,
+            "currentLoadReady": true,
+            "item": true,
+            "lifecycle": {
+              "lossObserved": true,
+              "lossReadyWidgetCount": 1,
+              "presenceObserved": true,
+              "previouslyReadyWidgetCount": 1,
+              "returnObserved": true,
+              "sequence": "positive-zero-positive",
+              "warningEmitted": false
+            },
+            "resolvedComponentPresent": true,
+            "resolvedComponentStatusKind": "undefined",
+            "resolvedStatus": -1,
+            "status": 1
+          },
+          "transition": [
+            1,
+            0,
+            1
+          ]
+        }
+      ],
+      "build": "candidate",
+      "cycles": 3,
+      "firstAbsentRegistryGap": null,
+      "firstPersistentLoss": null,
+      "harnessProved": true,
+      "harnessRescans": 0,
+      "markerCreations": 4,
+      "markerDestructions": 3,
+      "nativeRescanCountFinal": 1,
+      "nativeRescanCountInitial": 1,
+      "outcome": "measured",
+      "output": "WAYLAND-1",
+      "passiveWarnings": 0,
+      "registryIdentityStable": true,
+      "reports": 8,
+      "startupPrimeRetained": true
+    }
+  ],
+  "schemaVersion": 1,
+  "scope": {
+    "installedDesktopModified": false,
+    "nativeHost": "Omarchy 4.0.3",
+    "output": "isolated nested Wayland",
+    "physicalAcceptance": false,
+    "plugins": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.bar",
+      "hancore.shibumi.cpu (inert marker)"
+    ],
+    "quickshell": "0.3.1",
+    "realLockOrPlatformBackends": false
+  },
+  "sourceFileSha256": {
+    "hancore.shibumi.bar/Bar.qml": "83a21fdd339805f318d6e67378f7f08ed2e7c7debed33f87ae67d7dc9d480920",
+    "hancore.shibumi.bar/core/WidgetSlot.qml": "da8d1a1dff7a816d627ba5823baed1611d5a14569579e73ff9b003cf1c4b2146",
+    "hancore.shibumi.bar/services/HostWidgetResolver.qml": "38b540d34d86fa42e5430630dd42ad64b30671b4f3a2c3be38ffbf16b95bd88b",
+    "hancore.shibumi.state/runtime/Runtime.qml": "786577318f41b2a021bfc1ea48461043c1fa19325393fc2f147294a4eb032ec6",
+    "tests/widget-pipeline-classifier-regression.py": "92f10c047bd903b46aae2e32ef4a0ad39ae0bfb34764bc6c0cb2bfcd92eba849",
+    "tests/widget-pipeline-native-regression.py": "cc4277e238bed8975e2c55782f45102a8eacb7fb54323a93b1061daa38a8f66e",
+    "tests/widget-pipeline-wayland-regression.sh": "8bf05091a62d05d2857af71e59aee8820285019840d94f400cd75e1f78819903",
+    "tests/widget-pipeline-wayland-shell.qml": "06931c74e11f3aff058ea85dffe2472944a7f8d986b1055840957dbcd9399c28"
+  },
+  "status": "passed-isolated-native-fixture-not-release-acceptance"
+}

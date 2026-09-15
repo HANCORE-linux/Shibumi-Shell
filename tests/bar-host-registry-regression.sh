@@ -20,6 +20,17 @@ for endpoint in 'function prepareShutdown(): string' \
   rg -Fq "$endpoint" "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "missing Shibumi Control Center IPC endpoint: $endpoint"
 done
+[[ $(rg -Fc 'target: "omarchy.bar"' \
+  "$repo_root/hancore.shibumi.state/runtime/Runtime.qml") -eq 1 ]] \
+  || fail 'shared runtime does not uniquely own the Omarchy visibility nudge'
+rg -Fq 'enabled: runtime.visibilityIpcArmed' \
+  "$repo_root/hancore.shibumi.state/runtime/Runtime.qml" \
+  || fail 'Omarchy visibility nudge is not gated by delayed singleton admission'
+rg -Fq 'owner.barConfig.id !== lease.id' \
+  "$repo_root/hancore.shibumi.state/runtime/Runtime.qml" \
+  || fail 'outgoing Shibumi visibility ownership is not revoked before host takeover'
+rg -Fq 'function syncHidden()' "$repo_root/hancore.shibumi.bar/Bar.qml" \
+  || fail 'active Shibumi bar does not implement the Omarchy visibility nudge'
 rg -Fq 'if (name !== "separator") return "variant-required"' \
   "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail "legacy appearance IPC still accepts variant-scoped keys"
@@ -55,7 +66,6 @@ for shutdown_contract in \
 done
 
 for bar_host in \
-    "$repo_root/Bar.qml" \
     "$repo_root/hancore.shibumi.bar/Bar.qml"; do
   for fixed_property in \
       'readonly property bool requestedTransparent: false' \
@@ -78,7 +88,6 @@ for bar_host in \
 done
 
 for bar_surface in \
-    "$repo_root/styles/shibumi/BarSurface.qml" \
     "$repo_root/hancore.shibumi.bar/styles/shibumi/BarSurface.qml"; do
   rg -Fq 'visible: true' "$bar_surface" \
     || fail "V1/V2 chrome is not explicitly opaque in ${bar_surface#"$repo_root"/}"
@@ -90,7 +99,6 @@ done
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'
 [[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'
-"$repo_root/scripts/sync-bar-host.sh" --check >/dev/null
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
 ipc_pid=""
@@ -116,16 +124,14 @@ export QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1
 
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
 cp -a "$omarchy_path/shell/Ui" "$tmpdir/"
-cp -a "$bar_root/core" "$tmpdir/"
-cp "$repo_root/tests/fixtures/BarPanelStub.qml" "$tmpdir/core/BarPanel.qml"
-mkdir -p "$tmpdir/services"
-cp "$bar_root/services/HostWidgetResolver.qml" "$tmpdir/services/"
-cp -a "$bar_root/styles" "$tmpdir/"
-# This fixture lays Bar.qml at its root, so use the canonical relative import.
-# sync-bar-host --check above verifies the sole deployment-path normalization.
-cp "$repo_root/Bar.qml" "$tmpdir/Bar.qml"
+cp -a "$bar_root" "$tmpdir/hancore.shibumi.bar"
+cp "$repo_root/tests/fixtures/BarPanelStub.qml" \
+  "$tmpdir/hancore.shibumi.bar/core/BarPanel.qml"
+# Preserve the deployed plugin depth so Bar.qml keeps its canonical
+# ../hancore.shibumi.state/runtime import unchanged in the fixture.
 # Calibrated controls alter only the captured fixture, never repository sources.
-python3 - "$tmpdir/Bar.qml" "${SHIBUMI_TEST_RESTORE_CONTROL:-none}" <<'PY'
+python3 - "$tmpdir/hancore.shibumi.bar/Bar.qml" \
+  "${SHIBUMI_TEST_RESTORE_CONTROL:-none}" <<'PY'
 import sys
 from pathlib import Path
 path, mode = Path(sys.argv[1]), sys.argv[2]
@@ -232,11 +238,15 @@ if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load|
     <<<"$output"; then
   fail 'runtime log contains a host composition error'
 fi
+if grep -Eq 'another handler is registered for target omarchy\.bar' \
+    <<<"$output"; then
+  fail 'overlapping Bar fixtures registered duplicate Omarchy visibility targets'
+fi
 
 # A fresh engine receives an admitted shared-runtime marker and controlled
 # scoped services. It has no live shell, network or platform mutation route.
 printf '%s\n' '{"suiteId":"hancore.shibumi","suitePayloadDigest":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}' \
-  | tee "$tmpdir/.shibumi-managed.json" \
+  | tee "$tmpdir/hancore.shibumi.bar/.shibumi-managed.json" \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp "$repo_root/tests/bar-catalog-consumer-smoke.qml" "$tmpdir/shell.qml"
 set +e
@@ -257,6 +267,175 @@ if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load|
     <<<"$catalog_output"; then
   fail 'catalog consumer runtime log contains a composition error'
 fi
+
+cp "$repo_root/tests/bar-visibility-ipc-smoke.qml" "$tmpdir/shell.qml"
+visibility_bar="$tmpdir/hancore.shibumi.bar/Bar.qml"
+cp "$visibility_bar" "$tmpdir/Bar.qml.before-visibility"
+# This case is specifically about the IPC nudge. Disable the ordinary directory
+# watcher in the isolated copy, and hold each sampled result long enough to
+# force a deterministic in-flight marker change. Production bytes are untouched.
+python3 - "$visibility_bar" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+source = path.read_text()
+watch = '''  FileView {
+    path: root.hostReady ? root.home + "/.local/state/omarchy/toggles" : ""
+    watchChanges: true
+    printErrors: false
+    onFileChanged: root.requestBarHiddenProbe()
+  }'''
+quiet_watch = "  Item {} // fixture: ordinary bar-off directory watcher disabled"
+command = '    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]'
+delayed = ('    command: ["bash", "-lc", "rm -f \\\"$HOME/probe-sampled\\\"; '
+           'if [[ -f $HOME/.local/state/omarchy/toggles/bar-off ]]; then result=yes; '
+           'else result=no; fi; : > \\\"$HOME/probe-sampled\\\"; sleep 0.15; echo \\\"$result\\\""]')
+if source.count(watch) != 1 or source.count(command) != 1:
+    raise SystemExit("visibility fixture calibration anchor drifted")
+path.write_text(source.replace(watch, quiet_watch).replace(command, delayed))
+PY
+visibility_log="$tmpdir/bar-visibility-ipc.log"
+toggle_dir="$tmpdir/home/.local/state/omarchy/toggles"
+mkdir -p "$toggle_dir"
+rm -f "$toggle_dir/bar-off" "$tmpdir/home/probe-sampled"
+env HOME="$tmpdir/home" WAYLAND_DISPLAY= QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  /usr/bin/quickshell -p "$tmpdir" --no-color >"$visibility_log" 2>&1 &
+ipc_pid=$!
+
+visibility_state=""
+wait_visibility_state() {
+  local expected=$1 label=$2
+  for _ in {1..100}; do
+    if ! kill -0 "$ipc_pid" 2>/dev/null; then
+      cat "$visibility_log" >&2
+      fail "bar visibility IPC smoke exited while waiting for $label"
+    fi
+    visibility_state=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+      /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+        bar-visibility-test state 2>/dev/null || true)
+    [[ $visibility_state == "$expected" ]] && return 0
+    sleep 0.05
+  done
+  fail "bar visibility IPC smoke did not reach $label: $visibility_state"
+}
+
+wait_visibility_state handoff-gap 'the bounded incoming-handler gap'
+touch "$toggle_dir/bar-off"
+handoff_gap_response=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    omarchy.bar syncHidden 2>/dev/null || true)
+[[ $handoff_gap_response == *'Target not found'* ]] \
+  || fail 'incoming handoff gap unexpectedly retained an active visibility endpoint'
+wait_visibility_state idle-hidden \
+  'the arm-time resample of a marker changed during handoff'
+
+rm -f "$toggle_dir/bar-off"
+env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    omarchy.bar syncHidden >/dev/null \
+  || fail 'Omarchy visibility nudge did not accept the visible marker'
+wait_visibility_state idle-visible 'the restored visible marker state'
+
+# Sample hidden, mutate back to visible while that delayed sample is in flight,
+# then require the one queued follow-up to publish the final marker state.
+rm -f "$tmpdir/home/probe-sampled"
+touch "$toggle_dir/bar-off"
+env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    omarchy.bar syncHidden >/dev/null \
+  || fail 'Omarchy visibility nudge did not start the delayed hidden sample'
+for _ in {1..80}; do
+  [[ -e $tmpdir/home/probe-sampled ]] && break
+  sleep 0.01
+done
+[[ -e $tmpdir/home/probe-sampled ]] \
+  || fail 'delayed visibility probe did not sample the hidden marker'
+rm -f "$toggle_dir/bar-off"
+env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    omarchy.bar syncHidden >/dev/null \
+  || fail 'Omarchy visibility nudge did not queue the final visible sample'
+wait_visibility_state idle-visible 'the coalesced final visible marker state'
+
+# Revoke Shibumi from the host-injected bar identity before enabling the stock
+# handler. This models the opposite handoff direction and catches a retained
+# outgoing endpoint, not only delayed admission of the incoming one.
+takeover_result=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    bar-visibility-test beginStockTakeover 2>/dev/null || true)
+[[ $takeover_result == ok ]] || fail 'visibility fixture refused stock takeover'
+wait_visibility_state stock-owner 'the stock visibility owner takeover'
+
+visibility_finish=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    bar-visibility-test finish 2>/dev/null || true)
+[[ $visibility_finish == ok ]] || fail 'visibility fixture refused clean completion'
+set +e
+wait "$ipc_pid"
+visibility_rc=$?
+set -e
+ipc_pid=""
+visibility_output=$(<"$visibility_log")
+printf '%s\n' "$visibility_output"
+[[ $visibility_rc -eq 0 ]] || fail "bar visibility IPC smoke exited $visibility_rc"
+grep -q 'bar visibility IPC observed hidden marker' <<<"$visibility_output" \
+  || fail 'bar visibility IPC smoke did not observe the handoff marker'
+grep -q 'bar visibility IPC smoke passed' <<<"$visibility_output" \
+  || fail 'bar visibility IPC smoke did not restore the visible marker'
+if grep -Eq 'another handler is registered for target omarchy.bar|Binding loop|TypeError|ReferenceError' \
+    <<<"$visibility_output"; then
+  fail 'bar visibility IPC smoke log contains an ownership or binding error'
+fi
+
+# Calibrated negative control: with the watcher still disabled, a no-op Bar
+# method must leave the marker invisible to the test despite successful IPC
+# dispatch. This catches the exact false-positive path this regression guards.
+python3 - "$visibility_bar" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+source = path.read_text()
+working = '''  function syncHidden() {
+    return visibilityIpcReady && requestBarHiddenProbe()
+  }'''
+control = '''  function syncHidden() {
+    return false // calibrated no-op control
+  }'''
+if source.count(working) != 1:
+    raise SystemExit("visibility no-op control anchor drifted")
+path.write_text(source.replace(working, control))
+PY
+visibility_control_log="$tmpdir/bar-visibility-noop-control.log"
+rm -f "$toggle_dir/bar-off" "$tmpdir/home/probe-sampled"
+env HOME="$tmpdir/home" WAYLAND_DISPLAY= QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= XDG_RUNTIME_DIR="$tmpdir/runtime" \
+  /usr/bin/quickshell -p "$tmpdir" --no-color >"$visibility_control_log" 2>&1 &
+ipc_pid=$!
+visibility_log=$visibility_control_log
+wait_visibility_state idle-visible 'the no-op control baseline'
+touch "$toggle_dir/bar-off"
+env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    omarchy.bar syncHidden >/dev/null \
+  || fail 'no-op visibility control endpoint was unavailable'
+sleep 0.4
+visibility_state=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    bar-visibility-test state 2>/dev/null || true)
+[[ $visibility_state == idle-visible ]] \
+  || fail 'no-op visibility control unexpectedly observed the hidden marker'
+kill "$ipc_pid" 2>/dev/null || true
+wait "$ipc_pid" 2>/dev/null || true
+ipc_pid=""
+visibility_control_output=$(<"$visibility_control_log")
+printf '%s\n' "$visibility_control_output"
+if grep -Eq 'another handler is registered for target omarchy.bar|Binding loop|TypeError|ReferenceError' \
+    <<<"$visibility_control_output"; then
+  fail 'bar visibility no-op control log contains an ownership or binding error'
+fi
+rm -f "$toggle_dir/bar-off" "$tmpdir/home/probe-sampled"
+mv "$tmpdir/Bar.qml.before-visibility" "$visibility_bar"
 
 cp "$repo_root/tests/bar-shutdown-ipc-smoke.qml" "$tmpdir/shell.qml"
 ipc_log="$tmpdir/bar-shutdown-ipc.log"
@@ -295,5 +474,8 @@ if grep -Eq 'another handler is registered for target shibumi-suite|Binding loop
     <<<"$ipc_output"; then
   fail 'shutdown IPC smoke log contains an ownership or binding error'
 fi
+
+OMARCHY_PATH="$omarchy_path" \
+  "$repo_root/tests/scoped-loader-admission-regression.sh"
 
 printf 'bar host registry regression passed\n'

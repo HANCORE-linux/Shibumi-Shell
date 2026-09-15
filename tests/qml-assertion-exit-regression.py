@@ -12,13 +12,16 @@ REPO = Path(__file__).resolve().parents[1]
 def main():
     with tempfile.TemporaryDirectory(prefix="sb-qml-exit-") as name:
         root = Path(name)
-        for part in ("core", "tests", "home", "run"):
-            (root / part).mkdir(mode=0o700)
-        # Only the backend-free model/controller dependencies, no host plugins.
-        for name in ("GroupRegistry.js", "LayoutModel.js", "ShibumiConfig.js",
-                     "WidgetFamilies.js", "V2LayoutModel.js",
-                     "LayoutController.qml", "DragSession.qml"):
-            shutil.copyfile(REPO / "core" / name, root / "core" / name)
+        for part in ("hancore.shibumi.bar/core", "hancore.shibumi.state",
+                     "tests", "home", "run"):
+            (root / part).mkdir(mode=0o700, parents=True)
+        # Only the backend-free canonical model/controller dependencies, no host plugins.
+        for name in ("GroupRegistry.js", "LayoutModel.js", "WidgetFamilies.js",
+                     "V2LayoutModel.js", "LayoutController.qml", "DragSession.qml"):
+            shutil.copyfile(REPO / "hancore.shibumi.bar/core" / name,
+                            root / "hancore.shibumi.bar/core" / name)
+        shutil.copyfile(REPO / "hancore.shibumi.state/ShibumiConfig.js",
+                        root / "hancore.shibumi.state/ShibumiConfig.js")
         for name in ("group-registry-regression.qml", "layout-controller-regression.qml"):
             shutil.copyfile(REPO / "tests" / name, root / "tests" / name)
         home = root / "home"
@@ -50,7 +53,7 @@ def main():
         controller = "layout-controller-regression.qml"
         run(registry, 0, "registry positive")
         run(controller, 0, "controller positive")
-        model = root / "core/LayoutModel.js"
+        model = root / "hancore.shibumi.bar/core/LayoutModel.js"
         original = model.read_text()
         old = "var ExtraLimits = { left: 2, center: 1, right: 2 }"
         assert original.count(old) == 1, "center-limit mutation anchor drifted"

@@ -1,5 +1,5 @@
 import QtQuick
-import "../services" as Services
+import "../hancore.shibumi.bar/services" as Services
 
 Item {
   id: root

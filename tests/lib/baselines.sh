@@ -170,7 +170,9 @@ shibumi_validate_omarchy_baseline_schema() {
     || shibumi_baseline_fail \
       "baseline provenance must be an object: $manifest" || return
   jq -e '
-    if .id == "installed-package-v4.0.2"
+    if .id == "installed-package-v4.0.3"
+        or .id == "installed-source-parity-v4.0.3"
+        or .id == "installed-package-v4.0.2"
         or .id == "installed-source-parity-v4.0.2"
         or .id == "forward-compat-ed7bae4a" then
       .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
@@ -242,7 +244,8 @@ shibumi_validate_omarchy_baseline_schema() {
   case $profile in
     installed-package)
       jq -e '
-        if .id == "installed-package-v4.0.2" then
+        if .id == "installed-package-v4.0.3"
+            or .id == "installed-package-v4.0.2" then
           .provenance.kind == "package"
           and (.provenance.packages | type == "array" and length == 2)
           and ([.provenance.packages[].name] | sort
@@ -316,6 +319,10 @@ shibumi_validate_omarchy_tree() {
   local canonical_path canonical_manifest
   canonical_path=$(realpath -e -- "$requested_path") \
     || shibumi_baseline_fail "cannot resolve OMARCHY_PATH: $requested_path" \
+    || return
+  [[ $requested_path == "$canonical_path" ]] \
+    || shibumi_baseline_fail \
+      "OMARCHY_PATH must be canonical with no symlink components: $requested_path" \
     || return
   # The schema reader already opened this exact absolute path with O_NOFOLLOW.
   # Keep using its in-memory snapshot instead of resolving or reopening it.
@@ -445,6 +452,62 @@ shibumi_require_exact_subtree_owner() {
     || return
 }
 
+shibumi_preflight_clean_git_checkout() {
+  shibumi_require_baseline_tools || return
+
+  local requested_path=${1:-}
+  local expected_revision=${2:-}
+  local profile=${3:-external}
+  [[ $requested_path == /* ]] \
+    || shibumi_baseline_fail "$profile checkout path must be absolute" || return
+  [[ -d $requested_path && ! -L $requested_path ]] \
+    || shibumi_baseline_fail "$profile checkout root is missing or linked" || return
+  [[ $expected_revision =~ ^[0-9a-f]{40}$ ]] \
+    || shibumi_baseline_fail "$profile expected revision is malformed" || return
+  command -v git >/dev/null 2>&1 \
+    || shibumi_baseline_fail "git is required for $profile" || return
+
+  local canonical_path checkout_root actual_revision expected_tree actual_tree
+  local checkout_status
+  canonical_path=$(realpath -e -- "$requested_path") \
+    || shibumi_baseline_fail "$profile checkout root cannot be resolved" || return
+  [[ $requested_path == "$canonical_path" ]] \
+    || shibumi_baseline_fail \
+      "$profile checkout path must be canonical with no symlink components" \
+    || return
+  checkout_root=$(git -C "$canonical_path" rev-parse --show-toplevel 2>/dev/null) \
+    || shibumi_baseline_fail "$profile path is not a Git checkout" || return
+  [[ $(realpath -e -- "$checkout_root") == "$canonical_path" ]] \
+    || shibumi_baseline_fail "$profile path is not the checkout root" || return
+  actual_revision=$(git -C "$canonical_path" \
+    rev-parse --verify 'HEAD^{commit}' 2>/dev/null) \
+    || shibumi_baseline_fail "$profile checkout has no resolvable HEAD" || return
+  expected_tree=$(git -C "$canonical_path" \
+    rev-parse --verify "$expected_revision^{tree}" 2>/dev/null) \
+    || shibumi_baseline_fail \
+      "$profile checkout is missing the pinned revision" || return
+  actual_tree=$(git -C "$canonical_path" \
+    rev-parse --verify 'HEAD^{tree}' 2>/dev/null) \
+    || shibumi_baseline_fail "$profile checkout tree cannot be resolved" || return
+  [[ $actual_revision == "$expected_revision" ]] \
+    || shibumi_baseline_fail \
+      "$profile revision drift: expected $expected_revision, got $actual_revision" \
+    || return
+  [[ $actual_tree == "$expected_tree" ]] \
+    || shibumi_baseline_fail "$profile tree does not match the pinned revision" \
+    || return
+  checkout_status=$(git -C "$canonical_path" status --porcelain=v1 \
+    --untracked-files=all --ignore-submodules=none 2>/dev/null) \
+    || shibumi_baseline_fail "$profile checkout cleanliness cannot be read" \
+    || return
+  [[ -z $checkout_status ]] \
+    || shibumi_baseline_fail "$profile checkout is dirty" || return
+
+  SHIBUMI_PREFLIGHT_OMARCHY_PATH=$canonical_path
+  SHIBUMI_PREFLIGHT_OMARCHY_REVISION=$actual_revision
+  SHIBUMI_PREFLIGHT_OMARCHY_TREE=$actual_tree
+}
+
 shibumi_validate_quickshell_package_provenance() {
   shibumi_require_baseline_tools || return
 
@@ -486,7 +549,8 @@ shibumi_validate_installed_package_provenance() {
     shibumi_validate_omarchy_baseline_schema "$requested_manifest" || return
   fi
   [[ $(jq -r '.profile' "$requested_manifest") == installed-package \
-      && $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.2 ]] \
+      && ( $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.3 \
+        || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.2 ) ]] \
     || shibumi_baseline_fail \
       "installed package provenance requires the active installed-package manifest" \
     || return
@@ -589,6 +653,10 @@ shibumi_validate_agents_baseline() {
   canonical_path=$(realpath -e -- "$requested_path") \
     || shibumi_baseline_fail \
       "cannot resolve OMARCHY_PATH: $requested_path" || return
+  [[ $requested_path == "$canonical_path" ]] \
+    || shibumi_baseline_fail \
+      "OMARCHY_PATH must be canonical with no symlink components: $requested_path" \
+    || return
   # The schema reader already opened this exact absolute path with O_NOFOLLOW.
   # Keep using its in-memory snapshot instead of resolving or reopening it.
   canonical_manifest=$requested_manifest
@@ -632,18 +700,37 @@ shibumi_load_omarchy_baseline() {
   shibumi_require_baseline_tools || return
 
   local profile=${SHIBUMI_OMARCHY_BASELINE_PROFILE:-installed-package}
+  local baseline_version=${SHIBUMI_OMARCHY_BASELINE_VERSION:-4.0.3}
   local requested_path manifest
   case $profile in
     installed-package)
       requested_path=/usr/share/omarchy
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.2.json"
+      case $baseline_version in
+        4.0.3)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.3.json" ;;
+        4.0.2)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.2.json" ;;
+        *)
+          shibumi_baseline_fail \
+            "unsupported installed-package baseline version: $baseline_version"
+          return ;;
+      esac
       ;;
     installed-source-parity)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
+      case $baseline_version in
+        4.0.3)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.3.json" ;;
+        4.0.2)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json" ;;
+        *)
+          shibumi_baseline_fail \
+            "unsupported installed-source-parity baseline version: $baseline_version"
+          return ;;
+      esac
       ;;
     forward-compat)
       requested_path=${OMARCHY_PATH:-}
@@ -658,7 +745,6 @@ shibumi_load_omarchy_baseline() {
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for agents-current' || return
       manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
-      shibumi_validate_agents_baseline "$requested_path" "$manifest" || return
       ;;
     *)
       shibumi_baseline_fail "unsupported Omarchy baseline profile: $profile"
@@ -666,7 +752,23 @@ shibumi_load_omarchy_baseline() {
       ;;
   esac
 
-  if [[ $profile != agents-current ]]; then
+  if [[ $profile == installed-source-parity || $profile == forward-compat \
+      || $profile == agents-current ]]; then
+    if [[ $profile == agents-current ]]; then
+      shibumi_validate_agents_baseline_schema "$manifest" || return
+    else
+      shibumi_validate_omarchy_baseline_schema "$manifest" || return
+    fi
+    local preflight_revision
+    preflight_revision=$(jq -r '.sourceRevision' "$manifest") || return
+    shibumi_preflight_clean_git_checkout \
+      "$requested_path" "$preflight_revision" "$profile" || return
+    requested_path=$SHIBUMI_PREFLIGHT_OMARCHY_PATH
+  fi
+
+  if [[ $profile == agents-current ]]; then
+    shibumi_validate_agents_baseline "$requested_path" "$manifest" || return
+  else
     shibumi_validate_omarchy_tree "$requested_path" "$manifest" || return
     shibumi_validate_quickshell_package_provenance "$manifest" reuse || return
     if [[ $profile == installed-package ]]; then
@@ -716,6 +818,8 @@ shibumi_load_omarchy_baseline() {
 shibumi_stage_suite_runtime() {
   local repo_root=$1 fixture_root=$2
   local state_root="$fixture_root/hancore.shibumi.state"
-  mkdir -p "$state_root"
+  mkdir -p "$state_root/lib"
   cp -a -- "$repo_root/hancore.shibumi.state/runtime" "$state_root/"
+  cp -a -- "$repo_root/hancore.shibumi.state/lib/presentation" \
+    "$state_root/lib/"
 }

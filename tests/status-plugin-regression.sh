@@ -21,6 +21,9 @@ fail() {
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
 chmod 700 "$tmpdir/runtime"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
+mkdir -p "$tmpdir/hancore.shibumi.bar"
+cp -a -- "$repo_root/hancore.shibumi.bar/services" \
+  "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.status" "$tmpdir/status"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
@@ -59,6 +62,13 @@ rg -q 'registered(Source|Component)\("omarchy\.tray"\)' "$status_widget" \
 rg -q 'registered(Source|Component)\("hancore\.shibumi\.update-center"\)' \
   "$status_widget" \
   || fail "status view does not resolve the Shibumi update center"
+rg -Fq 'registeredEmbeddedWidgetComponent(' "$status_widget" \
+  || fail "status view bypasses owner-scoped embedded Component admission"
+for embedded_widget in hancore.shibumi.update-center omarchy.tray; do
+  rg -Fq "\"$embedded_widget\": true" \
+    "$repo_root/hancore.shibumi.bar/services/HostWidgetResolver.qml" \
+    || fail "G3 embedded Component allowlist is missing $embedded_widget"
+done
 rg -q 'serviceFor\("hancore\.shibumi\.status"\)' "$status_widget" \
   || fail "status view does not resolve the Shibumi notification adapter"
 if rg -q 'firstPartyServiceFor\("omarchy\.notifications"\)' "$status_widget"; then
@@ -97,7 +107,7 @@ rg -U -q 'function closeTrayDrawer\(\) \{[^}]*trayDrawerOpen = false[^}]*closeCh
 rg -U -q 'function openTrayDrawer\(\) \{[^}]*closeNotificationPanel\(\)[^}]*trayDrawerOpen = true' \
   "$status_widget" \
   || fail "tray drawer does not expose a deterministic screen-local open path"
-for bar_host in "$repo_root/Bar.qml" "$repo_root/hancore.shibumi.bar/Bar.qml"; do
+for bar_host in "$repo_root/hancore.shibumi.bar/Bar.qml"; do
   rg -Fq 'function openStatusTray(screenName: string): string' "$bar_host" \
     || fail "$bar_host does not expose the screen-local status tray route"
   rg -Fq 'function openStatusNotifications(screenName: string): string' \

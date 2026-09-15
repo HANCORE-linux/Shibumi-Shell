@@ -7,6 +7,7 @@ import Quickshell.Io
 import qs.Commons as Commons
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "PickerModel.js" as PickerModel
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -17,7 +18,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.quick-access"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -26,6 +27,26 @@ Item {
   property bool presentationEnabled: true
   readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
   readonly property var bar: shell ? shell.bar : null
+  // Tests may substitute an isolated screen list; production follows the
+  // public reactive Quickshell screen collection.
+  property var screenListOverride: null
+  readonly property var screens: screenListOverride !== null
+    ? screenListOverride : Quickshell.screens
+  Presentation.HostTokens { id: pickerTokens; bar: root.bar; serviceShell: suiteShell }
+  readonly property QtObject pickerPresentation: QtObject {
+    readonly property color background: pickerTokens.paper
+    readonly property color foreground: pickerTokens.ink
+    readonly property color urgent: pickerTokens.seal
+    readonly property string fontFamily: pickerTokens.fontFamily
+    readonly property int barSize: pickerTokens.barHeight
+    readonly property string position: root.bar && "position" in root.bar
+      ? String(root.bar.position || "top") : "top"
+    readonly property QtObject visualTokens: QtObject {
+      readonly property color paper: pickerTokens.paper
+      readonly property color mutedInk: pickerTokens.mutedInk
+      readonly property real tileRadius: pickerTokens.tileRadius
+    }
+  }
   readonly property string home: Quickshell.env("HOME")
   readonly property string scriptPath: String(
     Qt.resolvedUrl("scripts/shibumi-picker")).replace("file://", "")
@@ -81,6 +102,10 @@ Item {
   readonly property string currentThemeNamePath:
     home + "/.local/state/omarchy/current/theme.name"
   readonly property bool overlayLoaded: overlayLoader.item !== null
+  readonly property bool overlayActive: overlayLoader.active
+  readonly property bool pickerWorkersRunning: currentProc.running
+    || cacheProc.running || scanProc.running || priorityWarmProc.running
+    || warmProc.running || cleanupProc.running || themeMetaProc.running
   readonly property bool refreshScanPending: scanDelay.running
 
   function normalizeImageStyle(value) {
@@ -97,12 +122,34 @@ Item {
       ? candidate : "carousel"
   }
 
+  function screenForName(value) {
+    const name = String(value || "")
+    if (name === "") return null
+    const currentScreens = (screenListOverride !== null
+      ? screenListOverride : Quickshell.screens) || []
+    for (let index = 0; index < currentScreens.length; index++) {
+      const candidate = currentScreens[index]
+      if (candidate && String(candidate.name || "") === name) return candidate
+    }
+    return null
+  }
+
   function resolveTargetScreen(preferred) {
-    if (preferred && String(preferred.name || "") !== "") return preferred
+    const preferredName = preferred ? String(preferred.name || "") : ""
+    if (preferredName !== "") return screenForName(preferredName)
     const focusedName = Hyprland.focusedMonitor
       ? String(Hyprland.focusedMonitor.name || "") : ""
-    return bar && typeof bar.screenForName === "function"
-      ? bar.screenForName(focusedName) : null
+    return screenForName(focusedName)
+  }
+
+  function activeTargetPresent() {
+    if (!opened || usingOfficialPicker) return true
+    return activeScreen !== null && activeScreenName !== ""
+      && screenForName(activeScreenName) === activeScreen
+  }
+
+  function closeIfTargetMissing() {
+    if (opened && !activeTargetPresent()) close()
   }
 
   function cycleStyle(direction) {
@@ -134,8 +181,7 @@ Item {
   }
 
   function syncOverlay() {
-    if (!presentationEnabled || !opened || bar === null
-        || usingOfficialPicker) {
+    if (!presentationEnabled || !opened || usingOfficialPicker) {
       overlayLoader.active = false
       overlayLoader.source = ""
       return
@@ -143,7 +189,7 @@ Item {
     overlayLoader.active = true
     if (!overlayLoader.item) {
       overlayLoader.setSource(Qt.resolvedUrl("PickerOverlay.qml"), {
-        bar: bar,
+        bar: pickerPresentation,
         controller: root
       })
     }
@@ -154,10 +200,14 @@ Item {
     if (["theme", "wallpaper", "screenshots", "videos"].indexOf(candidate) < 0)
       return false
     if (officialPickerProc.running) return false
+    const targetScreen = resolveTargetScreen(screen)
+    const officialMode = (candidate === "theme" || candidate === "wallpaper")
+      && imagePickerStyle === "omarchy"
+    if (!officialMode && targetScreen === null) return false
     requestSerial++
     stopForegroundWorkers()
     mode = candidate
-    activeScreen = resolveTargetScreen(screen)
+    activeScreen = targetScreen
     filterText = ""
     selectedIndex = 0
     confirmDelete = false
@@ -215,7 +265,14 @@ Item {
     if (candidate !== "theme" && candidate !== "wallpaper")
       return "unavailable"
     if (!available || imagePickerStyle === "omarchy") return "native"
-    return openMode(candidate, screen) ? "handled" : "unavailable"
+    const targetScreen = resolveTargetScreen(screen)
+    if (!presentationEnabled || targetScreen === null) return "native"
+    if (!openMode(candidate, targetScreen)) return "native"
+    if (!opened || activeScreen !== targetScreen || !overlayLoaded) {
+      close()
+      return "native"
+    }
+    return "handled"
   }
 
   function close() {
@@ -224,6 +281,7 @@ Item {
     if (officialPickerProc.running)
       Quickshell.execDetached(["omarchy-shell", "image-selector", "cancel"])
     opened = false
+    activeScreen = null
     confirmDelete = false
     filterText = ""
     stopForegroundWorkers()
@@ -536,6 +594,7 @@ Item {
   onOpenedChanged: syncOverlay()
   onPresentationEnabledChanged: syncOverlay()
   onBarChanged: syncOverlay()
+  onScreenListOverrideChanged: closeIfTargetMissing()
   onAvailableChanged: if (available && runtimeWorkersEnabled)
     initialPrewarmDelay.restart()
   Component.onDestruction: {
@@ -544,6 +603,12 @@ Item {
     themePrewarmProc.running = false
     initialPrewarmDelay.stop()
     wallpaperPrewarmDelay.stop()
+  }
+
+  Connections {
+    target: Quickshell
+    enabled: root.screenListOverride === null
+    function onScreensChanged() { root.closeIfTargetMissing() }
   }
 
   Process {

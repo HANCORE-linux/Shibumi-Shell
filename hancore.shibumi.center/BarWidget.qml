@@ -5,13 +5,14 @@ import qs.Commons as Commons
 import qs.Ui as Ui
 import "CenterLayout.js" as CenterLayout
 import "CalendarModel.js" as CalendarModel
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
 
   moduleName: "hancore.shibumi.center"
   manageIpc: false
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url calendarSource: Qt.resolvedUrl("CalendarPanel.qml")
   property real availableWidth: 0
   // Start conservatively when the widget is recreated after a provider
@@ -198,7 +199,7 @@ Ui.Panel {
     }
   }
 
-  PillSurface {
+  Presentation.PillSurface {
     tokenSource: root.tokens
     bar: root.bar
     settings: root.settings
@@ -248,7 +249,7 @@ Ui.Panel {
       contentColor: root.widgetInk
     }
 
-    IconText {
+    Presentation.IconText {
       visible: root.displayMode === "icon"
       anchors.verticalCenter: parent.verticalCenter
       text: "schedule"

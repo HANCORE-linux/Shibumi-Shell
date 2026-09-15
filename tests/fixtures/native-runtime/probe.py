@@ -14,7 +14,9 @@ BASE = Path("/fixture")
 # tmpfs inside the resource-limited namespace, not in the host staging tree.
 shutil.copytree("/input", BASE, dirs_exist_ok=True, symlinks=True)
 LIMIT = 1024 * 1024
-DEADLINE = time.monotonic() + 35
+# The Icons coalescing negative control adds one complete native State
+# settlement before the existing provider/catalog matrix.
+DEADLINE = time.monotonic() + 75
 # Qt/Quickshell startup uses larger temporary file allocations than its text
 # output. A 1 MiB FSIZE cap reproduced SIGXFSZ before QML startup. Keep the
 # text/IPC caps below separate from this bounded per-file allocation ceiling.
@@ -126,7 +128,7 @@ def catalog_probe():
           "actual native catalog identity DTO mismatch")
     control = ready["snapshot"]["byId"]["hancore.shibumi.control-center"]
     check(control["description"] and control["author"] == "HANCORE"
-          and control["version"] == "0.1.1-beta.13"
+          and control["version"] == "0.1.1-beta.14"
           and control["barWidget"]["defaultSection"] == "left",
           "package-bound catalog presentation metadata was lost")
     check(host_config() == original, "read-only catalog changed native config")
@@ -242,6 +244,80 @@ with (BASE / "native.log").open("xb") as log:
         wait_status("native-runtime-probe", lambda value: value["barRegistered"]
                     and not value["stateWritePending"] and value["restoreCount"] == 0
                     and value["config"]["widgets"]["G4"]["appearance"]["v1"]["compact"] is True)
+
+        # Reproduce the Beta.14 Icons regression through the actual panel,
+        # BarFunctionsPage and WidgetAppearanceWorkbench. Outside Plugins the
+        # durable Bar consumer is the only catalog authority.
+        check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
+              "inactive CPU setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "openIcons") == (0, "ok"),
+              "actual Control Center Icons page refused")
+        wait_status("native-runtime-probe", lambda value:
+                    value["panelPage"] == "functions" and value["panelPageReady"]
+                    and value["catalogConsumerCount"] == 1
+                    and value["panelCatalog"] is not None
+                    and "hancore.shibumi.cpu" in value["panelCatalog"]["byId"])
+        check(ipc("native-runtime-probe", "malformedCatalogObservationsRefused")
+              == (0, "malformed-no-mutation"),
+              "malformed immutable catalog shapes reached an Icons mutation")
+        icons_state = wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and not value["cpuV1Requested"] and not value["cpuV1Enabled"])
+        icons_transition_serial = icons_state["stateTransitionSerial"]
+        check(ipc("native-runtime-probe", "activateCpuFromIcons")
+              == (0, "queued-without-native-mutation"),
+              "V1 Icons CPU activation did not use requested presentation")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and value["stateTransitionSerial"] == icons_transition_serial
+                    and value["cpuV1Enabled"] and value["cpuV2Enabled"])
+
+        check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
+              "V2 Icons setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and value["v2Mode"]
+                    and value["panelPage"] == "functions" and value["panelPageReady"]
+                    and value["catalogConsumerCount"] == 1)
+        check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
+              "V2 inactive CPU setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and value["cpuV1Enabled"]
+                    and not value["cpuV2Enabled"])
+        check(ipc("native-runtime-probe", "activateCpuFromIcons")
+              == (0, "queued-without-native-mutation"),
+              "V2 Icons CPU activation did not use its visible action")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and value["stateTransitionSerial"]
+                      == icons_transition_serial
+                    and value["cpuV1Enabled"] and value["cpuV2Enabled"]
+                    and value["cpuV2Requested"])
+
+        check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
+              "missing-authority CPU setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["cpuV2Enabled"])
+        check(ipc("native-runtime-probe", "releaseBarCatalogAndRefuseCpu")
+              == (0, "catalog-not-ready-no-mutation"),
+              "missing Bar catalog authority mutated CPU or reported a suite-service error")
+        check(ipc("native-runtime-probe", "rebindBarCatalog") == (0, "requested"),
+              "Bar catalog authority did not rebind")
+        wait_status("native-runtime-probe", lambda value:
+                    value["catalogConsumerCount"] == 1
+                    and value["panelCatalog"] is not None)
+        check(ipc("native-runtime-probe", "setCpuVisible", "true") == (0, "queued"),
+              "V2 CPU cleanup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and value["cpuV2Enabled"])
+        check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
+              "V1 restoration after Icons action refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["v2Mode"]
+                    and value["panelPage"] == "functions" and value["panelPageReady"]
+                    and value["catalogConsumerCount"] == 1)
+
         check(ipc("native-runtime-probe", "openPlugins") == (0, "ok"),
               "actual Control Center Plugins page refused")
         catalog_page = wait_status("native-runtime-probe", lambda value:
@@ -256,6 +332,13 @@ with (BASE / "native.log").open("xb") as log:
               and native_widget["barWidget"]["category"] == "Fixture"
               and native_widget["barWidget"]["defaultSection"] == "left",
               "scoped Plugins UI lost package metadata/search/defaultSection")
+        check(ipc("native-runtime-probe", "releasePluginPageCatalogAndRefuseCpu")
+              == (0, "page-authoritative-no-fallback"),
+              "Plugins page lost authority to the Bar consumer during lease loss")
+        catalog_page = wait_status("native-runtime-probe", lambda value:
+            value["panelPage"] == "plugins" and value["panelPageReady"]
+            and value["catalogConsumerCount"] == 2
+            and value["panelCatalog"] is not None)
         check(ipc("native-runtime-probe", "catalogDefaultCannotAuthorize")
               == (0, "refused"),
               "display catalog defaultSection fabricated activation authority")
@@ -357,7 +440,7 @@ with (BASE / "native.log").open("xb") as log:
         wait_status("native-runtime-probe", lambda value:
                     not value["stateWritePending"]
                     and value["controlCatalogInstalled"] is True)
-        print("NATIVE FIXED-GROUP VISIBILITY AND STATE-ONLY SETTLEMENT PASSED",
+        print("NATIVE ICONS CPU AUTHORITY AND FIXED-GROUP STATE SETTLEMENT PASSED",
               flush=True)
 
         # The actual Bar writer must retain a confirmed provider preimage and
@@ -464,7 +547,13 @@ with (BASE / "native.log").open("xb") as log:
               "V1 return-to-Shibumi cleanup refused")
         wait_status("native-runtime-probe", lambda value:
             not value["stateWritePending"] and not value["layoutBusy"]
-            and value["audioV1Enabled"] and value["audioV2Enabled"])
+            and not value["providerSnapshotBusy"]
+            and not value["pageTransitionPending"]
+            and value["audioV1Enabled"] and value["audioV2Enabled"]
+            and value["panelCatalog"] is not None
+            and value["panelCatalog"]["byId"]
+              ["fixture.audio-provider"]["enabled"] is False,
+            timeout=7)
 
         check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
               "V2 provider Undo setup refused")
@@ -542,6 +631,32 @@ with (BASE / "native.log").open("xb") as log:
                     not value["stateWritePending"] and not value["v2Mode"])
         print("ACTUAL V1/V2 PROVIDER UNDO SETTLEMENT AND STALE-SNAPSHOT REFUSAL PASSED",
               flush=True)
+
+        # Run the additional rapid Icons reversal after the provider/catalog
+        # matrix so its deliberate extra State settlement cannot perturb the
+        # five-second catalog reconciliation phase used above.
+        check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
+              "coalesced Icons setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "openIcons") == (0, "ok"),
+              "coalesced Icons page refused")
+        wait_status("native-runtime-probe", lambda value:
+                    value["panelPage"] == "functions" and value["panelPageReady"])
+        check(ipc("native-runtime-probe", "coalesceCpuFromIcons")
+              == (0, "coalesced-without-native-mutation"),
+              "Icons rapid reversal did not coalesce requested presentation")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and not value["cpuV1Requested"] and not value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "setCpuVisible", "true") == (0, "queued"),
+              "coalesced Icons cleanup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "openPlugins") == (0, "ok"),
+              "Plugins page restoration after Icons coalescing refused")
+        wait_status("native-runtime-probe", lambda value:
+                    value["panelPage"] == "plugins" and value["panelPageReady"])
 
         check(ipc("native-runtime-probe", "toggleCatalogWidget")
               == (0, "queued-without-native-mutation"),

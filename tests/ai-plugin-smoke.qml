@@ -68,6 +68,7 @@ ShellRoot {
 
   function agentsContractMatches() {
     if (!agentsService.agentsBackendActive
+        || agentsService.agentsSource !== ""
         || agentsService.modelUsageSource !== ""
         || agentsService.providers.length !== 2
         || agentsService.selectedTool !== fakeState.selectedTool) return false
@@ -561,6 +562,46 @@ ShellRoot {
   }
 
   QtObject {
+    id: delayedSelectionState
+    property string confirmedTool: "claude"
+    property string previewTool: confirmedTool
+    property var requestedConfig: ({
+      widgets: ({
+        G7: ({
+          "hancore.shibumi.ai": ({ aiTool: previewTool })
+        })
+      })
+    })
+    function groupEnabled(_groupId) { return true }
+    function setWidgetSetting(groupId, moduleId, key, value) {
+      if (groupId !== "G7" || moduleId !== "hancore.shibumi.ai"
+          || key !== "aiTool") return false
+      previewTool = String(value || "")
+      return true
+    }
+  }
+
+  QtObject {
+    id: delayedSelectionBar
+    function registeredWidgetSource(_id) { return "" }
+    function widgetSettings(groupId, moduleId) {
+      if (groupId !== "G7" || moduleId !== "hancore.shibumi.ai") return ({})
+      return ({ aiTool: delayedSelectionState.confirmedTool,
+        providers: ({ claude: ({ enabled: true }),
+          codex: ({ enabled: true }), opencode: ({ enabled: true }) }) })
+    }
+  }
+
+  QtObject {
+    id: delayedSelectionShell
+    property var bar: delayedSelectionBar
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.state"
+        ? delayedSelectionState : null
+    }
+  }
+
+  QtObject {
     id: agentsState
     property int revision: 0
     property bool g7Enabled: true
@@ -749,11 +790,17 @@ ShellRoot {
   }
 
   Ai.Service {
+    id: delayedSelectionService
+    shell: delayedSelectionShell
+    runtimeProbesEnabled: false
+    providerOverrides: [claudeProvider, codexProvider, openCodeProvider]
+  }
+
+  Ai.Service {
     id: agentsService
     shell: agentsShell
     agentRecordExpiryCheckIntervalMs: 20
     omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
-    agentsSourceOverride: "file:///fixture/agents/Panel.qml"
     agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_AGENT_USAGE_DIR")
   }
 
@@ -874,6 +921,14 @@ ShellRoot {
 
       if (root.phase < root.iconMatrix.length) {
         const expected = root.iconMatrix[root.phase]
+        if (root.phase === 0) {
+          if (delayedSelectionService.selectedTool !== "claude"
+              || !delayedSelectionService.selectTool("codex")
+              || delayedSelectionService.selectedTool !== "codex"
+              || delayedSelectionState.confirmedTool !== "claude")
+            return root.fail("AI selection did not preview before persistence readback")
+          delayedSelectionState.previewTool = "claude"
+        }
         if (!first.visible || !second.visible || first.aiService !== aiService
             || second.aiService !== aiService
             || !root.iconContractMatches(first, expected)
@@ -1025,14 +1080,13 @@ ShellRoot {
         const backendGeneration = agentsService.providerSettingsGeneration
         agentsService.modelUsageSourceOverride =
           Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
-        agentsService.agentsSourceOverride = ""
+        agentsService.agentsBackendUnavailable = true
         if (agentsService.agentsBackendActive
             || agentsService.modelUsageSource === ""
             || agentsService.providerSettingsGeneration <= backendGeneration
             || agentsService.backendProcessKind !== "legacy-detection")
           return root.fail("Agents to legacy transition was not reconciled")
-        agentsService.agentsSourceOverride =
-          "file:///fixture/agents/Panel.qml"
+        agentsService.agentsBackendUnavailable = false
         if (!agentsService.agentsBackendActive
             || agentsService.modelUsageSource !== ""
             || !agentsService.pendingBackendRefresh)

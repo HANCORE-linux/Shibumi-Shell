@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -246,7 +247,7 @@ ShibumiPanel {
             retainWhileLoading: true
           }
 
-          IconText {
+          Presentation.IconText {
             anchors.centerIn: parent
             visible: !panel.player || !panel.player.trackArtUrl
             text: "music_note"
@@ -460,7 +461,7 @@ ShibumiPanel {
               anchors.rightMargin: Commons.Style.space(6)
               spacing: Commons.Style.space(7)
 
-              IconText {
+              Presentation.IconText {
                 anchors.verticalCenter: parent.verticalCenter
                 text: sourceRow.modelData && sourceRow.modelData.isPlaying
                   ? "pause" : "play_arrow"
@@ -535,7 +536,7 @@ ShibumiPanel {
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -551,7 +552,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPillToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip

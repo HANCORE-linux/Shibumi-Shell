@@ -15,7 +15,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.network"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -56,6 +56,7 @@ Item {
   readonly property int sessionCount: implementation.sessionCount()
   readonly property int trafficConsumerCount:
     implementation.trafficConsumerCount()
+  readonly property bool wiredConnected: implementation.connectedDevice("wired", true) !== null
 
   readonly property string kind: implementation.connectionKind()
   readonly property string label: implementation.connectionLabel()
@@ -931,8 +932,8 @@ Item {
       return count === 1 ? result : null
     }
 
-    function connectedDevice(type) {
-      const rows = adapter.deviceSnapshots
+    function connectedDevice(type, allowMultiple) {
+      const rows = adapter.baseDeviceSnapshots
       let result = null
       let count = 0
       for (let index = 0; index < rows.length; index++) {
@@ -943,7 +944,7 @@ Item {
           count++
         }
       }
-      return count === 1 ? result : null
+      return count === 1 || (allowMultiple === true && count > 0) ? result : null
     }
 
     function connectedNetwork() {

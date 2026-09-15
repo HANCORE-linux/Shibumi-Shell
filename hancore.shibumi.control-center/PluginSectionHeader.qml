@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Rectangle {
   id: root
@@ -28,7 +29,7 @@ Rectangle {
     anchors.leftMargin: Commons.Style.space(7)
     spacing: Commons.Style.space(7)
 
-    IconText {
+    Presentation.ControlCenterIconText {
       visible: root.collapsible
       anchors.verticalCenter: parent.verticalCenter
       text: root.expanded ? "expand_more" : "chevron_right"

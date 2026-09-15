@@ -1,6 +1,6 @@
 import QtQuick
-import "../core/LayoutModel.js" as LayoutModel
-import "../core/ShibumiConfig.js" as ShibumiConfig
+import "../hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
+import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
 
 QtObject {
   function fail(message) {

@@ -2,27 +2,51 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import qs.Commons as Commons
+import "barcore" as BarCore
 import "quickaccess" as QuickAccess
 
 ShellRoot {
   id: root
 
-  property int phase: 0
+  property int phase: -1
   property int ticks: 0
+  property int screenLifecycleStep: 0
   property var quickSettings: ({ displayMode: "full" })
+  readonly property string fixtureImageDir:
+    Quickshell.env("SHIBUMI_QUICK_ACCESS_IMAGE_DIR")
+
+  function fixtureImagePath(name) {
+    return fixtureImageDir + "/" + String(name || "")
+  }
 
   function fail(message) {
     console.error("quick-access-plugin-smoke:", message)
     Qt.exit(1)
   }
 
+  function visibleText(owner, value) {
+    if (!owner) return null
+    if ("text" in owner && String(owner.text) === value && owner.visible)
+      return owner
+    const children = owner.children || []
+    for (let index = 0; index < children.length; index++) {
+      const match = visibleText(children[index], value)
+      if (match) return match
+    }
+    return null
+  }
+
   QtObject { id: firstScreen; property string name: "DP-1" }
+  QtObject { id: replacementFirstScreen; property string name: "DP-1" }
   QtObject { id: secondScreen; property string name: "HDMI-A-1" }
+  QtObject { id: missingScreen; property string name: "missing-output" }
 
   QtObject {
     id: fakeState
     property bool ready: true
     property int revision: 0
+    property color selectedColor: "#d46a7f"
     property var config: ({
       picker: {
         style: "default",
@@ -63,8 +87,16 @@ ShellRoot {
   }
 
   QtObject {
+    id: scalarBar
+    property bool barHidden: false
+    property int barSize: 37
+    property string fontFamily: "Fixture Sans"
+    property string position: "bottom"
+  }
+
+  QtObject {
     id: fakeShell
-    property var bar: fakeBar
+    property var bar: scalarBar
     function serviceFor(pluginId) {
       if (pluginId === "hancore.shibumi.state") return fakeState
       if (pluginId === "hancore.shibumi.quick-access") return quickAccessService
@@ -77,7 +109,7 @@ ShellRoot {
     property bool opened: false
     property int requestSerial: 0
     property string mode: "wallpaper"
-    property string currentSelection: "/tmp/current.jpg"
+    property string currentSelection: root.fixtureImagePath("source-50.png")
     property int selectedIndex: 0
     property bool videoMode: false
     property var filteredEntries: []
@@ -107,8 +139,10 @@ ShellRoot {
     property var filteredEntries: {
       const rows = []
       for (let i = 0; i < 100; i++)
-        rows.push({ label: "entry-" + i, sourcePath: "/tmp/source-" + i,
-          thumbnailPath: "/tmp/thumb-" + i, thumbnailReady: true })
+        rows.push({ label: "entry-" + i,
+          sourcePath: root.fixtureImagePath("source-" + i + ".png"),
+          thumbnailPath: root.fixtureImagePath("thumb-" + i + ".png"),
+          thumbnailReady: true })
       return rows
     }
     readonly property var selectedEntry: filteredEntries[selectedIndex]
@@ -140,6 +174,7 @@ ShellRoot {
     property color urgent: "#dd7788"
     property var shell: fakeShell
     property var activePopout: null
+    property int releaseCalls: 0
     property var visualTokens: ({
       slotHeight: 28,
       pillHeight: 24,
@@ -157,11 +192,77 @@ ShellRoot {
     function showTooltip(_target, _text) {}
     function hideTooltip(_target) {}
     function requestPopout(owner) { activePopout = owner }
-    function releasePopout(owner) { if (activePopout === owner) activePopout = null }
+    function releasePopout(owner) {
+      releaseCalls++
+      if (activePopout === owner) activePopout = null
+    }
     function screenForName(name) {
       return name === firstScreen.name ? firstScreen
         : name === secondScreen.name ? secondScreen : null
     }
+  }
+
+  Item {
+    id: missingPopoutBar
+    visible: false
+    property bool vertical: false
+    property int barSize: 35
+    property string position: "top"
+    property string fontFamily: "monospace"
+    property color foreground: "#eeeeee"
+    property color background: "#111111"
+    property color urgent: "#dd7788"
+    property var shell: fakeShell
+    property var activePopout: null
+    property var visualTokens: fakeBar.visualTokens
+    function showTooltip(_target, _text) {}
+    function hideTooltip(_target) {}
+    function requestPopout(owner) { activePopout = owner }
+  }
+
+  Component {
+    id: slotWidgetComponent
+    Item { visible: true; implicitWidth: 20; implicitHeight: 20 }
+  }
+
+  Item {
+    id: positiveSlotBar
+    visible: false
+    property bool vertical: false
+    property int barSize: 35
+    property string position: "top"
+    property var activePopout: null
+    property var visualTokens: null
+    property var pluginRegistry: null
+    property int releaseCalls: 0
+    property int hideCalls: 0
+    property int unregisterCalls: 0
+    function entryId(entry) { return String(entry.id || "") }
+    function entrySettings(_entry) { return ({}) }
+    function registeredWidgetComponent(_id) { return slotWidgetComponent }
+    function registerModuleSlot(_slot) {}
+    function unregisterModuleSlot(_slot) { unregisterCalls++ }
+    function hideTooltip(_owner) { hideCalls++ }
+    function releasePopout(_owner) { releaseCalls++ }
+  }
+
+  Item {
+    id: missingSlotBar
+    visible: false
+    property bool vertical: false
+    property int barSize: 35
+    property string position: "top"
+    property var activePopout: null
+    property var visualTokens: null
+    property var pluginRegistry: null
+    property int hideCalls: 0
+    property int unregisterCalls: 0
+    function entryId(entry) { return String(entry.id || "") }
+    function entrySettings(_entry) { return ({}) }
+    function registeredWidgetComponent(_id) { return slotWidgetComponent }
+    function registerModuleSlot(_slot) {}
+    function unregisterModuleSlot(_slot) { unregisterCalls++ }
+    function hideTooltip(_owner) { hideCalls++ }
   }
 
   QuickAccess.HearthstonePickerView {
@@ -214,7 +315,22 @@ ShellRoot {
     shell: fakeShell
     omarchyPath: "/tmp/shibumi-test-omarchy"
     runtimeWorkersEnabled: false
-    presentationEnabled: false
+    presentationEnabled: true
+    screenListOverride: [firstScreen, secondScreen]
+  }
+
+  Window {
+    id: presentationWindow
+    visible: true
+    width: 1280
+    height: 720
+
+    QuickAccess.PickerOverlay {
+      id: presentationProbe
+      anchors.fill: parent
+      bar: quickAccessService.pickerPresentation
+      controller: quickAccessService
+    }
   }
 
   Loader {
@@ -240,6 +356,40 @@ ShellRoot {
     }
   }
 
+  Loader {
+    id: missingPopoutLoader
+    active: true
+    sourceComponent: Component {
+      QuickAccess.BarWidget {
+        bar: missingPopoutBar
+        quickAccessServiceOverride: quickAccessService
+        targetScreenOverride: secondScreen
+      }
+    }
+  }
+
+  Loader {
+    id: positiveSlotLoader
+    active: true
+    sourceComponent: Component {
+      BarCore.WidgetSlot {
+        bar: positiveSlotBar
+        entry: ({ id: "fixture.positive" })
+      }
+    }
+  }
+
+  Loader {
+    id: missingSlotLoader
+    active: true
+    sourceComponent: Component {
+      BarCore.WidgetSlot {
+        bar: missingSlotBar
+        entry: ({ id: "fixture.missing" })
+      }
+    }
+  }
+
   Timer {
     id: watchdog
     interval: 6000
@@ -255,13 +405,105 @@ ShellRoot {
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item
-      if (!first || (root.phase < 4 && !second)) {
+      if (!first || (root.phase < 4 && !second)
+          || (root.phase < 5 && (!missingPopoutLoader.item
+            || !positiveSlotLoader.item || !missingSlotLoader.item))) {
         if (root.ticks >= 12) root.fail("widget loaders did not resolve")
         return
       }
       if (root.ticks < 3) return
 
-      if (root.phase === 0) {
+      if (root.phase === -1) {
+        const presentation = quickAccessService.pickerPresentation
+        if (!quickAccessService.available || quickAccessService.bar !== scalarBar
+            || "foreground" in scalarBar || "visualTokens" in scalarBar
+            || String(presentation.background) !== String(Commons.Color.background)
+            || String(presentation.foreground) !== String(Commons.Color.foreground)
+            || String(presentation.urgent) !== String(fakeState.selectedColor)
+            || presentation.fontFamily !== scalarBar.fontFamily
+            || presentation.barSize !== scalarBar.barSize
+            || presentation.position !== scalarBar.position)
+          return root.fail("scalar Bar presentation facade")
+        if (quickAccessService.screenForName(firstScreen.name) !== firstScreen
+            || quickAccessService.resolveTargetScreen(firstScreen) !== firstScreen
+            || quickAccessService.resolveTargetScreen(missingScreen) !== null)
+          return root.fail("public screen resolution")
+        if (quickAccessService.routeOmarchyAction("wallpaper", missingScreen)
+              !== "native" || quickAccessService.opened
+            || quickAccessService.openMode("wallpaper", missingScreen))
+          return root.fail("missing-screen native fallback")
+        quickAccessService.presentationEnabled = false
+        if (quickAccessService.routeOmarchyAction("wallpaper", firstScreen)
+              !== "native" || quickAccessService.opened)
+          return root.fail("unavailable-presentation native fallback")
+        quickAccessService.presentationEnabled = true
+        quickAccessService.runtimeWorkersEnabled = true
+        if (quickAccessService.routeOmarchyAction("wallpaper", firstScreen)
+              !== "handled" || !quickAccessService.opened
+            || quickAccessService.activeScreen !== firstScreen
+            || !quickAccessService.overlayLoaded
+            || !quickAccessService.overlayActive)
+          return root.fail("valid-screen picker routing")
+        quickAccessService.entries = [{
+          label: "sample",
+          sourcePath: root.fixtureImagePath("not-ready-sample.png"),
+          thumbnailPath: "", thumbnailReady: false
+        }]
+        quickAccessService.updateFilter("sam")
+        quickAccessService.statusText = "Copied"
+        root.phase = 0
+        root.ticks = 0
+      } else if (root.phase === 0) {
+        if (root.screenLifecycleStep === 0) {
+          if (!quickAccessService.pickerWorkersRunning) {
+            if (root.ticks < 12) return
+            return root.fail("controlled picker worker did not start")
+          }
+          const filterFeedback = root.visibleText(presentationProbe, "sam")
+          const statusFeedback = root.visibleText(presentationProbe, "Copied")
+          if (!filterFeedback || !statusFeedback
+              || String(filterFeedback.color)
+                !== String(quickAccessService.pickerPresentation.urgent)
+              || String(statusFeedback.color)
+                !== String(quickAccessService.pickerPresentation.urgent))
+            return root.fail("typed filter or status feedback is not visible")
+          quickAccessService.screenListOverride = [replacementFirstScreen, secondScreen]
+          root.screenLifecycleStep = 1
+          root.ticks = 0
+          return
+        }
+        if (quickAccessService.opened || quickAccessService.activeScreen !== null
+            || quickAccessService.loading || quickAccessService.overlayLoaded
+            || quickAccessService.overlayActive
+            || quickAccessService.pickerWorkersRunning
+            || quickAccessService.refreshScanPending) {
+          if (root.ticks < 12) return
+          return root.fail("removed-screen picker teardown"
+            + " opened=" + quickAccessService.opened
+            + " screen=" + (quickAccessService.activeScreen !== null)
+            + " loading=" + quickAccessService.loading
+            + " loaded=" + quickAccessService.overlayLoaded
+            + " active=" + quickAccessService.overlayActive
+            + " workers=" + quickAccessService.pickerWorkersRunning
+            + " scanDelay=" + quickAccessService.refreshScanPending)
+        }
+        quickAccessService.runtimeWorkersEnabled = false
+        quickAccessService.screenListOverride = [firstScreen, secondScreen]
+        if (quickAccessService.routeOmarchyAction("wallpaper", secondScreen)
+              !== "handled" || !quickAccessService.opened
+            || quickAccessService.activeScreen !== secondScreen
+            || !quickAccessService.overlayLoaded) {
+          return root.fail("remaining-screen picker reopen")
+        }
+        quickAccessService.close()
+        const customConfig = fakeState.config
+        fakeState.config = ({ picker: {
+          style: "default", imageStyle: "omarchy", mediaStyle: "default"
+        } })
+        if (quickAccessService.routeOmarchyAction("theme", firstScreen)
+              !== "native" || quickAccessService.opened)
+          return root.fail("Omarchy-style native fallback")
+        fakeState.config = customConfig
         if (!quickAccessService.available || first.picker !== quickAccessService
             || second.picker !== quickAccessService
             || quickAccessService.pickerStyle !== "tanzaku")
@@ -273,9 +515,12 @@ ShellRoot {
         fakePickerController.requestSerial++
         fakePickerController.opened = true
         fakePickerController.filteredEntries = [
-          { label: "left", sourcePath: "/tmp/left.jpg", thumbnailReady: false },
-          { label: "current", sourcePath: "/tmp/current.jpg", thumbnailReady: false },
-          { label: "right", sourcePath: "/tmp/right.jpg", thumbnailReady: false }
+          { label: "left", sourcePath: root.fixtureImagePath("source-49.png"),
+            thumbnailReady: false },
+          { label: "current", sourcePath: root.fixtureImagePath("source-50.png"),
+            thumbnailReady: false },
+          { label: "right", sourcePath: root.fixtureImagePath("source-51.png"),
+            thumbnailReady: false }
         ]
         fakePickerController.selectedIndex = 1
         if (tanzakuProbe.navigationAnimationsEnabled)
@@ -317,9 +562,10 @@ ShellRoot {
           return root.fail("first-screen picker routing")
         const rows = []
         for (let i = 0; i < 100; i++)
-          rows.push("/tmp/source-" + i + ".png\t/tmp/thumb-" + i
-            + ".jpg\tentry-" + i + "\t/tmp\t0")
-        quickAccessService.currentSelection = "/tmp/source-50.png"
+          rows.push(root.fixtureImagePath("source-" + i + ".png") + "\t"
+            + root.fixtureImagePath("thumb-" + i + ".png")
+            + "\tentry-" + i + "\t" + root.fixtureImageDir + "\t0")
+        quickAccessService.currentSelection = root.fixtureImagePath("source-50.png")
         quickAccessService.loading = true
         quickAccessService.scanComplete = false
         quickAccessService.finishCacheLoad(
@@ -328,7 +574,8 @@ ShellRoot {
         const initialRevision = quickAccessService.thumbnailRevision
         for (let i = 0; i < 100; i++)
           quickAccessService.noteThumbnailReady(
-            "/tmp/thumb-" + i + ".jpg", quickAccessService.requestSerial)
+            root.fixtureImagePath("thumb-" + i + ".png"),
+            quickAccessService.requestSerial)
         if (!quickAccessService.refreshScanPending || quickAccessService.loading
             || quickAccessService.scanComplete
             || quickAccessService.entries !== stableEntries
@@ -395,13 +642,29 @@ ShellRoot {
         if (quickAccessService.opened || fakeBar.activePopout !== null
             || quickAccessService.loading)
           return root.fail("picker close lifecycle")
+        const missingWidget = missingPopoutLoader.item
+        if (!missingWidget || !missingWidget.openMode("wallpaper"))
+          return root.fail("missing-popout widget did not open")
+        missingWidget.close()
+        positiveSlotBar.activePopout = positiveSlotLoader.item.activeItem
+        missingSlotBar.activePopout = missingSlotLoader.item.activeItem
         secondLoader.active = false
+        missingPopoutLoader.active = false
+        positiveSlotLoader.active = false
+        missingSlotLoader.active = false
         root.quickSettings = ({ displayMode: "text" })
         root.phase++
         root.ticks = 0
       } else if (root.phase === 5) {
-        if (secondLoader.item !== null || !first.idleInhibited
-            || !first.textMode || first.compact
+        if (secondLoader.item !== null || missingPopoutLoader.item !== null
+            || positiveSlotLoader.item !== null || missingSlotLoader.item !== null
+            || positiveSlotBar.releaseCalls !== 1
+            || positiveSlotBar.hideCalls !== 1
+            || positiveSlotBar.unregisterCalls !== 1
+            || missingSlotBar.hideCalls !== 1
+            || missingSlotBar.unregisterCalls !== 1
+            || fakeBar.releaseCalls < 1
+            || !first.idleInhibited || !first.textMode || first.compact
             || first.displayMode !== "text")
           return root.fail("widget teardown or shared state retention")
         root.quickSettings = ({ displayMode: "icon" })

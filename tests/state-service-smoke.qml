@@ -55,7 +55,7 @@ ShellRoot {
     id: state
     omarchyPath: Quickshell.env("OMARCHY_PATH")
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.13", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14", kinds: ["service"]})
   }
   Component.onCompleted: steps = [
     function() {
@@ -67,7 +67,10 @@ ShellRoot {
       check(!state.setGroupSetting("BAD", "compact", true) && !state.setGroupEnabledForVariant("G4", "v3", false), "invalid group/variant")
       check(!state.setWidgetSetting("G4", "example.widget", "number", Infinity), "non-finite setter accepted")
       check(state.setGroupEnabledForVariant("G4", "v1", false), "V1 disable queue")
-      check(state.groupEnabledForVariant("G4", "v1") && fakeShell.writes === 0, "optimistic setter publication")
+      check(state.groupEnabledForVariant("G4", "v1")
+        && !state.requestedGroupEnabledForVariant("G4", "v1")
+        && fakeShell.writes === 0,
+        "requested activation preview changed authoritative publication")
     }, function() {
       check(!state.groupEnabledForVariant("G4", "v1") && state.groupEnabledForVariant("G4", "v2")
         && state.groupSetting("G4", "enabled", true), "activation isolation")
@@ -124,6 +127,9 @@ ShellRoot {
         && appearance("G9", "v2", "mediaStyle") === "default" && appearance("G18", "v2", "widgetRadius") === "auto"
         && appearance("G4", "v1", "color") === "color04" && state.groupSetting("G4", "separator", false), "V2 global reset isolation")
       check(state.setWidgetSetting("G7", "hancore.shibumi.ai", "aiTool", "opencode"), "nested settings")
+      check(state.requestedGroupSettings("G7")["hancore.shibumi.ai"].aiTool
+        === "opencode" && !state.groupSettings("G7")["hancore.shibumi.ai"],
+        "nested selection request was not previewed independently")
       check(state.setPresentationSetting("radius", "small") && !state.setPresentationSetting("radius", "unsafe")
         && state.setPresentationSetting("shellStyle", "notch") && !state.setPresentationSetting("shellStyle", "unsafe")
         && state.setPresentationSetting("border", false) && state.setPresentationSetting("accent", "color06")
@@ -155,8 +161,13 @@ ShellRoot {
       check(state.config.picker.imageStyle === "hearthstone" && state.config.picker.mediaStyle === "hearthstone", "combined picker publication")
       check(state.setPickerStyle("carousel") && state.setWorkspacePreference("mode", "active")
         && !state.setWorkspacePreference("mode", "invalid"), "picker/workspace validation")
+      check(state.requestedConfig.workspace.mode === "active"
+        && state.config.workspace.mode !== "active",
+        "workspace request was not previewed before readback")
       const launcher = state.defaultLauncherConfig(); launcher.mode = "icon"; launcher.icon = "rebel"; launcher.text = "omarchy"
-      check(state.setLauncherConfig(launcher) && state.normalizeLauncherConfig(launcher).icon === "rebel", "launcher queue")
+      check(state.setLauncherConfig(launcher) && state.normalizeLauncherConfig(launcher).icon === "rebel"
+        && state.requestedConfig.launcher.icon === "rebel"
+        && state.config.launcher.icon !== "rebel", "launcher queue/preview")
     }, function() {
       check(state.config.workspace.mode === "active" && state.config.launcher.icon === "rebel" && state.config.launcher.text === "omarchy"
         && state.config.picker.style === "carousel", "workspace/launcher publication")

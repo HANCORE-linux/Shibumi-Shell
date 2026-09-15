@@ -60,12 +60,15 @@ while switching back to `omarchy.bar` reactivates its saved value.
 Compatibility is verified against the supported Quattro commit and the
 validation system; it is not inferred from successful QML parsing.
 
-Host widget entry points and their display metadata follow the registry's
-`resolveEnabledId()` selection when that API exists. Cached components are
-retained only while the selected entry-point URL still matches. An empty host
-resolution or missing selected manifest remains unavailable; it never falls
-back around a host refusal. Older registries without this API retain direct
-manifest lookup. Provider admission uses the same selection record for the
+On scoped hosts, host widget entry points and display metadata come directly
+from the exact configured `barWidgetRegistry.widgets[id]` entry. Equal
+Component handles retain the live Loader item; a replacement handle creates one
+new Loader submission. The Bar keeps no scoped component cache. Older
+full-registry hosts resolve `resolveEnabledId()` when available and retain a
+small URL-keyed Component cache only while the selected entry-point URL still
+matches. An empty host resolution or missing selected manifest remains
+unavailable; it never falls back around a host refusal. Older registries without
+clone resolution retain direct manifest lookup. Provider admission uses the same selection record for the
 entry point and multi-instance check. An active clone keeps its selected ID
 and existing entry settings; admitting it must not enable its original and
 thereby ask Omarchy to restore the source. Missing selections, unstable selected

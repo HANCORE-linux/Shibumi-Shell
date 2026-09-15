@@ -208,7 +208,7 @@ grep -Fx -- '--clear' "$tmpdir/location.log" >/dev/null \
 center_widget="$repo_root/hancore.shibumi.center/BarWidget.qml"
 center_service="$repo_root/hancore.shibumi.center/Service.qml"
 weather_panel="$repo_root/hancore.shibumi.center/WeatherPanel.qml"
-rg -U -q 'PillSurface \{\n([^\n]*\n)*[[:space:]]*anchors\.verticalCenter: parent\.verticalCenter\n[[:space:]]*height: root\.tokens \? root\.tokens\.pillHeight : 0' \
+rg -U -q 'Presentation\.PillSurface \{\n([^\n]*\n)*[[:space:]]*anchors\.verticalCenter: parent\.verticalCenter\n[[:space:]]*height: root\.tokens \? root\.tokens\.pillHeight : 0' \
   "$center_widget" \
   || fail "G8 pill does not retain the exact shared pill height"
 if rg -q 'anchors\.(top|bottom)Margin:.*pillHeight' "$center_widget"; then
@@ -267,7 +267,7 @@ fi
 calendar_panel="$repo_root/hancore.shibumi.center/CalendarPanel.qml"
 rg -q 'component CalendarAction: Rectangle' "$calendar_panel" \
   || fail "calendar navigation does not own its V1 action appearance"
-rg -q 'ShibumiPanelToolTip \{' "$calendar_panel" \
+rg -q 'Presentation\.ShibumiPillToolTip \{' "$calendar_panel" \
   || fail "calendar navigation bypasses the Shibumi tooltip"
 if rg -q 'Ui\.PanelActionButton' "$calendar_panel"; then
   fail "calendar navigation still uses the host tooltip appearance"

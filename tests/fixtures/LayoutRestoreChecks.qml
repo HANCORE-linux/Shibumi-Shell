@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
-import "../core/V2LayoutModel.js" as Layout
-import ".." as Host
+import "../hancore.shibumi.bar/core/V2LayoutModel.js" as Layout
+import "../hancore.shibumi.bar" as Host
 
 // Actual Bar/coordinator/restore, complete inert State + native writer. Their
 // publication clocks are deliberately separate; no FileView or host helper.

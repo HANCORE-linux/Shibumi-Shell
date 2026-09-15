@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -158,7 +159,7 @@ Item {
         if (root.bar && registered) root.bar.unregisterClickTarget(drawerToggle)
       }
 
-      IconText {
+      Presentation.IconText {
         id: moreIcon
         anchors.centerIn: parent
         text: "\uE5D3"

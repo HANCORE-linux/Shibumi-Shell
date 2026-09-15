@@ -21,6 +21,8 @@ def main():
     args = parser.parse_args()
     files = {}
     for source, target in ((REPO / 'hancore.shibumi.center', 'center'),
+                           (REPO / 'hancore.shibumi.state/lib/presentation',
+                            'hancore.shibumi.state/lib/presentation'),
                            (args.host_shell / 'Commons', 'Commons'),
                            (args.host_shell / 'Ui', 'Ui')):
         for name, record in snapshot(source).items():

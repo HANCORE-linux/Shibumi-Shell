@@ -1,25 +1,35 @@
-# Is Shibumi 0.1.1-beta.13 ready for prerelease testing?
+# Shibumi 0.1.1-beta.13 prerelease status
 
-> **Document status: Local release-candidate gate.** This page records evidence
-> and open acceptance. It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+> **Document status: Published prerelease record.** This page records the
+> accepted evidence and deferred gates. It cannot override
+> [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-Beta.13 supersedes Beta.12, which was tagged but not published as a GitHub
-release or AUR package, and retains its 24-plugin, Omarchy 4.0.3 runtime, bar,
-and lifecycle work. It contains no Step-6 product functionality and no
-automatic Step-6 migration.
+Beta.13 superseded Beta.12, which was tagged but not published as a GitHub
+release or AUR package. Beta.13 is published as GitHub prerelease
+`v0.1.1-beta.13` from exact commit
+`2760cdb8272255790d5e4613fed8a48cb63c3555`; AUR publication remains deferred.
+It retains the 24-plugin, Omarchy 4.0.3 runtime, bar, and lifecycle work and
+contains no Step-6 product functionality or automatic Step-6 migration.
+
+## Beta.14 worktree (not accepted)
+
+The [candidate validation record](development/beta14-validation.md) tracks the
+paused general performance investigation, direct #54 Loader fix, native A/B
+census and remaining physical gates. The additional recovery rescan was removed;
+only the once-per-process startup prime remains. It is separate from this published Beta.13 record.
+No Beta.13 acceptance row below accepts the uncommitted Beta.14 payload.
 
 ## Beta.13 snapshot hotfix status (2026-09-12)
 
-The current uncommitted worktree keeps each admitted `shell.json` snapshot open
-through transaction end as a no-follow regular-file descriptor. Pathname,
-held-object, size, and digest checks reject replacement and in-place mutation,
-including inode reuse.
+The published payload keeps each admitted `shell.json` snapshot open through
+transaction end as a no-follow regular-file descriptor. Pathname, held-object,
+size, and digest checks reject replacement and in-place mutation, including
+inode reuse.
 
 Focused Python regressions cover replacement, mutation, descriptor cleanup,
-drained-baseline rebind, and crash simulation. Those regressions and an
-independent review passed in the uncommitted worktree. Exact-commit Beta.13
-archive and package-bound gates, Machine 2, physical acceptance, and publication
-remain open.
+drained-baseline rebind, and crash simulation. Those regressions, independent
+review, exact-commit archive and package gates, package-bound lifecycle
+acceptance, and the scoped physical Machine 2 round passed before publication.
 
 ## Superseded Beta.12 candidate history
 
@@ -88,21 +98,31 @@ rollback.
 
 ## Current tested host contract
 
+The primary source and installed-package compatibility contracts are pinned to
+Omarchy 4.0.3. The published Beta.13 package was physically accepted on
+Omarchy 4.0.3 using one physical output; Beta.14 still
+requires its own physical output and coredump acceptance.
+
 | Component | Accepted identity |
 | --- | --- |
-| Omarchy | `omarchy 4.0.2-1` |
-| Omarchy settings | `omarchy-settings 4.0.2-1` |
-| Official source | `v4.0.2`, `346e69e1cec6c4e8924531874af6ba010a1bc99e` |
+| Physical Beta.13 release host | Omarchy `4.0.3`; single-output acceptance |
+| Omarchy | `omarchy 4.0.3-1` |
+| Omarchy settings | `omarchy-settings 4.0.3-1` |
+| Official source | `v4.0.3`, `0534987009061cbe2dacdde4ad564092ab698d12` |
 | Quickshell | `quickshell 0.3.1-1` |
-| Installed-package profile | `installed-package-v4.0.2` |
-| Source-parity profile | `installed-source-parity-v4.0.2` |
+| Installed-package profile | `installed-package-v4.0.3` |
+| Source-parity profile | `installed-source-parity-v4.0.3` |
+| Optional compatibility source | `v4.0.2`, `346e69e1cec6c4e8924531874af6ba010a1bc99e` |
 | Agents reference | `v4.0.0`, retained for that isolated contract only |
 | Forward reference | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 
-The installed package and pinned `v4.0.2` source have exact `shell` and
-`config` parity. Installed `/usr/share/omarchy/bin` links resolve to the same
-source payload, apart from three host-local helpers not owned by those packages.
-The machine-readable manifests bind the complete consumed subtrees.
+The installed package and pinned `v4.0.3` source have exact `shell` and
+`config` parity. Installed `/usr/share/omarchy/bin` links resolve to the source
+payload except for the three source-only maintenance helpers `omarchy-debug`,
+`omarchy-debug-idle`, and `omarchy-upload-log`. The machine-readable manifests
+bind the complete consumed subtrees. The immutable 4.0.2 manifests remain
+available through the explicit `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`
+compatibility selector; release jobs pin 4.0.3 directly.
 
 ## Bluetooth ST-01
 
@@ -124,26 +144,28 @@ helper remains declared debt. Helper removal is not part of this hotfix.
 
 | Gate | Status |
 | --- | --- |
-| Exact 24-plugin source contract | Local automated gate required on final commit |
-| Omarchy 4.0.2 installed-package baseline | Passed locally |
-| Omarchy 4.0.2 source-parity baseline | Passed locally |
-| Forward-compatibility baseline | Passed locally |
-| Bluetooth detached-record and stale-identity regression | Passed locally |
-| Lifecycle predecessor and all-journal admission regression | Passed locally |
-| Snapshot FD identity, cleanup, rebind, and crash-simulation regressions | Passed with independent review in the current uncommitted worktree; exact-commit evidence remains open |
-| Full Python, QML, shell, documentation, and package suites | Required on final commit |
-| Reproducible exact-commit archive and checksum | Required after final commit |
-| AUR package rehearsal with exact installed inventory | Required after checksum pinning |
-| Fresh physical Network acceptance | **Open; public-beta blocker** |
-| Fresh physical Bluetooth acceptance | **Open; public-beta blocker** |
-| Live install, activation, update, rollback, and uninstall | Beta.12 rejected candidate exposed managed-install rescan/stop race; full Beta.13 package rerun required |
-| Machine 2 | Beta.12 package staging was prepared; no Beta.13 package staging or activation has passed |
-| Push, tag, GitHub release, or AUR publication | Not authorized |
+| Exact 24-plugin source contract | Passed for the exact published payload |
+| Omarchy 4.0.3 installed-package baseline | Passed |
+| Omarchy 4.0.3 source-parity baseline | Passed |
+| Omarchy 4.0.2 compatibility manifests | Retained and schema-validated |
+| Forward-compatibility baseline | Passed |
+| Bluetooth detached-record and stale-identity regression | Passed |
+| Lifecycle predecessor and all-journal admission regression | Passed |
+| Snapshot FD identity, cleanup, rebind, and crash-simulation regressions | Passed with independent review |
+| Full Python, QML, shell, documentation, and package suites | Passed before publication |
+| Reproducible exact-commit archive and checksum | Passed |
+| AUR package rehearsal with exact installed inventory | Passed; AUR publication deferred |
+| Physical presentation and host-return acceptance | Passed on Omarchy 4.0.3 for V1/V2, stock-bar return, style, and top/bottom on `eDP-1` |
+| Package-bound lifecycle | Passed with all 24 plugins |
+| Machine 2 | Scoped Beta.13 physical round passed without a new Quickshell coredump |
+| GitHub prerelease | Published as `v0.1.1-beta.13` |
+| AUR publication | Deferred |
 
 Fixtures prove deterministic boundaries but do not replace physical Network,
 Bluetooth, output, suspend/resume, notification, drag/drop, or visual checks.
+The published physical round used one output; no multi-output result is claimed.
 Enterprise Wi-Fi, mixed scale, multi-output, and display hotplug remain tracked
-stable-release gates where hardware or credentials are unavailable.
+stable-release gates where hardware or credentials were unavailable.
 
 ## Release asset gate
 
@@ -171,6 +193,6 @@ retry closed.
 
 ## Publication decision
 
-Beta.13 is a local candidate, not an authorized release. Publication remains
-blocked until the final clean-commit automated gates, AUR rehearsal, and fresh
-physical Network/Bluetooth acceptance pass and separate authorization is given.
+Beta.13 is published as a GitHub prerelease from its accepted exact commit.
+This record does not claim AUR publication or physical multi-output,
+enterprise-Wi-Fi, mixed-scale, or display-hotplug acceptance.

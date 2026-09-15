@@ -206,7 +206,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host-api", required=True, type=Path)
     parser.add_argument("--state-source", type=Path, default=ROOT / "hancore.shibumi.state/Service.qml")
-    parser.add_argument("--bar-source", type=Path, default=ROOT / "Bar.qml")
+    parser.add_argument("--bar-source", type=Path,
+                        default=ROOT / "hancore.shibumi.bar/Bar.qml")
     parser.add_argument("--runtime-source", type=Path, default=ROOT / "hancore.shibumi.state/runtime/Runtime.qml")
     parser.add_argument("--case", choices=("valid", "missing", "malformed", "wrong-suite", "wrong-digest"))
     parser.add_argument("--runtime", action="store_true", help="also test cooperative runtime and retirement")

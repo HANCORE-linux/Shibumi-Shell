@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -239,7 +240,7 @@ ShibumiPanel {
         width: parent.width
         spacing: Commons.Style.space(10)
 
-        IconText {
+        Presentation.IconText {
           anchors.verticalCenter: parent.verticalCenter
           text: !panel.bluetoothService.radioEnabled ? "\uE1A9"
             : panel.bluetoothService.connectedCount > 0
@@ -375,7 +376,7 @@ ShibumiPanel {
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
     opacity: enabled ? 1 : 0.35
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -392,7 +393,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPanelToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip
@@ -442,7 +443,7 @@ ShibumiPanel {
       onClicked: panel.bluetoothService.toggleBluetooth()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPanelToolTip {
       panel: panel
       visible: powerMouse.containsMouse
       text: panel.bluetoothService.radioEnabled
@@ -487,7 +488,7 @@ ShibumiPanel {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Commons.Style.space(8)
 
-        IconText {
+        Presentation.IconText {
           anchors.verticalCenter: parent.verticalCenter
           text: entryItem.connected ? "\uE1A8" : "\uE1A7"
           color: entryItem.connected && panel.bar

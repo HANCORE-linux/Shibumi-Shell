@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 // V1 presentation over Quattro's registered omarchy.system-update owner.
 // The backend keeps update detection, IPC, and launch ownership.
@@ -56,7 +57,7 @@ Ui.BarWidget {
     return false
   }
 
-  IconText {
+  Presentation.IconText {
     id: updateIcon
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.opticalCenterOffset

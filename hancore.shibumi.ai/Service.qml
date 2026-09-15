@@ -19,7 +19,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.ai"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -42,6 +42,11 @@ Item {
   property bool openCodeAvailable: false
   property var agentsClaudeRecord: null
   property var agentsCodexRecord: null
+  // Current third-party PluginShellApi instances intentionally do not expose
+  // the host registry. Prefer the current agents backend when the host root is
+  // available; the bounded wrapper returns 66 only when that backend itself is
+  // absent, which switches this process to the pinned legacy fallback.
+  property bool agentsBackendUnavailable: false
   readonly property double nextAgentRecordExpiryAtMs: {
     const expiries = []
     if (agentsClaudeRecord && Number(agentsClaudeRecord.expiresAtMs) > 0)
@@ -64,7 +69,8 @@ Item {
 
   readonly property string agentsSource: String(agentsSourceOverride || "")
     || standardWidgetSource("omarchy.agents")
-  readonly property bool agentsBackendActive: agentsSource !== ""
+  readonly property bool agentsBackendActive: !agentsBackendUnavailable
+    && (agentsSource !== "" || String(omarchyPath || "") !== "")
   readonly property string agentsUsageDir: String(agentsUsageDirOverride || "")
     || (Quickshell.env("XDG_STATE_HOME")
       || (Quickshell.env("HOME") || "") + "/.local/state")
@@ -90,8 +96,25 @@ Item {
       : configuredEntrySettings("hancore.shibumi.ai")
     return mergeSettings(aliasSettings, localSettings)
   }
-  readonly property string requestedTool: String(
-    settings.aiTool || settings.tool || "claude").toLowerCase()
+  // Tool choice is presentation state. Reflect the latest admitted request so
+  // pointer/keyboard selection is immediate, while provider enablement and all
+  // backend work continue to follow confirmed settings above.
+  readonly property string requestedTool: {
+    const requested = stateService && stateService.requestedConfig
+      ? stateService.requestedConfig : null
+    const group = requested && requested.widgets
+      ? requested.widgets.G7 : null
+    const local = group && typeof group === "object"
+      && !Array.isArray(group)
+      && group["hancore.shibumi.ai"]
+      && typeof group["hancore.shibumi.ai"] === "object"
+      && !Array.isArray(group["hancore.shibumi.ai"])
+        ? group["hancore.shibumi.ai"] : null
+    const value = local
+      && Object.prototype.hasOwnProperty.call(local, "aiTool")
+        ? local.aiTool : settings.aiTool || settings.tool || "claude"
+    return String(value).toLowerCase()
+  }
   readonly property int agentsRefreshInterval: Math.max(30,
     Number(settings.refreshIntervalSec) || 900) * 1000
   readonly property string agentsUpdateScript: String(
@@ -110,6 +133,7 @@ Item {
       active: serviceActive,
       probes: runtimeProbesEnabled,
       agentsSource: agentsSource,
+      agentsUnavailable: agentsBackendUnavailable,
       legacySource: modelUsageSource
     })
   readonly property bool anyProviderEnabled:
@@ -662,9 +686,13 @@ Item {
       agentsUpdateHealthy = Number(exitCode) === 0
         && runningSettingsGeneration === providerSettingsGeneration
         && !pendingBackendRefresh
-      agentsClaudeFile.reload()
-      agentsCodexFile.reload()
-      if (Number(exitCode) !== 0 && error !== "")
+      if (Number(exitCode) === 66) {
+        agentsBackendUnavailable = true
+      } else {
+        agentsClaudeFile.reload()
+        agentsCodexFile.reload()
+      }
+      if (Number(exitCode) !== 0 && Number(exitCode) !== 66 && error !== "")
         console.warn("Shibumi AI agents update failed:", error.slice(0, 512))
     }
     providerRevision++

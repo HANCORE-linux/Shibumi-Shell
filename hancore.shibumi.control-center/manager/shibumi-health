@@ -21,10 +21,15 @@ MANAGED_MARKER = ".shibumi-managed.json"
 STATUS_ORDER = {"error": 0, "warning": 1, "ok": 2, "info": 3}
 ERROR_PATTERNS = re.compile(
     r"binding loop|referenceerror|typeerror|failed to load|error loading|"
-    r"could not resolve type|is not a type|cannot assign|loader.*error|"
-    r"host.facade|provider.*compatib",
+    r"could not resolve type|is not a type|cannot assign|unable to assign|"
+    r"loader.*error|host.facade|provider.*compatib",
     re.IGNORECASE,
 )
+WARNING_PATTERN = re.compile(
+    r"^[\s\d:.,+\-TZ\[\]]{0,96}warn(?:ing)?(?=\s|:)", re.IGNORECASE
+)
+LOG_TAIL_LINES = 400
+LOG_DETAIL_FINDINGS = 8
 SENSITIVE_PATTERNS = re.compile(
     r"authorization|cookie|credential|password|secret|ssid|token",
     re.IGNORECASE,
@@ -58,6 +63,9 @@ OWNER_ORDER = {
     OWNER_UNKNOWN: 3,
 }
 PACKAGE_NAME = "shibumi-shell"
+STATE_PLUGIN_ID = "hancore.shibumi.state"
+STATE_STORAGE_SCHEMA = "shibumiStateSchemaVersion"
+SHELL_STYLES = {"shibumi", "full", "fit", "dock", "notch"}
 AUR_INFO_URL = (
     "https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=shibumi-shell"
 )
@@ -209,6 +217,8 @@ class Probe:
         self.checks: list[Check] = []
         self.state: dict[str, Any] = {}
         self.config: dict[str, Any] = {}
+        self.shell_style: str | None = None
+        self.shell_style_source = ""
         self.registry: list[dict[str, Any]] = []
         self.processes: list[dict[str, Any]] = []
         self.production_pids: list[int] = []
@@ -457,6 +467,90 @@ class Probe:
             return self.attributed(OWNER_UNKNOWN, all_evidence_paths, evidence_ids)
         return self.attributed(owners.pop(), all_evidence_paths, evidence_ids)
 
+    @staticmethod
+    def config_entry_id(value: Any) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict) and isinstance(value.get("id"), str):
+            return value["id"]
+        return ""
+
+    @staticmethod
+    def normalized_shell_style(settings: dict[str, Any]) -> str:
+        presentation = settings.get("presentation")
+        presentation = presentation if isinstance(presentation, dict) else {}
+        candidate = presentation.get("shellStyle")
+        return candidate if candidate in SHELL_STYLES else "shibumi"
+
+    def configured_shell_style(self) -> tuple[str, str]:
+        """Read the form from canonical State, with pre-migration compatibility."""
+        bar = self.config.get("bar")
+        bar = bar if isinstance(bar, dict) else {}
+        entries = self.config.get("plugins")
+        canonical_expected = self.state.get("settingsStorageVersion") == 1
+
+        if entries is None:
+            if canonical_expected:
+                raise ValueError("canonical State service entry is missing")
+            matches: list[Any] = []
+        elif not isinstance(entries, list):
+            raise ValueError("plugins must be an array")
+        else:
+            matches = [
+                entry
+                for entry in entries
+                if self.config_entry_id(entry) == STATE_PLUGIN_ID
+            ]
+            if len(matches) > 1 or (matches and not isinstance(matches[0], dict)):
+                raise ValueError("State service entry is ambiguous")
+
+        entry = matches[0] if matches else None
+        canonical_present = isinstance(entry, dict) and (
+            STATE_STORAGE_SCHEMA in entry or "shibumi" in entry
+        )
+        if canonical_expected and entry is None:
+            raise ValueError("canonical State service entry is missing")
+        if canonical_expected or canonical_present:
+            layout = bar.get("layout")
+            if (
+                type(self.config.get("version")) not in (int, float)
+                or self.config["version"] != 1
+                or not isinstance(entries, list)
+                or len(entries) > 512
+                or not isinstance(layout, dict)
+                or any(
+                    not isinstance(layout.get(region), list)
+                    for region in ("left", "center", "right")
+                )
+            ):
+                raise ValueError("canonical State shell envelope is invalid")
+            if any(
+                self.config_entry_id(layout_entry) == STATE_PLUGIN_ID
+                for region in ("left", "center", "right")
+                for layout_entry in layout[region]
+            ):
+                raise ValueError("State service must not be a bar layout entry")
+            if (
+                not isinstance(entry, dict)
+                or type(entry.get(STATE_STORAGE_SCHEMA)) not in (int, float)
+                or entry[STATE_STORAGE_SCHEMA] != 1
+                or not isinstance(entry.get("shibumi"), dict)
+                or type(entry["shibumi"].get("version")) not in (int, float)
+                or entry["shibumi"]["version"] != 1
+            ):
+                raise ValueError(
+                    "canonical State settings are invalid; refusing legacy fallback"
+                )
+            return self.normalized_shell_style(entry["shibumi"]), "State service"
+
+        legacy = bar.get("shibumi", {"version": 1})
+        version = legacy.get("version", 1) if isinstance(legacy, dict) else None
+        if not isinstance(legacy, dict) or not (
+            (type(version) in (int, float) and version == 1) or version == "1"
+        ):
+            raise ValueError("legacy Shibumi settings are invalid")
+        return self.normalized_shell_style(legacy), "legacy bar settings"
+
     def load_state_and_config(self) -> None:
         state_path = self.state_dir / "install.json"
         try:
@@ -500,16 +594,16 @@ class Probe:
             self.config = read_json(source)
             if not isinstance(self.config.get("bar"), dict):
                 raise ValueError("bar configuration is missing")
-            shibumi = self.config["bar"].get("shibumi")
-            if shibumi is not None and not isinstance(shibumi, dict):
-                raise ValueError("bar.shibumi must be an object")
+            self.shell_style, self.shell_style_source = (
+                self.configured_shell_style()
+            )
             self.add(
                 "configuration",
                 "Runtime",
                 "Configuration",
                 "ok",
                 "Schema valid",
-                "The active shell configuration is parseable.",
+                f"Shell form read from {self.shell_style_source} configuration.",
                 source,
             )
         except (OSError, ValueError, json.JSONDecodeError) as error:
@@ -523,7 +617,10 @@ class Probe:
                 source,
                 "Repair the configuration before reloading the shell.",
             )
-            self.config = {"bar": {}}
+            self.shell_style = None
+            self.shell_style_source = ""
+            if not isinstance(self.config.get("bar"), dict):
+                self.config = {"bar": {}}
 
     def load_registry(self) -> None:
         fixture = os.environ.get("SHIBUMI_HEALTH_REGISTRY_FILE")
@@ -670,15 +767,11 @@ class Probe:
             if item.get("active") is True and "bar" in (item.get("kinds") or [])
         ]
         running_id = running[0] if len(running) == 1 else ""
-        presentation = bar.get("shibumi") if isinstance(bar.get("shibumi"), dict) else {}
-        presentation = (
-            presentation.get("presentation")
-            if isinstance(presentation.get("presentation"), dict)
-            else {}
-        )
-        shell_style = str(presentation.get("shellStyle") or "shibumi")
+        shell_style = self.shell_style
         selected = "Omarchy" if configured_id == "omarchy.bar" else (
-            "Shibumi V1" if shell_style == "shibumi" else "Shibumi V2"
+            "Shibumi (form unknown)" if shell_style is None else (
+                "Shibumi V1" if shell_style == "shibumi" else "Shibumi V2"
+            )
         )
         running_label = "None" if not running else (
             "Multiple" if len(running) > 1 else (
@@ -698,7 +791,9 @@ class Probe:
             "Run the guarded bar handoff again." if not matches else "",
         )
 
-        form = "Islands" if shell_style == "shibumi" else shell_style.title()
+        form = "Unknown" if shell_style is None else (
+            "Islands" if shell_style == "shibumi" else shell_style.title()
+        )
         position = str(bar.get("position") or "top").title()
         output_values = []
         for output in outputs:
@@ -938,9 +1033,28 @@ class Probe:
     def check_logs(self) -> None:
         fixture = os.environ.get("SHIBUMI_HEALTH_LOG_FILE")
         try:
+            if self.process_probe_failed or len(self.production_pids) != 1:
+                if self.process_probe_failed:
+                    detail = "The production process selection failed, so its log was not queried."
+                elif not self.production_pids:
+                    detail = "No exact production process was available for the log query."
+                else:
+                    detail = "Multiple production processes made log ownership ambiguous."
+                self.add(
+                    "runtime-errors",
+                    "Runtime",
+                    "Recent runtime findings",
+                    "warning",
+                    "Log unavailable",
+                    detail,
+                    "current Quickshell configuration",
+                    "Resolve production process ownership, then run Health again.",
+                    owner=OWNER_UNKNOWN,
+                )
+                return
             if fixture:
                 raw = Path(fixture).read_text(encoding="utf-8", errors="replace")
-            elif len(self.production_pids) == 1:
+            else:
                 result = run(
                     [
                         "qs",
@@ -948,7 +1062,7 @@ class Probe:
                         "--pid",
                         str(self.production_pids[0]),
                         "--tail",
-                        "400",
+                        str(LOG_TAIL_LINES),
                         "--no-color",
                         "--log-times",
                     ],
@@ -963,7 +1077,7 @@ class Probe:
                     self.add(
                         "runtime-errors",
                         "Runtime",
-                        "Recent runtime errors",
+                        "Recent runtime findings",
                         "warning",
                         "Log unavailable",
                         detail,
@@ -973,24 +1087,59 @@ class Probe:
                     )
                     return
                 raw = result.stdout
-            else:
-                raw = ""
-            lines = raw.splitlines()
+            returned_lines = raw.splitlines()
+            if not returned_lines or not any(line.strip() for line in returned_lines):
+                self.add(
+                    "runtime-errors",
+                    "Runtime",
+                    "Recent runtime findings",
+                    "warning",
+                    "Log unavailable",
+                    "The production log query returned an empty sample.",
+                    "current Quickshell configuration",
+                    "Confirm the selected process is logging, then run Health again.",
+                    owner=OWNER_UNKNOWN,
+                )
+                return
+            lines = returned_lines[-LOG_TAIL_LINES:]
+            reload_found = False
             for index in range(len(lines) - 1, -1, -1):
                 if "Configuration Loaded" in lines[index]:
                     lines = lines[index + 1 :]
+                    reload_found = True
                     break
-            matches: list[tuple[str, dict[str, str]]] = []
+            if reload_found:
+                sample_scope = (
+                    f"Sample: {len(lines)} line(s) after the latest reload marker "
+                    f"within the on-demand {LOG_TAIL_LINES}-line tail."
+                )
+            else:
+                sample_scope = (
+                    f"Sample: {len(lines)} line(s) from the on-demand "
+                    f"{LOG_TAIL_LINES}-line tail; the reload boundary was not present."
+                )
+            rate_scope = (
+                "Boot/hour rate: unavailable because this bounded sample does not "
+                "prove a complete boot or one-hour observation window."
+            )
+            error_matches: list[tuple[str, dict[str, str]]] = []
+            warning_matches: list[tuple[str, dict[str, str]]] = []
             suppressed_sensitive = False
             for line in lines:
-                if not ERROR_PATTERNS.search(line):
+                is_error = bool(ERROR_PATTERNS.search(line))
+                is_warning = bool(WARNING_PATTERN.search(line))
+                if not is_error and not is_warning:
                     continue
                 if SENSITIVE_PATTERNS.search(line):
                     suppressed_sensitive = True
                     continue
                 attribution = self.attribute_source(line)
-                matches.append((safe_text(self.redact_home_paths(line), 280), attribution))
-            matches = matches[-8:]
+                match = (safe_text(self.redact_home_paths(line), 280), attribution)
+                if is_error:
+                    error_matches.append(match)
+                else:
+                    warning_matches.append(match)
+            error_matches = error_matches[-LOG_DETAIL_FINDINGS:]
             if suppressed_sensitive:
                 self.add(
                     "runtime-errors-sensitive",
@@ -1003,26 +1152,23 @@ class Probe:
                     "Review the local shell log using a trusted terminal; Health will not expose the sensitive detail.",
                     owner=OWNER_UNKNOWN,
                 )
-            if not matches:
-                if suppressed_sensitive:
-                    return
+            if not error_matches and not warning_matches and not suppressed_sensitive:
                 self.add(
                     "runtime-errors",
                     "Runtime",
                     "Recent runtime errors",
                     "ok",
                     "None detected",
-                    "No recent Shibumi loader, type, reference, binding-loop, or provider failure was found.",
+                    "No matching loader, type, reference, binding-loop, assignment, or provider failure was found in the bounded log sample.",
                     "current Quickshell configuration",
                     owner=OWNER_UNKNOWN,
                 )
-                return
 
-            grouped: dict[str, list[tuple[str, dict[str, str]]]] = {}
-            for match in matches:
-                grouped.setdefault(match[1]["owner"], []).append(match)
-            for owner in sorted(grouped, key=lambda item: OWNER_ORDER[item]):
-                findings = grouped[owner]
+            grouped_errors: dict[str, list[tuple[str, dict[str, str]]]] = {}
+            for match in error_matches:
+                grouped_errors.setdefault(match[1]["owner"], []).append(match)
+            for owner in sorted(grouped_errors, key=lambda item: OWNER_ORDER[item]):
+                findings = grouped_errors[owner]
                 plugin_ids = sorted({item["pluginId"] for _, item in findings if item["pluginId"]})
                 source_paths = sorted({item["sourcePath"] for _, item in findings if item["sourcePath"]})
                 if owner == OWNER_SHIBUMI:
@@ -1038,8 +1184,8 @@ class Probe:
                     label = "Third-party runtime errors"
                     action = "Inspect the named third-party plugin and use its upstream support channel; Shibumi cannot file it."
                 else:
-                    check_id = "runtime-errors" if len(grouped) == 1 else "runtime-errors-unknown"
-                    label = "Recent runtime errors" if len(grouped) == 1 else "Unattributed runtime errors"
+                    check_id = "runtime-errors" if len(grouped_errors) == 1 else "runtime-errors-unknown"
+                    label = "Recent runtime errors" if len(grouped_errors) == 1 else "Unattributed runtime errors"
                     action = "Confirm the source before assigning ownership; Shibumi will not file an unattributed issue."
                 self.add(
                     check_id,
@@ -1055,11 +1201,53 @@ class Probe:
                     plugin_id="; ".join(plugin_ids),
                     issue_eligible=owner == OWNER_SHIBUMI,
                 )
-        except (OSError, subprocess.TimeoutExpired) as error:
+
+            grouped_warnings: dict[str, list[tuple[str, dict[str, str]]]] = {}
+            for match in warning_matches:
+                grouped_warnings.setdefault(match[1]["owner"], []).append(match)
+            for owner in sorted(grouped_warnings, key=lambda item: OWNER_ORDER[item]):
+                findings = grouped_warnings[owner]
+                visible = findings[-LOG_DETAIL_FINDINGS:]
+                plugin_ids = sorted({item["pluginId"] for _, item in findings if item["pluginId"]})
+                source_paths = sorted({item["sourcePath"] for _, item in findings if item["sourcePath"]})
+                if owner == OWNER_SHIBUMI:
+                    check_id = "runtime-warnings"
+                    label = "Recent Shibumi runtime warnings"
+                    action = "Review the bounded warning sample before deciding whether action is needed."
+                elif owner == OWNER_OMARCHY:
+                    check_id = "runtime-warnings-omarchy"
+                    label = "Omarchy runtime warnings"
+                    action = "Inspect the Omarchy source or its upstream support path if the warning persists."
+                elif owner == OWNER_THIRD_PARTY:
+                    check_id = "runtime-warnings-third-party"
+                    label = "Third-party runtime warnings"
+                    action = "Inspect the named third-party plugin and use its upstream support channel if needed."
+                else:
+                    check_id = "runtime-warnings" if len(grouped_warnings) == 1 else "runtime-warnings-unknown"
+                    label = "Recent runtime warnings" if len(grouped_warnings) == 1 else "Unattributed runtime warnings"
+                    action = "Confirm the source before assigning ownership; this warning is not attributed to Shibumi."
+                evidence = " | ".join(line for line, _ in visible)
+                omitted = len(findings) - len(visible)
+                if omitted:
+                    evidence = f"{omitted} earlier matching warning(s) omitted. " + evidence
+                self.add(
+                    check_id,
+                    "Runtime",
+                    label,
+                    "warning",
+                    f"{len(findings)} warning(s) in {len(lines)} sampled line(s)",
+                    f"{sample_scope} {rate_scope} Evidence: {evidence}",
+                    "; ".join(plugin_ids) or "current Quickshell configuration",
+                    action,
+                    owner=owner,
+                    source_path="; ".join(source_paths),
+                    plugin_id="; ".join(plugin_ids),
+                )
+        except (OSError, AttributeError, subprocess.TimeoutExpired) as error:
             self.add(
                 "runtime-errors",
                 "Runtime",
-                "Recent runtime errors",
+                "Recent runtime findings",
                 "warning",
                 "Log unavailable",
                 str(error),

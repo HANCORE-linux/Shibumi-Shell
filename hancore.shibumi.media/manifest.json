@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.media",
   "name": "Shibumi Media",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi media controls over Omarchy's MPRIS service.",
@@ -26,9 +26,13 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G9",
-    "capabilities": ["media"],
+    "capabilities": [
+      "media"
+    ],
     "preferredRegion": "right",
-    "requires": [],
+    "requires": [
+      "hancore.shibumi.state"
+    ],
     "recommends": []
   }
 }

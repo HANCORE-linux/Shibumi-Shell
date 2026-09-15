@@ -152,7 +152,8 @@ nested_socket=$(jq -r '.wl_socket' <<<"$instance")
 [[ -S $lab_root/runtime/$nested_socket ]] \
   || fail "nested Wayland socket is missing: $nested_socket"
 
-cp -a "$repo_root/core" "$repo_root/styles" "$lab_root/fixture/"
+cp -a "$repo_root/hancore.shibumi.bar/core" \
+  "$repo_root/hancore.shibumi.bar/styles" "$lab_root/fixture/"
 cp -a "$omarchy_path/shell/Commons" "$lab_root/fixture/"
 cp "$repo_root/tests/incidents/inc012/SectionHost.qml" "$lab_root/fixture/"
 cp "$repo_root/tests/group-section-wayland-shell.qml" \

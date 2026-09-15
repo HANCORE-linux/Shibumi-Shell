@@ -20,14 +20,16 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.control-center"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: root.shell
     manifest: root.manifest
   }
-  readonly property int pluginRevision: scopedHost
-    ? (barWidgetRegistry ? Number(barWidgetRegistry.revision || 0) : 0)
-    : pluginRegistry ? Number(pluginRegistry.registryRevision || 0) : 0
+  // Scoped catalog/update invalidation is explicit. Omarchy 4.0.3 republishes
+  // its widget revision for every State write, so that counter is not a
+  // structural or catalog revision. Legacy full registries retain their signal.
+  readonly property int pluginRevision: !scopedHost && pluginRegistry
+    ? Number(pluginRegistry.registryRevision || 0) : 0
   // Read interest is independent of update scans and their network workers.
   // Only this existing admitted provider owns the process-wide native catalog.
   property var _catalogBackendOverride: null
@@ -66,18 +68,19 @@ Item {
   function requestCatalogRefresh(token) {
     return catalogDemand.has(token) && nativeCatalog.requestRefresh()
   }
-  // PluginShellApi.barConfigChanged is a public non-authoritative change hint.
+  // Scoped barConfig/widget-registry signals are deliberately not catalog
+  // triggers: the host republishes both during ordinary State persistence.
+  // Demand startup, explicit requests and NativeCatalog's five-second
+  // post-drain reconcile are the three catalog acquisition paths.
   Connections {
-    target: root.available && root.catalogConsumerCount > 0 && root.scopedHost
-      && Qt.isQtObject(root.shell) ? root.shell : null
-    ignoreUnknownSignals: true
-    function onBarConfigChanged() { nativeCatalog.requestRefresh() }
-  }
-  Connections {
-    target: root.available && root.catalogConsumerCount > 0 && root.scopedHost
-      && Qt.isQtObject(root.barWidgetRegistry) ? root.barWidgetRegistry : null
-    ignoreUnknownSignals: true
-    function onRevisionChanged() { nativeCatalog.requestRefresh() }
+    target: nativeCatalog
+    // The catalog emits only for changed validated content. A first publication
+    // invalidates only if an update result already exists or a scan is running;
+    // no retained snapshot crosses the service facade.
+    function onContentChanged() {
+      if (root.checked || root.checkedAt > 0 || root.running)
+        root.invalidate(root.consumerCount > 0)
+    }
   }
 
   readonly property string command: Quickshell.env("HOME")

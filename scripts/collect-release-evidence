@@ -8,24 +8,59 @@ import hashlib
 import json
 import os
 import re
+import selectors
+import signal
 import stat
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.2-"),
+    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.3-"),
     (
         "omarchySettingsPackage",
         ("pacman", "-Q", "omarchy-settings"),
-        "omarchy-settings 4.0.2-",
+        "omarchy-settings 4.0.3-",
     ),
     ("quickshellPackage", ("pacman", "-Q", "quickshell"), "quickshell 0.3.1-"),
     ("quickshellVersion", ("quickshell", "--version"), "Quickshell 0.3.1"),
+)
+
+GATE_TIMEOUT_SECONDS = 900
+GATE_TERMINATION_GRACE_SECONDS = 10
+GATE_RAW_LOG_MAX_BYTES = 8 * 1024 * 1024
+TOTAL_RAW_LOG_MAX_BYTES = 64 * 1024 * 1024
+GATE_REDACTED_LOG_MAX_BYTES = 8 * 1024 * 1024
+TOTAL_REDACTED_LOG_MAX_BYTES = 64 * 1024 * 1024
+LOG_READ_CHUNK_BYTES = 64 * 1024
+INVENTORY_ENTRY_MAX = 100_000
+INVENTORY_FILE_MAX_BYTES = 64 * 1024 * 1024
+INVENTORY_TOTAL_MAX_BYTES = 512 * 1024 * 1024
+IDENTITY_FIELDS = (
+    "revision",
+    "gitTree",
+    "statusSha256",
+    "workingTreeSha256",
+    "fileCount",
+)
+
+EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
+    (
+        "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
+        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.3.json",
+    ),
+    (
+        "SHIBUMI_AGENTS_OMARCHY_PATH",
+        ROOT / "contracts/baselines/omarchy-agents-v4.0.0.json",
+    ),
+    (
+        "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
+        ROOT / "contracts/baselines/omarchy-forward-compat-ed7bae4a.json",
+    ),
 )
 
 GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -46,6 +81,10 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("tests/omarchy-installed-source-parity-contract-regression.sh",),
     ),
     (
+        "native-catalog-resource",
+        ("python3", "tests/native-catalog-resource-regression.py"),
+    ),
+    (
         "agents-contract",
         ("tests/omarchy-agents-contract-regression.sh",),
     ),
@@ -57,41 +96,740 @@ GATES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def git(*arguments: str, text: bool = True) -> str | bytes:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=text,
-    )
-    return result.stdout
-
-
-def candidate_inventory() -> tuple[str, int]:
-    paths = git(
-        "ls-files", "-co", "--exclude-standard", "-z", text=False
-    ).split(b"\0")
-    digest = hashlib.sha256()
-    count = 0
-    for encoded in sorted(path for path in paths if path):
-        relative = encoded.decode("utf-8", errors="surrogateescape")
-        path = ROOT / relative
-        if not path.is_file() or path.is_symlink():
-            continue
-        metadata = path.stat()
-        digest.update(relative.encode("utf-8", errors="surrogateescape"))
-        digest.update(b"\0")
-        digest.update(str(stat.S_IMODE(metadata.st_mode)).encode("ascii"))
-        digest.update(b"\0")
-        digest.update(hashlib.sha256(path.read_bytes()).digest())
-        digest.update(b"\0")
-        count += 1
-    return digest.hexdigest(), count
-
-
 def command_identity(command: tuple[str, ...]) -> str:
     return " ".join(command)
+
+
+def checkout_git_environment() -> dict[str, str]:
+    return {
+        "LC_ALL": "C",
+        "PATH": os.environ.get("PATH", os.defpath),
+    }
+
+
+def checkout_git(
+    path: Path, *arguments: str, text: bool = True
+) -> str | bytes:
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "--no-replace-objects",
+                "-c",
+                "core.fsmonitor=false",
+                "-C",
+                str(path),
+                *arguments,
+            ],
+            check=False,
+            capture_output=True,
+            text=text,
+            timeout=10,
+            env=checkout_git_environment(),
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        raise ValueError("cannot inspect checkout") from error
+    if result.returncode != 0:
+        raise ValueError("Git inspection failed")
+    return result.stdout.strip() if text else result.stdout
+
+
+def open_new_binary_file(path: Path) -> Any:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as error:
+        raise ValueError(f"output path is unsafe or already exists: {path}") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise ValueError(f"output path is not a private regular file: {path}")
+        return os.fdopen(descriptor, "wb")
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def write_new_file(path: Path, payload: bytes) -> None:
+    with open_new_binary_file(path) as output_file:
+        output_file.write(payload)
+
+
+def create_fresh_log_directory(path: Path) -> None:
+    try:
+        path.mkdir(mode=0o700, parents=False, exist_ok=False)
+        metadata = path.lstat()
+    except OSError as error:
+        raise ValueError(f"log directory is unsafe or already exists: {path}") from error
+    if not stat.S_ISDIR(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o077:
+        raise ValueError(f"log directory is not private: {path}")
+
+
+def validate_log_inventory(log_dir: Path, results: list[dict[str, Any]]) -> None:
+    try:
+        directory_metadata = log_dir.lstat()
+        entries = list(log_dir.iterdir())
+    except OSError as error:
+        raise ValueError("release evidence log inventory is unavailable") from error
+    if not stat.S_ISDIR(directory_metadata.st_mode):
+        raise ValueError("release evidence log path is not a directory")
+
+    expected_names: list[str] = []
+    for result in results:
+        gate_id = result.get("id")
+        if not isinstance(gate_id, str) or not re.fullmatch(r"[a-z0-9-]+", gate_id):
+            raise ValueError("release evidence contains an invalid gate id")
+        expected_names.append(f"{gate_id}.log")
+    if len(expected_names) != len(set(expected_names)):
+        raise ValueError("release evidence contains duplicate gate logs")
+
+    actual_names = [entry.name for entry in entries]
+    if sorted(actual_names) != sorted(expected_names):
+        raise ValueError("release evidence log inventory is incomplete or contains stale files")
+    for entry in entries:
+        try:
+            metadata = entry.lstat()
+        except OSError as error:
+            raise ValueError("release evidence log inventory changed") from error
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise ValueError("release evidence log inventory contains an unsafe file")
+
+
+def file_metadata_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def update_inventory_field(digest: Any, value: bytes) -> None:
+    digest.update(len(value).to_bytes(8, "big"))
+    digest.update(value)
+
+
+def working_tree_inventory(path: Path) -> tuple[str, int]:
+    raw_paths = checkout_git(
+        path, "ls-files", "-co", "--exclude-standard", "-z", text=False
+    )
+    assert isinstance(raw_paths, bytes)
+    encoded_paths = sorted(item for item in raw_paths.split(b"\0") if item)
+    if len(encoded_paths) > INVENTORY_ENTRY_MAX:
+        raise ValueError("working-tree entry limit exceeded")
+    if len(encoded_paths) != len(set(encoded_paths)):
+        raise ValueError("working-tree inventory has duplicate paths")
+
+    digest = hashlib.sha256()
+    total_bytes = 0
+    for encoded in encoded_paths:
+        relative = encoded.decode("utf-8", errors="surrogateescape")
+        relative_path = Path(relative)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError("working-tree inventory has an invalid path")
+        target = path / relative_path
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            fields = (encoded, b"missing", b"0", b"0", b"")
+        else:
+            mode = str(stat.S_IMODE(metadata.st_mode)).encode("ascii")
+            size = str(metadata.st_size).encode("ascii")
+            if stat.S_ISREG(metadata.st_mode):
+                if metadata.st_size > INVENTORY_FILE_MAX_BYTES:
+                    raise ValueError("working-tree file limit exceeded")
+                total_bytes += metadata.st_size
+                if total_bytes > INVENTORY_TOTAL_MAX_BYTES:
+                    raise ValueError("working-tree aggregate limit exceeded")
+                descriptor = os.open(
+                    target,
+                    os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
+                )
+                try:
+                    opened = os.fstat(descriptor)
+                    if file_metadata_identity(opened) != file_metadata_identity(metadata):
+                        raise ValueError("working-tree entry changed during inventory")
+                    content = hashlib.sha256()
+                    bytes_read = 0
+                    while True:
+                        payload = os.read(
+                            descriptor,
+                            min(LOG_READ_CHUNK_BYTES, metadata.st_size - bytes_read + 1),
+                        )
+                        if not payload:
+                            break
+                        bytes_read += len(payload)
+                        if bytes_read > metadata.st_size:
+                            raise ValueError("working-tree entry grew during inventory")
+                        content.update(payload)
+                    if (
+                        bytes_read != metadata.st_size
+                        or file_metadata_identity(os.fstat(descriptor))
+                        != file_metadata_identity(metadata)
+                    ):
+                        raise ValueError("working-tree entry changed during inventory")
+                finally:
+                    os.close(descriptor)
+                fields = (encoded, b"regular", mode, size, content.digest())
+            elif stat.S_ISLNK(metadata.st_mode):
+                link_target = os.readlink(target).encode(
+                    "utf-8", errors="surrogateescape"
+                )
+                if file_metadata_identity(target.lstat()) != file_metadata_identity(
+                    metadata
+                ):
+                    raise ValueError("working-tree entry changed during inventory")
+                fields = (encoded, b"symlink", mode, size, link_target)
+            else:
+                raise ValueError("working-tree inventory has an unsupported entry")
+        for field in fields:
+            update_inventory_field(digest, field)
+    return digest.hexdigest(), len(encoded_paths)
+
+
+def capture_git_checkout_identity(path: Path) -> dict[str, Any]:
+    replacements = checkout_git(path, "replace", "-l")
+    if replacements:
+        raise ValueError("checkout has Git replacement objects")
+    top_level_value = checkout_git(path, "rev-parse", "--show-toplevel")
+    assert isinstance(top_level_value, str)
+    top_level = Path(top_level_value)
+    if top_level.resolve(strict=True) != path.resolve(strict=True):
+        raise ValueError("path is not the checkout root")
+
+    def git_state() -> tuple[str, str, bytes]:
+        revision = checkout_git(path, "rev-parse", "--verify", "HEAD^{commit}")
+        tree = checkout_git(path, "rev-parse", "--verify", "HEAD^{tree}")
+        status = checkout_git(
+            path,
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+            text=False,
+        )
+        assert isinstance(revision, str)
+        assert isinstance(tree, str)
+        assert isinstance(status, bytes)
+        return revision, tree, status
+
+    before = git_state()
+    inventory_digest, file_count = working_tree_inventory(path)
+    after = git_state()
+    if before != after:
+        raise ValueError("checkout changed during identity capture")
+    revision, tree, status = after
+    return {
+        "path": str(path.resolve(strict=True)),
+        "revision": revision,
+        "gitTree": tree,
+        "statusSha256": hashlib.sha256(status).hexdigest(),
+        "workingTreeSha256": inventory_digest,
+        "fileCount": file_count,
+        "status": "clean" if not status else "dirty",
+        "_statusBytes": status,
+    }
+
+
+def comparable_identity(identity: dict[str, Any]) -> tuple[Any, ...]:
+    return tuple(identity[field] for field in IDENTITY_FIELDS)
+
+
+def preflight_git_checkout(
+    environment_name: str, path_value: str, expected_revision: str
+) -> dict[str, str]:
+    if not re.fullmatch(r"[0-9a-f]{40}", expected_revision):
+        raise ValueError(f"{environment_name}: malformed expected revision")
+    if not path_value or "\0" in path_value:
+        raise ValueError(f"{environment_name}: malformed checkout path")
+    path = Path(path_value)
+    if not path.is_absolute():
+        raise ValueError(f"{environment_name}: checkout path must be absolute")
+    if str(path) != path_value or os.path.normpath(path_value) != path_value:
+        raise ValueError(
+            f"{environment_name}: checkout path must be canonical and unlinked"
+        )
+    try:
+        component = Path(path.anchor)
+        for part in path.parts[1:]:
+            component /= part
+            if component.is_symlink():
+                raise ValueError(
+                    f"{environment_name}: checkout path has a symlink component"
+                )
+        canonical_path = path.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError(f"{environment_name}: checkout path is missing") from error
+    if str(canonical_path) != path_value:
+        raise ValueError(
+            f"{environment_name}: checkout path must be canonical and unlinked"
+        )
+    if not canonical_path.is_dir():
+        raise ValueError(f"{environment_name}: checkout path is not a directory")
+
+    try:
+        identity = capture_git_checkout_identity(canonical_path)
+        expected_tree = checkout_git(
+            canonical_path,
+            "rev-parse",
+            "--verify",
+            f"{expected_revision}^{{tree}}",
+        )
+        assert isinstance(expected_tree, str)
+        if identity["revision"] != expected_revision:
+            raise ValueError("revision does not match the pinned baseline")
+        if identity["gitTree"] != expected_tree:
+            raise ValueError("tree does not match the pinned baseline")
+        if identity["status"] != "clean":
+            raise ValueError("checkout is dirty")
+    except ValueError as error:
+        raise ValueError(f"{environment_name}: {error}") from error
+
+    identity["environment"] = environment_name
+    del identity["_statusBytes"]
+    return identity
+
+
+def preflight_external_baselines(environment: dict[str, str]) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for environment_name, manifest_path in EXTERNAL_BASELINES:
+        path_value = environment.get(environment_name, "")
+        if not path_value:
+            failures.append(f"{environment_name}: checkout path is missing")
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            expected_revision = manifest.get("sourceRevision")
+            if not isinstance(expected_revision, str):
+                raise ValueError("manifest source revision is malformed")
+            results.append(
+                preflight_git_checkout(
+                    environment_name, path_value, expected_revision
+                )
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            failures.append(str(error))
+    if failures:
+        raise ValueError("; ".join(failures))
+    return results
+
+
+def prepare_gate_environment(
+    environment: dict[str, str], preflights: list[dict[str, Any]]
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    gate_environment = {
+        name: value
+        for name, value in environment.items()
+        if not name.startswith("GIT_")
+    }
+    gate_environment["GIT_NO_REPLACE_OBJECTS"] = "1"
+    evidence: list[dict[str, Any]] = []
+    for preflight in preflights:
+        gate_environment[preflight["environment"]] = preflight["path"]
+        evidence.append(
+            {key: value for key, value in preflight.items() if key != "path"}
+        )
+    return gate_environment, evidence
+
+
+def validate_release_input_identities(
+    candidate_path: Path,
+    expected_candidate: dict[str, Any],
+    expected_baselines: list[dict[str, Any]],
+) -> None:
+    try:
+        candidate = capture_git_checkout_identity(candidate_path)
+    except (OSError, ValueError) as error:
+        raise ValueError("candidate identity cannot be revalidated") from error
+    if comparable_identity(candidate) != comparable_identity(expected_candidate):
+        raise ValueError("candidate identity drift")
+
+    for expected in expected_baselines:
+        environment_name = expected["environment"]
+        try:
+            current = preflight_git_checkout(
+                environment_name, expected["path"], expected["revision"]
+            )
+        except (OSError, ValueError) as error:
+            raise ValueError(
+                f"{environment_name}: baseline identity drift"
+            ) from error
+        if comparable_identity(current) != comparable_identity(expected):
+            raise ValueError(f"{environment_name}: baseline identity drift")
+
+
+def input_drift_gate_result(
+    gate_id: str,
+    command: tuple[str, ...],
+    log_path: Path,
+    phase: str,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    print(
+        f"evidence gate start: {gate_id} (identity validation)",
+        flush=True,
+    )
+    payload = f"release input identity validation failed {phase} gate\n".encode()
+    write_new_file(log_path, payload)
+    duration_ms = round((time.monotonic() - started) * 1000)
+    print(
+        f"evidence gate result: {gate_id} input-drift (exit=none)",
+        flush=True,
+    )
+    print(f"evidence gate duration: {gate_id} {duration_ms}ms", flush=True)
+    return {
+        "id": gate_id,
+        "command": list(command),
+        "status": "input-drift",
+        "exitCode": None,
+        "timedOut": False,
+        "outputLimitExceeded": False,
+        "timeoutSeconds": GATE_TIMEOUT_SECONDS,
+        "rawLogByteLimit": GATE_RAW_LOG_MAX_BYTES,
+        "rawLogBytes": len(payload),
+        "logByteLimit": GATE_REDACTED_LOG_MAX_BYTES,
+        "logBytes": len(payload),
+        "durationMs": duration_ms,
+        "log": str(log_path),
+        "logSha256": hashlib.sha256(payload).hexdigest(),
+        "inputValidation": {"status": "failed", "phase": phase},
+    }
+
+
+class LogLimitExceeded(Exception):
+    """Raised after retaining exactly the configured redacted-log limit."""
+
+
+class StreamingRedactor:
+    def __init__(
+        self,
+        destination: Any,
+        replacements: list[tuple[bytes, bytes]],
+        byte_limit: int,
+    ) -> None:
+        self.destination = destination
+        self.replacements = sorted(
+            ((value, replacement) for value, replacement in replacements if value),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        )
+        self.maximum_pattern_bytes = max(
+            (len(value) for value, _replacement in self.replacements), default=1
+        )
+        self.byte_limit = byte_limit
+        self.bytes_written = 0
+        self.buffer = bytearray()
+
+    def _write(self, payload: bytes) -> None:
+        remaining = self.byte_limit - self.bytes_written
+        if len(payload) > remaining:
+            if remaining > 0:
+                self.destination.write(payload[:remaining])
+                self.bytes_written += remaining
+            raise LogLimitExceeded
+        self.destination.write(payload)
+        self.bytes_written += len(payload)
+
+    def _drain(self, final: bool) -> None:
+        while self.buffer and (final or len(self.buffer) >= self.maximum_pattern_bytes):
+            safe_starts = (
+                len(self.buffer)
+                if final
+                else len(self.buffer) - self.maximum_pattern_bytes + 1
+            )
+            match: tuple[int, bytes, bytes] | None = None
+            for value, replacement in self.replacements:
+                index = self.buffer.find(
+                    value, 0, safe_starts + len(value) - 1
+                )
+                if index >= safe_starts:
+                    index = -1
+                if index >= 0 and (match is None or index < match[0]):
+                    match = (index, value, replacement)
+            if match is None:
+                payload = bytes(self.buffer[:safe_starts])
+                del self.buffer[:safe_starts]
+                self._write(payload)
+                continue
+            index, value, replacement = match
+            if index > 0:
+                payload = bytes(self.buffer[:index])
+                del self.buffer[:index]
+                self._write(payload)
+                continue
+            del self.buffer[: len(value)]
+            self._write(replacement)
+
+    def feed(self, payload: bytes) -> None:
+        self.buffer.extend(payload)
+        self._drain(final=False)
+
+    def finish(self) -> None:
+        self._drain(final=True)
+
+    def discard_pending(self) -> None:
+        self.buffer.clear()
+
+
+def log_replacements(baseline_paths: list[str]) -> list[tuple[bytes, bytes]]:
+    replacements = [
+        (str(ROOT).encode(), b"<repository>"),
+        (str(Path.home()).encode(), b"<home>"),
+    ]
+    replacements.extend(
+        (path.encode(), f"<baseline:{index + 1}>".encode())
+        for index, path in enumerate(baseline_paths)
+        if path
+    )
+    return replacements
+
+
+class EvidenceLogBudget:
+    def __init__(
+        self,
+        total_raw_bytes: int = TOTAL_RAW_LOG_MAX_BYTES,
+        total_redacted_bytes: int = TOTAL_REDACTED_LOG_MAX_BYTES,
+        per_gate_raw_bytes: int = GATE_RAW_LOG_MAX_BYTES,
+        per_gate_redacted_bytes: int = GATE_REDACTED_LOG_MAX_BYTES,
+    ) -> None:
+        self.raw_remaining = total_raw_bytes
+        self.redacted_remaining = total_redacted_bytes
+        self.per_gate_raw_bytes = per_gate_raw_bytes
+        self.per_gate_redacted_bytes = per_gate_redacted_bytes
+
+    def gate_limits(self) -> tuple[int, int]:
+        return (
+            min(self.per_gate_raw_bytes, self.raw_remaining),
+            min(self.per_gate_redacted_bytes, self.redacted_remaining),
+        )
+
+    def consume(self, result: dict[str, Any]) -> None:
+        self.raw_remaining = max(0, self.raw_remaining - result["rawLogBytes"])
+        self.redacted_remaining = max(
+            0, self.redacted_remaining - result["logBytes"]
+        )
+
+
+def signal_process_group(process: subprocess.Popen[bytes], process_signal: int) -> None:
+    try:
+        os.killpg(process.pid, process_signal)
+    except ProcessLookupError:
+        pass
+
+
+def run_evidence_gate(
+    gate_id: str,
+    command: tuple[str, ...],
+    log_path: Path,
+    baseline_paths: list[str],
+    timeout_seconds: float = GATE_TIMEOUT_SECONDS,
+    raw_byte_limit: int = GATE_RAW_LOG_MAX_BYTES,
+    log_byte_limit: int = GATE_REDACTED_LOG_MAX_BYTES,
+    termination_grace_seconds: float = GATE_TERMINATION_GRACE_SECONDS,
+    environment: dict[str, str] | None = None,
+    postcondition: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    print(
+        f"evidence gate start: {gate_id} (timeout={timeout_seconds:g}s)",
+        flush=True,
+    )
+    gate_started = time.monotonic()
+    exit_code: int | None = None
+    status = "failed"
+    timed_out = False
+    output_limit_exceeded = raw_byte_limit <= 0 or log_byte_limit <= 0
+    raw_log_bytes = 0
+    process: subprocess.Popen[bytes] | None = None
+
+    with open_new_binary_file(log_path) as log_file:
+        redactor = StreamingRedactor(
+            log_file, log_replacements(baseline_paths), log_byte_limit
+        )
+        if not output_limit_exceeded:
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=ROOT,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    env=environment if environment is not None else os.environ.copy(),
+                    start_new_session=True,
+                )
+            except (OSError, ValueError) as error:
+                message = f"could not start gate: {error}\n".encode()
+                if len(message) > raw_byte_limit:
+                    output_limit_exceeded = True
+                raw_log_bytes = min(len(message), raw_byte_limit)
+                try:
+                    redactor.feed(message[:raw_byte_limit])
+                    redactor.finish()
+                except LogLimitExceeded:
+                    output_limit_exceeded = True
+                status = "start-error" if not output_limit_exceeded else "output-limit"
+
+        if process is not None:
+            assert process.stdout is not None
+            selector = selectors.DefaultSelector()
+            selector.register(process.stdout, selectors.EVENT_READ)
+            stream_open = True
+            stream_complete = False
+            termination_started: float | None = None
+            kill_sent_at: float | None = None
+            deadline = gate_started + timeout_seconds
+            try:
+                while stream_open or process.poll() is None:
+                    now = time.monotonic()
+                    if termination_started is None and now >= deadline:
+                        timed_out = True
+                        termination_started = now
+                        signal_process_group(process, signal.SIGTERM)
+                    if (
+                        termination_started is not None
+                        and kill_sent_at is None
+                        and now - termination_started >= termination_grace_seconds
+                    ):
+                        signal_process_group(process, signal.SIGKILL)
+                        kill_sent_at = now
+                    if kill_sent_at is not None and now - kill_sent_at >= 1:
+                        if stream_open:
+                            selector.unregister(process.stdout)
+                            process.stdout.close()
+                            stream_open = False
+                        break
+
+                    if stream_open:
+                        events = selector.select(timeout=0.05)
+                    else:
+                        time.sleep(0.05)
+                        events = []
+                    for key, _mask in events:
+                        remaining = raw_byte_limit - raw_log_bytes
+                        payload = os.read(
+                            key.fileobj.fileno(),
+                            min(LOG_READ_CHUNK_BYTES, max(1, remaining + 1)),
+                        )
+                        if not payload:
+                            selector.unregister(key.fileobj)
+                            key.fileobj.close()
+                            stream_open = False
+                            stream_complete = True
+                            continue
+                        if len(payload) > remaining:
+                            payload = payload[:remaining]
+                            output_limit_exceeded = True
+                        raw_log_bytes += len(payload)
+                        try:
+                            redactor.feed(payload)
+                        except LogLimitExceeded:
+                            output_limit_exceeded = True
+                        if output_limit_exceeded and termination_started is None:
+                            termination_started = time.monotonic()
+                            signal_process_group(process, signal.SIGTERM)
+                            if stream_open:
+                                selector.unregister(key.fileobj)
+                                key.fileobj.close()
+                                stream_open = False
+                if process.poll() is None:
+                    signal_process_group(process, signal.SIGKILL)
+                exit_code = process.wait()
+                if stream_complete:
+                    try:
+                        redactor.finish()
+                    except LogLimitExceeded:
+                        output_limit_exceeded = True
+                else:
+                    redactor.discard_pending()
+            finally:
+                selector.close()
+                if process.stdout is not None and not process.stdout.closed:
+                    process.stdout.close()
+
+            if output_limit_exceeded:
+                status = "output-limit"
+            elif timed_out:
+                status = "timed-out"
+            elif exit_code == 0:
+                status = "passed"
+            else:
+                status = "failed"
+        elif output_limit_exceeded and status == "failed":
+            status = "output-limit"
+
+    postcondition_failed = False
+    if postcondition is not None:
+        try:
+            postcondition()
+        except (OSError, ValueError):
+            postcondition_failed = True
+            status = "input-drift"
+
+    duration_ms = round((time.monotonic() - gate_started) * 1000)
+    payload_digest = hashlib.sha256(log_path.read_bytes()).hexdigest()
+    log_bytes = log_path.stat().st_size
+    exit_display = "none" if exit_code is None else str(exit_code)
+    print(
+        f"evidence gate result: {gate_id} {status} (exit={exit_display})",
+        flush=True,
+    )
+    print(f"evidence gate duration: {gate_id} {duration_ms}ms", flush=True)
+    return {
+        "id": gate_id,
+        "command": list(command),
+        "status": status,
+        "exitCode": exit_code,
+        "timedOut": timed_out,
+        "outputLimitExceeded": output_limit_exceeded,
+        "timeoutSeconds": timeout_seconds,
+        "rawLogByteLimit": raw_byte_limit,
+        "rawLogBytes": raw_log_bytes,
+        "logByteLimit": log_byte_limit,
+        "logBytes": log_bytes,
+        "durationMs": duration_ms,
+        "log": str(log_path),
+        "logSha256": payload_digest,
+        "inputValidation": (
+            {"status": "failed", "phase": "after"}
+            if postcondition_failed
+            else {"status": "passed", "phase": "after"}
+        ),
+    }
+
+
+def run_guarded_evidence_gate(
+    gate_id: str,
+    command: tuple[str, ...],
+    log_path: Path,
+    baseline_paths: list[str],
+    candidate_path: Path,
+    expected_candidate: dict[str, Any],
+    expected_baselines: list[dict[str, Any]],
+    **gate_arguments: Any,
+) -> dict[str, Any]:
+    try:
+        validate_release_input_identities(
+            candidate_path, expected_candidate, expected_baselines
+        )
+    except ValueError:
+        return input_drift_gate_result(gate_id, command, log_path, "before")
+
+    result = run_evidence_gate(
+        gate_id,
+        command,
+        log_path,
+        baseline_paths,
+        postcondition=lambda: validate_release_input_identities(
+            candidate_path, expected_candidate, expected_baselines
+        ),
+        **gate_arguments,
+    )
+    if result["inputValidation"]["status"] == "passed":
+        result["inputValidation"]["phase"] = "before-and-after"
+    return result
 
 
 def probe_host_identity(
@@ -153,24 +891,6 @@ def release_host_probes_pass(probes: list[dict[str, Any]]) -> bool:
     )
 
 
-def redact_log(payload: bytes, baseline_paths: list[str]) -> bytes:
-    replacements = [
-        (str(ROOT), "<repository>"),
-        (str(Path.home()), "<home>"),
-    ]
-    replacements.extend(
-        (path, f"<baseline:{index + 1}>")
-        for index, path in enumerate(baseline_paths)
-        if path
-    )
-    result = payload
-    for value, replacement in sorted(
-        replacements, key=lambda item: len(item[0]), reverse=True
-    ):
-        result = result.replace(value.encode(), replacement.encode())
-    return result
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
@@ -193,27 +913,29 @@ def main() -> int:
             print(f"{gate_id}\t{command_identity(command)}")
         return 0
 
-    commit = str(git("rev-parse", "HEAD^{commit}")).strip()
-    if args.expected_commit is not None:
-        if not re.fullmatch(r"[0-9a-f]{40}", args.expected_commit):
-            print("--expected-commit must be a full lowercase commit id", file=sys.stderr)
-            return 2
-        if commit != args.expected_commit:
-            print(
-                f"release evidence HEAD mismatch: expected {args.expected_commit}, got {commit}",
-                file=sys.stderr,
-            )
-            return 2
-    status = str(git("status", "--porcelain=v1", "--untracked-files=all"))
-    if status.strip() and not args.allow_dirty:
+    if args.expected_commit is not None and not re.fullmatch(
+        r"[0-9a-f]{40}", args.expected_commit
+    ):
+        print("--expected-commit must be a full lowercase commit id", file=sys.stderr)
+        return 2
+    try:
+        candidate_preflight = capture_git_checkout_identity(ROOT)
+    except (OSError, ValueError):
+        print("release candidate identity preflight failed", file=sys.stderr)
+        return 2
+    commit = candidate_preflight["revision"]
+    if args.expected_commit is not None and commit != args.expected_commit:
+        print(
+            f"release evidence HEAD mismatch: expected {args.expected_commit}, got {commit}",
+            file=sys.stderr,
+        )
+        return 2
+    status_bytes = candidate_preflight["_statusBytes"]
+    if status_bytes and not args.allow_dirty:
         print("release evidence requires a clean candidate", file=sys.stderr)
         return 2
 
-    required_environment = (
-        "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
-        "SHIBUMI_AGENTS_OMARCHY_PATH",
-        "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
-    )
+    required_environment = tuple(name for name, _manifest in EXTERNAL_BASELINES)
     missing_environment = [
         name for name in required_environment if not os.environ.get(name)
     ]
@@ -225,13 +947,30 @@ def main() -> int:
         )
         return 2
 
+    try:
+        baseline_preflights = preflight_external_baselines(dict(os.environ))
+    except ValueError as error:
+        print(f"release baseline preflight failed: {error}", file=sys.stderr)
+        return 2
+    print(
+        f"release baseline preflight: passed ({len(baseline_preflights)} clean exact checkouts)",
+        flush=True,
+    )
+    gate_environment, baseline_preflight_evidence = prepare_gate_environment(
+        dict(os.environ), baseline_preflights
+    )
+
     output = args.output if args.output.is_absolute() else ROOT / args.output
     log_dir = output.with_suffix("").with_name(output.stem + ".logs")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    log_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if output.exists() or output.is_symlink():
+            raise ValueError(f"output path is unsafe or already exists: {output}")
+        create_fresh_log_directory(log_dir)
+    except (OSError, ValueError) as error:
+        print(f"release evidence output preparation failed: {error}", file=sys.stderr)
+        return 2
 
-    git_tree = str(git("rev-parse", "HEAD^{tree}")).strip()
-    candidate_digest, candidate_file_count = candidate_inventory()
     started = int(time.time())
     results: list[dict[str, Any]] = []
     host_probes = [probe_omarchy_package()]
@@ -241,34 +980,39 @@ def main() -> int:
         if name != "omarchyPackage"
     )
     all_passed = release_host_probes_pass(host_probes)
-    baseline_paths = [os.environ[name] for name in required_environment]
+    baseline_paths = [gate_environment[name] for name in required_environment]
+    log_budget = EvidenceLogBudget()
 
     for gate_id, command in GATES:
-        gate_started = time.time()
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=os.environ.copy(),
-            timeout=900,
-        )
-        payload = redact_log(result.stdout, baseline_paths)
         log_path = log_dir / f"{gate_id}.log"
-        log_path.write_bytes(payload)
-        results.append(
-            {
-                "id": gate_id,
-                "command": list(command),
-                "exitCode": result.returncode,
-                "durationMs": round((time.time() - gate_started) * 1000),
-                "log": str(log_path.relative_to(output.parent)),
-                "logSha256": hashlib.sha256(payload).hexdigest(),
-            }
-        )
-        if result.returncode != 0:
+        raw_byte_limit, log_byte_limit = log_budget.gate_limits()
+        try:
+            result = run_guarded_evidence_gate(
+                gate_id,
+                command,
+                log_path,
+                baseline_paths,
+                ROOT,
+                candidate_preflight,
+                baseline_preflights,
+                raw_byte_limit=raw_byte_limit,
+                log_byte_limit=log_byte_limit,
+                environment=gate_environment,
+            )
+        except ValueError as error:
+            print(f"release evidence log creation failed: {error}", file=sys.stderr)
+            return 2
+        log_budget.consume(result)
+        result["log"] = str(log_path.relative_to(output.parent))
+        results.append(result)
+        if result["status"] != "passed":
             all_passed = False
+
+    try:
+        validate_log_inventory(log_dir, results)
+    except ValueError as error:
+        print(f"release evidence log validation failed: {error}", file=sys.stderr)
+        return 2
 
     manifests = []
     for path in sorted((ROOT / "contracts/baselines").glob("omarchy-*.json")):
@@ -283,35 +1027,63 @@ def main() -> int:
             }
         )
 
+    try:
+        validate_release_input_identities(
+            ROOT, candidate_preflight, baseline_preflights
+        )
+    except ValueError:
+        final_identity_validation = {"status": "failed"}
+        all_passed = False
+        print("release final input identity revalidation: failed", flush=True)
+    else:
+        final_identity_validation = {"status": "passed"}
+        print("release final input identity revalidation: passed", flush=True)
+
     evidence = {
         "schemaVersion": 1,
         "candidate": {
             "version": (ROOT / "VERSION").read_text(encoding="utf-8").strip(),
             "baseCommit": commit,
-            "baseGitTree": git_tree,
-            "kind": "working-tree" if status.strip() else "clean-commit",
-            "workingTreeSha256": candidate_digest,
-            "fileCount": candidate_file_count,
-            "status": status.splitlines(),
+            "baseGitTree": candidate_preflight["gitTree"],
+            "kind": "working-tree" if status_bytes else "clean-commit",
+            "workingTreeSha256": candidate_preflight["workingTreeSha256"],
+            "fileCount": candidate_preflight["fileCount"],
+            "status": [
+                item.decode("utf-8", errors="surrogateescape")
+                for item in status_bytes.split(b"\0")
+                if item
+            ],
         },
         "environment": {
             "hostProbes": host_probes,
         },
         "baselines": manifests,
+        "baselinePreflights": baseline_preflight_evidence,
+        "finalInputValidation": final_identity_validation,
         "startedEpoch": started,
         "completedEpoch": int(time.time()),
         "passed": all_passed,
         "commands": results,
+        "logLimits": {
+            "perGateRawBytes": GATE_RAW_LOG_MAX_BYTES,
+            "totalRawBytes": TOTAL_RAW_LOG_MAX_BYTES,
+            "perGateRedactedBytes": GATE_REDACTED_LOG_MAX_BYTES,
+            "totalRedactedBytes": TOTAL_REDACTED_LOG_MAX_BYTES,
+        },
         "deferredPhysicalGates": [
             "physical mixed-scale multi-monitor",
             "enterprise Wi-Fi",
             "remaining device-backed Bluetooth workflows",
         ],
     }
-    output.write_text(
-        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    try:
+        write_new_file(
+            output,
+            (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        )
+    except ValueError as error:
+        print(f"release evidence output creation failed: {error}", file=sys.stderr)
+        return 2
     print(f"release evidence: {output}")
     return 0 if all_passed else 1
 

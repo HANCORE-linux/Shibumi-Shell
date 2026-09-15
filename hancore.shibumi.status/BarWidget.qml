@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -26,7 +27,7 @@ Item {
   property real trayAppMenuAnchorX: 0
   property bool notificationPanelOpen: false
 
-  HostTokens { id: hostTokens; bar: root.bar }
+  Presentation.HostTokens { id: hostTokens; bar: root.bar }
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property string displayMode: {
@@ -131,6 +132,10 @@ Item {
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
   function registeredComponent(id) {
+    if (bar
+        && typeof bar.registeredEmbeddedWidgetComponent === "function")
+      return bar.registeredEmbeddedWidgetComponent(
+        "hancore.shibumi.status", id)
     if (bar && typeof bar.registeredWidgetComponent === "function")
       return bar.registeredWidgetComponent(id)
     const registry = bar ? bar.barWidgetRegistry : null
@@ -553,7 +558,7 @@ Item {
     }
   }
 
-  PillSurface {
+  Presentation.PillSurface {
     tokenSource: root.tokens
     settings: root.settings
     v1AppearanceEnabled: true

@@ -5,6 +5,7 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell.Widgets
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -93,7 +94,7 @@ Item {
       opacity: root.washOpacity
     }
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       visible: !root.controller.isThumbnailReady(root.entry)
       text: root.controller.videoMode ? "movie" : "image"

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Column {
   id: root
@@ -312,7 +313,8 @@ Column {
     }
     if (pluginId !== ""
         && typeof controller.setPluginEnabled === "function"
-        && controller.setPluginEnabled(pluginId, enabled === true)) {
+        && controller.setPluginEnabled(
+          pluginId, enabled === true, true)) {
       toggleErrorGroup = ""
       toggleErrorMessage = ""
       return true
@@ -788,7 +790,7 @@ Column {
               height: parent.height
               spacing: Commons.Style.space(6)
 
-              IconText {
+              Presentation.ControlCenterIconText {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.selectedWidget.glyph
                 color: root.accent
@@ -854,7 +856,7 @@ Column {
                       ? Commons.Style.space(5) : 0)
                     + (previewLabel.visible ? previewLabel.implicitWidth : 0)
 
-                  IconText {
+                  Presentation.ControlCenterIconText {
                     id: previewGlyph
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
@@ -1345,7 +1347,7 @@ Column {
       anchors.rightMargin: Commons.Style.space(27)
       spacing: Commons.Style.space(6)
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(19)
         text: widgetRow.option.glyph
@@ -1463,7 +1465,7 @@ Column {
         : Commons.Util.alpha(root.foreground, 0.06)
     }
 
-    IconText {
+    Presentation.ControlCenterIconText {
       anchors.centerIn: parent
       text: moveActionControl.locked ? "lock"
         : moveActionControl.active ? "arrow_forward" : "arrow_back"
@@ -1512,7 +1514,7 @@ Column {
           ? Commons.Style.space(5) : 0)
         + (contentCycleText.visible ? contentCycleText.implicitWidth : 0)
 
-      IconText {
+      Presentation.ControlCenterIconText {
         id: contentCycleGlyph
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter

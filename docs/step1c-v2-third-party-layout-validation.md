@@ -42,7 +42,7 @@ Validated against the pinned installed-source Omarchy baseline
 - `QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/shibumi-config-regression.qml` — passed
 - `tests/layout-model-regression.qml` and `tests/layout-controller-regression.qml` — passed
 - full pinned `./tests/contract-regression.sh` — passed, including 24 plugins
-- `./scripts/sync-bar-host.sh --check` and `./scripts/sync-shared.sh --check` — passed
+- the then-current bar-host and shared vendoring checks — passed at the recorded revision
 - `git diff --check` — passed
 
 No physical multi-monitor, hardware, top/bottom live, or visual-freeze

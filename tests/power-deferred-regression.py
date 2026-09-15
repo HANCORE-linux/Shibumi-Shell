@@ -17,15 +17,6 @@ RUNTIME_ERROR = re.compile(r'TypeError|ReferenceError|Binding loop|Unable to ass
 
 
 def main():
-    # Both standalone and aggregate runs must test the canonical implementation,
-    # not silently accept stale vendored copies after a canonical-only edit.
-    for target in ('services/PowerService.qml', 'hancore.shibumi.power-state/Service.qml',
-                   'services/PowerCommand.qml', 'hancore.shibumi.power-state/PowerCommand.qml'):
-        checked = run_bounded(['/usr/bin/python3', '-I', '-S',
-            str(REPO / 'scripts/sync-power-source.py'), '--check', str(REPO), target],
-            timeout=3, maximum=4096)
-        if checked.returncode != 0:
-            raise RuntimeError('Power source parity failed: ' + target)
     power = snapshot(REPO / 'hancore.shibumi.power-state')
     runtime = snapshot(REPO / 'hancore.shibumi.state/runtime')
     shell = read_regular(REPO / 'tests/power-deferred-smoke.qml', 65536)

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -18,12 +20,14 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from shibumi_suite.admission import (  # noqa: E402
     AdmissionError,
     JOURNAL_SCHEMA_VERSION,
+    MAX_PREDECESSOR_STATES,
     classify_install_state,
     inventory_transactions,
     preflight_lifecycle_state,
     supported_install_identities,
 )
-from shibumi_suite.model import Suite  # noqa: E402
+from shibumi_suite.cli import command_status_with_admission  # noqa: E402
+from shibumi_suite.model import Suite, suite_payload_digest  # noqa: E402
 from shibumi_suite.runtime import OmarchyRuntime, RuntimePaths  # noqa: E402
 from shibumi_suite.transaction import (  # noqa: E402
     PluginTransaction,
@@ -48,13 +52,22 @@ class LifecycleAdmissionTests(unittest.TestCase):
             lock_file=self.root / "runtime/shibumi-suite.lock",
         )
         self.paths.state_dir.mkdir(parents=True)
+        # The repository may intentionally contain unrelated payload work while
+        # these isolated lifecycle fixtures run. Give fixture-generated current
+        # payloads a clean synthetic source identity; production dirty revisions
+        # are covered by an explicit rejection below.
+        self.suite.revision = Mock(return_value="f" * 40)  # type: ignore[method-assign]
         self.identities = supported_install_identities(self.suite)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def state_for(self, identity: dict[str, object]) -> dict[str, object]:
-        revision = str(identity["sourceRevisions"][0])
+    def state_for(
+        self,
+        identity: dict[str, object],
+        revision: str | None = None,
+    ) -> dict[str, object]:
+        revision = revision or str(identity["sourceRevisions"][0])
         package = revision.startswith("package:")
         state: dict[str, object] = {
             "schemaVersion": 1,
@@ -91,7 +104,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 "createdFile": True,
             },
         }
-        if identity["id"] == "current-release" and self.suite.settings_storage_version == 1:
+        if identity["settingsStorageVersion"] == 1:
             state["settingsStorageVersion"] = 1
         if package:
             state["packageName"] = "shibumi-shell"
@@ -103,12 +116,12 @@ class LifecycleAdmissionTests(unittest.TestCase):
     def test_storage_metadata_must_match_payload_identity(self) -> None:
         for identity in self.identities:
             state = self.state_for(identity)
-            if identity["id"] == "current-release":
-                state.pop("settingsStorageVersion", None)
+            if identity["settingsStorageVersion"] == 1:
+                state.pop("settingsStorageVersion")
             else:
                 state["settingsStorageVersion"] = 1
             with self.subTest(identity=identity["id"]), self.assertRaisesRegex(
-                    AdmissionError, "settings storage version does not match"):
+                    AdmissionError, "revision/digest identity"):
                 classify_install_state(state, self.suite, self.identities)
 
     def write_state(self, state: dict[str, object]) -> None:
@@ -173,17 +186,24 @@ class LifecycleAdmissionTests(unittest.TestCase):
         )
         return directory
 
-    def test_exact_public_beta_and_step5_states_are_admitted(self) -> None:
-        for identity_id in ("public-beta.11", "step-5-tip"):
-            with self.subTest(identity=identity_id):
-                identity = next(
-                    item for item in self.identities if item["id"] == identity_id
-                )
-                state = self.state_for(identity)
-                self.assertEqual(
-                    classify_install_state(state, self.suite, self.identities),
-                    identity_id,
-                )
+    def test_exact_public_release_and_step5_states_are_admitted(self) -> None:
+        for identity_id in (
+            "public-beta.11",
+            "step-5-tip",
+            "public-beta.12",
+            "public-beta.13",
+            "public-beta.14",
+        ):
+            identity = next(
+                item for item in self.identities if item["id"] == identity_id
+            )
+            for revision in identity["sourceRevisions"]:
+                with self.subTest(identity=identity_id, revision=revision):
+                    state = self.state_for(identity, str(revision))
+                    self.assertEqual(
+                        classify_install_state(state, self.suite, self.identities),
+                        identity_id,
+                    )
         migrated = self.state_for(
             next(item for item in self.identities if item["id"] == "step-5-tip")
         )
@@ -198,6 +218,59 @@ class LifecycleAdmissionTests(unittest.TestCase):
             classify_install_state(migrated, self.suite, self.identities),
             "step-5-tip",
         )
+
+    def test_predecessor_contract_parser_is_exact_and_bounded(self) -> None:
+        contract = json.loads(
+            (REPO_ROOT / "contracts/lifecycle-predecessors-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        contract_root = self.root / "contract-fixture"
+        contract_dir = contract_root / "contracts"
+        contract_dir.mkdir(parents=True)
+        fixture_suite = copy.copy(self.suite)
+        fixture_suite.root = contract_root
+        fixture_suite.revision = Mock(return_value="f" * 40)  # type: ignore[method-assign]
+
+        cases: dict[str, dict[str, object]] = {}
+        unknown_field = copy.deepcopy(contract)
+        unknown_field["states"][0]["futureIdentity"] = True
+        cases["unknown-field"] = unknown_field
+        duplicate_id = copy.deepcopy(contract)
+        duplicate_id["states"][1]["id"] = duplicate_id["states"][0]["id"]
+        cases["duplicate-id"] = duplicate_id
+        duplicate_revision = copy.deepcopy(contract)
+        duplicate_revision["states"][1]["sourceRevisions"] = [
+            duplicate_revision["states"][0]["sourceRevisions"][0]
+        ]
+        cases["duplicate-revision"] = duplicate_revision
+        non_string_revision = copy.deepcopy(contract)
+        non_string_revision["states"][0]["sourceRevisions"] = [{}]
+        cases["non-string-revision"] = non_string_revision
+        no_states = copy.deepcopy(contract)
+        no_states["states"] = []
+        cases["empty"] = no_states
+        too_many = copy.deepcopy(contract)
+        too_many["states"] = [
+            copy.deepcopy(contract["states"][0])
+            for _ in range(MAX_PREDECESSOR_STATES + 1)
+        ]
+        cases["too-many"] = too_many
+
+        contract_path = contract_dir / "lifecycle-predecessors-v1.json"
+        for name, value in cases.items():
+            with self.subTest(name=name):
+                contract_path.write_text(
+                    json.dumps(value) + "\n", encoding="utf-8"
+                )
+                with self.assertRaisesRegex(
+                    AdmissionError, "invalid lifecycle predecessor"
+                ):
+                    supported_install_identities(fixture_suite)
+
+        contract_path.write_bytes(b" " * (1024 * 1024 + 1))
+        with self.assertRaisesRegex(AdmissionError, "exceeds the"):
+            supported_install_identities(fixture_suite)
 
     def test_unknown_install_or_activation_fields_fail_closed(self) -> None:
         identity = next(
@@ -233,6 +306,319 @@ class LifecycleAdmissionTests(unittest.TestCase):
                     preflight_lifecycle_state(self.paths, self.suite)
                 (self.paths.state_dir / "install.json").unlink()
 
+    def test_status_emits_exact_redaction_safe_unsupported_identity(self) -> None:
+        identity = next(
+            item for item in self.identities if item["id"] == "current-release"
+        )
+        state = self.state_for(identity)
+        state["suiteVersion"] = "0.1.1-beta.12"
+        state["sourceRevision"] = "a" * 40
+        state["payloadRoot"] = "/home/reporter/private/shibumi"
+        state["sourceRoot"] = "/home/reporter/private/shibumi"
+        state["previousBar"] = {
+            "command": "DO-NOT-PRINT",
+            "config": "PRIVATE-CONTENT",
+            "username": "reporter",
+        }
+        self.write_state(state)
+        before = (self.paths.state_dir / "install.json").read_bytes()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = command_status_with_admission(self.suite, self.paths)
+
+        diagnostic = {
+            "suiteVersion": state["suiteVersion"],
+            "sourceRevision": state["sourceRevision"],
+            "suitePayloadDigest": state["payloadDigest"],
+            "pluginIds": state["plugins"],
+            "pluginDigests": state["pluginDigests"],
+            "settingsStorageVersion": state["settingsStorageVersion"],
+            "profile": state["profile"],
+            "activeBar": state["activeBar"],
+        }
+        labels = ", ".join(str(item["id"]) for item in self.identities)
+        expected = (
+            "shibumi-suite: installed identity is unsupported\n"
+            f"shibumi-suite: supported identity labels: {labels}\n"
+            "shibumi-suite: diagnostic is read-only and is not authorization; "
+            "no recovery or mutation was attempted\n"
+            "shibumi-suite: identity diagnostic:\n"
+            + json.dumps(diagnostic, indent=2, sort_keys=True)
+            + "\n"
+        )
+        self.assertEqual(result, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), expected)
+        self.assertNotIn("/home/", stderr.getvalue())
+        self.assertNotIn("DO-NOT-PRINT", stderr.getvalue())
+        self.assertNotIn("PRIVATE-CONTENT", stderr.getvalue())
+        self.assertNotIn("reporter", stderr.getvalue())
+        self.assertEqual((self.paths.state_dir / "install.json").read_bytes(), before)
+        self.assertFalse((self.paths.state_dir / "transactions").exists())
+        self.assertFalse(self.paths.plugin_dir.exists())
+
+    def test_status_rejects_unsafe_state_without_diagnostic_or_leak(self) -> None:
+        state_path = self.paths.state_dir / "install.json"
+        external = self.root / "PRIVATE-EXTERNAL.json"
+        external.write_bytes(b'{"secret":"DO-NOT-PRINT"}\n')
+        oversized = b'{"secret":"DO-NOT-PRINT","padding":"' + (
+            b"x" * (1024 * 1024)
+        ) + b'"}\n'
+        cases = {
+            "malformed": b'{"secret":"DO-NOT-PRINT"',
+            "duplicate": (
+                b'{"schemaVersion":1,"schemaVersion":1,'
+                b'"secret":"DO-NOT-PRINT"}\n'
+            ),
+            "oversized": oversized,
+        }
+        expected = (
+            "shibumi-suite: status admission refused; malformed, unsafe, "
+            "ambiguous, or unsupported state was not inspected further; "
+            "no recovery or mutation was attempted\n"
+        )
+        for name, payload in cases.items():
+            with self.subTest(name=name):
+                state_path.write_bytes(payload)
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    result = command_status_with_admission(self.suite, self.paths)
+                self.assertEqual(result, 1)
+                self.assertEqual(stdout.getvalue(), "")
+                self.assertEqual(stderr.getvalue(), expected)
+                self.assertNotIn("identity diagnostic", stderr.getvalue())
+                self.assertNotIn("DO-NOT-PRINT", stderr.getvalue())
+                self.assertNotIn(str(self.root), stderr.getvalue())
+                self.assertEqual(state_path.read_bytes(), payload)
+                state_path.unlink()
+
+        state_path.symlink_to(external)
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = command_status_with_admission(self.suite, self.paths)
+        self.assertEqual(result, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), expected)
+        self.assertTrue(state_path.is_symlink())
+        self.assertEqual(external.read_bytes(), b'{"secret":"DO-NOT-PRINT"}\n')
+
+    def test_status_keeps_all_one_byte_identity_deviations_nonzero(self) -> None:
+        identity = next(
+            item for item in self.identities if item["id"] == "public-beta.13"
+        )
+        base = self.state_for(identity)
+        revision = str(base["sourceRevision"])
+        first_plugin = str(base["plugins"][0])
+        cases: dict[str, dict[str, object]] = {}
+
+        suite_version = copy.deepcopy(base)
+        suite_version["suiteVersion"] = (
+            str(suite_version["suiteVersion"])[:-1]
+            + ("2" if str(suite_version["suiteVersion"])[-1] != "2" else "3")
+        )
+        cases["suite-version"] = suite_version
+
+        source_revision = copy.deepcopy(base)
+        source_revision["sourceRevision"] = (
+            ("0" if revision[0] != "0" else "1") + revision[1:]
+        )
+        cases["source-revision"] = source_revision
+
+        payload_digest = copy.deepcopy(base)
+        digest = str(payload_digest["payloadDigest"])
+        payload_digest["payloadDigest"] = (
+            ("0" if digest[0] != "0" else "1") + digest[1:]
+        )
+        cases["suite-payload-digest"] = payload_digest
+
+        plugin_digest = copy.deepcopy(base)
+        digest = str(plugin_digest["pluginDigests"][first_plugin])
+        plugin_digest["pluginDigests"][first_plugin] = (
+            ("0" if digest[0] != "0" else "1") + digest[1:]
+        )
+        plugin_digest["payloadDigest"] = suite_payload_digest(
+            plugin_digest["pluginDigests"]
+        )
+        cases["plugin-digest"] = plugin_digest
+
+        plugin_order = copy.deepcopy(base)
+        plugin_order["plugins"][0], plugin_order["plugins"][1] = (
+            plugin_order["plugins"][1],
+            plugin_order["plugins"][0],
+        )
+        cases["plugin-order"] = plugin_order
+
+        plugin_id = copy.deepcopy(base)
+        changed_plugin = first_plugin[:-1] + (
+            "x" if first_plugin[-1] != "x" else "y"
+        )
+        plugin_id["plugins"][0] = changed_plugin
+        plugin_id["pluginDigests"][changed_plugin] = plugin_id[
+            "pluginDigests"
+        ].pop(first_plugin)
+        plugin_id["payloadDigest"] = suite_payload_digest(plugin_id["pluginDigests"])
+        cases["plugin-id"] = plugin_id
+
+        storage_version = copy.deepcopy(base)
+        storage_version["settingsStorageVersion"] = 0
+        cases["settings-storage-version"] = storage_version
+
+        private = self.paths.state_dir / (
+            "transactions/.shibumi-preparing.1700000000-1-53535353"
+        )
+        private.mkdir(parents=True)
+        journal_sentinel = private / "sentinel"
+        journal_sentinel.write_bytes(b"journal-preserved\n")
+        self.paths.plugin_dir.mkdir(parents=True)
+        plugin_sentinel = self.paths.plugin_dir / "foreign.plugin"
+        plugin_sentinel.write_bytes(b"plugin-preserved\n")
+
+        for name, state in cases.items():
+            with self.subTest(name=name):
+                self.write_state(state)
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    result = command_status_with_admission(self.suite, self.paths)
+                self.assertEqual(result, 1)
+                self.assertEqual(stdout.getvalue(), "")
+                self.assertIn("no recovery or mutation was attempted", stderr.getvalue())
+                self.assertEqual(
+                    (self.paths.state_dir / "install.json").read_text(encoding="utf-8"),
+                    json.dumps(state, sort_keys=True) + "\n",
+                )
+                self.assertEqual(journal_sentinel.read_bytes(), b"journal-preserved\n")
+                self.assertEqual(plugin_sentinel.read_bytes(), b"plugin-preserved\n")
+                (self.paths.state_dir / "install.json").unlink()
+
+    def test_public_identity_origin_aliases_and_mixed_states_fail_closed(self) -> None:
+        beta12 = next(
+            item for item in self.identities if item["id"] == "public-beta.12"
+        )
+        beta13 = next(
+            item for item in self.identities if item["id"] == "public-beta.13"
+        )
+        cases: dict[str, dict[str, object]] = {}
+
+        beta12_package = self.state_for(beta12)
+        beta12_package.update({
+            "installOrigin": "package",
+            "payloadRoot": "/usr/share/shibumi-shell",
+            "sourceRevision": "package:0.1.1-beta.12",
+            "packageName": "shibumi-shell",
+            "packageVersion": "0.1.1-beta.12",
+        })
+        beta12_package.pop("sourceRoot")
+        cases["beta12-package-alias"] = beta12_package
+
+        package_as_source = self.state_for(beta13, "package:0.1.1-beta.13")
+        package_as_source["installOrigin"] = "checkout"
+        package_as_source["payloadRoot"] = str(REPO_ROOT)
+        package_as_source["sourceRoot"] = str(REPO_ROOT)
+        package_as_source.pop("packageName")
+        package_as_source.pop("packageVersion")
+        cases["package-revision-as-source"] = package_as_source
+
+        source_as_package = self.state_for(
+            beta13, "2760cdb8272255790d5e4613fed8a48cb63c3555"
+        )
+        source_as_package["installOrigin"] = "package"
+        source_as_package["payloadRoot"] = "/usr/share/shibumi-shell"
+        source_as_package["packageName"] = "shibumi-shell"
+        source_as_package["packageVersion"] = "0.1.1-beta.13"
+        source_as_package.pop("sourceRoot")
+        cases["source-revision-as-package"] = source_as_package
+
+        mixed = self.state_for(beta13)
+        mixed["sourceRevision"] = beta12["sourceRevisions"][0]
+        cases["beta12-revision-beta13-payload"] = mixed
+
+        dirty = self.state_for(beta13)
+        dirty["sourceRevision"] = str(dirty["sourceRevision"]) + "-dirty"
+        cases["dirty-source"] = dirty
+
+        private = self.paths.state_dir / (
+            "transactions/.shibumi-cleanup.1700000000-1-54545454"
+        )
+        private.mkdir(parents=True)
+        journal_sentinel = private / "sentinel"
+        journal_sentinel.write_bytes(b"journal-preserved\n")
+        self.paths.plugin_dir.mkdir(parents=True)
+        plugin_sentinel = self.paths.plugin_dir / "foreign.plugin"
+        plugin_sentinel.write_bytes(b"plugin-preserved\n")
+
+        for name, state in cases.items():
+            with self.subTest(name=name):
+                self.write_state(state)
+                state_before = (self.paths.state_dir / "install.json").read_bytes()
+                with self.assertRaises(AdmissionError):
+                    preflight_lifecycle_state(self.paths, self.suite)
+                self.assertEqual(
+                    (self.paths.state_dir / "install.json").read_bytes(), state_before
+                )
+                self.assertEqual(journal_sentinel.read_bytes(), b"journal-preserved\n")
+                self.assertEqual(plugin_sentinel.read_bytes(), b"plugin-preserved\n")
+                (self.paths.state_dir / "install.json").unlink()
+
+    def test_dirty_caller_checkout_does_not_become_an_installed_identity(self) -> None:
+        dirty_suite = copy.copy(self.suite)
+        dirty_suite.revision = Mock(  # type: ignore[method-assign]
+            return_value="3cb7f6d26df47b0e2d697575e4b42ba48e405c1d-dirty"
+        )
+        identities = supported_install_identities(dirty_suite)
+        self.assertNotIn("current-release", {item["id"] for item in identities})
+        beta12 = next(item for item in identities if item["id"] == "public-beta.12")
+        self.assertEqual(
+            classify_install_state(self.state_for(beta12), dirty_suite, identities),
+            "public-beta.12",
+        )
+
+        package_suite = copy.copy(self.suite)
+        package_suite.revision = Mock(  # type: ignore[method-assign]
+            return_value="package:0.1.1-beta.13"
+        )
+        package_identities = supported_install_identities(package_suite)
+        self.assertNotIn(
+            "current-release", {item["id"] for item in package_identities}
+        )
+        public_beta13 = next(
+            item for item in package_identities if item["id"] == "public-beta.13"
+        )
+        self.assertNotEqual(
+            public_beta13["payloadDigest"],
+            suite_payload_digest({
+                plugin_id: spec.payload_digest()
+                for plugin_id, spec in package_suite.plugins.items()
+            }),
+            "the fixture must exercise local payload drift at a published alias",
+        )
+
+    def test_supported_status_still_reaches_existing_status_behavior(self) -> None:
+        identity = next(
+            item for item in self.identities if item["id"] == "current-release"
+        )
+        state = self.state_for(identity)
+        self.write_state(state)
+        self.materialize_live_state(state, "1700000000-1-53535353")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        with (
+            patch("shibumi_suite.cli.command_status", return_value=7) as status,
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            result = command_status_with_admission(self.suite, self.paths)
+
+        self.assertEqual(result, 7)
+        status.assert_called_once_with(self.suite, self.paths)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+
     def test_step6_activation_is_rejected_before_any_recovery(self) -> None:
         identity = next(
             item for item in self.identities if item["id"] == "step-5-tip"
@@ -248,6 +634,16 @@ class LifecycleAdmissionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AdmissionError, "Step-6 installation state"):
             preflight_lifecycle_state(self.paths, self.suite)
+        self.assertTrue(private.is_dir())
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            result = command_status_with_admission(self.suite, self.paths)
+        self.assertEqual(result, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertNotIn("identity diagnostic", stderr.getvalue())
+        self.assertNotIn("powerRegistration", stderr.getvalue())
         self.assertTrue(private.is_dir())
 
     def test_schema1_without_config_parent_identity_is_retained(self) -> None:

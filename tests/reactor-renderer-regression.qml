@@ -1,5 +1,5 @@
 import QtQuick
-import "../styles/shibumi" as ShibumiStyle
+import "../hancore.shibumi.bar/styles/shibumi" as ShibumiStyle
 
 Item {
   id: root

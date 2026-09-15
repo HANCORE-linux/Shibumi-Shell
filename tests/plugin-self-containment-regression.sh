@@ -11,7 +11,6 @@ fail() {
 }
 
 "$repo_root/scripts/sync-shared.sh" --check >/dev/null
-"$repo_root/scripts/sync-bar-host.sh" --check >/dev/null
 
 found=0
 while IFS= read -r plugin_id; do

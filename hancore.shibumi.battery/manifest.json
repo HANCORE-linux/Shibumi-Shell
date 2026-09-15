@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.battery",
   "name": "Shibumi Battery",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi battery status and detailed battery panel.",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
@@ -21,7 +23,10 @@
     "suiteId": "hancore.shibumi",
     "bundle": "default",
     "role": "G12",
-    "requires": ["hancore.shibumi.power-state"],
+    "requires": [
+      "hancore.shibumi.state",
+      "hancore.shibumi.power-state"
+    ],
     "recommends": []
   }
 }

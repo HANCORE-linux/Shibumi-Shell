@@ -341,8 +341,9 @@ every independently installed Git-managed plugin. A compact text line below
 the button reports the result, for example `0 available`, while the tooltip
 and accessibility description spell out checked, unmanaged, and failed totals
 without duplicating the provider inventory above. The scan is shared across
-outputs, invalidated when the plugin registry changes, and stopped when no
-plugin catalog is visible.
+outputs, invalidated when the native catalog publishes a content-different
+plugin inventory, and stopped when no plugin catalog is visible. Ordinary
+scoped bar/config and widget-registry fan-out is not an inventory change.
 
 The terminal reports the number of available updates and offers a
 multi-selection. Only the selected plugins are then passed individually to
@@ -465,9 +466,14 @@ not secondary sections inside Icons:
   confirmation click, resets every official widget appearance for the active
   generation in one transaction, and preserves the other generation's
   appearance, launcher identity, activation, placement, splits, dividers, and
-  nonvisual settings. Active/inactive transfer controls use a full-height,
-  softly tonal tile-edge strip without an internal divider. Hover and keyboard
-  focus promote the strip and arrow with semantic `color03`.
+  nonvisual settings. Active/inactive transfer controls submit reversible
+  requested-state intents directly: their classification moves immediately and
+  a later click coalesces with an in-flight persistence request. File readback
+  remains canonical and rolls the presentation back on refusal or conflict;
+  provider and structural layout transitions retain serialized settlement.
+  The controls use a full-height, softly tonal tile-edge strip without an
+  internal divider. Hover and keyboard focus promote the strip and arrow with
+  semantic `color03`.
 
 The Workspaces and Pickers controls are not repeated on another page. Quick
 may still expose whether the Workspaces widget is shown; that is widget

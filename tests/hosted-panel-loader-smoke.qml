@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import "core" as Core
+import "hancore.shibumi.bar/core" as Core
 import "fixtures" as Fixtures
 
 ShellRoot {

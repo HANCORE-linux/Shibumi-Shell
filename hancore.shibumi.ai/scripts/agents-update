@@ -23,7 +23,10 @@ if [[ ! $timeout_seconds =~ ^[1-9][0-9]*$ ]] \
 fi
 command -v setsid >/dev/null 2>&1 || fail "setsid is required"
 updater="$omarchy_path/bin/omarchy-agent-usage-update"
-[[ -x $updater ]] || fail "agent updater is missing: $updater"
+if [[ ! -x $updater ]]; then
+  printf 'shibumi-ai agents backend unavailable\n' >&2
+  exit 66
+fi
 
 cleanup_process_group() {
   local group=${1:-}

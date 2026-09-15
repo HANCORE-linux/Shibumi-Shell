@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -131,7 +132,7 @@ Item {
         mipmap: true
       }
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.centerIn: parent
         visible: parent.parent.glyphOnly
           || providerIcon.status === Image.Error

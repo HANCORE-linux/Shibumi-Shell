@@ -80,9 +80,9 @@ remain effective. At the default scale they reproduce V1 exactly.
 
 ## Ownership
 
-- `shared/` owns the canonical Shibumi presentation contract during
-  development; deterministic vendored copies keep runtime plugins
-  self-contained.
+- `hancore.shibumi.state/lib/presentation/` owns passive shared visual
+  components. The active `shared/presentation/ShibumiPanel.qml` remains
+  deterministically vendored because its focus/popout lifecycle owns timers.
 - Every bar host exposes the versioned visual-token subset through the common
   host facade.
 - Services, adapters, layout persistence, and panel state do not depend on a

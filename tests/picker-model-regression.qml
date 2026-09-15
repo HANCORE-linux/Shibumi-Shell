@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../services/PickerModel.js" as PickerModel
+import "../hancore.shibumi.quick-access/PickerModel.js" as PickerModel
 
 TestCase {
   name: "PickerModel"

@@ -27,7 +27,7 @@ Item {
   SuiteRuntime.Provider {
     id: barRuntimeProvider
     pluginId: "hancore.shibumi.bar"
-    implementationVersion: "0.1.1-beta.13"
+    implementationVersion: "0.1.1-beta.14"
     owner: root
     host: suiteHostShell.host
     manifest: root.manifest
@@ -56,6 +56,13 @@ Item {
   property bool hostReady: false
   readonly property bool mutationAdmissionReady:
     hostReady && startupAdmissionSatisfied && !shutdownPrepared
+  // Consumed only by the process-singleton runtime IPC handler. A handler is
+  // admitted after complete host injection and startup, and is revoked before
+  // this Bar begins shutdown or whenever Bar ownership overlaps.
+  readonly property bool visibilityIpcReady: barRuntimeProvider.registered
+    && SuiteRuntime.Runtime.isActiveBar(root)
+    && injectionComplete && hostReady && !shutdownPrepared
+    && barConfig && barConfig.id === "hancore.shibumi.bar"
   property bool outputWindowsEnabled: true
   // No-output fixtures can opt out while the deployed scoped Bar performs
   // the one process-bound native registry prime before becoming visible.
@@ -78,6 +85,12 @@ Item {
   readonly property bool startupAdmissionSatisfied: injectionComplete
     && (!suiteHostShell.scoped || suiteRuntimeReady)
     && nativeRegistryPrimeReady
+  readonly property int validHostOutputCount: countValidHostOutputs()
+  property bool hostOutputPresenceObserved: false
+  property bool hostOutputLossObserved: false
+  property bool hostOutputReturnObserved: false
+  property var hostOutputPreviouslyReadyWidgetIds: ({})
+  property var hostOutputLossReadyWidgetIds: ({})
 
   property string home: Quickshell.env("HOME")
   property var fallbackBarConfig: ({
@@ -95,6 +108,9 @@ Item {
   readonly property bool transparent: false
   property bool barToggledOff: false
   property bool barToggleStateLoaded: false
+  property bool barHiddenProbeQueued: false
+  readonly property bool barHiddenProbeBusy:
+    barHiddenProbe.running || barHiddenProbeQueued
   readonly property var idleService: root.shell
     && typeof root.shell.firstPartyServiceFor === "function"
     ? root.shell.firstPartyServiceFor("omarchy.idle") : null
@@ -238,6 +254,167 @@ Item {
   property string controlCenterWidgetDetailGroup: ""
   property string controlCenterWidgetDetailPlugin: ""
 
+  function countValidHostOutputs() {
+    let count = 0
+    const values = Quickshell.screens || []
+    for (let index = 0; index < values.length; index++) {
+      const screen = values[index]
+      if (screen && String(screen.name || "") !== ""
+          && Number(screen.width) > 0 && Number(screen.height) > 0) count++
+    }
+    return count
+  }
+
+  function copyWidgetIdSet(value) {
+    const source = value && typeof value === "object" ? value : ({})
+    const result = Object.create(null)
+    for (const id in source) {
+      if (Object.prototype.hasOwnProperty.call(source, id)
+          && source[id] === true) result[id] = true
+    }
+    return result
+  }
+
+  function observeHostOutputCount(countValue) {
+    if (shutdownPrepared || !suiteHostShell.scoped
+        || screensaverPreHidden) return false
+    const count = Number(countValue)
+    if (!Number.isInteger(count) || count < 0) return false
+    if (count > 0) {
+      hostOutputPresenceObserved = true
+      if (hostOutputLossObserved) hostOutputReturnObserved = true
+      return true
+    }
+    if (!hostOutputPresenceObserved || hostOutputLossObserved
+        || !nativeRegistryPrimeReady) return false
+    hostOutputLossObserved = true
+    hostOutputLossReadyWidgetIds = copyWidgetIdSet(
+      hostOutputPreviouslyReadyWidgetIds)
+    return true
+  }
+
+  function syncHostOutputLifecycleState() {
+    return observeHostOutputCount(validHostOutputCount)
+  }
+
+  function validDiagnosticPluginId(value) {
+    const id = String(value || "")
+    return id.length > 0 && id.length <= 160
+      && /^[a-z0-9][a-z0-9._-]*$/.test(id) ? id : ""
+  }
+
+  function sanitizedDiagnosticScreenLabel(value) {
+    const label = String(value || "")
+    return label.length > 0 && label.length <= 64
+        && /^[A-Za-z0-9_.:-]+$/.test(label) ? label : "unknown"
+  }
+
+  function hostWidgetResolutionWarningCandidate(slot, outputCountValue) {
+    if (!slot || moduleSlots.indexOf(slot) < 0 || shutdownPrepared
+        || screensaverPreHidden || !mutationAdmissionReady
+        || !suiteHostShell.scoped || !hostWidgetResolverService.scoped
+        || hostWidgetResolverService.widgetRegistry === null
+        || !nativeRegistryPrimeReady
+        || !hostOutputPresenceObserved || !hostOutputLossObserved
+        || !hostOutputReturnObserved) return false
+    const outputCount = Number(outputCountValue)
+    if (!Number.isInteger(outputCount) || outputCount < 1) return false
+    const id = validDiagnosticPluginId(slot.moduleName)
+    if (id === "" || slot.moduleEnabled !== true
+        || Number(slot.resolutionAttempts) !== 10
+        || slot.resolvedComponent !== null
+        || !Object.prototype.hasOwnProperty.call(
+          hostOutputLossReadyWidgetIds, id)
+        || hostOutputLossReadyWidgetIds[id] !== true
+        || !hostWidgetConfiguredEnabled(id)) return false
+    try { return hostWidgetResolverService.configured(id) === true }
+    catch (error) { return false }
+  }
+
+  function hostWidgetResolutionWarningEvidence(slot, outputCountValue) {
+    if (!hostWidgetResolutionWarningCandidate(slot, outputCountValue))
+      return null
+    return {
+      pluginId: validDiagnosticPluginId(slot.moduleName),
+      screenLabel: sanitizedDiagnosticScreenLabel(slot.screenName),
+      retryCount: 10,
+      facadeScoped: true,
+      facadeRegistryPresent: true,
+      facadeConfigured: true,
+      facadeEnabled: true,
+      previouslyResolved: true,
+      outputSequence: true,
+      shutdown: false
+    }
+  }
+
+  function hostWidgetConfiguredEnabled(pluginId) {
+    const id = validDiagnosticPluginId(pluginId)
+    const layout = barConfig && barConfig.layout
+    if (id === "" || !layout) return false
+    for (const region of ["left", "center", "right"]) {
+      const entries = layout[region]
+      if (!Array.isArray(entries)) return false
+      for (let index = 0; index < entries.length; index++) {
+        const entry = entries[index]
+        if (entryId(entry) === id
+            && (!Util.isPlainObject(entry) || entry.enabled !== false))
+          return true
+      }
+    }
+    return false
+  }
+
+  function hostWidgetSlotLoadedCurrent(slot, pluginId) {
+    const id = validDiagnosticPluginId(pluginId)
+    if (id === "" || !slot || moduleSlots.indexOf(slot) < 0
+        || String(slot.moduleName || "") !== id
+        || slot.moduleEnabled !== true
+        || !hostWidgetConfiguredEnabled(id)) return false
+    try {
+      return typeof slot.currentLoadReady === "function"
+        && slot.currentLoadReady() === true
+    } catch (error) { return false }
+  }
+
+  function hostWidgetResolutionWarningCurrent(pluginId) {
+    const id = validDiagnosticPluginId(pluginId)
+    if (id === "") return false
+    for (let index = 0; index < moduleSlots.length; index++) {
+      const slot = moduleSlots[index]
+      if (slot && String(slot.moduleName || "") === id
+          && hostWidgetResolutionWarningCandidate(
+            slot, validHostOutputCount)) return true
+    }
+    return false
+  }
+
+  function noteHostWidgetResolution(slot, ready) {
+    if (!slot || moduleSlots.indexOf(slot) < 0 || shutdownPrepared
+        || !suiteHostShell.scoped || !nativeRegistryPrimeReady) return false
+    const id = validDiagnosticPluginId(slot.moduleName)
+    if (id === "") return false
+    if (ready === true) {
+      // Account only an onLoaded-confirmed item for the exact current registry
+      // handle. Older Beta.13 slots have no method and fail closed.
+      if (!hostWidgetSlotLoadedCurrent(slot, id)) return false
+      if (validHostOutputCount < 1 || hostOutputLossObserved) return false
+      if (hostOutputPreviouslyReadyWidgetIds[id] === true) return true
+      if (Object.keys(hostOutputPreviouslyReadyWidgetIds).length >= 256)
+        return false
+      const next = copyWidgetIdSet(hostOutputPreviouslyReadyWidgetIds)
+      next[id] = true
+      hostOutputPreviouslyReadyWidgetIds = next
+      return true
+    }
+    if (ready !== false) return false
+    const evidence = hostWidgetResolutionWarningEvidence(
+      slot, validHostOutputCount)
+    return evidence !== null
+      && SuiteRuntime.Runtime.noteHostWidgetResolutionExhausted(
+        root, Quickshell.processId, evidence)
+  }
+
   function releaseCatalogConsumer() {
     const service = catalogConsumerService
     const token = catalogConsumerToken
@@ -308,6 +485,10 @@ Item {
 
   function registeredWidgetComponent(widgetId) {
     return hostWidgetResolverService.componentFor(widgetId)
+  }
+
+  function registeredEmbeddedWidgetComponent(ownerId, widgetId) {
+    return hostWidgetResolverService.embeddedComponentFor(ownerId, widgetId)
   }
 
   function registeredWidgetSource(widgetId) {
@@ -2589,6 +2770,220 @@ Item {
     }
   }
 
+  function debugWidgetPipeline() {
+    // This is an evidence-only current-state census. Never project registry
+    // keys, metadata, source URLs, backend objects, or object references.
+    const expectedLimit = 64
+    const outputLimit = 16
+    const slotLimit = 128
+    const snapshotCountLimit = 256
+
+    function safeId(value) {
+      const id = String(value || "")
+      return id.length > 0 && id.length <= 160
+          && /^[a-z0-9][a-z0-9._-]*$/.test(id) ? id : ""
+    }
+    function safeScreen(value) {
+      const name = String(value || "")
+      return name.length > 0 && name.length <= 64
+          && /^[A-Za-z0-9_.:-]+$/.test(name) ? name : ""
+    }
+    function boundedInt(value, minimum, maximum, fallback) {
+      const number = Number(value)
+      return Number.isFinite(number)
+        ? Math.max(minimum, Math.min(maximum, Math.floor(number))) : fallback
+    }
+    function componentObservation(component, accessAvailable) {
+      if (accessAvailable === false) return {
+        present: false, statusKind: "unavailable", status: -1
+      }
+      if (component === null || component === undefined) return {
+        present: false, statusKind: "missing", status: -1
+      }
+      try {
+        const status = component.status
+        if (status === undefined) return {
+          present: true, statusKind: "undefined", status: -1
+        }
+        if (typeof status === "number") return {
+          present: true,
+          statusKind: "number",
+          status: boundedInt(status, 0, 3, -1)
+        }
+        return { present: true, statusKind: "other", status: -1 }
+      } catch (error) {
+        return { present: true, statusKind: "unavailable", status: -1 }
+      }
+    }
+    function outputSequence() {
+      if (hostOutputReturnObserved) return "positive-zero-positive"
+      if (hostOutputLossObserved) return "positive-zero"
+      if (hostOutputPresenceObserved) return "positive"
+      return "none"
+    }
+    let observedValidOutputCount = 0
+    const observedScreens = Quickshell.screens || []
+    for (let index = 0; index < observedScreens.length; index++) {
+      const screen = observedScreens[index]
+      if (screen && String(screen.name || "") !== ""
+          && Number(screen.width) > 0 && Number(screen.height) > 0)
+        observedValidOutputCount++
+    }
+
+    const snapshot = barWidgetRegistry && barWidgetRegistry.widgets
+      && typeof barWidgetRegistry.widgets === "object"
+      ? barWidgetRegistry.widgets : null
+    let snapshotKeyCount = 0
+    let snapshotKeyCountTruncated = false
+    if (snapshot) {
+      for (const key in snapshot) {
+        if (!Object.prototype.hasOwnProperty.call(snapshot, key)) continue
+        if (snapshotKeyCount >= snapshotCountLimit) {
+          snapshotKeyCountTruncated = true
+          break
+        }
+        snapshotKeyCount++
+      }
+    }
+
+    const expected = []
+    const seenExpected = Object.create(null)
+    const configuredLayout = layoutConfig && typeof layoutConfig === "object"
+      ? layoutConfig : ({})
+    let expectedTruncated = false
+    let inspectedEntries = 0
+    for (const region of ["left", "center", "right"]) {
+      const entries = Array.isArray(configuredLayout[region])
+        ? configuredLayout[region] : []
+      for (let index = 0; index < entries.length; index++) {
+        if (inspectedEntries >= expectedLimit) {
+          expectedTruncated = true
+          break
+        }
+        inspectedEntries++
+        let id = ""
+        try { id = safeId(entryId(entries[index])) } catch (error) {}
+        if (id === "" || seenExpected[id]) continue
+        seenExpected[id] = true
+        let configured = false
+        let selection = null
+        let component = null
+        let componentAccessAvailable = true
+        try {
+          configured = hostWidgetResolverService.configured(id) === true
+          selection = hostWidgetResolverService.selectionFor(id)
+          component = selection ? selection.component : null
+        } catch (error) {
+          configured = false
+          selection = null
+          componentAccessAvailable = false
+        }
+        const componentState = componentObservation(
+          component, componentAccessAvailable)
+        expected.push({
+          id: id,
+          configured: configured,
+          selection: selection !== null,
+          componentPresent: componentState.present,
+          componentStatusKind: componentState.statusKind,
+          componentStatus: componentState.status
+        })
+      }
+      if (expectedTruncated) break
+    }
+
+    const sessions = []
+    const outputCount = Math.min(1000000,
+      Array.isArray(layoutSessions) ? layoutSessions.length : 0)
+    for (let index = 0;
+         index < outputCount && index < outputLimit; index++) {
+      const session = layoutSessions[index]
+      if (!session) continue
+      sessions.push({
+        screen: safeScreen(session.screenName),
+        barPanel: true,
+        layoutSession: true
+      })
+    }
+
+    const slots = []
+    const slotCount = Math.min(1000000,
+      Array.isArray(moduleSlots) ? moduleSlots.length : 0)
+    for (let index = 0; index < slotCount && index < slotLimit; index++) {
+      const slot = moduleSlots[index]
+      if (!slot) continue
+      let resolved = null
+      let resolvedAccessAvailable = true
+      try { resolved = slot.resolvedComponent }
+      catch (error) { resolvedAccessAvailable = false }
+      const resolvedState = componentObservation(
+        resolved, resolvedAccessAvailable)
+      let currentLoadReady = false
+      try {
+        currentLoadReady = typeof slot.currentLoadReady === "function"
+          && slot.currentLoadReady() === true
+      } catch (error) { currentLoadReady = false }
+      slots.push({
+        id: safeId(slot.moduleName),
+        screen: safeScreen(slot.screenName),
+        moduleEnabled: slot.moduleEnabled === true,
+        resolutionAttempts: boundedInt(
+          slot.resolutionAttempts, 0, 10, 0),
+        resolvedComponentPresent: resolvedState.present,
+        resolvedComponentStatusKind: resolvedState.statusKind,
+        resolvedStatus: resolvedState.status,
+        currentLoadReady: currentLoadReady,
+        loaderActive: slot.loaderActive === true,
+        loaderStatus: boundedInt(slot.loaderStatus, 0, 3, 0),
+        loaderItem: slot.loaderHasItem === true
+      })
+    }
+
+    return {
+      version: 2,
+      facades: {
+        shellScoped: suiteHostShell.scoped === true,
+        pluginRegistryScoped: hostWidgetResolverService.scoped === true,
+        widgetRegistryPresent: hostWidgetResolverService.widgetRegistry !== null
+      },
+      outputs: {
+        validOutputCount: boundedInt(
+          observedValidOutputCount, 0, 256, 0),
+        barPanelCount: outputCount,
+        layoutSessionCount: outputCount,
+        truncated: outputCount > outputLimit,
+        sessions: sessions
+      },
+      outputLifecycle: {
+        presenceObserved: hostOutputPresenceObserved === true,
+        lossObserved: hostOutputLossObserved === true,
+        returnObserved: hostOutputReturnObserved === true,
+        sequence: outputSequence(),
+        previouslyReadyWidgetCount: boundedInt(Object.keys(
+          hostOutputPreviouslyReadyWidgetIds || {}).length, 0, 256, 0),
+        lossReadyWidgetCount: boundedInt(Object.keys(
+          hostOutputLossReadyWidgetIds || {}).length, 0, 256, 0),
+        warningEmitted: SuiteRuntime.Runtime.hostWidgetResolutionWarningEmitted
+          === true
+      },
+      registry: {
+        snapshotKeyCount: snapshotKeyCount,
+        snapshotKeyCountTruncated: snapshotKeyCountTruncated,
+        revision: boundedInt(barWidgetRegistry
+          ? barWidgetRegistry.revision : 0, 0, 2147483647, 0)
+      },
+      expected: {
+        truncated: expectedTruncated,
+        entries: expected
+      },
+      widgetSlots: {
+        count: slotCount,
+        truncated: slotCount > slotLimit,
+        entries: slots
+      }
+    }
+  }
+
   function debugBarGeometry() {
     const geometry = []
     const focused = focusedOutputName()
@@ -2666,6 +3061,22 @@ Item {
     return geometry
   }
 
+  function requestBarHiddenProbe() {
+    if (!hostReady || shutdownPrepared) return false
+    if (barHiddenProbe.running) {
+      // A later marker mutation arrived while an earlier sample was running.
+      // Drain one coalesced follow-up so the final published state is current.
+      barHiddenProbeQueued = true
+      return true
+    }
+    barHiddenProbe.running = true
+    return true
+  }
+
+  function syncHidden() {
+    return visibilityIpcReady && requestBarHiddenProbe()
+  }
+
   function prepareForShutdown() {
     if (shutdownPrepared) return true
     shutdownPrepared = true
@@ -2673,6 +3084,7 @@ Item {
     hostReadyDelay.stop()
     v1PluginReconcileTimer.stop()
     tooltipDelay.stop()
+    barHiddenProbeQueued = false
     barHiddenProbe.running = false
     hideTooltip(null)
     hostReady = false
@@ -2713,12 +3125,17 @@ Item {
   onInjectionCompleteChanged: scheduleStartupAdmission()
   onSuiteRuntimeReadyChanged: scheduleStartupAdmission()
   onNativeRegistryPrimeReadyChanged: scheduleStartupAdmission()
+  // Host injection can become scoped after Component.onCompleted, without a
+  // screen-count change. Start passive chronology when admission actually opens.
+  onHostReadyChanged: if (hostReady) syncHostOutputLifecycleState()
+  onValidHostOutputCountChanged: syncHostOutputLifecycleState()
   onCatalogConsumerCandidateChanged: {
     if (!shutdownPrepared) rebindCatalogConsumer()
   }
   Component.onCompleted: {
     applyBarConfig()
     rebindCatalogConsumer()
+    syncHostOutputLifecycleState()
     scheduleStartupAdmission()
   }
   Component.onDestruction: {
@@ -2744,6 +3161,11 @@ Item {
   }
 
   Connections {
+    target: Quickshell
+    function onScreensChanged() { root.syncHostOutputLifecycleState() }
+  }
+
+  Connections {
     target: layoutStateController
     ignoreUnknownSignals: true
 
@@ -2758,9 +3180,8 @@ Item {
 
     function onPluginsChanged() {
       if (root.shutdownPrepared) return
-      // Component creation also changes the resolver revision. Do not use it
-      // as a family dependency: a new projected slot would invalidate its
-      // own binding while its provider component is being constructed.
+      // Family classification follows the host/catalog domains, not the
+      // separately activated legacy Component cache.
       root.providerRegistryRevision++
       v1PluginReconcileTimer.restart()
     }
@@ -2944,6 +3365,10 @@ Item {
         ? "ok" : "not-ready"
     }
 
+    function debugWidgetPipeline(): string {
+      return JSON.stringify(root.debugWidgetPipeline())
+    }
+
     function connectedPanelState(): string {
       return JSON.stringify({
         active: root.connectedPanelOwner !== null
@@ -3090,13 +3515,18 @@ Item {
         root.barToggleStateLoaded = true
       }
     }
+    onExited: {
+      if (!root.barHiddenProbeQueued) return
+      root.barHiddenProbeQueued = false
+      Qt.callLater(function() { root.requestBarHiddenProbe() })
+    }
   }
 
   FileView {
     path: root.hostReady ? root.home + "/.local/state/omarchy/toggles" : ""
     watchChanges: true
     printErrors: false
-    onFileChanged: barHiddenProbe.running = true
+    onFileChanged: root.requestBarHiddenProbe()
   }
 
   Timer {

@@ -1,5 +1,5 @@
 import QtQuick
-import "../core/ResponsiveLayout.js" as ResponsiveLayout
+import "../hancore.shibumi.bar/core/ResponsiveLayout.js" as ResponsiveLayout
 
 Item {
   visible: false

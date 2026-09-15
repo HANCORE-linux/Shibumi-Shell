@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -47,6 +48,10 @@ ShibumiPanel {
 
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
+  // Selection feedback follows the latest admitted request. Host mutation,
+  // layout sequencing and persistence settlement still consume stateConfig.
+  readonly property var requestedStateConfig: stateService
+    && stateService.requestedConfig ? stateService.requestedConfig : stateConfig
   readonly property var rawBarPresentation: stateConfig.presentation || ({})
   readonly property var barPresentation: {
     const source = rawBarPresentation
@@ -58,7 +63,7 @@ ShibumiPanel {
     if (!v2LayoutActive) effective.panelBorder = effective.border
     return effective
   }
-  readonly property var workspaceConfig: stateConfig.workspace || ({})
+  readonly property var workspaceConfig: requestedStateConfig.workspace || ({})
   readonly property var layoutProtection: stateConfig.layoutProtection
     || ({ v1: false, v2: false })
   readonly property bool v1LayoutProtected: layoutProtection.v1 === true
@@ -66,7 +71,7 @@ ShibumiPanel {
   readonly property var pluginConfig: stateConfig.plugins || ({})
   readonly property var pluginFavorites: Array.isArray(pluginConfig.favorites)
     ? pluginConfig.favorites : []
-  readonly property var launcherConfig: stateConfig.launcher
+  readonly property var launcherConfig: requestedStateConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
   readonly property var launcherTextOptions: [
     "shibumi", "omarchy", "hyprland", "arch", "omacom"
@@ -179,18 +184,19 @@ ShibumiPanel {
     && "stateTransitionBusy" in bar
     ? bar.stateTransitionBusy === true : false
   readonly property var pluginCatalogObservation: {
+    if (!nativeCatalogRequired) return null
     const page = settingsPageItem
-    if (!nativeCatalogRequired || !page
-        || !("catalogObservation" in page)) return null
-    const observation = page.catalogObservation
-    if (!observation || typeof observation !== "object"
-        || !Object.isFrozen(observation)
-        || !observation.snapshot
-        || !Object.isFrozen(observation.snapshot)
-        || observation.snapshot.catalogKind !== "native-listPlugins"
-        || !Array.isArray(observation.snapshot.entries)
-        || !Object.isFrozen(observation.snapshot.entries)) return null
-    return observation
+    // Plugins owns its page-scoped lease; every other page may reuse only the
+    // Bar's existing durable observation, never acquire another consumer.
+    const pageOwnsObservation = page && ("catalogObservation" in page)
+    const source = pageOwnsObservation ? page
+      : bar && ("catalogObservation" in bar) ? bar : null
+    if (!source) return null
+    try {
+      const observation = source.catalogObservation
+      return validPluginCatalogObservation(observation)
+          && observation === source.catalogObservation ? observation : null
+    } catch (error) { return null }
   }
   readonly property var pluginCatalogSnapshot: pluginCatalogObservation
     ? pluginCatalogObservation.snapshot : null
@@ -669,7 +675,65 @@ ShibumiPanel {
       && bar.canSetBarWidgetInstalled(id, entry.installedInBar !== true)
   }
 
-  function setPluginEnabled(pluginId, enabled) {
+  function validPluginCatalogObservation(observation) {
+    try {
+      if (!observation || typeof observation !== "object"
+          || !Object.isFrozen(observation)
+          || (Object.getPrototypeOf(observation) !== Object.prototype
+            && Object.getPrototypeOf(observation) !== null)
+          || !Object.prototype.hasOwnProperty.call(observation, "serial")
+          || !Object.prototype.hasOwnProperty.call(observation, "generation")
+          || !Object.prototype.hasOwnProperty.call(observation, "snapshot")
+          || !Number.isInteger(observation.serial) || observation.serial <= 0
+          || !Number.isInteger(observation.generation)
+          || observation.generation <= 0) return false
+      const snapshot = observation.snapshot
+      if (!snapshot || typeof snapshot !== "object"
+          || !Object.isFrozen(snapshot)
+          || (Object.getPrototypeOf(snapshot) !== Object.prototype
+            && Object.getPrototypeOf(snapshot) !== null)
+          || !Object.prototype.hasOwnProperty.call(snapshot, "catalogKind")
+          || !Object.prototype.hasOwnProperty.call(snapshot, "entries")
+          || !Object.prototype.hasOwnProperty.call(snapshot, "byId")
+          || snapshot.catalogKind !== "native-listPlugins"
+          || !Array.isArray(snapshot.entries)
+          || !Object.isFrozen(snapshot.entries)
+          || !snapshot.byId || typeof snapshot.byId !== "object"
+          || !Object.isFrozen(snapshot.byId)
+          || Object.getPrototypeOf(snapshot.byId) !== null
+          || Object.keys(snapshot.byId).length !== snapshot.entries.length)
+        return false
+      const seen = Object.create(null)
+      for (let index = 0; index < snapshot.entries.length; index++) {
+        const row = snapshot.entries[index]
+        if (!row || typeof row !== "object" || !Object.isFrozen(row)
+            || (Object.getPrototypeOf(row) !== Object.prototype
+              && Object.getPrototypeOf(row) !== null)
+            || !Object.prototype.hasOwnProperty.call(row, "id")
+            || !Object.prototype.hasOwnProperty.call(row, "kinds")
+            || !Object.prototype.hasOwnProperty.call(row, "enabled")
+            || !Object.prototype.hasOwnProperty.call(row, "barWidget")
+            || typeof row.id !== "string" || row.id === ""
+            || row.id.length > 160
+            || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(row.id)
+            || /\.\./.test(row.id)
+            || Object.prototype.hasOwnProperty.call(seen, row.id)
+            || !Array.isArray(row.kinds) || !Object.isFrozen(row.kinds)
+            || row.kinds.some(function(kind) {
+              return typeof kind !== "string" || kind === ""
+            })
+            || typeof row.enabled !== "boolean"
+            || !row.barWidget || typeof row.barWidget !== "object"
+            || !Object.isFrozen(row.barWidget)
+            || !Object.prototype.hasOwnProperty.call(snapshot.byId, row.id)
+            || snapshot.byId[row.id] !== row) return false
+        seen[row.id] = true
+      }
+      return true
+    } catch (error) { return false }
+  }
+
+  function setPluginEnabled(pluginId, enabled, coalescePresentation) {
     pluginActionError = ""
     if (!nativeCatalogRequired && (!pluginRegistry
         || typeof pluginRegistry.setEnabled !== "function")) {
@@ -677,11 +741,20 @@ ShibumiPanel {
       return false
     }
     const id = String(pluginId || "")
-    const manifest = nativeCatalogRequired && pluginCatalogSnapshot
-      && pluginCatalogSnapshot.byId
-      ? pluginCatalogSnapshot.byId[id]
+    const observation = nativeCatalogRequired ? pluginCatalogObservation : null
+    if (nativeCatalogRequired && !observation) {
+      pluginActionError = "The plugin catalog is not ready."
+      return false
+    }
+    const manifest = nativeCatalogRequired && observation.snapshot.byId
+      ? observation.snapshot.byId[id]
       : pluginRegistry && pluginRegistry.installedPlugins
         ? pluginRegistry.installedPlugins[id] : null
+    if (nativeCatalogRequired && (!manifest || manifest.id !== id
+        || observation !== pluginCatalogObservation)) {
+      pluginActionError = "The plugin catalog is not ready."
+      return false
+    }
     const kinds = manifest && Array.isArray(manifest.kinds)
       ? manifest.kinds : []
     if (kinds.indexOf("bar") >= 0) {
@@ -724,7 +797,8 @@ ShibumiPanel {
         if (removedAlternative && bar
             && typeof bar.setWidgetGroupsEnabledForAllVariants === "function")
           return bar.setWidgetGroupsEnabledForAllVariants([group], true)
-        return setGroupEnabled(group, enabled === true)
+        return setGroupEnabled(
+          group, enabled === true, coalescePresentation === true)
       }
       if (suiteManaged) {
         console.warn(
@@ -958,12 +1032,17 @@ ShibumiPanel {
   }
 
   function groupEnabledForVariant(groupId, variantValue) {
+    // Keep local model bindings attached to the primitive facade publication;
+    // nested service method calls are not a reliable dependency surface.
+    void(requestedStateConfig)
     const variant = String(variantValue || "").toLowerCase()
     if (["v1", "v2"].indexOf(variant) < 0) return false
-    return stateService && typeof stateService.groupEnabledForVariant
-      === "function"
-      ? stateService.groupEnabledForVariant(groupId, variant)
-      : groupSetting(groupId, "enabled", true) !== false
+    return stateService
+      && typeof stateService.requestedGroupEnabledForVariant === "function"
+      ? stateService.requestedGroupEnabledForVariant(groupId, variant)
+      : stateService && typeof stateService.groupEnabledForVariant === "function"
+        ? stateService.groupEnabledForVariant(groupId, variant)
+        : groupSetting(groupId, "enabled", true) !== false
   }
 
   function groupEnabled(groupId) {
@@ -986,10 +1065,25 @@ ShibumiPanel {
     return states
   }
 
-  function setGroupEnabled(groupId, enabled) {
+  function setGroupEnabled(groupId, enabled, coalescePresentation) {
     const group = String(groupId || "")
     const variant = v2LayoutActive ? "v2" : "v1"
+    const coalesced = coalescePresentation === true
+    const structuralIdle = !bar || (bar.layoutTransitionBusy !== true
+      && bar.providerSnapshotTransitionBusy !== true
+      && bar.stateTransitionBusy !== true)
     return runWithControlCenterRestore(function() {
+      // The Icons Active/Inactive organizer is reversible presentation state.
+      // Let StateStorage coalesce another intent while readback is pending;
+      // GroupSlot still follows confirmed config, and provider/layout changes
+      // continue through the serialized Bar transitions below.
+      if (coalesced) {
+        return structuralIdle && stateService
+            && typeof stateService.setGroupEnabledForVariant === "function"
+          ? stateService.setGroupEnabledForVariant(
+              group, variant, enabled === true)
+          : false
+      }
       if (bar && typeof bar.requestWidgetGroupStateTransition === "function")
         return bar.requestWidgetGroupStateTransition(
           group, variant, enabled === true)
@@ -1001,7 +1095,7 @@ ShibumiPanel {
         : stateService && typeof stateService.setGroupSetting === "function"
           ? stateService.setGroupSetting(group, "enabled", enabled === true)
           : false
-    })
+    }, coalesced ? false : true)
   }
 
   function setGroupSetting(groupId, key, value) {
@@ -1523,7 +1617,7 @@ ShibumiPanel {
     foreground: panel.marketText
     accent: panel.marketAccent
 
-    IconText {
+    Presentation.ControlCenterIconText {
       anchors.centerIn: parent
       text: action.icon
       color: action.foreground
@@ -1539,7 +1633,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPillToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse
       text: action.tooltip

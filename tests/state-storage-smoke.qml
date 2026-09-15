@@ -114,7 +114,13 @@ Item {
       if (root.phase === 0 && storage.ready && root.document.version === 1) {
         const before = JSON.stringify(storage.value)
         root.check(root.change("G4", "compact", true), "first request")
+        root.check(storage.requestedValue.widgets.G4.compact === true
+          && JSON.stringify(storage.value) === before,
+          "first request was not previewed without authoritative publication")
         root.check(root.change("G6", "enabledV2", false), "second request")
+        root.check(storage.requestedValue.widgets.G4.compact === true
+          && storage.requestedValue.widgets.G6.enabledV2 === false,
+          "coalesced requests were not previewed")
         root.check(JSON.stringify(storage.value) === before, "optimistic publication")
         const fresh = JSON.parse(JSON.stringify(root.document))
         fresh.plugins[0].foreignFuture = {keep: [1, false, "Malmö"]}
@@ -131,6 +137,8 @@ Item {
         root.phase = 2
       } else if (root.phase === 2 && !storage.pending && storage.writeStatus === "refused") {
         root.check(storage.value.widgets.G4.compact === true, "refusal published intent")
+        root.check(storage.requestedValue.widgets.G4.compact === true,
+          "refused preview did not roll back to file truth")
         root.mode = "converged"
         root.check(root.change("G4", "compact", false), "convergent request")
         root.phase = 3

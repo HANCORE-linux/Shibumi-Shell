@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -588,7 +589,7 @@ ShibumiPanel {
     width: contentColumn.width
     height: Commons.Style.space(32)
 
-    IconText {
+    Presentation.IconText {
       id: muteIcon
       anchors.left: parent.left
       anchors.top: parent.top

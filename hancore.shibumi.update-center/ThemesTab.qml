@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons as Commons
 import "Model.js" as Model
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -365,7 +366,7 @@ Item {
                 acceptedButtons: Qt.NoButton
               }
 
-              ShibumiPanelToolTip {
+              Presentation.ShibumiPanelToolTip {
                 panel: root.panel
                 visible: stateMouse.containsMouse
                 text: Model.themeStateDetail(modelData)

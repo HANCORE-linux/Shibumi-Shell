@@ -40,27 +40,47 @@ The local run covers:
   and enabled state;
 - incomplete or failed continuity transactions;
 - configuration/schema readability;
-- bounded QML loader, type, reference, binding-loop, and provider compatibility
-  failures since the current configuration was loaded;
+- bounded QML loader, type, reference, binding-loop, assignment (including
+  `Unable to assign … to QColor`), and provider compatibility failures since
+  the current configuration was loaded;
+- visible runtime warnings from the same on-demand production-process log
+  sample, grouped by verified owner rather than assumed to be Shibumi;
 - for a source install: branch, commit, upstream, dirty state, and cached
   ahead/behind state;
 - for a package install: local Pacman version, staged Shibumi payload version,
   and package ownership;
 - Shibumi, Omarchy, and Quickshell versions.
 
+For the Shibumi bar, the form comes from `presentation.shellStyle` in the
+unique canonical `hancore.shibumi.state` service entry under `plugins[]`. It
+never comes from `bar.style`. Current installs whose metadata requires State
+entry storage report a missing, duplicate, layout-placed, or malformed entry as
+an invalid configuration and leave the form unknown instead of assuming V1.
+A valid pre-migration install remains reportable from its retired bar-local
+settings, but any present canonical State data takes precedence and malformed
+canonical data never falls back to the retired location.
+
 The page shows every warning or error, including its bounded evidence and next
-step. In the healthy state only the active bar, installed Shibumi components,
-and recent runtime errors remain as quiet icon-and-text rows. Other successful
-implementation checks stay hidden: they provide no user action and surface
-automatically if their state becomes abnormal.
+step. Runtime warning rows state the number of matches and lines in the sampled
+scope. The query remains the existing `qs log --pid <production-pid> --tail 400`
+on-demand read; Health adds no process, poller, timer, or background sampler.
+Because a tail can omit earlier records, Health does not extrapolate a
+since-boot or hourly warning rate unless a complete timed observation window is
+actually established. The current query does not establish one, so the rate is
+reported as unavailable. A missing, failed, or ambiguous production-process or
+log selection is **Log unavailable**, never a clean zero. In the healthy state
+only the active bar, installed Shibumi components, and recent runtime errors
+remain as quiet icon-and-text rows. Other successful implementation checks stay
+hidden: they provide no user action and surface automatically if their state
+becomes abnormal.
 
 ### Ownership attribution
 
 Every check carries an `owner` of `shibumi`, `omarchy`, `third-party`, or
 `unknown`, plus a sanitized `sourcePath` and optional `pluginId`. Runtime log
-findings are grouped by this attribution instead of being presented as one
-Shibumi error. `/usr/share/omarchy/**` findings are Omarchy-owned; installed
-`hancore.shibumi.*` roots are Shibumi-owned; and unrelated user plugin roots,
+errors and warnings are grouped by this attribution instead of being presented
+as Shibumi findings. `/usr/share/omarchy/**` findings are Omarchy-owned;
+installed `hancore.shibumi.*` roots are Shibumi-owned; and unrelated user plugin roots,
 including OmaConnect, are third-party-owned only when the local install state
 or plugin registry verifies the ID. Bare names and unverified explicit plugin
 fields remain `unknown`. Competing Shibumi and non-Shibumi sources on one line

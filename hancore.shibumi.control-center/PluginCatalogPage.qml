@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import "SearchEngine.js" as SearchEngine
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Column {
   id: root
@@ -927,7 +928,7 @@ Column {
       spacing: Commons.Style.space(8)
       visible: root.feedbackVisible && !root.removalConfirmationVisible
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         text: root.removingPluginId !== ""
           ? "hourglass_top" : "swap_horiz"
@@ -1012,7 +1013,7 @@ Column {
       spacing: Commons.Style.space(7)
       visible: root.removalConfirmationVisible
 
-      IconText {
+      Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
         text: "delete"
         color: Commons.Color.urgent

@@ -1,0 +1,8 @@
+module Shibumi.Presentation
+ControlCenterIconText 1.0 ControlCenterIconText.qml
+HostTokens 1.0 HostTokens.qml
+IconText 1.0 IconText.qml
+PacmanWorkspaceMarker 1.0 PacmanWorkspaceMarker.qml
+PillSurface 1.0 PillSurface.qml
+ShibumiPanelToolTip 1.0 ShibumiPanelToolTip.qml
+ShibumiPillToolTip 1.0 ShibumiPillToolTip.qml

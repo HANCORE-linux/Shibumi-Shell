@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -51,7 +52,7 @@ Item {
   Component.onCompleted: syncRegistration()
   Component.onDestruction: if (bar && registered) bar.unregisterClickTarget(root)
 
-  IconText {
+  Presentation.IconText {
     id: bellIcon
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.iconHorizontalOffset

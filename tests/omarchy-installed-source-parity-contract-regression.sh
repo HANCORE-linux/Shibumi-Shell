@@ -12,6 +12,7 @@ if [[ $source_path != /* || ! -d $source_path ]]; then
 fi
 
 export SHIBUMI_OMARCHY_BASELINE_PROFILE=installed-source-parity
+export SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3
 export OMARCHY_PATH=$source_path
 
 exec "$repo_root/tests/contract-regression.sh"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.memory",
   "name": "Shibumi Memory",
-  "version": "0.1.1-beta.13",
+  "version": "0.1.1-beta.14",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Shibumi memory widget and detailed memory panel.",
@@ -24,6 +24,7 @@
     "bundle": "default",
     "role": "G4",
     "requires": [
+      "hancore.shibumi.state",
       "hancore.shibumi.telemetry"
     ],
     "recommends": []

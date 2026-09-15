@@ -99,14 +99,49 @@ done
 for needle in \
   'function configureBar' \
   'target.omarchyPath = shell.omarchyPath' \
-  'target.shell = shell' \
-  'target.manifest = manifest' \
-  'target.barWidgetRegistry = shell.barWidgetRegistry' \
-  'target.pluginRegistry = shell.pluginRegistry' \
-  'target.barConfig = shell.barConfig' \
   'falling back to'; do
   rg -Fq "$needle" "$shell_root" || fail "shell host contract drift: $needle"
 done
+
+case $SHIBUMI_OMARCHY_SOURCE_REVISION in
+  0534987009061cbe2dacdde4ad564092ab698d12)
+    for needle in \
+      'target.shell = shell.pluginShellFor(manifest)' \
+      'target.manifest = shell.publicPluginManifest(manifest)' \
+      'target.barWidgetRegistry = shell.pluginBarWidgetRegistryFor(manifest)' \
+      'target.pluginRegistry = shell.pluginRegistryFor(manifest)' \
+      'target.barConfig = shell.barConfigFor(manifest)' \
+      'function publicPluginManifest(manifest)' \
+      'function publicBarWidgetSnapshot()'; do
+      rg -Fq "$needle" "$shell_root" \
+        || fail "scoped 4.0.3 shell contract drift: $needle"
+    done
+    for legacy_assignment in \
+      'if ("shell" in target) target.shell = shell' \
+      'if ("manifest" in target) target.manifest = manifest' \
+      'if ("barWidgetRegistry" in target) target.barWidgetRegistry = shell.barWidgetRegistry' \
+      'if ("pluginRegistry" in target) target.pluginRegistry = shell.pluginRegistry' \
+      'if ("barConfig" in target) target.barConfig = shell.barConfig'; do
+      if rg -Fxq "    $legacy_assignment" "$shell_root"; then
+        fail "4.0.3 shell restored raw host injection: $legacy_assignment"
+      fi
+    done
+    ;;
+  346e69e1cec6c4e8924531874af6ba010a1bc99e|ed7bae4ac5a570e9df307486e0202fdafcc6ee24)
+    for needle in \
+      'target.shell = shell' \
+      'target.manifest = manifest' \
+      'target.barWidgetRegistry = shell.barWidgetRegistry' \
+      'target.pluginRegistry = shell.pluginRegistry' \
+      'target.barConfig = shell.barConfig'; do
+      rg -Fq "$needle" "$shell_root" \
+        || fail "legacy compatibility shell contract drift: $needle"
+    done
+    ;;
+  *)
+    fail "unsupported complete-host source revision: $SHIBUMI_OMARCHY_SOURCE_REVISION"
+    ;;
+esac
 
 for needle in \
   'property var borderSpec:' \

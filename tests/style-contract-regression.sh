@@ -13,24 +13,25 @@ fail() {
 command -v rg >/dev/null 2>&1 || fail "rg is required"
 
 rg -Fq 'root.bar.layoutController.v2Mode !== true' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "V1 gap animations can still load in V2 shell styles"
 
-rg -q 'property string requestedId: "shibumi"' styles/StyleRegistry.qml \
+rg -q 'property string requestedId: "shibumi"' hancore.shibumi.bar/styles/StyleRegistry.qml \
   || fail "style registry default is not shibumi"
-rg -q 'readonly property var availableIds: .*"shibumi"' styles/StyleRegistry.qml \
+rg -q 'readonly property var availableIds: .*"shibumi"' hancore.shibumi.bar/styles/StyleRegistry.qml \
   || fail "shibumi is not registered"
-rg -q 'case "shibumi": return Qt\.resolvedUrl\("shibumi/Style\.qml"\)' styles/StyleRegistry.qml \
+rg -q 'case "shibumi": return Qt\.resolvedUrl\("shibumi/Style\.qml"\)' hancore.shibumi.bar/styles/StyleRegistry.qml \
   || fail "shibumi source is not registered"
 
-mapfile -t style_dirs < <(find styles -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+mapfile -t style_dirs < <(find hancore.shibumi.bar/styles -mindepth 1 -maxdepth 1 \
+  -type d -printf '%f\n' | sort)
 [[ ${#style_dirs[@]} -gt 0 ]] || fail "no production style is present"
 
 for style_id in "${style_dirs[@]}"; do
-  style_dir="styles/$style_id"
-  rg -q "\"${style_id}\"" styles/StyleRegistry.qml \
+  style_dir="hancore.shibumi.bar/styles/$style_id"
+  rg -q "\"${style_id}\"" hancore.shibumi.bar/styles/StyleRegistry.qml \
     || fail "$style_id is not listed in the style registry"
-  rg -q "case \"${style_id}\":" styles/StyleRegistry.qml \
+  rg -q "case \"${style_id}\":" hancore.shibumi.bar/styles/StyleRegistry.qml \
     || fail "$style_id has no registry source mapping"
   for required_file in Style.qml BarSurface.qml TooltipSurface.qml VisualTokens.qml; do
     [[ -f "$style_dir/$required_file" ]] \
@@ -58,33 +59,33 @@ for style_id in "${style_dirs[@]}"; do
   fi
 done
 
-rg -q 'import "styles" as Styles' Bar.qml \
-  || fail "Bar.qml does not import the style registry"
-rg -q '^  Styles\.StyleRegistry \{' Bar.qml \
-  || fail "Bar.qml does not instantiate the style registry"
-rg -q 'requestedStyleId = String\(config\.style \|\| "shibumi"\)' Bar.qml \
+rg -q 'import "styles" as Styles' hancore.shibumi.bar/Bar.qml \
+  || fail "hancore.shibumi.bar/Bar.qml does not import the style registry"
+rg -q '^  Styles\.StyleRegistry \{' hancore.shibumi.bar/Bar.qml \
+  || fail "hancore.shibumi.bar/Bar.qml does not instantiate the style registry"
+rg -q 'requestedStyleId = String\(config\.style \|\| "shibumi"\)' hancore.shibumi.bar/Bar.qml \
   || fail "bar.style is not read from host configuration"
-rg -q '^  function setStyle\(value\)' Bar.qml \
+rg -q '^  function setStyle\(value\)' hancore.shibumi.bar/Bar.qml \
   || fail "style selection cannot be persisted through the host facade"
 for v1_ipc_contract in \
   'function addV1Slot(region: string): string' \
   'function removeV1Slot(region: string): string' \
   'function moveV1GroupToSlot(groupId: string, region: string,'; do
-  rg -Fq "$v1_ipc_contract" Bar.qml \
+  rg -Fq "$v1_ipc_contract" hancore.shibumi.bar/Bar.qml \
     || fail "V1 slot runtime IPC drifted: $v1_ipc_contract"
 done
-rg -q 'activeStyle\.barSurfaceComponent' core/BarPanel.qml \
+rg -q 'activeStyle\.barSurfaceComponent' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface is not delegated to the active style"
-rg -q 'activeStyle\.tooltipSurfaceComponent' core/BarPanel.qml \
+rg -q 'activeStyle\.tooltipSurfaceComponent' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "tooltip surface is not delegated to the active style"
-rg -q 'exclusiveZone: bar\.barExclusiveSize' core/BarPanel.qml \
+rg -q 'exclusiveZone: bar\.barExclusiveSize' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar reserve size does not follow the active style contract"
 for edit_contract in \
   'radius: root.bar.layoutController.v2Mode' \
   '? 0 : root.bar.visualTokens.islandRadius + Commons.Style.space(2)' \
   'SequentialAnimation on opacity' \
   'duration: 900'; do
-  rg -Fq "$edit_contract" styles/shibumi/BarSurface.qml \
+  rg -Fq "$edit_contract" hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
     || fail "edit-mode frame drifted from V1: $edit_contract"
 done
 for protection_contract in \
@@ -95,7 +96,7 @@ for protection_contract in \
   'readonly property int enabledSeparatorHitTargetCount:' \
   'bar.toggleGroupSeparator(String(groupId || ""), editing)' \
   'bar.layoutController.toggleSplit(region, Number(index), editing)'; do
-  rg -Fq "$protection_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$protection_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "within-region layout protection drifted: $protection_contract"
 done
 for stable_group_contract in \
@@ -104,34 +105,34 @@ for stable_group_contract in \
   'stableGroupModel.insert(target, { groupId: groupId })' \
   'stableGroupModel.remove(index)' \
   'model: stableGroupModel'; do
-  rg -Fq "$stable_group_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$stable_group_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "dynamic groups can rebuild existing widget owners: $stable_group_contract"
 done
-if rg -Fq 'model: root.groups' styles/shibumi/GroupSection.qml; then
+if rg -Fq 'model: root.groups' hancore.shibumi.bar/styles/shibumi/GroupSection.qml; then
   fail "group repeater still destroys every widget owner on layout changes"
 fi
 rg -Fq 'onClicked: root.bar.toggleGroupSeparator(' \
-  styles/shibumi/GroupSection.qml && \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml && \
   fail "separator click bypasses the V2 interaction guard"
 rg -Uq 'onClicked: \{\n[[:space:]]*if \(root\) root\.toggleSeparator\(' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "within-region markers do not use the guarded interaction route"
 for v1_edit_interaction_contract in \
   'return !v2Mode && bar.layoutController' \
   'function onSlotEditingChanged()' \
   'enabled: root ? !root.slotEditing : false'; do
-  rg -Fq "$v1_edit_interaction_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$v1_edit_interaction_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "V1 edit interaction drifted: $v1_edit_interaction_contract"
 done
 rg -Fq 'return separated ? Math.max(0, splitGrow - groupSpacing)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "active separators no longer follow the original V2 edge offset"
 rg -Fq 'width: root && horizontalCell.placeholderSlot' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "edit placeholder does not use the presentation-specific slot size"
-rg -Fq 'height: root.v2Shell' core/GroupSlot.qml \
+rg -Fq 'height: root.v2Shell' hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "V2 widget fill is no longer constrained to the pill height"
-rg -Fq 'decorated ? v2SurfaceHeight : 0' core/GroupSlot.qml \
+rg -Fq 'decorated ? v2SurfaceHeight : 0' hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "V2 fill height no longer follows the fixed 24px surface contract"
 for group_activation_contract in \
   'void(stateConfig)' \
@@ -140,18 +141,18 @@ for group_activation_contract in \
   'effectiveGroupId, v2Shell ? "v2" : "v1")' \
   'const bindings = !v2Shell && bar && "v1FamilySlotBindings" in bar' \
   '? GroupRegistry.dynamicGroupIdForModule(replacement) : groupId'; do
-  rg -Fq "$group_activation_contract" core/GroupSlot.qml \
+  rg -Fq "$group_activation_contract" hancore.shibumi.bar/core/GroupSlot.qml \
     || fail "optional group activation is not reactive: $group_activation_contract"
 done
 rg -Fq 'markerCenter: item.x + item.separatorCenter' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "separator geometry is not derived from the live widget edge"
 for slot_add_contract in \
   'readonly property bool canAddSlot: slotEditing' \
   'text: "+"' \
   'root.bar.layoutController.addV2Slot(root.region)' \
   'root.bar.layoutController.addV1Slot(root.region)'; do
-  rg -Fq "$slot_add_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$slot_add_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "inline add-slot affordance drifted: $slot_add_contract"
 done
 for v1_slot_contract in \
@@ -161,7 +162,7 @@ for v1_slot_contract in \
   'anchors.verticalCenter: parent.verticalCenter' \
   'root.bar.layoutController.removeV1SlotAt(' \
   'root.bar.layoutController.isExtraV1Slot(root.region, index)'; do
-  rg -Fq "$v1_slot_contract" styles/shibumi/GroupSection.qml \
+  rg -Fq "$v1_slot_contract" hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     || fail "V1 editable slot proxy drifted: $v1_slot_contract"
 done
 for boundary_protection_contract in \
@@ -169,28 +170,28 @@ for boundary_protection_contract in \
   'if (!root.layoutChangesAllowed) return false' \
   'enabled: root.layoutChangesAllowed' \
   'root.layoutSession && root.layoutSession.editing'; do
-  rg -Fq "$boundary_protection_contract" styles/shibumi/BarSurface.qml \
+  rg -Fq "$boundary_protection_contract" hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
     || fail "boundary layout protection drifted: $boundary_protection_contract"
 done
 for v1_boundary_contract in \
   'visible: root.bar.layoutController.v2Mode !== true' \
   '&& boundaryMarker.splitOn ? "│" : "•"'; do
-  rg -Fq "$v1_boundary_contract" styles/shibumi/BarSurface.qml \
+  rg -Fq "$v1_boundary_contract" hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
     || fail "V1 boundary marker drifted: $v1_boundary_contract"
 done
 rg -Fq 'root.tokenColor("separator", root.bar.visualTokens.sumi)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "widget separator color does not use the quiet V2 token"
 rg -Fq '? root.bar.visualTokens.separator : root.bar.visualTokens.sumi' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "boundary separator color does not use the quiet V2 token"
 rg -Fq 'visible: boundaryX > 0 && boundaryIndex >= 0' \
-  styles/shibumi/BarSurface.qml \
+  hancore.shibumi.bar/styles/shibumi/BarSurface.qml \
   || fail "boundary split handles are incorrectly gated by edit mode"
-rg -Fq 'visible: hasFollowingGroup' styles/shibumi/GroupSection.qml \
+rg -Fq 'visible: hasFollowingGroup' hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "within-region split handles are incorrectly gated by edit mode"
 rg -Fq 'readonly property int groupGap: Commons.Style.space(6)' \
-  styles/shibumi/VisualTokens.qml \
+  hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
   || fail "unsplit group gaps drifted from the V1 6px contract"
 for v2_geometry_contract in \
   'readonly property int barHeight: Commons.Style.space(v2Shell ? 33 : 35)' \
@@ -200,14 +201,14 @@ for v2_geometry_contract in \
   'readonly property int panelRadius: v2Shell' \
   'Math.max(Commons.Style.space(80), naturalShellWidth)' \
   'height: horizontalSurface.shibumiShell'; do
-  rg -Fq "$v2_geometry_contract" styles/shibumi \
+  rg -Fq "$v2_geometry_contract" hancore.shibumi.bar/styles/shibumi \
     || fail "original V2 shell geometry drifted: $v2_geometry_contract"
 done
 for v2_shadow_contract in \
   'visible: root.shellStyle !== "shibumi" && root.shellStyle !== "notch"' \
   'offset: Qt.vector2d(0, root.atTop ? 2 : -2)' \
   '? root.bar.visualTokens.shellShadow : Qt.rgba(0, 0, 0, 0.46)'; do
-  rg -Fq "$v2_shadow_contract" styles/shibumi/RunChrome.qml \
+  rg -Fq "$v2_shadow_contract" hancore.shibumi.bar/styles/shibumi/RunChrome.qml \
     || fail "original V2 shell shadow drifted: $v2_shadow_contract"
 done
 for v2_edge_contract in \
@@ -227,7 +228,7 @@ for v2_edge_contract in \
   'x: root.width - root.desktopEdgeInset' \
   'y: root.atTop ? root.height - 1 : 0' \
   ': Math.max(0, root.width - 2 * root.desktopEdgeInset)'; do
-  rg -Fq "$v2_edge_contract" styles/shibumi/RunChrome.qml \
+  rg -Fq "$v2_edge_contract" hancore.shibumi.bar/styles/shibumi/RunChrome.qml \
     || fail "V2 open-edge contour contract drifted: $v2_edge_contract"
 done
 for notch_single_path_contract in \
@@ -235,10 +236,10 @@ for notch_single_path_contract in \
   'x: root.notchConnectedCenterX - root.connectedCurveHalfWidth' \
   'x: root.notchConnectedCenterX + root.connectedCurveHalfWidth' \
   'visible: root.connectedPanelActive && root.shellStyle !== "notch"'; do
-  rg -Fq "$notch_single_path_contract" styles/shibumi/RunChrome.qml \
+  rg -Fq "$notch_single_path_contract" hancore.shibumi.bar/styles/shibumi/RunChrome.qml \
     || fail "Notch border is no longer one fused contour: $notch_single_path_contract"
 done
-if rg -q 'widgetPadding|appearancePadding' styles/shibumi/RunChrome.qml; then
+if rg -q 'widgetPadding|appearancePadding' hancore.shibumi.bar/styles/shibumi/RunChrome.qml; then
   fail "Notch border geometry depends on per-widget spacing"
 fi
 if awk '
@@ -246,36 +247,36 @@ if awk '
   in_rectangle && /visible: root.shellStyle === "full"/ { found=1 }
   in_rectangle && /^  }/ { in_rectangle=0 }
   END { exit !found }
-' styles/shibumi/RunChrome.qml; then
+' hancore.shibumi.bar/styles/shibumi/RunChrome.qml; then
   fail "Full regained a closed Rectangle border"
 fi
 rg -Fq 'return groupSpacing + (separated ? splitGrow : 0)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "split marker is not centered across the full V1 22px gap"
-rg -Fq 'clip: false' styles/shibumi/GroupSection.qml \
+rg -Fq 'clip: false' hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "unsplit V1 markers are clipped outside their 6px cells"
 awk '/id: separatorHitRepeater/{seen=1} seen && /hoverEnabled: true/{found=1; exit} END{exit !found}' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "within-region split handles cannot reveal their V1 hover marker"
 for inactive_drag_contract in \
   'visible: enabled' \
   'hoverEnabled: enabled' \
   ': Qt.ArrowCursor'; do
   sed -n '/id: dragMouse/,/function windowPoint/p' \
-    styles/shibumi/GroupSection.qml \
+    hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
     | rg -Fq "$inactive_drag_contract" \
     || fail "inactive drag handles can own the cursor: $inactive_drag_contract"
 done
 rg -Fq 'radius: root ? root.bar.visualTokens.pillRadius : 0' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "drop targets do not follow the selected V1 radius"
 rg -Fq '? tokenNumber("tileRadius", 8) : tokenNumber("pillRadius", 12)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "V1 expandable slots do not follow Radius 12/Radius 6"
 for v1_host_contract in \
   'property real horizontalHostHeight: 0' \
   'horizontalHostHeight: root.v2Shell ? 0 : root.v1SlotHeight'; do
-  rg -Fq "$v1_host_contract" core/WidgetSlot.qml core/GroupSlot.qml \
+  rg -Fq "$v1_host_contract" hancore.shibumi.bar/core/WidgetSlot.qml hancore.shibumi.bar/core/GroupSlot.qml \
     || fail "V1 widgets lost the original 28px host contract: $v1_host_contract"
 done
 for dynamic_v1_contract in \
@@ -294,21 +295,21 @@ for dynamic_v1_contract in \
   'id: dynamicV1Shadow' \
   'RectangularShadow {' \
   'root.bar.visualTokens.shadowEnabled === true'; do
-  rg -Fq "$dynamic_v1_contract" core/GroupSlot.qml \
+  rg -Fq "$dynamic_v1_contract" hancore.shibumi.bar/core/GroupSlot.qml \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
 done
 for edit_surface_contract in \
   'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
   'mask: Region {' \
   'onClicked: dragSession.setEditing(false)'; do
-  rg -Fq "$edit_surface_contract" core/BarPanel.qml \
+  rg -Fq "$edit_surface_contract" hancore.shibumi.bar/core/BarPanel.qml \
     || fail "stable V1 edit surface drifted: $edit_surface_contract"
 done
 rg -Fq 'readonly property real appearancePadding: v2Shell && bar.visualTokens' \
-  core/GroupSlot.qml \
+  hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "V2 widget padding leaked into the original V1 group geometry"
 rg -Fq '? tokenNumber("slotHeight", 28) : tokenNumber("pillHeight", 24)' \
-  styles/shibumi/GroupSection.qml \
+  hancore.shibumi.bar/styles/shibumi/GroupSection.qml \
   || fail "V1 expandable slots do not use the 24px pill size"
 for pill_contract in \
   'property var settings: ({})' \
@@ -324,7 +325,7 @@ for pill_contract in \
   'blur: 8' \
   'root.bar && root.bar.position === "bottom" ? -1 : 1' \
   'visible: root.shellPillVisible'; do
-  rg -Fq "$pill_contract" shared/presentation/PillSurface.qml \
+  rg -Fq "$pill_contract" hancore.shibumi.state/lib/presentation/PillSurface.qml \
     || fail "V1/V2 widget surface separation drifted: $pill_contract"
 done
 for v1_shadow_contract in \
@@ -332,34 +333,33 @@ for v1_shadow_contract in \
     'offset: Qt.vector2d(0, root.atTop ? 1 : -1)' \
     'root.bar.visualTokens.pillShadow !== undefined' \
     'Qt.rgba(0, 0, 0, 0.55)'; do
-  rg -Fq "$v1_shadow_contract" styles/shibumi/RunChrome.qml \
+  rg -Fq "$v1_shadow_contract" hancore.shibumi.bar/styles/shibumi/RunChrome.qml \
     || fail "V1 island shadow drifted: $v1_shadow_contract"
 done
 for tooltip_shadow_contract in \
     'visible: root.bar.visualTokens.shellStyle === "shibumi"' \
     '&& root.bar.visualTokens.shadowEnabled === true' \
     'anchors.fill: tooltipBubble'; do
-  rg -Fq "$tooltip_shadow_contract" styles/shibumi/TooltipSurface.qml \
+  rg -Fq "$tooltip_shadow_contract" hancore.shibumi.bar/styles/shibumi/TooltipSurface.qml \
     || fail "V1 tooltip shadow drifted: $tooltip_shadow_contract"
 done
 for widget in ai audio battery bluetooth brightness center control-center cpu gpu \
     media memory network power-profile quick-access status storage temperature \
     workspaces; do
-  token_injection='HostTokens { id: hostTokens; bar: root.bar }'
+  token_injection='Presentation.HostTokens { id: hostTokens; bar: root.bar }'
   case "$widget" in
     audio|media|control-center|cpu|memory|gpu|storage|temperature|workspaces|battery|power-profile)
-      token_injection='HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }' ;;
+      token_injection='Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }' ;;
   esac
   rg -Fq "$token_injection" "hancore.shibumi.$widget/BarWidget.qml" \
     || fail "$widget does not provide standard-host visual tokens"
   rg -Fq 'if (value === "round") return pillHeight / 2' \
-    "hancore.shibumi.$widget/HostTokens.qml" \
-    || fail "$widget host tokens do not preserve the V2 Round shape"
+    hancore.shibumi.state/lib/presentation/HostTokens.qml \
+    || fail "$widget shared host tokens do not preserve the V2 Round shape"
 done
 for shape_tokens in \
-    styles/shibumi/VisualTokens.qml \
     hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
-    shared/presentation/HostTokens.qml; do
+    hancore.shibumi.state/lib/presentation/HostTokens.qml; do
   rg -Fq 'if (value === "round") return pillHeight / 2' "$shape_tokens" \
     || fail "V2 Round shape is not half the widget surface: $shape_tokens"
   rg -Fq 'if (!v2Shell) return widgetColorId(settings) !== "inherit"' \
@@ -390,7 +390,7 @@ for launcher_contract in \
     || fail "Control Center appearance surface drifted: $launcher_contract"
 done
 
-panel_tooltip=shared/presentation/ShibumiPanelToolTip.qml
+panel_tooltip=hancore.shibumi.state/lib/presentation/ShibumiPanelToolTip.qml
 [[ -f $panel_tooltip ]] || fail "shared panel tooltip is missing"
 for tooltip_contract in \
   'delay: 320' \
@@ -411,7 +411,7 @@ for tooltip_owner in \
   hancore.shibumi.status/TrayDrawerPanel.qml \
   hancore.shibumi.update-center/PanelButton.qml \
   hancore.shibumi.update-center/ThemesTab.qml; do
-  rg -q 'ShibumiPanelToolTip \{' "$tooltip_owner" \
+  rg -q 'Presentation\.ShibumiPanelToolTip \{' "$tooltip_owner" \
     || fail "$tooltip_owner bypasses the Shibumi panel tooltip"
 done
 
@@ -433,7 +433,13 @@ for header_action_owner in \
     || fail "$header_action_owner lost the 28px header action width"
   rg -q 'implicitHeight: Commons\.Style\.space\(28\)' "$header_action_owner" \
     || fail "$header_action_owner lost the 28px header action height"
-  rg -q 'ShibumiPanelToolTip \{' "$header_action_owner" \
+  header_tooltip=Panel
+  case "$header_action_owner" in
+    hancore.shibumi.ai/AiUsagePanel.qml|hancore.shibumi.battery/BatteryPanel.qml|hancore.shibumi.center/WeatherPanel.qml|hancore.shibumi.control-center/ControlCenterPanel.qml|hancore.shibumi.media/MediaPanel.qml|hancore.shibumi.power-profile/PowerProfilePanel.qml)
+      header_tooltip=Pill ;;
+  esac
+  rg -q "Presentation\\.Shibumi${header_tooltip}ToolTip \\{" \
+    "$header_action_owner" \
     || fail "$header_action_owner lost its local header tooltip"
 done
 
@@ -513,7 +519,7 @@ fi
   || fail "Shibumi panel must render at most one matching shadow contour"
 rg -Fq '&& root.shellStyle === "shibumi"' "$panel_surface" \
   || fail "V2 connected panels still cast a shadow into the bar notch"
-run_chrome=styles/shibumi/RunChrome.qml
+run_chrome=hancore.shibumi.bar/styles/shibumi/RunChrome.qml
 for negative_space_contract in \
   'readonly property real connectedCurveHalfWidth: 7 * connectedReveal' \
   'readonly property real connectedDepth: 5 * connectedReveal' \
@@ -542,13 +548,18 @@ for panel_contract in \
     || fail "Shibumi panel lost dynamic radius contract: $panel_contract"
 done
 
-for adapter in ShibumiButtonGroup ShibumiDropdown ShibumiTextField; do
-  adapter_file="shared/presentation/${adapter}.qml"
-  [[ -f $adapter_file ]] || fail "missing dynamic-radius adapter: $adapter"
-  rg -q 'property real controlRadius:' "$adapter_file" \
-    || fail "$adapter does not expose the shared control radius"
-  rg -q 'radius: root\.controlRadius' "$adapter_file" \
-    || fail "$adapter does not render with the shared control radius"
+for retired_presentation_source in \
+  shared/presentation/ShibumiButtonGroup.qml \
+  widgets/ShibumiButtonGroup.qml \
+  hancore.shibumi.workspaces/ShibumiButtonGroup.qml \
+  shared/presentation/ShibumiDropdown.qml \
+  shared/presentation/ShibumiTextField.qml \
+  shared/presentation/ShibumiSlider.qml \
+  widgets/ShibumiSlider.qml \
+  hancore.shibumi.audio/ShibumiSlider.qml \
+  hancore.shibumi.brightness/ShibumiSlider.qml; do
+  [[ ! -e $retired_presentation_source ]] \
+    || fail "retired presentation dead code returned: $retired_presentation_source"
 done
 
 for radius_owner in \
@@ -756,7 +767,7 @@ for palette_contract in \
   'readonly property color paper: Commons.Color.background' \
   'readonly property color ink: Commons.Color.foreground' \
   'readonly property color sumi: Commons.Color.muted'; do
-  rg -Fq "$palette_contract" styles/shibumi/VisualTokens.qml \
+  rg -Fq "$palette_contract" hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
     || fail "Shibumi bypasses the canonical Quattro palette: $palette_contract"
 done
 for widget_outline_contract in \
@@ -769,9 +780,9 @@ for widget_outline_contract in \
   'settings.widgetBorderUsesSurfaceColor === true' \
   'return id !== "inherit" && stateService' \
   '? stateService.paletteColor(id) : panelBorder'; do
-  rg -Fq "$widget_outline_contract" styles/shibumi/VisualTokens.qml \
+  rg -Fq "$widget_outline_contract" hancore.shibumi.bar/styles/shibumi/VisualTokens.qml \
     || fail "widget outline no longer consumes its selected palette color: $widget_outline_contract"
-  rg -Fq "$widget_outline_contract" shared/presentation/HostTokens.qml \
+  rg -Fq "$widget_outline_contract" hancore.shibumi.state/lib/presentation/HostTokens.qml \
     || fail "host-neutral widget outline color drifted: $widget_outline_contract"
 done
 for extra_swatch_contract in \
@@ -783,11 +794,11 @@ for extra_swatch_contract in \
   'color06: values.color6 || values.cyan || ""' \
   'color07: values.color7 || values.bright_fg || values.light_fg || ""' \
   'color08: values.color8 || values.bright_black || ""'; do
-  rg -Fq "$extra_swatch_contract" shared/state/ThemePaletteModel.js \
+  rg -Fq "$extra_swatch_contract" hancore.shibumi.state/ThemePaletteModel.js \
     || fail "V1 palette swatch mapping drifted: $extra_swatch_contract"
 done
 if rg -q 'values\.(bg|fg|dark_bg|darker_bg|lighter_bg|dark_fg)\b' \
-  shared/state/ThemePaletteModel.js; then
+  hancore.shibumi.state/ThemePaletteModel.js; then
   fail "Shibumi restored removed Quattro bg/fg palette aliases"
 fi
 for remove_theme_contract in \

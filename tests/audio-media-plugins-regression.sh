@@ -20,8 +20,7 @@ fail() {
 
 stage_media_runtime() {
   local root=$1
-  mkdir -p "$root/hancore.shibumi.state"
-  cp -a "$repo_root/hancore.shibumi.state/runtime" "$root/hancore.shibumi.state/"
+  shibumi_stage_suite_runtime "$repo_root" "$root"
   printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
     > "$root/hancore.shibumi.state/.shibumi-managed.json"
 }

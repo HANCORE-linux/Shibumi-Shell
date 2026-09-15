@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from types import ModuleType
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "hancore.shibumi.network/scripts/network-reachability-probe"
 
@@ -219,7 +220,9 @@ def main() -> int:
                 f"""
                 import importlib.machinery
                 import importlib.util
+                import sys
                 import time
+                sys.dont_write_bytecode = True
                 loader = importlib.machinery.SourceFileLoader("probe", {str(HELPER)!r})
                 spec = importlib.util.spec_from_loader(loader.name, loader)
                 module = importlib.util.module_from_spec(spec)

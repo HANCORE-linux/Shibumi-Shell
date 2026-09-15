@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from . import STATE_SCHEMA_VERSION, SUITE_ID
-from .admission import AdmissionError, preflight_lifecycle_state
+from .admission import (
+    AdmissionError,
+    UnsupportedInstallIdentity,
+    preflight_lifecycle_state,
+    require_current_payload_identity,
+)
 from .config import (
     apply_identity_contract,
     ConfigError,
@@ -1241,6 +1246,38 @@ def command_uninstall(
     return 0
 
 
+def command_status_with_admission(suite: Suite, paths: RuntimePaths) -> int:
+    try:
+        preflight_lifecycle_state(paths, suite)
+    except UnsupportedInstallIdentity as error:
+        print("shibumi-suite: installed identity is unsupported", file=sys.stderr)
+        print(
+            "shibumi-suite: supported identity labels: "
+            + ", ".join(error.supported_labels),
+            file=sys.stderr,
+        )
+        print(
+            "shibumi-suite: diagnostic is read-only and is not authorization; "
+            "no recovery or mutation was attempted",
+            file=sys.stderr,
+        )
+        print("shibumi-suite: identity diagnostic:", file=sys.stderr)
+        print(
+            json.dumps(error.diagnostic, indent=2, sort_keys=True),
+            file=sys.stderr,
+        )
+        return 1
+    except AdmissionError:
+        print(
+            "shibumi-suite: status admission refused; malformed, unsafe, "
+            "ambiguous, or unsupported state was not inspected further; "
+            "no recovery or mutation was attempted",
+            file=sys.stderr,
+        )
+        return 1
+    return command_status(suite, paths)
+
+
 def command_status(suite: Suite, paths: RuntimePaths) -> int:
     state_path = install_state_file(paths)
     state: dict[str, Any] | None = None
@@ -1429,8 +1466,7 @@ def main(argv: list[str] | None = None) -> int:
         paths.validate()
         runtime = OmarchyRuntime(paths.omarchy_root)
         if args.command == "status":
-            preflight_lifecycle_state(paths, suite)
-            return command_status(suite, paths)
+            return command_status_with_admission(suite, paths)
 
         allow_payload_repair = args.command == "repair"
         with SuiteLock(paths.lock_file):
@@ -1440,6 +1476,10 @@ def main(argv: list[str] | None = None) -> int:
                 allow_pending_recovery=True,
                 allow_payload_repair=allow_payload_repair,
             )
+            if args.command in {"install", "migrate", "update", "repair"}:
+                # Reject an unbound target checkout/package before interrupted
+                # recovery or any requested payload mutation can run.
+                require_current_payload_identity(suite)
             recovered = recover_transactions(paths, runtime, suite=suite)
             if recovered:
                 # Recovery can legitimately replace exposed payload or commit

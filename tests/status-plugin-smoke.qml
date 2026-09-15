@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import "status" as Status
+import "hancore.shibumi.bar/services" as BarServices
 import "fixtures" as Fixtures
 
 ShellRoot {
@@ -13,6 +14,7 @@ ShellRoot {
   property real initialWidth: 0
   property var clickTargets: []
   property var statusSettings: ({ displayMode: "full" })
+  readonly property var scopedStatus: scopedStatusLoader.item
 
   function fail(message) {
     console.error("status-widget-smoke:", message)
@@ -198,6 +200,72 @@ ShellRoot {
   }
 
   QtObject {
+    id: scopedFacade
+    readonly property string pluginId: "hancore.shibumi.status"
+  }
+
+  QtObject {
+    id: scopedRegistry
+    readonly property var widgets: ({
+      "hancore.shibumi.update-center": ({
+        component: childComponent,
+        metadata: { pluginId: "hancore.shibumi.update-center" }
+      }),
+      "omarchy.tray": ({
+        component: childComponent,
+        metadata: { pluginId: "omarchy.tray" }
+      })
+    })
+  }
+
+  QtObject {
+    id: scopedBar
+    property bool vertical: false
+    property int barSize: 35
+    property string fontFamily: "monospace"
+    property color foreground: "#eeeeee"
+    property color barForeground: foreground
+    property color background: "#111111"
+    property color urgent: "#88bbee"
+    property bool foregroundAnimationEnabled: false
+    property var activePopout: null
+    property var shell: fakeShell
+    property var pluginRegistry: scopedFacade
+    property var barWidgetRegistry: scopedRegistry
+    property var layoutConfig: ({
+      left: [{ id: "hancore.shibumi.status" }], center: [], right: []
+    })
+    property var visualTokens: fakeBar.visualTokens
+    function registeredWidgetComponent(id) {
+      return scopedResolver.componentFor(id)
+    }
+    function registeredEmbeddedWidgetComponent(ownerId, id) {
+      return scopedResolver.embeddedComponentFor(ownerId, id)
+    }
+    function registeredWidgetSource(id) {
+      return scopedResolver.entryPointUrl(id)
+    }
+    function widgetSettings(group, module) {
+      return group === "G3" ? ({ marker: module }) : ({})
+    }
+    function registerClickTarget(_target) {}
+    function unregisterClickTarget(_target) {}
+    function showTooltip(_target, _text) {}
+    function hideTooltip(_target) {}
+    function requestPopout(owner) { activePopout = owner }
+    function releasePopout(owner) {
+      if (activePopout === owner) activePopout = null
+    }
+    function switchPanelFrom(_owner, _direction) { return true }
+    function targetBelongsToWindow(_target, _window) { return true }
+  }
+
+  BarServices.HostWidgetResolver {
+    id: scopedResolver
+    bar: scopedBar
+  }
+
+  QtObject {
     id: unavailableShell
     function firstPartyServiceFor(_id) { return null }
   }
@@ -248,6 +316,14 @@ ShellRoot {
     trayComponent: null
   }
 
+  Loader {
+    id: scopedStatusLoader
+    active: true
+    sourceComponent: Component {
+      Status.BarWidget { bar: scopedBar }
+    }
+  }
+
   Timer {
     interval: 80
     repeat: true
@@ -257,6 +333,27 @@ ShellRoot {
       const status = statusLoader.item
       if (root.phase === 0) {
         if (!status || !status.ready || root.phaseTicks < 3) return
+        if (!root.scopedStatus || !root.scopedStatus.visible
+            || !root.scopedStatus.updateWidget
+            || !root.scopedStatus.trayWidget) {
+          if (root.phaseTicks < 25) return
+          return root.fail("scoped G3 embedded widgets did not load: visible="
+            + !!(root.scopedStatus && root.scopedStatus.visible)
+            + ", update=" + !!(root.scopedStatus
+              && root.scopedStatus.updateWidget)
+            + ", tray=" + !!(root.scopedStatus
+              && root.scopedStatus.trayWidget))
+        }
+        if (scopedResolver.componentFor(
+              "hancore.shibumi.update-center") !== null
+            || scopedResolver.embeddedComponentFor(
+              "hancore.shibumi.status", "hancore.shibumi.update-center")
+                !== childComponent
+            || scopedResolver.embeddedComponentFor(
+              "hancore.shibumi.status", "omarchy.tray") !== childComponent
+            || scopedResolver.embeddedComponentFor(
+              "hancore.shibumi.status", "fixture.not-allowed") !== null)
+          return root.fail("scoped G3 component admission boundary")
         if (!status.visible || unavailableStatus.visible
             || !status.updateWidget || !status.trayWidget
             || !status.notificationService || root.clickTargets.length !== 4)

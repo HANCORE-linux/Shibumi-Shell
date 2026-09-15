@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Widgets
 import qs.Commons as Commons
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Item {
   id: root
@@ -61,7 +62,7 @@ Item {
       }
     }
 
-    IconText {
+    Presentation.IconText {
       anchors.centerIn: parent
       visible: !root.controller.isThumbnailReady(root.entry)
       text: root.controller.videoMode ? "movie" : "image"

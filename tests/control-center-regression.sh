@@ -85,6 +85,21 @@ rg -q 'root\.toggle\(\)' "$control_dir/BarWidget.qml" \
 rg -Fq 'readonly property bool animationActive: pointer.containsMouse' \
   "$control_dir/BarWidget.qml" \
   || fail "G1 background motion is not hover-only"
+rg -Fq '&& stateService.requestedConfig ? stateService.requestedConfig' \
+  "$control_dir/BarWidget.qml" \
+  || fail "G1 launcher does not consume requested presentation state"
+for preview_panel in \
+    "$control_dir/ControlCenterPanel.qml" \
+    "$repo_root/tests/fixtures/ControlCenterTestPanel.qml"; do
+  for preview_contract in \
+      'readonly property var requestedStateConfig:' \
+      'readonly property var workspaceConfig: requestedStateConfig.workspace' \
+      'readonly property var launcherConfig: requestedStateConfig.launcher' \
+      'requestedGroupEnabledForVariant'; do
+    rg -Fq "$preview_contract" "$preview_panel" \
+      || fail "Control Center requested-state fixture drifted: $preview_contract"
+  done
+done
 rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost' \
   "$control_dir/BarWidget.qml" \
   || fail "stock Omarchy return icon inherits a Shibumi pill surface"
@@ -280,6 +295,16 @@ plugin_bar_toggle=$(sed -n \
 grep -Fq 'return runWithControlCenterRestore(function() {' \
     <<<"$plugin_bar_toggle" \
   || fail "V1 plugin activation does not preserve the Control Center"
+organizer_group_toggle=$(sed -n \
+  '/^  function setGroupEnabled(groupId, enabled, coalescePresentation) {$/,/^  }$/p' \
+  "$control_dir/ControlCenterPanel.qml")
+for organizer_contract in \
+    'if (coalesced) {' \
+    'stateService.setGroupEnabledForVariant(' \
+    '}, coalesced ? false : true)'; do
+  grep -Fq "$organizer_contract" <<<"$organizer_group_toggle" \
+    || fail "Active/Inactive organizer coalescing drifted: $organizer_contract"
+done
 rg -Fq 'restoreBar.scheduleOpenControlCenterRestores(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "state mutations are not enrolled in panel-owner handoff"
@@ -1686,7 +1711,7 @@ for workbench_contract in \
     'component WidgetSectionHeader: Item' \
     'component WidgetMoveAction: FocusScope' \
     'function setWidgetActive(option, enabled)' \
-    'controller.setPluginEnabled(pluginId, enabled === true)' \
+    'pluginId, enabled === true, true)' \
     'id: editorPointer' \
     'id: moveAction' \
     'onRequested: root.setWidgetActive(' \

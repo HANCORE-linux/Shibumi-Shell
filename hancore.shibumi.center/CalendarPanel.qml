@@ -4,6 +4,7 @@ import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "CalendarModel.js" as CalendarModel
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -230,7 +231,7 @@ ShibumiPanel {
       onClicked: action.clicked()
     }
 
-    ShibumiPanelToolTip {
+    Presentation.ShibumiPillToolTip {
       panel: panel
       visible: panel.shellStyle !== "shibumi"
         && action.tooltipText !== "" && actionMouse.containsMouse

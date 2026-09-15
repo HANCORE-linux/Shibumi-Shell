@@ -17,9 +17,13 @@ payloads into a primary desktop's Omarchy plugin directory.
 
 ## Repository shape
 
-- `hancore.shibumi.*/` contains the 24 self-contained plugin roots.
-- `Bar.qml`, `core/`, `styles/`, and selected shared sources are canonical
-  development copies with checked vendored mirrors.
+- `hancore.shibumi.*/` contains the 24 plugin roots and the canonical bar-host
+  and feature-owner sources. The only cross-plugin QML imports are the exact,
+  declared State runtime and passive presentation modules.
+- `hancore.shibumi.state/lib/presentation/` contains the passive shared visual
+  components; its declared consumers depend directly on State.
+- `shared/presentation/` retains only the active `ShibumiPanel.qml` canonical
+  source. `scripts/sync-shared.sh` drift-checks its existing vendored copies.
 - `contracts/` contains executable product and evidence contracts.
 - `scripts/shibumi_suite/` implements the transactional lifecycle adapter.
 - `tests/` contains source, component, runtime, and lifecycle regressions.

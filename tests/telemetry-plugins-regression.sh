@@ -209,7 +209,7 @@ fi
 for removed_process_contract in pmon SHIBUMI_GPU_PROC_ROOT \
     emit_drm_processes "printf 'proc|" "printf 'counter|"; do
   if rg -Fq "$removed_process_contract" \
-      "$repo_root/shared/telemetry/shibumi-gpu-probe"; then
+      "$repo_root/hancore.shibumi.cpu/scripts/shibumi-gpu-probe"; then
     fail "GPU helper still collects per-process activity: $removed_process_contract"
   fi
 done

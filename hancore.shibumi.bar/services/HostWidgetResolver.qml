@@ -2,22 +2,35 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 
-// Scoped hosts publish accepted Component handles. Render exact configured
-// IDs, with no original fallback or foreign manifest reconstruction. Legacy
-// full registries retain their previously tested component-ownership route.
+// Legacy hosts need locally owned Components because they expose manifest URLs.
+// Scoped hosts are read through their public snapshots only for non-rendering
+// selection helpers; WidgetSlot binds their Component handles directly.
 QtObject {
   id: root
 
   required property var bar
   property var components: ({})
   property var componentUrls: ({})
+  // Only the separately activated legacy component cache publishes revisions.
+  // Scoped WidgetSlots react to the host snapshot directly.
   property int revision: 0
-  readonly property bool scoped: !!bar && !!bar.pluginRegistry
-    && "pluginId" in bar.pluginRegistry
+  readonly property var hostRegistry: bar ? bar.pluginRegistry : null
+  readonly property bool scoped: !!hostRegistry
+    && "pluginId" in hostRegistry
   readonly property var widgetRegistry: bar ? bar.barWidgetRegistry : null
+  readonly property var configuredLayout: bar
+    ? "layoutConfig" in bar ? bar.layoutConfig
+      : bar.barConfig ? bar.barConfig.layout : null
+    : null
+  readonly property var embeddedComponentOwners: ({
+    "hancore.shibumi.status": ({
+      "hancore.shibumi.update-center": true,
+      "omarchy.tray": true
+    })
+  })
 
   function configured(id) {
-    const layout = bar && bar.barConfig ? bar.barConfig.layout : null
+    const layout = configuredLayout
     if (!layout) return false
     for (const region of ["left", "center", "right"]) {
       const entries = layout[region]
@@ -71,14 +84,35 @@ QtObject {
     return String(registry.entryPointUrl(manifest, "barWidget") || "")
   }
 
+  function isComponentHandle(candidate) {
+    // Scoped native registry handles can lose their JavaScript `status`
+    // projection while remaining valid QQmlComponents accepted by Loader.
+    // Check the installed Qt type itself; Ready-shaped data and arbitrary
+    // QObjects must never reach Loader.sourceComponent.
+    try { return !!candidate && candidate instanceof Component }
+    catch (error) { return false }
+  }
+
+  function scopedComponentFor(widgetId) {
+    const id = String(widgetId || "")
+    const selection = selectionFor(id)
+    const component = selection ? selection.component : null
+    return isComponentHandle(component) ? component : null
+  }
+
+  function embeddedComponentFor(ownerId, widgetId) {
+    const owner = String(ownerId || "")
+    const id = String(widgetId || "")
+    if (!scoped) return componentFor(id)
+    const allowed = embeddedComponentOwners[owner]
+    return configured(owner) && allowed && allowed[id] === true
+      ? scopedComponentFor(id) : null
+  }
+
   function componentFor(widgetId) {
     const id = String(widgetId || "")
-    if (scoped) {
-      const selection = selectionFor(id)
-      const component = selection ? selection.component : null
-      return configured(id) && component && component.status === Component.Ready
-        ? component : null
-    }
+    if (scoped)
+      return configured(id) ? scopedComponentFor(id) : null
     const existing = components[id]
     const url = entryPointUrl(id)
     return existing && existing.status === Component.Ready
@@ -124,9 +158,8 @@ QtObject {
     revision++
   }
 
-  // shell.json mutations also emit PluginRegistry.pluginsChanged(). Preserve
-  // component identity when the resolved entry point did not actually change;
-  // otherwise every settings click destroys all bar widgets and their panels.
+  // Legacy shell.json mutations also emit PluginRegistry.pluginsChanged().
+  // Preserve locally created Component identity when its URL is unchanged.
   function syncRegistry() {
     const nextComponents = ({})
     const nextUrls = ({})
@@ -145,17 +178,14 @@ QtObject {
       components = nextComponents
       componentUrls = nextUrls
     }
-    // WidgetSlots re-resolve missing or changed entry points. Retained handles
-    // stay identical, so their live instances and open panels remain intact.
+    // Legacy WidgetSlots re-resolve missing or changed entry points. Retained
+    // handles stay identical, so live instances and open panels remain intact.
     revision++
   }
 
   onScopedChanged: clear()
-  property Connections widgetConnections: Connections {
-    target: root.scoped ? root.widgetRegistry : null
-    function onWidgetsChanged() { root.revision++ }
-    function onRevisionChanged() { root.revision++ }
-  }
+  onHostRegistryChanged: clear()
+  onConfiguredLayoutChanged: if (!scoped) revision++
   property Connections registryConnections: Connections {
     target: !root.scoped && root.bar ? root.bar.pluginRegistry : null
     function onPluginsChanged() { root.syncRegistry() }

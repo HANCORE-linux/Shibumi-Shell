@@ -15,6 +15,8 @@ Scope {
   property var other: null
   property var observed: null
   property var duplicate: null
+  property var initialSnapshot: null
+  property int updateEpoch: 0
   property bool revokeCount: false
   Component { id: holderFactory; QtObject {} }
   QtObject {
@@ -34,11 +36,13 @@ Scope {
     property bool busy: false
     property int serial: 0
     property int calls: 0
+    property string output: "[]"
     signal completed(int serial, string output, bool ok)
     signal drained(int serial)
     function start(value) { if (busy) return false; serial = value; busy = true; calls++; return true }
     function cancel() { busy = false; drained(serial) }
-    function finish() { busy = false; completed(serial, '[]', true); drained(serial) }
+    function finish() { busy = false; completed(serial, output, true); drained(serial) }
+    function fail() { busy = false; completed(serial, "", false); drained(serial) }
   }
   Catalog.PluginUpdateService {
     id: service
@@ -58,8 +62,16 @@ Scope {
     }
   }
   function manifest(valid) {
-    return {id: "hancore.shibumi.control-center", version: valid ? "0.1.1-beta.13" : "invalid",
+    return {id: "hancore.shibumi.control-center", version: valid ? "0.1.1-beta.14" : "invalid",
       kinds: ["service", "bar-widget"]}
+  }
+  function changedCatalogOutput() {
+    return JSON.stringify([{id: "fixture.one", name: "Fixture",
+      kinds: ["service"], enabled: true, active: false, canDisable: true,
+      firstParty: false, clonedFrom: "", description: "", author: "",
+      version: "1", tags: [], barWidget: {displayName: "", description: "",
+        category: "", semanticCapabilities: [], defaultSection: "center",
+        allowMultiple: false}}])
   }
   function assert(value, message) {
     if (value) return
@@ -89,7 +101,10 @@ Scope {
         root.assert(!service.requestCatalogRefresh(root.token) && !service.catalogObservation(root.token)
           && !service.requestCatalogRefresh({}), "interest became admission")
         root.assert(!("catalog" in service) && !("backend" in service)
-          && !("installedPlugins" in service), "raw catalog authority exported")
+          && !("installedPlugins" in service)
+          && !("observedCatalogInventory" in service)
+          && !("observeCatalogInventory" in service),
+          "raw catalog authority exported")
         service.shell = firstShell
         root.stage = 1; break
       case 1:
@@ -110,6 +125,9 @@ Scope {
       case 4:
         root.quiet()
         root.assert(!service.catalogReady && backend.calls === 0, "plain override admitted")
+        service.checked = true
+        service.checkedAt = Date.now()
+        root.updateEpoch = service.invalidationEpoch
         service._catalogBackendOverride = backend
         root.stage = 5; break
       case 5:
@@ -120,6 +138,11 @@ Scope {
       case 6:
         if (!service.catalogReady || service.catalogRefreshing) break
         root.observed = service.catalogObservation(root.token)
+        root.initialSnapshot = service.catalogSnapshot
+        root.assert(service.invalidationEpoch === root.updateEpoch + 1
+          && service.checkedAt === 0,
+          "first catalog publication retained an existing update cache")
+        root.updateEpoch = service.invalidationEpoch
         root.assert(root.observed && root.observed.snapshot.entries.length === 0
           && service.catalogSnapshot === root.observed.snapshot
           && service.isCatalogObservationCurrent(root.other, root.observed)
@@ -144,37 +167,101 @@ Scope {
         if (service.catalogRefreshing) break
         root.assert(service.catalogReady && !service.isCatalogObservationCurrent(root.token, root.observed),
           "old read identity survived publication")
+        root.assert(service.catalogSnapshot === root.initialSnapshot
+          && service.invalidationEpoch === root.updateEpoch,
+          "identical catalog content invalidated update cache")
         root.observed = service.catalogObservation(root.token)
         root.calls = backend.calls
         firstShell.barConfig = ({fixture: 1})
         root.stage = 10; break
       case 10:
-        if (!backend.busy) {
-          root.assert(root.stageTicks < 20, "public shell hint did not refresh")
-          break
-        }
-        root.assert(backend.calls === root.calls + 1, "native hints failed to coalesce")
-        backend.finish()
+        if (root.stageTicks < 3) break
+        root.assert(!backend.busy && backend.calls === root.calls
+          && service.isCatalogObservationCurrent(root.token, root.observed),
+          "State/config signal started or invalidated the catalog")
+        root.assert(service.requestCatalogRefresh(root.token),
+          "explicit config refresh request was refused")
         root.stage = 27; break
       case 27:
-        if (service.catalogRefreshing) break
-        root.calls = backend.calls
-        widgetRegistry.revision++
+        if (!backend.busy) break
+        root.assert(backend.calls === root.calls + 1,
+          "explicit config refresh did not start exactly once")
+        backend.output = root.changedCatalogOutput()
+        backend.finish()
         root.stage = 28; break
       case 28:
-        if (!backend.busy) {
-          root.assert(root.stageTicks < 20, "widget hint did not refresh")
-          break
-        }
-        root.assert(backend.calls === root.calls + 1, "widget hint did not coalesce")
+        if (service.catalogRefreshing) break
+        root.assert(service.catalogSnapshot !== root.initialSnapshot
+          && service.invalidationEpoch === root.updateEpoch + 1,
+          "changed catalog content retained update cache")
+        root.updateEpoch = service.invalidationEpoch
+        root.observed = service.catalogObservation(root.token)
+        root.calls = backend.calls
+        widgetRegistry.revision++
+        root.stage = 29; break
+      case 29:
+        if (root.stageTicks < 3) break
+        root.assert(!backend.busy && backend.calls === root.calls
+          && service.isCatalogObservationCurrent(root.token, root.observed),
+          "widget-registry signal started or invalidated the catalog")
+        root.assert(service.requestCatalogRefresh(root.token),
+          "explicit registry refresh request was refused")
+        root.stage = 30; break
+      case 30:
+        if (!backend.busy) break
+        root.assert(backend.calls === root.calls + 1,
+          "explicit registry refresh did not start exactly once")
         backend.finish()
         root.stage = 11; break
       case 11:
         if (service.catalogRefreshing) break
+        root.assert(service.invalidationEpoch === root.updateEpoch,
+          "repeated changed catalog content re-invalidated update cache")
         root.assert(service.releaseCatalogConsumer(root.token) && service.catalogConsumerCount === 1
           && !service.catalogObservation(root.token) && service.catalogObservation(root.other),
           "selective release lost remaining reader")
-        root.assert(service.requestCatalogRefresh(root.other), "remaining consumer cannot refresh")
+        root.assert(service.releaseCatalogConsumer(root.other)
+          && service.catalogConsumerCount === 0 && !service.catalogReady,
+          "last explicit release retained catalog authority")
+        root.stage = 31; break
+      case 31:
+        root.other = service.acquireCatalogConsumer(root.second)
+        root.assert(root.other && service.catalogConsumerCount === 1,
+          "catalog reacquire after demand gap failed")
+        root.stage = 32; break
+      case 32:
+        if (!backend.busy) break
+        backend.finish()
+        root.stage = 33; break
+      case 33:
+        if (!service.catalogReady || service.catalogRefreshing) break
+        root.assert(service.invalidationEpoch === root.updateEpoch,
+          "identical inventory after demand gap invalidated update cache")
+        root.assert(service.requestCatalogRefresh(root.other),
+          "failure-gap refresh request was refused")
+        root.stage = 34; break
+      case 34:
+        if (!backend.busy) break
+        backend.fail()
+        root.stage = 35; break
+      case 35:
+        if (service.catalogRefreshing) break
+        root.assert(!service.catalogReady
+          && service.invalidationEpoch === root.updateEpoch,
+          "failed catalog read changed update-cache identity")
+        root.assert(service.requestCatalogRefresh(root.other),
+          "catalog recovery request was refused")
+        root.stage = 36; break
+      case 36:
+        if (!backend.busy) break
+        backend.finish()
+        root.stage = 37; break
+      case 37:
+        if (!service.catalogReady || service.catalogRefreshing) break
+        root.assert(service.invalidationEpoch === root.updateEpoch,
+          "identical inventory after read failure invalidated update cache")
+        root.assert(service.requestCatalogRefresh(root.other),
+          "remaining consumer cannot refresh")
         root.stage = 12; break
       case 12:
         if (!backend.busy) break
@@ -258,7 +345,7 @@ Scope {
           "separate update scan did not finish")
         service.releaseConsumer()
         root.first.destroy()
-        console.log("production catalog service leases/admission/hints passed; inert backend")
+        console.log("production catalog service leases/admission/reconcile passed; inert backend")
         Qt.quit()
       }
     }

@@ -1,6 +1,6 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.13` local candidate contract
+Status: `0.1.1-beta.14` local candidate contract
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
@@ -103,13 +103,9 @@ the PKGBUILD containing `_source_sha256` inside the bytes it hashes would make
 the checksum self-referential. The runtime package helpers under `packaging/`
 remain in the asset.
 
-The GitHub tag workflow rebuilds the archive from `GITHUB_SHA`, requires the
-remote `v<VERSION>` tag to peel to that commit, and compares the result with the
-pinned PKGBUILD checksum. It creates a draft with an explicit asset inventory,
-downloads the remote assets, compares every name, size, and SHA-256, and only
-then publishes. A server-side `v*` ruleset must independently block tag updates
-and deletion. A failed upload or verification remains a draft. The checkout
-action is pinned to a full commit SHA.
+The GitHub tag workflow rebuilds the archive from `GITHUB_SHA`, requires the remote `v<VERSION>` tag to peel to that commit, and compares the result with the pinned PKGBUILD checksum. The self-hosted validation job has read-only repository permission. It transfers the validated assets and their checksum manifest to a separate publication job. Only that job receives write permission.
+
+The publication job verifies the transferred inventory and checksums before it creates or updates a draft. It downloads the remote assets, compares every name, size, and SHA-256, and only then publishes. A server-side `v*` ruleset must independently block tag updates and deletion. A failed upload or verification remains a draft. Every external action is pinned to a full commit SHA.
 
 ## Local rehearsal
 
