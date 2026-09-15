@@ -42,7 +42,8 @@ jq -e '.schemaVersion == 1 and .manifestId == "hancore.shibumi.backend-boundary"
 jq -e '.schemaVersion == 1
   and .contractId == "hancore.shibumi.lifecycle-predecessors"
   and (.states | map(.id)) == [
-    "public-beta.11", "step-5-tip", "public-beta.12", "public-beta.13"
+    "public-beta.11", "step-5-tip", "public-beta.12", "public-beta.13",
+    "public-beta.14"
   ]' \
   contracts/lifecycle-predecessors-v1.json >/dev/null
 grep -Fq 'contracts/lifecycle-predecessors-v1.json' "$pkgbuild" || {

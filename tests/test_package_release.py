@@ -163,6 +163,17 @@ class PackageReleaseTests(unittest.TestCase):
             states["public-beta.12"]["sourceRevisions"],
         )
 
+        aur_check = (ROOT / "scripts/check-aur-package").read_text(
+            encoding="utf-8"
+        )
+        state_list_marker = "and (.states | map(.id)) == ["
+        self.assertEqual(aur_check.count(state_list_marker), 1)
+        aur_state_list = aur_check.split(state_list_marker, 1)[1].split("]", 1)[0]
+        self.assertEqual(
+            json.loads(f"[{aur_state_list}]"),
+            [item["id"] for item in contract["states"]],
+        )
+
     def test_package_boundary_has_no_user_mutation_hook(self) -> None:
         pkgbuild = (ROOT / "packaging/aur/PKGBUILD").read_text(encoding="utf-8")
         self.assertIn('/usr/share/$pkgname', pkgbuild)
