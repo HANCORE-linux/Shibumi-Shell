@@ -427,6 +427,7 @@ def prepare_gate_environment(
         for name, value in environment.items()
         if not name.startswith("GIT_")
     }
+    gate_environment["GIT_NO_REPLACE_OBJECTS"] = "1"
     evidence: list[dict[str, Any]] = []
     for preflight in preflights:
         gate_environment[preflight["environment"]] = preflight["path"]

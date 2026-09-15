@@ -739,7 +739,14 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertEqual(
                 gate_environment["SHIBUMI_TEST_BASELINE"], str(checkout.resolve())
             )
-            self.assertFalse(any(name.startswith("GIT_") for name in gate_environment))
+            self.assertEqual(
+                {
+                    name: value
+                    for name, value in gate_environment.items()
+                    if name.startswith("GIT_")
+                },
+                {"GIT_NO_REPLACE_OBJECTS": "1"},
+            )
             self.assertNotIn("path", evidence_preflights[0])
             self.assertNotIn(str(checkout.resolve()), json.dumps(evidence_preflights))
 
@@ -899,7 +906,10 @@ puts JSON.generate(workflow.fetch("jobs"))
             )
             baselines = [expected_baseline]
             baseline_paths = [str(baseline)]
-            environment = os.environ.copy()
+            environment, _evidence = module.prepare_gate_environment(
+                os.environ.copy(), baselines
+            )
+            self.assertEqual(environment["GIT_NO_REPLACE_OBJECTS"], "1")
 
             unchanged = module.run_guarded_evidence_gate(
                 "unchanged-control",
@@ -917,6 +927,68 @@ puts JSON.generate(workflow.fetch("jobs"))
                 unchanged["inputValidation"],
                 {"status": "passed", "phase": "before-and-after"},
             )
+
+            candidate_tracked = candidate / "tracked"
+            candidate_tracked.write_text("replacement\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(candidate), "add", "tracked"], check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(candidate),
+                    "-c",
+                    "user.name=Shibumi Test",
+                    "-c",
+                    "user.email=test.invalid@example.invalid",
+                    "commit",
+                    "-qm",
+                    "replacement",
+                ],
+                check=True,
+            )
+            replacement_revision = subprocess.run(
+                ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "-C", str(candidate), "checkout", "-q", _candidate_revision],
+                check=True,
+            )
+            replacement_program = "\n".join((
+                "import subprocess",
+                f"repo = {str(candidate)!r}",
+                f"original = {_candidate_revision!r}",
+                f"replacement = {replacement_revision!r}",
+                "subprocess.run(['git', '-C', repo, 'replace', original, replacement], check=True)",
+                "try:",
+                "    content = subprocess.run(['git', '-C', repo, 'show', 'HEAD:tracked'], check=True, capture_output=True, text=True).stdout",
+                "    print(content, end='')",
+                "finally:",
+                "    subprocess.run(['git', '-C', repo, 'replace', '-d', original], check=True, capture_output=True)",
+            ))
+            transient_replacement = module.run_guarded_evidence_gate(
+                "transient-replacement",
+                (sys.executable, "-c", replacement_program),
+                temporary_path / "transient-replacement.log",
+                baseline_paths,
+                candidate,
+                expected_candidate,
+                baselines,
+                timeout_seconds=2,
+                environment=environment,
+            )
+            self.assertEqual(transient_replacement["status"], "passed")
+            self.assertEqual(
+                (temporary_path / "transient-replacement.log").read_text(
+                    encoding="utf-8"
+                ),
+                "candidate\n",
+            )
+            self.assertEqual(module.checkout_git(candidate, "replace", "-l"), "")
 
             untracked = baseline / "untracked"
             untracked.write_text("drift\n", encoding="utf-8")
