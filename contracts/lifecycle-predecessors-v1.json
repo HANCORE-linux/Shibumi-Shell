@@ -251,7 +251,7 @@
     },
     {
       "id": "public-beta.14",
-      "payloadDigest": "e2e96e5acf84df210220743370e5dcaacd90011f68e941b4edc8f927a186452d",
+      "payloadDigest": "70a76ad6ba877381a2663c1ac76b6eaf7883bb724dfa0d2c017e113ec1946577",
       "pluginDigests": {
         "hancore.shibumi.ai": "0822b145622043a44ba6548a46b321a0b01860b1900462b4248718e1f19903d1",
         "hancore.shibumi.audio": "514b0f9933d43d8c08f6877bc331ce757995f1ac12f42a0fe45b4bf928dbde76",
@@ -265,7 +265,7 @@
         "hancore.shibumi.gpu": "ef9b8a37ffcb0c5117a88e612331437063455499676fd25b35a014145a32b378",
         "hancore.shibumi.media": "a995b788516867178c15226e0a4cacae4f13bdf63fd07e976fe64bddfa5922bc",
         "hancore.shibumi.memory": "b7d15c4311353c66e41b2a1e5215ee12eb795ff53d02db69596487818f912c5a",
-        "hancore.shibumi.network": "d9a07a10f2d36d2ae3a29193b13c68c9f0f9f5a08c320081d9b8120a24668dce",
+        "hancore.shibumi.network": "c28e673e6d4e0ea690d58d2dcd2ffac355ca945dc8e1298ed5ddcc56809f25c5",
         "hancore.shibumi.power-profile": "e145829b435014fbb7dabdf77b90f5216a1e22fce3a6770a9389647de9f95448",
         "hancore.shibumi.power-state": "76fb382dcdc4cb9837eb0f6b35aa2e75da7bbe463445d4d39c8b691340a2d07f",
         "hancore.shibumi.quick-access": "5974fed2f7ad5732d7f205739f6fbb61d74f4926051f655dbdad1388fdb76e9f",
