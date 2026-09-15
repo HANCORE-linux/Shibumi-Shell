@@ -146,8 +146,9 @@ Ui.Panel {
   }
 
   function syncTrafficConsumer() {
-    const desired = networkReady && mode === "ethernet"
-      ? networkService : null
+    const nativeDemand = networkReady && "wiredConnected" in networkService
+    const desired = networkReady && (nativeDemand
+      ? networkService.wiredConnected : mode === "ethernet") ? networkService : null
     if (trafficService === desired) {
       trafficRetry.stop()
       return
@@ -248,6 +249,7 @@ Ui.Panel {
   Connections {
     target: root.networkService
     ignoreUnknownSignals: true
+    function onWiredConnectedChanged() { root.syncTrafficConsumer() }
     function onSpeedTestReadyChanged() {
       if (root.pendingPresentationMode === "speed"
           && !root.applyPendingPresentation()) presentationRetry.restart()
@@ -259,7 +261,7 @@ Ui.Panel {
   }
   onModeChanged: {
     if (mode !== "ethernet") resetTrafficHistory()
-    syncTrafficConsumer()
+    if (!networkService || !("wiredConnected" in networkService)) syncTrafficConsumer()
   }
   Component.onCompleted: syncTrafficConsumer()
   Component.onDestruction: {

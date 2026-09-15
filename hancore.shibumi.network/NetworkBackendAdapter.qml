@@ -650,8 +650,7 @@ Item {
             || typeof source.generation !== "number"
             || !isFinite(source.generation) || source.generation < 0
             || Math.floor(source.generation) !== source.generation
-            || source.generation !== root.networkTelemetry.generation
-            || root.networkTelemetry.connected !== source.connected)
+            || source.generation !== root.networkTelemetry.generation)
           return { available: false, degraded: true, connected: false,
             row: null }
         const activeProjection = decorateActiveConnections(
@@ -664,8 +663,7 @@ Item {
         row.downloadBytesPerSecond = source.downloadBytesPerSecond
         row.uploadBytesPerSecond = source.uploadBytesPerSecond
         if (!source.connected) {
-          if (source.id !== "" || source.deviceId !== ""
-              || root.networkTelemetry.connectionSnapshot !== null)
+          if (source.id !== "" || source.deviceId !== "")
             return { available: false, degraded: true, connected: false,
               row: null }
           row.id = ""
@@ -675,8 +673,7 @@ Item {
         }
         if (source.id !== Model.connectionId(source.connectionUuid)
             || source.deviceId !== Model.deviceId(source.kind,
-              source.hardwareAddress, source.interfaceName)
-            || root.networkTelemetry.connectionSnapshot === null)
+              source.hardwareAddress, source.interfaceName))
           return { available: false, degraded: true, connected: false,
             row: null }
         let matches = 0
