@@ -135,7 +135,11 @@ baseline.
   reaction paths. Scoped bar/config and registry fan-out do not start catalog
   reads; explicit requests and the five-second demanded reconcile do.
   Missing registration stays empty until the registry publishes it; an original must
-  never substitute for a clone. Clone ancestry comes from public `listPlugins`,
+  never substitute for a clone. Composite G3 is the sole nested-Component
+  exception: only while `hancore.shibumi.status` is configured may its explicit
+  owner-bound route consume scoped `hancore.shibumi.update-center` and
+  `omarchy.tray` Components. They remain unavailable through ordinary
+  unconfigured lookup. Clone ancestry comes from public `listPlugins`,
   with cycle detection and a 32-entry traversal bound, not fabricated foreign
   manifests or executable paths. Native IPC owns enable/disable and clone
   restoration; the active Bar owns layout edits and confirms its injected
@@ -415,8 +419,11 @@ checks pass.
   visibility-nudge handler, enabled only for the one fully admitted active
   Shibumi bar. It exposes only `syncHidden`, which asks that owner to re-read
   Omarchy's host-owned `bar-off` marker after `omarchy-toggle-bar` changes it;
-  the directory watcher remains the ordinary update path. Overlapping or
-  shutting-down Bar lifetimes fail closed instead of registering two targets.
+  the directory watcher remains the ordinary update path. Incoming ownership
+  arms only after the bounded host-handler handoff window; changing the
+  host-injected bar identity revokes outgoing ownership synchronously.
+  Overlapping or shutting-down Bar lifetimes fail closed instead of registering
+  two targets.
 - Omarchy falls back to `omarchy.bar` when a selected third-party entry point
   fails to load.
 - Plugin code is unsandboxed and executes inside the Omarchy Shell process.
@@ -470,8 +477,11 @@ the saved preference.
   Setter `true` means queued, not saved. Published config/revision remain
   file-backed, with explicit pending/status/serial and settlement notification;
   a native `false` can mean unchanged and requires matching file readback too.
-  Scope loss cancels queued work. Full-entry readback is not an fsync guarantee,
-  a generic CAS contract, or a bound on FileView's acquisition allocation.
+  Scope loss cancels queued work. Reversible Active/Inactive organizer intents
+  use the requested-state/coalescing path directly while structural layout and
+  provider transitions remain serialized; file readback still owns canonical
+  config and rollback. Full-entry readback is not an fsync guarantee, a generic
+  CAS contract, or a bound on FileView's acquisition allocation.
 - The one-time migration renames `hancore.qsrise.*` IDs, `bar.qsrise`, nested
   plugin-keyed settings, and string references without changing unrelated
   configuration or the user's layout order.

@@ -113,6 +113,10 @@ Bar {
         v2Mode: probe.layoutController.v2Mode,
         cpuV1Enabled: !!state && state.groupEnabledForVariant("G5", "v1"),
         cpuV2Enabled: !!state && state.groupEnabledForVariant("G5", "v2"),
+        cpuV1Requested: !!state
+          && state.requestedGroupEnabledForVariant("G5", "v1"),
+        cpuV2Requested: !!state
+          && state.requestedGroupEnabledForVariant("G5", "v2"),
         audioV1Enabled: !!state && state.groupEnabledForVariant("G6", "v1"),
         audioV2Enabled: !!state && state.groupEnabledForVariant("G6", "v2"),
         providerSnapshotBusy: probe.providerSnapshotTransitionBusy,
@@ -277,6 +281,7 @@ Bar {
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
       const page = panel ? panel.settingsPageItem : null
       const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const variant = probe.layoutController.v2Mode ? "v2" : "v1"
       const section = probe.visibleItemWithText(
         page, "INACTIVE WIDGETS", 0)
       const action = probe.visibleAccessibleAction(page, "Activate CPU", 0)
@@ -284,11 +289,37 @@ Bar {
       const beforeBar = JSON.stringify(probe.barConfig)
       if (!section || !action) return "visible-action-missing"
       action.requested()
-      return state && probe.stateTransitionBusy
-          && !probe.layoutTransitionBusy && state.writePending
+      return state && !probe.stateTransitionBusy
+          && !probe.layoutTransitionBusy
+          && !probe.providerSnapshotTransitionBusy && state.writePending
+          && state.requestedGroupEnabledForVariant("G5", variant)
           && JSON.stringify(state.config) === beforeConfig
           && JSON.stringify(probe.barConfig) === beforeBar
         ? "queued-without-native-mutation" : "failed"
+    }
+    function coalesceCpuFromIcons(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const variant = probe.layoutController.v2Mode ? "v2" : "v1"
+      const action = probe.visibleAccessibleAction(page, "Activate CPU", 0)
+      const beforeConfig = state ? JSON.stringify(state.config) : ""
+      const beforeBar = JSON.stringify(probe.barConfig)
+      const beforeSerial = state ? state.writeSerial : 0
+      if (!panel || !action || !state) return "visible-action-missing"
+      action.requested()
+      const firstPreview = state.requestedGroupEnabledForVariant(
+        "G5", variant)
+      const secondAccepted = panel.setPluginEnabled(
+        "hancore.shibumi.cpu", false, true)
+      return firstPreview && secondAccepted && state.writePending
+          && state.writeSerial === beforeSerial + 2
+          && !state.requestedGroupEnabledForVariant("G5", variant)
+          && !probe.stateTransitionBusy && !probe.layoutTransitionBusy
+          && !probe.providerSnapshotTransitionBusy
+          && JSON.stringify(state.config) === beforeConfig
+          && JSON.stringify(probe.barConfig) === beforeBar
+        ? "coalesced-without-native-mutation" : "failed"
     }
     function malformedCatalogObservationsRefused(): string {
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null

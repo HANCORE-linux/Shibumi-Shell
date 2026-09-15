@@ -22,6 +22,12 @@ QtObject {
     ? "layoutConfig" in bar ? bar.layoutConfig
       : bar.barConfig ? bar.barConfig.layout : null
     : null
+  readonly property var embeddedComponentOwners: ({
+    "hancore.shibumi.status": ({
+      "hancore.shibumi.update-center": true,
+      "omarchy.tray": true
+    })
+  })
 
   function configured(id) {
     const layout = configuredLayout
@@ -87,14 +93,26 @@ QtObject {
     catch (error) { return false }
   }
 
+  function scopedComponentFor(widgetId) {
+    const id = String(widgetId || "")
+    const selection = selectionFor(id)
+    const component = selection ? selection.component : null
+    return isComponentHandle(component) ? component : null
+  }
+
+  function embeddedComponentFor(ownerId, widgetId) {
+    const owner = String(ownerId || "")
+    const id = String(widgetId || "")
+    if (!scoped) return componentFor(id)
+    const allowed = embeddedComponentOwners[owner]
+    return configured(owner) && allowed && allowed[id] === true
+      ? scopedComponentFor(id) : null
+  }
+
   function componentFor(widgetId) {
     const id = String(widgetId || "")
-    if (scoped) {
-      const selection = selectionFor(id)
-      const component = selection ? selection.component : null
-      return configured(id) && isComponentHandle(component)
-        ? component : null
-    }
+    if (scoped)
+      return configured(id) ? scopedComponentFor(id) : null
     const existing = components[id]
     const url = entryPointUrl(id)
     return existing && existing.status === Component.Ready

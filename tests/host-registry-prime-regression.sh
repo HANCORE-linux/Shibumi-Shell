@@ -16,8 +16,8 @@ runtime_source="$repo_root/hancore.shibumi.state/runtime/Runtime.qml"
 bar_source="$repo_root/hancore.shibumi.bar/Bar.qml"
 [[ $(grep -Ec '^  property Process ' "$runtime_source") -eq 1 ]] \
   || fail 'registry prime added or lost a production process'
-[[ $(grep -Ec '^  property Timer ' "$runtime_source") -eq 1 ]] \
-  || fail 'registry prime added or lost a production timer'
+[[ $(grep -Ec '^  property Timer ' "$runtime_source") -eq 2 ]] \
+  || fail 'runtime added or lost the bounded registry-prime or visibility-handoff timer'
 [[ $(grep -Ec '^  property WorkerScript |^  property .*Poll' "$runtime_source") -eq 0 ]] \
   || fail 'registry prime added a production worker or poller'
 [[ $(grep -Fc '"shell", "rescanPlugins"' "$runtime_source") -eq 1 ]] \

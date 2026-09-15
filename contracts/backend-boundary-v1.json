@@ -51,7 +51,7 @@
     {"scope":"hostIdRule","target":"omarchy.monitor","category":"omarchyBackend","owner":"hancore.shibumi.brightness","capability":"displays","count":10,"backend":"omarchy.monitor","removalStep":"Step 6"},
     {"scope":"hostIdRule","target":"omarchy.power","category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","count":5,"backend":"omarchy.power","removalStep":"Step 6"},
     {"scope":"hostIdRule","target":"omarchy.system-update","category":"omarchyBackend","owner":"hancore.shibumi.update-center","capability":"system-update-state","count":11,"backend":"omarchy.system-update","removalStep":"Step 7"},
-    {"scope":"hostIdRule","target":"omarchy.tray","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"system-tray","count":10,"backend":"omarchy.tray","removalStep":"Step 7"},
+    {"scope":"hostIdRule","target":"omarchy.tray","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"system-tray","count":11,"backend":"omarchy.tray","removalStep":"Step 7"},
     {"scope":"hostIdRule","target":"omarchy.weather","category":"omarchyBackend","owner":"hancore.shibumi.center","capability":"weather","count":6,"backend":"omarchy.weather","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-agent-usage-","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-agent-usage-codex","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
@@ -381,7 +381,7 @@
     {"target":"omarchy.shell","count":1,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"target":"omarchy.system-update","count":11,"category":"omarchyBackend","owner":"hancore.shibumi.update-center","capability":"system-update-state","backend":"omarchy.system-update","removalStep":"Step 7","reason":"Remove the official update detector identity after Shibumi owns update state."},
     {"target":"omarchy.tailscale","count":1,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
-    {"target":"omarchy.tray","count":10,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"system-tray","backend":"omarchy.tray","removalStep":"Step 7","reason":"Remove the official tray identity after the Shibumi SystemTray service is authoritative."},
+    {"target":"omarchy.tray","count":11,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"system-tray","backend":"omarchy.tray","removalStep":"Step 7","reason":"Remove the official tray identity after the Shibumi SystemTray service is authoritative."},
     {"target":"omarchy.weather","count":6,"category":"omarchyBackend","owner":"hancore.shibumi.center","capability":"weather","backend":"omarchy.weather","removalStep":"Step 8","reason":"Remove the private weather detail identity after Shibumi owns weather state and actions."},
     {"target":"omarchy.workspaces","count":3,"category":"hostIntegration","owner":"hancore.shibumi.workspaces","capability":"workspaces"}
   ],

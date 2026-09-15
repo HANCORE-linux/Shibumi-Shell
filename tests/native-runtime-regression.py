@@ -212,7 +212,7 @@ def run(base, required_markers=None):
         print("Owned native resource group: " + str(group.parent_path / group.name), flush=True)
         launcher = ["/usr/bin/python3", str(base / "cgroup_exec.py"), str(group.procs), *command]
         reply = run_bounded(launcher, env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-            timeout=55, maximum=1024 * 1024, pass_fds=(group.procs,))
+            timeout=95, maximum=1024 * 1024, pass_fds=(group.procs,))
     print((reply.stdout + reply.stderr).decode(errors="replace"), end="", flush=True)
     if reply.returncode != 0:
         raise RuntimeError("isolated native fixture failed: " + str(reply.returncode))

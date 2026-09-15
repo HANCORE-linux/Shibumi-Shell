@@ -111,6 +111,8 @@ Item {
   property bool refusePluginRemoval: false
   property string removalRefusalDetail: "Move this widget back to an extra bar slot before removing it."
   property string pluginActionError: ""
+  property int presentationPluginRequests: 0
+  property bool rejectNonPresentationWhilePending: false
   readonly property bool pluginUpdateCheckRunning:
     pluginUpdateService ? pluginUpdateService.running === true : false
   readonly property int pluginUpdateCount: pluginUpdateService ? pluginUpdateService.updateCount : 0
@@ -650,8 +652,10 @@ Item {
     return true
   }
 
-  function setPluginEnabled(pluginId, enabled) {
+  function setPluginEnabled(pluginId, enabled, coalescePresentation) {
     const id = String(pluginId || "")
+    if (coalescePresentation === true) presentationPluginRequests++
+    else if (rejectNonPresentationWhilePending) return false
     if (asyncStateTransitions && !applyingPluginTransition
         && id === "hancore.shibumi.bluetooth") {
       if (pluginLayoutTransitionBusy || providerSnapshotTransitionBusy

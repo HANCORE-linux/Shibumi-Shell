@@ -70,4 +70,8 @@ unavailable. On scoped hosts every Shibumi `WidgetSlot` binds the exact
 bounded missing-component retry. Repeated snapshots with an identical handle
 do not touch the Loader; a real handle replacement makes one new submission.
 Older full-registry hosts use the separately activated URL resolver and its
-legacy revision/retry path.
+legacy revision/retry path. Shibumi Status is the only composite scoped
+presentation: while its G3 owner is configured, an explicit owner-bound lookup
+admits only `hancore.shibumi.update-center` and `omarchy.tray`. Direct lookup
+still refuses those unconfigured child IDs, and no other nested consumer gains
+registry access.

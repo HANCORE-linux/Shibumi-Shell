@@ -65,6 +65,13 @@ Semantically equivalent retained-manifest refreshes keep the same lease.
 Actual replacements publish a final lease set atomically, never an intermediate
 set that briefly exposes an overlapping provider.
 
+The Runtime also owns the suite's one `omarchy.bar` compatibility handler.
+An admitted incoming Bar waits one second before the endpoint is armed so the
+outgoing stock/default handler can drain. If the host-injected `barConfig.id`
+stops naming Shibumi, ownership and the endpoint are revoked synchronously
+before the stock Bar takes over. Overlap, shutdown and retirement remain
+fail-closed; the ordinary marker watcher covers the bounded handoff gap.
+
 The runtime uses the suite marker at its own State plugin location. Marker
 failure or a marker change retires the runtime for that engine; it does not
 silently upgrade an existing engine to different installed bytes. The existing
@@ -107,7 +114,10 @@ and item intact; replacing or revoking the source invalidates completion and
 produces one new submission. The separately activated legacy route retains
 locally created Components and their original status checks. No missing scoped
 Component is cached, reconstructed from a manifest, or replaced by an original
-provider.
+provider. G3's composite presentation uses a separate owner-bound lookup: a
+configured `hancore.shibumi.status` may consume only the scoped
+`hancore.shibumi.update-center` and `omarchy.tray` Components. Ordinary lookup
+still refuses both while they are not directly configured.
 
 The Runtime may emit one passive sanitized exhaustion warning per process,
 only after a real positive/zero/positive output sequence, a previously confirmed
@@ -162,9 +172,12 @@ reflects the latest admitted, normalized request synchronously and falls back to
 file truth when a request is refused, conflicts, times out or loses admission.
 Only reversible visual feedback currently consumes it: Control Center
 workspace/launcher choices and active/inactive classification, the rendered
-workspace mode/style, the launcher mark, and AI provider selection. Backend
-activation, host mutation, structural transition sequencing, completion status,
-and `config`/`revision` consumers remain readback-backed.
+workspace mode/style, the launcher mark, and AI provider selection. The Icons
+Active/Inactive organizer submits through that coalescing State route, so a
+second intent can replace a pending request instead of waiting behind the
+structural Bar transition. Provider replacement, backend activation, host
+mutation, structural transition sequencing, completion status, and
+`config`/`revision` consumers remain readback-backed.
 
 Comparison is structural JSON equality: object-key ordering is insignificant,
 array ordering and values remain significant. Observed publication is not an

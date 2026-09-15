@@ -62,6 +62,7 @@ Item {
   readonly property bool visibilityIpcReady: barRuntimeProvider.registered
     && SuiteRuntime.Runtime.isActiveBar(root)
     && injectionComplete && hostReady && !shutdownPrepared
+    && barConfig && barConfig.id === "hancore.shibumi.bar"
   property bool outputWindowsEnabled: true
   // No-output fixtures can opt out while the deployed scoped Bar performs
   // the one process-bound native registry prime before becoming visible.
@@ -484,6 +485,10 @@ Item {
 
   function registeredWidgetComponent(widgetId) {
     return hostWidgetResolverService.componentFor(widgetId)
+  }
+
+  function registeredEmbeddedWidgetComponent(ownerId, widgetId) {
+    return hostWidgetResolverService.embeddedComponentFor(ownerId, widgetId)
   }
 
   function registeredWidgetSource(widgetId) {

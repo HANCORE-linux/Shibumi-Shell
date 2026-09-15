@@ -55,14 +55,45 @@ QtObject {
     if (!lease || !lease.owner) return null
     const owner = lease.owner
     if (!("visibilityIpcReady" in owner)) return null
+    void(owner.barConfig)
     void(owner.visibilityIpcReady)
+    if (!plain(owner.barConfig) || owner.barConfig.id !== lease.id) return null
     return owner.visibilityIpcReady === true ? owner : null
   }
   // Process-singleton compatibility endpoint for the host bar-toggle command.
   // Keeping the handler here prevents overlapping Bar lifetimes from ever
-  // registering duplicate omarchy.bar targets.
+  // registering duplicate omarchy.bar targets. Omarchy can briefly retain the
+  // outgoing/default Bar handler while loading a plugin Bar or replacing the
+  // complete shell root, so arm only after that host-owned handoff window.
+  property bool visibilityIpcArmed: false
+  property int visibilityIpcHandoffDelayMs: 1000
+  function syncVisibilityIpcArm() {
+    if (visibilityBarOwner === null) {
+      visibilityIpcHandoff.stop()
+      visibilityIpcArmed = false
+    } else if (!visibilityIpcArmed) {
+      visibilityIpcHandoff.restart()
+    }
+  }
+  onVisibilityBarOwnerChanged: syncVisibilityIpcArm()
+  Component.onCompleted: syncVisibilityIpcArm()
+  property Timer visibilityIpcHandoff: Timer {
+    interval: runtime.visibilityIpcHandoffDelayMs
+    repeat: false
+    onTriggered: {
+      const owner = runtime.visibilityBarOwner
+      if (owner === null) return
+      runtime.visibilityIpcArmed = true
+      // A marker change can land after the outgoing host handler disappears
+      // but before this endpoint is armed. Sample once at admission so that
+      // bounded handoff gap cannot strand stale visibility if the watcher also
+      // missed that change.
+      if (typeof owner.syncHidden === "function") owner.syncHidden()
+    }
+  }
   property IpcHandler visibilityIpc: IpcHandler {
-    enabled: runtime.visibilityBarOwner !== null
+    enabled: runtime.visibilityIpcArmed
+      && runtime.visibilityBarOwner !== null
     target: "omarchy.bar"
 
     function syncHidden(): void {
@@ -128,6 +159,8 @@ QtObject {
     retired = true
     payloadDigest = ""
     _leases = []
+    visibilityIpcHandoff.stop()
+    visibilityIpcArmed = false
     hostRegistryPrimeDeadline.stop()
     if (["dispatching", "acknowledged"].indexOf(
         hostRegistryPrimePhase) >= 0) {

@@ -14,7 +14,9 @@ BASE = Path("/fixture")
 # tmpfs inside the resource-limited namespace, not in the host staging tree.
 shutil.copytree("/input", BASE, dirs_exist_ok=True, symlinks=True)
 LIMIT = 1024 * 1024
-DEADLINE = time.monotonic() + 35
+# The Icons coalescing negative control adds one complete native State
+# settlement before the existing provider/catalog matrix.
+DEADLINE = time.monotonic() + 75
 # Qt/Quickshell startup uses larger temporary file allocations than its text
 # output. A 1 MiB FSIZE cap reproduced SIGXFSZ before QML startup. Keep the
 # text/IPC caps below separate from this bounded per-file allocation ceiling.
@@ -260,12 +262,16 @@ with (BASE / "native.log").open("xb") as log:
         check(ipc("native-runtime-probe", "malformedCatalogObservationsRefused")
               == (0, "malformed-no-mutation"),
               "malformed immutable catalog shapes reached an Icons mutation")
+        icons_state = wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and not value["cpuV1Requested"] and not value["cpuV1Enabled"])
+        icons_transition_serial = icons_state["stateTransitionSerial"]
         check(ipc("native-runtime-probe", "activateCpuFromIcons")
               == (0, "queued-without-native-mutation"),
-              "V1 Icons CPU activation did not use its visible action")
+              "V1 Icons CPU activation did not use requested presentation")
         wait_status("native-runtime-probe", lambda value:
                     not value["stateWritePending"] and not value["stateTransitionBusy"]
-                    and value["stateTransitionResult"] == "confirmed"
+                    and value["stateTransitionSerial"] == icons_transition_serial
                     and value["cpuV1Enabled"] and value["cpuV2Enabled"])
 
         check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
@@ -284,8 +290,10 @@ with (BASE / "native.log").open("xb") as log:
               "V2 Icons CPU activation did not use its visible action")
         wait_status("native-runtime-probe", lambda value:
                     not value["stateWritePending"] and not value["stateTransitionBusy"]
-                    and value["stateTransitionResult"] == "confirmed"
-                    and value["cpuV1Enabled"] and value["cpuV2Enabled"])
+                    and value["stateTransitionSerial"]
+                      == icons_transition_serial
+                    and value["cpuV1Enabled"] and value["cpuV2Enabled"]
+                    and value["cpuV2Requested"])
 
         check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
               "missing-authority CPU setup refused")
@@ -539,7 +547,13 @@ with (BASE / "native.log").open("xb") as log:
               "V1 return-to-Shibumi cleanup refused")
         wait_status("native-runtime-probe", lambda value:
             not value["stateWritePending"] and not value["layoutBusy"]
-            and value["audioV1Enabled"] and value["audioV2Enabled"])
+            and not value["providerSnapshotBusy"]
+            and not value["pageTransitionPending"]
+            and value["audioV1Enabled"] and value["audioV2Enabled"]
+            and value["panelCatalog"] is not None
+            and value["panelCatalog"]["byId"]
+              ["fixture.audio-provider"]["enabled"] is False,
+            timeout=7)
 
         check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
               "V2 provider Undo setup refused")
@@ -617,6 +631,32 @@ with (BASE / "native.log").open("xb") as log:
                     not value["stateWritePending"] and not value["v2Mode"])
         print("ACTUAL V1/V2 PROVIDER UNDO SETTLEMENT AND STALE-SNAPSHOT REFUSAL PASSED",
               flush=True)
+
+        # Run the additional rapid Icons reversal after the provider/catalog
+        # matrix so its deliberate extra State settlement cannot perturb the
+        # five-second catalog reconciliation phase used above.
+        check(ipc("native-runtime-probe", "setCpuVisible", "false") == (0, "queued"),
+              "coalesced Icons setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "openIcons") == (0, "ok"),
+              "coalesced Icons page refused")
+        wait_status("native-runtime-probe", lambda value:
+                    value["panelPage"] == "functions" and value["panelPageReady"])
+        check(ipc("native-runtime-probe", "coalesceCpuFromIcons")
+              == (0, "coalesced-without-native-mutation"),
+              "Icons rapid reversal did not coalesce requested presentation")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["stateTransitionBusy"]
+                    and not value["cpuV1Requested"] and not value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "setCpuVisible", "true") == (0, "queued"),
+              "coalesced Icons cleanup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and value["cpuV1Enabled"])
+        check(ipc("native-runtime-probe", "openPlugins") == (0, "ok"),
+              "Plugins page restoration after Icons coalescing refused")
+        wait_status("native-runtime-probe", lambda value:
+                    value["panelPage"] == "plugins" and value["panelPageReady"])
 
         check(ipc("native-runtime-probe", "toggleCatalogWidget")
               == (0, "queued-without-native-mutation"),

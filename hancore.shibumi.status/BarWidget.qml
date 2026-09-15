@@ -132,6 +132,10 @@ Item {
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
   function registeredComponent(id) {
+    if (bar
+        && typeof bar.registeredEmbeddedWidgetComponent === "function")
+      return bar.registeredEmbeddedWidgetComponent(
+        "hancore.shibumi.status", id)
     if (bar && typeof bar.registeredWidgetComponent === "function")
       return bar.registeredWidgetComponent(id)
     const registry = bar ? bar.barWidgetRegistry : null

@@ -23,9 +23,12 @@ done
 [[ $(rg -Fc 'target: "omarchy.bar"' \
   "$repo_root/hancore.shibumi.state/runtime/Runtime.qml") -eq 1 ]] \
   || fail 'shared runtime does not uniquely own the Omarchy visibility nudge'
-rg -Fq 'enabled: runtime.visibilityBarOwner !== null' \
+rg -Fq 'enabled: runtime.visibilityIpcArmed' \
   "$repo_root/hancore.shibumi.state/runtime/Runtime.qml" \
-  || fail 'Omarchy visibility nudge is not gated by singleton Bar admission'
+  || fail 'Omarchy visibility nudge is not gated by delayed singleton admission'
+rg -Fq 'owner.barConfig.id !== lease.id' \
+  "$repo_root/hancore.shibumi.state/runtime/Runtime.qml" \
+  || fail 'outgoing Shibumi visibility ownership is not revoked before host takeover'
 rg -Fq 'function syncHidden()' "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail 'active Shibumi bar does not implement the Omarchy visibility nudge'
 rg -Fq 'if (name !== "separator") return "variant-required"' \
@@ -317,13 +320,15 @@ wait_visibility_state() {
   fail "bar visibility IPC smoke did not reach $label: $visibility_state"
 }
 
-wait_visibility_state idle-visible 'the initial visible marker state'
+wait_visibility_state handoff-gap 'the bounded incoming-handler gap'
 touch "$toggle_dir/bar-off"
-env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+handoff_gap_response=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
   /usr/bin/quickshell ipc --pid "$ipc_pid" call \
-    omarchy.bar syncHidden >/dev/null \
-  || fail 'Omarchy visibility nudge did not accept the hidden marker'
-wait_visibility_state idle-hidden 'the hidden marker state'
+    omarchy.bar syncHidden 2>/dev/null || true)
+[[ $handoff_gap_response == *'Target not found'* ]] \
+  || fail 'incoming handoff gap unexpectedly retained an active visibility endpoint'
+wait_visibility_state idle-hidden \
+  'the arm-time resample of a marker changed during handoff'
 
 rm -f "$toggle_dir/bar-off"
 env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
@@ -352,6 +357,16 @@ env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
     omarchy.bar syncHidden >/dev/null \
   || fail 'Omarchy visibility nudge did not queue the final visible sample'
 wait_visibility_state idle-visible 'the coalesced final visible marker state'
+
+# Revoke Shibumi from the host-injected bar identity before enabling the stock
+# handler. This models the opposite handoff direction and catches a retained
+# outgoing endpoint, not only delayed admission of the incoming one.
+takeover_result=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
+  /usr/bin/quickshell ipc --pid "$ipc_pid" call \
+    bar-visibility-test beginStockTakeover 2>/dev/null || true)
+[[ $takeover_result == ok ]] || fail 'visibility fixture refused stock takeover'
+wait_visibility_state stock-owner 'the stock visibility owner takeover'
+
 visibility_finish=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
   /usr/bin/quickshell ipc --pid "$ipc_pid" call \
     bar-visibility-test finish 2>/dev/null || true)
@@ -365,7 +380,7 @@ visibility_output=$(<"$visibility_log")
 printf '%s\n' "$visibility_output"
 [[ $visibility_rc -eq 0 ]] || fail "bar visibility IPC smoke exited $visibility_rc"
 grep -q 'bar visibility IPC observed hidden marker' <<<"$visibility_output" \
-  || fail 'bar visibility IPC smoke did not observe the hidden marker'
+  || fail 'bar visibility IPC smoke did not observe the handoff marker'
 grep -q 'bar visibility IPC smoke passed' <<<"$visibility_output" \
   || fail 'bar visibility IPC smoke did not restore the visible marker'
 if grep -Eq 'another handler is registered for target omarchy.bar|Binding loop|TypeError|ReferenceError' \

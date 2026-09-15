@@ -313,7 +313,8 @@ Column {
     }
     if (pluginId !== ""
         && typeof controller.setPluginEnabled === "function"
-        && controller.setPluginEnabled(pluginId, enabled === true)) {
+        && controller.setPluginEnabled(
+          pluginId, enabled === true, true)) {
       toggleErrorGroup = ""
       toggleErrorMessage = ""
       return true

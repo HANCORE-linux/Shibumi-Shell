@@ -295,6 +295,16 @@ plugin_bar_toggle=$(sed -n \
 grep -Fq 'return runWithControlCenterRestore(function() {' \
     <<<"$plugin_bar_toggle" \
   || fail "V1 plugin activation does not preserve the Control Center"
+organizer_group_toggle=$(sed -n \
+  '/^  function setGroupEnabled(groupId, enabled, coalescePresentation) {$/,/^  }$/p' \
+  "$control_dir/ControlCenterPanel.qml")
+for organizer_contract in \
+    'if (coalesced) {' \
+    'stateService.setGroupEnabledForVariant(' \
+    '}, coalesced ? false : true)'; do
+  grep -Fq "$organizer_contract" <<<"$organizer_group_toggle" \
+    || fail "Active/Inactive organizer coalescing drifted: $organizer_contract"
+done
 rg -Fq 'restoreBar.scheduleOpenControlCenterRestores(' \
   "$control_dir/ControlCenterPanel.qml" \
   || fail "state mutations are not enrolled in panel-owner handoff"
@@ -1701,7 +1711,7 @@ for workbench_contract in \
     'component WidgetSectionHeader: Item' \
     'component WidgetMoveAction: FocusScope' \
     'function setWidgetActive(option, enabled)' \
-    'controller.setPluginEnabled(pluginId, enabled === true)' \
+    'pluginId, enabled === true, true)' \
     'id: editorPointer' \
     'id: moveAction' \
     'onRequested: root.setWidgetActive(' \

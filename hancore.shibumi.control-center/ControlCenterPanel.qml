@@ -733,7 +733,7 @@ ShibumiPanel {
     } catch (error) { return false }
   }
 
-  function setPluginEnabled(pluginId, enabled) {
+  function setPluginEnabled(pluginId, enabled, coalescePresentation) {
     pluginActionError = ""
     if (!nativeCatalogRequired && (!pluginRegistry
         || typeof pluginRegistry.setEnabled !== "function")) {
@@ -797,7 +797,8 @@ ShibumiPanel {
         if (removedAlternative && bar
             && typeof bar.setWidgetGroupsEnabledForAllVariants === "function")
           return bar.setWidgetGroupsEnabledForAllVariants([group], true)
-        return setGroupEnabled(group, enabled === true)
+        return setGroupEnabled(
+          group, enabled === true, coalescePresentation === true)
       }
       if (suiteManaged) {
         console.warn(
@@ -1064,10 +1065,25 @@ ShibumiPanel {
     return states
   }
 
-  function setGroupEnabled(groupId, enabled) {
+  function setGroupEnabled(groupId, enabled, coalescePresentation) {
     const group = String(groupId || "")
     const variant = v2LayoutActive ? "v2" : "v1"
+    const coalesced = coalescePresentation === true
+    const structuralIdle = !bar || (bar.layoutTransitionBusy !== true
+      && bar.providerSnapshotTransitionBusy !== true
+      && bar.stateTransitionBusy !== true)
     return runWithControlCenterRestore(function() {
+      // The Icons Active/Inactive organizer is reversible presentation state.
+      // Let StateStorage coalesce another intent while readback is pending;
+      // GroupSlot still follows confirmed config, and provider/layout changes
+      // continue through the serialized Bar transitions below.
+      if (coalesced) {
+        return structuralIdle && stateService
+            && typeof stateService.setGroupEnabledForVariant === "function"
+          ? stateService.setGroupEnabledForVariant(
+              group, variant, enabled === true)
+          : false
+      }
       if (bar && typeof bar.requestWidgetGroupStateTransition === "function")
         return bar.requestWidgetGroupStateTransition(
           group, variant, enabled === true)
@@ -1079,7 +1095,7 @@ ShibumiPanel {
         : stateService && typeof stateService.setGroupSetting === "function"
           ? stateService.setGroupSetting(group, "enabled", enabled === true)
           : false
-    })
+    }, coalesced ? false : true)
   }
 
   function setGroupSetting(groupId, key, value) {

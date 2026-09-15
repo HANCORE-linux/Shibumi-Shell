@@ -908,6 +908,8 @@ ShellRoot {
           "G4", "widgetBorderColor", "inherit")
         appearance.controller.setGroupSetting(
           "G4", "widgetBorderUsesSurfaceColor", false)
+        const presentationRequestsBefore = panel.presentationPluginRequests
+        panel.rejectNonPresentationWhilePending = true
         if (appearance.widgetUsesCustomAppearance("G4"))
           return root.fail("Icons treated explicit defaults as customization")
         appearance.controller.resetGroupAppearance("G4")
@@ -978,8 +980,11 @@ ShellRoot {
         if (!appearance.setWidgetEnabled("G18", true)
             || appearance.activeWidgetCount !== 15
             || appearance.inactiveWidgetCount !== 3
-            || !appearance.selectedWidgetActive)
-          return root.fail("V2 Icons did not restore Storage to active")
+            || !appearance.selectedWidgetActive
+            || panel.presentationPluginRequests
+              !== presentationRequestsBefore + 4)
+          return root.fail("V2 Icons did not restore Storage through coalesced presentation requests")
+        panel.rejectNonPresentationWhilePending = false
         panel.v2LayoutActive = false
         if (appearance.activeWidgetCount !== 12
             || appearance.inactiveWidgetCount !== 6
