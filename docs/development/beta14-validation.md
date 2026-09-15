@@ -181,9 +181,70 @@ After separate candidate-installation approval, on both Omarchy 4.0.3 hosts:
 - record PID plus process start identity, exact payload, host versions and timed
   warning counts; a truncated sample cannot provide a complete warning rate.
 
-The local desktop's incomplete widget configuration and the isolated single-marker
-fixture are not a passed full-suite installation. Full widget/function acceptance
-must be explicit on both hosts after authorized candidate installation.
+### Maintainer single-output DP-1 exercise
+
+The exact checkout payload at
+`4d9744cffb30bcbdb4520c8fa9d693c08852406b` was installed on the maintainer
+host with one physical LG 27GL850 connected as `DP-1`. An OSD power-button
+attempt was invalid: after 30 seconds off, DRM still reported the connector as
+`connected`, Hyprland retained `DP-1`, and no `monitorremovedv2`, `FALLBACK`, or
+`monitoraddedv2` event occurred. The monitor retains its DisplayPort link while
+powered off, so this attempt is not monitor-power acceptance.
+
+One physical DisplayPort hot-unplug/replug cycle then produced
+`monitorremovedv2` for `DP-1`, `monitoraddedv2` for `FALLBACK`, and
+`monitoraddedv2` for `DP-1` after more than ten seconds disconnected. The return
+census reported all 16 top-level slots with `currentLoadReady=true`,
+`outputLifecycle.sequence="positive-zero-positive"`, unchanged registry
+revision `294`, and the same single startup-prime rescan. The Quickshell PID
+remained `271022`. The Control Center survived a V2 Notch to V1 to V2 Notch
+round trip.
+
+This census proves only top-level slot restoration. The embedded G3 status
+composite did not restore its children even though its outer
+`hancore.shibumi.status` slot remained loaded and ready. G3 was already partial
+before the cycle: only the Arch updater was visible, while Notifications and
+Tray were absent. The embedded-child failure is tracked separately and is not
+represented by the 16-slot census.
+
+The 13 new log lines comprise three host output-lifecycle lines matching the
+reporter pattern, eight unattributed `QQmlVMEMetaObject` invalid-context
+warnings, and two LayerShell fallback warnings. The cycle added no `TypeError`,
+`Binding loop`, or Shibumi-attributed `WARN scene`. No HDMI, reporter-hardware,
+multi-output, or power-button pass is claimed.
+
+### Exact final-candidate smoke
+
+The exact detached checkout at
+`11c9f63147ffea3265bdff442bb556f23700d209` was installed after uninstalling
+`4d9744cffb30bcbdb4520c8fa9d693c08852406b` with `--keep-settings`. Installation
+preserved V2 Notch and all 17 configured widget groups. The new Quickshell
+process had PID `638726`, one startup prime, and an initial 16/16 ready-slot
+census on the single physical `DP-1` output.
+
+For the 30-minute log window from 00:25:53 through 00:55:53, the maintainer
+reported exercising V1, V2 Full, Fit, Dock, Notch, and return to V1 with the
+Control Center retained or restored; five consecutive G4 Inactive/Active
+toggles ending Active; workspace style Default to Numbers to Default; return to
+V2 Notch; Wi-Fi off/on; and lock/unlock. The final persisted state was V2 Notch,
+workspace style Default, and G4 Active.
+
+During the same window, the maintainer ran
+`omarchy plugin remove hancore.bongocat --yes` for the #51 third-party removal
+case. The Quickshell PID remained `638726`; the removed plugin disappeared from
+the live catalog and layout; its dormant Shibumi group reference remained; and
+the census settled from 16/16 to 15/15 ready slots without a process restart.
+At removal time, 349 unattributed `QQmlVMEMetaObject` invalid-context warnings
+appeared from 00:32:27.215 through 00:32:27.461; no later warning appeared. The
+log diff from baseline line 17 contained zero `Binding loop`, `TypeError`,
+Shibumi-attributed `WARN scene`, or `ERROR` matches. In particular, the former
+`NetworkBackendAdapter.telemetryProjection` and `Service.kind` binding-loop
+locations remained at zero through the maintainer-reported Wi-Fi transition.
+
+The earlier local desktop's incomplete widget configuration and the isolated
+single-marker fixture are not a passed full-suite installation. Full
+widget/function acceptance must remain explicit per authorized candidate and
+host.
 General performance sampling remains paused. Mark physical multi-output
 `SKIPPED` until two physical outputs are active. Keep #54 open pending reporter
 confirmation; do not post diagnostics, restart a desktop or publish a candidate

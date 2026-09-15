@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.1-beta.14] - 2026-09-13
+## [0.1.1-beta.14] - 2026-09-16
 
 ### Added
 
@@ -19,9 +19,20 @@
   scripts while retaining the 24-plugin, 18-owner, one-process architecture
 - Updated the primary installed-package and source-parity contracts to Omarchy
   4.0.3, retaining 4.0.2 as an explicit optional compatibility baseline
+- Restored top-level widgets after hard monitor output loss without an
+  additional recovery rescan; verified on pre-final candidate `4d9744c` by one
+  physical DisplayPort hot-unplug cycle on single-output DP-1 (all 16 slots
+  restored). The embedded G3 status composite did not restore its children and
+  is tracked separately. Reporter confirmation pending (#54).
 
 ### Fixed
 
+- Bound Beta.14 package admission to the contract's exact plugin and payload
+  digests, rejecting mutated and unknown package identities
+- Disabled Git replacement-object resolution in release-evidence gate
+  environments
+- Decoupled Network telemetry projection and demand from derived connection
+  state, eliminating the `telemetryProjection` and `kind` binding loops
 - Guarded hosted-widget popout release during live teardown, preventing the
   three-output `releasePopout` warning reported in #51
 - Admitted the exact published Beta.13 source and package identities and made
@@ -30,9 +41,6 @@
   service has a scoped host rather than a direct Bar reference
 - Preserved normalized AI usage shape and freshness through empty, malformed,
   stale, and restored provider data
-- Submitted current registry Components through one provenance-recorded Loader
-  setter, restoring widgets after hard monitor output loss without a recovery
-  rescan (#54)
 
 ### Validation
 
@@ -42,9 +50,18 @@
 - The maintained Native Catalog 3+3 gate measured 0 KiB warm growth for exact
   Beta.13 and the candidate in its first accepted run; the 512 KiB assertion is
   unchanged
+- During a 30-minute live single-output DP-1 window on the exact final
+  candidate, the maintainer exercised Wi-Fi off/on, every V1/V2 form, five G4
+  toggles, workspace style, lock/unlock, and third-party removal with no binding
+  loop or `TypeError` in the baseline-scoped log diff
 
 ### Known limits
 
+- Unattributed `QQmlVMEMetaObject` invalid-context warnings appear during output
+  loss/return (8) and live third-party plugin removal (349); no functional
+  impact observed, root cause not yet attributed
+- Source checkouts installed between tagged releases must be uninstalled with
+  `--keep-settings` from their exact commit before installing a newer checkout
 - Local and Machine 2 package installation, physical monitor-power acceptance,
   coredump checks, and reporter confirmation for #54 remain separate gates
 - The tcmalloc allocation diagnostic was aborted without a product finding;
