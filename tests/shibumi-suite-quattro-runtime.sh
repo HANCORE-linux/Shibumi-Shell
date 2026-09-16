@@ -57,8 +57,14 @@ cleanup() {
 
   if [[ $failed -eq 1 && ${SHIBUMI_KEEP_TEST_TMP:-0} == 1 ]]; then
     printf 'Retained failed runtime fixture: %s\n' "$tmpdir" >&2
-  elif [[ -n $tmpdir && -d $tmpdir ]]; then
-    rm -rf -- "$tmpdir"
+  elif [[ -n $tmpdir ]]; then
+    if ! rm -rf -- "$tmpdir" \
+        || [[ -e $tmpdir || -L $tmpdir ]]; then
+      printf 'Runtime fixture temporary directory cleanup failed: %s\n' \
+        "$tmpdir" >&2
+      failed=1
+      status=1
+    fi
   fi
   exit "$status"
 }
@@ -74,10 +80,16 @@ command -v git >/dev/null 2>&1 || fail 'git is required'
 command -v tar >/dev/null 2>&1 || fail 'tar is required'
 command -v systemctl >/dev/null 2>&1 || fail 'systemctl is required'
 command -v systemd-run >/dev/null 2>&1 || fail 'systemd-run is required'
-[[ -n ${WAYLAND_DISPLAY:-} && -n ${XDG_RUNTIME_DIR:-} ]] \
-  || fail 'a running Wayland user session is required'
+[[ -n ${WAYLAND_DISPLAY:-} && -n ${XDG_RUNTIME_DIR:-} \
+    && -n ${DBUS_SESSION_BUS_ADDRESS:-} ]] \
+  || fail 'a running Wayland user session with a session bus is required'
 
+fixture_wayland_display=$WAYLAND_DISPLAY
+[[ $fixture_wayland_display == /* ]] \
+  || fixture_wayland_display="$XDG_RUNTIME_DIR/$fixture_wayland_display"
 tmpdir=$(mktemp -d /tmp/shibumi-suite-runtime.XXXXXX)
+fixture_runtime_dir="$tmpdir/runtime"
+mkdir -m 0700 "$fixture_runtime_dir"
 fresh_home="$tmpdir/fresh-home"
 fresh_config_home="$fresh_home/.config"
 fresh_state_home="$fresh_home/.local/state"
@@ -195,7 +207,7 @@ for unit in "${units[@]}"; do
   fi
 done
 unit_state() {
-  timeout --kill-after=0.2s 0.8s systemctl --user show "$1" \
+  timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host show "$1" \
     -p LoadState -p ActiveState --value 2>/dev/null
 }
 unit_active() {
@@ -218,9 +230,9 @@ all_inactive() {
 }
 
 for unit in "${units[@]}"; do
-  timeout --kill-after=0.2s 0.8s systemctl --user kill \
+  timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host kill \
     --kill-whom=all --signal=TERM "$unit" >/dev/null 2>&1 || true
-  timeout --kill-after=0.2s 0.8s systemctl --user stop "$unit" \
+  timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host stop "$unit" \
     >/dev/null 2>&1 || true
 done
 for _ in {1..20}; do
@@ -232,7 +244,7 @@ done
 for unit in "${units[@]}"; do
   if unit_active "$unit"; then
     printf 'KILL %s\n' "$unit" >>"$SHIBUMI_TEST_CLEANUP_LOG"
-    timeout --kill-after=0.2s 0.8s systemctl --user kill \
+    timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host kill \
       --kill-whom=all --signal=KILL "$unit" >/dev/null 2>&1 || true
   else
     result=$?
@@ -275,6 +287,7 @@ environment=(
   --setenv="XDG_CACHE_HOME=$XDG_CACHE_HOME"
   --setenv="XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
   --setenv="WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+  --setenv="DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
   --setenv="SHIBUMI_LOCK_FILE=$SHIBUMI_LOCK_FILE"
   --setenv="OMARCHY_PATH=$OMARCHY_PATH"
   --setenv="PATH=$PATH"
@@ -282,7 +295,7 @@ environment=(
 )
 [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] \
   || environment+=(--setenv="HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE")
-timeout --kill-after=1s 8s systemd-run --user --quiet --collect \
+timeout --kill-after=1s 8s systemd-run --user --machine=@.host --quiet --collect \
   --unit="$unit" --service-type=exec \
   --property=KillMode=control-group --property=TimeoutStopSec=0.2s \
   "${environment[@]}" /usr/bin/bash -c \
@@ -334,6 +347,9 @@ set_arm_environment() {
     XDG_CONFIG_HOME="$config_home"
     XDG_STATE_HOME="$state_home"
     XDG_CACHE_HOME="$cache_home"
+    XDG_RUNTIME_DIR="$fixture_runtime_dir"
+    WAYLAND_DISPLAY="$fixture_wayland_display"
+    DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"
     SHIBUMI_LOCK_FILE="$tmpdir/$arm-shibumi-suite.lock"
     SHIBUMI_TEST_SERVICE_FILE="$service_file"
     SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log"
@@ -379,7 +395,7 @@ start_stock_shell() {
       shell_ready=1
       break
     fi
-    [[ $(timeout --kill-after=0.2s 0.8s systemctl --user show \
+    [[ $(timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host show \
         "$shell_unit" -p ActiveState --value 2>/dev/null) == active ]] \
       || fail 'stock Quattro shell exited before IPC became ready'
     sleep 0.1
@@ -637,13 +653,13 @@ normal_cleanup_records=none
 
 cleanup_probe="$service_prefix-cleanup-probe.service"
 printf '%s\n' "$cleanup_probe" >>"$service_file"
-timeout --kill-after=1s 8s systemd-run --user --quiet --collect \
+timeout --kill-after=1s 8s systemd-run --user --machine=@.host --quiet --collect \
   --unit="$cleanup_probe" --service-type=exec \
   --property=KillMode=control-group \
   --property=TimeoutStopSec=30s /usr/bin/bash -c \
   'trap "" TERM; while :; do sleep 1; done' \
   || fail 'TERM-resistant cleanup probe did not start'
-[[ $(timeout --kill-after=0.2s 0.8s systemctl --user show \
+[[ $(timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host show \
     "$cleanup_probe" -p ActiveState --value 2>/dev/null) == active ]] \
   || fail 'TERM-resistant cleanup probe is not active'
 cleanup_probe_armed=1

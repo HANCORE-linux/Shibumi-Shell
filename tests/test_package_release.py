@@ -624,6 +624,69 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertIn("refusing foreign fixture service", result.stderr)
             self.assertFalse(systemctl_log.exists())
 
+    def test_quattro_cleanup_removal_failure_is_fatal(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        helper_start = runtime.index("cleanup() {\n")
+        helper_end = runtime.index("\n}\ntrap cleanup EXIT", helper_start) + 3
+        cleanup = runtime[helper_start:helper_end]
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-cleanup-removal."
+        ) as temporary:
+            root = Path(temporary)
+            harness = root / "cleanup"
+            harness.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "tmpdir=$1\n"
+                "stop_shells=\n"
+                "cleanup_log=\n"
+                "service_prefix=shibumi-runtime-Ab12Cd\n"
+                "cleanup_probe_armed=0\n"
+                "failed=0\n"
+                f"{cleanup}\n"
+                "cleanup\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            failed_scratch = root / "failed-scratch"
+            failed_scratch.mkdir()
+            (failed_scratch / "sentinel").write_text("retained\n", encoding="utf-8")
+            stub_bin = root / "bin"
+            stub_bin.mkdir()
+            rm_stub = stub_bin / "rm"
+            rm_stub.write_text("#!/usr/bin/env bash\nexit 73\n", encoding="utf-8")
+            rm_stub.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{stub_bin}:{environment['PATH']}"
+            failed = subprocess.run(
+                [str(harness), str(failed_scratch)],
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+            self.assertEqual(failed.returncode, 1, failed.stderr)
+            self.assertTrue((failed_scratch / "sentinel").is_file())
+            self.assertIn(
+                "Runtime fixture temporary directory cleanup failed",
+                failed.stderr,
+            )
+
+            removed_scratch = root / "removed-scratch"
+            removed_scratch.mkdir()
+            (removed_scratch / "sentinel").write_text("removed\n", encoding="utf-8")
+            removed = subprocess.run(
+                [str(harness), str(removed_scratch)],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(removed.returncode, 0, removed.stderr)
+            self.assertFalse(removed_scratch.exists())
+            self.assertFalse(removed_scratch.is_symlink())
+
     def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
@@ -639,8 +702,12 @@ puts JSON.generate(workflow.fetch("jobs"))
         self.assertIn('rm -f "$fixture_omarchy/bin/omarchy-restart-shell"', runtime)
         self.assertIn('"$fixture_omarchy/bin/omarchy-update-available"', runtime)
         self.assertIn("command -v omarchy-update-available", runtime)
-        self.assertIn("systemd-run --user --quiet --collect", runtime)
-        self.assertEqual(runtime.count("systemd-run --user"), 2)
+        self.assertIn("mkdir -m 0700 \"$fixture_runtime_dir\"", runtime)
+        self.assertIn('XDG_RUNTIME_DIR="$fixture_runtime_dir"', runtime)
+        self.assertIn('WAYLAND_DISPLAY="$fixture_wayland_display"', runtime)
+        self.assertIn('DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"', runtime)
+        self.assertIn("systemd-run --user --machine=@.host --quiet --collect", runtime)
+        self.assertEqual(runtime.count("systemd-run --user --machine=@.host"), 2)
         self.assertEqual(
             runtime.count("timeout --kill-after=1s 8s systemd-run --user"), 2
         )
