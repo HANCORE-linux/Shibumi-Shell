@@ -192,7 +192,8 @@ class LifecycleAdmissionTests(unittest.TestCase):
             "step-5-tip",
             "public-beta.12",
             "public-beta.13",
-            "public-beta.14",
+            "source-beta.14",
+            "public-beta.14.1",
         ):
             identity = next(
                 item for item in self.identities if item["id"] == identity_id
@@ -287,6 +288,39 @@ class LifecycleAdmissionTests(unittest.TestCase):
                     state["activation"]["futureWriter"] = True  # type: ignore[index]
                 with self.assertRaisesRegex(AdmissionError, "unknown|Step-6"):
                     classify_install_state(state, self.suite, self.identities)
+
+    def test_beta14_source_revision_cannot_authorize_beta141_payload(self) -> None:
+        source_beta14 = next(
+            item for item in self.identities if item["id"] == "source-beta.14"
+        )
+        beta141 = next(
+            item for item in self.identities if item["id"] == "public-beta.14.1"
+        )
+        old_revision = "11c9f63147ffea3265bdff442bb556f23700d209"
+        self.assertEqual(source_beta14["sourceRevisions"][0], old_revision)
+        self.assertEqual(
+            beta141["payloadDigest"],
+            "0350a8f66d81dc640b6d268ace149620ae78c40aea13ad2cd507ad6de93d8de3",
+        )
+
+        self.assertEqual(
+            classify_install_state(
+                self.state_for(source_beta14, old_revision),
+                self.suite,
+                self.identities,
+            ),
+            "source-beta.14",
+        )
+        self.assertEqual(
+            classify_install_state(
+                self.state_for(beta141), self.suite, self.identities
+            ),
+            "public-beta.14.1",
+        )
+
+        mixed = self.state_for(beta141, old_revision)
+        with self.assertRaisesRegex(AdmissionError, "revision/digest identity"):
+            classify_install_state(mixed, self.suite, self.identities)
 
     def test_shared_version_with_wrong_revision_or_digest_is_rejected(self) -> None:
         identity = next(

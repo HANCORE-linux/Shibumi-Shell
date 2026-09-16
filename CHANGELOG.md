@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.1.1-beta.14.1] - 2026-09-16
+
+Same product behavior as Beta.14; only version constants changed in the
+product payload.
+
+### Changed
+
+- Runtime release gate installs the Beta.13 package as predecessor (Step-5
+  predates Omarchy 4.0.3) and adds a fresh-install arm on an empty host
+- Contract: Beta.14 source revisions admitted as `source-beta.14`;
+  `public-beta.14.1` is the package identity
+
+### Release history
+
+- v0.1.1-beta.14 was tagged but never published: its release-validation gate
+  failed on the obsolete Step-5 predecessor fixture, not on the product
+
+### Known limits
+
+- Step-5 checkouts cannot be updated in place on Omarchy 4.0.3; run
+  `uninstall --keep-settings` from the Step-5 checkout, then install from the tag
+- Source checkouts outside the admitted revisions require the same sequence
+  from their exact checkout (#56, supervised; general recovery is Beta.15)
+- `QQmlVMEMetaObject` invalid-context warnings on output loss/return (8) and
+  third-party plugin removal (349); no functional impact observed, unattributed
+- G3 status-composite children do not restore after output return
+  (separate finding)
+- #54 pending reporter confirmation; evidence is one DP-1 hot-unplug cycle
+  on pre-final `4d9744c`
+- AUR publication deferred
+
 ## [0.1.1-beta.14] - 2026-09-16
 
 ### Added

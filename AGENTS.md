@@ -38,6 +38,8 @@ python3 tests/test_lifecycle_admission.py
 python3 tests/test_shibumi_health.py
 python3 tests/test_shibumi_manager.py
 ./tests/third-party-integration-regression.sh
+# Requires a running Wayland session; starts isolated fixture shells.
+./tests/shibumi-suite-quattro-runtime.sh
 ./scripts/check-aur-package
 ```
 

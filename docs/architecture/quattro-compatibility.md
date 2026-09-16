@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The unreleased `0.1.1-beta.14` candidate is reviewed against the current
+The unreleased `0.1.1-beta.14.1` candidate is reviewed against the current
 official Omarchy Quattro baseline. The published Beta.13 remains the latest
 physically accepted release:
 
@@ -118,7 +118,7 @@ patching Omarchy. The all-suite test withholds platform owners and creates no
 output surfaces.
 
 These source and fixture results establish the exact 4.0.3 contract but do not
-complete Beta.14 release acceptance. The public widget snapshot is not a global
+complete Beta.14.1 release acceptance. The public widget snapshot is not a global
 manifest or service registry; denied or missing capabilities must not be
 replaced by private host traversal, a guessed original provider, undeclared
 sibling imports, duplicate backends, or authentication access. Final acceptance

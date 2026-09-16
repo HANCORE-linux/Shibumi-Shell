@@ -66,7 +66,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.14")
+        self.assertEqual(version, "0.1.1-beta.14.1")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -89,7 +89,7 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn(f'value: "{count} / {count}"', preview)
         self.assertNotIn('value: "25 / 25"', preview)
 
-    def test_lifecycle_contract_pins_exact_public_release_identities(self) -> None:
+    def test_lifecycle_contract_pins_exact_release_identities(self) -> None:
         contract = json.loads(
             (ROOT / "contracts/lifecycle-predecessors-v1.json").read_text(
                 encoding="utf-8"
@@ -132,11 +132,23 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "84f25408c8068c839884415a0a48c85922f54e22c782a6b19791e07903278c69",
             },
-            "public-beta.14": {
+            "source-beta.14": {
                 "suiteVersion": "0.1.1-beta.14",
-                "sourceRevisions": ["package:0.1.1-beta.14"],
+                "sourceRevisions": [
+                    "11c9f63147ffea3265bdff442bb556f23700d209",
+                    "36ceb7ddcd58eb3a7d78485db3f0be53840e12e6",
+                    "513b7ec4d05e9633070e10f7b42ea2335ee448e8",
+                    "32a0044656d7c4910f3e424fdca7e5597c112066",
+                    "87eb87d508e9f0dd5d6c46ce076fac1b05e1507e",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "70a76ad6ba877381a2663c1ac76b6eaf7883bb724dfa0d2c017e113ec1946577",
+            },
+            "public-beta.14.1": {
+                "suiteVersion": "0.1.1-beta.14.1",
+                "sourceRevisions": ["package:0.1.1-beta.14.1"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "0350a8f66d81dc640b6d268ace149620ae78c40aea13ad2cd507ad6de93d8de3",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -449,6 +461,110 @@ puts JSON.generate(workflow.fetch("jobs"))
                     capture_output=True,
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
+
+    def test_quattro_runtime_pins_predecessor_and_both_package_arms(self) -> None:
+        runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
+        predecessor = (
+            "predecessor_revision="
+            "2760cdb8272255790d5e4613fed8a48cb63c3555"
+        )
+        arm_markers = ("# Arm 1: package update", "# Arm 2: fresh install")
+
+        def assert_contract(text: str) -> None:
+            self.assertEqual(text.count(predecessor), 1)
+            for marker in arm_markers:
+                self.assertEqual(text.count(marker), 1)
+
+        runtime = runtime_path.read_text(encoding="utf-8")
+        assert_contract(runtime)
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-quattro-arm-markers."
+        ) as temporary:
+            missing_marker = Path(temporary) / "quattro-runtime-missing-arm.sh"
+            missing_marker.write_text(
+                runtime.replace(arm_markers[1], "", 1), encoding="utf-8"
+            )
+            with self.assertRaises(AssertionError):
+                assert_contract(missing_marker.read_text(encoding="utf-8"))
+
+    def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        helper_start = runtime.index("assert_uninstalled_arm() {\n")
+        helper_end = runtime.index("\n}\n\ndrain_fixture_shells()", helper_start) + 3
+        helper = runtime[helper_start:helper_end]
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-quattro-uninstall."
+        ) as temporary:
+            root = Path(temporary)
+            harness = root / "assert-uninstalled"
+            harness.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "config_home=$1\n"
+                "state_home=$2\n"
+                "cache_home=$3\n"
+                "fail() { printf 'fixture fail: %s\\n' \"$*\" >&2; exit 1; }\n"
+                "shell_ipc() { printf 'ok\\n'; }\n"
+                f"{helper}\n"
+                "assert_uninstalled_arm\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            cases = (
+                (
+                    "audio-directory",
+                    "plugin",
+                    "fixture fail: Shibumi plugin entry remains after uninstall\n",
+                ),
+                (
+                    "dangling-state",
+                    "state",
+                    "fixture fail: suite state remains after uninstall\n",
+                ),
+                (
+                    "dangling-cache",
+                    "cache",
+                    "fixture fail: suite cache remains after uninstall\n",
+                ),
+                ("clean-control", "clean", ""),
+            )
+            for name, leftover, expected_stderr in cases:
+                with self.subTest(case=name):
+                    case_root = root / name
+                    config_home = case_root / "config"
+                    state_home = case_root / "state"
+                    cache_home = case_root / "cache"
+                    plugins = config_home / "omarchy/plugins"
+                    plugins.mkdir(parents=True)
+                    state_home.mkdir(parents=True)
+                    cache_home.mkdir(parents=True)
+                    (config_home / "omarchy/shell.json").write_text(
+                        "{}\n", encoding="utf-8"
+                    )
+                    if leftover == "plugin":
+                        (plugins / "hancore.shibumi.audio").mkdir()
+                    elif leftover == "state":
+                        (state_home / "shibumi").symlink_to(case_root / "missing")
+                    elif leftover == "cache":
+                        (cache_home / "shibumi").symlink_to(case_root / "missing")
+
+                    result = subprocess.run(
+                        [
+                            str(harness),
+                            str(config_home),
+                            str(state_home),
+                            str(cache_home),
+                        ],
+                        text=True,
+                        capture_output=True,
+                    )
+                    expected_exit = 0 if leftover == "clean" else 1
+                    self.assertEqual(result.returncode, expected_exit, result.stderr)
+                    self.assertEqual(result.stderr, expected_stderr)
 
     def test_quattro_cleanup_rejects_foreign_units_without_systemctl(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(

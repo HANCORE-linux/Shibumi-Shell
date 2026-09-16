@@ -16,8 +16,9 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-The published `0.1.1-beta.13` prerelease passed physical single-output
-acceptance on Omarchy `4.0.3`. The current pinned host contracts use Omarchy
+The published `0.1.1-beta.14.1` prerelease was validated on a single-output
+Omarchy 4.0.3 host; see the release notes for scope and known limits.
+The current pinned host contracts use Omarchy
 and Omarchy Settings `4.0.3-1` (source tag `v4.0.3`, revision `05349870`) with
 Quickshell `0.3.1-1`; the 4.0.2 manifests remain an optional compatibility
 baseline. Multi-output acceptance was not run. See the
@@ -60,7 +61,7 @@ for the latest validated host versions.
 ## Install
 
 > [!IMPORTANT]
-> `0.1.1-beta.13` is published as a GitHub prerelease, but AUR publication is
+> `0.1.1-beta.14.1` is published as a GitHub prerelease, but AUR publication is
 > deferred and the package is not available from AUR yet. Until the AUR package
 > is published, use the source path below. Shibumi supports Omarchy Quattro
 > only.
@@ -81,16 +82,20 @@ Until the AUR package is released, use this transitional source installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite install --yes
 ```
 
-Update the transitional source installation with:
+Update the transitional source installation from an earlier tag (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.13):
 
 ```sh
 cd Shibumi-Shell
-git pull --ff-only
+git fetch --tags
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite update --yes
 ```
+
+Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
 This transitional source command asks for root privileges only while Pacman
 installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
