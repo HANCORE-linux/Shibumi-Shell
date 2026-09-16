@@ -16,7 +16,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.14"
+    implementationVersion: "0.1.1-beta.14.1"
     owner: root
     host: root.shell
     manifest: root.manifest

@@ -15,7 +15,7 @@ ShellRoot {
   property var cachedPreference: null
   property int callsBeforeLoss: 0
   property int writesBeforeLoss: 0
-  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.14", kinds: ["service"]})
+  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.14.1", kinds: ["service"]})
   function check(value, message) {
     if (value) return
     console.error("workspaces-runtime:", message)
@@ -44,10 +44,10 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.14"
+    implementationVersion: "0.1.1-beta.14.1"
     owner: state
     host: root.stateEnabled ? stateHost : null
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14.1", kinds: ["service"]})
   }
   QtObject {
     id: backend

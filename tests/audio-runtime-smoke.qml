@@ -11,7 +11,7 @@ ShellRoot {
   property var savedPanel: null
   property real originalRadius: 0
   property var audioManifest: ({id: "hancore.shibumi.audio",
-    version: "0.1.1-beta.14", kinds: ["service", "bar-widget"]})
+    version: "0.1.1-beta.14.1", kinds: ["service", "bar-widget"]})
   function check(value, message) {
     if (value) return
     console.error("audio-runtime-smoke:", message)
@@ -48,9 +48,9 @@ ShellRoot {
   SuiteRuntime.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.14"
+    implementationVersion: "0.1.1-beta.14.1"
     owner: tokenState
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14.1", kinds: ["service"]})
   }
   Fixtures.AudioRuntimeBackend { id: backend }
   Audio.Service { id: service; nativeBackendOverride: backend }

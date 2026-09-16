@@ -94,7 +94,7 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_audio / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.audio", "name": "Shibumi Audio",
-        "version": "0.1.1-beta.14", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.14.1", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi Audio", "category": "Audio",
@@ -109,7 +109,7 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_cpu / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.cpu", "name": "Shibumi CPU",
-        "version": "0.1.1-beta.14", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.14.1", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi CPU", "category": "System",

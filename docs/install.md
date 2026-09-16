@@ -20,7 +20,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> `0.1.1-beta.14` is a local candidate and is not published to AUR. This is
+> `0.1.1-beta.14.1` is a local candidate and is not published to AUR. This is
 > the supported flow only after the release gates pass and publication is
 > separately authorized.
 
