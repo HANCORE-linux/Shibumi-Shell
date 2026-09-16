@@ -466,18 +466,31 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
-    def test_quattro_runtime_pins_predecessor_and_both_package_arms(self) -> None:
+    def test_quattro_runtime_pins_predecessors_and_all_three_arms(self) -> None:
         runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
-        predecessor = (
-            "predecessor_revision="
-            "2760cdb8272255790d5e4613fed8a48cb63c3555"
+        predecessors = (
+            "package_predecessor_revision="
+            "2760cdb8272255790d5e4613fed8a48cb63c3555",
+            "source_predecessor_revision="
+            "7a6c853b1947d303bad9a5b640c224c01b669106",
         )
-        arm_markers = ("# Arm 1: package update", "# Arm 2: fresh install")
+        arm_markers = (
+            "# Arm 1: package update",
+            "# Arm 2: fresh install",
+            "# Arm 3: source checkout update",
+        )
 
         def assert_contract(text: str) -> None:
-            self.assertEqual(text.count(predecessor), 1)
+            for predecessor in predecessors:
+                self.assertEqual(text.count(predecessor), 1)
             for marker in arm_markers:
                 self.assertEqual(text.count(marker), 1)
+            self.assertIn("clone --quiet --shared --no-checkout", text)
+            self.assertIn("checkout --quiet \\\n    --detach", text)
+            self.assertEqual(text.count("run_update_arm \"$"), 2)
+            self.assertIn(".installOrigin == $origin", text)
+            self.assertIn(".payloadRoot == $root", text)
+            self.assertIn(".sourceRoot == $root", text)
 
         runtime = runtime_path.read_text(encoding="utf-8")
         assert_contract(runtime)
@@ -486,7 +499,7 @@ puts JSON.generate(workflow.fetch("jobs"))
         ) as temporary:
             missing_marker = Path(temporary) / "quattro-runtime-missing-arm.sh"
             missing_marker.write_text(
-                runtime.replace(arm_markers[1], "", 1), encoding="utf-8"
+                runtime.replace(arm_markers[2], "", 1), encoding="utf-8"
             )
             with self.assertRaises(AssertionError):
                 assert_contract(missing_marker.read_text(encoding="utf-8"))
@@ -636,7 +649,9 @@ puts JSON.generate(workflow.fetch("jobs"))
         self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
         self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
         self.assertIn("refusing foreign fixture service", runtime)
-        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])", runtime)
+        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])", runtime)
+        self.assertIn("package update (5) + fresh install (4) + source update (5) = 14", runtime)
+        self.assertIn("exact 14-shell generation budget", runtime)
         self.assertIn("--kill-whom=all --signal=TERM", runtime)
         self.assertIn("--kill-whom=all --signal=KILL", runtime)
         self.assertIn("timeout --kill-after=1s 8s", runtime)

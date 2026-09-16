@@ -78,33 +78,58 @@ command -v systemd-run >/dev/null 2>&1 || fail 'systemd-run is required'
   || fail 'a running Wayland user session is required'
 
 tmpdir=$(mktemp -d /tmp/shibumi-suite-runtime.XXXXXX)
-update_home="$tmpdir/update-home"
-update_config_home="$update_home/.config"
-update_state_home="$update_home/.local/state"
-update_cache_home="$update_home/.cache"
 fresh_home="$tmpdir/fresh-home"
 fresh_config_home="$fresh_home/.config"
 fresh_state_home="$fresh_home/.local/state"
 fresh_cache_home="$fresh_home/.cache"
-predecessor_root="$tmpdir/predecessor-package"
-candidate_root="$tmpdir/candidate-package"
+package_predecessor_root="$tmpdir/predecessor-package"
+package_candidate_root="$tmpdir/candidate-package"
+source_predecessor_root="$tmpdir/predecessor-source"
+source_candidate_root="$tmpdir/candidate-source"
 source_root=""
 stub_bin="$tmpdir/bin"
 fixture_omarchy="$tmpdir/omarchy"
-mkdir -p "$update_home" "$fresh_home" "$predecessor_root" \
-  "$candidate_root" "$stub_bin" "$fixture_omarchy"
-predecessor_revision=2760cdb8272255790d5e4613fed8a48cb63c3555
+mkdir -p "$fresh_home" "$package_predecessor_root" \
+  "$package_candidate_root" "$stub_bin" "$fixture_omarchy"
+package_predecessor_revision=2760cdb8272255790d5e4613fed8a48cb63c3555
+source_predecessor_revision=7a6c853b1947d303bad9a5b640c224c01b669106
 # Only committed payload is tested; uncommitted plugin changes are invisible to this gate.
 candidate_revision=$(git --no-replace-objects -C "$repo_root" rev-parse HEAD)
 [[ $candidate_revision =~ ^[0-9a-f]{40}$ ]] \
   || fail 'candidate HEAD did not resolve to a full commit identity'
+[[ $source_predecessor_revision != "$candidate_revision" ]] \
+  || fail 'source predecessor and candidate revisions must differ'
 
-# Both arms install package-projected payloads (PACKAGE-METADATA.json at root, mirrors PKGBUILD:62). Source-checkout → source-checkout transitions are not exercised here.
-git --no-replace-objects -C "$repo_root" archive "$predecessor_revision" \
-  | tar -x -C "$predecessor_root"
+for source_spec in \
+    "$source_predecessor_root:$source_predecessor_revision" \
+    "$source_candidate_root:$candidate_revision"; do
+  checkout_root=${source_spec%%:*}
+  checkout_revision=${source_spec#*:}
+  git -c core.hooksPath=/dev/null clone --quiet --shared --no-checkout -- \
+    "$repo_root" "$checkout_root" \
+    || fail "could not create isolated source checkout: $checkout_root"
+  git -c core.hooksPath=/dev/null -C "$checkout_root" checkout --quiet \
+    --detach "$checkout_revision" \
+    || fail "could not detach isolated source checkout: $checkout_root"
+  [[ -d $checkout_root && ! -L $checkout_root \
+      && -d $checkout_root/.git && ! -L $checkout_root/.git ]] \
+    || fail "source fixture root is not an isolated Git checkout: $checkout_root"
+  [[ $(git --no-replace-objects -C "$checkout_root" rev-parse HEAD) \
+      == "$checkout_revision" \
+      && -z $(git -C "$checkout_root" status --porcelain=v1 \
+        --untracked-files=all) ]] \
+    || fail "source fixture checkout identity is invalid: $checkout_root"
+  [[ ! -e $checkout_root/PACKAGE-METADATA.json \
+      && ! -L $checkout_root/PACKAGE-METADATA.json ]] \
+    || fail "source fixture exposes projected package identity: $checkout_root"
+done
+
+# Package fixtures mirror the root metadata projection performed by PKGBUILD:62.
+git --no-replace-objects -C "$repo_root" archive "$package_predecessor_revision" \
+  | tar -x -C "$package_predecessor_root"
 git --no-replace-objects -C "$repo_root" archive "$candidate_revision" \
-  | tar -x -C "$candidate_root"
-for package_root in "$predecessor_root" "$candidate_root"; do
+  | tar -x -C "$package_candidate_root"
+for package_root in "$package_predecessor_root" "$package_candidate_root"; do
   [[ -d $package_root && ! -L $package_root ]] \
     || fail "package fixture root is not an isolated real directory: $package_root"
   [[ -f $package_root/packaging/package-metadata.json \
@@ -135,8 +160,8 @@ validate_package_identity() {
     || fail "package VERSION is invalid: $package_root"
 }
 
-validate_package_identity "$predecessor_root" '0.1.1-beta.13'
-validate_package_identity "$candidate_root" '0.1.1-beta.14.1'
+validate_package_identity "$package_predecessor_root" '0.1.1-beta.13'
+validate_package_identity "$package_candidate_root" '0.1.1-beta.14.1'
 
 cp -a "$omarchy_path/shell" "$fixture_omarchy/shell"
 cp -a "$omarchy_path/bin" "$fixture_omarchy/bin"
@@ -163,7 +188,7 @@ mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
 [[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
   || exit 1
 for unit in "${units[@]}"; do
-  if [[ ! $unit =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])\.service$ \
+  if [[ ! $unit =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])\.service$ \
       && $unit != "$SHIBUMI_TEST_SERVICE_PREFIX-cleanup-probe.service" ]]; then
     printf 'refusing foreign fixture service: %s\n' "$unit" >&2
     exit 1
@@ -232,10 +257,11 @@ mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
 [[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
   || exit 1
 for existing in "${units[@]}"; do
-  [[ $existing =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])\.service$ ]] \
+  [[ $existing =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])\.service$ ]] \
     || exit 1
 done
-(( ${#units[@]} < 12 )) || {
+# package update (5) + fresh install (4) + source update (5) = 14 shells.
+(( ${#units[@]} < 14 )) || {
   printf 'isolated shell service generation limit exceeded\n' >&2
   exit 1
 }
@@ -361,34 +387,52 @@ start_stock_shell() {
   [[ $shell_ready -eq 1 ]] || fail 'stock Quattro shell did not become ready'
 }
 
-assert_package_install_state() {
+assert_install_state() {
   local expected_root=$1
   local expected_version=$2
-  local expected_revision="package:$expected_version"
+  local expected_origin=$3
+  local expected_revision=$4
   local marker_count=0
   state_file="$state_home/shibumi/install.json"
   [[ -f $state_file && ! -L $state_file ]] || fail 'install state is missing'
   jq -e --arg root "$expected_root" --arg version "$expected_version" \
-    --arg revision "$expected_revision" '
+    --arg origin "$expected_origin" --arg revision "$expected_revision" '
       .suiteVersion == $version and
-      .installOrigin == "package" and
+      .installOrigin == $origin and
       .payloadRoot == $root and
       .sourceRevision == $revision and
-      .packageName == "shibumi-shell" and
-      .packageVersion == $version and
       (.plugins | length) == 24
     ' "$state_file" >/dev/null \
-    || fail "installed package authority is invalid for $expected_version"
+    || fail "installed $expected_origin authority is invalid for $expected_revision"
+  case $expected_origin in
+    package)
+      jq -e --arg version "$expected_version" '
+        .packageName == "shibumi-shell" and
+        .packageVersion == $version and
+        (has("sourceRoot") | not)
+      ' "$state_file" >/dev/null \
+        || fail "installed package identity is invalid for $expected_version"
+      ;;
+    checkout)
+      jq -e --arg root "$expected_root" '
+        .sourceRoot == $root and
+        (has("packageName") | not) and
+        (has("packageVersion") | not)
+      ' "$state_file" >/dev/null \
+        || fail "installed checkout identity is invalid for $expected_revision"
+      ;;
+    *) fail "unsupported fixture install origin: $expected_origin" ;;
+  esac
   while IFS= read -r marker; do
     ((marker_count += 1))
     jq -e --arg version "$expected_version" --arg revision "$expected_revision" '
       .suiteVersion == $version and .sourceRevision == $revision
     ' "$marker" >/dev/null \
-      || fail "managed marker package authority is invalid: $marker"
+      || fail "managed marker $expected_origin authority is invalid: $marker"
   done < <(find "$config_home/omarchy/plugins" -mindepth 2 -maxdepth 2 \
     -name .shibumi-managed.json -type f -print)
   (( marker_count == 24 )) \
-    || fail "installed package has $marker_count managed markers instead of 24"
+    || fail "installed $expected_origin has $marker_count managed markers instead of 24"
 }
 
 assert_uninstalled_arm() {
@@ -421,66 +465,110 @@ drain_fixture_shells() {
     SHIBUMI_TEST_SERVICE_PREFIX="$service_prefix" "$stop_shells"
 }
 
+declare -A arm_predecessor_reply arm_candidate_reply arm_deactivated_reply
+declare -A arm_generations arm_elapsed
+
+run_update_arm() {
+  local predecessor_src=$1
+  local candidate_src=$2
+  local origin=$3
+  local arm predecessor_version predecessor_identity candidate_version
+  local candidate_identity arm_home arm_config_home arm_state_home arm_cache_home
+  local predecessor_digest candidate_digest generation_start started
+  case $origin in
+    package)
+      arm=package
+      predecessor_version=0.1.1-beta.13
+      predecessor_identity="package:$predecessor_version"
+      candidate_version=0.1.1-beta.14.1
+      candidate_identity="package:$candidate_version"
+      ;;
+    checkout)
+      arm=source
+      predecessor_version=0.1.1-beta.14.1
+      predecessor_identity=$source_predecessor_revision
+      candidate_version=0.1.1-beta.14.1
+      candidate_identity=$candidate_revision
+      ;;
+    *) fail "unsupported update-arm origin: $origin" ;;
+  esac
+  arm_home="$tmpdir/$arm-home"
+  arm_config_home="$arm_home/.config"
+  arm_state_home="$arm_home/.local/state"
+  arm_cache_home="$arm_home/.cache"
+  [[ ! -e $arm_home && ! -L $arm_home ]] \
+    || fail "update fixture path already exists: $arm_home"
+  mkdir -p "$arm_home"
+  assert_empty_directory "$arm_home"
+  mkdir -p "$arm_config_home" "$arm_state_home" "$arm_cache_home"
+  for empty_path in "$arm_config_home" "$arm_state_home" "$arm_cache_home"; do
+    assert_empty_directory "$empty_path"
+  done
+
+  started=$SECONDS
+  generation_start=$(service_generation_count)
+  set_arm_environment "$arm" "$arm_home" "$arm_config_home" \
+    "$arm_state_home" "$arm_cache_home"
+  source_root=$predecessor_src
+  start_stock_shell
+
+  suite_cli install --yes || fail "$arm predecessor install command failed"
+  assert_install_state "$predecessor_src" "$predecessor_version" "$origin" \
+    "$predecessor_identity"
+  predecessor_digest=$(jq -r '.payloadDigest // empty' "$state_file")
+  [[ $predecessor_digest =~ ^[0-9a-f]{64}$ ]] \
+    || fail "$arm predecessor payload digest is invalid"
+  arm_predecessor_reply[$arm]=$(shell_ipc shibumi-suite-runtime verifyPayload \
+    "$predecessor_digest") \
+    || fail "$arm predecessor state service payload query failed"
+  [[ ${arm_predecessor_reply[$arm]} == ok ]] \
+    || fail "$arm predecessor state service did not confirm its payload digest"
+  suite_cli status >/dev/null || fail "$arm predecessor status is not clean"
+
+  source_root=$candidate_src
+  suite_cli update --yes || fail "$arm candidate update command failed"
+  assert_install_state "$candidate_src" "$candidate_version" "$origin" \
+    "$candidate_identity"
+  candidate_digest=$(jq -r '.payloadDigest // empty' "$state_file")
+  [[ $candidate_digest =~ ^[0-9a-f]{64}$ ]] \
+    || fail "$arm candidate payload digest is invalid"
+  if [[ $origin == package && $candidate_digest == "$predecessor_digest" ]]; then
+    fail 'package update did not advance the payload identity'
+  fi
+  arm_candidate_reply[$arm]=$(shell_ipc shibumi-suite-runtime verifyPayload \
+    "$candidate_digest") \
+    || fail "$arm candidate state service payload query failed"
+  [[ ${arm_candidate_reply[$arm]} == ok ]] \
+    || fail "$arm candidate state service did not confirm its payload digest"
+  suite_cli status >/dev/null || fail "$arm candidate status is not clean"
+
+  suite_cli deactivate --keep-layout --yes \
+    || fail "$arm external-bar transition failed"
+  config="$config_home/omarchy/shell.json"
+  jq -e '(.bar.id // "omarchy.bar") == "omarchy.bar"' "$config" >/dev/null \
+    || fail "$arm external-bar transition did not activate the stock bar"
+  arm_deactivated_reply[$arm]=$(shell_ipc shibumi-suite-runtime verifyPayload \
+    "$candidate_digest") \
+    || fail "$arm deactivated state service payload query failed"
+  [[ ${arm_deactivated_reply[$arm]} == ok ]] \
+    || fail "$arm state service endpoint was lost under the stock bar"
+  suite_cli status >/dev/null \
+    || fail "$arm external candidate status is not clean"
+
+  suite_cli uninstall --yes || fail "$arm suite uninstall command failed"
+  assert_uninstalled_arm
+  drain_fixture_shells || fail "$arm fixture shell service drain failed"
+  [[ ! -s $cleanup_log ]] \
+    || fail "normal $arm cleanup unexpectedly required KILL"
+  arm_generations[$arm]=$(( $(service_generation_count) - generation_start ))
+  [[ ${arm_generations[$arm]} -eq 5 ]] \
+    || fail "$arm arm used ${arm_generations[$arm]} shell generations instead of 5"
+  arm_elapsed[$arm]=$(( SECONDS - started ))
+}
+
 gate_started=$SECONDS
 # Arm 1: package update
-assert_empty_directory "$update_home"
-mkdir -p "$update_config_home" "$update_state_home" "$update_cache_home"
-for empty_path in "$update_config_home" "$update_state_home" \
-    "$update_cache_home"; do
-  assert_empty_directory "$empty_path"
-done
-update_started=$SECONDS
-update_generation_start=$(service_generation_count)
-set_arm_environment update "$update_home" "$update_config_home" \
-  "$update_state_home" "$update_cache_home"
-source_root="$predecessor_root"
-start_stock_shell
-
-suite_cli install --yes || fail 'Beta.13 package install command failed'
-assert_package_install_state "$predecessor_root" '0.1.1-beta.13'
-update_predecessor_digest=$(jq -r '.payloadDigest // empty' "$state_file")
-[[ $update_predecessor_digest =~ ^[0-9a-f]{64}$ ]] \
-  || fail 'Beta.13 package payload digest is invalid'
-update_predecessor_reply=$(shell_ipc shibumi-suite-runtime verifyPayload \
-  "$update_predecessor_digest") \
-  || fail 'installed Beta.13 state service payload query failed'
-[[ $update_predecessor_reply == ok ]] \
-  || fail 'installed Beta.13 state service did not confirm its payload digest'
-suite_cli status >/dev/null || fail 'installed Beta.13 package status is not clean'
-
-source_root="$candidate_root"
-suite_cli update --yes || fail 'candidate package update command failed'
-assert_package_install_state "$candidate_root" '0.1.1-beta.14.1'
-update_candidate_digest=$(jq -r '.payloadDigest // empty' "$state_file")
-[[ $update_candidate_digest =~ ^[0-9a-f]{64}$ \
-    && $update_candidate_digest != "$update_predecessor_digest" ]] \
-  || fail 'package update did not advance the payload identity'
-update_candidate_reply=$(shell_ipc shibumi-suite-runtime verifyPayload \
-  "$update_candidate_digest") \
-  || fail 'updated candidate state service payload query failed'
-[[ $update_candidate_reply == ok ]] \
-  || fail 'updated candidate state service did not confirm its payload digest'
-suite_cli status >/dev/null || fail 'updated candidate package status is not clean'
-
-suite_cli deactivate --keep-layout --yes \
-  || fail 'updated suite external-bar transition failed'
-config="$config_home/omarchy/shell.json"
-jq -e '(.bar.id // "omarchy.bar") == "omarchy.bar"' "$config" >/dev/null \
-  || fail 'external-bar transition did not activate the stock bar'
-update_deactivated_reply=$(shell_ipc shibumi-suite-runtime verifyPayload \
-  "$update_candidate_digest") \
-  || fail 'deactivated candidate state service payload query failed'
-[[ $update_deactivated_reply == ok ]] \
-  || fail 'state service endpoint was lost under the stock bar'
-suite_cli status >/dev/null || fail 'external candidate package status is not clean'
-
-suite_cli uninstall --yes || fail 'updated suite uninstall command failed'
-assert_uninstalled_arm
-drain_fixture_shells || fail 'update-arm fixture shell service drain failed'
-[[ ! -s $cleanup_log ]] \
-  || fail 'normal update-arm cleanup unexpectedly required KILL'
-update_generations=$(( $(service_generation_count) - update_generation_start ))
-update_elapsed=$(( SECONDS - update_started ))
+run_update_arm "$package_predecessor_root" "$package_candidate_root" package
 
 # Arm 2: fresh install
 assert_empty_directory "$fresh_home"
@@ -500,10 +588,11 @@ fresh_started=$SECONDS
 fresh_generation_start=$(service_generation_count)
 set_arm_environment fresh "$fresh_home" "$fresh_config_home" \
   "$fresh_state_home" "$fresh_cache_home"
-source_root="$candidate_root"
+source_root="$package_candidate_root"
 start_stock_shell
 suite_cli install --yes || fail 'fresh candidate package install command failed'
-assert_package_install_state "$candidate_root" '0.1.1-beta.14.1'
+assert_install_state "$package_candidate_root" '0.1.1-beta.14.1' package \
+  'package:0.1.1-beta.14.1'
 fresh_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $fresh_digest =~ ^[0-9a-f]{64}$ ]] \
   || fail 'fresh candidate package payload digest is invalid'
@@ -530,7 +619,14 @@ drain_fixture_shells || fail 'final fixture shell service drain failed'
 [[ ! -s $cleanup_log ]] \
   || fail 'normal fresh-arm cleanup unexpectedly required KILL'
 fresh_generations=$(( $(service_generation_count) - fresh_generation_start ))
+[[ $fresh_generations -eq 4 ]] \
+  || fail "fresh arm used $fresh_generations shell generations instead of 4"
 fresh_elapsed=$(( SECONDS - fresh_started ))
+
+# Arm 3: source checkout update
+run_update_arm "$source_predecessor_root" "$source_candidate_root" checkout
+[[ $(service_generation_count) -eq 14 ]] \
+  || fail 'runtime arms did not use the exact 14-shell generation budget'
 
 if grep -Eq \
     'hancore\.shibumi[^ ]*.*(Binding loop|TypeError|ReferenceError|is not a type|failed to load)|plugin hancore\.shibumi.*failed|bar option hancore\.shibumi.*failed' \
@@ -558,14 +654,20 @@ probe_cleanup_record="KILL $cleanup_probe"
   || fail 'cleanup probe did not produce exactly its owned KILL record'
 total_elapsed=$(( SECONDS - gate_started ))
 
-printf 'Update arm verifyPayload: beta13=%s candidate=%s deactivated=%s\n' \
-  "$update_predecessor_reply" "$update_candidate_reply" "$update_deactivated_reply"
-printf 'Update arm timing/generations: %ss/%s\n' \
-  "$update_elapsed" "$update_generations"
+printf 'Package update arm verifyPayload: predecessor=%s candidate=%s deactivated=%s\n' \
+  "${arm_predecessor_reply[package]}" "${arm_candidate_reply[package]}" \
+  "${arm_deactivated_reply[package]}"
+printf 'Package update arm timing/generations: %ss/%s\n' \
+  "${arm_elapsed[package]}" "${arm_generations[package]}"
 printf 'Fresh arm preflight/verifyPayload: %s/%s deactivated=%s\n' \
   "$fresh_preflight" "$fresh_reply" "$fresh_deactivated_reply"
 printf 'Fresh arm timing/generations: %ss/%s\n' \
   "$fresh_elapsed" "$fresh_generations"
+printf 'Source update arm verifyPayload: predecessor=%s candidate=%s deactivated=%s\n' \
+  "${arm_predecessor_reply[source]}" "${arm_candidate_reply[source]}" \
+  "${arm_deactivated_reply[source]}"
+printf 'Source update arm timing/generations: %ss/%s\n' \
+  "${arm_elapsed[source]}" "${arm_generations[source]}"
 printf 'Cleanup evidence: normal=%s; deliberate-probe=%s; fixture-services=inactive\n' \
   "$normal_cleanup_records" "$probe_cleanup_record"
 printf 'Candidate revision: %s; total elapsed: %ss\n' \
