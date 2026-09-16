@@ -22,6 +22,7 @@ from unittest.mock import Mock, patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PUBLISHED_BETA141_REVISION = "7a6c853b1947d303bad9a5b640c224c01b669106"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from shibumi_suite.admission import (  # noqa: E402
@@ -961,7 +962,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertFalse(self.paths.state_dir.exists())
 
     def test_exact_beta141_package_identity_is_admitted(self) -> None:
-        packaged_suite = self.packaged_suite()
+        packaged_suite = self.packaged_suite(
+            source_revision=PUBLISHED_BETA141_REVISION
+        )
         self.assertEqual(
             require_current_payload_identity(packaged_suite), "public-beta.14.1"
         )
@@ -1030,12 +1033,29 @@ class SuiteLifecycleTests(unittest.TestCase):
             "public-beta.14.1",
         )
 
+    def test_current_payload_is_not_admitted_as_published_beta141(self) -> None:
+        packaged_suite = self.packaged_suite()
+
+        with self.assertRaisesRegex(
+            AdmissionError, "exact declared revision identity"
+        ):
+            require_current_payload_identity(packaged_suite)
+        self.assertFalse(self.paths.state_dir.exists())
+        self.assertFalse(self.paths.plugin_dir.exists())
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertEqual(self.runtime.events, [])
+
     def test_mutated_beta141_package_identity_is_rejected(self) -> None:
+        packaged_suite = self.packaged_suite(
+            source_revision=PUBLISHED_BETA141_REVISION
+        )
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.14.1"
+        )
         drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
         payload = drift_path.read_bytes()
         replacement = b" " if payload[-1:] != b" " else b"\n"
         drift_path.write_bytes(payload[:-1] + replacement)
-        packaged_suite = self.packaged_suite()
 
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
@@ -1278,11 +1298,43 @@ class SuiteLifecycleTests(unittest.TestCase):
         config["plugins"].append({"id": plugin_id, "custom": "old"})
         atomic_write(self.paths.config_file, encode_config(config))
 
-    def packaged_suite(self, version: str = "0.1.1-beta.14.1") -> Suite:
-        metadata_path = self.source / "PACKAGE-METADATA.json"
-        shutil.copy2(REPO_ROOT / "packaging/package-metadata.json", metadata_path)
+    def packaged_suite(
+        self,
+        version: str = "0.1.1-beta.14.1",
+        source_revision: str | None = None,
+    ) -> Suite:
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
         suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
+        plugin_ids = [item["id"] for item in suite_contract["plugins"]]
+        metadata_source = REPO_ROOT / "packaging/package-metadata.json"
+        if source_revision is not None:
+            for plugin_id in plugin_ids:
+                shutil.rmtree(self.source / plugin_id)
+            archive = subprocess.run(
+                [
+                    "git",
+                    "--no-replace-objects",
+                    "-C",
+                    str(REPO_ROOT),
+                    "archive",
+                    source_revision,
+                    "--",
+                    *plugin_ids,
+                    "contracts/plugin-suite-v1.json",
+                    "packaging/package-metadata.json",
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
+                bundle.extractall(self.source, filter="data")
+            metadata_source = self.source / "packaging/package-metadata.json"
+            suite_contract = json.loads(
+                suite_contract_path.read_text(encoding="utf-8")
+            )
+
+        metadata_path = self.source / "PACKAGE-METADATA.json"
+        shutil.copy2(metadata_source, metadata_path)
         suite_contract["suiteVersion"] = version
         suite_contract_path.write_text(
             json.dumps(suite_contract, indent=2) + "\n", encoding="utf-8"
