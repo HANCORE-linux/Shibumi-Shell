@@ -48,8 +48,11 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite install --yes
 ```
+
+Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
 This temporary source path installs the package-managed runtime dependencies
 first. `sudo` applies only to Pacman; the suite transaction still runs as the
@@ -60,6 +63,7 @@ To inspect the transaction before installing:
 ```bash
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -139,10 +143,12 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-For a trusted source checkout:
+For a trusted source checkout (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.13):
 
 ```bash
-git pull --ff-only
+cd Shibumi-Shell
+git fetch --tags
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update
 ```
@@ -161,14 +167,19 @@ discards staging, and leaves the live plugins unchanged; unlock the active
 session and retry. For an external-bar installation, update preserves the
 active bar and layout.
 
-Beta.13 inventories every existing journal before recovery and admits only the
-exact public Beta.11, Step-5-tip, or current Beta.13 revision/digest identity.
-A shared version string is not sufficient. Step-6 Power registration, Step-6
-journal metadata, mixed live markers, or any unknown state abort before
-recovery and before mutation. One fully admitted interrupted journal may be
-recovered before live payload identity is checked again; multiple public
-journals fail as ambiguous. Do not install Beta.13 over a Step-6 development
-installation; use its separately reviewed rollback procedure.
+Beta.14.1 inventories every existing journal before recovery and admits only
+exact revision, plugin-digest, payload-digest, activation, marker, and journal
+identities declared by the lifecycle predecessor contract. A shared version
+string is not sufficient. Step-6 Power registration or journal metadata, mixed
+live markers, multiple public journals, and unknown states fail closed before
+recovery or mutation. One fully admitted interrupted journal may be recovered
+before the lifecycle checks live payload identity again.
+
+Tag `v0.1.1-beta.14` was never published and is not a supported predecessor.
+Issue #56 recovery for a source checkout outside the admitted identities is
+supervised: run `./scripts/shibumi-suite uninstall --keep-settings --yes` from
+that exact checkout, then install `v0.1.1-beta.14.1`. Do not bypass admission by
+manually deleting lifecycle state, journals, markers, or plugin directories.
 
 ### Move from a checkout to the package
 

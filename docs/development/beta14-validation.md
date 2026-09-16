@@ -259,3 +259,14 @@ bounded `debugWidgetPipeline` report from the exact shell instance and a redacte
 log window around the event. Select exactly one instance using its registered
 configuration path and PID; do not use broad `pgrep -f` matches or request the
 entire user journal. Never request credentials or AI session history.
+
+## Beta.14.1 runtime-gate validation
+- Host: Omarchy 4.0.3; existing desktop Wayland session.
+- Candidate: `97adb8ae324a3aa1921e472f9a4155f1b8cbc961`; committed package-projected payload.
+- Predecessor: Beta.13 tag commit `2760cdb8272255790d5e4613fed8a48cb63c3555`.
+- Package update: 18 s, five shell generations; predecessor/candidate/deactivated payload replies all `ok`.
+- Empty-host fresh install: 12 s, four generations; installed/deactivated payload replies both `ok`.
+- Gate duration: 33 s internally; both arms passed, with no normal cleanup KILL records.
+- The deliberate TERM-resistant cleanup probe produced exactly one owned KILL record; fixture units and directory were removed.
+- Leftover Audio-plugin negative control failed as required; four focused regressions passed; follow-up review had no actionable findings.
+- No source-checkout transition, existing-active-Shibumi fresh case, or new hardware acceptance was exercised.

@@ -82,16 +82,20 @@ Until the AUR package is released, use this transitional source installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite install --yes
 ```
 
-Update the transitional source installation with:
+Update the transitional source installation from an earlier tag (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.13):
 
 ```sh
 cd Shibumi-Shell
-git pull --ff-only
+git fetch --tags
+git checkout v0.1.1-beta.14.1
 ./scripts/shibumi-suite update --yes
 ```
+
+Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
 This transitional source command asks for root privileges only while Pacman
 installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
