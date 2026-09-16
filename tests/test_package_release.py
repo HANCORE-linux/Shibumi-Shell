@@ -462,6 +462,110 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
+    def test_quattro_runtime_pins_predecessor_and_both_package_arms(self) -> None:
+        runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
+        predecessor = (
+            "predecessor_revision="
+            "2760cdb8272255790d5e4613fed8a48cb63c3555"
+        )
+        arm_markers = ("# Arm 1: package update", "# Arm 2: fresh install")
+
+        def assert_contract(text: str) -> None:
+            self.assertEqual(text.count(predecessor), 1)
+            for marker in arm_markers:
+                self.assertEqual(text.count(marker), 1)
+
+        runtime = runtime_path.read_text(encoding="utf-8")
+        assert_contract(runtime)
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-quattro-arm-markers."
+        ) as temporary:
+            missing_marker = Path(temporary) / "quattro-runtime-missing-arm.sh"
+            missing_marker.write_text(
+                runtime.replace(arm_markers[1], "", 1), encoding="utf-8"
+            )
+            with self.assertRaises(AssertionError):
+                assert_contract(missing_marker.read_text(encoding="utf-8"))
+
+    def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        helper_start = runtime.index("assert_uninstalled_arm() {\n")
+        helper_end = runtime.index("\n}\n\ndrain_fixture_shells()", helper_start) + 3
+        helper = runtime[helper_start:helper_end]
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-quattro-uninstall."
+        ) as temporary:
+            root = Path(temporary)
+            harness = root / "assert-uninstalled"
+            harness.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "config_home=$1\n"
+                "state_home=$2\n"
+                "cache_home=$3\n"
+                "fail() { printf 'fixture fail: %s\\n' \"$*\" >&2; exit 1; }\n"
+                "shell_ipc() { printf 'ok\\n'; }\n"
+                f"{helper}\n"
+                "assert_uninstalled_arm\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            cases = (
+                (
+                    "audio-directory",
+                    "plugin",
+                    "fixture fail: Shibumi plugin entry remains after uninstall\n",
+                ),
+                (
+                    "dangling-state",
+                    "state",
+                    "fixture fail: suite state remains after uninstall\n",
+                ),
+                (
+                    "dangling-cache",
+                    "cache",
+                    "fixture fail: suite cache remains after uninstall\n",
+                ),
+                ("clean-control", "clean", ""),
+            )
+            for name, leftover, expected_stderr in cases:
+                with self.subTest(case=name):
+                    case_root = root / name
+                    config_home = case_root / "config"
+                    state_home = case_root / "state"
+                    cache_home = case_root / "cache"
+                    plugins = config_home / "omarchy/plugins"
+                    plugins.mkdir(parents=True)
+                    state_home.mkdir(parents=True)
+                    cache_home.mkdir(parents=True)
+                    (config_home / "omarchy/shell.json").write_text(
+                        "{}\n", encoding="utf-8"
+                    )
+                    if leftover == "plugin":
+                        (plugins / "hancore.shibumi.audio").mkdir()
+                    elif leftover == "state":
+                        (state_home / "shibumi").symlink_to(case_root / "missing")
+                    elif leftover == "cache":
+                        (cache_home / "shibumi").symlink_to(case_root / "missing")
+
+                    result = subprocess.run(
+                        [
+                            str(harness),
+                            str(config_home),
+                            str(state_home),
+                            str(cache_home),
+                        ],
+                        text=True,
+                        capture_output=True,
+                    )
+                    expected_exit = 0 if leftover == "clean" else 1
+                    self.assertEqual(result.returncode, expected_exit, result.stderr)
+                    self.assertEqual(result.stderr, expected_stderr)
+
     def test_quattro_cleanup_rejects_foreign_units_without_systemctl(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
