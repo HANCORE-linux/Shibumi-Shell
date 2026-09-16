@@ -468,25 +468,45 @@ puts JSON.generate(workflow.fetch("jobs"))
 
     def test_quattro_runtime_pins_predecessors_and_all_three_arms(self) -> None:
         runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
-        predecessors = (
+        revision_pins = (
             "package_predecessor_revision="
             "2760cdb8272255790d5e4613fed8a48cb63c3555",
+            "package_candidate_revision="
+            "7a6c853b1947d303bad9a5b640c224c01b669106",
             "source_predecessor_revision="
             "7a6c853b1947d303bad9a5b640c224c01b669106",
         )
         arm_markers = (
             "# Arm 1: package update",
-            "# Arm 2: fresh install",
+            "# Arm 2: fresh source checkout install",
             "# Arm 3: source checkout update",
+        )
+        package_candidate_archive = (
+            'archive "$package_candidate_revision" \\\n'
+            '  | tar -x -C "$package_candidate_root"'
+        )
+        fresh_source_assertion = (
+            'assert_install_state "$source_candidate_root" '
+            "'0.1.1-beta.14.1' checkout \\\n"
+            '  "$candidate_revision"'
         )
 
         def assert_contract(text: str) -> None:
-            for predecessor in predecessors:
-                self.assertEqual(text.count(predecessor), 1)
+            for revision_pin in revision_pins:
+                self.assertEqual(text.count(revision_pin), 1)
             for marker in arm_markers:
                 self.assertEqual(text.count(marker), 1)
+            self.assertIn(
+                "# Published beta.14.1; lift to the next tag at release pin.",
+                text,
+            )
             self.assertIn("clone --quiet --shared --no-checkout", text)
             self.assertIn("checkout --quiet \\\n    --detach", text)
+            self.assertIn(package_candidate_archive, text)
+            self.assertIn('source_root="$source_candidate_root"', text)
+            self.assertIn(fresh_source_assertion, text)
+            self.assertIn("fresh candidate source checkout", text)
+            self.assertNotIn("fresh candidate package", text)
             self.assertEqual(text.count("run_update_arm \"$"), 2)
             self.assertIn(".installOrigin == $origin", text)
             self.assertIn(".payloadRoot == $root", text)
@@ -497,12 +517,28 @@ puts JSON.generate(workflow.fetch("jobs"))
         with tempfile.TemporaryDirectory(
             prefix="shibumi-quattro-arm-markers."
         ) as temporary:
-            missing_marker = Path(temporary) / "quattro-runtime-missing-arm.sh"
-            missing_marker.write_text(
-                runtime.replace(arm_markers[2], "", 1), encoding="utf-8"
+            mutations = (
+                runtime.replace(arm_markers[2], "", 1),
+                runtime.replace(
+                    package_candidate_archive,
+                    package_candidate_archive.replace(
+                        "$package_candidate_revision", "$candidate_revision"
+                    ),
+                    1,
+                ),
+                runtime.replace(
+                    fresh_source_assertion,
+                    fresh_source_assertion.replace(
+                        '"$source_candidate_root"', '"$package_candidate_root"'
+                    ),
+                    1,
+                ),
             )
-            with self.assertRaises(AssertionError):
-                assert_contract(missing_marker.read_text(encoding="utf-8"))
+            for index, mutated_runtime in enumerate(mutations):
+                mutation = Path(temporary) / f"quattro-runtime-mutation-{index}.sh"
+                mutation.write_text(mutated_runtime, encoding="utf-8")
+                with self.assertRaises(AssertionError):
+                    assert_contract(mutation.read_text(encoding="utf-8"))
 
     def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(

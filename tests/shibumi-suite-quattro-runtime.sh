@@ -104,11 +104,15 @@ fixture_omarchy="$tmpdir/omarchy"
 mkdir -p "$fresh_home" "$package_predecessor_root" \
   "$package_candidate_root" "$stub_bin" "$fixture_omarchy"
 package_predecessor_revision=2760cdb8272255790d5e4613fed8a48cb63c3555
+# Published beta.14.1; lift to the next tag at release pin.
+package_candidate_revision=7a6c853b1947d303bad9a5b640c224c01b669106
 source_predecessor_revision=7a6c853b1947d303bad9a5b640c224c01b669106
 # Only committed payload is tested; uncommitted plugin changes are invisible to this gate.
 candidate_revision=$(git --no-replace-objects -C "$repo_root" rev-parse HEAD)
 [[ $candidate_revision =~ ^[0-9a-f]{40}$ ]] \
   || fail 'candidate HEAD did not resolve to a full commit identity'
+[[ $package_predecessor_revision != "$package_candidate_revision" ]] \
+  || fail 'package predecessor and candidate revisions must differ'
 [[ $source_predecessor_revision != "$candidate_revision" ]] \
   || fail 'source predecessor and candidate revisions must differ'
 
@@ -139,7 +143,7 @@ done
 # Package fixtures mirror the root metadata projection performed by PKGBUILD:62.
 git --no-replace-objects -C "$repo_root" archive "$package_predecessor_revision" \
   | tar -x -C "$package_predecessor_root"
-git --no-replace-objects -C "$repo_root" archive "$candidate_revision" \
+git --no-replace-objects -C "$repo_root" archive "$package_candidate_revision" \
   | tar -x -C "$package_candidate_root"
 for package_root in "$package_predecessor_root" "$package_candidate_root"; do
   [[ -d $package_root && ! -L $package_root ]] \
@@ -586,7 +590,7 @@ gate_started=$SECONDS
 # Arm 1: package update
 run_update_arm "$package_predecessor_root" "$package_candidate_root" package
 
-# Arm 2: fresh install
+# Arm 2: fresh source checkout install
 assert_empty_directory "$fresh_home"
 mkdir -p "$fresh_config_home" "$fresh_state_home" "$fresh_cache_home"
 for empty_path in "$fresh_config_home" "$fresh_state_home" \
@@ -604,19 +608,20 @@ fresh_started=$SECONDS
 fresh_generation_start=$(service_generation_count)
 set_arm_environment fresh "$fresh_home" "$fresh_config_home" \
   "$fresh_state_home" "$fresh_cache_home"
-source_root="$package_candidate_root"
+source_root="$source_candidate_root"
 start_stock_shell
-suite_cli install --yes || fail 'fresh candidate package install command failed'
-assert_install_state "$package_candidate_root" '0.1.1-beta.14.1' package \
-  'package:0.1.1-beta.14.1'
+suite_cli install --yes || fail 'fresh candidate source checkout install command failed'
+assert_install_state "$source_candidate_root" '0.1.1-beta.14.1' checkout \
+  "$candidate_revision"
 fresh_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $fresh_digest =~ ^[0-9a-f]{64}$ ]] \
-  || fail 'fresh candidate package payload digest is invalid'
+  || fail 'fresh candidate source checkout payload digest is invalid'
 fresh_reply=$(shell_ipc shibumi-suite-runtime verifyPayload "$fresh_digest") \
   || fail 'fresh candidate state service payload query failed'
 [[ $fresh_reply == ok ]] \
   || fail 'fresh candidate state service did not confirm its payload digest'
-suite_cli status >/dev/null || fail 'fresh candidate package status is not clean'
+suite_cli status >/dev/null \
+  || fail 'fresh candidate source checkout status is not clean'
 suite_cli deactivate --keep-layout --yes \
   || fail 'fresh suite external-bar transition failed'
 config="$config_home/omarchy/shell.json"
@@ -628,7 +633,7 @@ fresh_deactivated_reply=$(shell_ipc shibumi-suite-runtime verifyPayload \
 [[ $fresh_deactivated_reply == ok ]] \
   || fail 'fresh state service endpoint was lost under the stock bar'
 suite_cli status >/dev/null \
-  || fail 'fresh external candidate package status is not clean'
+  || fail 'fresh external candidate source checkout status is not clean'
 suite_cli uninstall --yes || fail 'fresh candidate suite uninstall command failed'
 assert_uninstalled_arm
 drain_fixture_shells || fail 'final fixture shell service drain failed'
@@ -686,6 +691,8 @@ printf 'Source update arm timing/generations: %ss/%s\n' \
   "${arm_elapsed[source]}" "${arm_generations[source]}"
 printf 'Cleanup evidence: normal=%s; deliberate-probe=%s; fixture-services=inactive\n' \
   "$normal_cleanup_records" "$probe_cleanup_record"
-printf 'Candidate revision: %s; total elapsed: %ss\n' \
-  "$candidate_revision" "$total_elapsed"
+printf 'Package revisions: predecessor=%s candidate=%s\n' \
+  "$package_predecessor_revision" "$package_candidate_revision"
+printf 'Source revisions: predecessor=%s candidate=%s; total elapsed: %ss\n' \
+  "$source_predecessor_revision" "$candidate_revision" "$total_elapsed"
 printf 'Shibumi suite Quattro runtime passed\n'
