@@ -19,6 +19,9 @@ tag must agree.
 6. Confirm the repository visibility and remaining public-release blockers.
 7. Keep AUR publication behind the source, package, and clean-build gates in
    [packaging and AUR strategy](packaging.md).
+8. On host baseline change (`SHIBUMI_*_OMARCHY_PATH`, `quattro-compatibility.md` pins),
+   lift `predecessor_revision` in `tests/shibumi-suite-quattro-runtime.sh` to the last
+   tag validated on that baseline and run the gate locally before tagging.
 
 ## Prepare the package checksum
 
