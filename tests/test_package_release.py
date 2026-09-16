@@ -89,7 +89,7 @@ class PackageReleaseTests(unittest.TestCase):
         self.assertIn(f'value: "{count} / {count}"', preview)
         self.assertNotIn('value: "25 / 25"', preview)
 
-    def test_lifecycle_contract_pins_exact_public_release_identities(self) -> None:
+    def test_lifecycle_contract_pins_exact_release_identities(self) -> None:
         contract = json.loads(
             (ROOT / "contracts/lifecycle-predecessors-v1.json").read_text(
                 encoding="utf-8"
@@ -132,11 +132,23 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "84f25408c8068c839884415a0a48c85922f54e22c782a6b19791e07903278c69",
             },
-            "public-beta.14": {
+            "source-beta.14": {
                 "suiteVersion": "0.1.1-beta.14",
-                "sourceRevisions": ["package:0.1.1-beta.14"],
+                "sourceRevisions": [
+                    "11c9f63147ffea3265bdff442bb556f23700d209",
+                    "36ceb7ddcd58eb3a7d78485db3f0be53840e12e6",
+                    "513b7ec4d05e9633070e10f7b42ea2335ee448e8",
+                    "32a0044656d7c4910f3e424fdca7e5597c112066",
+                    "87eb87d508e9f0dd5d6c46ce076fac1b05e1507e",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "70a76ad6ba877381a2663c1ac76b6eaf7883bb724dfa0d2c017e113ec1946577",
+            },
+            "public-beta.14.1": {
+                "suiteVersion": "0.1.1-beta.14.1",
+                "sourceRevisions": ["package:0.1.1-beta.14.1"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "0350a8f66d81dc640b6d268ace149620ae78c40aea13ad2cd507ad6de93d8de3",
             },
         }
         self.assertEqual(set(states), set(expected))

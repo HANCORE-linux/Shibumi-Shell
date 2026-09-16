@@ -950,10 +950,10 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertTrue(changed)
         self.assertFalse(self.paths.state_dir.exists())
 
-    def test_exact_beta14_package_identity_is_admitted(self) -> None:
+    def test_exact_beta141_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite()
         self.assertEqual(
-            require_current_payload_identity(packaged_suite), "public-beta.14"
+            require_current_payload_identity(packaged_suite), "public-beta.14.1"
         )
         self.assertEqual(
             command_install(self.args(), packaged_suite, self.paths, self.runtime),
@@ -961,10 +961,66 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(
             preflight_lifecycle_state(self.paths, packaged_suite),
-            "public-beta.14",
+            "public-beta.14.1",
         )
 
-    def test_mutated_beta14_package_identity_is_rejected(self) -> None:
+        contract = json.loads(
+            (self.source / "contracts/lifecycle-predecessors-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        source_beta14 = next(
+            item for item in contract["states"] if item["id"] == "source-beta.14"
+        )
+        old_revision = "11c9f63147ffea3265bdff442bb556f23700d209"
+        self.assertIn(old_revision, source_beta14["sourceRevisions"])
+
+        state_path = self.paths.state_dir / "install.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["suiteVersion"] = source_beta14["suiteVersion"]
+        state["installOrigin"] = "checkout"
+        state["sourceRoot"] = str(self.source.resolve())
+        state.pop("packageName")
+        state.pop("packageVersion")
+        state["sourceRevision"] = old_revision
+        state["payloadDigest"] = source_beta14["payloadDigest"]
+        state["pluginDigests"] = dict(source_beta14["pluginDigests"])
+        atomic_write(
+            state_path,
+            (json.dumps(state, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        )
+        for plugin_id in state["plugins"]:
+            marker_path = self.paths.plugin_dir / plugin_id / ".shibumi-managed.json"
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["suiteVersion"] = source_beta14["suiteVersion"]
+            marker["sourceRevision"] = old_revision
+            marker["payloadDigest"] = source_beta14["pluginDigests"][plugin_id]
+            marker["suitePayloadDigest"] = source_beta14["payloadDigest"]
+            atomic_write(
+                marker_path,
+                (json.dumps(marker, indent=2, sort_keys=True) + "\n").encode(
+                    "utf-8"
+                ),
+            )
+
+        with self.assertRaisesRegex(AdmissionError, "live plugin marker or payload"):
+            preflight_lifecycle_state(self.paths, packaged_suite)
+        self.assertEqual(
+            preflight_lifecycle_state(
+                self.paths, packaged_suite, allow_payload_repair=True
+            ),
+            "source-beta.14",
+        )
+        self.assertEqual(
+            command_repair(self.args(), packaged_suite, self.paths, self.runtime),
+            0,
+        )
+        self.assertEqual(
+            preflight_lifecycle_state(self.paths, packaged_suite),
+            "public-beta.14.1",
+        )
+
+    def test_mutated_beta141_package_identity_is_rejected(self) -> None:
         drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
         payload = drift_path.read_bytes()
         replacement = b" " if payload[-1:] != b" " else b"\n"
