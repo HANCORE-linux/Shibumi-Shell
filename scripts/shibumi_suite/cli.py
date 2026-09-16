@@ -26,6 +26,7 @@ from .config import (
     migrate_legacy_config,
     migrate_state_settings,
     validate_state_settings,
+    parse_config_bytes,
     read_config,
     reconcile_profile_additions,
     reconcile_profile_services,
@@ -290,6 +291,25 @@ def previous_bar_for_state(
     return copy.deepcopy(fallback) if isinstance(fallback, dict) else {}
 
 
+def stock_bar_for_self_reference(paths: RuntimePaths) -> dict[str, Any]:
+    """Read the host default directly; an orphan Shibumi bar is not restorable."""
+    try:
+        defaults = parse_config_bytes(
+            paths.defaults_file.read_bytes(), paths.defaults_file,
+            user_config_exists=True,
+        )[0]
+    except OSError as error:
+        raise ConfigError(f"cannot read shell config {paths.defaults_file}: {error}") from error
+    bar = defaults.get("bar")
+    if not isinstance(bar, dict):
+        raise ConfigError(f"host shell defaults have no bar object: {paths.defaults_file}")
+    if "id" in bar and bar["id"] != "omarchy.bar":
+        raise ConfigError(f"host shell defaults do not select omarchy.bar: {paths.defaults_file}")
+    result = copy.deepcopy(bar)
+    result["id"] = "omarchy.bar"
+    return result
+
+
 def confirm(action: str, assume_yes: bool) -> None:
     if assume_yes:
         return
@@ -519,6 +539,10 @@ def command_install(
     validate_sources(runtime, specs)
     current, _ = read_config(paths.config_file, paths.defaults_file)
     external = args.no_activate and args.keep_layout
+    self_reference_stock = (
+        stock_bar_for_self_reference(paths)
+        if configured_bar_id(current) == "hancore.shibumi.bar" else None
+    )
 
     def desired_for(config: dict[str, Any]) -> dict[str, Any]:
         return remove_plugin_ids((
@@ -566,6 +590,9 @@ def command_install(
         transaction.stop_shell()
         current = transaction.refresh_config_after_stop()
         desired = desired_for(current)
+        previous_bar = current.get("bar")
+        if configured_bar_id(current) == "hancore.shibumi.bar":
+            previous_bar = self_reference_stock or stock_bar_for_self_reference(paths)
         desired_state = make_install_state(
             suite,
             list(profile.install),
@@ -577,7 +604,7 @@ def command_install(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
-            previous_bar=current.get("bar"),
+            previous_bar=previous_bar,
         )
         transaction.expose()
         transaction.stage_removal_ids(suite.retired_plugins)

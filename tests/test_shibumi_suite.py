@@ -658,6 +658,16 @@ class SuiteLifecycleTests(unittest.TestCase):
             command_install(self.args(), self.suite, self.paths, self.runtime), 0
         )
 
+    def write_orphan_shibumi_config(self) -> dict[str, object]:
+        config = json.loads(self.defaults.read_text(encoding="utf-8"))
+        config["bar"]["id"] = "hancore.shibumi.bar"
+        config = migrate_state_settings(config)
+        state_entry(config)["shibumi"]["orphanSetting"] = {
+            "nested": [1, False, "retain"]
+        }
+        atomic_write(self.paths.config_file, encode_config(config))
+        return config
+
     def test_runtime_paths_reject_symlinked_writable_root_before_mutation(
         self,
     ) -> None:
@@ -1071,6 +1081,114 @@ class SuiteLifecycleTests(unittest.TestCase):
             self.paths.config_file.read_text(encoding="utf-8")
         )
         self.assertNotIn("transparent", uninstalled["bar"])
+
+    def test_orphan_install_deactivate_restores_implicit_stock_bar_and_settings(
+        self,
+    ) -> None:
+        self.write_orphan_shibumi_config()
+        expected_bar = copy.deepcopy(
+            json.loads(self.defaults.read_text(encoding="utf-8"))["bar"]
+        )
+        expected_bar["id"] = "omarchy.bar"
+
+        self.install()
+        self.assertEqual(
+            load_install_state(self.paths, self.suite)["previousBar"], expected_bar
+        )
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+
+        restored = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        expected_bar["layout"]["left"].append(
+            {"id": "hancore.shibumi.control-center"}
+        )
+        self.assertEqual(restored["bar"], expected_bar)
+        self.assertEqual(
+            state_entry(restored)["shibumi"]["orphanSetting"],
+            {"nested": [1, False, "retain"]},
+        )
+
+    def test_orphan_install_uninstall_restores_explicit_stock_bar_and_settings(
+        self,
+    ) -> None:
+        defaults = json.loads(self.defaults.read_text(encoding="utf-8"))
+        defaults["bar"]["id"] = "omarchy.bar"
+        atomic_write(self.defaults, encode_config(defaults))
+        self.write_orphan_shibumi_config()
+
+        self.install()
+        self.assertEqual(
+            load_install_state(self.paths, self.suite)["previousBar"], defaults["bar"]
+        )
+        self.assertEqual(
+            command_uninstall(
+                self.args(keep_settings=True), self.suite, self.paths, self.runtime
+            ),
+            0,
+        )
+
+        restored = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(restored["bar"], defaults["bar"])
+        self.assertEqual(
+            state_entry(restored)["shibumi"]["orphanSetting"],
+            {"nested": [1, False, "retain"]},
+        )
+
+    def test_orphan_install_rejects_invalid_host_defaults_before_mutation(
+        self,
+    ) -> None:
+        self.write_orphan_shibumi_config()
+        original_config = self.paths.config_file.read_bytes()
+        valid = json.loads(self.defaults.read_text(encoding="utf-8"))
+        cases = {
+            "absent": None,
+            "invalid-json": b"{",
+            "no-bar": encode_config({"version": 1, "plugins": []}),
+            "null-id": encode_config({**valid, "bar": {**valid["bar"], "id": None}}),
+            "empty-id": encode_config({**valid, "bar": {**valid["bar"], "id": ""}}),
+            "foreign-id": encode_config(
+                {**valid, "bar": {**valid["bar"], "id": "third.party.bar"}}
+            ),
+        }
+
+        for label, payload in cases.items():
+            with self.subTest(case=label):
+                if payload is None:
+                    self.defaults.unlink(missing_ok=True)
+                else:
+                    self.defaults.write_bytes(payload)
+                with self.assertRaises(ConfigError):
+                    command_install(self.args(), self.suite, self.paths, self.runtime)
+                self.assertEqual(self.paths.config_file.read_bytes(), original_config)
+                self.assertEqual(self.runtime.events, [])
+                self.assertFalse(self.paths.plugin_dir.exists())
+                self.assertFalse(self.paths.state_dir.exists())
+
+    def test_orphan_external_install_never_records_shibumi_as_previous_bar(
+        self,
+    ) -> None:
+        self.write_orphan_shibumi_config()
+        expected = copy.deepcopy(
+            json.loads(self.defaults.read_text(encoding="utf-8"))["bar"]
+        )
+        expected["id"] = "omarchy.bar"
+
+        self.assertEqual(
+            command_install(
+                self.args(no_activate=True, keep_layout=True),
+                self.suite,
+                self.paths,
+                self.runtime,
+            ),
+            0,
+        )
+
+        state = load_install_state(self.paths, self.suite)
+        self.assertEqual(state["previousBar"], expected)
+        installed = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(installed["bar"]["id"], "hancore.shibumi.bar")
+        self.assertEqual(state["activation"]["mode"], "external")
 
     def test_lifecycle_never_mutates_hyprland_appearance_config(self) -> None:
         hypr_root = self.root / "config/hypr"
@@ -3025,6 +3143,121 @@ class SuiteLifecycleTests(unittest.TestCase):
             state["activation"]["configuredBar"], installed["bar"]["id"]
         )
         self.assertEqual(installed["bar"]["foreignOwnerState"], {"serial": 23})
+
+    def test_orphan_managed_install_preserves_changed_post_stop_bar(self) -> None:
+        self.write_orphan_shibumi_config()
+        original_stop = self.runtime.stop_shell
+        final_bar: dict[str, object] = {}
+
+        def stop_after_bar_save() -> None:
+            nonlocal final_bar
+            original_stop()
+            config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+            config["bar"]["id"] = "third.party.after-stop"
+            config["bar"]["foreignOwnerState"] = {"serial": 29}
+            final_bar = copy.deepcopy(config["bar"])
+            atomic_write(self.paths.config_file, encode_config(config))
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_bar_save
+        ):
+            self.assertEqual(
+                command_install(self.args(), self.suite, self.paths, self.runtime),
+                0,
+            )
+
+        self.assertEqual(
+            load_install_state(self.paths, self.suite)["previousBar"], final_bar
+        )
+
+    def assert_post_stop_shibumi_transition_uses_stock(
+        self, initial_bar_id: str | None
+    ) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        if initial_bar_id is not None:
+            base["bar"]["id"] = initial_bar_id
+        atomic_write(self.paths.config_file, encode_config(base))
+        expected_bar = copy.deepcopy(
+            json.loads(self.defaults.read_text(encoding="utf-8"))["bar"]
+        )
+        expected_bar["id"] = "omarchy.bar"
+        original_stop = self.runtime.stop_shell
+
+        def stop_after_shibumi_save() -> None:
+            original_stop()
+            config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+            config["bar"]["id"] = "hancore.shibumi.bar"
+            atomic_write(self.paths.config_file, encode_config(config))
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_shibumi_save
+        ):
+            self.assertEqual(
+                command_install(self.args(), self.suite, self.paths, self.runtime),
+                0,
+            )
+
+        self.assertEqual(
+            load_install_state(self.paths, self.suite)["previousBar"], expected_bar
+        )
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        restored = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(restored["bar"]["id"], "omarchy.bar")
+
+    def test_stock_to_shibumi_during_stop_records_stock_and_deactivates(
+        self,
+    ) -> None:
+        self.assert_post_stop_shibumi_transition_uses_stock(None)
+
+    def test_third_party_to_shibumi_during_stop_records_stock_and_deactivates(
+        self,
+    ) -> None:
+        self.assert_post_stop_shibumi_transition_uses_stock("third.party.before-stop")
+
+    def test_post_stop_shibumi_rejects_new_invalid_defaults_before_exposure(
+        self,
+    ) -> None:
+        base = json.loads(self.defaults.read_text(encoding="utf-8"))
+        base["bar"]["id"] = "third.party.before-stop"
+        atomic_write(self.paths.config_file, encode_config(base))
+        original_stop = self.runtime.stop_shell
+        original_expose = PluginTransaction.expose
+        transitioned = False
+
+        def stop_after_invalid_default_save() -> None:
+            nonlocal transitioned
+            original_stop()
+            if transitioned:
+                return
+            config = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+            config["bar"]["id"] = "hancore.shibumi.bar"
+            atomic_write(self.paths.config_file, encode_config(config))
+            self.defaults.write_bytes(b"{")
+            transitioned = True
+
+        def recording_expose(transaction: PluginTransaction) -> None:
+            self.runtime.events.append("expose")
+            original_expose(transaction)
+
+        with patch.object(
+            self.runtime, "stop_shell", side_effect=stop_after_invalid_default_save
+        ), patch.object(PluginTransaction, "expose", recording_expose):
+            with self.assertRaises(ConfigError):
+                command_install(self.args(), self.suite, self.paths, self.runtime)
+
+        self.assertEqual(self.runtime.events, ["stop", "stop", "restart"])
+        self.assertTrue(self.runtime.shell_running)
+        self.assertFalse(
+            any(
+                (self.paths.plugin_dir / plugin_id).exists()
+                for plugin_id in self.suite.plugins
+            )
+        )
+        self.assertTrue(self.paths.plugin_dir.is_dir())
+        self.assertFalse(self.hidden_transaction_paths())
+        self.assertFalse((self.paths.state_dir / "install.json").exists())
 
     def test_managed_install_drains_before_publish_without_rescan(self) -> None:
         original_expose = PluginTransaction.expose
