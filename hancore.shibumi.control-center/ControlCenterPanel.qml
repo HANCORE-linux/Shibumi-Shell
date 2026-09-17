@@ -779,7 +779,7 @@ ShibumiPanel {
             id, enabled === true, section)
           if (!changed)
             pluginActionError = enabled === true
-              ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
+              ? "The widget could not be added to the V1 layout."
               : "The plugin could not be removed from the V1 layout."
           return changed
         }

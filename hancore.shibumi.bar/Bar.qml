@@ -1595,7 +1595,11 @@ Item {
     const row = snapshot && snapshot.byId
       && Object.prototype.hasOwnProperty.call(snapshot.byId, id)
       ? snapshot.byId[id] : null
-    return !!(row && row.id === id && row.enabled === false
+    return !!(row && row.id === id
+      && (row.enabled === false || (row.enabled === true
+        && !layoutStateController.v2Mode
+        && isV1AdditionalSuiteWidget(id) && !layoutContains(id)
+        && registeredWidgetComponent(id) !== null))
       && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
   }
 

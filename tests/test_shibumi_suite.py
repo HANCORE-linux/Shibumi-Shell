@@ -106,6 +106,163 @@ INVALID_EMPTY_REGISTRY_OUTPUTS = (
 )
 
 
+BUG049_REACTIVATION_GUARD = """    return !!(row && row.id === id
+      && (row.enabled === false || (row.enabled === true
+        && !layoutStateController.v2Mode
+        && isV1AdditionalSuiteWidget(id) && !layoutContains(id)
+        && registeredWidgetComponent(id) !== null))
+      && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
+"""
+
+
+def validate_bug049_static_contract(
+    bar_source: str, panel_source: str, resolver_source: str
+) -> None:
+    helper = """  function isV1AdditionalSuiteWidget(widgetId) {
+    return [
+      "hancore.shibumi.temperature",
+      "hancore.shibumi.gpu",
+      "hancore.shibumi.storage"
+    ].indexOf(String(widgetId || "")) >= 0
+  }
+"""
+    admission = """    if (!mutationAdmissionReady) return false
+    const id = String(widgetId || "")
+    if (!suiteHostShell.scoped || !layoutTransitionsSupported
+        || layoutTransitionBusy || providerSnapshotTransitionBusy
+        || stateTransitionBusy || !catalogObservation
+        || !LayoutModel.validPluginId(id)) return false
+    if (installed !== true) return layoutContains(id)
+"""
+    row_identity = """    const row = snapshot && snapshot.byId
+      && Object.prototype.hasOwnProperty.call(snapshot.byId, id)
+      ? snapshot.byId[id] : null
+"""
+    resolver = """  function registeredWidgetComponent(widgetId) {
+    return hostWidgetResolverService.componentFor(widgetId)
+  }
+"""
+    stale_observation = """    if (!canSetBarWidgetInstalled(id, installed)
+        || observationValue !== catalogObservation) return false
+"""
+    keep_configured = """      removeIds: removeIds, keepConfigured: installed !== true
+        && isV1AdditionalSuiteWidget(id),
+"""
+    for label, fragment in (
+        ("exact G16-G18 identity set", helper),
+        ("admission, busy, and disabled-path checks", admission),
+        ("catalog row identity", row_identity),
+        ("registered component resolver", resolver),
+        ("narrow enabled-row exception", BUG049_REACTIVATION_GUARD),
+        ("stale observation refusal", stale_observation),
+        ("neutral-entry retention", keep_configured),
+    ):
+        if bar_source.count(fragment) != 1:
+            raise AssertionError(f"Bug 049 static contract lost {label}")
+    if resolver_source.count("entry.metadata.pluginId === key") != 1:
+        raise AssertionError("Bug 049 component authority lost exact metadata identity")
+
+    branch_start = panel_source.index(
+        "        if (!v2LayoutActive\n"
+        "            && [\"G16\", \"G17\", \"G18\"].indexOf(group) >= 0) {"
+    )
+    branch_end = panel_source.index(
+        "        const alternativesInstalled", branch_start
+    )
+    branch = panel_source[branch_start:branch_end]
+    neutral_error = "The widget could not be added to the V1 layout."
+    capacity_error = (
+        "V1 has no free extension slot. Remove an active added plugin or free "
+        "a V1 extension slot under Bars."
+    )
+    if branch.count(neutral_error) != 1 or capacity_error in branch:
+        raise AssertionError("Bug 049 G16-G18 failure text is not neutral")
+    if panel_source.count(neutral_error) != 1 or panel_source.count(capacity_error) != 1:
+        raise AssertionError("Bug 049 changed failure text outside G16-G18")
+
+
+class Bug049StaticRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bar_source = (
+            REPO_ROOT / "hancore.shibumi.bar/Bar.qml"
+        ).read_text(encoding="utf-8")
+        cls.panel_source = (
+            REPO_ROOT / "hancore.shibumi.control-center/ControlCenterPanel.qml"
+        ).read_text(encoding="utf-8")
+        cls.resolver_source = (
+            REPO_ROOT
+            / "hancore.shibumi.bar/services/HostWidgetResolver.qml"
+        ).read_text(encoding="utf-8")
+
+    def mutated_bar(self, old: str, new: str) -> str:
+        self.assertEqual(self.bar_source.count(old), 1)
+        return self.bar_source.replace(old, new, 1)
+
+    def validate(self, bar_source: str, resolver_source: str | None = None) -> None:
+        validate_bug049_static_contract(
+            bar_source, self.panel_source, resolver_source or self.resolver_source
+        )
+
+    def test_product_sources_match_narrow_reactivation_contract(self) -> None:
+        self.validate(self.bar_source)
+
+    def test_reverted_enabled_guard_is_detected(self) -> None:
+        reverted = self.mutated_bar(
+            BUG049_REACTIVATION_GUARD,
+            """    return !!(row && row.id === id && row.enabled === false
+      && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
+""",
+        )
+        with self.assertRaisesRegex(AssertionError, "narrow enabled-row exception"):
+            self.validate(reverted)
+
+    def test_missing_component_authority_is_detected(self) -> None:
+        weakened = self.mutated_bar(
+            "        && registeredWidgetComponent(id) !== null))\n",
+            "        && true))\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "narrow enabled-row exception"):
+            self.validate(weakened)
+
+    def test_wrong_component_metadata_identity_is_detected(self) -> None:
+        weakened = self.resolver_source.replace(
+            "entry.metadata.pluginId === key", "true", 1
+        )
+        with self.assertRaisesRegex(AssertionError, "exact metadata identity"):
+            self.validate(self.bar_source, weakened)
+
+    def test_missing_busy_admission_is_detected(self) -> None:
+        weakened = self.mutated_bar(
+            "    if (!suiteHostShell.scoped || !layoutTransitionsSupported\n"
+            "        || layoutTransitionBusy || providerSnapshotTransitionBusy\n",
+            "    if (!suiteHostShell.scoped || !layoutTransitionsSupported\n"
+            "        || providerSnapshotTransitionBusy\n",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "admission, busy, and disabled-path checks"
+        ):
+            self.validate(weakened)
+
+    def test_stale_observation_weakening_is_detected(self) -> None:
+        weakened = self.mutated_bar(
+            "        || observationValue !== catalogObservation) return false\n",
+            ") return false\n",
+        )
+        with self.assertRaisesRegex(AssertionError, "stale observation refusal"):
+            self.validate(weakened)
+
+    def test_disabled_path_weakening_is_detected(self) -> None:
+        weakened = self.mutated_bar(
+            "    if (installed !== true) return layoutContains(id)\n",
+            "    if (installed !== true) return true\n",
+        )
+        with self.assertRaisesRegex(
+            AssertionError, "admission, busy, and disabled-path checks"
+        ):
+            self.validate(weakened)
+
+
 class FakeOmarchyRuntime(OmarchyRuntime):
     def __init__(self, paths: RuntimePaths) -> None:
         super().__init__()
