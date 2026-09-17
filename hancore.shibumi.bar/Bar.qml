@@ -2700,18 +2700,14 @@ Item {
 
   function widgetRestoreSatisfied(record, widget) {
     if (!record || !widget || widget.opened !== true) return false
-    // A V1/V2 change replaces the WidgetSlot owner. The outgoing owner can
-    // remain alive long enough to satisfy an early timer tick, then disappear
-    // after the restore has already stopped. Only the replacement owner may
-    // complete a variant-switch restore.
-    if (record.needsReplacement && widget === record.owner) return false
-    // Once the replacement owner is established, navigation belongs to the
+    // Once an owner is established, navigation belongs to the
     // user. Follow its current page instead of forcing the page captured at
     // switch time; if this owner is replaced again, that latest page becomes
     // the handoff target for its successor.
     if (widget === record.activeOwner) {
-      if (record.id === "hancore.shibumi.control-center"
-          && widget.panelLoaded === true && widget.panelItem) {
+      if (record.id === "hancore.shibumi.control-center") {
+        if (widget.panelLoaded !== true || !widget.panelItem
+            || widget.panelItem.settingsPageReady !== true) return false
         const currentPage = String(widget.panelItem.settingsPage || "")
         if (currentPage !== "") record.page = currentPage
       }
@@ -2723,6 +2719,7 @@ Item {
       return true
     }
     const pageReady = widget.panelLoaded === true && widget.panelItem
+      && widget.panelItem.settingsPageReady === true
       && String(widget.panelItem.settingsPage || "") === record.page
     if (pageReady) record.activeOwner = widget
     return pageReady
@@ -2745,7 +2742,7 @@ Item {
         if (record.waitingWrites && record.waitingWrites.length) continue
         record.restoreRevision = Number(record.restoreRevision || 0) + 1
         record.attempts = Number(record.attempts || 0) + 1
-        // Never let a missing replacement owner fall back to another output.
+        // Never let a missing owner fall back to another output.
         const widget = root.findPanelWidgetOnScreen(
           record.id, record.screenName)
         const satisfied = root.widgetRestoreSatisfied(record, widget)
@@ -2761,7 +2758,9 @@ Item {
         // Filesystem-backed config publication and the layout delegate rebuild
         // can replace the panel owner more than once. Keep each output-local
         // handoff alive for its full 1.6 s window.
-        const current = root.pendingWidgetRestores.indexOf(record)
+        const current = root.pendingWidgetRestores.findIndex(item =>
+          item.restoreId === record.restoreId
+            && item.restoreRevision === record.restoreRevision)
         if (current >= 0 && record.attempts >= 20) root.removeWidgetRestoreAt(current)
       }
       // openPage()/open() can synchronously cancel or schedule another restore.

@@ -31,6 +31,19 @@ rg -Fq 'owner.barConfig.id !== lease.id' \
   || fail 'outgoing Shibumi visibility ownership is not revoked before host takeover'
 rg -Fq 'function syncHidden()' "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail 'active Shibumi bar does not implement the Omarchy visibility nudge'
+for restore_contract in \
+    'widget.panelItem.settingsPageReady !== true' \
+    'widget.panelItem.settingsPageReady === true' \
+    'item.restoreId === record.restoreId' \
+    '&& item.restoreRevision === record.restoreRevision' \
+    'Never let a missing owner fall back to another output.'; do
+  rg -Fq "$restore_contract" "$repo_root/hancore.shibumi.bar/Bar.qml" \
+    || fail "Control Center restore contract drifted: $restore_contract"
+done
+if rg -Fq 'record.needsReplacement && widget === record.owner' \
+    "$repo_root/hancore.shibumi.bar/Bar.qml"; then
+  fail 'ready Control Center restore still vetoes its current owner'
+fi
 rg -Fq 'if (name !== "separator") return "variant-required"' \
   "$repo_root/hancore.shibumi.bar/Bar.qml" \
   || fail "legacy appearance IPC still accepts variant-scoped keys"
@@ -150,8 +163,35 @@ controls = {
         '        && completed.some(function(request) { return request.revision !== revision }))',
         'const changed = true'),
     'snapshot-replay': ('if (root.pendingWidgetRestores.length === 0) stop()',
-        'root.pendingWidgetRestores = records.filter(record => record.attempts < 20)\n'
+        'const replay = records.some(record => !root.pendingWidgetRestores.some(item =>\n'
+        '        item.restoreId === record.restoreId))\n'
+        '      if (replay) root.pendingWidgetRestores = records.filter(record => record.attempts < 20)\n'
         '      if (root.pendingWidgetRestores.length === 0) stop()'),
+    'same-owner-veto': ('if (!record || !widget || widget.opened !== true) return false',
+        'if (!record || !widget || widget.opened !== true) return false\n'
+        '    if (record.needsReplacement && widget === record.owner) return false'),
+    'active-page-readiness': ('if (widget.panelLoaded !== true || !widget.panelItem\n'
+        '            || widget.panelItem.settingsPageReady !== true) return false',
+        'if (widget.panelLoaded !== true || !widget.panelItem) return false'),
+    'page-readiness': ('const pageReady = widget.panelLoaded === true && widget.panelItem\n'
+        '      && widget.panelItem.settingsPageReady === true\n'
+        '      && String(widget.panelItem.settingsPage || "") === record.page',
+        'const pageReady = widget.panelLoaded === true && widget.panelItem\n'
+        '      && String(widget.panelItem.settingsPage || "") === record.page'),
+    'copied-record-prune': ('const current = root.pendingWidgetRestores.findIndex(item =>\n'
+        '          item.restoreId === record.restoreId\n'
+        '            && item.restoreRevision === record.restoreRevision)',
+        'const current = root.pendingWidgetRestores.indexOf(record)'),
+    'revision-prune': ('const current = root.pendingWidgetRestores.findIndex(item =>\n'
+        '          item.restoreId === record.restoreId\n'
+        '            && item.restoreRevision === record.restoreRevision)',
+        'const current = root.pendingWidgetRestores.findIndex(item =>\n'
+        '          item.restoreId === record.restoreId)'),
+    'output-prune': ('const current = root.pendingWidgetRestores.findIndex(item =>\n'
+        '          item.restoreId === record.restoreId\n'
+        '            && item.restoreRevision === record.restoreRevision)',
+        'const current = root.pendingWidgetRestores.findIndex(item =>\n'
+        '          item.restoreRevision === record.restoreRevision)'),
 }
 if mode != 'none':
     if mode not in controls:
