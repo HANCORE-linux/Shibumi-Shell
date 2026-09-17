@@ -472,10 +472,8 @@ ShibumiPanel {
     if (bar) void(bar.layoutConfig)
     void(stateConfig.widgets)
     const registry = pluginRegistry
-    let installed = registry && registry.installedPlugins
-      ? registry.installedPlugins : ({})
+    let installed = ({})
     if (nativeCatalogRequired) {
-      installed = ({})
       const snapshot = pluginCatalogSnapshot
       if (!snapshot || !snapshot.byId || !Object.isFrozen(snapshot.byId))
         return []
@@ -501,7 +499,8 @@ ShibumiPanel {
           __catalogClonedFrom: String(row.clonedFrom || "")
         }
       }
-    }
+    } else installed = registry && registry.installedPlugins
+      ? registry.installedPlugins : ({})
     const result = []
     const ids = Object.keys(installed).sort(function(left, right) {
       const leftName = String(installed[left].name || left).toLowerCase()

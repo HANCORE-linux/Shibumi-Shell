@@ -215,13 +215,21 @@ import sys
 from pathlib import Path
 repo, target = map(Path, sys.argv[1:])
 panel = (repo / 'hancore.shibumi.control-center/ControlCenterPanel.qml').read_text()
-start = panel.index('  function removePlugin(pluginId) {')
-end = panel.index('  function rescanPlugins() {', start)
+removal_start = panel.index('  function removePlugin(pluginId) {')
+removal_end = panel.index('  function rescanPlugins() {', removal_start)
+catalog_start = panel.index('  function pluginGlyph(pluginId, kinds) {')
+catalog_end = panel.index('  function pluginActivationAvailable(entry) {', catalog_start)
+group_states_start = panel.index('  function groupVariantStates(groupValues) {')
+group_states_end = panel.index('  function setGroupEnabled(', group_states_start)
 fixture = (repo / 'tests/fixtures/PluginRemovalChecks.qml').read_text()
-if fixture.count('  // INJECT_REMOVE_PLUGIN') != 1:
-    raise SystemExit('plugin removal fixture injection marker drifted')
-(target / 'fixtures/PluginRemovalChecks.qml').write_text(
-    fixture.replace('  // INJECT_REMOVE_PLUGIN', panel[start:end]))
+for marker in ('  // INJECT_REMOVE_PLUGIN', '  // INJECT_BUILD_PLUGIN_ENTRIES'):
+    if fixture.count(marker) != 1:
+        raise SystemExit(f'plugin fixture injection marker drifted: {marker}')
+fixture = fixture.replace(
+    '  // INJECT_REMOVE_PLUGIN', panel[removal_start:removal_end])
+fixture = fixture.replace('  // INJECT_BUILD_PLUGIN_ENTRIES',
+    panel[catalog_start:catalog_end] + panel[group_states_start:group_states_end])
+(target / 'fixtures/PluginRemovalChecks.qml').write_text(fixture)
 PY
 cp "$repo_root/tests/fixtures/DirectPreferredHostedPanelWidget.qml" "$tmpdir/fixtures/"
 cp "$repo_root/tests/fixtures/MisleadingItemHostedPanelWidget.qml" "$tmpdir/fixtures/"

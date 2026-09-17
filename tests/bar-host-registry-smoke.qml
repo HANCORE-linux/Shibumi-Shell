@@ -1176,7 +1176,8 @@ ShellRoot {
           || !stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("rejected provider install did not roll back")
 
-      if (!removalChecks.verifyScopedActive("example.scoped", [])
+      if (!removalChecks.verifyPluginCatalogRegistryIsolation()
+          || !removalChecks.verifyScopedActive("example.scoped", [])
           || !removalChecks.verifyScopedActive(
             "example.scoped-provider", ["G6"])
           || !root.verifyV1FamilyCapacity() || !root.verifyV1RemovalAmbiguity()
