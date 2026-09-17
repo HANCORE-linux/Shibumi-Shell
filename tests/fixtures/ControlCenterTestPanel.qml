@@ -669,6 +669,33 @@ Item {
     return null
   }
 
+  function collectQuickBarOptionDelegates(item, result) {
+    if (!item) return
+    const option = item.modelData
+    const optionId = option ? String(option.id || "") : ""
+    const optionIndex = Number(item.index)
+    if (typeof item.activate === "function"
+        && ["v1", "v2", "omarchy"].indexOf(optionId) >= 0
+        && optionIndex >= 0 && optionIndex < 3)
+      result[optionIndex] = item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++)
+      collectQuickBarOptionDelegates(children[index], result)
+  }
+
+  function quickBarOptionDelegates() {
+    const result = [null, null, null]
+    collectQuickBarOptionDelegates(settings.pageItem, result)
+    return result
+  }
+
+  function quickBarOptionPointerAreas() {
+    const delegates = quickBarOptionDelegates()
+    return delegates.map(function(delegateItem) {
+      return findPointerItem(delegateItem)
+    })
+  }
+
   function widgetPaletteRoot() {
     const dismissArea = findNamedItem(settings, "paletteDismissArea")
     return dismissArea ? dismissArea.parent : null

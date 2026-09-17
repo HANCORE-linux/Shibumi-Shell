@@ -737,6 +737,8 @@ fi
 
 for landing_contract in \
   'id: barButtonColumn' \
+  'model: root.barOptions.length' \
+  'readonly property var modelData: root.barOptions[index]' \
   'width: parent.width' \
   'radius: root.controller.controlRadius' \
   'id: routeCanvas' \

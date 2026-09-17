@@ -26,6 +26,9 @@ ShellRoot {
   property real widestActiveBarStatus: 0
   property int paletteLifecycleStep: 0
   property int paletteInitialTileCount: 0
+  property int quickBarIdentityStep: 0
+  property var quickBarDelegatesBefore: []
+  property var quickBarPointersBefore: []
 
   Control.PluginUpdateTestService { id: pluginUpdateService }
   Control.PluginUpdateTestService { id: replacementUpdateService }
@@ -37,6 +40,29 @@ ShellRoot {
     console.error("control-center-smoke:", message)
     Qt.exit(1)
     throw new Error(message)
+  }
+
+  function quickBarStateError(panel, delegates, activeId, v2Detail) {
+    const ids = ["v1", "v2", "omarchy"]
+    const labels = ["V1", "V2", "Omarchy Bar"]
+    const details = ["Shibumi split bar", v2Detail, "Stock Omarchy bar"]
+    for (let index = 0; index < ids.length; index++) {
+      const option = delegates[index]
+      const active = ids[index] === activeId
+      if (!option || String(option.modelData.id || "") !== ids[index]
+          || String(option.modelData.label || "") !== labels[index]
+          || String(option.modelData.detail || "") !== details[index]
+          || option.modelData.active !== active
+          || option.Accessible.role !== Accessible.RadioButton
+          || option.Accessible.name !== labels[index]
+          || option.Accessible.description !== details[index]
+          || option.Accessible.checked !== active
+          || !panel.findTextItem(option, labels[index])
+          || !panel.findTextItem(option, details[index])
+          || (panel.findTextItem(option, "ACTIVE") !== null) !== active)
+        return ids[index]
+    }
+    return ""
   }
 
   QtObject {
@@ -1886,6 +1912,59 @@ ShellRoot {
             || quick.barOptionCount !== 3 || quick.actionCount !== 8
             || quick.barOptions[2].label !== "Omarchy Bar")
           return root.fail("compact Quick switch/action deck did not instantiate")
+        const barDelegates = panel.quickBarOptionDelegates()
+        const barPointers = panel.quickBarOptionPointerAreas()
+        if (barDelegates.length !== 3 || barPointers.length !== 3
+            || barDelegates.some(function(item) { return item === null })
+            || barPointers.some(function(item) { return item === null }))
+          return root.fail("Quick bar delegate identity fixture did not find three options")
+        if (root.quickBarIdentityStep === 0) {
+          panel.v2LayoutActive = true
+          root.quickBarIdentityStep = 1
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 1) {
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v2", "Shibumi full bar")
+          if (stateError !== "")
+            return root.fail("Quick Full bar delegate data did not bind: "
+              + stateError)
+          if (!panel.setBarPresentation("shellStyle", "fit"))
+            return root.fail("Quick Full/Fit delegate transition was rejected")
+          root.quickBarIdentityStep = 2
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 2) {
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v2", "Shibumi fit bar")
+          if (stateError !== "")
+            return root.fail("Quick Fit bar delegate data did not rebound: "
+              + stateError)
+          root.quickBarDelegatesBefore = barDelegates
+          root.quickBarPointersBefore = barPointers
+          panel.v2LayoutActive = false
+          root.quickBarIdentityStep = 3
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 3) {
+          for (let index = 0; index < 3; index++) {
+            if (barDelegates[index] !== root.quickBarDelegatesBefore[index])
+              return root.fail(
+                "Quick bar delegate identity changed across V2 to V1")
+            if (barPointers[index] !== root.quickBarPointersBefore[index])
+              return root.fail(
+                "Quick bar pointer identity changed across V2 to V1")
+          }
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v1", "Shibumi fit bar")
+          if (stateError !== "")
+            return root.fail("Quick V1 bar delegate data did not rebound: "
+              + stateError)
+          root.quickBarIdentityStep = 4
+        }
         const activeBeforePreview = quick.activeBarId
         quick.hoveredBarIndex = 1
         if (quick.previewBar.id !== "v2"
