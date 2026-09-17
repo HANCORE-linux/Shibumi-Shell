@@ -137,7 +137,6 @@ Column {
         break
       }
     }
-    Qt.callLater(function() { root.forceActiveFocus() })
     return transitioning
   }
 

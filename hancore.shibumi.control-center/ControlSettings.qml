@@ -414,6 +414,10 @@ Item {
     return dismissed
   }
 
+  function focusPaletteInput() {
+    if (paletteLoader.item) paletteLoader.item.focusInput()
+  }
+
   function openWidgetPicker() {
     if (returnOnly) return false
     query = ""
@@ -423,7 +427,7 @@ Item {
     installConfirmed = false
     installStatus = ""
     paletteOpen = true
-    Qt.callLater(function() { paletteSearch.forceActiveFocus() })
+    Qt.callLater(root.focusPaletteInput)
     return true
   }
 
@@ -436,7 +440,7 @@ Item {
     installConfirmed = false
     installStatus = ""
     paletteOpen = true
-    Qt.callLater(function() { installInput.forceActiveFocus() })
+    Qt.callLater(root.focusPaletteInput)
     return true
   }
 
@@ -455,7 +459,7 @@ Item {
     installerDirect = false
     installConfirmed = false
     installStatus = ""
-    Qt.callLater(function() { installInput.forceActiveFocus() })
+    Qt.callLater(root.focusPaletteInput)
   }
 
   function supportedInstallUrl(value) {
@@ -997,20 +1001,23 @@ Item {
     }
   }
 
-  Rectangle {
+  Loader {
+    id: paletteLoader
     anchors.fill: parent
-    visible: root.paletteOpen
+    active: root.paletteOpen
     z: 20
-    color: Qt.rgba(0, 0, 0, 0.58)
+    sourceComponent: Rectangle {
+      color: Qt.rgba(0, 0, 0, 0.58)
+      function focusInput() { (root.installMode ? installInput : paletteSearch).forceActiveFocus() }
 
     MouseArea {
+      objectName: "paletteDismissArea"
       anchors.fill: parent
       enabled: !pluginInstall.running
       onClicked: root.closeWidgetPicker()
     }
 
     Rectangle {
-      id: commandPalette
       anchors.centerIn: parent
       width: Math.min(parent.width - Commons.Style.space(72),
         Commons.Style.space(560))
@@ -1137,10 +1144,8 @@ Item {
         }
 
         Item {
-          id: pluginResultsViewport
           width: parent.width
-          height: root.installMode
-            ? parent.height - y : parent.height - y
+          height: parent.height - y
 
           Flickable {
             id: resultsFlick
@@ -1189,6 +1194,7 @@ Item {
 
                   delegate: WidgetModuleTile {
                     id: moduleTile
+                    objectName: "widgetPaletteTile"
                     required property var modelData
                     width: (moduleBay.width - moduleBay.spacing) / 2
                     controller: root.controller
@@ -1301,7 +1307,6 @@ Item {
             }
 
             Rectangle {
-              id: riskConfirmation
               width: parent.width
               height: Commons.Style.space(32)
               radius: root.controller.controlRadius
@@ -1331,8 +1336,7 @@ Item {
                 visible: root.validInstallUrl && !root.installConfirmed
 
                 SequentialAnimation on opacity {
-                  running: root.paletteOpen && root.installMode
-                    && root.validInstallUrl && !root.installConfirmed
+                  running: root.installMode && root.validInstallUrl && !root.installConfirmed
                   loops: 2
                   NumberAnimation {
                     from: 0.28
@@ -1388,9 +1392,7 @@ Item {
                   }
                   root.installMode = false
                   root.installConfirmed = false
-                  Qt.callLater(function() {
-                    paletteSearch.forceActiveFocus()
-                  })
+                  Qt.callLater(root.focusPaletteInput)
                 }
               }
 
@@ -1425,6 +1427,7 @@ Item {
           }
         }
       }
+    }
     }
   }
 

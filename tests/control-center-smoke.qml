@@ -24,6 +24,8 @@ ShellRoot {
   property bool statusStockHost: false
   property bool statusV2Layout: false
   property real widestActiveBarStatus: 0
+  property int paletteLifecycleStep: 0
+  property int paletteInitialTileCount: 0
 
   Control.PluginUpdateTestService { id: pluginUpdateService }
   Control.PluginUpdateTestService { id: replacementUpdateService }
@@ -293,14 +295,22 @@ ShellRoot {
     shell: fakeShell
   }
 
-  Loader {
-    id: widgetLoader
-    active: true
-    sourceComponent: Component {
-      Control.BarWidget {
-        bar: fakeBar
-        panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
-        pluginUpdateServiceOverride: root.selectedUpdateService
+  Window {
+    id: testWindow
+    width: 800
+    height: 600
+    visible: root.phase === 8
+    onVisibleChanged: if (visible) requestActivate()
+
+    Loader {
+      id: widgetLoader
+      active: true
+      sourceComponent: Component {
+        Control.BarWidget {
+          bar: fakeBar
+          panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
+          pluginUpdateServiceOverride: root.selectedUpdateService
+        }
       }
     }
   }
@@ -1725,7 +1735,154 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         const quick = panel ? panel.settingsPageItem : null
-        if (!panel || panel.settingsPage !== "quick" || !quick || !quick.ready
+        if (!panel) return root.fail("palette lifecycle panel disappeared")
+        if (root.paletteLifecycleStep === 0) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("closed widget palette retained production items")
+          if (panel.settingsPage !== "plugins") {
+            if (!panel.showSettingsPage("plugins"))
+              return root.fail("widget palette host page did not open")
+            root.ticks = 0
+            return
+          }
+          const buildStarted = Date.now()
+          if (!panel.openWidgetPicker())
+            return root.fail("widget palette did not open")
+          console.log("widget palette fixture initial open call ms:",
+            Date.now() - buildStarted)
+          root.paletteLifecycleStep = 1
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 1) {
+          if (!panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("open widget palette did not build and focus: loaded="
+              + panel.widgetPaletteLoaded() + " tiles="
+              + panel.widgetPaletteTileCount() + " expected="
+              + panel.availableWidgetCount + " focus="
+              + panel.widgetPaletteInputFocused())
+          root.paletteInitialTileCount = panel.widgetPaletteTileCount()
+          panel.setWidgetPaletteQuery("bluetooth")
+          root.paletteLifecycleStep = 2
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 2) {
+          if (panel.widgetPaletteTileCount() !== 1)
+            return root.fail("widget palette search did not filter current catalog")
+          if (!panel.dismissWidgetPaletteFromOutside())
+            return root.fail("widget palette outside dismissal was unavailable")
+          root.paletteLifecycleStep = 3
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 3) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0
+              || panel.widgetPaletteInputFocused())
+            return root.fail("outside dismissal did not unload widget palette")
+          panel.appendWidgetPaletteProbe()
+          const buildStarted = Date.now()
+          if (!panel.openWidgetPicker())
+            return root.fail("widget palette did not reopen")
+          console.log("widget palette fixture reopen call ms:",
+            Date.now() - buildStarted)
+          root.paletteLifecycleStep = 4
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 4) {
+          if (!panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || panel.widgetPaletteTileCount()
+                !== root.paletteInitialTileCount + 1
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("reopened widget palette retained stale catalog state")
+          if (!panel.handleEscape())
+            return root.fail("widget palette Escape dismissal failed")
+          root.paletteLifecycleStep = 5
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 5) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("Escape did not unload widget palette")
+          if (!panel.openPluginInstaller())
+            return root.fail("direct plugin installer did not open after unload")
+          root.paletteLifecycleStep = 6
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 6) {
+          if (!panel.pluginInstallerOpen || !panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("reopened installer lost its production focus path")
+          if (!panel.handleEscape())
+            return root.fail("direct installer Escape dismissal failed")
+          root.paletteLifecycleStep = 7
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 7) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("installer close did not unload widget palette")
+          if (!panel.openWidgetPicker())
+            return root.fail("embedded installer picker did not open")
+          root.paletteLifecycleStep = 8
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 8) {
+          if (panel.widgetPaletteInstallMode() || !panel.widgetPaletteInputFocused()
+              || !panel.openEmbeddedPluginInstaller())
+            return root.fail("embedded installer production action was unavailable")
+          root.paletteLifecycleStep = 9
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 9) {
+          if (!panel.widgetPaletteInstallMode() || !panel.widgetPaletteInputFocused()
+              || !panel.backFromEmbeddedPluginInstaller())
+            return root.fail("embedded installer input did not receive focus")
+          root.paletteLifecycleStep = 10
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 10) {
+          if (panel.widgetPaletteInstallMode()
+              || !panel.widgetPaletteInputFocused() || !panel.handleEscape())
+            return root.fail("embedded installer Back did not refocus search")
+          root.paletteLifecycleStep = 11
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 11) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("embedded installer close did not unload palette")
+          if (!panel.openWidgetPicker() || !panel.handleEscape())
+            return root.fail("queued-focus teardown setup failed")
+          root.paletteLifecycleStep = 12
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 12) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0
+              || panel.widgetPaletteInputFocused()
+              || !panel.showSettingsPage("quick"))
+            return root.fail("queued focus survived palette destruction")
+          root.paletteLifecycleStep = 13
+          root.ticks = 0
+          return
+        }
+        if (panel.settingsPage !== "quick" || !quick || !quick.ready
             || quick.barOptionCount !== 3 || quick.actionCount !== 8
             || quick.barOptions[2].label !== "Omarchy Bar")
           return root.fail("compact Quick switch/action deck did not instantiate")
@@ -1740,7 +1897,7 @@ ShellRoot {
             || panel.lastQuickSystemAction !== "screensaver")
           return root.fail("Quick action deck did not delegate to its owners")
         if (!quick.activateAction("add-plugin")
-            || !panel.pluginInstallerOpen)
+            || !panel.pluginInstallerOpen || panel.settingsPage !== "plugins")
           return root.fail("direct plugin installer did not open")
         const pluginRepository =
           "https://github.com/robzolkos/omarchy-github.git"
