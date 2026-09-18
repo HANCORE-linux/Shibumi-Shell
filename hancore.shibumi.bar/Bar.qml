@@ -857,10 +857,10 @@ Item {
       layoutConfig, excludeValue, includeSpec)
   }
 
-  function reconcileActivePluginGroups(specs, syncValue, followRegionsValue) {
+  function reconcileActivePluginGroups(specs, syncValue, followRegionsValue, allowPartialValue) {
     if (layoutStateController.v2Mode)
       return layoutStateController.reconcileV2PluginGroups(
-        specs, syncValue, followRegionsValue)
+        specs, syncValue, followRegionsValue, allowPartialValue)
     if (!Array.isArray(specs)) return false
     const bindings = WidgetFamilies.v1SlotBindings(specs,
       layoutStateController.currentV1Order(), pluginRegistry,
@@ -869,7 +869,7 @@ Item {
     return layoutStateController.reconcileV1PluginGroups(
       specs.filter(function(spec) {
         return !spec || familyProviders.indexOf(spec.pluginId) < 0
-      }))
+      }), allowPartialValue)
   }
 
   function reconcileV1PluginGroups() {
@@ -886,7 +886,7 @@ Item {
     // whose provider entry was moved outside the V2 editor. Explicit V2 drag
     // mutations update both stores first, so this does not undo an edit.
     if (!reconcileActivePluginGroups(
-          activePluginSpecs(), true, layoutStateController.v2Mode))
+          activePluginSpecs(), true, layoutStateController.v2Mode, true))
       return false
     return reconcileWidgetFamilyProviders()
   }

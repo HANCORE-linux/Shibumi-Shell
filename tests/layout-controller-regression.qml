@@ -1,5 +1,6 @@
 import QtQuick
 import "../hancore.shibumi.bar/core" as Core
+import "../hancore.shibumi.bar/core/V2LayoutModel.js" as V2LayoutModel
 import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
 
 Window {
@@ -30,8 +31,13 @@ Window {
   QtObject {
     id: fakeStateService
     property var config: ShibumiConfig.defaultConfig()
+    property bool writePending: false
+    property bool rejectWrites: false
+    property bool holdWrites: false
+    property var heldConfig: null
 
     function setLayout(order, splits) {
+      if (rejectWrites) return false
       const next = ShibumiConfig.normalize(config)
       next.order = ShibumiConfig.normalizedOrder(order)
       next.v1SlotRoles = next.order
@@ -39,8 +45,24 @@ Window {
       next.splits = next.order
         ? ShibumiConfig.normalizedSplits(splits, next.order) : null
       if (!next.order || !next.splits || root.same(config, next)) return false
+      if (holdWrites) {
+        heldConfig = ShibumiConfig.normalize(next)
+        writePending = true
+        return true
+      }
       config = ShibumiConfig.normalize(next)
       root.writes++
+      return true
+    }
+
+    function settleHeld(confirm) {
+      if (!heldConfig) return false
+      if (confirm === true) {
+        config = heldConfig
+        root.writes++
+      }
+      heldConfig = null
+      writePending = false
       return true
     }
 
@@ -49,6 +71,7 @@ Window {
     }
 
     function setV2Layout(value) {
+      if (rejectWrites) return false
       const normalized = ShibumiConfig.normalizedV2Layout(value)
       if (!normalized
           || root.same(config.v2Layout, normalized)) return false
@@ -79,8 +102,31 @@ Window {
     }
   }
 
+  QtObject {
+    id: fakeBar
+    property bool mutationAdmissionReady: true
+    property bool layoutTransitionBusy: false
+    property bool layoutTransitionsSupported: false
+    property bool legacyLayoutMutationAllowed: true
+    property int transitionRequests: 0
+
+    function requestV2LayoutTransition(patch) {
+      transitionRequests++
+      return fakeStateService.setV2Layout(patch.v2Layout)
+    }
+  }
+
+  QtObject {
+    id: replacementStateService
+    property var config: ShibumiConfig.defaultConfig()
+    property bool writePending: false
+    function setLayout(_order, _splits) { return false }
+    function setV2Layout(_layout) { return false }
+  }
+
   Core.LayoutController {
     id: controller
+    bar: fakeBar
     stateService: fakeStateService
   }
 
@@ -284,6 +330,72 @@ Window {
         || !same(controller.splits, restoreSplits))
       fail("V1 exact rollback validation/idempotence")
 
+    const bASpecs = [{ pluginId: "custom.v2-to-v1", region: "right" }]
+    if (!controller.reconcileV1PluginGroups(bASpecs)
+        || controller.groupLocation("G:custom.v2-to-v1").region !== "right"
+        || !controller.reconcileV1PluginGroups([])
+        || controller.groupLocation("G:custom.v2-to-v1") !== null)
+      fail("B(a) controller placement did not settle with free V1 capacity")
+
+    const mixedSpecs = [
+      { pluginId: "custom.a", region: "left" },
+      { pluginId: "custom.b", region: "left" },
+      { pluginId: "custom.c", region: "left" },
+      { pluginId: "custom.d", region: "left" },
+      { pluginId: "custom.e", region: "left" }
+    ]
+    const beforeCapacity = ShibumiConfig.normalize(fakeStateService.config)
+    const writesBeforeCapacity = root.writes
+    if (controller.reconcileV1PluginGroups(mixedSpecs)
+        || !same(fakeStateService.config, beforeCapacity)
+        || root.writes !== writesBeforeCapacity)
+      fail("strict legacy reconciliation accepted a partial V1 plan")
+    if (!same(controller.unplacedPluginIdsFor(mixedSpecs),
+          mixedSpecs.map(spec => spec.pluginId)))
+      fail("V1 capacity did not derive from the confirmed order")
+
+    fakeBar.layoutTransitionBusy = true
+    if (controller.reconcileV1PluginGroups(mixedSpecs, true)
+        || !same(controller.unplacedPluginIdsFor(mixedSpecs),
+          mixedSpecs.map(spec => spec.pluginId)))
+      fail("busy V1 reconciliation changed confirmed capacity truth")
+    fakeBar.layoutTransitionBusy = false
+    fakeStateService.rejectWrites = true
+    if (controller.reconcileV1PluginGroups(mixedSpecs, true)
+        || !same(controller.unplacedPluginIdsFor(mixedSpecs),
+          mixedSpecs.map(spec => spec.pluginId)))
+      fail("rejected V1 reconciliation changed confirmed capacity truth")
+    fakeStateService.rejectWrites = false
+    fakeStateService.holdWrites = true
+    if (!controller.reconcileV1PluginGroups(mixedSpecs, true)
+        || !fakeStateService.writePending
+        || !same(controller.unplacedPluginIdsFor(mixedSpecs),
+          mixedSpecs.map(spec => spec.pluginId)))
+      fail("queued V1 plan replaced confirmed capacity truth")
+    fakeStateService.holdWrites = false
+    if (!fakeStateService.settleHeld(true)
+        || !same(controller.unplacedPluginIdsFor(mixedSpecs), ["custom.e"])
+        || !controller.groupLocation("G:custom.a"))
+      fail("confirmed mixed V1 plan did not derive its capacity remainder")
+    const confirmedPartial = ShibumiConfig.normalize(fakeStateService.config)
+    if (controller.unplacedPluginIdsFor([]).length !== 0
+        || controller.unplacedPluginIdsFor(mixedSpecs.slice(0, 4)).length !== 0)
+      fail("V1 spec changes retained an outdated capacity snapshot")
+    fakeStateService.config = beforeCapacity
+    if (!same(controller.unplacedPluginIdsFor(mixedSpecs),
+          mixedSpecs.map(spec => spec.pluginId)))
+      fail("revoked V1 state did not restore current capacity truth")
+    fakeStateService.config = confirmedPartial
+    if (!same(controller.unplacedPluginIdsFor(mixedSpecs), ["custom.e"]))
+      fail("confirmed V1 target was ignored because of prior request state")
+    if (!controller.reconcileV1PluginGroups(mixedSpecs.slice(1), true)
+        || controller.unplacedPluginIdsFor(mixedSpecs.slice(1)).length !== 0
+        || !controller.groupLocation("G:custom.e")
+        || controller.groupLocation("G:custom.a") !== null)
+      fail("V1 retry did not place the remainder and clear capacity")
+    if (!controller.reconcileV1PluginGroups([]))
+      fail("V1 capacity fixture cleanup failed")
+
     const protectedV2State = ShibumiConfig.normalize(fakeStateService.config)
     protectedV2State.presentation.shellStyle = "full"
     protectedV2State.layoutProtection.v2 = true
@@ -297,6 +409,52 @@ Window {
         || !controller.toggleSplit("boundaries", 0, true)
         || controller.v2Boundaries[0] !== true)
       fail("protected V2 interaction state did not activate independently")
+
+    const v2Baseline = ShibumiConfig.normalize(fakeStateService.config)
+    const fullV2 = V2LayoutModel.defaultLayout()
+    fullV2.left[3] = "G:custom.l1"
+    fullV2.left[8] = "G:custom.l2"
+    fullV2.left[9] = "G:custom.l3"
+    fullV2.left.push("G:custom.l4", "G:custom.l5", "G:custom.l6")
+    fullV2.right[10] = "G:custom.move"
+    const fullV2State = ShibumiConfig.normalize(fakeStateService.config)
+    fullV2State.v2Layout = fullV2
+    fakeStateService.config = ShibumiConfig.normalize(fullV2State)
+    const v2MixedSpecs = [
+      { pluginId: "custom.blocked", region: "left" },
+      { pluginId: "custom.l1", region: "left" },
+      { pluginId: "custom.l2", region: "left" },
+      { pluginId: "custom.l3", region: "left" },
+      { pluginId: "custom.l4", region: "left" },
+      { pluginId: "custom.l5", region: "left" },
+      { pluginId: "custom.l6", region: "left" },
+      { pluginId: "custom.move", region: "left" }
+    ]
+    fakeBar.layoutTransitionsSupported = true
+    const requestsBeforeV2 = fakeBar.transitionRequests
+    if (controller.reconcileV2PluginGroups(v2MixedSpecs, true, true)
+        || fakeBar.transitionRequests !== requestsBeforeV2
+        || !same(controller.unplacedPluginIdsFor(v2MixedSpecs),
+          ["custom.blocked"]))
+      fail("strict scoped reconciliation accepted a partial V2 plan")
+    fakeStateService.rejectWrites = true
+    if (controller.reconcileV2PluginGroups(v2MixedSpecs, true, true, true)
+        || fakeBar.transitionRequests !== requestsBeforeV2 + 1
+        || !same(controller.unplacedPluginIdsFor(v2MixedSpecs),
+          ["custom.blocked"]))
+      fail("rejected V2 request changed confirmed capacity truth")
+    fakeStateService.rejectWrites = false
+    if (!controller.reconcileV2PluginGroups(v2MixedSpecs, true, true, true)
+        || fakeBar.transitionRequests !== requestsBeforeV2 + 2
+        || !same(controller.unplacedPluginIdsFor(v2MixedSpecs),
+          ["custom.blocked"])
+        || controller.v2Slots.left[0] !== "G:custom.move"
+        || controller.v2Slots.right[10] !== "G1")
+      fail("confirmed V2 partial plan lost its swap or capacity remainder")
+    fakeStateService.config = v2Baseline
+    fakeBar.layoutTransitionsSupported = false
+    if (controller.unplacedPluginIdsFor([]).length !== 0)
+      fail("V2 spec changes retained an outdated capacity snapshot")
 
     if (!controller.reconcileV2PluginGroups([
           { pluginId: "custom.v2", region: "left" }

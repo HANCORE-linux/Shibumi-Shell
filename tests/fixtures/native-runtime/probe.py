@@ -15,8 +15,12 @@ BASE = Path("/fixture")
 shutil.copytree("/input", BASE, dirs_exist_ok=True, symlinks=True)
 LIMIT = 1024 * 1024
 # The Icons coalescing negative control adds one complete native State
-# settlement before the existing provider/catalog matrix.
-DEADLINE = time.monotonic() + 75
+# settlement before the existing provider/catalog matrix. The measured total
+# was 59.97 s versus 59.47 s before cleanup (about 0.5 s inclusive overhead),
+# so 85 s leaves 10 s below the unchanged 95 s runner timeout.
+DEADLINE = time.monotonic() + 85
+PROBE_STARTED = DEADLINE - 85
+print("NATIVE_TIMING " + json.dumps({"endpoint": "probe-start", "monotonic": PROBE_STARTED, "probeElapsed": 0.0}), flush=True)
 # Qt/Quickshell startup uses larger temporary file allocations than its text
 # output. A 1 MiB FSIZE cap reproduced SIGXFSZ before QML startup. Keep the
 # text/IPC caps below separate from this bounded per-file allocation ceiling.
@@ -311,6 +315,8 @@ with (BASE / "native.log").open("xb") as log:
               "V2 CPU cleanup refused")
         wait_status("native-runtime-probe", lambda value:
                     not value["stateWritePending"] and value["cpuV2Enabled"])
+        a_started = time.monotonic()
+        print("NATIVE_TIMING " + json.dumps({"endpoint": "a-start", "monotonic": a_started, "probeElapsed": a_started - PROBE_STARTED}), flush=True)
         check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
               "V1 restoration after Icons action refused")
         wait_status("native-runtime-probe", lambda value:
@@ -376,6 +382,14 @@ with (BASE / "native.log").open("xb") as log:
             and any((entry == "fixture.native-widget" or isinstance(entry, dict)
                      and entry.get("id") == "fixture.native-widget")
                     for entry in value["injectedBar"]["layout"]["left"]))
+        enabled_entries = [entry for entry in enabled_widget["injectedBar"]["layout"]["left"]
+                           if (entry == "fixture.native-widget" or isinstance(entry, dict)
+                               and entry.get("id") == "fixture.native-widget")]
+        check(len(enabled_entries) == 1 and isinstance(enabled_entries[0], dict)
+              and enabled_entries[0].get("shibumiModule") is True,
+              "native widget entry lost exact shibumiModule marker")
+        a_ended = time.monotonic()
+        print("NATIVE_TIMING " + json.dumps({"endpoint": "a-end", "monotonic": a_ended, "probeElapsed": a_ended - PROBE_STARTED, "phaseElapsed": a_ended - a_started}), flush=True)
         enabled_serial = enabled_widget["catalogReadSerial"]
         wait_status("native-runtime-probe", lambda value:
                     value["catalogReadSerial"] > enabled_serial
@@ -404,6 +418,267 @@ with (BASE / "native.log").open("xb") as log:
                     value["catalogReadSerial"] > disabled_serial
                     and value["panelCatalog"]["byId"]["fixture.native-widget"]["enabled"] is False,
                     timeout=7)
+
+        # Native B(b): fill all five V1 extension slots with fixed groups,
+        # add the real catalog widget in V2, observe the full V1 background
+        # reconcile, then free one slot and retry through V2 -> V1.
+        b_started = time.monotonic()
+        print("NATIVE_TIMING " + json.dumps({"endpoint": "b-start", "monotonic": b_started,
+              "probeElapsed": b_started - PROBE_STARTED}), flush=True)
+        bb_baseline = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and not value["v2Mode"]
+            and all("G:fixture.native-widget" not in value["config"]["order"][region]
+                    for region in ("left", "center", "right")))
+        baseline_order = json.loads(json.dumps(bb_baseline["config"]["order"]))
+        baseline_splits = json.loads(json.dumps(bb_baseline["config"]["splits"]))
+        full_order = {
+            "left": ["", "", "G3", "G4", "G5", "G6", "G7", "G1", "G2"],
+            "center": ["", "G8"],
+            "right": ["", "", "G11", "G14", "G12", "G13", "G15", "G9", "G10"],
+        }
+        check(ipc("native-runtime-probe", "prepareFullV1Capacity") == (0, "queued"),
+              "full V1 capacity setup refused")
+        full_v1 = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and value["config"]["order"] == full_order)
+        full_splits = full_v1["config"]["splits"]
+        fixed_ids = ["G" + str(index) for index in range(1, 16)]
+        full_values = [group for region in ("left", "center", "right")
+                       for group in full_order[region] if group]
+        check(sorted(full_values) == sorted(fixed_ids) and len(full_values) == 15,
+              "full V1 setup did not preserve each fixed group exactly once")
+        check(full_order["left"][:2] == ["", ""]
+              and full_order["right"][:2] == ["", ""]
+              and full_order["center"][0] == ""
+              and full_order["left"][7:] == ["G1", "G2"]
+              and full_order["right"][7:] == ["G9", "G10"]
+              and full_order["center"][1] == "G8"
+              and len(full_splits["left"]) == 8
+              and len(full_splits["right"]) == 8
+              and len(full_splits["boundaries"]) == 2,
+              "full V1 setup did not leave valid base holes and five busy extras")
+        persisted(lambda value: state_settings(value)["order"] == full_order
+                  and state_settings(value)["splits"] == full_splits)
+
+        check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
+              "B(b) V2 setup refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["layoutBusy"]
+                    and value["v2Mode"] and value["config"]["order"] == full_order)
+        check(ipc("native-runtime-probe", "toggleCatalogWidget")
+              == (0, "queued-without-native-mutation"),
+              "B(b) real V2 catalog add was not serialized")
+        v2_added = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and value["layoutResult"] == "confirmed"
+            and not value["pageTransitionPending"]
+            and "G:fixture.native-widget" in value["config"]["v2Layout"]["left"]
+            and any(isinstance(entry, dict)
+                    and entry.get("id") == "fixture.native-widget"
+                    and entry.get("shibumiModule") is True
+                    for entry in value["injectedBar"]["layout"]["left"]))
+        persisted(lambda value:
+                  state_settings(value)["order"] == full_order
+                  and "G:fixture.native-widget" in state_settings(value)["v2Layout"]["left"]
+                  and any(isinstance(entry, dict)
+                          and entry.get("id") == "fixture.native-widget"
+                          and entry.get("shibumiModule") is True
+                          for entry in value["bar"]["layout"]["left"]))
+        native_added_entries = [entry for entry in host_config()["bar"]["layout"]["left"]
+                                if isinstance(entry, dict)
+                                and entry.get("id") == "fixture.native-widget"]
+        check(len(native_added_entries) == 1
+              and native_added_entries[0].get("shibumiModule") is True,
+              "B(b) native file readback lost the exact marker")
+
+        check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
+              "B(b) full V1 switch refused")
+        full_observation = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and not value["v2Mode"] and value["config"]["order"] == full_order
+            and all("G:fixture.native-widget" not in value["config"]["order"][region]
+                    for region in ("left", "center", "right"))
+            and any(isinstance(entry, dict)
+                    and entry.get("id") == "fixture.native-widget"
+                    and entry.get("shibumiModule") is True
+                    for entry in value["injectedBar"]["layout"]["left"])
+            and ((not value["unplacedPluginIdsPropertyExists"]
+                  and not value["capacityMessagePropertyExists"])
+                 or (value["unplacedPluginIds"] == ["fixture.native-widget"]
+                     and value["capacityMessage"] != "")))
+        persisted(lambda value:
+                  state_settings(value)["presentation"]["shellStyle"] == "shibumi"
+                  and state_settings(value)["order"] == full_order
+                  and all("G:fixture.native-widget" not in state_settings(value)["order"][region]
+                          for region in ("left", "center", "right"))
+                  and any(isinstance(entry, dict)
+                          and entry.get("id") == "fixture.native-widget"
+                          and entry.get("shibumiModule") is True
+                          for entry in value["bar"]["layout"]["left"]))
+        capacity_evidence = {
+            "markerIsDict": any(isinstance(entry, dict)
+                                and entry.get("id") == "fixture.native-widget"
+                                and entry.get("shibumiModule") is True
+                                for entry in full_observation["injectedBar"]["layout"]["left"]),
+            "hasV1Position": any("G:fixture.native-widget" in full_observation["config"]["order"][region]
+                                 for region in ("left", "center", "right")),
+            "unplacedPluginIdsPropertyExists": full_observation["unplacedPluginIdsPropertyExists"],
+            "unplacedPluginIds": full_observation["unplacedPluginIds"],
+            "capacityMessagePropertyExists": full_observation["capacityMessagePropertyExists"],
+            "capacityMessage": full_observation["capacityMessage"],
+            "pageFeedbackVisible": full_observation["pageFeedbackVisible"],
+            "pageFeedbackTitle": full_observation["pageFeedbackTitle"],
+            "pageFeedbackDetail": full_observation["pageFeedbackDetail"],
+        }
+        check(capacity_evidence["markerIsDict"]
+              and not capacity_evidence["hasV1Position"],
+              "B(b) full V1 observation did not retain the marker without a position")
+        print("NATIVE_BB_FULL_V1_EVIDENCE "
+              + json.dumps(capacity_evidence, sort_keys=True), flush=True)
+        bb_capacity_warning = (
+            capacity_evidence["unplacedPluginIds"] == ["fixture.native-widget"]
+            and capacity_evidence["capacityMessage"] != "")
+        check(ipc("native-runtime-probe", "expirePageFeedback") == (0, "true"),
+              "explicit page feedback expiry failed")
+        if bb_capacity_warning:
+            warning_after_feedback = wait_status("native-runtime-probe", lambda value:
+                not value["pageFeedbackVisible"]
+                and value["unplacedPluginIds"] == ["fixture.native-widget"]
+                and value["capacityMessage"] != "")
+            check(warning_after_feedback["capacityMessage"]
+                  == capacity_evidence["capacityMessage"],
+                  "capacity warning disappeared when action feedback expired")
+
+        check(ipc("native-runtime-probe", "freeFullV1Slot") == (0, "queued"),
+              "B(b) fixed-group move-back refused")
+        freed_order = json.loads(json.dumps(full_order))
+        freed_order["left"][0], freed_order["left"][7] = (
+            freed_order["left"][7], freed_order["left"][0])
+        freed = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and value["config"]["order"] == freed_order)
+        freed_fixed = [group for region in ("left", "center", "right")
+                       for group in freed["config"]["order"][region]
+                       if group in fixed_ids]
+        check(sorted(freed_fixed) == sorted(fixed_ids) and len(freed_fixed) == 15
+              and freed["config"]["order"]["left"][7] == "",
+              "B(b) slot release did not preserve all fixed groups")
+        persisted(lambda value: state_settings(value)["order"] == freed_order)
+        if bb_capacity_warning:
+            check(freed["unplacedPluginIds"] == ["fixture.native-widget"]
+                  and not freed["pageFeedbackVisible"]
+                  and freed["capacityMessage"] == "Some widgets currently have no bar slot.",
+                  "free V1 slot with pending placement must show a cause-neutral page status")
+            print("NATIVE_BB_FREE_SLOT_STATUS " + json.dumps({
+                "slotEmpty": freed["config"]["order"]["left"][7] == "",
+                "unplacedPluginIds": freed["unplacedPluginIds"],
+                "capacityMessage": freed["capacityMessage"],
+            }, sort_keys=True), flush=True)
+
+        check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
+              "B(b) retry V2 switch refused")
+        wait_status("native-runtime-probe", lambda value:
+                    not value["stateWritePending"] and not value["layoutBusy"]
+                    and value["v2Mode"]
+                    and "G:fixture.native-widget" in value["config"]["v2Layout"]["left"])
+        check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
+              "B(b) retry V1 switch refused")
+        retry_placed = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and not value["v2Mode"]
+            and value["config"]["order"]["left"][7] == "G:fixture.native-widget"
+            and any(isinstance(entry, dict)
+                    and entry.get("id") == "fixture.native-widget"
+                    and entry.get("shibumiModule") is True
+                    for entry in value["injectedBar"]["layout"]["left"])
+            and (not value["unplacedPluginIdsPropertyExists"]
+                 or value["unplacedPluginIds"] == [])
+            and (not value["capacityMessagePropertyExists"]
+                 or value["capacityMessage"] == ""))
+        check((not retry_placed["unplacedPluginIdsPropertyExists"]
+               or retry_placed["unplacedPluginIds"] == [])
+              and (not retry_placed["capacityMessagePropertyExists"]
+                   or retry_placed["capacityMessage"] == ""),
+              "B(b) successful retry retained stale capacity feedback")
+        persisted(lambda value:
+                  state_settings(value)["order"]["left"][7]
+                    == "G:fixture.native-widget"
+                  and any(isinstance(entry, dict)
+                          and entry.get("id") == "fixture.native-widget"
+                          and entry.get("shibumiModule") is True
+                          for entry in value["bar"]["layout"]["left"]))
+
+        cleanup_code, cleanup_text = ipc(
+            "native-runtime-probe", "removeCapacityWidget")
+        check(cleanup_code == 0 and cleanup_text.startswith("{"),
+              "B(b) explicit cleanup did not return bounded evidence: "
+              + cleanup_text[:512])
+        cleanup_evidence = json.loads(cleanup_text)
+        print("NATIVE_BB_CLEANUP_REQUEST_EVIDENCE "
+              + json.dumps(cleanup_evidence, sort_keys=True), flush=True)
+        check(cleanup_evidence.get("accepted") is True
+              and cleanup_evidence.get("pageEntryPresent") is True
+              and cleanup_evidence.get("stateWritePending") is True
+              and cleanup_evidence.get("layoutBusy") is True
+              and cleanup_evidence.get("layoutSerialAdvanced") is True
+              and cleanup_evidence.get("nativeUnchangedBeforeSettlement") is True,
+              "B(b) explicit production cleanup was not serialized: "
+              + json.dumps(cleanup_evidence, sort_keys=True))
+        bb_disabled = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and value["layoutResult"] == "confirmed"
+            and not value["pageTransitionPending"]
+            and all("G:fixture.native-widget" not in value["config"]["order"][region]
+                    for region in ("left", "center", "right"))
+            and all(not any(isinstance(entry, dict)
+                            and entry.get("id") == "fixture.native-widget"
+                            for entry in value["injectedBar"]["layout"][region])
+                    for region in ("left", "center", "right")))
+        catalog_disabled = wait_status("native-runtime-probe", lambda value:
+                    value["catalogReadSerial"] > bb_disabled["catalogReadSerial"]
+                    and value["panelCatalog"]["byId"]
+                      ["fixture.native-widget"]["enabled"] is False,
+                    timeout=7)
+        disabled_file = persisted(lambda value:
+                  all("G:fixture.native-widget" not in
+                      state_settings(value)["order"][region]
+                      for region in ("left", "center", "right"))
+                  and all(not any(isinstance(entry, dict)
+                                  and entry.get("id") == "fixture.native-widget"
+                                  for entry in value["bar"]["layout"][region])
+                          for region in ("left", "center", "right")))
+        native_file_entry_count = sum(
+            1 for region in ("left", "center", "right")
+            for entry in disabled_file["bar"]["layout"][region]
+            if isinstance(entry, dict)
+            and entry.get("id") == "fixture.native-widget")
+        check(native_file_entry_count == 0,
+              "B(b) explicit cleanup retained the native widget entry")
+        print("NATIVE_BB_CLEANUP_SETTLED_EVIDENCE " + json.dumps({
+            "catalogEnabled": catalog_disabled["panelCatalog"]["byId"]
+              ["fixture.native-widget"]["enabled"],
+            "layoutResult": bb_disabled["layoutResult"],
+            "nativeFileEntryCount": native_file_entry_count,
+        }, sort_keys=True), flush=True)
+        check(ipc("native-runtime-probe", "restoreCapacityBaseline") == (0, "queued"),
+              "B(b) baseline restoration refused")
+        restored_capacity = wait_status("native-runtime-probe", lambda value:
+            not value["stateWritePending"] and not value["layoutBusy"]
+            and not value["v2Mode"]
+            and value["config"]["order"] == baseline_order
+            and value["config"]["splits"] == baseline_splits)
+        persisted(lambda value:
+                  state_settings(value)["order"] == baseline_order
+                  and state_settings(value)["splits"] == baseline_splits
+                  and all(not any(isinstance(entry, dict)
+                                  and entry.get("id") == "fixture.native-widget"
+                                  for entry in value["bar"]["layout"][region])
+                          for region in ("left", "center", "right")))
+        check(restored_capacity["config"]["order"] == baseline_order,
+              "B(b) cleanup did not restore the prior V1 state")
+        b_ended = time.monotonic()
+        print("NATIVE_TIMING " + json.dumps({"endpoint": "b-end", "monotonic": b_ended,
+              "probeElapsed": b_ended - PROBE_STARTED,
+              "phaseElapsed": b_ended - b_started}), flush=True)
 
         # A suite plugin remains enabled in the native DTO while its fixed
         # group is hidden. The page must derive active placement from the
@@ -463,6 +738,9 @@ with (BASE / "native.log").open("xb") as log:
                     and not value["pageTransitionPending"]
                     and value["pageUndoMode"] == "provider-snapshot"
                     and not value["audioV1Enabled"] and not value["audioV2Enabled"]
+                    and value["unplacedPluginIdsPropertyExists"]
+                    and value["unplacedPluginIds"] == []
+                    and value["capacityMessage"] == ""
                     and any(any((entry == "fixture.audio-provider" or isinstance(entry, dict)
                                  and entry.get("id") == "fixture.audio-provider") for entry in
                                 value["injectedBar"]["layout"][region])
@@ -711,6 +989,13 @@ with (BASE / "native.log").open("xb") as log:
         check(ipc("native-runtime-probe", "compact", "false") == (0, "queued"), "writer failed after re-selection")
         persisted(lambda value: state_settings(value)["widgets"]["G4"]["compact"] is False)
         check(host_config()["bar"].get("shibumi") == legacy, "legacy settings were rewritten")
+        probe_ended = time.monotonic()
+        probe_remaining = DEADLINE - probe_ended
+        print("NATIVE_TIMING " + json.dumps({"endpoint": "probe-end", "monotonic": probe_ended, "probeElapsed": probe_ended - PROBE_STARTED, "endRemaining": probe_remaining}), flush=True)
+        check(probe_remaining >= 8,
+              "native B(b) probe exceeded the authorized 77 s action budget")
+        check(bb_capacity_warning,
+              "full V1 background reconcile did not publish the unplaced widget capacity warning")
     finally:
         finish_owned_group(process)
         log.flush()

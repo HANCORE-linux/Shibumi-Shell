@@ -18,6 +18,19 @@ Column {
   property string pluginQuery: ""
   property bool activeExpanded: false
   property bool availableExpanded: false
+  readonly property var unplacedPluginIds: {
+    const bar = controller && "bar" in controller ? controller.bar : null
+    const layout = bar && "layoutController" in bar ? bar.layoutController : null
+    if (!bar || typeof bar.activePluginSpecs !== "function" || !layout
+        || typeof layout.unplacedPluginIdsFor !== "function") return []
+    const specs = bar.activePluginSpecs()
+    if (!Array.isArray(specs)) return []
+    const providers = !layout.v2Mode && "v1FamilySlotBindings" in bar ? Object.values(bar.v1FamilySlotBindings || {}) : []
+    return layout.unplacedPluginIdsFor(specs.filter(function(spec) {
+      return !spec || providers.indexOf(spec.pluginId) < 0
+    }))
+  }
+  readonly property string capacityMessage: unplacedPluginIds.length > 0 ? "Some widgets currently have no bar slot." : ""
   property bool feedbackVisible: false
   property string feedbackTitle: ""
   property string feedbackDetail: ""
@@ -895,7 +908,7 @@ Column {
       anchors.right: parent.right
       anchors.top: parent.top
       anchors.topMargin: Commons.Style.space(4)
-      visible: !root.feedbackVisible && !root.removalConfirmationVisible
+      visible: !root.feedbackVisible && !root.removalConfirmationVisible && root.capacityMessage === ""
       height: Commons.Style.space(34)
       radius: root.controller.controlRadius
       color: "transparent"
@@ -926,7 +939,8 @@ Column {
       anchors.leftMargin: Commons.Style.space(10)
       anchors.rightMargin: Commons.Style.space(8)
       spacing: Commons.Style.space(8)
-      visible: root.feedbackVisible && !root.removalConfirmationVisible
+      visible: (root.feedbackVisible || root.capacityMessage !== "")
+        && !root.removalConfirmationVisible
 
       Presentation.ControlCenterIconText {
         anchors.verticalCenter: parent.verticalCenter
@@ -944,7 +958,7 @@ Column {
 
         Text {
           width: parent.width
-          text: root.feedbackTitle
+          text: root.feedbackVisible ? root.feedbackTitle : root.capacityMessage
           color: root.foreground
           elide: Text.ElideRight
           font.family: root.controller.marketFont
@@ -954,7 +968,8 @@ Column {
 
         Text {
           width: parent.width
-          text: root.feedbackDetail
+          text: root.feedbackVisible ? root.feedbackDetail
+            : "Check slots under Bars; placement is retried on the next bar switch."
           color: root.foreground
           opacity: 0.56
           elide: Text.ElideRight

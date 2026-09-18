@@ -67,6 +67,18 @@ Item {
       : LayoutModel.locationFor(currentV1Order(), groupId)
   }
 
+  function unplacedPluginIdsFor(specs) {
+    const result = []
+    if (!Array.isArray(specs)) return result
+    for (const spec of specs) {
+      const id = String(spec && spec.pluginId || "")
+      const group = v2Mode ? V2LayoutModel.dynamicGroupId(id) : LayoutModel.dynamicGroupId(id)
+      const placed = v2Mode ? V2LayoutModel.locationFor(v2Slots, group) : LayoutModel.locationFor(v1Slots, group)
+      if (group !== "" && !placed && result.indexOf(id) < 0) result.push(id)
+    }
+    return result
+  }
+
   function currentV1Order() {
     const liveOrder = stateService && stateService.config
       ? stateService.config.order : null
@@ -192,26 +204,26 @@ Item {
       currentV1Splits(currentOrder), groupId) !== null
   }
 
-  function reconcileV1PluginGroups(specs) {
+  function reconcileV1PluginGroups(specs, allowPartialValue) {
     if (mutationBusy) return false
     const currentOrder = currentV1Order()
     const currentSplits = currentV1Splits(currentOrder)
     const next = LayoutModel.reconcilePluginGroups(
       currentOrder, currentSplits, specs)
-    if (!next || next.unplaced.length > 0) return false
+    if (!next || (next.unplaced.length > 0 && allowPartialValue !== true)) return false
     if (LayoutModel.sameOrder(currentOrder, next.order)
         && LayoutModel.sameSplits(currentSplits, next.splits, next.order))
       return true
     return persist(next.order, next.splits)
   }
 
-  function reconcileV2PluginGroups(specs, syncValue, followRegionsValue) {
+  function reconcileV2PluginGroups(specs, syncValue, followRegionsValue, allowPartialValue) {
     if (!v2Mode || !stateService
         || typeof stateService.setV2Layout !== "function") return false
     const current = V2LayoutModel.copy(v2Slots)
     const next = V2LayoutModel.reconcilePluginGroups(
       current, specs, followRegionsValue === true)
-    if (!next || next.unplaced.length > 0 || mutationBusy) return false
+    if (!next || (next.unplaced.length > 0 && allowPartialValue !== true) || mutationBusy) return false
     if (bar && bar.layoutTransitionsSupported === true) {
       if (syncValue === true)
         return bar.requestV2LayoutTransition({v2Layout: next.layout})

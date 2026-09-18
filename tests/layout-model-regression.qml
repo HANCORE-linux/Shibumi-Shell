@@ -1,5 +1,6 @@
 import QtQuick
 import "../hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
+import "../hancore.shibumi.bar/core/V2LayoutModel.js" as V2LayoutModel
 import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
 
 QtObject {
@@ -145,6 +146,14 @@ QtObject {
         || !LayoutModel.validSplits(withoutLeft.splits, withoutLeft.order))
       fail("dynamic group removal did not repair a swapped base slot")
 
+    const bA = LayoutModel.reconcilePluginGroups(order, splits, [
+      { pluginId: "custom.v2-to-v1", region: "right" }
+    ])
+    if (!bA || bA.unplaced.length !== 0
+        || LayoutModel.locationFor(bA.order, "G:custom.v2-to-v1").region !== "right"
+        || !LayoutModel.validSplits(bA.splits, bA.order))
+      fail("free V1 capacity did not place the V2-origin candidate")
+
     const full = LayoutModel.reconcilePluginGroups(order, splits, [
       { pluginId: "custom.a", region: "left" },
       { pluginId: "custom.b", region: "left" },
@@ -154,8 +163,33 @@ QtObject {
     ])
     if (!full || full.unplaced.length !== 1
         || full.unplaced[0] !== "custom.e"
-        || full.order.left.length !== 9 || full.order.right.length !== 9)
-      fail("dynamic group capacity must fail closed")
+        || full.order.left.length !== 9 || full.order.right.length !== 9
+        || !LayoutModel.locationFor(full.order, "G:custom.a")
+        || !LayoutModel.validSplits(full.splits, full.order))
+      fail("mixed V1 plan lost placeable candidates or capacity remainder")
+
+    const v2Full = V2LayoutModel.defaultLayout()
+    v2Full.left[3] = "G:custom.l1"
+    v2Full.left[8] = "G:custom.l2"
+    v2Full.left[9] = "G:custom.l3"
+    v2Full.left.push("G:custom.l4", "G:custom.l5", "G:custom.l6")
+    v2Full.right[10] = "G:custom.move"
+    const v2Mixed = V2LayoutModel.reconcilePluginGroups(v2Full, [
+      { pluginId: "custom.blocked", region: "left" },
+      { pluginId: "custom.l1", region: "left" },
+      { pluginId: "custom.l2", region: "left" },
+      { pluginId: "custom.l3", region: "left" },
+      { pluginId: "custom.l4", region: "left" },
+      { pluginId: "custom.l5", region: "left" },
+      { pluginId: "custom.l6", region: "left" },
+      { pluginId: "custom.move", region: "left" }
+    ], true)
+    if (!v2Mixed || !V2LayoutModel.valid(v2Mixed.layout)
+        || v2Mixed.unplaced.length !== 1
+        || v2Mixed.unplaced[0] !== "custom.blocked"
+        || v2Mixed.layout.left[0] !== "G:custom.move"
+        || v2Mixed.layout.right[10] !== "G1")
+      fail("V2 full-region swap was lost beside an unplaced candidate")
 
     console.log("layout model regression passed")
     Qt.exit(0)

@@ -17,7 +17,7 @@ ShellRoot {
     property var launcherView: null
     property var launcherSlot: null
     property var order: ({
-      left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+      left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G:fixture.placed"],
       center: ["G8"],
       right: ["G9", "G10", "G11", "G14", "G12", "G13", "G15"]
     })
@@ -56,6 +56,7 @@ ShellRoot {
       id: fakeController
 
       readonly property bool v2Mode: false
+      property bool mutationBusy: false
       property var order: test.order
       readonly property var v1Slots: order
 
@@ -78,7 +79,10 @@ ShellRoot {
         return region !== "center" && index >= 7
       }
 
+      function interactiveMutationAllowed(_editing) { return !mutationBusy }
+
       function swapGroups(source, target) {
+        if (mutationBusy) return false
         const sourceLocation = groupLocation(source)
         const targetLocation = groupLocation(target)
         if (!sourceLocation || !targetLocation || source === target) return false
@@ -111,7 +115,10 @@ ShellRoot {
         pillRadius: 12,
         sumi: "#aaaaaa"
       })
-      readonly property var layoutConfig: ({ left: [], center: [], right: [] })
+      readonly property var layoutConfig: ({
+        left: [{ id: "fixture.placed", shibumiModule: true }],
+        center: [], right: []
+      })
       readonly property var layoutController: fakeController
       property var activePopout: null
 
@@ -163,9 +170,10 @@ ShellRoot {
       const ids = session.targets.map(entry => entry.groupId)
       const seen = ({})
       for (const id of ids) seen[id] = true
-      const first = session.targets.find(entry => entry.groupId === "G2")
-      const second = session.targets.find(entry => entry.groupId === "G1")
-      if (ids.length !== 7 || Object.keys(seen).length !== 7 || !first || !second) {
+      const first = session.targets.find(
+        entry => entry.groupId === "G:fixture.placed")
+      const second = session.targets.find(entry => entry.groupId === "G2")
+      if (ids.length !== 8 || Object.keys(seen).length !== 8 || !first || !second) {
         fail("target registry became stale after model mutation")
         return
       }
@@ -173,8 +181,8 @@ ShellRoot {
       const secondOrigin = second.item.mapToItem(null, 0, 0)
       if (firstOrigin.x >= secondOrigin.x) {
         fail("target ids no longer match the rendered order: ids="
-          + ids.join(",") + " G2=" + firstOrigin.x
-          + " G1=" + secondOrigin.x
+          + ids.join(",") + " plugin=" + firstOrigin.x
+          + " G2=" + secondOrigin.x
           + " geometry=" + JSON.stringify(section.groupGeometry))
         return
       }
@@ -207,26 +215,34 @@ ShellRoot {
     }
 
     function runSwap() {
-      if (session.targets.length !== 7) {
+      if (session.targets.length !== 8) {
         fail("restored group did not re-register its drag target")
         return
       }
-      const source = session.targets.find(entry => entry.groupId === "G1")
+      const source = session.targets.find(
+        entry => entry.groupId === "G:fixture.placed")
       const target = session.targets.find(entry => entry.groupId === "G2")
       if (!source || !target) {
-        fail("expected G1/G2 targets")
+        fail("expected placed plugin/G2 targets")
         return
       }
 
       const sourceOrigin = source.item.mapToItem(null, 0, 0)
       const targetOrigin = target.item.mapToItem(null, 0, 0)
       if (!session.setEditing(true)
-          || !session.begin("G1", source.item,
+          || !session.begin("G:fixture.placed", source.item,
             sourceOrigin.x + source.item.width / 2,
             sourceOrigin.y + source.item.height / 2)) {
         fail("drag did not begin")
         return
       }
+      fakeController.mutationBusy = true
+      if (!session.active || !session.editing
+          || fakeController.interactiveMutationAllowed(true)) {
+        fail("pending slot mutation did not protect the running edit drag")
+        return
+      }
+      fakeController.mutationBusy = false
       const ghostHostOrigin = ghostHost.mapToItem(null, 0, 0)
       if (Math.abs(dragGhost.x - (session.ghostX - ghostHostOrigin.x)) > 0.5
           || Math.abs(dragGhost.y - (session.ghostY - ghostHostOrigin.y)) > 0.5) {
@@ -238,8 +254,8 @@ ShellRoot {
           || session.targetGroupId !== "G2"
           || !session.drop()
           || writes !== 1
-          || fakeController.order.left[0] !== "G2"
-          || fakeController.order.left[1] !== "G1") {
+          || fakeController.order.left[1] !== "G:fixture.placed"
+          || fakeController.order.left[7] !== "G2") {
         fail("registered-target drop did not swap exactly once")
         return
       }
@@ -255,14 +271,14 @@ ShellRoot {
 
       onTriggered: {
         attempts++
-        if (phase === 1 && session.targets.length === 6
+        if (phase === 1 && session.targets.length === 7
             && !session.targets.some(entry => entry.groupId === "G1")) {
           test.launcherView.visible = true
           phase = 2
           attempts = 0
           return
         }
-        if (phase === 2 && session.targets.length === 7) {
+        if (phase === 2 && session.targets.length === 8) {
           stop()
           test.runSwap()
           return
@@ -295,7 +311,7 @@ ShellRoot {
 
       onTriggered: {
         attempts++
-        if (session.targets.length !== 7 || section.width <= 0) {
+        if (session.targets.length !== 8 || section.width <= 0) {
           if (attempts < 50) return
           stop()
           test.fail("group targets did not register: " + session.targets.length)

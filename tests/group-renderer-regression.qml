@@ -621,12 +621,21 @@ ShellRoot {
     }
 
     QtObject {
+      id: placedDynamicController
+      function groupLocation(groupId) {
+        return groupId === "G:omarchy.active-window"
+          ? {region: "right", index: 7, groupId: groupId} : null
+      }
+    }
+
+    QtObject {
       id: budgetBar
 
       readonly property bool vertical: false
       readonly property int barSize: 26
       readonly property var shell: fakeShell
       readonly property var visualTokens: noSplitBar.visualTokens
+      readonly property var layoutController: placedDynamicController
       readonly property var layoutConfig: ({
         left: [], center: [],
         right: [
@@ -1674,7 +1683,11 @@ ShellRoot {
               ? directSlots[0].activeItem.height : -1))
           return
         }
-        if (!dynamicV1Group.dynamicV1Group
+        const placedDynamicLocation = budgetBar.layoutController.groupLocation(
+          "G:omarchy.active-window")
+        if (!placedDynamicLocation || placedDynamicLocation.region !== "right"
+            || placedDynamicLocation.index !== 7
+            || !dynamicV1Group.dynamicV1Group
             || dynamicV1Group.dynamicV1CustomFill
             || !dynamicV1Group.visualSurfaceItem.visible
             || !test.closeEnough(dynamicV1Group.visualSurfaceItem.height, 24)
