@@ -12,6 +12,7 @@ Item {
 
   property var shell: null
   property var manifest: null
+  SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.status"
     implementationVersion: "0.1.1-beta.14.1"
@@ -22,9 +23,7 @@ Item {
   property var actionRunner: null
   property bool runtimeProbesEnabled: true
 
-  readonly property var idleService: shell
-    && typeof shell.firstPartyServiceFor === "function"
-    ? shell.firstPartyServiceFor("omarchy.idle") : null
+  readonly property var idleService: suiteShell.firstPartyServiceFor("omarchy.idle")
   readonly property var notificationService: notificationAdapter.available
     ? notificationAdapter : null
   readonly property bool stayAwake: idleService
@@ -36,8 +35,12 @@ Item {
     id: notificationAdapter
   }
 
-  onShellChanged: notificationAdapter.attachShell(shell)
-  Component.onCompleted: notificationAdapter.attachShell(shell)
+  onShellChanged: notificationAdapter.attachShell(suiteShell)
+  Component.onCompleted: notificationAdapter.attachShell(suiteShell)
+  Connections {
+    target: suiteShell.scoped ? SuiteRuntime.Runtime : null
+    function onRevisionChanged() { notificationAdapter.attachShell(suiteShell) }
+  }
 
   property string recordingPid: ""
   property int recordingElapsed: 0

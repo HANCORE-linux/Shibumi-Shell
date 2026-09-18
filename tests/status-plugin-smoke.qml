@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import "status" as Status
 import "hancore.shibumi.bar/services" as BarServices
+import "hancore.shibumi.state/runtime" as SuiteRuntime
 import "fixtures" as Fixtures
 
 ShellRoot {
@@ -15,6 +16,11 @@ ShellRoot {
   property var clickTargets: []
   property var statusSettings: ({ displayMode: "full" })
   readonly property var scopedStatus: scopedStatusLoader.item
+  readonly property var scopedDiagnosticStatus: scopedDiagnosticStatusLoader.item
+  property bool scopedServiceStarted: false
+  property int scopedServicePhase: 0
+  property int scopedStayAwakeChanges: 0
+  property int scopedDndChanges: 0
 
   function fail(message) {
     console.error("status-widget-smoke:", message)
@@ -124,6 +130,107 @@ ShellRoot {
       commands = commands.concat([command.slice()])
       return true
     }
+  }
+
+  QtObject {
+    id: leasedIdleA
+    property bool stayAwake: true
+    property int setCalls: 0
+    function setIdleEnabled(value) {
+      stayAwake = value !== true
+      setCalls++
+    }
+  }
+
+  QtObject {
+    id: leasedNotificationsA
+    property bool doNotDisturb: true
+    property int setCalls: 0
+    function setDoNotDisturb(value) {
+      doNotDisturb = value === true
+      setCalls++
+    }
+  }
+
+  QtObject {
+    id: leasedIdleB
+    property bool stayAwake: false
+    property int setCalls: 0
+    function setIdleEnabled(value) {
+      stayAwake = value !== true
+      setCalls++
+    }
+  }
+
+  QtObject {
+    id: leasedNotificationsB
+    property bool doNotDisturb: false
+    property int setCalls: 0
+    function setDoNotDisturb(value) {
+      doNotDisturb = value === true
+      setCalls++
+    }
+  }
+
+  QtObject {
+    id: leasedBarHostA
+    readonly property string pluginId: "hancore.shibumi.bar"
+    function firstPartyServiceFor(id) {
+      if (id === "omarchy.idle") return leasedIdleA
+      if (id === "omarchy.notifications") return leasedNotificationsA
+      return null
+    }
+  }
+
+  QtObject {
+    id: leasedBarHostB
+    readonly property string pluginId: "hancore.shibumi.bar"
+    function firstPartyServiceFor(id) {
+      if (id === "omarchy.idle") return leasedIdleB
+      if (id === "omarchy.notifications") return leasedNotificationsB
+      return null
+    }
+  }
+
+  Item {
+    id: leasedBarOwner
+    property var providerHost: leasedBarHostA
+    SuiteRuntime.Provider {
+      id: leasedBarProvider
+      pluginId: "hancore.shibumi.bar"
+      implementationVersion: "0.1.1-beta.14.1"
+      owner: leasedBarOwner
+      host: leasedBarOwner.providerHost
+      manifest: ({ id: "hancore.shibumi.bar",
+        version: "0.1.1-beta.14.1", kinds: ["bar"] })
+    }
+  }
+
+  QtObject {
+    id: rawScopedStatusShell
+    readonly property string pluginId: "hancore.shibumi.status"
+    function serviceFor(_id) { return null }
+    function firstPartyServiceFor(_id) { return null }
+  }
+
+  Loader {
+    id: scopedDiagnosticStatusLoader
+    active: root.scopedServiceStarted
+    sourceComponent: Component {
+      Status.Service {
+        shell: rawScopedStatusShell
+        manifest: ({ id: "hancore.shibumi.status",
+          version: "0.1.1-beta.14.1", kinds: ["service"] })
+        actionRunner: actionRecorder
+        runtimeProbesEnabled: false
+      }
+    }
+  }
+
+  Connections {
+    target: root.scopedDiagnosticStatus
+    function onStayAwakeChanged() { root.scopedStayAwakeChanges++ }
+    function onNotificationsSilencedChanged() { root.scopedDndChanges++ }
   }
 
   Status.Service {
@@ -324,11 +431,115 @@ ShellRoot {
     }
   }
 
+  function advanceScopedServiceRegression() {
+    if (scopedServicePhase === 0) {
+      if (!SuiteRuntime.Runtime.ready || !leasedBarProvider.registered) return false
+      if (!scopedServiceStarted) {
+        scopedServiceStarted = true
+        return false
+      }
+      if (!scopedDiagnosticStatus) return false
+      const notifications = scopedDiagnosticStatus.notificationService
+      if (scopedDiagnosticStatus.idleService !== leasedIdleA || !notifications)
+        return fail("scoped Status did not resolve owner A")
+      if (notifications === leasedNotificationsA
+          || !scopedDiagnosticStatus.stayAwake
+          || !scopedDiagnosticStatus.notificationsSilenced
+          || notifications.historyAvailable
+          || notifications.pastDismissAvailable
+          || notifications.pendingCount !== 0
+          || notifications.recentCount !== 0
+          || notifications.pendingModel.count !== 0
+          || notifications.pastModel.count !== 0)
+        return fail("owner A narrow notification capabilities were widened")
+      const idleChanges = scopedStayAwakeChanges
+      const dndChanges = scopedDndChanges
+      if (!scopedDiagnosticStatus.toggleStayAwake()
+          || leasedIdleA.setCalls !== 1
+          || scopedDiagnosticStatus.stayAwake
+          || scopedStayAwakeChanges <= idleChanges
+          || !scopedDiagnosticStatus.toggleNotifications()
+          || leasedNotificationsA.setCalls !== 1
+          || scopedDiagnosticStatus.notificationsSilenced
+          || scopedDndChanges <= dndChanges)
+        return fail("owner A mutation notifications did not reach Status")
+      console.log("status scoped capabilities: lease=A available=true"
+        + " idle=" + scopedDiagnosticStatus.stayAwake
+        + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
+        + " history=false pastDismiss=false pending=0 recent=0")
+      leasedBarOwner.providerHost = null
+      scopedServicePhase++
+      return false
+    }
+    if (scopedServicePhase === 1) {
+      if (leasedBarProvider.registered) return false
+      if (scopedDiagnosticStatus.idleService !== null
+          || scopedDiagnosticStatus.notificationService !== null
+          || scopedDiagnosticStatus.stayAwake
+          || scopedDiagnosticStatus.notificationsSilenced)
+        return fail("scoped Status retained a withdrawn owner A lease")
+      if (scopedDiagnosticStatus.toggleStayAwake()
+          || scopedDiagnosticStatus.toggleNotifications()
+          || leasedIdleA.setCalls !== 1
+          || leasedNotificationsA.setCalls !== 1)
+        return fail("withdrawn owner A remained mutable through Status")
+      console.log("status scoped capabilities: lease=none available=false"
+        + " idle=" + scopedDiagnosticStatus.stayAwake
+        + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
+        + " history=false pending=0 recent=0")
+      leasedBarOwner.providerHost = leasedBarHostB
+      scopedServicePhase++
+      return false
+    }
+    if (scopedServicePhase === 2) {
+      if (!leasedBarProvider.registered) return false
+      const notifications = scopedDiagnosticStatus.notificationService
+      if (scopedDiagnosticStatus.idleService !== leasedIdleB || !notifications)
+        return fail("scoped Status did not resolve owner B")
+      if (scopedDiagnosticStatus.stayAwake
+          || scopedDiagnosticStatus.notificationsSilenced
+          || notifications.historyAvailable
+          || notifications.pastDismissAvailable
+          || notifications.pendingCount !== 0
+          || notifications.recentCount !== 0
+          || notifications.pendingModel.count !== 0
+          || notifications.pastModel.count !== 0)
+        return fail("owner B narrow notification state was incorrect")
+      leasedIdleA.stayAwake = true
+      leasedNotificationsA.doNotDisturb = true
+      if (scopedDiagnosticStatus.stayAwake
+          || scopedDiagnosticStatus.notificationsSilenced)
+        return fail("withdrawn owner A still affected Status")
+      const idleChanges = scopedStayAwakeChanges
+      const dndChanges = scopedDndChanges
+      if (!scopedDiagnosticStatus.toggleStayAwake()
+          || leasedIdleB.setCalls !== 1
+          || !scopedDiagnosticStatus.stayAwake
+          || scopedStayAwakeChanges <= idleChanges
+          || !scopedDiagnosticStatus.toggleNotifications()
+          || leasedNotificationsB.setCalls !== 1
+          || !scopedDiagnosticStatus.notificationsSilenced
+          || scopedDndChanges <= dndChanges
+          || leasedIdleA.setCalls !== 1
+          || leasedNotificationsA.setCalls !== 1)
+        return fail("owner B mutation notifications did not reach Status")
+      console.log("status scoped capabilities: lease=B available=true"
+        + " idle=" + scopedDiagnosticStatus.stayAwake
+        + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
+        + " history=false pastDismiss=false pending=0 recent=0"
+        + " oldOwnerIsolated=true")
+      console.log("status scoped service lease regression passed")
+      scopedServicePhase++
+    }
+    return true
+  }
+
   Timer {
     interval: 80
     repeat: true
     running: true
     onTriggered: {
+      if (!root.advanceScopedServiceRegression()) return
       root.phaseTicks++
       const status = statusLoader.item
       if (root.phase === 0) {

@@ -18,9 +18,14 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
-mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
-chmod 700 "$tmpdir/runtime"
+mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home" \
+  "$tmpdir/config" "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" \
+  "$tmpdir/tmp"
+chmod 700 "$tmpdir/runtime" "$tmpdir/home" "$tmpdir/config" \
+  "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" "$tmpdir/tmp"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 mkdir -p "$tmpdir/hancore.shibumi.bar"
 cp -a -- "$repo_root/hancore.shibumi.bar/services" \
   "$tmpdir/hancore.shibumi.bar/services"
@@ -35,11 +40,26 @@ install -m 0644 "$repo_root/tests/fixtures/StatusTestWidget.qml" \
 
 set +e
 output=$(timeout 8 env \
-  QT_QPA_PLATFORM=offscreen \
-  WAYLAND_DISPLAY= \
+  HOME="$tmpdir/home" \
+  XDG_CONFIG_HOME="$tmpdir/config" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  XDG_DATA_HOME="$tmpdir/data" \
+  XDG_DATA_DIRS="$tmpdir/data" \
+  XDG_STATE_HOME="$tmpdir/state" \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
-  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
-  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  TMPDIR="$tmpdir/tmp" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-session-bus" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-system-bus" \
+  HYPRLAND_INSTANCE_SIGNATURE= \
+  WAYLAND_DISPLAY= \
+  DISPLAY= \
+  PATH=/usr/bin:/bin \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  QT_QUICK_BACKEND=software \
+  QML_DISABLE_DISK_CACHE=1 \
+  QML_IMPORT_PATH="$omarchy_path/shell" \
+  QML2_IMPORT_PATH="$omarchy_path/shell" \
   "$quickshell_bin" -p "$tmpdir" 2>&1)
 rc=$?
 set -e
@@ -48,6 +68,13 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'status plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+unexpected_diagnostics=$(grep -E \
+  'WARN|ERROR|CRITICAL|TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error' \
+  <<<"$output" | grep -Fv \
+  'Module path contains invalid characters for a module name:  "/hancore.shibumi.bar/services"' \
+  || true)
+[[ -z $unexpected_diagnostics ]] \
+  || fail "component smoke emitted an unexpected runtime diagnostic"
 
 status_widget="$repo_root/hancore.shibumi.status/BarWidget.qml"
 status_service="$repo_root/hancore.shibumi.status/Service.qml"
