@@ -13,7 +13,10 @@ ShellRoot {
   property var duplicateService: null
   property var replacementService: null
   property int writesBeforePublication: -1
-  property int enablesBeforePublication: -1
+  property int stateLayoutCallsBeforeMetadata: -1
+  property int providerRevisionBeforeMetadata: -1
+  property string layoutBeforeMetadata: ""
+  property string orderBeforeMetadata: ""
 
   function fail(message) {
     console.error("bar-catalog-consumer-smoke:", message)
@@ -47,8 +50,18 @@ ShellRoot {
     id: stateService
     property bool ready: true
     property int revision: 0
+    property int setLayoutCalls: 0
     property color selectedColor: "#ffffff"
     property var config: ({ presentation: ({ shellStyle: "shibumi" }) })
+    onConfigChanged: revision++
+    function setLayout(order, splits) {
+      setLayoutCalls++
+      const next = JSON.parse(JSON.stringify(config))
+      next.order = order
+      next.splits = splits
+      config = next
+      return true
+    }
   }
   QtObject { id: stateHost; property string pluginId: "hancore.shibumi.state" }
   SuiteRuntime.Provider {
@@ -72,21 +85,40 @@ ShellRoot {
     function updateEntryInline(pluginId, settings) { updateCalls++; return false }
   }
 
+  // Exact public shape of Omarchy 4.0.3 PluginRegistryApi.qml at
+  // 0534987009061cbe2dacdde4ad564092ab698d12. It deliberately has no
+  // pluginsChanged signal and exposes only the active full bar's own manifest.
   QtObject {
     id: fakePluginRegistry
-    signal pluginsChanged()
     property string pluginId: "hancore.shibumi.bar"
-    property int enableCalls: 0
-    property var installedPlugins: ({
-      "omarchy.clock": ({ barWidget: ({ semanticCapabilities: ["clock"] }) }),
-      "local.clock": ({ omarchy: ({ clonedFrom: "omarchy.clock" }) })
-    })
-    function setEnabled(pluginId, enabled) { enableCalls++; return false }
+    property var manifest: ({ id: "hancore.shibumi.bar",
+      version: "0.1.1-beta.14.1", kinds: ["bar"] })
+    property bool enabled: true
+    property var _entryPointUrl: null
+    readonly property var installedPlugins: {
+      const out = ({})
+      if (manifest) out[pluginId] = manifest
+      return out
+    }
+    function isEnabled(id) {
+      return String(id || "") === pluginId && enabled
+    }
+    function resolveEnabledId(id) {
+      return String(id || "") === pluginId ? pluginId : ""
+    }
+    function entryPointUrl(candidate, kind) {
+      if (!candidate || String(candidate.id || "") !== pluginId) return ""
+      return _entryPointUrl ? _entryPointUrl(String(kind || "")) : ""
+    }
   }
   QtObject {
     id: fakeWidgetRegistry
     property int revision: 0
-    property var widgets: ({
+    property var widgets: root.clockWidgetSnapshot()
+  }
+
+  function clockWidgetSnapshot() {
+    return ({
       "local.clock": ({ component: null,
         metadata: ({ pluginId: "local.clock", allowMultiple: false }) })
     })
@@ -180,7 +212,6 @@ ShellRoot {
         root.bar.barConfig = configured
         root.bar.layoutConfig = configured.layout
         root.writesBeforePublication = scopedBarHost.mutateCalls + scopedBarHost.updateCalls
-        root.enablesBeforePublication = fakePluginRegistry.enableCalls
         root.firstService.publish(root.observation([
           { id: "omarchy.clock", enabled: false },
           { id: "local.clock", clonedFrom: "omarchy.clock", enabled: true }
@@ -201,9 +232,99 @@ ShellRoot {
             + " layout=" + JSON.stringify(root.bar.layoutConfig)
             + " slots=" + JSON.stringify(root.bar.layoutController.v1Slots))
         if (scopedBarHost.mutateCalls + scopedBarHost.updateCalls
-              !== root.writesBeforePublication
-            || fakePluginRegistry.enableCalls !== root.enablesBeforePublication)
+              !== root.writesBeforePublication)
           root.fail("catalog publication started a mutation/reconcile write")
+
+        root.stateLayoutCallsBeforeMetadata = stateService.setLayoutCalls
+        root.providerRevisionBeforeMetadata = root.bar.providerRegistryRevision
+        root.layoutBeforeMetadata = JSON.stringify(root.bar.layoutConfig)
+        root.orderBeforeMetadata = JSON.stringify(root.bar.layoutController.v1Slots)
+        // The scoped API republishes these properties directly. There is no
+        // pluginsChanged signal for Bar's legacy listener to receive.
+        fakePluginRegistry.enabled = false
+        fakePluginRegistry.manifest = ({ id: "hancore.shibumi.bar",
+          version: "0.1.1-beta.15-metadata", kinds: ["bar"] })
+        root.stage = 20; root.waits = 0
+      } else if (root.stage === 20) {
+        if (root.waits < 3) return
+        if (fakePluginRegistry.installedPlugins["hancore.shibumi.bar"]
+              !== fakePluginRegistry.manifest
+            || root.bar.providerRegistryRevision
+              !== root.providerRevisionBeforeMetadata
+            || root.bar.v1FamilySlotBindings.G8 !== "local.clock"
+            || JSON.stringify(root.bar.layoutConfig) !== root.layoutBeforeMetadata
+            || JSON.stringify(root.bar.layoutController.v1Slots)
+              !== root.orderBeforeMetadata
+            || stateService.setLayoutCalls
+              !== root.stateLayoutCallsBeforeMetadata)
+          root.fail("scoped manifest/enabled publication reached the legacy listener or changed provider state")
+
+        // Omarchy's real pluginsChanged fan-out separately republishes the
+        // detached BarWidgetRegistry snapshot/revision after syncPluginWidgets.
+        // Model a disabled widget while keeping bar.layout byte-for-byte fixed.
+        fakeWidgetRegistry.widgets = ({})
+        fakeWidgetRegistry.revision++
+        root.firstService.publish(root.observation([
+          { id: "omarchy.clock", enabled: false },
+          { id: "local.clock", clonedFrom: "omarchy.clock", enabled: false }
+        ], 2))
+        root.stage = 21; root.waits = 0
+      } else if (root.stage === 21) {
+        if (root.waits < 3) return
+        if (root.bar.v1FamilySlotBindings.G8 !== undefined
+            || JSON.stringify(root.bar.widgetCapabilities("local.clock"))
+              !== '["clock"]'
+            || root.bar.providerRegistryRevision
+              !== root.providerRevisionBeforeMetadata
+            || JSON.stringify(root.bar.layoutConfig) !== root.layoutBeforeMetadata
+            || JSON.stringify(root.bar.layoutController.v1Slots)
+              !== root.orderBeforeMetadata
+            || stateService.setLayoutCalls
+              !== root.stateLayoutCallsBeforeMetadata)
+          root.fail("scoped widget disable did not update only the reactive V1 binding")
+
+        fakePluginRegistry.enabled = true
+        fakeWidgetRegistry.widgets = root.clockWidgetSnapshot()
+        fakeWidgetRegistry.revision++
+        root.firstService.publish(root.observation([
+          { id: "omarchy.clock", enabled: false },
+          { id: "local.clock", clonedFrom: "omarchy.clock", enabled: true }
+        ], 3))
+        root.stage = 22; root.waits = 0
+      } else if (root.stage === 22) {
+        if (root.waits < 3) return
+        if (root.bar.v1FamilySlotBindings.G8 !== "local.clock"
+            || root.bar.providerRegistryRevision
+              !== root.providerRevisionBeforeMetadata
+            || JSON.stringify(root.bar.layoutConfig) !== root.layoutBeforeMetadata
+            || JSON.stringify(root.bar.layoutController.v1Slots)
+              !== root.orderBeforeMetadata
+            || stateService.setLayoutCalls
+              !== root.stateLayoutCallsBeforeMetadata)
+          root.fail("scoped widget re-enable did not restore the reactive V1 binding")
+
+        // A catalog metadata change can move the same rendered provider to a
+        // different fixed family without a bar.layout assignment.
+        root.firstService.publish(root.observation([
+          { id: "omarchy.audio", enabled: false },
+          { id: "local.clock", clonedFrom: "omarchy.audio", enabled: true }
+        ], 4))
+        root.stage = 23; root.waits = 0
+      } else if (root.stage === 23) {
+        if (root.waits < 3) return
+        if (JSON.stringify(root.bar.widgetCapabilities("local.clock"))
+              !== '["audio"]'
+            || root.bar.v1FamilySlotBindings.G6 !== "local.clock"
+            || root.bar.v1FamilySlotBindings.G8 !== undefined
+            || root.bar.providerRegistryRevision
+              !== root.providerRevisionBeforeMetadata
+            || JSON.stringify(root.bar.layoutConfig) !== root.layoutBeforeMetadata
+            || JSON.stringify(root.bar.layoutController.v1Slots)
+              !== root.orderBeforeMetadata
+            || stateService.setLayoutCalls
+              !== root.stateLayoutCallsBeforeMetadata)
+          root.fail("scoped catalog metadata did not reactively move the visible family binding")
+
         root.duplicateService = catalogServiceFactory.createObject(root)
         root.stage = 3; root.waits = 0
       } else if (root.stage === 3) {
@@ -243,9 +364,10 @@ ShellRoot {
             || root.bar.rebindCatalogConsumer()
             || root.replacementService.acquireCalls !== 1)
           root.fail("shutdown retained or reacquired the catalog consumer")
-        fakePluginRegistry.pluginsChanged()
+        fakePluginRegistry.manifest = ({ id: "hancore.shibumi.bar",
+          version: "0.1.1-beta.15-shutdown", kinds: ["bar"] })
         if (root.bar.providerRegistryRevision !== providerRevision)
-          root.fail("shutdown accepted a late plugin-registry reconciliation")
+          root.fail("shutdown accepted a late scoped registry publication")
         root.stage = 8; root.waits = 0
       } else if (root.stage === 8) {
         if (root.waits < 5) return
@@ -260,8 +382,7 @@ ShellRoot {
         if (root.firstService.wrongReleaseCalls !== 0
             || root.replacementService.wrongReleaseCalls !== 0
             || scopedBarHost.mutateCalls + scopedBarHost.updateCalls
-              !== root.writesBeforePublication
-            || fakePluginRegistry.enableCalls !== root.enablesBeforePublication)
+              !== root.writesBeforePublication)
           root.fail("catalog shutdown/destruction used a wrong token or mutated host state")
         console.log("bar catalog consumer smoke passed")
         Qt.exit(0)
