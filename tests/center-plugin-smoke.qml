@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import "center" as Center
+import "hancore.shibumi.bar/services" as BarServices
 
 ShellRoot {
   id: root
@@ -42,8 +43,54 @@ ShellRoot {
     id: registry
     property int revision: 1
     property var widgets: ({
+      "omarchy.system-update": ({
+        component: updateComponent,
+        metadata: { pluginId: "omarchy.system-update" }
+      }),
+      "omarchy.tray": ({
+        component: updateComponent,
+        metadata: { pluginId: "omarchy.tray" }
+      })
+    })
+  }
+
+  QtObject {
+    id: scopedFacade
+    readonly property string pluginId: "hancore.shibumi.center"
+  }
+
+  QtObject {
+    id: absentOwnerBar
+    property var pluginRegistry: scopedFacade
+    property var barWidgetRegistry: registry
+    property var layoutConfig: ({ left: [], center: [], right: [] })
+  }
+
+  BarServices.HostWidgetResolver {
+    id: absentOwnerResolver
+    bar: absentOwnerBar
+  }
+
+  QtObject {
+    id: missingMetadataRegistry
+    property int revision: 1
+    property var widgets: ({
       "omarchy.system-update": { component: updateComponent }
     })
+  }
+
+  QtObject {
+    id: missingMetadataBar
+    property var pluginRegistry: scopedFacade
+    property var barWidgetRegistry: missingMetadataRegistry
+    property var layoutConfig: ({
+      left: [], center: [{ id: "hancore.shibumi.center" }], right: []
+    })
+  }
+
+  BarServices.HostWidgetResolver {
+    id: missingMetadataResolver
+    bar: missingMetadataBar
   }
 
   QtObject {
@@ -139,7 +186,11 @@ ShellRoot {
     property bool foregroundAnimationEnabled: false
     property var activePopout: null
     property var shell: fakeShell
+    property var pluginRegistry: scopedFacade
     property var barWidgetRegistry: registry
+    property var layoutConfig: ({
+      left: [], center: [{ id: "hancore.shibumi.center" }], right: []
+    })
     property var clickTargets: root.clickTargets
     property int summonCount: 0
     property var visualTokens: ({
@@ -193,6 +244,15 @@ ShellRoot {
       return ({ clock12h: false })
     }
     function setWidgetSetting(_group, _module, _key, _value) { return true }
+    function registeredWidgetComponent(id) {
+      return scopedResolver.componentFor(id)
+    }
+    function registeredEmbeddedWidgetComponent(ownerId, id) {
+      return scopedResolver.embeddedComponentFor(ownerId, id)
+    }
+    function registeredWidgetSource(id) {
+      return scopedResolver.entryPointUrl(id)
+    }
     function run(_command) {}
     function summonBarWidget(_module, _mode) {
       summonCount++
@@ -210,6 +270,11 @@ ShellRoot {
     function requestPopout(owner) { activePopout = owner }
     function releasePopout(owner) { if (activePopout === owner) activePopout = null }
     function switchPanelFrom(_owner, _direction) { return false }
+  }
+
+  BarServices.HostWidgetResolver {
+    id: scopedResolver
+    bar: fakeBar
   }
 
   Center.BarWidget {
@@ -238,6 +303,22 @@ ShellRoot {
     running: true
     onTriggered: {
       if (root.phase === 0) {
+        if (!center.updateBackend)
+          return root.fail("scoped center update backend is null")
+        if (scopedResolver.componentFor("omarchy.system-update") !== null
+            || scopedResolver.embeddedComponentFor(
+              "hancore.shibumi.center", "omarchy.system-update")
+                !== updateComponent
+            || scopedResolver.embeddedComponentFor(
+              "hancore.shibumi.center", "omarchy.tray") !== null
+            || scopedResolver.embeddedComponentFor(
+              "fixture.invalid-owner", "omarchy.system-update") !== null
+            || absentOwnerResolver.embeddedComponentFor(
+              "hancore.shibumi.center", "omarchy.system-update") !== null
+            || missingMetadataResolver.embeddedComponentFor(
+              "hancore.shibumi.center", "omarchy.system-update") !== null
+            || String(center.updateSource) !== "")
+          return root.fail("scoped G8 component admission boundary")
         if (center.stage !== 0 || center.dateText !== "Thu 16"
             || center.centerService !== secondCenter.centerService
             || center.statusService !== secondCenter.statusService
@@ -275,7 +356,10 @@ ShellRoot {
               ? center.indicatorWidget.hasActive : false)
             + " updateModule=" + (center.updateWidget
               ? center.updateWidget.moduleName : "missing"))
-        if (!center.updateBackend
+        if (!center.updateBackend.updateAvailable
+            || typeof center.updateBackend.runUpdate !== "function"
+            || typeof center.updateBackend.refresh !== "function"
+            || !center.updateWidget.visible
             || center.updateBackend.settings.marker !== "G8-update"
             || center.updateWidget.backendWidget !== center.updateBackend
             || center.updateWidget.tooltipText !== "Omarchy update available"

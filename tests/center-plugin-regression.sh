@@ -49,6 +49,9 @@ python3 "$repo_root/tests/weather-panel-control-regression.py" --host-shell "$om
 mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
+mkdir -p "$tmpdir/hancore.shibumi.bar"
+cp -a -- "$repo_root/hancore.shibumi.bar/services" \
+  "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.center" "$tmpdir/center"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"

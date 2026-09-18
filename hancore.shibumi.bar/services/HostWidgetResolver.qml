@@ -23,6 +23,9 @@ QtObject {
       : bar.barConfig ? bar.barConfig.layout : null
     : null
   readonly property var embeddedComponentOwners: ({
+    "hancore.shibumi.center": ({
+      "omarchy.system-update": true
+    }),
     "hancore.shibumi.status": ({
       "hancore.shibumi.update-center": true,
       "omarchy.tray": true
