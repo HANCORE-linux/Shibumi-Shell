@@ -190,6 +190,598 @@ class ContinuityManagerTests(unittest.TestCase):
             },
         )
 
+    def _saved_profile_switch_evidence(
+        self,
+        plugin_id: str,
+        *,
+        installed: bool,
+        initial_snapshot: str = "valid",
+        initial_omit: bool = False,
+        later_active: bool = True,
+        plugin_enabled: bool = False,
+        target: str = "shibumi",
+        missing_target_profile: bool = False,
+        fail_after_profile: bool = False,
+        restore_profile_on_rollback: bool = False,
+    ) -> dict[str, object]:
+        case_root = self.root / "-".join(
+            (
+                target,
+                plugin_id,
+                initial_snapshot,
+                str(initial_omit),
+                str(later_active),
+                str(missing_target_profile),
+                str(fail_after_profile),
+                str(restore_profile_on_rollback),
+            )
+        )
+        omarchy_root = case_root / "omarchy"
+        config = case_root / "config/omarchy/shell.json"
+        defaults = omarchy_root / "config/omarchy/shell.json"
+        state_dir = case_root / "state/shibumi"
+        runtime = case_root / "runtime"
+        config.parent.mkdir(parents=True)
+        defaults.parent.mkdir(parents=True)
+        state_dir.mkdir(parents=True)
+        runtime.mkdir(parents=True)
+
+        inactive = self.module["deactivate_config"](
+            self.active,
+            self.defaults,
+            self.state,
+            self.defaults["bar"]["layout"],
+        )
+        current = inactive if target == "shibumi" else self.active
+        state = copy.deepcopy(self.state)
+        target_layout = self.module["initial_layout"](
+            target, self.defaults, state
+        )
+        target_layout["left"].append({"id": plugin_id, "position": 7})
+        if missing_target_profile:
+            self.assertEqual(target, "omarchy")
+            state["previousBar"] = {
+                "layout": copy.deepcopy(target_layout),
+                "centerAnchor": "omarchy.clock",
+            }
+        config.write_text(json.dumps(current) + "\n", encoding="utf-8")
+        defaults.write_text(json.dumps(self.defaults) + "\n", encoding="utf-8")
+        state_path = state_dir / "install.json"
+        state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+        saved_profiles = {
+            "schemaVersion": 1,
+            "layouts": {
+                "shibumi": target_layout
+                if target == "shibumi"
+                else self.active["bar"]["layout"],
+                "omarchy": target_layout
+                if target == "omarchy"
+                else inactive["bar"]["layout"],
+            },
+            "centerAnchors": {
+                "shibumi": "hancore.shibumi.center",
+                "omarchy": "omarchy.clock",
+            },
+        }
+        if missing_target_profile:
+            del saved_profiles["layouts"][target]
+        profile = state_dir / "shell-layout-profiles.json"
+        profile.write_text(
+            json.dumps(saved_profiles) + "\n",
+            encoding="utf-8",
+        )
+        original_config = config.read_bytes()
+        original_state = state_path.read_bytes()
+        original_profile = profile.read_bytes()
+        environment = {
+            "OMARCHY_PATH": str(omarchy_root),
+            "SHIBUMI_CONFIG_FILE": str(config),
+            "SHIBUMI_DEFAULT_CONFIG": str(defaults),
+            "SHIBUMI_STATE_DIR": str(state_dir),
+            "SHIBUMI_LOCK_FILE": str(runtime / "switch.lock"),
+        }
+
+        reloads = 0
+        clock = 0.0
+        failure_injected = False
+        profile_restored = False
+        stop = Mock()
+
+        def registry(active_bar: str) -> list[dict[str, object]]:
+            allowed_stock = {
+                *self.state["activation"]["enableServices"],
+                "hancore.shibumi.control-center",
+            }
+            values = [
+                {
+                    "id": managed_id,
+                    "enabled": active_bar != "omarchy.bar"
+                    or managed_id in allowed_stock,
+                    "active": managed_id == active_bar,
+                }
+                for managed_id in self.state["plugins"]
+            ]
+            values.append(
+                {
+                    "id": "omarchy.bar",
+                    "enabled": True,
+                    "active": active_bar == "omarchy.bar",
+                }
+            )
+            if installed and plugin_id not in self.state["plugins"]:
+                values.append(
+                    {
+                        "id": plugin_id,
+                        "enabled": plugin_enabled,
+                        "active": False,
+                    }
+                )
+            return values
+
+        def fake_shell_call(
+            _runtime_paths: dict[str, Path],
+            arguments: list[str],
+            *,
+            check: bool = False,
+        ) -> Mock:
+            del check
+            if arguments == ["shell", "listPlugins"]:
+                active_bar = (
+                    ("omarchy.bar" if target == "shibumi" else "hancore.shibumi.bar")
+                    if reloads == 0
+                    else ("hancore.shibumi.bar" if target == "shibumi" else "omarchy.bar")
+                )
+                if reloads and not later_active:
+                    active_bar = ""
+                values: list[object] = registry(active_bar)
+                if reloads == 0:
+                    if initial_omit:
+                        values = [value for value in values if value["id"] != plugin_id]
+                    if initial_snapshot == "unavailable":
+                        return Mock(returncode=1, stdout="", stderr="unavailable")
+                    if initial_snapshot == "empty":
+                        values = []
+                    elif initial_snapshot == "malformed-row":
+                        values.append("malformed")
+                    elif initial_snapshot == "non-string-id":
+                        values.append({"id": 7, "enabled": True})
+                    elif initial_snapshot == "duplicate":
+                        values.append(copy.deepcopy(values[0]))
+                    elif initial_snapshot == "empty-id":
+                        values.append({"id": "", "enabled": True})
+                    elif initial_snapshot == "incomplete-managed":
+                        values = [
+                            value
+                            for value in values
+                            if value["id"] != self.state["plugins"][0]
+                        ]
+                stdout = json.dumps(values)
+                if reloads == 0 and initial_snapshot == "duplicate-id-key":
+                    stdout = stdout[:-1] + (
+                        f',{{"id":{json.dumps(plugin_id)},'
+                        '"id":"last-wins.decoy","enabled":true}]'
+                    )
+                return Mock(returncode=0, stdout=stdout, stderr="")
+            if arguments == ["shell", "ping"]:
+                return Mock(returncode=0, stdout="ok\n", stderr="")
+            raise AssertionError(f"unexpected fake IPC call: {arguments}")
+
+        def fake_reload(*_args: object, **_kwargs: object) -> None:
+            nonlocal reloads, profile_restored
+            if (
+                restore_profile_on_rollback
+                and failure_injected
+                and not profile_restored
+            ):
+                profile.write_bytes(original_profile)
+                profile_restored = True
+            reloads += 1
+
+        def monotonic() -> float:
+            return clock
+
+        def sleep(seconds: float) -> None:
+            nonlocal clock
+            clock += seconds
+
+        globals_map = self.module["perform"].__globals__
+        original_verify = globals_map["verify"]
+        original_atomic_write = globals_map["atomic_write"]
+        original_retire = globals_map["retire_switch_transaction"]
+        retired_journal_phases: list[str] = []
+
+        def faulting_atomic_write(path: Path, payload: bytes) -> None:
+            nonlocal failure_injected
+            original_atomic_write(path, payload)
+            if fail_after_profile and path == profile and not failure_injected:
+                failure_injected = True
+                raise self.module["ManagerError"](
+                    "injected failure after profile rename"
+                )
+
+        def observing_retire(
+            runtime_paths: dict[str, Path], transaction: Path
+        ) -> None:
+            journal = json.loads(
+                (transaction / "journal.json").read_text(encoding="utf-8")
+            )
+            retired_journal_phases.append(journal["phase"])
+            original_retire(runtime_paths, transaction)
+
+        def bounded_verify(
+            runtime_paths: dict[str, Path],
+            state: dict[str, object],
+            target: str,
+        ) -> None:
+            original_verify(runtime_paths, state, target, timeout=0.3)
+
+        error = ""
+        with patch.dict("os.environ", environment, clear=False), patch.dict(
+            globals_map,
+            {
+                "stop_shell": stop,
+                "reload_shell": fake_reload,
+                "shell_call": fake_shell_call,
+                "verify": bounded_verify,
+                "atomic_write": faulting_atomic_write,
+                "retire_switch_transaction": observing_retire,
+            },
+        ), patch.object(globals_map["time"], "monotonic", monotonic), patch.object(
+            globals_map["time"], "sleep", sleep
+        ):
+            try:
+                self.module["perform"](target)
+            except self.module["ManagerError"] as caught:
+                error = str(caught)
+
+            failure_evidence = None
+            retry_error = ""
+            retry_return = None
+            if fail_after_profile:
+                failure_evidence = {
+                    "error": error,
+                    "status": json.loads(
+                        (state_dir / "switch-status.json").read_text(
+                            encoding="utf-8"
+                        )
+                    ),
+                    "configRestored": config.read_bytes() == original_config,
+                    "stateRestored": state_path.read_bytes() == original_state,
+                    "profileChanged": profile.read_bytes() != original_profile,
+                    "savedProfiles": json.loads(
+                        profile.read_text(encoding="utf-8")
+                    ),
+                    "transactionRetained": (
+                        state_dir / "switch-transaction"
+                    ).exists(),
+                }
+                try:
+                    retry_return = self.module["perform"](target)
+                except self.module["ManagerError"] as caught:
+                    retry_error = str(caught)
+
+        final_config = json.loads(config.read_text(encoding="utf-8"))
+        final_profile = json.loads(profile.read_text(encoding="utf-8"))
+        status = json.loads(
+            (state_dir / "switch-status.json").read_text(encoding="utf-8")
+        )
+
+        def layout_ids(layout: dict[str, list[object]]) -> list[str]:
+            return sorted(
+                self.module["entry_id"](entry)
+                for region in ("left", "center", "right")
+                for entry in layout[region]
+            )
+
+        evidence = {
+            "error": error,
+            "phase": status["phase"],
+            "detail": status["detail"],
+            "activeBar": final_config["bar"].get("id", "omarchy.bar"),
+            "layout": layout_ids(final_config["bar"]["layout"]),
+            "savedLayout": layout_ids(
+                final_profile["layouts"][target]
+            ),
+            "savedProfiles": final_profile,
+            "configRestored": config.read_bytes() == original_config,
+            "profileChanged": profile.read_bytes() != original_profile,
+            "transactionRetained": (state_dir / "switch-transaction").exists(),
+            "stopCalls": stop.call_count,
+            "reloadCalls": reloads,
+        }
+        if failure_evidence is not None:
+            evidence.update({
+                "failure": failure_evidence,
+                "retiredJournalPhases": retired_journal_phases,
+                "retry": {
+                    "error": retry_error,
+                    "return": retry_return,
+                    "phase": status["phase"],
+                    "detail": status["detail"],
+                },
+            })
+        return evidence
+
+    def test_failed_post_profile_write_keeps_healed_cache_for_retry(self) -> None:
+        plugin_id = "thirdparty.removed"
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id, installed=False, fail_after_profile=True
+        )
+        failure = evidence["failure"]
+        expected_target = self.module["initial_layout"](
+            "shibumi", self.defaults, self.state
+        )
+        expected_current = self.module["deactivate_config"](
+            self.active,
+            self.defaults,
+            self.state,
+            self.defaults["bar"]["layout"],
+        )
+        expected_profiles = {
+            "schemaVersion": 1,
+            "layouts": {
+                "shibumi": expected_target,
+                "omarchy": expected_current["bar"]["layout"],
+            },
+            "centerAnchors": {
+                "shibumi": "hancore.shibumi.center",
+                "omarchy": "omarchy.clock",
+            },
+        }
+
+        self.assertEqual(failure["error"], "injected failure after profile rename")
+        self.assertEqual(failure["status"]["phase"], "error")
+        self.assertEqual(
+            failure["status"]["detail"],
+            "injected failure after profile rename",
+        )
+        self.assertTrue(failure["configRestored"])
+        self.assertTrue(failure["stateRestored"])
+        self.assertTrue(failure["profileChanged"])
+        self.assertFalse(failure["transactionRetained"])
+        self.assertEqual(failure["savedProfiles"], expected_profiles)
+        self.assertNotIn(
+            plugin_id,
+            {
+                self.module["entry_id"](entry)
+                for region in ("left", "center", "right")
+                for entry in failure["savedProfiles"]["layouts"]["shibumi"][region]
+            },
+        )
+        self.assertEqual(
+            evidence["retiredJournalPhases"], ["rolled-back", "committed"]
+        )
+        self.assertEqual(
+            evidence["retry"],
+            {"error": "", "return": 0, "phase": "complete", "detail": ""},
+        )
+        self.assertEqual(evidence["savedProfiles"], expected_profiles)
+        self.assertFalse(evidence["transactionRetained"])
+
+        negative = self._saved_profile_switch_evidence(
+            plugin_id,
+            installed=False,
+            fail_after_profile=True,
+            restore_profile_on_rollback=True,
+        )
+        self.assertIn(
+            plugin_id,
+            {
+                self.module["entry_id"](entry)
+                for region in ("left", "center", "right")
+                for entry in negative["failure"]["savedProfiles"]["layouts"][
+                    "shibumi"
+                ][region]
+            },
+        )
+        self.assertEqual(
+            negative["retry"]["detail"], f"pruned=['{plugin_id}']"
+        )
+
+    def test_switch_drops_absent_third_party_from_saved_shibumi_profile(self) -> None:
+        evidence = self._saved_profile_switch_evidence(
+            "thirdparty.removed", installed=False
+        )
+        profiles = evidence.pop("savedProfiles")
+        expected_target = self.module["initial_layout"](
+            "shibumi", self.defaults, self.state
+        )
+        expected_layout = sorted(
+            plugin_id
+            for region in ("left", "center", "right")
+            for plugin_id in self.state["activation"]["layout"][region]
+        )
+
+        expected_inactive = self.module["deactivate_config"](
+            self.active,
+            self.defaults,
+            self.state,
+            self.defaults["bar"]["layout"],
+        )
+        self.assertEqual(profiles, {
+            "schemaVersion": 1,
+            "layouts": {
+                "shibumi": expected_target,
+                "omarchy": expected_inactive["bar"]["layout"],
+            },
+            "centerAnchors": {
+                "shibumi": "hancore.shibumi.center",
+                "omarchy": "omarchy.clock",
+            },
+        })
+        self.assertEqual(
+            evidence,
+            {
+                "error": "",
+                "phase": "complete",
+                "detail": "pruned=['thirdparty.removed']",
+                "activeBar": "hancore.shibumi.bar",
+                "layout": expected_layout,
+                "savedLayout": expected_layout,
+                "configRestored": False,
+                "profileChanged": True,
+                "transactionRetained": False,
+                "stopCalls": 1,
+                "reloadCalls": 1,
+            },
+        )
+
+    def test_switch_drops_absent_third_party_from_saved_omarchy_profile(self) -> None:
+        plugin_id = "thirdparty.removed"
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id, installed=False, target="omarchy"
+        )
+        profiles = evidence.pop("savedProfiles")
+
+        self.assertEqual(profiles, {
+            "schemaVersion": 1,
+            "layouts": {
+                "shibumi": self.active["bar"]["layout"],
+                "omarchy": self.defaults["bar"]["layout"],
+            },
+            "centerAnchors": {
+                "shibumi": "hancore.shibumi.center",
+                "omarchy": "omarchy.clock",
+            },
+        })
+        self.assertEqual(evidence["phase"], "complete")
+        self.assertEqual(evidence["detail"], f"pruned=['{plugin_id}']")
+        self.assertEqual(evidence["activeBar"], "omarchy.bar")
+        self.assertFalse(evidence["transactionRetained"])
+
+    def test_switch_persists_pruned_synthesized_omarchy_profile(self) -> None:
+        plugin_id = "thirdparty.removed"
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id,
+            installed=False,
+            target="omarchy",
+            missing_target_profile=True,
+        )
+
+        self.assertEqual(evidence["error"], "")
+        self.assertEqual(evidence["phase"], "complete")
+        self.assertNotIn(plugin_id, evidence["layout"])
+        self.assertNotIn(plugin_id, evidence["savedLayout"])
+        self.assertTrue(evidence["profileChanged"])
+
+    def test_switch_keeps_installed_but_disabled_saved_plugin_as_failure(self) -> None:
+        plugin_id = "thirdparty.disabled"
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id, installed=True
+        )
+        profiles = evidence.pop("savedProfiles")
+        failure = (
+            "shibumi verification failed: missing=[], missing-from-registry=[], "
+            f"disabled=['{plugin_id}'], services=[], active=True"
+        )
+
+        saved_entry = next(
+            entry
+            for entry in profiles["layouts"]["shibumi"]["left"]
+            if self.module["entry_id"](entry) == plugin_id
+        )
+        self.assertEqual(saved_entry, {"id": plugin_id, "position": 7})
+        self.assertEqual(
+            evidence,
+            {
+                "error": failure,
+                "phase": "error",
+                "detail": failure,
+                "activeBar": "omarchy.bar",
+                "layout": [
+                    "hancore.shibumi.control-center",
+                    "omarchy.clock",
+                    "omarchy.menu",
+                ],
+                "savedLayout": sorted(
+                    [
+                        "hancore.shibumi.control-center",
+                        "hancore.shibumi.widget",
+                        plugin_id,
+                    ]
+                ),
+                "configRestored": True,
+                "profileChanged": False,
+                "transactionRetained": False,
+                "stopCalls": 2,
+                "reloadCalls": 2,
+            },
+        )
+
+    def test_switch_does_not_prune_without_a_complete_valid_snapshot(self) -> None:
+        plugin_id = "thirdparty.removed"
+        failure = (
+            "shibumi verification failed: missing=[], "
+            f"missing-from-registry=['{plugin_id}'], disabled=[], services=[], active=True"
+        )
+        for snapshot in (
+            "unavailable",
+            "empty",
+            "malformed-row",
+            "non-string-id",
+            "duplicate",
+            "duplicate-id-key",
+            "empty-id",
+            "incomplete-managed",
+        ):
+            with self.subTest(snapshot=snapshot):
+                evidence = self._saved_profile_switch_evidence(
+                    plugin_id, installed=False, initial_snapshot=snapshot
+                )
+                profiles = evidence.pop("savedProfiles")
+                saved_entry = next(
+                    entry
+                    for entry in profiles["layouts"]["shibumi"]["left"]
+                    if self.module["entry_id"](entry) == plugin_id
+                )
+                self.assertEqual(saved_entry, {"id": plugin_id, "position": 7})
+                self.assertEqual(evidence["error"], failure)
+                self.assertEqual(evidence["phase"], "error")
+                self.assertEqual(evidence["detail"], failure)
+                self.assertTrue(evidence["configRestored"])
+                self.assertFalse(evidence["profileChanged"])
+
+    def test_switch_never_prunes_managed_or_omarchy_layout_ids(self) -> None:
+        for plugin_id in ("hancore.shibumi.widget", "omarchy.weather"):
+            with self.subTest(plugin_id=plugin_id):
+                evidence = self._saved_profile_switch_evidence(
+                    plugin_id,
+                    installed=True,
+                    initial_omit=True,
+                    plugin_enabled=True,
+                )
+                profiles = evidence.pop("savedProfiles")
+                self.assertIn(plugin_id, evidence["savedLayout"])
+                self.assertEqual(evidence["phase"], "complete")
+                self.assertEqual(evidence["detail"], "")
+                self.assertTrue(
+                    any(
+                        self.module["entry_id"](entry) == plugin_id
+                        and entry.get("position") == 7
+                        for region in ("left", "center", "right")
+                        for entry in profiles["layouts"]["shibumi"][region]
+                    )
+                )
+
+    def test_later_verification_failure_does_not_persist_pruned_profile(self) -> None:
+        plugin_id = "thirdparty.removed"
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id, installed=False, later_active=False
+        )
+        profiles = evidence.pop("savedProfiles")
+
+        self.assertIn(plugin_id, evidence["savedLayout"])
+        self.assertEqual(evidence["phase"], "error")
+        self.assertIn("active=False", evidence["error"])
+        self.assertFalse(evidence["profileChanged"])
+        self.assertTrue(
+            any(
+                self.module["entry_id"](entry) == plugin_id
+                for region in ("left", "center", "right")
+                for entry in profiles["layouts"]["shibumi"][region]
+            )
+        )
+
     def test_canonical_versions_match_native_json_number_semantics(self) -> None:
         for key in ("shibumiStateSchemaVersion", "version"):
             for value in (1, 1.0):
@@ -375,6 +967,26 @@ class ContinuityManagerTests(unittest.TestCase):
 
         self.assertFalse(ready)
         self.assertIn("hancore.shibumi.state", detail)
+
+    def test_activation_reports_missing_managed_plugin_only_as_managed(self) -> None:
+        config = self.module["activate_config"](self.active, self.state)
+        plugins = {
+            plugin_id: {
+                "enabled": True,
+                "active": plugin_id == "hancore.shibumi.bar",
+            }
+            for plugin_id in self.state["plugins"]
+            if plugin_id != "hancore.shibumi.widget"
+        }
+
+        ready, detail = self.module["activation_verification"](
+            config, plugins, self.state
+        )
+
+        self.assertFalse(ready)
+        self.assertIn("missing=['hancore.shibumi.widget']", detail)
+        self.assertIn("missing-from-registry=[]", detail)
+        self.assertIn("disabled=[]", detail)
 
     def test_legacy_shibumi_snapshot_removes_merged_stock_layout(self) -> None:
         snapshot = self.module["snapshot_layout"](

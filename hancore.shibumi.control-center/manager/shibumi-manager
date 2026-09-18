@@ -79,6 +79,15 @@ def reject_json_constant(value: str) -> None:
     raise ValueError(f"non-standard JSON constant: {value}")
 
 
+def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, member in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON key")
+        value[key] = member
+    return value
+
+
 def finite_json_float(raw: str) -> float:
     value = float(raw)
     if not math.isfinite(value):
@@ -872,18 +881,43 @@ def runtime_environment(runtime_paths: dict[str, Path]) -> dict[str, str]:
 
 
 def plugin_snapshot(runtime_paths: dict[str, Path]) -> dict[str, dict[str, Any]]:
-    result = shell_call(runtime_paths, ["shell", "listPlugins"])
+    result = shell_call(runtime_paths, ["shell", "listPlugins"], check=True)
     try:
-        values = json.loads(result.stdout)
-    except json.JSONDecodeError as error:
+        values = json.loads(
+            result.stdout,
+            object_pairs_hook=unique,
+            parse_constant=reject_json_constant,
+        )
+    except ValueError as error:
         raise ManagerError("shell returned malformed plugin state") from error
     if not isinstance(values, list):
         raise ManagerError("shell plugin state is not an array")
-    return {
-        str(value["id"]): value
-        for value in values
-        if isinstance(value, dict) and value.get("id")
-    }
+    plugins: dict[str, dict[str, Any]] = {}
+    for value in values:
+        plugin_id = value.get("id") if isinstance(value, dict) else None
+        if not isinstance(plugin_id, str) or not plugin_id or plugin_id in plugins:
+            raise ManagerError("shell plugin state contains a malformed or duplicate row")
+        plugins[plugin_id] = value
+    return plugins
+
+
+def prune_uninstalled_layout_plugins(
+    layout: dict[str, list[Any]], plugins: dict[str, dict[str, Any]], managed: set[str]
+) -> list[str]:
+    # Managed-row presence is necessary, not proof of completeness; pruning
+    # relies on the pinned host's authoritative-snapshot contract.
+    if not plugins or not managed.issubset(plugins):
+        return []
+    missing = {
+        entry_id(entry) for region in REGIONS for entry in layout[region]
+    } - plugins.keys() - managed
+    pruned = sorted(
+        plugin_id for plugin_id in missing
+        if plugin_id and not plugin_id.startswith("omarchy.")
+    )
+    for region in REGIONS:
+        layout[region] = [entry for entry in layout[region] if entry_id(entry) not in pruned]
+    return pruned
 
 
 def activation_verification(
@@ -905,17 +939,18 @@ def activation_verification(
         entry_id(entry) for entry in config["plugins"]
     }
     missing = managed - plugins.keys()
+    layout_missing = registry_enabled - managed - plugins.keys()
     disabled = {
-        plugin_id
-        for plugin_id in registry_enabled
-        if plugins.get(plugin_id, {}).get("enabled") is not True
+        plugin_id for plugin_id in registry_enabled & plugins.keys()
+        if plugins[plugin_id].get("enabled") is not True
     }
     missing_services = service_ids - configured_services
     active = plugins.get(active_bar, {}).get("active") is True
-    ready = not missing and not disabled and not missing_services and active
+    ready = not (missing or layout_missing or disabled or missing_services) and active
     detail = (
-        f"missing={sorted(missing)}, disabled={sorted(disabled)}, "
-        f"services={sorted(missing_services)}, active={active}"
+        f"missing={sorted(missing)}, "
+        f"missing-from-registry={sorted(layout_missing)}, "
+        f"disabled={sorted(disabled)}, services={sorted(missing_services)}, active={active}"
     )
     return ready, detail
 
@@ -1033,7 +1068,14 @@ def perform(target: str) -> int:
         target_layout = layouts.get(runtime_target)
         if target_layout is None:
             target_layout = initial_layout(runtime_target, defaults, state)
-            layouts[runtime_target] = copy_layout(target_layout)
+        try:
+            installed_plugins = plugin_snapshot(runtime_paths)
+        except ManagerError:
+            installed_plugins = {}
+        pruned_ids = prune_uninstalled_layout_plugins(
+            target_layout, installed_plugins, set(state["plugins"])
+        )
+        layouts[runtime_target] = copy_layout(target_layout)
         target_center_anchor = center_anchors.get(runtime_target)
         if target_center_anchor is None:
             target_center_anchor = initial_center_anchor(
@@ -1141,7 +1183,8 @@ def perform(target: str) -> int:
         else:
             journal["phase"] = "committed"
             atomic_write(journal_path, encode(journal))
-            write_status(runtime_paths, target, "complete")
+            detail = f"pruned={pruned_ids}" if pruned_ids else ""
+            write_status(runtime_paths, target, "complete", detail)
             cleanup_transaction()
     return 0
 
