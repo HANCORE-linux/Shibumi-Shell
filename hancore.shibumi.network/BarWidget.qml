@@ -146,9 +146,10 @@ Ui.Panel {
   }
 
   function syncTrafficConsumer() {
-    const nativeDemand = networkReady && "wiredConnected" in networkService
-    const desired = networkReady && (nativeDemand
-      ? networkService.wiredConnected : mode === "ethernet") ? networkService : null
+    const service = networkService
+    const nativeDemand = !!service && networkReady && "wiredConnected" in service
+    const desired = networkReady && (nativeDemand ? service.wiredConnected
+      : mode === "ethernet") ? service : null
     if (trafficService === desired) {
       trafficRetry.stop()
       return

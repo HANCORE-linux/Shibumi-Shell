@@ -7,6 +7,9 @@ source "$repo_root/tests/lib/baselines.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
+smoke_only=${SHIBUMI_NETWORK_SMOKE_ONLY:-0}
+[[ $smoke_only == 0 || $smoke_only == 1 ]] \
+  || { printf 'network plugin regression failed: SHIBUMI_NETWORK_SMOKE_ONLY must be 0 or 1\n' >&2; exit 1; }
 tmpdir=$(mktemp -d /tmp/shibumi-network.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
 
@@ -24,8 +27,10 @@ command -v magick >/dev/null 2>&1 \
 python3 -c 'import dbus' >/dev/null 2>&1 \
   || fail "python-dbus is required for Enterprise source gates"
 
-mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin"
-chmod 700 "$tmpdir/runtime"
+mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/bin" \
+  "$tmpdir/home" "$tmpdir/config" "$tmpdir/cache" "$tmpdir/data"
+chmod 700 "$tmpdir/runtime" "$tmpdir/home" "$tmpdir/config" \
+  "$tmpdir/cache" "$tmpdir/data"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.network" "$tmpdir/network"
 cp -a -- "$repo_root/hancore.shibumi.network" \
@@ -47,6 +52,12 @@ install -m 0755 \
 
 set +e
 output=$(timeout 12 env \
+  HOME="$tmpdir/home" \
+  XDG_CONFIG_HOME="$tmpdir/config" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  XDG_DATA_HOME="$tmpdir/data" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/missing-session-bus" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus" \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
@@ -60,6 +71,14 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'network plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+    <<<"$output"; then
+  fail "component smoke produced a QML runtime error"
+fi
+if [[ $smoke_only == 1 ]]; then
+  printf 'network plugin smoke-only regression passed\n'
+  exit 0
+fi
 
 install -m 0644 "$repo_root/tests/network-native-panel-smoke.qml" \
   "$tmpdir/shell.qml"
