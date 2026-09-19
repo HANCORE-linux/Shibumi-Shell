@@ -102,6 +102,16 @@ explicit foreign plugin ID is likewise ambiguous. An Omarchy path may still
 outvote an incidental, unanchored plugin name. Ownership must not be assigned
 by guesswork.
 
+The Control Center headline and its **HEALTH** chip count Shibumi-attributed
+runtime log findings together with every non-log process, payload, backend, and
+sensitive-detail check. An unreadable or ambiguous log remains a primary
+**Log unavailable** warning. Error and warning checks attributed to Omarchy,
+third-party code, or an unknown source are retained under one collapsed runtime
+row; expanding it shows their original status, owner, evidence, and order.
+Its number counts Health checks, not individual log lines. `unknown` means that
+responsibility is not established. This UI projection does not change
+`report.overall`, remove checks, or alter the complete CLI/JSON report.
+
 An expanded error exposes a stable `SHIBUMI-HEALTH/<CHECK-ID>` code and a
 **Copy** action. Copy places only the bounded, sanitized code, result, owner,
 version, plugin/source identity, evidence, and suggested action on the

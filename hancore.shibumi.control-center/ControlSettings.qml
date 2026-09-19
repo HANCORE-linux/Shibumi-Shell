@@ -97,31 +97,26 @@ Item {
     })
     return values.concat(plugins)
   }
+  readonly property var healthPrimaryChecks: Array.isArray(
+    controller.healthPrimaryChecks) ? controller.healthPrimaryChecks : []
+  readonly property var healthOtherRuntimeChecks: Array.isArray(
+    controller.healthOtherRuntimeChecks) ? controller.healthOtherRuntimeChecks : []
   readonly property int healthErrorCount: {
-    const report = controller && controller.healthReport
-      ? controller.healthReport : ({ checks: [] })
-    const checks = Array.isArray(report.checks) ? report.checks : []
-    const errors = checks.filter(function(check) {
+    const errors = healthPrimaryChecks.filter(function(check) {
       return String(check.status || "") === "error"
     }).length
     return errors > 0 ? errors
       : String(controller.healthFailure || "") !== "" ? 1 : 0
   }
-  readonly property int healthWarningCount: {
-    const report = controller && controller.healthReport
-      ? controller.healthReport : ({ checks: [] })
-    const checks = Array.isArray(report.checks) ? report.checks : []
-    return checks.filter(function(check) {
+  readonly property int healthWarningCount:
+    healthPrimaryChecks.filter(function(check) {
       return String(check.status || "") === "warning"
     }).length
-  }
-  readonly property bool healthChecked: {
-    const report = controller && controller.healthReport
-      ? controller.healthReport : ({ checks: [] })
-    return Array.isArray(report.checks) && report.checks.length > 0
-  }
+  readonly property bool healthChecked: healthPrimaryChecks.length > 0
+    || healthOtherRuntimeChecks.length > 0
   readonly property bool healthPassed: healthChecked
     && healthErrorCount === 0 && healthWarningCount === 0
+    && healthOtherRuntimeChecks.length === 0
   readonly property color healthErrorColor:
     controller.accentColor("color01")
   readonly property color healthPassColor:

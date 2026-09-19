@@ -63,7 +63,7 @@ for lifecycle_contract in \
     'ControlSettings.qml:property string pendingConfigureRoute: ""' \
     'ControlSettings.qml:function scheduleConfigureRoute(value)' \
     'ControlSettings.qml:id: configureRouteSync' \
-    'control-center-smoke.qml:malformed Health result replaced the last report' \
+    'control-center-smoke.qml:Health projection case 6 lost the failure fallback' \
     'control-center-smoke.qml:closing the panel stopped or destroyed Health' \
     'control-center-smoke.qml:reopened Health did not expose the completed report'; do
   file=${lifecycle_contract%%:*}
@@ -1073,7 +1073,7 @@ for health_contract in \
     'return controller.accentColor("color01")' \
     'return controller.accentColor("color03")' \
     '["runtime-errors", "bar-runtime", "managed-plugins"]' \
-    'return parts.length > 0 ? parts.join("  ·  ") : "Not checked yet"' \
+    'errors === 0 && warnings === 0 && otherRuntimeChecks.length > 0' \
     'verticalAlignment: Text.AlignVCenter' \
     'checkRow.interactive && checkRow.extra !== ""' \
     'readonly property int statusColumnWidth: 62' \
@@ -1101,12 +1101,62 @@ for health_contract in \
     || fail "Health route contract drifted: $health_contract"
 done
 
+for health_projection_contract in \
+    'HealthProjection.js:"runtime-errors", "runtime-errors-omarchy"' \
+    'HealthProjection.js:"runtime-errors-third-party", "runtime-errors-unknown"' \
+    'HealthProjection.js:"runtime-warnings", "runtime-warnings-omarchy"' \
+    'HealthProjection.js:"runtime-warnings-third-party", "runtime-warnings-unknown"' \
+    'HealthProjection.js:status === "error" || status === "warning"' \
+    'HealthProjection.js:String(check.owner || "unknown") !== "shibumi"' \
+    'HealthProjection.js:check.value === "Log unavailable"' \
+    'ControlCenterPanel.qml:HealthProjection.primaryChecks(healthReport)' \
+    'ControlCenterPanel.qml:HealthProjection.otherRuntimeChecks(healthReport)' \
+    'ControlMainPage.qml:controller.healthPrimaryChecks' \
+    'ControlMainPage.qml:controller.healthOtherRuntimeChecks' \
+    'ControlMainPage.qml:runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)' \
+    'ControlMainPage.qml:0 Shibumi findings' \
+    'ControlMainPage.qml:Open a Shibumi issue only for findings listed above.' \
+    'ControlMainPage.qml:id: otherRuntimeHeader' \
+    'ControlMainPage.qml:Keys.onReturnPressed: root.otherRuntimeExpanded' \
+    'ControlMainPage.qml:Keys.onSpacePressed: root.otherRuntimeExpanded' \
+    'ControlMainPage.qml:model: root.otherRuntimeExpanded ? root.otherRuntimeChecks : []' \
+    'PluginSectionHeader.qml:property bool showCount: true' \
+    'PluginSectionHeader.qml:property string tooltipText: ""' \
+    'PluginSectionHeader.qml:Presentation.ShibumiPillToolTip {' \
+    'PluginSectionHeader.qml:contentItem.wrapMode = Text.Wrap' \
+    'ControlSettings.qml:&& healthOtherRuntimeChecks.length === 0' \
+    'ControlCenterTestPanel.qml:HealthProjection.primaryChecks(healthReport)' \
+    'ControlCenterTestPanel.qml:HealthProjection.otherRuntimeChecks(healthReport)'; do
+  file=${health_projection_contract%%:*}
+  label=${health_projection_contract#*:}
+  target="$control_dir/$file"
+  if [[ $file == ControlCenterTestPanel.qml ]]; then
+    target="$repo_root/tests/fixtures/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "Health presentation projection drifted: $label"
+done
+if rg -q 'check\.group|Number\([^)]*check\.value' \
+    "$control_dir/HealthProjection.js"; then
+  fail "Health presentation projection uses a broad group or numeric text parser"
+fi
+if rg -q 'controller\.bar\.(showTooltip|hideTooltip)' \
+    "$control_dir/ControlMainPage.qml"; then
+  fail "Health projection tooltip escaped into the bar window"
+fi
+
 for health_error_contract in \
     'id: "runtime-errors"' \
     'status: "error"' \
     'health.diagnosticCode(error)' \
     'health.diagnosticIssueUrl(error)' \
-    'health.copyDiagnostic(error)'; do
+    'health.copyDiagnostic(error)' \
+    'Health projection case 1 has wrong owner counts' \
+    'Health projection case 2 has wrong counts or label' \
+    'Health projection case 3 lost original rows or severity' \
+    'Health projection case 4 hid Log unavailable' \
+    'Health projection case 5 hid a primary runtime check' \
+    'Health projection case 6 lost the failure fallback'; do
   rg -Fq "$health_error_contract" "$repo_root/tests/control-center-smoke.qml" \
     || fail "Health error-action smoke contract drifted: $health_error_contract"
 done

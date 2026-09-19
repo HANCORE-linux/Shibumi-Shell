@@ -13,6 +13,8 @@ Column {
   property bool motionActive: false
   property string expandedCheckId: ""
   property string copiedCheckId: ""
+  property bool otherRuntimeExpanded: false
+  readonly property alias otherRuntimeHeader: otherRuntimeHeader
 
   readonly property var report: controller.healthReport || ({
     generatedEpoch: 0,
@@ -22,10 +24,14 @@ Column {
   })
   readonly property var checks: Array.isArray(report.checks)
     ? report.checks : []
-  readonly property var attentionChecks: checks.filter(function(check) {
+  readonly property var primaryChecks: Array.isArray(
+    controller.healthPrimaryChecks) ? controller.healthPrimaryChecks : checks
+  readonly property var otherRuntimeChecks: Array.isArray(
+    controller.healthOtherRuntimeChecks) ? controller.healthOtherRuntimeChecks : []
+  readonly property var attentionChecks: primaryChecks.filter(function(check) {
     return check.status === "error" || check.status === "warning"
   })
-  readonly property var runtimeChecks: checks.filter(function(check) {
+  readonly property var runtimeChecks: primaryChecks.filter(function(check) {
     return check.status !== "error" && check.status !== "warning"
       && ["runtime-errors", "bar-runtime", "managed-plugins"]
         .indexOf(String(check.id || "")) >= 0
@@ -50,12 +56,21 @@ Column {
   width: parent ? parent.width : 1
   spacing: Commons.Style.space(6)
 
+  function headlineStatus() {
+    if (String(controller.healthFailure || "") !== ""
+        || attentionChecks.some(function(check) { return check.status === "error" }))
+      return "error"
+    if (attentionChecks.length > 0) return "warning"
+    if (otherRuntimeChecks.length > 0) return "info"
+    return report.overall === "healthy" ? "healthy" : "info"
+  }
+
   function overallLabel() {
     if (busy) return controller.healthFetching ? "Checking updates …" : "Checking …"
-    if (report.overall === "error") return "Action needed"
-    if (report.overall === "warning") return "Review recommended"
-    if (report.overall === "healthy") return "Healthy"
-    return "Not checked"
+    if (headlineStatus() === "error") return "Action needed"
+    if (headlineStatus() === "warning") return "Review recommended"
+    if (otherRuntimeChecks.length > 0) return "No Shibumi findings"
+    return headlineStatus() === "healthy" ? "Healthy" : "Not checked"
   }
 
   function statusGlyph(status) {
@@ -82,19 +97,22 @@ Column {
   }
 
   function summaryLabel() {
-    const errors = checks.filter(function(check) {
+    let errors = primaryChecks.filter(function(check) {
       return check.status === "error"
     }).length
-    const warnings = checks.filter(function(check) {
+    if (errors === 0 && String(controller.healthFailure || "") !== "") errors = 1
+    const warnings = primaryChecks.filter(function(check) {
       return check.status === "warning"
     }).length
-    const passed = checks.filter(function(check) {
+    const passed = primaryChecks.filter(function(check) {
       return check.status === "ok"
     }).length
     const parts = []
     if (errors > 0) parts.push(errors + (errors === 1 ? " error" : " errors"))
     if (warnings > 0)
       parts.push(warnings + (warnings === 1 ? " warning" : " warnings"))
+    if (errors === 0 && warnings === 0 && otherRuntimeChecks.length > 0)
+      return "0 Shibumi findings"
     if (passed > 0) parts.push(passed + " checks passed")
     return parts.length > 0 ? parts.join("  ·  ") : "Not checked yet"
   }
@@ -263,7 +281,7 @@ Column {
     radius: root.controller.controlRadius
     color: root.controller.controlFillColor
     border.width: root.controller.controlBorderWidth
-    border.color: root.report.overall === "error"
+    border.color: root.headlineStatus() === "error"
       ? root.statusColor("error") : root.controller.controlBorderColor
 
     Row {
@@ -282,12 +300,12 @@ Column {
         radius: width / 2
         color: "transparent"
         border.width: 1
-        border.color: root.statusColor(root.report.overall)
+        border.color: root.statusColor(root.headlineStatus())
 
         Text {
           anchors.centerIn: parent
-          text: root.busy ? "…" : root.statusGlyph(root.report.overall)
-          color: root.statusColor(root.report.overall)
+          text: root.busy ? "…" : root.statusGlyph(root.headlineStatus())
+          color: root.statusColor(root.headlineStatus())
           font.family: root.controller.marketFont
           font.pixelSize: Commons.Style.space(18) * root.uiScale
           font.weight: Font.DemiBold
@@ -384,6 +402,41 @@ Column {
   Repeater {
     id: attentionRepeater
     model: root.attentionChecks
+    delegate: HealthCheckRow {
+      required property var modelData
+      width: root.width
+      check: modelData
+      interactive: true
+    }
+  }
+
+  PluginSectionHeader {
+    id: otherRuntimeHeader
+    width: parent.width
+    visible: root.otherRuntimeChecks.length > 0
+    controller: root.controller
+    title: root.otherRuntimeChecks.length
+      + " runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
+    showCount: false
+    expanded: root.otherRuntimeExpanded
+    boundedTitle: true
+    tooltipText: "This count is Health checks, not individual log lines. Named owners identify who maintains a component; unknown findings need source attribution before responsibility can be assigned. Open a Shibumi issue only for findings listed above."
+    foreground: root.foreground
+    accent: root.accent
+    uiScale: root.uiScale
+    activeFocusOnTab: visible
+    Accessible.role: Accessible.Button
+    Accessible.name: title
+    Accessible.description: tooltipText
+    Accessible.onPressAction: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
+    onToggled: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
+    Keys.onReturnPressed: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
+    Keys.onSpacePressed: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
+  }
+
+  Repeater {
+    id: otherRuntimeRepeater
+    model: root.otherRuntimeExpanded ? root.otherRuntimeChecks : []
     delegate: HealthCheckRow {
       required property var modelData
       width: root.width

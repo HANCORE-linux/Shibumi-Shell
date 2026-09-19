@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "../control" as Control
 import "../control/HostIdentity.js" as HostIdentity
+import "../control/HealthProjection.js" as HealthProjection
 
 Item {
   id: root
@@ -17,6 +18,10 @@ Item {
 
   readonly property bool open: ownerWidget.opened
   readonly property var healthReport: healthService.report
+  readonly property var healthPrimaryChecks:
+    HealthProjection.primaryChecks(healthReport)
+  readonly property var healthOtherRuntimeChecks:
+    HealthProjection.otherRuntimeChecks(healthReport)
   readonly property bool healthRunning: healthService.running
   readonly property bool healthFetching: healthService.fetching
   readonly property string healthFailure: healthService.failure
@@ -275,6 +280,8 @@ Item {
   readonly property real compactWorkspacesPanelHeight:
     settings.compactWorkspacesPanelHeight
   readonly property int headerHealthErrorCount: settings.healthErrorCount
+  readonly property int headerHealthWarningCount: settings.healthWarningCount
+  readonly property bool headerHealthPassed: settings.healthPassed
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property bool pluginInstallerOpen: settings.paletteOpen
     && settings.installMode && settings.installerDirect
