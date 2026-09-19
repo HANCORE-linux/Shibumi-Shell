@@ -261,10 +261,27 @@ def _normalize(config: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _prune_missing_layout_plugins(layout: dict[str, list[Any]], managed_ids: set[str],
+                                  plugin_dir: Path) -> None:
+    try:
+        with os.scandir(plugin_dir) as rows:
+            installed = {row.name for row in rows if row.is_symlink()
+                         or row.is_dir(follow_symlinks=True)}
+    except OSError:
+        return
+    for region in REGIONS:
+        layout[region] = [
+            entry for entry in layout[region]
+            if not (plugin_id := entry_id(entry)) or plugin_id in managed_ids
+            or plugin_id.startswith(OMARCHY_PLUGIN_PREFIX) or plugin_id in installed
+        ]
+
+
 def apply_profile(
     config: dict[str, Any],
     profile: ProfileSpec,
     plugins: dict[str, PluginSpec],
+    plugin_dir: Path,
 ) -> dict[str, Any]:
     state_entry(config)
     result = _normalize(config)
@@ -312,6 +329,7 @@ def apply_profile(
     result["bar"]["style"] = "shibumi"
     if result["bar"].get("position") not in ("top", "bottom"):
         result["bar"]["position"] = "top"
+    _prune_missing_layout_plugins(result["bar"]["layout"], set(plugins), plugin_dir)
     return result
 
 
@@ -389,6 +407,7 @@ def select_omarchy_image_picker(config: dict[str, Any]) -> dict[str, Any]:
 def remove_suite(
     config: dict[str, Any],
     plugins: dict[str, PluginSpec],
+    plugin_dir: Path,
     active_bar: str,
     default_center_anchor: str,
     keep_settings: bool,
@@ -433,6 +452,7 @@ def remove_suite(
             restored_layout[region] = entries
         restored["layout"] = restored_layout
         result["bar"] = restored
+        _prune_missing_layout_plugins(restored_layout, plugin_ids, plugin_dir)
         if "transparent" in current_bar:
             result["bar"]["transparent"] = copy.deepcopy(
                 current_bar["transparent"]

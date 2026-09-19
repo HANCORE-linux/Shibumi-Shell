@@ -812,6 +812,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         return SimpleNamespace(**defaults)
 
     def install(self) -> None:
+        (self.paths.plugin_dir / "local.extra").mkdir(parents=True, exist_ok=True)
         self.assertEqual(
             command_install(self.args(), self.suite, self.paths, self.runtime), 0
         )
@@ -2441,7 +2442,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         base = json.loads(self.defaults.read_text(encoding="utf-8"))
         base["bar"]["position"] = "left"
         profile = self.suite.profile("default")
-        result = apply_profile(base, profile, self.suite.plugins)
+        result = apply_profile(
+            base, profile, self.suite.plugins, self.paths.plugin_dir
+        )
         layout_ids = {
             entry_id(entry)
             for region in ("left", "center", "right")
@@ -2454,7 +2457,9 @@ class SuiteLifecycleTests(unittest.TestCase):
     def test_profile_excludes_stock_widgets_and_keeps_third_party_extras(self) -> None:
         base = json.loads(self.defaults.read_text(encoding="utf-8"))
         profile = self.suite.profile("default")
-        result = apply_profile(base, profile, self.suite.plugins)
+        result = apply_profile(
+            base, profile, self.suite.plugins, self.paths.plugin_dir
+        )
         layout_ids = {
             entry_id(entry)
             for region in ("left", "center", "right")
@@ -2465,6 +2470,99 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertFalse(
             any(plugin_id.startswith("omarchy.") for plugin_id in layout_ids)
         )
+
+    def test_install_prunes_only_foreign_layout_ids_without_plugin_directories(
+        self,
+    ) -> None:
+        config = json.loads(self.defaults.read_text(encoding="utf-8"))
+        config["bar"]["layout"]["right"].extend([
+            {"id": "foreign.orphan"}, {"id": "foreign.installed"},
+            {"id": "foreign.file"}, {"id": "foreign.link"},
+            {"id": "foreign.dangling"},
+            {"id": "hancore.shibumi.bluetooth", "custom": "managed"},
+        ])
+        atomic_write(self.paths.config_file, encode_config(config))
+        self.paths.plugin_dir.mkdir(parents=True)
+        (self.paths.plugin_dir / "foreign.installed").mkdir()
+        (self.paths.plugin_dir / "foreign.file").write_text("not a plugin\n")
+        (self.paths.plugin_dir / "foreign.link").symlink_to("foreign.installed")
+        (self.paths.plugin_dir / "foreign.dangling").symlink_to("missing")
+
+        self.assertEqual(
+            command_install(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        written = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        entries = {
+            entry_id(entry): entry
+            for region in ("left", "center", "right")
+            for entry in written["bar"]["layout"][region]
+        }
+        self.assertNotIn("foreign.orphan", entries)
+        self.assertNotIn("foreign.file", entries)
+        self.assertIn("foreign.installed", entries)
+        self.assertIn("foreign.link", entries)
+        self.assertIn("foreign.dangling", entries)
+        self.assertEqual(entries["hancore.shibumi.bluetooth"]["custom"], "managed")
+
+    def test_previous_bar_restore_prunes_orphans_but_unreadable_root_preserves_all(
+        self,
+    ) -> None:
+        self.install()
+        state_path = self.paths.state_dir / "install.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["previousBar"]["layout"]["right"].extend([
+            {"id": "foreign.restore-orphan"},
+            {"id": "omarchy.absent-official"},
+        ])
+        atomic_write(state_path, encode_config(state))
+
+        self.assertEqual(
+            command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        restored = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        restored_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in restored["bar"]["layout"][region]
+        }
+        self.assertNotIn("foreign.restore-orphan", restored_ids)
+        self.assertIn("omarchy.absent-official", restored_ids)
+
+        restored["bar"]["layout"]["right"].append({"id": "foreign.unreadable"})
+        atomic_write(self.paths.config_file, encode_config(restored))
+        real_scandir = os.scandir
+        failed_reads = 0
+
+        def fail_two_catalog_reads(path: object) -> object:
+            nonlocal failed_reads
+            if path == self.paths.plugin_dir and failed_reads < 2:
+                failed_reads += 1
+                raise PermissionError("fixture plugin directory unreadable")
+            return real_scandir(path)
+
+        with patch.object(config_module.os, "scandir", side_effect=fail_two_catalog_reads):
+            self.assertEqual(
+                command_activate(self.args(), self.suite, self.paths, self.runtime), 0
+            )
+        self.assertEqual(failed_reads, 2)
+        active = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        self.assertTrue(any(
+            entry_id(entry) == "foreign.unreadable"
+            for region in ("left", "center", "right")
+            for entry in active["bar"]["layout"][region]
+        ))
+
+        self.assertEqual(
+            command_uninstall(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        final = json.loads(self.paths.config_file.read_text(encoding="utf-8"))
+        final_ids = {
+            entry_id(entry)
+            for region in ("left", "center", "right")
+            for entry in final["bar"]["layout"][region]
+        }
+        self.assertNotIn("foreign.unreadable", final_ids)
+        self.assertIn("omarchy.absent-official", final_ids)
 
     def test_locked_migration_preserves_legacy_state_before_shell_drain(
         self,
@@ -4140,6 +4238,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         config["bar"]["layout"]["right"].append(
             {"id": "user.weather", "custom": {"city": "Berlin"}}
         )
+        (self.paths.plugin_dir / "user.weather").mkdir()
         config["plugins"].append({"id": "user.service", "interval": 17})
         state_entry(config)["shibumi"]["testSetting"] = "retained"
         atomic_write(self.paths.config_file, encode_config(config))

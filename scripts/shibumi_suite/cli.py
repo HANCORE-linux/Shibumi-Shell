@@ -553,7 +553,7 @@ def command_install(
             )
             if external
             else apply_identity_contract(
-                apply_profile(config, profile, suite.plugins),
+                apply_profile(config, profile, suite.plugins, paths.plugin_dir),
                 migrate_storage=suite.settings_storage_version == 1,
             )
         ), suite.retired_plugins)
@@ -927,7 +927,7 @@ def command_repair(
             )
             if external
             else apply_identity_contract(
-                apply_profile(config, profile, suite.plugins),
+                apply_profile(config, profile, suite.plugins, paths.plugin_dir),
                 migrate_storage=suite.settings_storage_version == 1,
             )
         ), suite.retired_plugins)
@@ -1038,7 +1038,7 @@ def command_activate(
         if state.get("settingsStorageVersion") == 1:
             config = migrate_state_settings(config, import_legacy=False)
         return apply_identity_contract(
-            apply_profile(config, profile, suite.plugins),
+            apply_profile(config, profile, suite.plugins, paths.plugin_dir),
             migrate_storage=state.get("settingsStorageVersion") == 1,
         )
 
@@ -1128,6 +1128,7 @@ def command_deactivate(
                 remove_suite(
                     config,
                     suite.plugins,
+                    paths.plugin_dir,
                     active_bar,
                     default_center_anchor(defaults),
                     True,
@@ -1227,6 +1228,7 @@ def command_uninstall(
             remove_suite(
                 config,
                 suite.plugins,
+                paths.plugin_dir,
                 str(state.get("activeBar") or "hancore.shibumi.bar"),
                 default_center_anchor(defaults),
                 args.keep_settings,
