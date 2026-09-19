@@ -285,6 +285,31 @@ ShellRoot {
     }
 
     QtObject {
+      id: centerRunController
+
+      property int centerSplitMode: 0
+      readonly property bool v2Mode: false
+      readonly property var order: ({
+        left: ["G1", "G2"],
+        center: ["G8", "G7"],
+        right: ["G9", "G10"]
+      })
+      readonly property var v1Slots: order
+      readonly property var splits: ({
+        left: [true],
+        center: centerSplitMode === 0 ? [true]
+          : centerSplitMode === 1 ? [false] : [],
+        boundaries: [false, false],
+        right: [true]
+      })
+
+      function splitEnabled(region, index) {
+        const values = splits[String(region || "")] || []
+        return values[Number(index)] === true
+      }
+    }
+
+    QtObject {
       id: v2SplitController
 
       property bool activeLayoutProtected: false
@@ -482,6 +507,34 @@ ShellRoot {
       function hideTooltip(owner) {}
       function releasePopout(owner) {}
       function unassignedLayoutEntries(region) { return [] }
+    }
+
+    QtObject {
+      id: centerRunBar
+
+      readonly property bool vertical: false
+      readonly property int barSize: 26
+      readonly property bool transparent: false
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property var shell: fakeShell
+      readonly property var visualTokens: noSplitBar.visualTokens
+      readonly property var layoutConfig: noSplitBar.layoutConfig
+      readonly property var layoutController: centerRunController
+      property var activePopout: null
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        return fakeWidgetRegistry.componentFor(moduleName)
+      }
+      function registerModuleSlot(_slot) {}
+      function unregisterModuleSlot(_slot) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(_region) { return [] }
     }
 
     QtObject {
@@ -868,6 +921,13 @@ ShellRoot {
     }
 
     ShibumiStyle.BarSurface {
+      id: centerRunSurface
+      bar: centerRunBar
+      width: 1200
+      height: centerRunBar.barSize
+    }
+
+    ShibumiStyle.BarSurface {
       id: tallAlignmentSurface
       bar: tallAlignmentBar
       width: 1200
@@ -1034,6 +1094,50 @@ ShellRoot {
       return point.y + item.height / 2
     }
 
+    function runChromeItem(item) {
+      if (!item) return null
+      if ("runs" in item && "notchShoulderInset" in item) return item
+      const children = item.children || []
+      for (const child of children) {
+        const match = runChromeItem(child)
+        if (match) return match
+      }
+      return null
+    }
+
+    function cutsFromRuns(runs) {
+      const result = []
+      for (let index = 1; index < runs.length; index++) {
+        result.push({
+          from: runs[index - 1].x + runs[index - 1].width,
+          to: runs[index].x
+        })
+      }
+      return result
+    }
+
+    function expectedSectionCut(section, runChrome) {
+      const geometry = section.groupGeometry
+      if (geometry.length < 2) return null
+      const origin = section.mapToItem(runChrome, 0, 0).x
+      return {
+        from: origin + geometry[0].right + 4,
+        to: origin + geometry[1].left - 4,
+        localFrom: geometry[0].right + 4,
+        localTo: geometry[1].left - 4
+      }
+    }
+
+    function sameCut(actual, expected) {
+      return actual && expected
+        && closeEnough(actual.from, expected.from)
+        && closeEnough(actual.to, expected.to)
+    }
+
+    function hasCut(cuts, expected) {
+      return cuts.some(function(cut) { return sameCut(cut, expected) })
+    }
+
     function regionAlignmentError(surface, alignmentTestBar, region,
         expectedV2, expectedPosition, expectedExtraHeight) {
       const groups = regionItem(surface, region)
@@ -1106,6 +1210,8 @@ ShellRoot {
       property int shadowPhase: 0
       property int hiddenGapPhase: 0
       property int alignmentPhase: 0
+      property int centerRunPhase: 0
+      property var centerSideCuts: []
       readonly property var alignmentCases: [
         { v2: false, position: "top" },
         { v2: false, position: "bottom" },
@@ -1202,6 +1308,62 @@ ShellRoot {
             familyBar.useV2 = false
           }
           familyPhase++
+          attempts = 0
+          return
+        }
+
+        if (centerRunPhase < 3) {
+          const runChrome = test.runChromeItem(centerRunSurface)
+          const left = test.regionItem(centerRunSurface, "left")
+          const center = test.regionItem(centerRunSurface, "center")
+          const right = test.regionItem(centerRunSurface, "right")
+          if (!runChrome || !left || !center || !right
+              || left.groupGeometry.length !== 2
+              || center.groupGeometry.length !== 2
+              || right.groupGeometry.length !== 2) {
+            if (attempts < 50) return
+            stop()
+            test.fail("full BarSurface run geometry did not settle")
+            return
+          }
+
+          const cuts = test.cutsFromRuns(runChrome.runs)
+          const leftCut = test.expectedSectionCut(left, runChrome)
+          const centerCut = test.expectedSectionCut(center, runChrome)
+          const rightCut = test.expectedSectionCut(right, runChrome)
+          if (!test.hasCut(cuts, leftCut) || !test.hasCut(cuts, rightCut)) {
+            stop()
+            test.fail("left/right BarSurface cuts drifted: "
+              + JSON.stringify(cuts))
+            return
+          }
+
+          if (centerRunPhase === 0) {
+            if (cuts.length !== 3 || !test.hasCut(cuts, centerCut)
+                || centerCut.localFrom >= centerCut.localTo) {
+              stop()
+              test.fail("enabled center split did not cut the content gap: cuts="
+                + JSON.stringify(cuts) + ", center="
+                + JSON.stringify(centerCut) + ", runs="
+                + JSON.stringify(runChrome.runs))
+              return
+            }
+            centerSideCuts = [leftCut, rightCut]
+            centerRunController.centerSplitMode = 1
+          } else {
+            if (cuts.length !== 2
+                || !test.sameCut(cuts[0], centerSideCuts[0])
+                || !test.sameCut(cuts[1], centerSideCuts[1])) {
+              stop()
+              test.fail("disabled/empty center split changed side cuts or cut center: "
+                + JSON.stringify(cuts) + " versus "
+                + JSON.stringify(centerSideCuts))
+              return
+            }
+            if (centerRunPhase === 1)
+              centerRunController.centerSplitMode = 2
+          }
+          centerRunPhase++
           attempts = 0
           return
         }
