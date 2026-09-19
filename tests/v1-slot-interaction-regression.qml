@@ -33,7 +33,7 @@ ShellRoot {
         property var settings: ({})
         property real availableWidth: 0
         readonly property real naturalWidth: test.wideSibling
-          && moduleName === "hancore.shibumi.memory" ? 300 : 30
+          && moduleName === "hancore.shibumi.ai" ? 300 : 30
         implicitWidth: availableWidth > 0
           && (moduleName === "hancore.shibumi.center" || naturalWidth === 300)
             ? Math.min(naturalWidth, availableWidth) : naturalWidth
@@ -67,6 +67,7 @@ ShellRoot {
         }),
         splits: ({
           left: [false, false, false, false, false, false],
+          center: [],
           boundaries: [false, false],
           right: [false, false, false, false, false, false]
         })
@@ -428,6 +429,7 @@ ShellRoot {
           if (!clock || !("availableWidth" in clock.item)
               || session.targets.length !== 8 || !centerLoader.item) return
           test.originalClockTarget = clock.item
+          fakeStateService.setGroupEnabled("G7", false)
           if (!centerLoader.item.canAddSlot || !controller.addV1Slot("center")
               || controller.addV1Slot("center"))
             return test.fail("center plus/capacity contract")
@@ -441,25 +443,34 @@ ShellRoot {
           if (centerLoader.item.canAddSlot || extra.item.width !== 24
               || test.target("G8", 0).item !== test.originalClockTarget
               || controller.removeV1SlotAt("center", 0)
-              || !test.dragTo("G4", extra))
+              || !test.dragTo("G7", extra))
             return test.fail("center addition replaced G8 owner or broke drop target")
           test.phase = 16
           test.attempts = 0
           return
         }
         if (test.phase === 16) {
-          const moved = test.target("G4", 1)
+          const moved = test.target("G7", 1)
           const clock = test.target("G8", 0)
-          if (!moved || moved.region !== "center" || !clock
-              || !("availableWidth" in moved.item) || !("availableWidth" in clock.item)
-              || controller.v1Slots.left[3] !== "") return
-          if (controller.removeV1SlotAt("center", 1)
-              || clock.item.availableWidth !== 124 || moved.item.availableWidth !== 0
-              || centerLoader.item.enabledSeparatorHitTargetCount !== 0)
-            return test.fail("center sibling budget or occupied removal guard: clock="
-              + clock.item.availableWidth + ", sibling=" + moved.item.availableWidth
-              + ", siblingWidth=" + moved.item.width + ", separators="
-              + centerLoader.item.enabledSeparatorHitTargetCount)
+          if (!moved || moved.region !== "center" || !clock || controller.v1Slots.left[6] !== "") return
+          if (fakeStateService.config.widgets.G7.enabled === false) {
+            if (moved.item.width !== 24 || centerLoader.item.separatorHitTargetCount !== 0)
+              return test.fail("disabled G7 did not remain an editing proxy")
+            fakeStateService.setGroupEnabled("G7", true)
+            return
+          }
+          if (!controller.splitEnabled("center", 0)) {
+            if (centerLoader.item.separatorHitTargetCount !== 1
+                || !controller.toggleSplit("center", 0, true))
+              return test.fail("center marker did not toggle its positional split")
+            return
+          }
+          centerLoader.item.contentItem.forceLayout()
+          const geometry = centerLoader.item.groupGeometry, marker = centerLoader.item.separatorGeometry[0]
+          if (geometry.length !== 2 || !marker || marker.index !== 0
+              || geometry[1].left - geometry[0].right !== 22
+              || marker.markerCenter <= geometry[0].right || marker.markerCenter >= geometry[1].left)
+            return test.fail("center split geometry or drag-marker relation changed")
           test.centerLayoutSnapshot = JSON.stringify(fakeStateService.config)
           centerLoader.item.availableWidth = 55
           test.phase = 17
@@ -468,9 +479,9 @@ ShellRoot {
         }
         if (test.phase === 17) {
           const clock = test.target("G8", 0)
-          if (!clock || clock.item.availableWidth !== 19 || centerLoader.item.width > 55) return
+          if (!clock || clock.item.availableWidth !== 3 || centerLoader.item.width > 55) return
           const otherClock = secondSession.targets.find(entry => entry.groupId === "G8")
-          if (!otherClock || otherClock.item.availableWidth !== 194
+          if (!otherClock || otherClock.item.availableWidth !== 178
               || JSON.stringify(fakeStateService.config) !== test.centerLayoutSnapshot)
             return test.fail("output-local center budget changed another output or stored layout")
           // The preceding reorder may rebuild delegates; pin the current
@@ -487,8 +498,8 @@ ShellRoot {
         }
         if (test.phase === 20 || test.phase === 21 || test.phase === 22) {
           if (test.attempts < 8) return
-          const sibling = session.targets.find(entry => entry.groupId === "G4")
-          const otherSibling = secondSession.targets.find(entry => entry.groupId === "G4")
+          const sibling = session.targets.find(entry => entry.groupId === "G7")
+          const otherSibling = secondSession.targets.find(entry => entry.groupId === "G7")
           const placeholderWidth = test.phase === 21 ? 30 : 0
           if (!sibling || !otherSibling || !("availableWidth" in sibling.item)
               || sibling.item.availableWidth !== 55 - placeholderWidth
@@ -524,11 +535,11 @@ ShellRoot {
         }
         if (test.phase === 23) {
           const clock = test.target("G8", 0)
-          if (!clock || !clock.item.hasLoadedWidgets || clock.item.availableWidth !== 19) return
+          if (!clock || !clock.item.hasLoadedWidgets || clock.item.availableWidth !== 3) return
           if (JSON.stringify(fakeStateService.config) !== test.centerLayoutSnapshot)
             return test.fail("center readiness recovery rewrote stored layout")
-          const home = session.targets.find(entry => entry.region === "left" && entry.index === 3)
-          if (!test.dragTo("G4", home)) return test.fail("center-to-outer return failed")
+          const home = session.targets.find(entry => entry.region === "left" && entry.index === 6)
+          if (!test.dragTo("G7", home)) return test.fail("center-to-outer return failed")
           test.phase = 18
           test.attempts = 0
           return
@@ -542,9 +553,9 @@ ShellRoot {
         }
         if (test.phase === 19) {
           if (controller.v1Slots.center.length !== 1 || session.targets.length !== 8
-              || secondSession.targets.length !== 8 || test.writes !== 15) return
-          if (!centerLoader.item.canAddSlot || "center" in controller.splits)
-            return test.fail("center cleanup changed split schema or plus availability")
+              || secondSession.targets.length !== 8 || test.writes !== 16) return
+          if (!centerLoader.item.canAddSlot || controller.splits.center.length !== 0)
+            return test.fail("center cleanup changed split shape or plus availability")
           stop()
           session.setEditing(false)
           secondSession.setEditing(false)

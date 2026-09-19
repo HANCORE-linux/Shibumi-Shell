@@ -64,8 +64,10 @@ up to two additional slots on each outer side and one in the center (two
 center positions total; default: G8 alone). The existing `+` appears in
 edit mode; adding the second position does not move G8. A saved one-position
 center stays unchanged until you explicitly add a slot. Only empty extra slots
-can be removed. The center has no internal divider; the existing section
-boundaries and split schema stay unchanged.
+can be removed. A two-position center exposes the same positional split marker,
+hit target, and spacing as the outer regions. Existing configurations without
+`splits.center` migrate it to a disabled boolean array matching the center order;
+the settings schema remains version 1.
 
 - `+` adds an empty slot up to nine positions per outer side or two in the center.
 - Dragging a group onto an occupied slot swaps the two groups; dragging it onto
@@ -74,9 +76,9 @@ boundaries and split schema stay unchanged.
   be removed.
 - A disabled, hardware-unavailable, or responsively hidden V1 group remains a
   compact proxy while editing, so its position can still be changed.
-- Outer splits remain positional. Adding or removing an outer slot changes
-  its split array in the same validated transaction. Center changes preserve
-  the existing split arrays and section boundaries.
+- Splits remain positional in all three regions. Adding or removing a slot
+  resizes that region's split array in the same validated transaction while
+  preserving the other regions and both section boundaries.
 - **Restore layout** returns V1 to its fixed `7 / 1 / 7` default and removes
   every extra position.
 

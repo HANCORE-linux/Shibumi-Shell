@@ -696,7 +696,9 @@ Item {
       if (key === "v1Layout") {
         if (!exactKeys(value, ["order", "splits"])) return null
         const order = transitionLayout(value.order, "v1")
-        if (!order || !exactKeys(value.splits, ["left", "right", "boundaries"])) return null
+        const legacySplits = exactKeys(value.splits, ["left", "right", "boundaries"])
+        if (!order || (!legacySplits
+            && !exactKeys(value.splits, ["left", "center", "right", "boundaries"]))) return null
         const splits = ShibumiConfig.normalizedSplits(value.splits, order)
         if (!splits) return null
         result[key] = {order: order, splits: splits}

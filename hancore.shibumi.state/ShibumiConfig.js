@@ -47,6 +47,7 @@ function defaultSplits(orderValue) {
   var order = normalizedOrder(orderValue) || defaultOrder()
   return {
     left: Array(Math.max(0, order.left.length - 1)).fill(false),
+    center: Array(Math.max(0, order.center.length - 1)).fill(false),
     boundaries: [false, false],
     right: Array(Math.max(0, order.right.length - 1)).fill(false)
   }
@@ -267,10 +268,13 @@ function normalizedSplits(value, orderValue) {
   var order = normalizedOrder(orderValue)
   if (!isPlainObject(value) || !order) return null
   var left = boolArray(value.left, Math.max(0, order.left.length - 1))
+  var center = Object.prototype.hasOwnProperty.call(value, "center")
+    ? boolArray(value.center, Math.max(0, order.center.length - 1))
+    : Array(Math.max(0, order.center.length - 1)).fill(false)
   var boundaries = boolArray(value.boundaries, 2)
   var right = boolArray(value.right, Math.max(0, order.right.length - 1))
-  if (!left || !boundaries || !right) return null
-  return { left: left, boundaries: boundaries, right: right }
+  if (!left || !center || !boundaries || !right) return null
+  return { left: left, center: center, boundaries: boundaries, right: right }
 }
 
 function safeScalar(value) {

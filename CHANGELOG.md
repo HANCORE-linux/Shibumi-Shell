@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added a positional V1 split between G8 and the optional second center slot;
+  Edit slots, Split all, and Merge all use the existing split interaction
+
 ### Changed
 
 - Control Center Health now keeps non-Shibumi and unattributed runtime-log
@@ -22,6 +27,9 @@
   `6eece9b`); the stock bar's handler is unused while it is not shown, so the
   warning is informational. Under the stock bar there is no duplicate. This
   describes one exact pairing, not a general allowance for duplicate handlers.
+- Older Shibumi readers ignore `splits.center` and can drop it when rewriting
+  layout state; current readers migrate a missing field to disabled without a
+  settings-schema version bump.
 
 ## [0.1.1-beta.14.1] - 2026-09-16
 

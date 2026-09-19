@@ -193,7 +193,8 @@ ShellRoot {
     try {
       const withCenter = LayoutModel.addSlot(LayoutModel.defaultOrder(), "center")
       const pair = LayoutModel.moveGroupToSlot(withCenter, "G4", "center", 1)
-      const added = LayoutModel.addDynamicGroup(pair, LayoutModel.defaultSplits(), "example.outer", "left")
+      const pairSplits = LayoutModel.resizeSplits(LayoutModel.defaultSplits(), pair)
+      const added = LayoutModel.addDynamicGroup(pair, pairSplits, "example.outer", "left")
       const swapped = LayoutModel.swapGroups(added.order, "G:example.outer", "G8")
       const state = JSON.parse(JSON.stringify(savedState))
       state.presentation.shellStyle = "shibumi"
@@ -218,7 +219,7 @@ ShellRoot {
           || !removalChecks.verify("example.outer", true)
           || !hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
           || JSON.stringify(stateService.config.order) !== JSON.stringify(pair)
-          || JSON.stringify(stateService.config.splits) !== JSON.stringify(LayoutModel.defaultSplits()))
+          || JSON.stringify(stateService.config.splits) !== JSON.stringify(pairSplits))
         return root.fail("explicit return-to-extra did not permit safe removal")
     } finally {
       stateService.config = savedState

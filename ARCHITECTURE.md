@@ -86,8 +86,11 @@ baseline.
 - V1 can explicitly add one center slot in edit mode: at most two center
   positions total. The default remains G8 alone; existing saved layouts are
   not expanded on load. Only an empty extra slot can be removed. Center slots
-  use the existing drag/drop and gap treatment without an internal center
-  divider or new split-schema field. G8's width budget excludes its center
+  use the existing drag/drop and gap treatment. A two-position center exposes
+  one positional split with the existing marker and spacing. Missing
+  `splits.center` migrates to a disabled array of the required length without a
+  settings-schema version bump; an explicitly malformed field rejects the V1
+  layout as a unit. G8's width budget excludes its center
   sibling; when G8 is disabled or has no loaded widget, the first loaded,
   stage-shown center group owns the remainder. Owner selection uses loading
   readiness, not its budget-dependent geometry, to avoid binding feedback.
@@ -150,7 +153,8 @@ baseline.
   selected-provider flows; package-bound physical acceptance remains open.
   Family replacement does not increase capacity; the separately approved
   optional V1 center slot follows
-  the limits above. V2 layout semantics and the saved schema remain unchanged.
+  the limits above. V2 layout semantics remain unchanged, and the settings
+  schema stays at version 1.
 - G1 is the Shibumi wordmark and Control Center. Omarchy remains the sole owner
   of the application launcher menu; G1 neither owns nor opens it.
 - G1 exposes the current V1 palette contract: colors 01-07 plus foreground,

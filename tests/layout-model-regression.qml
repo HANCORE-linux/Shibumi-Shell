@@ -49,7 +49,10 @@ QtObject {
       fail("malformed order was accepted")
 
     const toggled = LayoutModel.toggleSplit(splits, "left", 0, order)
+    const centerOrder = LayoutModel.addSlot(order, "center"), centerSplits = LayoutModel.resizeSplits(splits, centerOrder)
+    const centerToggled = LayoutModel.toggleSplit(centerSplits, "center", 0, centerOrder)
     if (!toggled || !toggled.left[0] || splits.left[0]
+        || !centerToggled || !centerToggled.center[0]
         || LayoutModel.toggleSplit(splits, "center", 0, order) !== null
         || LayoutModel.toggleSplit(splits, "left", 6, order) !== null)
       fail("split toggle contract")
@@ -60,10 +63,10 @@ QtObject {
         || !LayoutModel.splitEnabled(boundary, "boundaries", 1, order))
       fail("boundary split contract")
 
-    const splitAll = LayoutModel.allSplits(true, order)
-    if (!LayoutModel.validSplits(splitAll, order)
-        || !splitAll.left.every(Boolean) || !splitAll.right.every(Boolean)
-        || !splitAll.boundaries.every(Boolean)
+    const splitAll = LayoutModel.allSplits(true, centerOrder)
+    if (!LayoutModel.validSplits(splitAll, centerOrder)
+        || !splitAll.left.every(Boolean) || !splitAll.center.every(Boolean)
+        || !splitAll.right.every(Boolean) || !splitAll.boundaries.every(Boolean)
         || LayoutModel.allSplits("true") !== null)
       fail("split-all contract")
 
