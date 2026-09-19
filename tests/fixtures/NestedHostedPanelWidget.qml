@@ -134,6 +134,16 @@ Item {
                 width: 120
                 height: root.desiredContentHeight
               }
+
+              // Intrinsic controls own their content height even when private
+              // implementation children follow the repaired holder geometry.
+              Item {
+                width: parent.width
+                height: parent.height + 14
+                implicitHeight: 180
+
+                Item { anchors.fill: parent }
+              }
             }
           }
         }

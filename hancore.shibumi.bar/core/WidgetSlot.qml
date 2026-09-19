@@ -621,8 +621,12 @@ Item {
       if (depth > 0) {
         let point = Qt.point(0, 0)
         try { point = item.mapToItem(holder, 0, 0) } catch (error) {}
-        const itemHeight = Math.max(Number(item.height) || 0,
-          Number(item.implicitHeight) || 0)
+        const implicitHeight = Number(item.implicitHeight) || 0
+        if (implicitHeight > 0) {
+          bottom = Math.max(bottom, (Number(point.y) || 0) + implicitHeight)
+          return
+        }
+        const itemHeight = Number(item.height) || 0
         const fillsHolder = Math.abs(Number(point.x) || 0) < 0.5
           && Math.abs(Number(point.y) || 0) < 0.5
           && Math.abs((Number(item.width) || 0)
