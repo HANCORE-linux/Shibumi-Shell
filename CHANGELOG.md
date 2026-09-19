@@ -9,17 +9,17 @@
 
 ### Changed
 
-- Control Center Health now keeps non-Shibumi and unattributed runtime-log
-  findings in a collapsed detail group while its headline and HEALTH chip count
-  Shibumi-attributed and primary diagnostic checks; CLI and JSON reports remain
-  complete and unchanged
+- Control Center Health shows only Shibumi-attributed runtime-log findings and
+  primary diagnostic checks; runtime findings attributed to Omarchy, Qt,
+  third-party code, or an unknown source are no longer listed in the panel. CLI
+  and JSON reports remain complete.
 
 ### Known limits
 
 - Quickshell can log `Failed to register with host portal … Connection already
   associated with an application ID` once per shell start. The message comes
   from Qt's portal integration and appears with and without Shibumi installed;
-  Health lists it under findings not attributed to Shibumi.
+  Health does not list it; `shibumi-health` reports it under its owner.
 - On Omarchy 4.0.3 (`0534987…`) Quickshell logs `Handler was registered but will
   not be used … target omarchy.bar` once per shell start while the Shibumi bar is
   active. Both the hidden stock bar and Shibumi's runtime register this IPC

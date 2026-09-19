@@ -99,8 +99,6 @@ Item {
   }
   readonly property var healthPrimaryChecks: Array.isArray(
     controller.healthPrimaryChecks) ? controller.healthPrimaryChecks : []
-  readonly property var healthOtherRuntimeChecks: Array.isArray(
-    controller.healthOtherRuntimeChecks) ? controller.healthOtherRuntimeChecks : []
   readonly property int healthErrorCount: {
     const errors = healthPrimaryChecks.filter(function(check) {
       return String(check.status || "") === "error"
@@ -113,10 +111,8 @@ Item {
       return String(check.status || "") === "warning"
     }).length
   readonly property bool healthChecked: healthPrimaryChecks.length > 0
-    || healthOtherRuntimeChecks.length > 0
   readonly property bool healthPassed: healthChecked
     && healthErrorCount === 0 && healthWarningCount === 0
-    && healthOtherRuntimeChecks.length === 0
   readonly property color healthErrorColor:
     controller.accentColor("color01")
   readonly property color healthPassColor:

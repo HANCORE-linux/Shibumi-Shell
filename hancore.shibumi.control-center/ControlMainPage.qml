@@ -13,8 +13,6 @@ Column {
   property bool motionActive: false
   property string expandedCheckId: ""
   property string copiedCheckId: ""
-  property bool otherRuntimeExpanded: false
-  readonly property alias otherRuntimeHeader: otherRuntimeHeader
 
   readonly property var report: controller.healthReport || ({
     generatedEpoch: 0,
@@ -26,8 +24,6 @@ Column {
     ? report.checks : []
   readonly property var primaryChecks: Array.isArray(
     controller.healthPrimaryChecks) ? controller.healthPrimaryChecks : checks
-  readonly property var otherRuntimeChecks: Array.isArray(
-    controller.healthOtherRuntimeChecks) ? controller.healthOtherRuntimeChecks : []
   readonly property var attentionChecks: primaryChecks.filter(function(check) {
     return check.status === "error" || check.status === "warning"
   })
@@ -61,15 +57,14 @@ Column {
         || attentionChecks.some(function(check) { return check.status === "error" }))
       return "error"
     if (attentionChecks.length > 0) return "warning"
-    if (otherRuntimeChecks.length > 0) return "info"
-    return report.overall === "healthy" ? "healthy" : "info"
+    if (primaryChecks.length > 0) return "healthy"
+    return "info"
   }
 
   function overallLabel() {
     if (busy) return controller.healthFetching ? "Checking updates …" : "Checking …"
     if (headlineStatus() === "error") return "Action needed"
     if (headlineStatus() === "warning") return "Review recommended"
-    if (otherRuntimeChecks.length > 0) return "No Shibumi findings"
     return headlineStatus() === "healthy" ? "Healthy" : "Not checked"
   }
 
@@ -111,8 +106,6 @@ Column {
     if (errors > 0) parts.push(errors + (errors === 1 ? " error" : " errors"))
     if (warnings > 0)
       parts.push(warnings + (warnings === 1 ? " warning" : " warnings"))
-    if (errors === 0 && warnings === 0 && otherRuntimeChecks.length > 0)
-      return "0 Shibumi findings"
     if (passed > 0) parts.push(passed + " checks passed")
     return parts.length > 0 ? parts.join("  ·  ") : "Not checked yet"
   }
@@ -402,41 +395,6 @@ Column {
   Repeater {
     id: attentionRepeater
     model: root.attentionChecks
-    delegate: HealthCheckRow {
-      required property var modelData
-      width: root.width
-      check: modelData
-      interactive: true
-    }
-  }
-
-  PluginSectionHeader {
-    id: otherRuntimeHeader
-    width: parent.width
-    visible: root.otherRuntimeChecks.length > 0
-    controller: root.controller
-    title: root.otherRuntimeChecks.length
-      + " runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
-    showCount: false
-    expanded: root.otherRuntimeExpanded
-    boundedTitle: true
-    tooltipText: "This count is Health checks, not individual log lines. Named owners identify who maintains a component; unknown findings need source attribution before responsibility can be assigned. Open a Shibumi issue only for findings listed above."
-    foreground: root.foreground
-    accent: root.accent
-    uiScale: root.uiScale
-    activeFocusOnTab: visible
-    Accessible.role: Accessible.Button
-    Accessible.name: title
-    Accessible.description: tooltipText
-    Accessible.onPressAction: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
-    onToggled: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
-    Keys.onReturnPressed: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
-    Keys.onSpacePressed: root.otherRuntimeExpanded = !root.otherRuntimeExpanded
-  }
-
-  Repeater {
-    id: otherRuntimeRepeater
-    model: root.otherRuntimeExpanded ? root.otherRuntimeChecks : []
     delegate: HealthCheckRow {
       required property var modelData
       width: root.width

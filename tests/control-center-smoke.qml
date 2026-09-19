@@ -1589,7 +1589,8 @@ ShellRoot {
           if (root.healthProjectionStep === 0) {
             if (panel.headerHealthErrorCount !== 1
                 || health.attentionChecks.length !== 1)
-              return root.fail("Health page did not expose its initial error")
+              return root.fail(
+                "Health page lost its initial Shibumi-owned runtime error")
             const v1HealthPanelHeight = panel.compactHealthPanelHeight
             panel.v2LayoutActive = true
             if (!panel.compactHealthPage
@@ -1626,19 +1627,36 @@ ShellRoot {
 
             root.stableHealthReport = panel.healthService.report
             panel.healthService.report = root.healthReport("error", [
+              root.healthCheck("runtime-errors", "error", "omarchy",
+                "External runtime-errors", "1 error", "External detail"),
+              root.healthCheck("runtime-errors-omarchy", "warning", "omarchy",
+                "External runtime-errors-omarchy", "1 warning", "External detail"),
+              root.healthCheck("runtime-errors-third-party", "error",
+                "third-party", "External runtime-errors-third-party", "1 error",
+                "External detail"),
+              root.healthCheck("runtime-errors-unknown", "warning", "unknown",
+                "External runtime-errors-unknown", "1 warning", "External detail"),
+              root.healthCheck("runtime-warnings", "error", "third-party",
+                "External runtime-warnings", "1 error", "External detail"),
+              root.healthCheck("runtime-warnings-omarchy", "warning", "omarchy",
+                "External runtime-warnings-omarchy", "1 warning", "External detail"),
+              root.healthCheck("runtime-warnings-third-party", "error",
+                "third-party", "External runtime-warnings-third-party", "1 error",
+                "External detail"),
+              root.healthCheck("runtime-warnings-unknown", "warning", "unknown",
+                "External runtime-warnings-unknown", "1 warning", "External detail"),
               root.healthCheck("runtime-errors", "error", "shibumi",
                 "Shibumi runtime error", "1 error", "Shibumi detail"),
-              root.healthCheck("runtime-errors-omarchy", "error", "omarchy",
-                "Omarchy runtime error", "1 error", "Omarchy detail"),
-              root.healthCheck("runtime-warnings-third-party", "warning",
-                "third-party", "Third-party runtime warning", "1 warning",
-                "Third-party detail"),
-              root.healthCheck("runtime-errors-unknown", "error", "unknown",
-                "Unknown runtime error", "1 error", "Unknown detail"),
+              root.healthCheck("runtime-errors", "warning", "unknown",
+                "Recent runtime findings", "Log unavailable", "Unavailable detail"),
+              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
+                "Sensitive runtime findings", "Details redacted", "Redacted"),
               root.healthCheck("quickshell-process", "error", "unknown",
                 "Quickshell process", "missing", "Process detail"),
-              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
-                "Sensitive runtime findings", "Details redacted", "Redacted")
+              root.healthCheck("payload-integrity", "error", "unknown",
+                "Payload integrity", "mismatch", "Payload detail"),
+              root.healthCheck("audio-backend", "warning", "unknown",
+                "Audio backend", "unavailable", "Backend detail")
             ])
             root.projectionReportJson = JSON.stringify(panel.healthService.report)
             root.healthProjectionStep = 1
@@ -1648,24 +1666,32 @@ ShellRoot {
 
           if (root.healthProjectionStep === 1) {
             const mixed = panel.healthService.report.checks
-            if (health.primaryChecks.length !== 3
-                || health.attentionChecks.length !== 3
-                || health.otherRuntimeChecks.length !== 3
-                || panel.headerHealthErrorCount !== 2
-                || panel.headerHealthWarningCount !== 1
-                || health.primaryChecks[0] !== mixed[0]
-                || health.otherRuntimeChecks[0] !== mixed[1]
+            if (health.primaryChecks.length !== 6
+                || health.attentionChecks.length !== 6
+                || panel.headerHealthErrorCount !== 3
+                || panel.headerHealthWarningCount !== 3
+                || health.primaryChecks[0] !== mixed[8]
+                || health.primaryChecks[1] !== mixed[9]
+                || health.primaryChecks[2] !== mixed[10]
+                || health.primaryChecks[3] !== mixed[11]
+                || health.primaryChecks[4] !== mixed[12]
+                || health.primaryChecks[5] !== mixed[13]
                 || JSON.stringify(panel.healthService.report)
                   !== root.projectionReportJson)
-              return root.fail("Health projection case 1 has wrong owner counts")
+              return root.fail(
+                "Health projection case 1 broke the exact-ID or owner boundary")
             panel.healthService.report = root.healthReport("error", [
+              root.healthCheck("bar-runtime", "ok", "shibumi",
+                "Active bar", "Running", "Primary detail"),
+              root.healthCheck("quickshell-process", "ok", "unknown",
+                "Quickshell process", "1 process", "Primary detail"),
+              root.healthCheck("runtime-errors", "ok", "unknown",
+                "Recent runtime errors", "None detected", "Primary detail"),
               root.healthCheck("runtime-errors-omarchy", "error", "omarchy",
-                "Omarchy runtime errors", "2 errors", "Omarchy expanded detail"),
+                "Omarchy runtime error", "1 error", "External detail"),
               root.healthCheck("runtime-warnings-third-party", "warning",
-                "third-party", "Third-party runtime warnings", "3 warnings",
-                "Third-party expanded detail"),
-              root.healthCheck("runtime-warnings-unknown", "warning", "unknown",
-                "Qt portal runtime warning", "1 warning", "Unknown expanded detail")
+                "third-party", "Third-party runtime warning", "1 warning",
+                "External detail")
             ])
             root.projectionReportJson = JSON.stringify(panel.healthService.report)
             root.healthProjectionStep = 2
@@ -1674,118 +1700,106 @@ ShellRoot {
           }
 
           if (root.healthProjectionStep === 2) {
-            const collapsedLabel = "3 runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
-            if (health.primaryChecks.length !== 0
-                || health.otherRuntimeChecks.length !== 3
+            const realistic = panel.healthService.report.checks
+            const oldGroupLabel = "2 runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
+            if (health.primaryChecks.length !== 3
                 || health.attentionChecks.length !== 0
                 || panel.headerHealthErrorCount !== 0
                 || panel.headerHealthWarningCount !== 0
-                || panel.headerHealthPassed
-                || health.otherRuntimeExpanded
-                || health.overallLabel() !== "No Shibumi findings"
-                || health.summaryLabel() !== "0 Shibumi findings"
-                || health.summaryLabel() === "Not checked yet"
-                || !panel.findTextItem(health, collapsedLabel)
-                || panel.findTextItem(panel, "HEALTH · PASS"))
-              return root.fail("Health projection case 2 has wrong counts or label")
-            const header = health.otherRuntimeHeader
-            if (!header.activeFocus) {
-              header.forceActiveFocus(Qt.TabFocusReason)
-              root.ticks = 0
-              return
-            }
-            if (!header.tooltip.visible) {
-              if (root.ticks < 15) return
-              return root.fail("Health projection tooltip did not open from focus")
-            }
-            const tooltipContent = header.tooltip.contentItem
-            if (!tooltipContent
-                || tooltipContent.Window.window !== testWindow
-                || tooltipContent.lineCount < 2
-                || tooltipContent.wrapMode !== Text.Wrap
-                || header.tooltip.width > header.width
-                || header.tooltip.width >= testWindow.width
-                || !header.tooltipText.endsWith(
-                  "Open a Shibumi issue only for findings listed above."))
-              return root.fail("Health projection tooltip has wrong window or text")
-            header.width = 240
-            if (header.tooltip.width > 240 || tooltipContent.lineCount < 2)
-              return root.fail("Health projection tooltip exceeded a narrow header")
-            panel.healthService.report = root.healthReport("error",
-              panel.healthService.report.checks.concat([
-                root.healthCheck("runtime-errors", "ok", "unknown",
-                  "Recent runtime errors", "None detected", "Clean sample")
-              ]))
+                || !panel.headerHealthPassed
+                || health.overallLabel() !== "Healthy"
+                || health.summaryLabel() !== "3 checks passed"
+                || panel.healthReport.overall !== "error"
+                || panel.healthReport.checks.length !== 5
+                || health.primaryChecks[0] !== realistic[0]
+                || health.primaryChecks[1] !== realistic[1]
+                || health.primaryChecks[2] !== realistic[2]
+                || panel.findTextItem(health, oldGroupLabel)
+                || !panel.findTextItem(panel, "HEALTH  ·  PASS")
+                || JSON.stringify(panel.healthService.report)
+                  !== root.projectionReportJson)
+              return root.fail(
+                "Health projection case 2 exposed or counted external runtime findings"
+                + " primary=" + health.primaryChecks.length
+                + " attention=" + health.attentionChecks.length
+                + " errors=" + panel.headerHealthErrorCount
+                + " warnings=" + panel.headerHealthWarningCount
+                + " passed=" + panel.headerHealthPassed
+                + " label=" + health.overallLabel()
+                + " summary=" + health.summaryLabel()
+                + " overall=" + panel.healthReport.overall
+                + " checks=" + panel.healthReport.checks.length
+                + " oldGroup=" + !!panel.findTextItem(health, oldGroupLabel)
+                + " chip=" + !!panel.findTextItem(panel, "HEALTH  ·  PASS")
+                + " immutable=" + (JSON.stringify(panel.healthService.report)
+                  === root.projectionReportJson))
+            panel.healthService.report = root.healthReport("warning", [
+              root.healthCheck("managed-plugins", "ok", "shibumi",
+                "Managed plugins", "Complete", "Primary detail"),
+              root.healthCheck("runtime-errors", "ok", "unknown",
+                "Recent runtime errors", "None detected", "Primary detail"),
+              root.healthCheck("runtime-warnings-unknown", "warning", "unknown",
+                "Qt portal runtime warning", "1 warning", "External detail")
+            ])
             root.projectionReportJson = JSON.stringify(panel.healthService.report)
-            if (health.primaryChecks.length !== 1
-                || health.summaryLabel() !== "0 Shibumi findings")
-              return root.fail("Health projection case 2 lost its zero summary")
-            header.toggled()
-            header.focus = false
             root.healthProjectionStep = 3
             root.ticks = 0
             return
           }
 
           if (root.healthProjectionStep === 3) {
-            const external = panel.healthService.report.checks
-            if (!health.otherRuntimeExpanded
-                || health.otherRuntimeChecks[0] !== external[0]
-                || health.otherRuntimeChecks[1] !== external[1]
-                || health.otherRuntimeChecks[2] !== external[2]
-                || health.otherRuntimeChecks[0].status !== "error"
-                || health.otherRuntimeChecks[1].status !== "warning"
-                || health.otherRuntimeChecks[2].owner !== "unknown"
-                || !panel.findTextItem(health, "Omarchy runtime errors")
-                || !panel.findTextItem(health, "Third-party runtime warnings")
-                || !panel.findTextItem(health, "Qt portal runtime warning")
-                || health.checkDetail(external[0]).indexOf("Owner: Omarchy") < 0
-                || health.diagnosticIssueUrl(external[0]) !== ""
+            const oldGroupLabel = "1 runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
+            if (health.primaryChecks.length !== 2
+                || health.attentionChecks.length !== 0
+                || !panel.headerHealthPassed
+                || health.overallLabel() !== "Healthy"
+                || panel.healthReport.overall !== "warning"
+                || panel.findTextItem(health, oldGroupLabel)
                 || JSON.stringify(panel.healthService.report)
                   !== root.projectionReportJson)
-              return root.fail("Health projection case 3 lost original rows or severity")
-            panel.healthService.report = root.healthReport("warning", [
+              return root.fail(
+                "Health projection case 3 trusted raw overall or rendered a warning")
+            panel.healthService.report = root.healthReport("error", [
               root.healthCheck("runtime-errors", "warning", "unknown",
                 "Recent runtime findings", "Log unavailable", "Unavailable detail"),
               root.healthCheck("runtime-warnings-omarchy", "warning", "omarchy",
-                "Omarchy runtime warnings", "many warnings", "Omarchy detail")
+                "Omarchy runtime warnings", "many warnings", "External detail"),
+              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
+                "Sensitive runtime findings", "Details redacted", "Redacted"),
+              root.healthCheck("quickshell-process", "error", "unknown",
+                "Quickshell process", "0 processes", "Process detail"),
+              root.healthCheck("payload-integrity", "error", "unknown",
+                "Payload integrity", "mismatch", "Payload detail"),
+              root.healthCheck("audio-backend", "warning", "unknown",
+                "Audio backend", "unavailable", "Backend detail")
             ])
-            health.otherRuntimeExpanded = false
             root.healthProjectionStep = 4
             root.ticks = 0
             return
           }
 
           if (root.healthProjectionStep === 4) {
-            if (health.primaryChecks.length !== 1
-                || health.otherRuntimeChecks.length !== 1
-                || health.primaryChecks[0].value !== "Log unavailable"
-                || panel.headerHealthWarningCount !== 1
-                || health.overallLabel() !== "Review recommended")
-              return root.fail("Health projection case 4 hid Log unavailable")
-            panel.healthService.report = root.healthReport("error", [
-              root.healthCheck("quickshell-process", "error", "unknown",
-                "Quickshell process", "0 processes", "Process detail"),
-              root.healthCheck("payload-integrity", "error", "unknown",
-                "Payload integrity", "mismatch", "Payload detail"),
-              root.healthCheck("audio-backend", "warning", "unknown",
-                "Audio backend", "unavailable", "Backend detail"),
-              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
-                "Sensitive runtime findings", "Details redacted", "Redacted"),
-              root.healthCheck("runtime-errors", "ok", "unknown",
-                "Recent runtime errors", "None detected", "Clean sample")
-            ])
-            root.healthProjectionStep = 5
-            root.ticks = 0
-            return
-          }
-
-          if (root.healthProjectionStep === 5) {
+            const unsafeMasking = panel.healthService.report.checks
             if (health.primaryChecks.length !== 5
-                || health.otherRuntimeChecks.length !== 0
-                || health.attentionChecks.length !== 4
-                || health.runtimeChecks.length !== 1)
-              return root.fail("Health projection case 5 hid a primary runtime check")
+                || health.attentionChecks.length !== 5
+                || health.primaryChecks[0] !== unsafeMasking[0]
+                || health.primaryChecks[1] !== unsafeMasking[2]
+                || health.primaryChecks[2] !== unsafeMasking[3]
+                || health.primaryChecks[3] !== unsafeMasking[4]
+                || health.primaryChecks[4] !== unsafeMasking[5]
+                || health.primaryChecks[0].value !== "Log unavailable"
+                || health.primaryChecks[0].status !== "warning"
+                || health.primaryChecks[1].status !== "warning"
+                || health.primaryChecks[2].status !== "error"
+                || health.primaryChecks[3].status !== "error"
+                || health.primaryChecks[4].status !== "warning"
+                || panel.headerHealthErrorCount !== 2
+                || panel.headerHealthWarningCount !== 3
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed"
+                || panel.findTextItem(health, "Omarchy runtime warnings"))
+              return root.fail(
+                "Health projection case 4 masked Log unavailable or a primary failure")
             const unsafeReport = JSON.stringify({
               schemaVersion: 1,
               summary: "unsafe fixture",
@@ -1805,20 +1819,52 @@ ShellRoot {
               root.healthCheck("runtime-errors", "ok", "unknown",
                 "Recent runtime errors", "None detected", "Clean sample")
             ])
+            root.healthProjectionStep = 5
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 5) {
+            const healthyReport = panel.healthService.report
+            if (panel.healthService.acceptReport("{broken")
+                || panel.healthService.report !== healthyReport
+                || panel.healthService.failure === ""
+                || health.primaryChecks.length !== 1
+                || panel.headerHealthErrorCount !== 1
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed")
+              return root.fail(
+                "Health projection case 5 lost the schema-failure fallback")
+            panel.healthService.failure = "Health check failed (exit 1)."
             root.healthProjectionStep = 6
             root.ticks = 0
             return
           }
 
-          const healthyReport = panel.healthService.report
-          if (panel.healthService.acceptReport("{broken")
-              || panel.healthService.report !== healthyReport
-              || panel.healthService.failure === ""
-              || panel.headerHealthErrorCount !== 1
-              || health.overallLabel() !== "Action needed")
-            return root.fail("Health projection case 6 lost the failure fallback")
+          if (root.healthProjectionStep === 6) {
+            if (panel.headerHealthErrorCount !== 1
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed")
+              return root.fail(
+                "Health projection case 6 lost the fetch-failure fallback")
+            panel.healthService.failure = ""
+            panel.healthService.report = root.healthReport("loading", [])
+            root.healthProjectionStep = 7
+            root.ticks = 0
+            return
+          }
+
+          if (health.primaryChecks.length !== 0
+              || health.attentionChecks.length !== 0
+              || panel.headerHealthErrorCount !== 0
+              || panel.headerHealthWarningCount !== 0
+              || panel.headerHealthPassed
+              || health.overallLabel() !== "Not checked"
+              || health.summaryLabel() !== "Not checked yet"
+              || panel.findTextItem(panel, "HEALTH  ·  PASS"))
+            return root.fail(
+              "Health projection case 7 treated an empty report as checked")
           panel.healthService.report = root.stableHealthReport
-          panel.healthService.failure = ""
           root.lifecycleHealthService = panel.healthService
           root.lifecycleReportEpoch = Number(
             root.stableHealthReport.generatedEpoch || 0)

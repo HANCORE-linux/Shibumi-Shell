@@ -25,7 +25,3 @@ function primaryChecks(report) {
     return !isOtherRuntimeFinding(check)
   })
 }
-
-function otherRuntimeChecks(report) {
-  return reportChecks(report).filter(isOtherRuntimeFinding)
-}

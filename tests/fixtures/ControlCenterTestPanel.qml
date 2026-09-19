@@ -20,8 +20,6 @@ Item {
   readonly property var healthReport: healthService.report
   readonly property var healthPrimaryChecks:
     HealthProjection.primaryChecks(healthReport)
-  readonly property var healthOtherRuntimeChecks:
-    HealthProjection.otherRuntimeChecks(healthReport)
   readonly property bool healthRunning: healthService.running
   readonly property bool healthFetching: healthService.fetching
   readonly property string healthFailure: healthService.failure
