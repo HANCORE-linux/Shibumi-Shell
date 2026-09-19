@@ -769,20 +769,25 @@ Item {
 
   function unassignedLayoutEntries(region) {
     const entries = GroupRegistry.unassignedEntries(layoutConfig, region)
+    const removing = layoutTransitionBusy && layoutTransition.operation
+      && layoutTransition.operation.intent
+      && Array.isArray(layoutTransition.operation.intent.removeIds)
+      ? layoutTransition.operation.intent.removeIds : []
     if (layoutStateController.v2Mode) {
       // G16-G18 use V1 extension slots but remain native fixed groups in V2.
       // Keep their persisted V1 provider entries out of V2's unassigned deck,
       // otherwise the same widget would be rendered twice after a switch.
       return deduplicatedUnassignedEntries(entries.filter(function(entry) {
-        if (isV1AdditionalSuiteWidget(entryId(entry))) return false
-        const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+        const id = entryId(entry)
+        if (isV1AdditionalSuiteWidget(id) || removing.indexOf(id) >= 0) return false
+        const groupId = GroupRegistry.dynamicGroupIdForModule(id)
         return groupId === "" || !layoutStateController.groupLocation(groupId)
       }))
     }
     const familyProviders = Object.values(v1FamilySlotBindings)
     return deduplicatedUnassignedEntries(entries.filter(function(entry) {
       const id = entryId(entry)
-      if (familyProviders.indexOf(id) >= 0) return false
+      if (familyProviders.indexOf(id) >= 0 || removing.indexOf(id) >= 0) return false
       const groupId = GroupRegistry.dynamicGroupIdForModule(id)
       return groupId === "" || !layoutStateController.groupLocation(groupId)
     }))

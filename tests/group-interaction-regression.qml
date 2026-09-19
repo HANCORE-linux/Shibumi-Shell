@@ -1,6 +1,8 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "core" as Core
+import "core/GroupRegistry.js" as GroupRegistry
 import "styles/shibumi" as ShibumiStyle
 
 ShellRoot {
@@ -8,6 +10,21 @@ ShellRoot {
     id: test
     visible: true
     property bool frameSeen: false
+    readonly property string transferId: "fixture.p10.088.widget"
+    readonly property string transferScreen: "fixture-output"
+    property int transferStage: -1
+    readonly property bool scopedTransfer: transferStage !== -1
+    property string expectedPingContainer: ""
+    property string pingNextAction: ""
+    property string pingOutput: ""
+    property string transitionResult: ""
+    property double keepDeckInstance: 0
+    property int keepDeckInstances: 0
+    property int keepStableAttempts: 0
+    property var nativeLayout: ({
+      left: [{ id: "fixture.placed", shibumiModule: true }],
+      center: [], right: []
+    })
     onFrameSwapped: frameSeen = true
 
     width: 420
@@ -26,11 +43,19 @@ ShellRoot {
       id: markerWidget
 
       Item {
+        id: marker
         property var bar: null
         property string moduleName: ""
+        property string hostGroupId: ""
         property var settings: ({})
+        readonly property double instanceId: Date.now()
         implicitWidth: 30
         implicitHeight: 20
+        IpcHandler {
+          enabled: marker.moduleName === test.transferId
+          target: "fixture.p10.088.target"
+          function ping(): string { return marker.instanceId + "/" + marker.hostGroupId }
+        }
       }
     }
 
@@ -43,6 +68,51 @@ ShellRoot {
       id: fakeStateService
       readonly property var config: ({ widgets: ({}) })
       readonly property color selectedColor: "#88aaff"
+      property bool ready: true
+      property bool writePending: false
+      property int writeSerial: 0
+      property int writeCalls: 0
+      property int revision: 0
+      property var pendingPatch: null
+      signal persistenceSettled(int serial, string result)
+
+      function same(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+      function normalizedLayoutFamilyPatch(value) {
+        return value && value.v1Layout
+          ? JSON.parse(JSON.stringify(value)) : null
+      }
+      function layoutFamilySnapshot(value) {
+        return value && value.v1Layout ? { v1Layout: {
+          order: JSON.parse(JSON.stringify(test.order)),
+          splits: { left: [], center: [], right: [] }
+        } } : null
+      }
+      function setLayoutFamilyTransition(patch) {
+        if (writePending || !patch || !patch.v1Layout) return false
+        writeCalls++
+        pendingPatch = JSON.parse(JSON.stringify(patch))
+        writeSerial++
+        writePending = true
+        statePublishTimer.restart()
+        return true
+      }
+      function compensateLayoutFamilyTransition(_serial, _expected, _before) {
+        return false
+      }
+    }
+
+    Timer {
+      id: statePublishTimer
+      interval: 25
+      onTriggered: {
+        const patch = fakeStateService.pendingPatch
+        fakeStateService.pendingPatch = null
+        test.order = JSON.parse(JSON.stringify(patch.v1Layout.order))
+        fakeStateService.writePending = false
+        fakeStateService.revision++
+        fakeStateService.persistenceSettled(
+          fakeStateService.writeSerial, "confirmed")
+      }
     }
 
     QtObject {
@@ -57,10 +127,13 @@ ShellRoot {
 
       readonly property bool v2Mode: false
       property bool mutationBusy: false
+      property bool transferClaim: false
       property var order: test.order
       readonly property var v1Slots: order
 
       function groupLocation(groupId) {
+        if (groupId === "G:" + test.transferId && transferClaim)
+          return { region: "left", index: order.left.length, groupId: groupId }
         for (const region of ["left", "center", "right"]) {
           const index = order[region].indexOf(groupId)
           if (index >= 0) return { region: region, index: index, groupId: groupId }
@@ -107,6 +180,11 @@ ShellRoot {
       readonly property color background: "#181818"
       readonly property color urgent: "#88aaff"
       readonly property var shell: fakeShell
+      readonly property var pluginRegistry: test.scopedTransfer
+        ? ({ pluginId: "fixture" }) : null
+      readonly property var barWidgetRegistry: test.scopedTransfer ? ({ widgets: ({
+        [test.transferId]: { component: markerWidget,
+          metadata: { pluginId: test.transferId } } }) }) : null
       readonly property var visualTokens: ({
         groupGap: 6,
         splitGap: 16,
@@ -115,20 +193,25 @@ ShellRoot {
         pillRadius: 12,
         sumi: "#aaaaaa"
       })
-      readonly property var layoutConfig: ({
-        left: [{ id: "fixture.placed", shibumiModule: true }],
-        center: [], right: []
-      })
+      readonly property var layoutConfig: test.nativeLayout
+      readonly property var barConfig: ({ layout: test.nativeLayout })
       readonly property var layoutController: fakeController
+      readonly property var layoutStateController: fakeController
+      readonly property bool layoutTransitionBusy: layoutTransition.busy
+      readonly property var v1FamilySlotBindings: ({})
+      property var moduleSlots: []
       property var activePopout: null
 
       function entryId(entry) { return entry && entry.id ? String(entry.id) : "" }
       function entrySettings(entry) { return entry || ({}) }
+      function widgetAllowsMultiple(_id) { return false }
+      function isV1AdditionalSuiteWidget(_id) { return false }
       function registeredWidgetComponent(moduleName) {
         return fakeWidgetRegistry.componentFor(moduleName)
       }
-      function registerModuleSlot(slot) {}
-      function unregisterModuleSlot(slot) {}
+      // INJECT_BAR_PROJECTION
+      // INJECT_BAR_SLOT_REGISTRY
+      function showTooltip(owner, text) {}
       function hideTooltip(owner) {}
       function releasePopout(owner) {}
     }
@@ -143,7 +226,103 @@ ShellRoot {
       id: section
       bar: fakeBar
       region: "left"
+      screenName: test.transferScreen
       layoutSession: session
+    }
+
+    Core.BarSection {
+      id: transferDeck
+      bar: fakeBar
+      region: "left-extra"
+      screenName: test.transferScreen
+      entries: fakeBar.unassignedLayoutEntries("left", test.transferScreen)
+    }
+
+    QtObject {
+      id: failingState
+      property bool ready: true
+      property bool writePending: false
+      property int writeSerial: 0
+      property int writeCalls: 0
+      readonly property int revision: 0
+      signal persistenceSettled(int serial, string result)
+      function same(a, b) { return JSON.stringify(a) === JSON.stringify(b) }
+      function normalizedLayoutFamilyPatch(value) { return value }
+      function layoutFamilySnapshot(value) {
+        return value && value.v1Layout ? { v1Layout: {
+          order: JSON.parse(JSON.stringify(test.order)), splits: {
+            left: [], center: [], right: [] } } } : null
+      }
+      function setLayoutFamilyTransition(_patch) { writeCalls++; return false }
+      function compensateLayoutFamilyTransition(_serial, _expected, _before) {
+        return false
+      }
+    }
+
+    QtObject {
+      id: fakeNativeWriter
+      property var pendingLayout: null
+      function mutateShellConfig(mutator) {
+        const config = { bar: { layout: JSON.parse(JSON.stringify(test.nativeLayout)) } }
+        mutator(config)
+        pendingLayout = JSON.parse(JSON.stringify(config.bar.layout))
+        nativePublishTimer.restart()
+        return true
+      }
+    }
+
+    Timer {
+      id: nativePublishTimer
+      interval: 40
+      onTriggered: {
+        test.nativeLayout = fakeNativeWriter.pendingLayout
+        fakeNativeWriter.pendingLayout = null
+      }
+    }
+
+    Core.LayoutTransition {
+      id: layoutTransition
+      stateService: fakeStateService
+      nativeWriter: fakeNativeWriter
+      observedBarConfig: fakeBar.barConfig
+      planNativeLayout: test.planNativeLayout
+      admitted: true
+      onSettled: function(_serial, result) { test.transitionResult = result }
+    }
+
+    Core.LayoutTransition {
+      id: failedTransition
+      stateService: failingState
+      nativeWriter: fakeNativeWriter
+      observedBarConfig: fakeBar.barConfig
+      planNativeLayout: test.planNativeLayout
+      admitted: true
+      onSettled: function(_serial, result) { test.transitionResult = result }
+    }
+
+    Process {
+      id: pingProcess
+      command: ["/usr/bin/quickshell", "ipc", "--pid",
+        String(Quickshell.processId), "call", "--",
+        "fixture.p10.088.target", "ping"]
+      stdout: StdioCollector {
+        waitForEnd: true
+        onStreamFinished: test.pingOutput = String(text || "").trim()
+      }
+      onExited: function(code) {
+        Qt.callLater(function() { test.finishPing(code) })
+      }
+    }
+
+    Timer {
+      id: transferTimer
+      property int transferAttempts: 0
+      interval: 10
+      repeat: true
+      onTriggered: {
+        transferAttempts++
+        test.advanceTransfer()
+      }
     }
 
     Item {
@@ -158,6 +337,169 @@ ShellRoot {
         bar: fakeBar
         layoutSession: session
       }
+    }
+
+    function transferSlot(region) {
+      return fakeBar.moduleSlots.find(slot => slot
+        && slot.moduleName === transferId && slot.region === region
+        && slot.screenName === transferScreen) || null
+    }
+
+    function transferGroupPresent() {
+      return order.left.indexOf("G:" + transferId) >= 0
+    }
+
+    function transferNativePresent() {
+      return nativeLayout.left.some(entry => fakeBar.entryId(entry) === transferId)
+    }
+
+    function setTransferNativePresent(present) {
+      const next = JSON.parse(JSON.stringify(nativeLayout))
+      next.left = next.left.filter(entry => fakeBar.entryId(entry) !== transferId)
+      if (present) next.left.push({ id: transferId })
+      nativeLayout = next
+    }
+
+    function withoutTransferGroup() {
+      const next = JSON.parse(JSON.stringify(order))
+      next.left = next.left.filter(id => id !== "G:" + transferId)
+      return next
+    }
+
+    function catalogIntent(keepConfigured) {
+      return { kind: "catalog-layout", id: transferId, installed: false,
+        region: "left", removeIds: [transferId],
+        keepConfigured: keepConfigured === true, providerGroups: [] }
+    }
+
+    function planNativeLayout(layoutValue, intent) {
+      const next = JSON.parse(JSON.stringify(layoutValue))
+      for (const region of ["left", "center", "right"])
+        next[region] = next[region].filter(entry =>
+          intent.removeIds.indexOf(fakeBar.entryId(entry)) < 0)
+      if (intent.installed === true)
+        next[intent.region].push({ id: intent.id, shibumiModule: true })
+      else if (intent.keepConfigured === true)
+        next[intent.region].push({ id: intent.id })
+      return next
+    }
+
+    function requestTransfer(keepConfigured) {
+      transitionResult = ""
+      return layoutTransition.request({ v1Layout: {
+        order: withoutTransferGroup(),
+        splits: { left: [], center: [], right: [] }
+      } }, catalogIntent(keepConfigured))
+    }
+
+    function startPing(container, action) {
+      transferTimer.stop()
+      expectedPingContainer = container
+      pingNextAction = action
+      pingOutput = ""
+      pingProcess.running = true
+    }
+
+    function finishPing(code) {
+      if (code !== 0 || !pingOutput.endsWith("/" + expectedPingContainer))
+        return fail("private exact-PID ping failed for " + expectedPingContainer
+          + ": code=" + code + " output=" + pingOutput)
+      if (pingNextAction === "remove-group") {
+        transferStage = 1
+        if (!requestTransfer(false))
+          return fail("real native-removal transition was refused")
+      } else if (pingNextAction === "add-group") {
+        fakeController.transferClaim = true
+        transferStage = 4
+      } else if (pingNextAction === "state-failure") {
+        console.log("group transfer B passed")
+        transitionResult = ""
+        const accepted = failedTransition.request({ v1Layout: {
+          order: withoutTransferGroup(),
+          splits: { left: [], center: [], right: [] }
+        } }, catalogIntent(false))
+        if (accepted || failingState.writeCalls !== 1
+            || transitionResult !== "state-refused" || !transferGroupPresent()
+            || transferSlot("left-extra"))
+          return fail("failed State write did not retain the group")
+        console.log("failed State write retained grouped widget")
+        startPing("G:" + transferId, "keep-configured")
+        return
+      } else if (pingNextAction === "keep-configured") {
+        keepDeckInstance = 0
+        keepDeckInstances = 0
+        keepStableAttempts = 0
+        transferStage = 5
+        if (!requestTransfer(true))
+          return fail("keepConfigured transition was refused")
+      } else {
+        if (keepDeckInstances !== 1 || layoutTransition.busy
+            || transferGroupPresent() || !transferNativePresent())
+          return fail("keepConfigured deck did not settle exactly once")
+        console.log("keepConfigured deck appeared once after finish")
+        console.log("group interaction regression passed")
+        Qt.exit(0)
+        return
+      }
+      transferTimer.transferAttempts = 0
+      transferTimer.start()
+    }
+
+    function advanceTransfer() {
+      const groupSlot = transferSlot("G:" + transferId)
+      const deckSlot = transferSlot("left-extra")
+      if (transferStage === -2 && transferTimer.transferAttempts >= 2) {
+        setTransferNativePresent(true)
+        transferStage = 0
+      } else if (transferStage === 0 && groupSlot && groupSlot.loadedItem && !deckSlot) {
+        startPing("G:" + transferId, "remove-group")
+      } else if (transferStage === 1 && !layoutTransition.busy
+          && transitionResult === "confirmed" && !transferGroupPresent()
+          && !transferNativePresent() && !groupSlot && !deckSlot) {
+        console.log("group transfer A passed")
+        transferStage = 2
+      } else if (transferStage === 2 && !groupSlot && !deckSlot) {
+        setTransferNativePresent(true)
+        transferStage = 3
+      } else if (transferStage === 3 && deckSlot && deckSlot.loadedItem && !groupSlot) {
+        startPing("left-extra", "add-group")
+      } else if (transferStage === 4 && !groupSlot && !deckSlot) {
+        const nextOrder = JSON.parse(JSON.stringify(fakeController.order))
+        nextOrder.left.push("G:" + transferId)
+        order = nextOrder
+        fakeController.transferClaim = false
+      } else if (transferStage === 4 && groupSlot && groupSlot.loadedItem && !deckSlot) {
+        startPing("G:" + transferId, "state-failure")
+      } else if (transferStage === 5 && !layoutTransition.busy
+          && transitionResult === "confirmed" && !groupSlot
+          && deckSlot && deckSlot.loadedItem) {
+        const instance = Number(deckSlot.loadedItem.instanceId)
+        if (keepDeckInstance !== instance) {
+          keepDeckInstance = instance
+          keepDeckInstances++
+        }
+        if (keepDeckInstances !== 1)
+          return fail("keepConfigured created more than one deck instance")
+        keepStableAttempts++
+        if (keepStableAttempts >= 3) {
+          startPing("left-extra", "done")
+        }
+      } else if (transferTimer.transferAttempts > 150) {
+        fail("group transfer timed out at stage " + transferStage
+          + " busy=" + layoutTransition.busy + " result=" + transitionResult
+          + " order=" + JSON.stringify(fakeController.order) + " slots=" + fakeBar.moduleSlots.map(
+            slot => slot.moduleName + "/" + slot.region).join(","))
+      }
+    }
+
+    function startTransfer() {
+      transferTimer.transferAttempts = 0
+      transferStage = -2
+      const nextOrder = JSON.parse(JSON.stringify(fakeController.order))
+      nextOrder.left.push("G:" + transferId)
+      order = nextOrder
+      fakeController.order = Qt.binding(function() { return test.order })
+      transferTimer.start()
     }
 
     function fail(message) {
@@ -193,8 +535,7 @@ ShellRoot {
         return
       }
 
-      console.log("group interaction regression passed")
-      Qt.exit(0)
+      Qt.callLater(startTransfer)
     }
 
     function widgetSlotFor(groupId) {

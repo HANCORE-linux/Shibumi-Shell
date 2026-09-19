@@ -1353,15 +1353,19 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   smoke_root=$(mktemp -d)
   trap 'rm -rf -- "$smoke_root"' EXIT
   mkdir -p "$smoke_root/adapters" "$smoke_root/core" "$smoke_root/services" \
-    "$smoke_root/styles/shibumi" "$smoke_root/widgets" "$smoke_root/runtime"
-  chmod 700 "$smoke_root/runtime"
+    "$smoke_root/styles/shibumi" "$smoke_root/widgets" \
+    "$smoke_root"/{home,config,cache,data,state,runtime,tmp,bin}
+  chmod 700 "$smoke_root"/{home,config,cache,data,state,runtime,tmp}
+  printf '#!/bin/sh\nexit 97\n' > "$smoke_root/bin/hyprctl"
+  printf '#!/bin/sh\nexit 97\n' > "$smoke_root/bin/fc-match"
+  chmod 700 "$smoke_root/bin"/{hyprctl,fc-match}
   cp -a "${OMARCHY_PATH}/shell/Commons" "$smoke_root/"
   cp -a "${OMARCHY_PATH}/shell/Ui" "$smoke_root/"
   cp widgets/ShibumiPanel.qml \
     hancore.shibumi.state/lib/presentation/PillSurface.qml \
     "$smoke_root/widgets/"
   cp hancore.shibumi.bar/core/BarSection.qml hancore.shibumi.bar/core/GroupRegistry.js hancore.shibumi.bar/core/GroupSlot.qml \
-    hancore.shibumi.bar/core/LayoutController.qml hancore.shibumi.bar/core/LayoutModel.js hancore.shibumi.bar/core/V2LayoutModel.js \
+    hancore.shibumi.bar/core/LayoutController.qml hancore.shibumi.bar/core/LayoutModel.js hancore.shibumi.bar/core/LayoutTransition.qml hancore.shibumi.bar/core/V2LayoutModel.js \
     hancore.shibumi.bar/core/PanelRouting.js \
     hancore.shibumi.bar/core/ResponsiveLayout.js hancore.shibumi.bar/core/RunGeometry.js \
     hancore.shibumi.bar/core/WidgetSlot.qml "$smoke_root/core/"
@@ -1385,12 +1389,41 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   grep -q 'group renderer regression passed' <<<"$group_renderer_output" \
     || fail "group renderer smoke did not reach its marker"
 
-  cp tests/group-interaction-regression.qml "$smoke_root/shell.qml"
+  python3 - "$repo_root" "$smoke_root/shell.qml" <<'PY'
+import sys
+from pathlib import Path
+repo, target = Path(sys.argv[1]), Path(sys.argv[2])
+bar = (repo / "hancore.shibumi.bar/Bar.qml").read_text()
+fixture = (repo / "tests/group-interaction-regression.qml").read_text()
+def fragment(start, end):
+    if bar.count(start) != 1 or bar.count(end) != 1:
+        raise SystemExit("Bar projection extraction anchor drifted")
+    return bar[bar.index(start):bar.index(end)].rstrip()
+replacements = {
+    "      // INJECT_BAR_PROJECTION": fragment(
+        "  function deduplicatedUnassignedEntries(",
+        "  function pluginSpecsForLayout("),
+    "      // INJECT_BAR_SLOT_REGISTRY": fragment(
+        "  function registerModuleSlot(", "  function registerClickTarget("),
+}
+for marker, source in replacements.items():
+    if fixture.count(marker) != 1:
+        raise SystemExit("group interaction injection marker drifted")
+    fixture = fixture.replace(marker, source)
+target.write_text(fixture)
+PY
 
   set +e
-  group_interaction_output=$(timeout 5 env \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
+  group_interaction_output=$(timeout 8 env \
+    -u DISPLAY -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u QS_CONFIG_PATH \
+    HOME="$smoke_root/home" XDG_CONFIG_HOME="$smoke_root/config" \
+    XDG_CACHE_HOME="$smoke_root/cache" XDG_DATA_HOME="$smoke_root/data" \
+    XDG_STATE_HOME="$smoke_root/state" XDG_RUNTIME_DIR="$smoke_root/runtime" \
+    TMPDIR="$smoke_root/tmp" PATH="$smoke_root/bin:/usr/bin" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$smoke_root/runtime/no-session-bus" \
+    DBUS_SYSTEM_BUS_ADDRESS="unix:path=$smoke_root/runtime/no-system-bus" \
+    QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
+    QT_QUICK_BACKEND=software QSG_RHI_BACKEND=software QT_OPENGL=software \
     /usr/bin/quickshell -p "$smoke_root" 2>&1)
   group_interaction_rc=$?
   set -e
@@ -1399,6 +1432,22 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     || fail "group interaction smoke exited $group_interaction_rc"
   grep -q 'group interaction regression passed' <<<"$group_interaction_output" \
     || fail "group interaction smoke did not reach its marker"
+  for transfer_marker in 'group transfer A passed' 'group transfer B passed' \
+      'failed State write retained grouped widget' \
+      'keepConfigured deck appeared once after finish'; do
+    grep -q "$transfer_marker" <<<"$group_interaction_output" \
+      || fail "group interaction smoke missed: $transfer_marker"
+  done
+  if grep -Fq 'another handler is registered for target fixture.p10.088.target' \
+      <<<"$group_interaction_output"; then
+    fail "group interaction smoke overlapped group/deck IPC owners"
+  fi
+  [[ $(grep -Fc 'removing.indexOf(id) >= 0' "$smoke_root/shell.qml") -eq 2 ]] \
+    || fail "pending removeIds projection is missing from a V1/V2 branch"
+  grep -Fq 'const removeIds = installed === true' hancore.shibumi.bar/Bar.qml \
+    && grep -Fq '? conflictingLayoutProviderIds(id) : [id]' \
+      hancore.shibumi.bar/Bar.qml \
+    || fail "activation no longer projects displaced provider removeIds"
 
   cp tests/v1-slot-interaction-regression.qml "$smoke_root/shell.qml"
 
