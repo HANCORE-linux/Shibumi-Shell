@@ -258,9 +258,11 @@ rg -Fq 'function submitLoaderSource(candidate)' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
   && rg -Fq 'const nextSource = slotComplete && moduleEnabled ? candidate : null' \
     hancore.shibumi.bar/core/WidgetSlot.qml \
-  && rg -Fq 'submitLoaderSource(resolvedComponent)' \
+  && rg -Fq '!("claimLoadedOwner" in bar) || bar.widgetSlotLoadAdmitted(root)' \
     hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "widget slots must submit the resolved component through the controlled setter"
+  && rg -Fq '? resolvedComponent : null)' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "widget slots must gate controlled source submission with a legacy fallback"
 rg -q 'active: root\.slotComplete && root\.moduleEnabled' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
   && rg -q 'root\._submission\.source !== null' \
@@ -1351,7 +1353,108 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     | tr -d '"' | sort -u)
 
   smoke_root=$(mktemp -d)
-  trap 'rm -rf -- "$smoke_root"' EXIT
+  fixture_group_pid=
+  fixture_group_pgid=
+  fixture_parent_pgid=$(ps -o pgid= -p "$BASHPID" | tr -d ' ')
+  [[ $fixture_parent_pgid =~ ^[0-9]+$ ]] \
+    || fail "could not identify the contract runner process group"
+  fixture_pid_alive() {
+    [[ -n $fixture_group_pid ]] && kill -0 -- "$fixture_group_pid" 2>/dev/null
+  }
+  fixture_group_alive() {
+    [[ -n $fixture_group_pid \
+      && $fixture_group_pgid == "$fixture_group_pid" \
+      && $fixture_group_pgid != "$fixture_parent_pgid" ]] \
+      && kill -0 -- "-$fixture_group_pgid" 2>/dev/null
+  }
+  signal_fixture_group() {
+    local signal
+    signal=$1
+    [[ -n $fixture_group_pid \
+      && $fixture_group_pgid == "$fixture_group_pid" \
+      && $fixture_group_pgid != "$fixture_parent_pgid" ]] \
+      || return 1
+    kill -s "$signal" -- "-$fixture_group_pgid" 2>/dev/null
+  }
+  stop_fixture_group() {
+    local group_term_sent
+    group_term_sent=false
+    [[ -n $fixture_group_pid && $fixture_group_pgid == "$fixture_group_pid" ]] || return 0
+    if ! fixture_group_alive && fixture_pid_alive; then
+      kill -TERM -- "$fixture_group_pid" 2>/dev/null || true
+    fi
+    if fixture_group_alive; then
+      signal_fixture_group TERM || true
+      group_term_sent=true
+    fi
+    for _ in {1..20}; do
+      if fixture_group_alive; then
+        if [[ $group_term_sent == false ]]; then
+          signal_fixture_group TERM || true
+          group_term_sent=true
+        fi
+      elif ! fixture_pid_alive; then
+        break
+      fi
+      sleep 0.05
+    done
+    fixture_pid_alive && kill -KILL -- "$fixture_group_pid" 2>/dev/null || true
+    fixture_group_alive && signal_fixture_group KILL || true
+    for _ in {1..20}; do fixture_group_alive || break; sleep 0.05; done
+    wait "$fixture_group_pid" 2>/dev/null || true
+    ! fixture_group_alive
+  }
+  cleanup_smoke() {
+    if ! stop_fixture_group; then
+      printf 'contract regression failed: fixture group survived signal cleanup\n' >&2
+      return 1
+    fi
+    rm -rf -- "$smoke_root"
+  }
+  trap cleanup_smoke EXIT
+  trap 'cleanup_smoke || exit 125; exit 130' HUP INT TERM
+  run_isolated_fixture() {
+    local ticks output_file pgid rc i
+    ticks=$1
+    output_file=$2
+    pgid=
+    rc=0
+    shift 2
+    : >"$output_file"
+    setsid "$@" >"$output_file" 2>&1 &
+    fixture_group_pid=$! fixture_group_pgid=$!
+    for _ in {1..50}; do
+      pgid=$(ps -o pgid= -p "$fixture_group_pid" 2>/dev/null | tr -d ' ') || true
+      [[ -n $pgid || ! -e /proc/$fixture_group_pid ]] && break
+      sleep 0.01
+    done
+    if [[ -z $pgid && ! -e /proc/$fixture_group_pid ]]; then
+      set +e; wait "$fixture_group_pid"; rc=$?; set -e
+      stop_fixture_group || fail "fixture group survived early leader exit"
+      fixture_group_pid=
+      fixture_group_pgid=
+      return "$rc"
+    fi
+    if [[ $pgid != "$fixture_group_pgid" ]]; then
+      stop_fixture_group || fail "fixture group survived invalid ownership cleanup"
+      fixture_group_pid=
+      fixture_group_pgid=
+      fail "fixture did not own its process group"
+    fi
+    for ((i=0; i<ticks; i++)); do
+      fixture_group_alive || break
+      sleep 0.1
+    done
+    if fixture_group_alive; then
+      stop_fixture_group || fail "fixture process group survived TERM/KILL cleanup"
+      rc=124
+    else
+      set +e; wait "$fixture_group_pid"; rc=$?; set -e
+    fi
+    fixture_group_pid=
+    fixture_group_pgid=
+    return "$rc"
+  }
   mkdir -p "$smoke_root/adapters" "$smoke_root/core" "$smoke_root/services" \
     "$smoke_root/styles/shibumi" "$smoke_root/widgets" \
     "$smoke_root"/{home,config,cache,data,state,runtime,tmp,bin}
@@ -1375,19 +1478,158 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
     hancore.shibumi.bar/styles/shibumi/VisualTokens.qml hancore.shibumi.bar/styles/shibumi/GapEffectsLayer.qml \
     hancore.shibumi.bar/styles/shibumi/ReactorEventLayer.qml \
     "$smoke_root/styles/shibumi/"
-  cp tests/group-renderer-regression.qml "$smoke_root/shell.qml"
+  python3 - "$repo_root" "$smoke_root/shell.qml" <<'PY'
+import sys
+from pathlib import Path
+repo, target = Path(sys.argv[1]), Path(sys.argv[2])
+bar = (repo / "hancore.shibumi.bar/Bar.qml").read_text()
+fixture = (repo / "tests/group-renderer-regression.qml").read_text()
+declaration_start = "  property var loadedOwners: []"
+declaration_end = "  property var clickTargets: []"
+function_start = "  function widgetSlotLoadAdmitted("
+function_end = "  function registerClickTarget("
+declaration_markers = [
+    "      // INJECT_BAR_LOADED_OWNER_DECLARATIONS",
+    "        // INJECT_TEARDOWN_BAR_LOADED_OWNER_DECLARATIONS",
+]
+function_markers = [
+    "      // INJECT_BAR_LOADED_OWNER_FUNCTIONS",
+    "        // INJECT_TEARDOWN_BAR_LOADED_OWNER_FUNCTIONS",
+]
+if any(fixture.count(marker) != 1
+        for marker in declaration_markers + function_markers):
+    raise SystemExit("loaded-owner fixture injection marker drifted")
+has_ownership = declaration_start in bar or function_start in bar
+if has_ownership:
+    if any(bar.count(anchor) != 1 for anchor in (declaration_start,
+            declaration_end, function_start, function_end)):
+        raise SystemExit("loaded-owner projection extraction anchor drifted")
+    declarations = bar[bar.index(declaration_start):bar.index(declaration_end)].rstrip()
+    functions = bar[bar.index(function_start):bar.index(function_end)].rstrip()
+else:
+    declarations = "  property var loadedOwners: []"
+    functions = ""
+for marker in declaration_markers:
+    fixture = fixture.replace(marker, declarations)
+for marker in function_markers:
+    fixture = fixture.replace(marker, functions)
+target.write_text(fixture)
+PY
+
+  early_child_file="$smoke_root/early-child.pid"
+  set +e
+  (
+    trap - EXIT HUP INT TERM
+    ps() { sleep 0.1; command ps "$@"; }
+    run_isolated_fixture 10 "$smoke_root/early-leader.log" \
+      /bin/sh -c '/bin/sh -c '\''sleep 30'\'' & echo $! >"$1"; exit 23' \
+      fixture "$early_child_file"
+  )
+  early_leader_rc=$?
+  set -e
+  [[ $early_leader_rc -eq 23 ]] \
+    || fail "early fixture leader exit did not preserve status 23"
+  early_child_pid=$(<"$early_child_file")
+  [[ $early_child_pid =~ ^[0-9]+$ ]] \
+    || fail "early fixture leader did not publish its child PID"
+  for _ in {1..20}; do
+    kill -0 "$early_child_pid" 2>/dev/null || break
+    sleep 0.05
+  done
+  kill -0 "$early_child_pid" 2>/dev/null \
+    && fail "early fixture leader left a living process-group child"
+
+  startup_leader_file="$smoke_root/startup-leader.pid"
+  startup_child_file="$smoke_root/startup-child.pid"
+  set +e
+  (
+    trap - EXIT HUP INT
+    trap 'stop_fixture_group || exit 125; exit 130' TERM
+    startup_signal_target=$BASHPID
+    ps() { sleep 0.2; command ps "$@"; }
+    run_isolated_fixture 10 "$smoke_root/startup-signal.log" \
+      /bin/sh -c 'trap "" TERM; echo $$ >"$1"; /bin/sh -c '\''trap "" TERM; sleep 30'\'' & echo $! >"$2"; kill -TERM "$3"; wait' \
+      fixture "$startup_leader_file" "$startup_child_file" "$startup_signal_target"
+  )
+  startup_signal_rc=$?
+  set -e
+  [[ $startup_signal_rc -eq 130 ]] \
+    || fail "startup signal cleanup exited $startup_signal_rc instead of 130"
+  startup_leader_pid=$(<"$startup_leader_file")
+  startup_child_pid=$(<"$startup_child_file")
+  [[ $startup_leader_pid =~ ^[0-9]+$ && $startup_child_pid =~ ^[0-9]+$ ]] \
+    || fail "startup signal fixture did not publish exact owned PIDs"
+  [[ $startup_leader_pid != "$fixture_parent_pgid" ]] \
+    || fail "startup fixture unexpectedly matched the contract runner process group"
+  for _ in {1..20}; do
+    if ! kill -0 -- "-$startup_leader_pid" 2>/dev/null \
+        && ! kill -0 -- "$startup_child_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.05
+  done
+  kill -0 -- "-$startup_leader_pid" 2>/dev/null \
+    && fail "startup signal left the exact owned fixture group alive"
+  kill -0 -- "$startup_child_pid" 2>/dev/null \
+    && fail "startup signal left the exact owned fixture child alive"
+
+  ipc_child_file="$smoke_root/ipc-child.pid"
+  set +e
+  run_isolated_fixture 10 "$smoke_root/hanging-ipc.log" \
+    /bin/sh -c 'trap "" TERM; /bin/sh -c '\''trap "" TERM; sleep 30'\'' & echo $! >"$1"; wait' \
+    fixture "$ipc_child_file"
+  hanging_ipc_rc=$?
+  set -e
+  [[ $hanging_ipc_rc -eq 124 ]] \
+    || fail "controlled hanging IPC child did not exercise timeout cleanup"
+  ipc_child_pid=$(<"$ipc_child_file")
+  [[ $ipc_child_pid =~ ^[0-9]+$ ]] || fail "hanging IPC child did not publish its PID"
+  kill -0 "$ipc_child_pid" 2>/dev/null \
+    && fail "controlled hanging IPC child survived process-group cleanup"
 
   set +e
-  group_renderer_output=$(timeout 5 env \
-    QT_QPA_PLATFORM=offscreen \
-    XDG_RUNTIME_DIR="$smoke_root/runtime" \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
+  run_isolated_fixture 50 "$smoke_root/group-renderer.log" env \
+    -u DISPLAY -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u QS_CONFIG_PATH \
+    HOME="$smoke_root/home" XDG_CONFIG_HOME="$smoke_root/config" \
+    XDG_CACHE_HOME="$smoke_root/cache" XDG_DATA_HOME="$smoke_root/data" \
+    XDG_STATE_HOME="$smoke_root/state" XDG_RUNTIME_DIR="$smoke_root/runtime" \
+    TMPDIR="$smoke_root/tmp" PATH="$smoke_root/bin:/usr/bin" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$smoke_root/runtime/no-session-bus" \
+    DBUS_SYSTEM_BUS_ADDRESS="unix:path=$smoke_root/runtime/no-system-bus" \
+    QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
+    QT_QUICK_BACKEND=software QSG_RHI_BACKEND=software QT_OPENGL=software \
+    /usr/bin/quickshell -p "$smoke_root"
   group_renderer_rc=$?
   set -e
+  group_renderer_output=$(<"$smoke_root/group-renderer.log")
   printf '%s\n' "$group_renderer_output"
-  [[ $group_renderer_rc -eq 0 ]] || fail "group renderer smoke exited $group_renderer_rc"
+  group_renderer_failures=()
+  [[ $group_renderer_rc -eq 0 ]] \
+    || group_renderer_failures+=("exited $group_renderer_rc")
   grep -q 'group renderer regression passed' <<<"$group_renderer_output" \
-    || fail "group renderer smoke did not reach its marker"
+    || group_renderer_failures+=("did not reach its marker")
+  grep -q 'P10_106_PRIVATE_IPC' <<<"$group_renderer_output" \
+    || group_renderer_failures+=("did not verify private IPC routing")
+  grep -q 'P10_106_ACTUAL_BAR_TEARDOWN' <<<"$group_renderer_output" \
+    || group_renderer_failures+=("did not destroy the actual Bar fixture owner")
+  grep -q 'QQmlInvalidContext' <<<"$group_renderer_output" \
+    && group_renderer_failures+=("used an invalid QML context during Bar teardown")
+  grep -q 'owner sentinel changed .* item geometry' <<<"$group_renderer_output" \
+    && group_renderer_failures+=("owner sentinel changed foreign geometry")
+  grep -Fq 'another handler is registered for target fixture.shibumi.106.native-owner' \
+    <<<"$group_renderer_output" \
+    && group_renderer_failures+=("overlapped native IPC handlers")
+  if ! python3 -c 'import re,sys
+lines=sys.stdin.read().splitlines(); events=[]
+for line in lines:
+ m=re.search(r"P10_106_(IPC_QML_DESTRUCTION|SENTINEL_DESTRUCTION) ([0-9]+)",line)
+ if m and int(m.group(2)) <= 3: events.append((m.group(1),int(m.group(2))))
+expected=[x for n in range(1,4) for x in [("IPC_QML_DESTRUCTION",n),("SENTINEL_DESTRUCTION",n)]]
+sys.exit(events != expected)' <<<"$group_renderer_output"; then
+    group_renderer_failures+=("did not preserve handler-to-sentinel destruction ordering three times")
+  fi
+  ((${#group_renderer_failures[@]} == 0)) \
+    || fail "group renderer smoke: ${group_renderer_failures[*]}"
 
   python3 - "$repo_root" "$smoke_root/shell.qml" <<'PY'
 import sys
@@ -1400,6 +1642,9 @@ def fragment(start, end):
         raise SystemExit("Bar projection extraction anchor drifted")
     return bar[bar.index(start):bar.index(end)].rstrip()
 replacements = {
+    "      // INJECT_BAR_LOADED_OWNER_DECLARATIONS": fragment(
+        "  property var loadedOwners: []",
+        "  property var clickTargets: []"),
     "      // INJECT_BAR_PROJECTION": fragment(
         "  function deduplicatedUnassignedEntries(",
         "  function pluginSpecsForLayout("),
@@ -1414,7 +1659,7 @@ target.write_text(fixture)
 PY
 
   set +e
-  group_interaction_output=$(timeout 8 env \
+  run_isolated_fixture 80 "$smoke_root/group-interaction.log" env \
     -u DISPLAY -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u QS_CONFIG_PATH \
     HOME="$smoke_root/home" XDG_CONFIG_HOME="$smoke_root/config" \
     XDG_CACHE_HOME="$smoke_root/cache" XDG_DATA_HOME="$smoke_root/data" \
@@ -1424,19 +1669,19 @@ PY
     DBUS_SYSTEM_BUS_ADDRESS="unix:path=$smoke_root/runtime/no-system-bus" \
     QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
     QT_QUICK_BACKEND=software QSG_RHI_BACKEND=software QT_OPENGL=software \
-    /usr/bin/quickshell -p "$smoke_root" 2>&1)
+    /usr/bin/quickshell -p "$smoke_root"
   group_interaction_rc=$?
   set -e
+  group_interaction_output=$(<"$smoke_root/group-interaction.log")
   printf '%s\n' "$group_interaction_output"
   [[ $group_interaction_rc -eq 0 ]] \
     || fail "group interaction smoke exited $group_interaction_rc"
-  grep -q 'group interaction regression passed' <<<"$group_interaction_output" \
-    || fail "group interaction smoke did not reach its marker"
-  for transfer_marker in 'group transfer A passed' 'group transfer B passed' \
+  for transfer_marker in 'group interaction regression passed' \
+      'group transfer A passed' 'group transfer B passed' \
       'failed State write retained grouped widget' \
       'keepConfigured deck appeared once after finish'; do
-    grep -q "$transfer_marker" <<<"$group_interaction_output" \
-      || fail "group interaction smoke missed: $transfer_marker"
+    [[ $(grep -Fc "$transfer_marker" <<<"$group_interaction_output") -eq 1 ]] \
+      || fail "group interaction smoke did not reach exactly one: $transfer_marker"
   done
   if grep -Fq 'another handler is registered for target fixture.p10.088.target' \
       <<<"$group_interaction_output"; then

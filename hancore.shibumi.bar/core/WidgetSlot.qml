@@ -453,7 +453,7 @@ Item {
   }
 
   function synchronizeLoaderSource() {
-    submitLoaderSource(resolvedComponent)
+    submitLoaderSource(!("claimLoadedOwner" in bar) || bar.widgetSlotLoadAdmitted(root) ? resolvedComponent : null)
   }
 
   function requestLoaderSourceSync() {
@@ -953,7 +953,10 @@ Item {
     // evaluated. Defer that cache refresh to keep the fallback acyclic.
     function onRevisionChanged() { resolverRefresh.restart() }
   }
-
+  Connections {
+    target: "claimLoadedOwner" in root.bar ? root.bar : null
+    function onLoadedOwnersChanged() { root.requestLoaderSourceSync() }
+  }
   Timer {
     id: scopedLoaderSync
 
@@ -1104,6 +1107,8 @@ Item {
             && typeof root.bar.noteHostWidgetResolution === "function") {
           root.bar.noteHostWidgetResolution(root, true)
         }
+        if ("claimLoadedOwner" in root.bar && !root.bar.claimLoadedOwner(
+            root, completedItem)) root.requestLoaderSourceSync()
       }
       deferredSync.restart()
     }

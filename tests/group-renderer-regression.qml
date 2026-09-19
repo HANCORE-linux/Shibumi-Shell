@@ -1,16 +1,114 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "core" as Core
 import "styles/shibumi" as ShibumiStyle
 import "widgets" as Widgets
 
 ShellRoot {
+  id: fixtureRoot
+
   Item {
     id: test
 
     width: 1200
     height: 180
     property int narrowStage: 0
+    readonly property string nativeOwnerId: "fixture.shibumi.106.owner"
+    readonly property string outputOwnershipId: "fixture.shibumi.106.output"
+    readonly property string multipleOwnershipId: "fixture.shibumi.106.multiple"
+    readonly property string peerOwnershipId: "fixture.shibumi.106.peer"
+    readonly property string abandonedOwnershipId: "fixture.shibumi.106.abandoned"
+    property int nativeAlive: 0
+    property int nativeSerial: 0
+    property var nativeLoadOverlaps: []
+    property var nativeIpcDestructions: []
+    property var observedLoadedOwners: []
+    property int nativePingExpected: 0
+    property string nativePingOutput: ""
+    property int nativePingExit: -1
+    property bool nativePingReady: false
+    property bool peerOwnerEnabled: true
+    property var peerSentinel: null
+    property bool abandonedOwnerEnabled: true
+    property bool abandonedWaiterPresent: true
+
+    Component {
+      id: nativeOwnerWidget
+
+      Item {
+        id: nativeOwner
+
+        property var bar: null
+        property string moduleName: ""
+        property var settings: ({})
+        property real availableWidth: -1
+        property int instanceSerial: 0
+        implicitWidth: 18
+        implicitHeight: 12
+
+        Item {
+          x: 10
+          width: 10
+          height: 1
+        }
+
+        IpcHandler {
+          enabled: nativeOwner.moduleName === test.nativeOwnerId
+          target: "fixture.shibumi.106.native-owner"
+          function ping(): string { return String(nativeOwner.instanceSerial) }
+          Component.onDestruction: {
+            test.nativeIpcDestructions = test.nativeIpcDestructions.concat(
+              [nativeOwner.instanceSerial])
+            console.log("P10_106_IPC_QML_DESTRUCTION",
+              nativeOwner.instanceSerial)
+          }
+        }
+
+        onModuleNameChanged: {
+          if (moduleName !== test.nativeOwnerId || instanceSerial !== 0) return
+          instanceSerial = ++test.nativeSerial
+          const overlap = test.nativeAlive > 0
+          test.nativeAlive++
+          test.nativeLoadOverlaps = test.nativeLoadOverlaps.concat([overlap])
+          console.log("P10_106_LOAD", instanceSerial,
+            "item=" + String(nativeOwner), "alive=" + test.nativeAlive,
+            "overlap=" + overlap)
+        }
+        Component.onDestruction: {
+          if (instanceSerial === 0) return
+          console.log("P10_106_ITEM_QML_DESTRUCTION", instanceSerial)
+          test.nativeAlive--
+        }
+      }
+    }
+
+    Component {
+      id: actualBarFixture
+
+      Item {
+        id: root
+        property bool teardownClaimed: false
+        // INJECT_TEARDOWN_BAR_LOADED_OWNER_DECLARATIONS
+
+        Item {
+          id: teardownSlot
+          property string moduleName: test.peerOwnershipId
+          property string screenName: "DP-1"
+        }
+
+        Item { id: teardownItem }
+
+        function widgetAllowsMultiple(_moduleName) { return false }
+        // INJECT_TEARDOWN_BAR_LOADED_OWNER_FUNCTIONS
+
+        Component.onCompleted: {
+          teardownClaimed = claimLoadedOwner(teardownSlot, teardownItem)
+          if (!teardownClaimed || loadedOwners.length !== 1)
+            test.fail("actual Bar fixture did not claim its loaded owner")
+        }
+      }
+    }
 
     Component {
       id: markerWidget
@@ -538,6 +636,161 @@ ShellRoot {
     }
 
     QtObject {
+      id: ownershipStateService
+
+      property int revision: 0
+      property var config: ({
+        presentation: ({ shellStyle: "shibumi" }),
+        widgets: ({}),
+        order: ({
+          left: ["G1", "G2", "G3", "G4", "G5", "G6", "G7",
+            "G:" + test.nativeOwnerId],
+          center: ["G8"],
+          right: ["G9", "G10", "G11", "G14", "G12", "G13", "G15", ""]
+        }),
+        splits: ({
+          left: [false, false, false, false, false, false, false],
+          center: [], boundaries: [false, false],
+          right: [false, false, false, false, false, false, false]
+        }),
+        v2Layout: ({
+          left: ["G1", "G2", "G3", "", "G5", "G6", "G4", "G7", "", ""],
+          center: ["G8"],
+          right: ["G9", "G10", "G11", "G14", "G12", "G13", "G16",
+            "G18", "G17", "G15", "", "G:" + test.nativeOwnerId, ""]
+        })
+      })
+      readonly property color selectedColor: "#88aaff"
+
+      function setStyle(style) {
+        const next = JSON.parse(JSON.stringify(config))
+        next.presentation.shellStyle = style
+        config = next
+        revision++
+      }
+
+      function moveV1OwnerRight() {
+        const next = JSON.parse(JSON.stringify(config))
+        next.order.right[7] = next.order.left[7]
+        next.order.left[7] = ""
+        config = next
+        revision++
+      }
+    }
+
+    QtObject {
+      id: ownershipShell
+      function serviceFor(pluginId) {
+        return pluginId === "hancore.shibumi.state"
+          ? ownershipStateService : null
+      }
+    }
+
+    Core.LayoutController {
+      id: ownershipController
+      bar: root
+      stateService: ownershipStateService
+    }
+
+    Connections {
+      target: root
+      function onLoadedOwnersChanged() {
+        const previous = test.observedLoadedOwners.find(
+          owner => owner.objectName === test.nativeOwnerId)
+        const current = root.loadedOwners.find(
+          owner => owner.objectName === test.nativeOwnerId)
+        if (previous && !current && nativeOwnershipProbe.running) {
+          const serial = test.nativeIpcDestructions.length > 0
+            ? test.nativeIpcDestructions[test.nativeIpcDestructions.length - 1] : 0
+          console.log("P10_106_SENTINEL_DESTRUCTION", serial)
+          if (serial === 0)
+            test.fail("owner sentinel died before its native IPC handler")
+        }
+        test.observedLoadedOwners = root.loadedOwners.slice()
+      }
+    }
+
+    QtObject {
+      id: root
+
+      readonly property bool vertical: false
+      readonly property int barSize: ownershipController.v2Mode ? 33 : 35
+      readonly property bool transparent: false
+      readonly property bool barHidden: false
+      readonly property string position: "top"
+      readonly property string fontFamily: "monospace"
+      readonly property color foreground: noSplitBar.foreground
+      readonly property color barForeground: noSplitBar.foreground
+      readonly property color background: noSplitBar.background
+      readonly property color urgent: noSplitBar.urgent
+      readonly property bool foregroundAnimationEnabled: false
+      readonly property var shell: ownershipShell
+      readonly property var visualTokens: ownershipController.v2Mode
+        ? v2SplitBar.visualTokens : noSplitBar.visualTokens
+      readonly property var layoutConfig: ({
+        left: [
+          { id: test.nativeOwnerId },
+          { id: test.outputOwnershipId },
+          { id: test.multipleOwnershipId },
+          { id: test.peerOwnershipId },
+          { id: test.abandonedOwnershipId }
+        ], center: [], right: []
+      })
+      readonly property var layoutController: ownershipController
+      readonly property var pluginRegistry: ({ pluginId: "fixture" })
+      readonly property var barWidgetRegistry: ({ widgets: ({
+        [test.nativeOwnerId]: {
+          component: nativeOwnerWidget,
+          metadata: { pluginId: test.nativeOwnerId, allowMultiple: false }
+        },
+        [test.outputOwnershipId]: {
+          component: markerWidget,
+          metadata: { pluginId: test.outputOwnershipId, allowMultiple: false }
+        },
+        [test.multipleOwnershipId]: {
+          component: markerWidget,
+          metadata: { pluginId: test.multipleOwnershipId, allowMultiple: true }
+        },
+        [test.peerOwnershipId]: {
+          component: markerWidget,
+          metadata: { pluginId: test.peerOwnershipId, allowMultiple: false }
+        },
+        [test.abandonedOwnershipId]: {
+          component: markerWidget,
+          metadata: { pluginId: test.abandonedOwnershipId, allowMultiple: false }
+        }
+      }) })
+      readonly property var v1FamilySlotBindings: ({})
+      property var activePopout: null
+      property var pendingTooltipTarget: null
+      property var tooltipTarget: null
+      property var moduleSlots: []
+      // INJECT_BAR_LOADED_OWNER_DECLARATIONS
+
+      function entryId(entry) { return noSplitBar.entryId(entry) }
+      function entrySettings(entry) { return noSplitBar.entrySettings(entry) }
+      function registeredWidgetComponent(moduleName) {
+        const source = barWidgetRegistry.widgets[moduleName]
+        return source ? source.component : null
+      }
+      function widgetAllowsMultiple(moduleName) {
+        const source = barWidgetRegistry.widgets[moduleName]
+        return !!(source && source.metadata.allowMultiple)
+      }
+      function registerModuleSlot(slot) {
+        if (moduleSlots.indexOf(slot) < 0) moduleSlots = moduleSlots.concat([slot])
+      }
+      function unregisterModuleSlot(slot) {
+        moduleSlots = moduleSlots.filter(item => item !== slot)
+      }
+      // INJECT_BAR_LOADED_OWNER_FUNCTIONS
+      function showTooltip(_owner, _text) {}
+      function hideTooltip(_owner) {}
+      function releasePopout(_owner) {}
+      function unassignedLayoutEntries(_region) { return [] }
+    }
+
+    QtObject {
       id: v2SplitBar
 
       readonly property bool vertical: false
@@ -958,6 +1211,98 @@ ShellRoot {
       height: noSplitBar.barSize
     }
 
+    Loader {
+      id: actualBarFixtureLoader
+
+      property bool teardownStarted: false
+      active: false
+      sourceComponent: actualBarFixture
+      onLoaded: {
+        if (!item.teardownClaimed)
+          return test.fail("actual Bar fixture owner was not ready")
+        Qt.callLater(function() { actualBarFixtureLoader.active = false })
+      }
+      onItemChanged: {
+        if (!teardownStarted || item !== null) return
+        Qt.callLater(function() {
+          console.log("P10_106_ACTUAL_BAR_TEARDOWN")
+          console.log("group renderer regression passed")
+          Qt.exit(0)
+        })
+      }
+    }
+
+    ShibumiStyle.BarSurface {
+      id: ownershipSurface
+      bar: root
+      screenName: "DP-1"
+      width: 1200
+      height: root.barSize
+    }
+
+    Core.WidgetSlot {
+      id: outputOwnerA
+      bar: root
+      entry: ({ id: test.outputOwnershipId })
+      screenName: "DP-1"
+    }
+
+    Core.WidgetSlot {
+      id: outputOwnerB
+      bar: root
+      entry: ({ id: test.outputOwnershipId })
+      screenName: "HDMI-A-1"
+    }
+
+    Core.WidgetSlot {
+      id: multipleOwnerA
+      bar: root
+      entry: ({ id: test.multipleOwnershipId })
+      screenName: "DP-1"
+    }
+
+    Core.WidgetSlot {
+      id: multipleOwnerB
+      bar: root
+      entry: ({ id: test.multipleOwnershipId })
+      screenName: "DP-1"
+    }
+
+    Core.WidgetSlot {
+      id: peerOwner
+      bar: root
+      entry: ({ id: test.peerOwnershipId, enabled: test.peerOwnerEnabled })
+      screenName: "DP-1"
+    }
+
+    Loader {
+      id: peerWaiter
+      active: nativeOwnershipProbe.running
+      sourceComponent: Core.WidgetSlot {
+        bar: root
+        entry: ({ id: test.peerOwnershipId })
+        screenName: "DP-1"
+      }
+    }
+
+    Core.WidgetSlot {
+      id: abandonedOwner
+      bar: root
+      entry: ({ id: test.abandonedOwnershipId,
+        enabled: test.abandonedOwnerEnabled })
+      screenName: "DP-1"
+    }
+
+    Loader {
+      id: abandonedWaiter
+      active: test.abandonedWaiterPresent && nativeOwnershipProbe.running
+      sourceComponent: Core.WidgetSlot {
+        bar: root
+        entry: ({ id: test.abandonedOwnershipId })
+        screenName: "DP-1"
+      }
+    }
+
     Core.GroupSlot {
       id: familySlot
       bar: familyBar
@@ -1199,6 +1544,235 @@ ShellRoot {
         })
       }
       return result
+    }
+
+    Process {
+      id: nativeOwnerPing
+      command: ["/usr/bin/quickshell", "ipc", "--pid",
+        String(Quickshell.processId), "call", "--",
+        "fixture.shibumi.106.native-owner", "ping"]
+      stdout: StdioCollector {
+        waitForEnd: true
+        onStreamFinished: test.nativePingOutput = String(text || "").trim()
+      }
+      onExited: function(code) {
+        test.nativePingExit = code
+        Qt.callLater(function() { test.nativePingReady = true })
+      }
+    }
+
+    Timer {
+      id: nativeOwnershipProbe
+
+      property int phase: 0
+      property int waits: 0
+      property var sourceSlot: null
+      property var sourceItem: null
+      property string sourceSlotPointer: ""
+      property string sourceItemPointer: ""
+      property bool v1ToV2Overlap: false
+      property bool v2ToV1Overlap: false
+      property bool regionOverlap: false
+      property bool nativePingStarted: false
+      property bool peerStartedWaiting: false
+      property bool abandonedStartedWaiting: false
+      interval: 10
+      repeat: true
+
+      function ownerSlot(region) {
+        const section = test.regionItem(ownershipSurface, region)
+        return test.widgetSlots(section, []).find(
+          slot => slot.moduleName === test.nativeOwnerId) || null
+      }
+
+      function awaitOrFail(message) {
+        waits++
+        if (waits < 100) return true
+        stop()
+        test.fail(message)
+        return false
+      }
+
+      function geometryUnchanged(item) {
+        return item && item.children.length === 1
+          && item.childrenRect.x === 10 && item.childrenRect.width === 10
+      }
+
+      function beginTransfer(label, next) {
+        sourceSlot = ownerSlot(label === "V1_TO_V2" ? "left" : "right")
+        sourceItem = sourceSlot ? sourceSlot.activeItem : null
+        if (!sourceItem) return false
+        if (!geometryUnchanged(sourceItem)) {
+          test.fail("owner sentinel changed foreign item geometry")
+          return false
+        }
+        sourceSlotPointer = String(sourceSlot)
+        sourceItemPointer = String(sourceItem)
+        console.log("P10_106_BEGIN", label, "sourceSlot=" + sourceSlotPointer,
+          "sourceItem=" + sourceItemPointer, "alive=" + test.nativeAlive)
+        next()
+        sourceSlot = null
+        sourceItem = null
+        phase++
+        waits = 0
+        return true
+      }
+
+      function observeTransfer(label, region) {
+        const targetSlot = ownerSlot(region)
+        const targetItem = targetSlot ? targetSlot.activeItem : null
+        if (!targetItem || String(targetItem) === sourceItemPointer) return false
+        if (!geometryUnchanged(targetItem)) {
+          test.fail("owner sentinel changed replacement item geometry")
+          return false
+        }
+        const overlap = test.nativeLoadOverlaps[targetItem.instanceSerial - 1]
+          === true
+        console.log("P10_106_TARGET", label,
+          "sourceSlot=" + sourceSlotPointer, "sourceItem=" + sourceItemPointer,
+          "targetSlot=" + String(targetSlot), "targetItem=" + String(targetItem),
+          "alive=" + test.nativeAlive, "overlap=" + overlap)
+        if (label === "V1_TO_V2") v1ToV2Overlap = overlap
+        else if (label === "V2_TO_V1") v2ToV1Overlap = overlap
+        else regionOverlap = overlap
+        sourceSlot = targetSlot
+        sourceItem = targetItem
+        phase++
+        waits = 0
+        return true
+      }
+
+      onTriggered: {
+        if (phase === 0) {
+          if (!beginTransfer("V1_TO_V2", function() {
+              ownershipStateService.setStyle("full")
+            })) awaitOrFail("V1 dynamic owner did not settle")
+          return
+        }
+        if (phase === 1) {
+          if (!observeTransfer("V1_TO_V2", "right"))
+            awaitOrFail("V1 to V2 target did not settle")
+          return
+        }
+        if (phase === 2) {
+          if (test.nativeAlive > 1) {
+            awaitOrFail("V1 owner did not release after V2 load")
+            return
+          }
+          console.log("P10_106_RELEASED", "V1_TO_V2", "alive=" + test.nativeAlive)
+          if (beginTransfer("V2_TO_V1", function() {
+              ownershipStateService.setStyle("shibumi")
+            })) phase = 3
+          return
+        }
+        if (phase === 3) {
+          if (!observeTransfer("V2_TO_V1", "left"))
+            awaitOrFail("V2 to V1 target did not settle")
+          return
+        }
+        if (phase === 4) {
+          if (test.nativeAlive > 1) {
+            awaitOrFail("V2 owner did not release after V1 load")
+            return
+          }
+          console.log("P10_106_RELEASED", "V2_TO_V1", "alive=" + test.nativeAlive)
+          sourceSlotPointer = String(sourceSlot)
+          sourceItemPointer = String(sourceItem)
+          console.log("P10_106_BEGIN", "V1_REGION",
+            "sourceSlot=" + sourceSlotPointer,
+            "sourceItem=" + sourceItemPointer, "alive=" + test.nativeAlive)
+          ownershipStateService.moveV1OwnerRight()
+          sourceSlot = null
+          sourceItem = null
+          phase = 5
+          waits = 0
+          return
+        }
+        if (phase === 5) {
+          if (!observeTransfer("V1_REGION", "right"))
+            awaitOrFail("V1 cross-region target did not settle")
+          return
+        }
+        if (phase === 6) {
+          if (test.nativeAlive > 1) {
+            awaitOrFail("V1 region source did not release")
+            return
+          }
+          if (!outputOwnerA.activeItem || !outputOwnerB.activeItem)
+            return test.fail("same widget did not load on different outputs")
+          if (!multipleOwnerA.activeItem || !multipleOwnerB.activeItem)
+            return test.fail("allowMultiple widget did not load twice on one output")
+          if (!directWidget.activeItem)
+            return test.fail("legacy bar without admission API did not load")
+          console.log("P10_106_ADMISSION_CONTROLS", "legacy=true",
+            "output=true", "allowMultiple=true", "children="
+            + sourceItem.children.length, "rect=" + sourceItem.childrenRect.x
+            + ":" + sourceItem.childrenRect.width)
+          if (!nativePingStarted) {
+            test.nativePingExpected = sourceItem.instanceSerial
+            if (test.nativePingExpected <= 1)
+              return test.fail("replacement owner was not fresh")
+            nativePingStarted = true
+            nativeOwnerPing.running = true
+            return
+          }
+          if (!test.nativePingReady) return
+          if (test.nativePingExit !== 0
+              || test.nativePingOutput !== String(test.nativePingExpected))
+            return test.fail("private IPC did not route to the fresh owner")
+          console.log("P10_106_PRIVATE_IPC", test.nativePingOutput)
+          peerStartedWaiting = peerOwner.activeItem !== null
+            && peerWaiter.item && peerWaiter.item.activeItem === null
+          test.peerSentinel = root.loadedOwners.find(
+            owner => owner.slot === peerOwner) || null
+          if (!test.peerSentinel)
+            return test.fail("peer owner sentinel was absent before item teardown")
+          abandonedStartedWaiting = abandonedOwner.activeItem !== null
+            && abandonedWaiter.item && abandonedWaiter.item.activeItem === null
+          test.peerOwnerEnabled = false
+          phase = 7
+          waits = 0
+          return
+        }
+        if (phase === 7) {
+          if (peerOwner.activeItem !== null || !peerWaiter.item
+              || peerWaiter.item.activeItem === null) {
+            awaitOrFail("waiting peer did not load after owner item unload")
+            return
+          }
+          if (root.loadedOwners.indexOf(test.peerSentinel) >= 0)
+            return test.fail("peer owner sentinel survived item teardown")
+          test.abandonedWaiterPresent = false
+          phase = 8
+          waits = 0
+          return
+        }
+        if (phase === 8) {
+          if (abandonedWaiter.item !== null) {
+            awaitOrFail("waiting target slot was not destroyed")
+            return
+          }
+          test.abandonedOwnerEnabled = false
+          phase = 9
+          waits = 0
+          return
+        }
+        if (phase === 9) {
+          if (abandonedOwner.activeItem !== null) {
+            awaitOrFail("abandoned owner item did not unload")
+            return
+          }
+          stop()
+          console.log("P10_106_FAILURE_CONTROLS",
+            "peerWaited=" + peerStartedWaiting,
+            "destroyedTargetWaited=" + abandonedStartedWaiting)
+          if (v1ToV2Overlap || v2ToV1Overlap || regionOverlap
+              || !peerStartedWaiting || !abandonedStartedWaiting)
+            return test.fail("native owner handoff overlapped or bypassed waiting")
+          actualBarFixtureLoader.teardownStarted = true
+          actualBarFixtureLoader.active = true
+        }
+      }
     }
 
     Timer {
@@ -1970,8 +2544,7 @@ ShellRoot {
         if (centerSlot.availableWidth !== 1 || optionalSlot.availableWidth !== 1)
           return test.fail("exhausted sibling budget became unconstrained")
 
-        console.log("group renderer regression passed")
-        Qt.exit(0)
+        nativeOwnershipProbe.start()
       }
     }
   }

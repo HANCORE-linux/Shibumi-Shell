@@ -21,6 +21,10 @@ ShellRoot {
     property double keepDeckInstance: 0
     property int keepDeckInstances: 0
     property int keepStableAttempts: 0
+    property int transferLegacyResolutionCalls: 0
+    property bool transferOwnerSeen: false
+    property int maxTransferOwnerCount: 0
+    property bool removeIdsSuppressionSeen: false
     property var nativeLayout: ({
       left: [{ id: "fixture.placed", shibumiModule: true }],
       center: [], right: []
@@ -171,7 +175,7 @@ ShellRoot {
     }
 
     QtObject {
-      id: fakeBar
+      id: root
 
       readonly property bool vertical: false
       readonly property int barSize: 26
@@ -200,6 +204,7 @@ ShellRoot {
       readonly property bool layoutTransitionBusy: layoutTransition.busy
       readonly property var v1FamilySlotBindings: ({})
       property var moduleSlots: []
+      // INJECT_BAR_LOADED_OWNER_DECLARATIONS
       property var activePopout: null
 
       function entryId(entry) { return entry && entry.id ? String(entry.id) : "" }
@@ -207,6 +212,8 @@ ShellRoot {
       function widgetAllowsMultiple(_id) { return false }
       function isV1AdditionalSuiteWidget(_id) { return false }
       function registeredWidgetComponent(moduleName) {
+        if (moduleName === test.transferId)
+          test.transferLegacyResolutionCalls++
         return fakeWidgetRegistry.componentFor(moduleName)
       }
       // INJECT_BAR_PROJECTION
@@ -214,6 +221,18 @@ ShellRoot {
       function showTooltip(owner, text) {}
       function hideTooltip(owner) {}
       function releasePopout(owner) {}
+    }
+
+    Connections {
+      target: root
+      function onLoadedOwnersChanged() {
+        const owners = test.transferOwners()
+        if (owners.length > 0) test.transferOwnerSeen = true
+        test.maxTransferOwnerCount = Math.max(
+          test.maxTransferOwnerCount, owners.length)
+        if (owners.length > 1)
+          test.fail("transfer widget acquired duplicate loaded owners")
+      }
     }
 
     Core.DragSession {
@@ -224,7 +243,7 @@ ShellRoot {
 
     ShibumiStyle.GroupSection {
       id: section
-      bar: fakeBar
+      bar: root
       region: "left"
       screenName: test.transferScreen
       layoutSession: session
@@ -232,10 +251,10 @@ ShellRoot {
 
     Core.BarSection {
       id: transferDeck
-      bar: fakeBar
+      bar: root
       region: "left-extra"
       screenName: test.transferScreen
-      entries: fakeBar.unassignedLayoutEntries("left", test.transferScreen)
+      entries: root.unassignedLayoutEntries("left", test.transferScreen)
     }
 
     QtObject {
@@ -284,7 +303,7 @@ ShellRoot {
       id: layoutTransition
       stateService: fakeStateService
       nativeWriter: fakeNativeWriter
-      observedBarConfig: fakeBar.barConfig
+      observedBarConfig: root.barConfig
       planNativeLayout: test.planNativeLayout
       admitted: true
       onSettled: function(_serial, result) { test.transitionResult = result }
@@ -294,7 +313,7 @@ ShellRoot {
       id: failedTransition
       stateService: failingState
       nativeWriter: fakeNativeWriter
-      observedBarConfig: fakeBar.barConfig
+      observedBarConfig: root.barConfig
       planNativeLayout: test.planNativeLayout
       admitted: true
       onSettled: function(_serial, result) { test.transitionResult = result }
@@ -334,15 +353,27 @@ ShellRoot {
 
       ShibumiStyle.DragGhost {
         id: dragGhost
-        bar: fakeBar
+        bar: root
         layoutSession: session
       }
     }
 
     function transferSlot(region) {
-      return fakeBar.moduleSlots.find(slot => slot
+      return root.moduleSlots.find(slot => slot
         && slot.moduleName === transferId && slot.region === region
         && slot.screenName === transferScreen) || null
+    }
+
+    function transferOwners() {
+      return root.loadedOwners.filter(owner => owner
+        && owner.objectName === transferId
+        && owner.screenName === transferScreen)
+    }
+
+    function transferOwnerMatches(slot) {
+      const owners = transferOwners()
+      return !!slot && !!slot.loadedItem && owners.length === 1
+        && owners[0].slot === slot
     }
 
     function transferGroupPresent() {
@@ -350,12 +381,12 @@ ShellRoot {
     }
 
     function transferNativePresent() {
-      return nativeLayout.left.some(entry => fakeBar.entryId(entry) === transferId)
+      return nativeLayout.left.some(entry => root.entryId(entry) === transferId)
     }
 
     function setTransferNativePresent(present) {
       const next = JSON.parse(JSON.stringify(nativeLayout))
-      next.left = next.left.filter(entry => fakeBar.entryId(entry) !== transferId)
+      next.left = next.left.filter(entry => root.entryId(entry) !== transferId)
       if (present) next.left.push({ id: transferId })
       nativeLayout = next
     }
@@ -376,7 +407,7 @@ ShellRoot {
       const next = JSON.parse(JSON.stringify(layoutValue))
       for (const region of ["left", "center", "right"])
         next[region] = next[region].filter(entry =>
-          intent.removeIds.indexOf(fakeBar.entryId(entry)) < 0)
+          intent.removeIds.indexOf(root.entryId(entry)) < 0)
       if (intent.installed === true)
         next[intent.region].push({ id: intent.id, shibumiModule: true })
       else if (intent.keepConfigured === true)
@@ -412,6 +443,9 @@ ShellRoot {
         fakeController.transferClaim = true
         transferStage = 4
       } else if (pingNextAction === "state-failure") {
+        const retainedSlot = transferSlot("G:" + transferId)
+        if (!transferOwnerMatches(retainedSlot))
+          return fail("failed State control lacked its tracked group owner")
         console.log("group transfer B passed")
         transitionResult = ""
         const accepted = failedTransition.request({ v1Layout: {
@@ -433,9 +467,12 @@ ShellRoot {
         if (!requestTransfer(true))
           return fail("keepConfigured transition was refused")
       } else {
+        const keptSlot = transferSlot("left-extra")
         if (keepDeckInstances !== 1 || layoutTransition.busy
-            || transferGroupPresent() || !transferNativePresent())
-          return fail("keepConfigured deck did not settle exactly once")
+            || transferGroupPresent() || !transferNativePresent()
+            || !transferOwnerMatches(keptSlot) || !transferOwnerSeen
+            || maxTransferOwnerCount !== 1)
+          return fail("keepConfigured deck did not settle with one tracked owner")
         console.log("keepConfigured deck appeared once after finish")
         console.log("group interaction regression passed")
         Qt.exit(0)
@@ -452,16 +489,31 @@ ShellRoot {
         setTransferNativePresent(true)
         transferStage = 0
       } else if (transferStage === 0 && groupSlot && groupSlot.loadedItem && !deckSlot) {
+        const registryEntry = root.barWidgetRegistry.widgets[transferId]
+        if (!groupSlot.scopedHost || groupSlot.scopedEntry !== registryEntry
+            || groupSlot.scopedComponent !== markerWidget
+            || groupSlot.resolvedComponent !== markerWidget
+            || transferLegacyResolutionCalls !== 0)
+          return fail("transfer A did not use the scoped registry candidate")
+        if (!transferOwnerMatches(groupSlot)) return
         startPing("G:" + transferId, "remove-group")
+      } else if (transferStage === 1 && layoutTransition.busy
+          && transferNativePresent()) {
+        if (deckSlot)
+          return fail("pending removeIds exposed an unassigned deck candidate")
+        removeIdsSuppressionSeen = true
       } else if (transferStage === 1 && !layoutTransition.busy
           && transitionResult === "confirmed" && !transferGroupPresent()
           && !transferNativePresent() && !groupSlot && !deckSlot) {
+        if (!removeIdsSuppressionSeen || transferOwners().length !== 0)
+          return fail("transfer A lacked removeIds suppression or owner release")
         console.log("group transfer A passed")
         transferStage = 2
       } else if (transferStage === 2 && !groupSlot && !deckSlot) {
         setTransferNativePresent(true)
         transferStage = 3
       } else if (transferStage === 3 && deckSlot && deckSlot.loadedItem && !groupSlot) {
+        if (!transferOwnerMatches(deckSlot)) return
         startPing("left-extra", "add-group")
       } else if (transferStage === 4 && !groupSlot && !deckSlot) {
         const nextOrder = JSON.parse(JSON.stringify(fakeController.order))
@@ -469,10 +521,12 @@ ShellRoot {
         order = nextOrder
         fakeController.transferClaim = false
       } else if (transferStage === 4 && groupSlot && groupSlot.loadedItem && !deckSlot) {
+        if (!transferOwnerMatches(groupSlot)) return
         startPing("G:" + transferId, "state-failure")
       } else if (transferStage === 5 && !layoutTransition.busy
           && transitionResult === "confirmed" && !groupSlot
           && deckSlot && deckSlot.loadedItem) {
+        if (!transferOwnerMatches(deckSlot)) return
         const instance = Number(deckSlot.loadedItem.instanceId)
         if (keepDeckInstance !== instance) {
           keepDeckInstance = instance
@@ -487,7 +541,7 @@ ShellRoot {
       } else if (transferTimer.transferAttempts > 150) {
         fail("group transfer timed out at stage " + transferStage
           + " busy=" + layoutTransition.busy + " result=" + transitionResult
-          + " order=" + JSON.stringify(fakeController.order) + " slots=" + fakeBar.moduleSlots.map(
+          + " order=" + JSON.stringify(fakeController.order) + " slots=" + root.moduleSlots.map(
             slot => slot.moduleName + "/" + slot.region).join(","))
       }
     }

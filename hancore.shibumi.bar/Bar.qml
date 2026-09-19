@@ -214,6 +214,16 @@ Item {
   property real connectedPanelCardWidth: 0
   property real connectedPanelCardHeight: 0
   property var moduleSlots: []
+  property var loadedOwners: []
+  property Component loadedOwnerSentinel: Component {
+    QtObject {
+      id: sentinel
+      required property Item slot
+      required property string screenName
+      Component.onCompleted: root.loadedOwners = root.loadedOwners.concat([sentinel])
+      Component.onDestruction: root.loadedOwners = root.loadedOwners.filter(candidate => candidate !== sentinel)
+    }
+  }
   property var clickTargets: []
   property var layoutSessions: []
   property var tooltipTarget: null
@@ -2254,6 +2264,14 @@ Item {
     moduleSlots = moduleSlots.filter(item => item !== slot)
   }
 
+  function widgetSlotLoadAdmitted(slot) {
+    return widgetAllowsMultiple(slot.moduleName) || !loadedOwners.some(candidate =>
+      candidate.objectName === slot.moduleName && candidate.screenName === slot.screenName && candidate.slot !== slot)
+  }
+  function claimLoadedOwner(slot, item) {
+    if (!widgetSlotLoadAdmitted(slot)) return false
+    return !!loadedOwnerSentinel.createObject(item, {slot, objectName: slot.moduleName, screenName: slot.screenName})
+  }
   function registerClickTarget(target) {
     if (!target || clickTargets.indexOf(target) !== -1) return
     const next = clickTargets.slice()
