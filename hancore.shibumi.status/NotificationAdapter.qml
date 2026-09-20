@@ -26,6 +26,8 @@ Item {
     property var queuedHistoryHost: null
     property int queuedHistoryGeneration: -1
     property string historyOutput: ""
+    property var mutationHost: null
+    property int mutationGeneration: -1
   }
 
   readonly property bool available: state.hostService !== null
@@ -35,11 +37,15 @@ Item {
   readonly property int recentCount: pastRows.count
   readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
-  readonly property bool pastDismissAvailable: available
-    && typeof state.hostService.dismissPast === "function"
-  readonly property bool pastClearAvailable: available
-    && (typeof state.hostService.clearPast === "function"
-      || typeof state.hostService.clearHistory === "function")
+  readonly property bool pastDismissAvailable: available &&
+    (typeof state.hostService.dismissPast === "function" || !historySourceModel())
+  readonly property bool pastClearAvailable: available && (!historySourceModel()
+    || typeof state.hostService.clearPast === "function"
+    || typeof state.hostService.clearHistory === "function")
+  readonly property string historyDir: Quickshell.env("HOME")
+    + "/.local/state/omarchy/notifications/history"
+  readonly property string imagesDir: Quickshell.env("HOME")
+    + "/.local/state/omarchy/notifications/images"
   property alias pendingModel: pendingRows
   property alias pastModel: pastRows
 
@@ -94,7 +100,8 @@ Item {
       exec: String(value.exec || ""),
       urgency: Number(value.urgency || 0),
       expireTimeout: Number(value.expireTimeout || 0),
-      timestamp: Number(value.timestamp || 0)
+      timestamp: Number(value.timestamp || 0),
+      fileName: String(value.fileName || "")
     }
   }
 
@@ -117,16 +124,26 @@ Item {
 
   // Derived from MIT-licensed Omarchy v4.0.3 NotificationLogic.historyRows:
   // compact JSON lines, newest first, malformed lines skipped, at most ten.
+  function validHistoryFileName(value) {
+    return typeof value === "string" && value.length > 5
+      && value.endsWith(".json") && value.indexOf("/") < 0
+      && value.indexOf("\\") < 0 && !/[\x00-\x1f\x7f]/.test(value)
+  }
   function applyHistory(raw) {
     const rows = []
     const lines = String(raw || "").split("\n")
+    const prefix = historyDir + "/"
     for (let index = 0; index < lines.length; index++) {
-      const line = lines[index].trim()
-      if (!line) continue
+      const line = lines[index], separator = line.indexOf("\t")
+      if (separator < 0 || !line.startsWith(prefix)) continue
+      const fileName = line.slice(prefix.length, separator)
+      if (!validHistoryFileName(fileName)) continue
       try {
-        const value = JSON.parse(line)
-        if (value && typeof value === "object")
+        const value = JSON.parse(line.slice(separator + 1))
+        if (value && typeof value === "object") {
+          value.fileName = fileName
           rows.push(primitiveEntry(value))
+        }
       } catch (_error) {
         // Match the host: one malformed persisted line does not hide the rest.
       }
@@ -188,9 +205,15 @@ Item {
   function dismissPast(index) {
     const service = state.hostService
     if (!service || index < 0 || index >= pastRows.count) return false
-    if (typeof service.dismissPast !== "function") return false
-    service.dismissPast(index)
-    return true
+    if (typeof service.dismissPast === "function") {
+      service.dismissPast(index)
+      return true
+    }
+    const fileName = String(pastRows.get(index).fileName || "")
+    if (historySourceModel() || !validHistoryFileName(fileName)) return false
+    return startHistoryMutation(["bash", "-c",
+      "rm -f \"$1/$3\" \"$2/$4\"-*", "--", historyDir, imagesDir,
+      fileName, fileName.slice(0, -5)])
   }
 
   function clearPending() {
@@ -222,9 +245,21 @@ Item {
       service.clearHistory()
       return true
     }
-    return false
+    if (historySourceModel()) return false
+    return startHistoryMutation(["bash", "-c",
+      "for f in \"$1\"/*.json; do\n  [[ -e $f ]] || continue\n"
+      + "  stale=\"${f##*/}\"\n  rm -f \"$f\" \"$2/${stale%.json}\"-*\n"
+      + "done", "--", historyDir, imagesDir])
   }
 
+  function startHistoryMutation(command) {
+    if (!state.hostService || mutationProcess.running) return false
+    state.mutationHost = state.hostService
+    state.mutationGeneration = state.hostGeneration
+    mutationProcess.command = command
+    mutationProcess.running = true
+    return true
+  }
   function markAllSeen() {
     const service = state.hostService
     if (!service) return false
@@ -279,9 +314,19 @@ Item {
   }
 
   Process {
+    id: mutationProcess
+    onExited: function(exitCode, _exitStatus) {
+      const current = state.hostService === state.mutationHost
+        && state.hostGeneration === state.mutationGeneration
+      state.mutationHost = null
+      state.mutationGeneration = -1
+      if (current && exitCode === 0) root.showHistory()
+    }
+  }
+  Process {
     id: historyReader
-    command: ["sh", "-c", "awk 1 \"$1\"/*.json", "--",
-      Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history/"]
+    command: ["sh", "-c", "awk '{ print FILENAME \"\\t\" $0 }' \"$1\"/*.json",
+      "--", historyDir]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: state.historyOutput = text

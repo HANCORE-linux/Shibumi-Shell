@@ -445,7 +445,8 @@ ShellRoot {
           || !scopedDiagnosticStatus.stayAwake
           || !scopedDiagnosticStatus.notificationsSilenced
           || !notifications.historyAvailable
-          || notifications.pastDismissAvailable
+          || !notifications.pastDismissAvailable
+          || !notifications.pastClearAvailable
           || notifications.pendingCount !== 0
           || notifications.recentCount !== 0
           || notifications.pendingModel.count !== 0
@@ -465,7 +466,7 @@ ShellRoot {
       console.log("status scoped capabilities: lease=A available=true"
         + " idle=" + scopedDiagnosticStatus.stayAwake
         + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
-        + " history=true pastDismiss=false pending=0 recent=0")
+        + " history=true pastDismiss=true pending=0 recent=0")
       leasedBarOwner.providerHost = null
       scopedServicePhase++
       return false
@@ -498,7 +499,8 @@ ShellRoot {
       if (scopedDiagnosticStatus.stayAwake
           || scopedDiagnosticStatus.notificationsSilenced
           || !notifications.historyAvailable
-          || notifications.pastDismissAvailable
+          || !notifications.pastDismissAvailable
+          || !notifications.pastClearAvailable
           || notifications.pendingCount !== 0
           || notifications.recentCount !== 0
           || notifications.pendingModel.count !== 0
@@ -525,7 +527,7 @@ ShellRoot {
       console.log("status scoped capabilities: lease=B available=true"
         + " idle=" + scopedDiagnosticStatus.stayAwake
         + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
-        + " history=true pastDismiss=false pending=0 recent=0"
+        + " history=true pastDismiss=true pending=0 recent=0"
         + " oldOwnerIsolated=true")
       console.log("status scoped service lease regression passed")
       scopedServicePhase++
@@ -724,6 +726,8 @@ ShellRoot {
             || notificationPanel.anchorItem === null
             || notificationPanel.bar !== fakeBar
             || notificationPanel.pendingCount !== 3
+            || !notificationPanel.notificationService.pastDismissAvailable
+            || !notificationPanel.notificationService.pastClearAvailable
             || fakeBar.activePopout !== status)
           return root.fail("notification panel injection/popout ownership")
         notificationPanel.setDnd(false)

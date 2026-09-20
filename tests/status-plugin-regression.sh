@@ -222,6 +222,9 @@ rg -Fq 'notificationService.showHistory()' \
 rg -Fq 'text: "Recent"' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification panel has no recent-history action"
+rg -U -q 'id: tabRow\n[[:space:]]+visible: panel\.liveAvailable' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "single-mode Recent view leaves a redundant tab row"
 rg -Fq 'notificationRow.bucket === "past" ? "RECENT" : "LIVE"' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification rows do not label live versus recent entries"

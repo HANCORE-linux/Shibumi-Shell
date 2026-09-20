@@ -45,38 +45,54 @@ cp -- "$repo_root/tests/notification-adapter-smoke.qml" "$tmpdir/shell.qml"
 run_case() {
   local name=$1 expected=$2 history_mode=$3
   local marker=${4:-notification adapter smoke passed}
-  local race=${5:-} path=/usr/bin:/bin
+  local race=${5:-} mutation=${6:-} path=/usr/bin:/bin
   local root="$tmpdir/$name" output="$tmpdir/$name.log"
   mkdir -p "$root"/{home,config,cache,state,data,runtime,tmp,pipewire}
   chmod 700 "$root/runtime"
   if [[ -n $race ]]; then
     mkdir "$root/bin"
-    if [[ $race == refresh || $race == same-refresh ]]; then
+    if [[ $race == mutation-replace ]]; then
+      printf '#!/bin/sh\nsleep 0.25\nexec /usr/bin/bash "$@"\n' \
+        >"$root/bin/bash"
+      chmod 755 "$root/bin/bash"
+    elif [[ $race == refresh || $race == same-refresh ]]; then
       cat >"$root/bin/awk" <<'EOF'
 #!/bin/sh
+for last do :; done
+file=${last%/*}/fixture.json
 if mkdir "$SHIBUMI_HELPER_STATE" 2>/dev/null; then
   sleep 0.25
-  printf '%s\n' '{"summary":"Old host history","timestamp":1}'
+  printf '%s\t%s\n' "$file" '{"summary":"Old host history","timestamp":1}'
 else
-  printf '%s\n' '{"summary":"New host history","timestamp":2}'
+  printf '%s\t%s\n' "$file" '{"summary":"New host history","timestamp":2}'
 fi
 EOF
     else
       printf '#!/bin/sh\nsleep 0.25\nexec /usr/bin/awk "$@"\n' >"$root/bin/awk"
     fi
-    chmod 755 "$root/bin/awk"
+    [[ -e $root/bin/awk ]] && chmod 755 "$root/bin/awk"
     path="$root/bin:$path"
   fi
   if [[ $history_mode != missing ]]; then
     mkdir -p "$root/home/.local/state/omarchy/notifications/history"
   fi
   if [[ $history_mode == populated ]]; then
-    local history="$root/home/.local/state/omarchy/notifications/history"
+    local base="$root/home/.local/state/omarchy/notifications"
+    local history="$base/history" images="$base/images"
+    mkdir -p "$images"
     printf '%s\n' '{malformed' >"$history/000-malformed.json"
+    : >"$images/000-malformed-copy.png"
+    printf '%s\n' '{"summary":"Control filename","timestamp":999}' \
+      >"$history/"$'bad\tname.json'
+    : >"$images/"$'bad\tname-copy.png'
     for index in {1..12}; do
       printf '{"id":%d,"originalId":%d,"app":"Fixture","summary":"History %d","body":"<b>plain</b>","timestamp":%d}\n' \
         "$index" "$index" "$index" "$index" >"$history/$index.json"
+      : >"$images/$index-copy.png"
     done
+    printf 'keep\n' >"$history/keep.txt"
+    : >"$images/unrelated.png"
+    printf 'sentinel\n' >"$base/escape.json"
     mkdir -p "$root/state/omarchy/notifications/history"
     printf '%s\n' '{"summary":"Wrong XDG path","timestamp":999}' \
       >"$root/state/omarchy/notifications/history/poison.json"
@@ -101,6 +117,7 @@ EOF
     LANG=C.UTF-8 \
     SHIBUMI_EXPECTED_HISTORY_COUNT="$expected" \
     SHIBUMI_HISTORY_RACE="$race" \
+    SHIBUMI_HISTORY_MUTATION="$mutation" \
     SHIBUMI_HELPER_STATE="$root/helper-state" \
     QML_IMPORT_PATH="$omarchy_path/shell" \
     QML2_IMPORT_PATH="$omarchy_path/shell" \
@@ -127,6 +144,22 @@ EOF
   if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' "$output"; then
     fail "$name runtime log contains a composition error"
   fi
+  if [[ $mutation == dismiss ]]; then
+    [[ ! -e $history/12.json && -e $history/11.json && -e $history/1.json \
+      && -e "$history/"$'bad\tname.json' ]] \
+      || fail 'dismiss did not remove only the selected history file'
+    [[ ! -e $images/12-copy.png && -e $images/11-copy.png \
+      && -e $images/unrelated.png && -e $base/escape.json ]] \
+      || fail 'dismiss removed the wrong image or escaped history'
+  elif [[ $mutation == clear ]]; then
+    ! compgen -G "$history/*.json" >/dev/null \
+      || fail 'clear left history JSON files'
+    [[ -e $history/keep.txt && -e $images/unrelated.png \
+      && -e $base/escape.json ]] \
+      || fail 'clear removed unrelated files'
+    ! compgen -G "$images/*-copy.png" >/dev/null \
+      || fail 'clear left associated history images'
+  fi
 }
 
 run_case populated 10 populated
@@ -137,8 +170,14 @@ run_case replace-race 10 populated 'notification history replace race passed' re
 run_case replace-refresh 1 missing 'notification history refresh race passed' refresh
 run_case same-host-refresh 1 missing \
   'notification history same-refresh race passed' same-refresh
+run_case dismiss-history 10 populated \
+  'notification history dismiss passed' '' dismiss
+run_case mutation-replace 10 populated \
+  'notification history mutation replace race passed' mutation-replace dismiss
+run_case clear-history 10 populated \
+  'notification history clear passed' '' clear
 
-# UI contract: history rows are read-only, close without invoking live actions,
+# UI contract: history rows close without invoking live actions,
 # and sender-controlled labels are rendered as plain text.
 grep -Fq 'onClicked: panel.selectTab("recent")' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \

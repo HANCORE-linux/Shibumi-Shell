@@ -234,8 +234,9 @@ ShibumiPanel {
 
       Row {
         id: tabRow
+        visible: panel.liveAvailable
         width: parent.width
-        height: 28
+        height: visible ? 28 : 0
         spacing: 6
 
         Rectangle {

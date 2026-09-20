@@ -10,6 +10,10 @@ ShellRoot {
     Quickshell.env("SHIBUMI_EXPECTED_HISTORY_COUNT") || 0)
   readonly property string historyRace:
     Quickshell.env("SHIBUMI_HISTORY_RACE")
+  readonly property string historyMutation:
+    Quickshell.env("SHIBUMI_HISTORY_MUTATION")
+  property int mutationPhase: 0
+  property int mutationStartTick: 0
 
   function fail(message) {
     console.error("notification-adapter-smoke:", message)
@@ -145,7 +149,7 @@ ShellRoot {
         }
       }
       if (root.ticks < (root.historyRace ? 40 : 12)) return
-      if (root.historyRace) {
+      if (root.historyRace && root.historyRace !== "mutation-replace") {
         const refresh = root.historyRace === "refresh"
           || root.historyRace === "same-refresh"
         const expected = root.historyRace === "replace" || refresh ? 1 : 0
@@ -158,6 +162,28 @@ ShellRoot {
           return root.fail("stale history crossed " + root.historyRace)
         console.log("notification history " + root.historyRace
           + " race passed")
+        Qt.exit(0)
+        return
+      }
+      if (root.mutationPhase === 1) {
+        if (dndOnlyAdapter.pastModel.count !== root.expectedHistoryCount
+            || dndOnlyAdapter.pastModel.get(0).summary !== "History 11") return
+        console.log("notification history dismiss passed")
+        Qt.exit(0)
+        return
+      }
+      if (root.mutationPhase === 2) {
+        if (dndOnlyAdapter.recentCount !== 0) return
+        console.log("notification history clear passed")
+        Qt.exit(0)
+        return
+      }
+      if (root.mutationPhase === 3) {
+        if (root.ticks < root.mutationStartTick + 20) return
+        if (dndOnlyAdapter.recentCount !== 0
+            || dndOnlyAdapter.pendingCount !== 1)
+          return root.fail("stale mutation callback crossed host replacement")
+        console.log("notification history mutation replace race passed")
         Qt.exit(0)
         return
       }
@@ -174,11 +200,34 @@ ShellRoot {
       if (!dndOnlyAdapter.setDoNotDisturb(false)
           || dndOnlyAdapter.doNotDisturb)
         return root.fail("DND-only proxy action failed")
-      if (dndOnlyAdapter.pastDismissAvailable
-          || dndOnlyAdapter.pastClearAvailable
-          || dndOnlyAdapter.dismissPast(0)
-          || dndOnlyAdapter.clearPast())
-        return root.fail("read-only history exposed a mutation action")
+      if (!dndOnlyAdapter.pastDismissAvailable
+          || !dndOnlyAdapter.pastClearAvailable)
+        return root.fail("file-backed history did not expose mutation actions")
+      for (const invalidName of ["../escape.json", "/tmp/escape.json",
+          "control\n.json", "back\\slash.json", "not-json"]) {
+        const invalidIndex = dndOnlyAdapter.pastModel.count
+        dndOnlyAdapter.pastModel.append({
+          fileName: invalidName, summary: "Invalid history path",
+          timestamp: 999
+        })
+        if (dndOnlyAdapter.dismissPast(invalidIndex))
+          return root.fail("malformed history filename reached the mutation")
+        dndOnlyAdapter.pastModel.remove(invalidIndex)
+      }
+      if (root.historyMutation === "dismiss") {
+        if (!dndOnlyAdapter.dismissPast(0))
+          return root.fail("history dismiss was refused")
+        root.mutationStartTick = root.ticks
+        root.mutationPhase = root.historyRace === "mutation-replace" ? 3 : 1
+        if (root.mutationPhase === 3) dndOnlyAdapter.attachShell(currentShell)
+        return
+      }
+      if (root.historyMutation === "clear") {
+        if (!dndOnlyAdapter.clearPast())
+          return root.fail("history clear was refused")
+        root.mutationPhase = 2
+        return
+      }
       liveRows.append({
         id: 8, originalId: 8, app: "Live fixture", appIcon: "",
         summary: "Second notification", body: "Reactive row", image: "",
