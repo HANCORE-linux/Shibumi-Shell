@@ -66,7 +66,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.14.1")
+        self.assertEqual(version, "0.1.1-beta.15")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -487,7 +487,7 @@ puts JSON.generate(workflow.fetch("jobs"))
         )
         fresh_source_assertion = (
             'assert_install_state "$source_candidate_root" '
-            "'0.1.1-beta.14.1' checkout \\\n"
+            "'0.1.1-beta.15' checkout \\\n"
             '  "$candidate_revision"'
         )
 

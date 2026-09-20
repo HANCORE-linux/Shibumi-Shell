@@ -1458,7 +1458,7 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def packaged_suite(
         self,
-        version: str = "0.1.1-beta.14.1",
+        version: str = "0.1.1-beta.15",
         source_revision: str | None = None,
     ) -> Suite:
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
@@ -1761,8 +1761,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.14.1")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.14.1")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.15")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.15")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -1781,7 +1781,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.14.1")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.15")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_sandbox_update_advances_beta_7_to_beta_9(self) -> None:
@@ -1853,7 +1853,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             plugin_id: spec.payload_digest()
             for plugin_id, spec in self.suite.plugins.items()
         }
-        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.14.1")
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15")
         self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
@@ -1871,7 +1871,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], "0.1.1-beta.14.1")
+            self.assertEqual(manifest["version"], "0.1.1-beta.15")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -2080,7 +2080,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.14.1+installed.9"
+                state["suiteVersion"] = "0.1.1-beta.15+installed.9"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -2089,7 +2089,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.14.1")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -2152,9 +2152,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.14.1")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.14.1")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.14.1")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.15")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.15")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.15")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

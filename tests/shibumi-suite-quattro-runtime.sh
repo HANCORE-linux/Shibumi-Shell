@@ -507,7 +507,7 @@ run_update_arm() {
       arm=source
       predecessor_version=0.1.1-beta.14.1
       predecessor_identity=$source_predecessor_revision
-      candidate_version=0.1.1-beta.14.1
+      candidate_version=0.1.1-beta.15
       candidate_identity=$candidate_revision
       ;;
     *) fail "unsupported update-arm origin: $origin" ;;
@@ -611,7 +611,7 @@ set_arm_environment fresh "$fresh_home" "$fresh_config_home" \
 source_root="$source_candidate_root"
 start_stock_shell
 suite_cli install --yes || fail 'fresh candidate source checkout install command failed'
-assert_install_state "$source_candidate_root" '0.1.1-beta.14.1' checkout \
+assert_install_state "$source_candidate_root" '0.1.1-beta.15' checkout \
   "$candidate_revision"
 fresh_digest=$(jq -r '.payloadDigest // empty' "$state_file")
 [[ $fresh_digest =~ ^[0-9a-f]{64}$ ]] \

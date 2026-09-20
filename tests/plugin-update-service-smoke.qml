@@ -209,7 +209,7 @@ ShellRoot {
         if (service.available || service.check(true))
           return root.fail("scoped update worker started before manifest admission")
         service.manifest = {id: "hancore.shibumi.control-center",
-          version: "0.1.1-beta.14.1", kinds: ["service", "bar-widget"]}
+          version: "0.1.1-beta.15", kinds: ["service", "bar-widget"]}
         root.phase++
         root.ticks = 0
         return
