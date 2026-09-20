@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 
 // Compatibility adapter for the host-owned Omarchy Notifications service.
 // The host service owns the notification daemon and all notification objects;
@@ -18,13 +20,12 @@ Item {
   QtObject {
     id: state
     property var hostService: null
-    property bool historyReplayActive: false
-    property var liveKeys: []
-    property var lateLiveRows: []
-    property var dismissedHistoryKeys: []
-    property bool suppressReplay: false
-    property double historyReplayCutoff: 0
-    property double suppressionCutoff: 0
+    property int hostGeneration: 0
+    property var historyReadHost: null
+    property int historyReadGeneration: -1
+    property var queuedHistoryHost: null
+    property int queuedHistoryGeneration: -1
+    property string historyOutput: ""
   }
 
   readonly property bool available: state.hostService !== null
@@ -32,13 +33,13 @@ Item {
     && state.hostService.doNotDisturb === true
   readonly property int pendingCount: pendingRows.count
   readonly property int recentCount: pastRows.count
+  readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
-    && (historySourceModel() !== null
-      || typeof state.hostService.showRecentHistory === "function"
-      || typeof state.hostService.showHistory === "function")
   readonly property bool pastDismissAvailable: available
-    && (typeof state.hostService.dismissPast === "function"
-      || typeof state.hostService.dismissPopup === "function")
+    && typeof state.hostService.dismissPast === "function"
+  readonly property bool pastClearAvailable: available
+    && (typeof state.hostService.clearPast === "function"
+      || typeof state.hostService.clearHistory === "function")
   property alias pendingModel: pendingRows
   property alias pastModel: pastRows
 
@@ -49,14 +50,18 @@ Item {
     const service = shellValue
       && typeof shellValue.firstPartyServiceFor === "function"
       ? shellValue.firstPartyServiceFor("omarchy.notifications") : null
-    state.hostService = service || null
-    state.historyReplayActive = false
-    state.liveKeys = []
-    state.lateLiveRows = []
-    state.dismissedHistoryKeys = []
-    state.suppressReplay = false
-    state.historyReplayCutoff = 0
-    state.suppressionCutoff = 0
+    const nextService = service || null
+    if (state.hostService === nextService) {
+      syncModels()
+      return
+    }
+    state.hostGeneration++
+    state.hostService = nextService
+    state.historyOutput = ""
+    state.queuedHistoryHost = null
+    state.queuedHistoryGeneration = -1
+    pendingRows.clear()
+    pastRows.clear()
     syncModels()
   }
 
@@ -93,12 +98,6 @@ Item {
     }
   }
 
-  function entryKey(entry) {
-    const value = entry || ({})
-    return String(Number(value.timestamp || 0)) + ":"
-      + String(Number(value.originalId || value.id || 0))
-  }
-
   function rebuild(target, model) {
     target.clear()
     if (!model || typeof model.get !== "function") return
@@ -110,89 +109,32 @@ Item {
     }
   }
 
-  function rememberLateLiveRows(model) {
-    if (!state.historyReplayActive || !model
-        || typeof model.get !== "function") return
-    for (let index = 0; index < model.count; index++) {
-      const entry = model.get(index)
-      if (!entry || Number(entry.originalId || entry.id || 0) < 0) continue
-      const key = entryKey(entry)
-      const timestamp = Number(entry.timestamp || 0)
-      if (state.liveKeys.indexOf(key) >= 0
-          || state.historyReplayCutoff <= 0
-          || timestamp < state.historyReplayCutoff
-          || state.lateLiveRows.some(row => entryKey(row) === key)) continue
-      state.lateLiveRows.push(primitiveEntry(entry))
-    }
-  }
-
-  function rebuildReplayModels(model) {
-    pendingRows.clear()
-    pastRows.clear()
-    const lateKeys = []
-    for (const entry of state.lateLiveRows) {
-      lateKeys.push(entryKey(entry))
-      pendingRows.append(entry)
-    }
-    if (!model || typeof model.get !== "function") return
-    for (let index = 0; index < model.count; index++) {
-      const entry = model.get(index)
-      if (!entry || Number(entry.originalId || entry.id || 0) < 0
-          || lateKeys.indexOf(entryKey(entry)) >= 0
-          || state.dismissedHistoryKeys.indexOf(entryKey(entry)) >= 0)
-        continue
-      const timestamp = Number(entry.timestamp || 0)
-      const isNewLive = state.historyReplayCutoff > 0
-        && timestamp >= state.historyReplayCutoff
-      const target = state.liveKeys.indexOf(entryKey(entry)) >= 0 || isNewLive
-        ? pendingRows : pastRows
-      target.append(primitiveEntry(entry))
-    }
-  }
-
-  function rebuildSuppressedModels(model) {
-    pendingRows.clear()
-    pastRows.clear()
-    if (!model || typeof model.get !== "function") return
-    for (let index = 0; index < model.count; index++) {
-      const entry = model.get(index)
-      if (!entry || Number(entry.originalId || entry.id || 0) < 0) continue
-      if (Number(entry.timestamp || 0) >= state.suppressionCutoff)
-        pendingRows.append(primitiveEntry(entry))
-    }
-  }
-
   function syncModels() {
-    const current = sourceModel()
+    rebuild(pendingRows, sourceModel())
     const archived = historySourceModel()
-    rememberLateLiveRows(current)
-    if (state.suppressReplay && !archived)
-      rebuildSuppressedModels(current)
-    else if (state.historyReplayActive && !archived)
-      rebuildReplayModels(current)
-    else {
-      rebuild(pendingRows, current)
-      // The current host intentionally exposes only live popupModel rows. Its
-      // history is available through showRecentHistory(), not as a public
-      // model; keep the recent model empty until that action is requested.
-      rebuild(pastRows, archived)
-    }
+    if (archived) rebuild(pastRows, archived)
   }
 
-  function removeBufferedEntry(entry) {
-    const key = entryKey(entry)
-    let removed = false
-    for (let index = state.lateLiveRows.length - 1; index >= 0; index--) {
-      if (entryKey(state.lateLiveRows[index]) !== key) continue
-      state.lateLiveRows.splice(index, 1)
-      removed = true
+  // Derived from MIT-licensed Omarchy v4.0.3 NotificationLogic.historyRows:
+  // compact JSON lines, newest first, malformed lines skipped, at most ten.
+  function applyHistory(raw) {
+    const rows = []
+    const lines = String(raw || "").split("\n")
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index].trim()
+      if (!line) continue
+      try {
+        const value = JSON.parse(line)
+        if (value && typeof value === "object")
+          rows.push(primitiveEntry(value))
+      } catch (_error) {
+        // Match the host: one malformed persisted line does not hide the rest.
+      }
     }
-    for (let index = state.liveKeys.length - 1; index >= 0; index--) {
-      if (state.liveKeys[index] !== key) continue
-      state.liveKeys.splice(index, 1)
-      removed = true
-    }
-    return removed
+    rows.sort((a, b) => b.timestamp - a.timestamp)
+    pastRows.clear()
+    for (let index = 0; index < Math.min(10, rows.length); index++)
+      pastRows.append(rows[index])
   }
 
   function sourceIndex(entry, model) {
@@ -236,13 +178,8 @@ Item {
       return true
     }
     const entry = pendingRows.get(index)
-    const buffered = removeBufferedEntry(entry)
     const source = sourceIndex(entry, sourceModel())
-    if (source < 0) {
-      if (!buffered) return false
-      syncModels()
-      return true
-    }
+    if (source < 0) return false
     if (typeof service.dismissPopup !== "function") return false
     service.dismissPopup(source)
     return true
@@ -251,16 +188,8 @@ Item {
   function dismissPast(index) {
     const service = state.hostService
     if (!service || index < 0 || index >= pastRows.count) return false
-    const entry = pastRows.get(index)
-    const key = entryKey(entry)
-    if (typeof service.dismissPast === "function") {
-      service.dismissPast(index)
-      return true
-    }
-    const source = sourceIndex(entry, sourceModel())
-    if (source < 0 || typeof service.dismissPopup !== "function") return false
-    state.dismissedHistoryKeys = state.dismissedHistoryKeys.concat([key])
-    service.dismissPopup(source)
+    if (typeof service.dismissPast !== "function") return false
+    service.dismissPast(index)
     return true
   }
 
@@ -277,14 +206,6 @@ Item {
     }
     if (typeof service.clearPopups === "function") {
       service.clearPopups()
-      state.liveKeys = []
-      state.lateLiveRows = []
-      state.dismissedHistoryKeys = []
-      state.historyReplayActive = false
-      state.suppressReplay = true
-      state.historyReplayCutoff = 0
-      state.suppressionCutoff = Date.now()
-      syncModels()
       return true
     }
     return false
@@ -328,42 +249,54 @@ Item {
     return true
   }
 
+  function startHistoryRead() {
+    state.historyOutput = ""
+    state.historyReadHost = state.hostService
+    state.historyReadGeneration = state.hostGeneration
+    historyReader.running = true
+  }
+
+  function startQueuedHistoryRead() {
+    if (historyReader.running
+        || state.queuedHistoryHost !== state.hostService
+        || state.queuedHistoryGeneration !== state.hostGeneration) return
+    state.queuedHistoryHost = null
+    state.queuedHistoryGeneration = -1
+    startHistoryRead()
+  }
+
   function showHistory() {
-    const service = state.hostService
-    if (!service) return false
-    const archived = historySourceModel()
-    if (archived) {
+    if (!state.hostService) return false
+    if (historySourceModel()) {
       syncModels()
       return true
     }
+    if (historyReader.running) {
+      state.queuedHistoryHost = state.hostService
+      state.queuedHistoryGeneration = state.hostGeneration
+    } else startHistoryRead()
+    return true
+  }
 
-    const current = sourceModel()
-    state.liveKeys = []
-    state.lateLiveRows = []
-    state.dismissedHistoryKeys = []
-    if (state.historyReplayActive) {
-      for (let index = 0; index < pendingRows.count; index++)
-        state.liveKeys.push(entryKey(pendingRows.get(index)))
-    } else if (current && typeof current.get === "function") {
-      for (let index = 0; index < current.count; index++)
-        state.liveKeys.push(entryKey(current.get(index)))
+  Process {
+    id: historyReader
+    command: ["sh", "-c", "awk 1 \"$1\"/*.json", "--",
+      Quickshell.env("HOME") + "/.local/state/omarchy/notifications/history/"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: state.historyOutput = text
     }
-    state.suppressReplay = false
-    state.suppressionCutoff = 0
-    state.historyReplayCutoff = Date.now()
-    state.historyReplayActive = true
-    syncModels()
-    if (typeof service.showRecentHistory === "function") {
-      service.showRecentHistory()
-      return true
+    stderr: StdioCollector { waitForEnd: true }
+    onRunningChanged: if (!running)
+      Qt.callLater(root.startQueuedHistoryRead)
+    onExited: function(exitCode, _exitStatus) {
+      const current = state.hostService === state.historyReadHost
+        && state.hostGeneration === state.historyReadGeneration
+      state.historyReadHost = null
+      state.historyReadGeneration = -1
+      if (current)
+        root.applyHistory(exitCode === 0 ? state.historyOutput : "")
     }
-    if (typeof service.showHistory === "function") {
-      service.showHistory()
-      return true
-    }
-    state.historyReplayActive = false
-    syncModels()
-    return false
   }
 
   Connections {

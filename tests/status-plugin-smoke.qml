@@ -410,8 +410,7 @@ ShellRoot {
         trayComponent: childComponent
         trayDrawerSource: Qt.resolvedUrl(
           "fixtures/TrayDrawerTestPanel.qml")
-        notificationPanelSource: Qt.resolvedUrl(
-          "fixtures/NotificationPanelTestView.qml")
+        notificationPanelSource: Qt.resolvedUrl("status/NotificationPanel.qml")
       }
     }
   }
@@ -445,7 +444,7 @@ ShellRoot {
       if (notifications === leasedNotificationsA
           || !scopedDiagnosticStatus.stayAwake
           || !scopedDiagnosticStatus.notificationsSilenced
-          || notifications.historyAvailable
+          || !notifications.historyAvailable
           || notifications.pastDismissAvailable
           || notifications.pendingCount !== 0
           || notifications.recentCount !== 0
@@ -466,7 +465,7 @@ ShellRoot {
       console.log("status scoped capabilities: lease=A available=true"
         + " idle=" + scopedDiagnosticStatus.stayAwake
         + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
-        + " history=false pastDismiss=false pending=0 recent=0")
+        + " history=true pastDismiss=false pending=0 recent=0")
       leasedBarOwner.providerHost = null
       scopedServicePhase++
       return false
@@ -498,7 +497,7 @@ ShellRoot {
         return fail("scoped Status did not resolve owner B")
       if (scopedDiagnosticStatus.stayAwake
           || scopedDiagnosticStatus.notificationsSilenced
-          || notifications.historyAvailable
+          || !notifications.historyAvailable
           || notifications.pastDismissAvailable
           || notifications.pendingCount !== 0
           || notifications.recentCount !== 0
@@ -526,7 +525,7 @@ ShellRoot {
       console.log("status scoped capabilities: lease=B available=true"
         + " idle=" + scopedDiagnosticStatus.stayAwake
         + " dnd=" + scopedDiagnosticStatus.notificationsSilenced
-        + " history=false pastDismiss=false pending=0 recent=0"
+        + " history=true pastDismiss=false pending=0 recent=0"
         + " oldOwnerIsolated=true")
       console.log("status scoped service lease regression passed")
       scopedServicePhase++
@@ -727,9 +726,9 @@ ShellRoot {
             || notificationPanel.pendingCount !== 3
             || fakeBar.activePopout !== status)
           return root.fail("notification panel injection/popout ownership")
-        notificationPanel.toggleDnd()
-        notificationPanel.markAllSeen()
-        notificationPanel.dismissPending()
+        notificationPanel.setDnd(false)
+        notificationPanel.clearActive()
+        notificationPanel.dismiss("pending", 0)
         if (fakeNotifications.dndToggleCount !== 2
             || fakeNotifications.markAllSeenCount !== 1
             || fakeNotifications.dismissPendingCount !== 1)

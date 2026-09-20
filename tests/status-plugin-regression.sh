@@ -20,7 +20,7 @@ fail() {
 
 mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home" \
   "$tmpdir/config" "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" \
-  "$tmpdir/tmp"
+  "$tmpdir/tmp" "$tmpdir/pipewire"
 chmod 700 "$tmpdir/runtime" "$tmpdir/home" "$tmpdir/config" \
   "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" "$tmpdir/tmp"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
@@ -30,6 +30,8 @@ mkdir -p "$tmpdir/hancore.shibumi.bar"
 cp -a -- "$repo_root/hancore.shibumi.bar/services" \
   "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.status" "$tmpdir/status"
+cp -- "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+  "$tmpdir/status/ShibumiPanel.qml"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/status-plugin-smoke.qml" "$tmpdir/shell.qml"
@@ -39,7 +41,7 @@ install -m 0644 "$repo_root/tests/fixtures/StatusTestWidget.qml" \
   "$tmpdir/fixtures/"
 
 set +e
-output=$(timeout 8 env \
+output=$(timeout 8 env -i \
   HOME="$tmpdir/home" \
   XDG_CONFIG_HOME="$tmpdir/config" \
   XDG_CACHE_HOME="$tmpdir/cache" \
@@ -48,12 +50,14 @@ output=$(timeout 8 env \
   XDG_STATE_HOME="$tmpdir/state" \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
   TMPDIR="$tmpdir/tmp" \
+  PIPEWIRE_RUNTIME_DIR="$tmpdir/pipewire" \
   DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-session-bus" \
   DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-system-bus" \
   HYPRLAND_INSTANCE_SIGNATURE= \
   WAYLAND_DISPLAY= \
   DISPLAY= \
   PATH=/usr/bin:/bin \
+  LANG=C.UTF-8 \
   QT_QPA_PLATFORM=offscreen \
   QT_QPA_PLATFORMTHEME= \
   QT_QUICK_BACKEND=software \
