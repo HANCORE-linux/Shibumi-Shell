@@ -1241,6 +1241,7 @@ while IFS= read -r plugin_id; do
 done < <(jq -r '.plugins[].id' contracts/plugin-suite-v1.json)
 
 "$repo_root/tests/style-contract-regression.sh"
+"$repo_root/tests/panel-window-geometry-regression.sh"
 "$repo_root/tests/picker-helper-regression.sh"
 "$repo_root/tests/plugin-suite-contract-regression.sh"
 "$repo_root/tests/plugin-self-containment-regression.sh"
