@@ -90,6 +90,7 @@ Item {
   property bool _loaderSubmissionActive: false
   property var _residentLoad: null
   property var _completedLoad: null
+  property bool _barConnectionRevoked: false
   property var loadedComponent: null
   property var loadedItem: null
   property int resolutionAttempts: 0
@@ -184,6 +185,7 @@ Item {
     ensureResolvedComponent()
   }
   Component.onDestruction: {
+    revokeBarConnection()
     clearCompatibilityConnection()
     if (bar.activePopout === activeItem
         && typeof bar.releasePopout === "function")
@@ -355,19 +357,22 @@ Item {
     const previousSubmission = _submission
     if (previousSubmission && previousSubmission.source === nextSource) return
 
-    // Claim the complete successor request before any invalidating write. Every
-    // later write can synchronously re-enter this function, so the outer call
-    // rechecks object identity before it can clear or dispatch anything else.
+    // Loader.active observes the request itself, so revoke the resident Bar
+    // connection before publishing a null source. Reentry during that revoke
+    // owns any changed submission and the outer call must not overwrite it.
     const request = {
       source: nextSource,
       generation: previousSubmission
         ? previousSubmission.generation + 1 : 1
     }
+    revokeBarConnection()
+    if (_submission !== previousSubmission) return
+    _submission = request
+    if (_submission !== request) return
     const activationRequired = nextSource !== null
       && (!previousSubmission || previousSubmission.source === null)
     if (activationRequired || nextSource === null)
       _loaderSubmissionActive = false
-    _submission = request
     if (_submission !== request) return
     if (!invalidateCompletedLoad(request)) return
     if (_submission !== request) return
@@ -390,7 +395,8 @@ Item {
         generation: request.generation,
         item: resident.item
       }
-      publishCompletedLoad(completion, request, resident)
+      if (publishCompletedLoad(completion, request, resident))
+        resumeBarConnection()
       return
     }
 
@@ -603,9 +609,21 @@ Item {
     inlineSettingsSync.restart()
   }
 
+  function revokeBarConnection() {
+    if (_barConnectionRevoked) return
+    _barConnectionRevoked = true
+    const target = activeItem
+    if (target && "bar" in target) target.bar = null
+  }
+
+  function resumeBarConnection() {
+    _barConnectionRevoked = false
+    injectProperties()
+  }
+
   function injectProperties() {
     const target = activeItem
-    if (!target) return
+    if (!target || _barConnectionRevoked) return
     if ("bar" in target) target.bar = bar
     if ("moduleName" in target) target.moduleName = moduleName
     if ("hostGroupId" in target) target.hostGroupId = region
@@ -787,11 +805,12 @@ Item {
   Loader {
     id: widgetLoader
     anchors.fill: parent
-    // Both activation and source submission stay gated until this exact slot
-    // is registered. sourceComponent has no binding: submitLoaderSource() is
-    // its single assignment path and records provenance before setter dispatch.
-    active: root.slotComplete && root.moduleEnabled
-      && root._loaderSubmissionActive
+    // Activation follows only the admitted submission. In particular, an
+    // entry disable must pass through submitLoaderSource(null), which revokes
+    // the resident Bar connection before deactivating this Loader.
+    // sourceComponent has no binding: submitLoaderSource() is its single
+    // assignment path and records provenance before setter dispatch.
+    active: root._loaderSubmissionActive
       && root._submission !== null
       && root._submission.source !== null
     onLoaded: {
@@ -801,7 +820,10 @@ Item {
       const completedGeneration = completedSubmission
         ? completedSubmission.generation : -1
       const completedItem = widgetLoader.item
-      root.injectProperties()
+      if (completedSource !== null
+          && root._submission === completedSubmission
+          && root._dispatchedSubmission === completedSubmission)
+        root.resumeBarConnection()
       root.syncActiveItemMetrics()
       // Injection can synchronously submit a replacement. Confirm only the
       // exact atomic request and item that emitted this completion.

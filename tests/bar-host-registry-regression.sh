@@ -7,6 +7,7 @@ source "$repo_root/tests/lib/baselines.sh"
 shibumi_load_omarchy_baseline
 bar_root="$repo_root/hancore.shibumi.bar"
 omarchy_path=$OMARCHY_PATH
+widget_slot_source=${SHIBUMI_TEST_WIDGET_SLOT_SOURCE:-$bar_root/core/WidgetSlot.qml}
 
 fail() {
   printf 'bar host registry regression failed: %s\n' "$*" >&2
@@ -111,6 +112,7 @@ done
 
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'
+[[ -f $widget_slot_source ]] || fail 'WidgetSlot fixture source is missing'
 [[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
@@ -138,6 +140,53 @@ export QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1
 cp -a "$omarchy_path/shell/Commons" "$tmpdir/"
 cp -a "$omarchy_path/shell/Ui" "$tmpdir/"
 cp -a "$bar_root" "$tmpdir/hancore.shibumi.bar"
+
+# Exercise WidgetSlot teardown in the host-owned gate without another runner.
+# This private engine has no production bus, display, PATH, or PipeWire route.
+lifecycle_root="$tmpdir/lifecycle"
+mkdir -p "$lifecycle_root/staged/barcore" "$lifecycle_root/home" \
+  "$lifecycle_root/runtime" "$lifecycle_root/tmp" "$lifecycle_root/bin" \
+  "$lifecycle_root/config-dirs" "$lifecycle_root/pipewire"
+chmod 700 "$lifecycle_root/runtime" "$lifecycle_root/tmp" \
+  "$lifecycle_root/pipewire"
+cp -a "$omarchy_path/shell/Commons" "$lifecycle_root/"
+install -m 0644 "$widget_slot_source" \
+  "$lifecycle_root/staged/barcore/WidgetSlot.qml"
+install -m 0644 "$repo_root/tests/fixtures/BarContextLifecycleHost.qml" \
+  "$lifecycle_root/shell.qml"
+install -m 0644 "$repo_root/tests/fixtures/PrivateLifecycleBar.qml" \
+  "$lifecycle_root/PrivateLifecycleBar.qml"
+set +e
+lifecycle_output=$(timeout --foreground --kill-after=1 10 env \
+  HOME="$lifecycle_root/home" \
+  XDG_CONFIG_HOME="$lifecycle_root/home/.config" \
+  XDG_STATE_HOME="$lifecycle_root/home/.local/state" \
+  XDG_DATA_HOME="$lifecycle_root/home/.local/share" \
+  XDG_CACHE_HOME="$lifecycle_root/home/.cache" \
+  XDG_DATA_DIRS="$lifecycle_root/data" \
+  XDG_CONFIG_DIRS="$lifecycle_root/config-dirs" \
+  XDG_RUNTIME_DIR="$lifecycle_root/runtime" TMPDIR="$lifecycle_root/tmp" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$lifecycle_root/absent-session" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$lifecycle_root/absent-system" \
+  PIPEWIRE_RUNTIME_DIR="$lifecycle_root/pipewire" \
+  PIPEWIRE_REMOTE=shibumi-fixture-unavailable \
+  HYPRLAND_INSTANCE_SIGNATURE= WAYLAND_DISPLAY= DISPLAY= \
+  PATH="$lifecycle_root/bin" QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
+  QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 QML_DISABLE_DISK_CACHE=1 \
+  /usr/bin/quickshell -p "$lifecycle_root" --no-color 2>&1)
+lifecycle_rc=$?
+set -e
+printf '%s\n' "$lifecycle_output"
+[[ $lifecycle_rc -eq 0 ]] || fail "bar context lifecycle fixture exited $lifecycle_rc"
+grep -Fq 'bar context lifecycle regression passed' <<<"$lifecycle_output" \
+  || fail 'bar context lifecycle fixture did not reach its success marker'
+grep -Fq 'registry-update-after-revoke' <<<"$lifecycle_output" \
+  || fail 'bar context lifecycle fixture missed its post-revoke update'
+if grep -Eqi 'attempted to evaluate a function in an invalid context|TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error' \
+    <<<"$lifecycle_output"; then
+  fail 'bar context lifecycle fixture log contains a QML context or binding error'
+fi
+
 cp "$repo_root/tests/fixtures/BarPanelStub.qml" \
   "$tmpdir/hancore.shibumi.bar/core/BarPanel.qml"
 # Preserve the deployed plugin depth so Bar.qml keeps its canonical

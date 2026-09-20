@@ -17,7 +17,12 @@ OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
 ./tests/host-registry-prime-regression.sh
 ```
 
-The bar-host regression also exercises the process-singleton `omarchy.bar`
+The bar-host regression drives `entry.enabled=false` and unloads a private Bar
+Loader before a host-registry update. It verifies that real `WidgetSlot`
+residents revoke their Bar connection first, retain owner sentinels until item
+destruction, and attach to a replacement Bar without invalid-context or
+JavaScript diagnostics. It also exercises the
+process-singleton `omarchy.bar`
 visibility nudge in an isolated HOME, proving both host-owned marker directions,
 delayed admission behind an outgoing stock handler, synchronous revocation
 before stock takeover, and rejection of duplicate target registration.

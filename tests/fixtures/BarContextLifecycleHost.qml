@@ -1,0 +1,294 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Quickshell
+
+ShellRoot {
+  id: host
+
+  property int registryRevision: 0
+  property var helperMarks: []
+  property var barMarks: []
+  property int ownerCreated: 0
+  property int ownerReleased: 0
+  property int providerCreated: 0
+  property int providerDestroyed: 0
+  property int providerDetached: 0
+  property bool statusEnabled: true
+  property bool statusEntryEnabled: true
+  property string slotRegion: "left"
+  property var currentProviders: ({})
+  property var cachedProviders: []
+  property var cachedCatalogs: []
+  property var events: []
+  property var initialProviders: ({})
+  property var oldBar: null
+  property int initialHelperCalls: 0
+  property int phase: 0
+
+  function allocateBarSerial() {
+    barMarks.push("bar")
+    return barMarks.length
+  }
+
+  function recordProviderCreated(kind, item) {
+    providerCreated++
+    const next = Object.assign({}, currentProviders)
+    next[kind] = item
+    currentProviders = next
+    cachedProviders = cachedProviders.concat([item])
+    events.push("provider-created:" + kind)
+  }
+
+  function recordProviderDetached(kind, ownerCount) {
+    providerDetached++
+    events.push("provider-detached:" + kind + ":owners=" + ownerCount)
+  }
+
+  function recordProviderDestroyed(kind, item) {
+    providerDestroyed++
+    const next = Object.assign({}, currentProviders)
+    if (next[kind] === item) next[kind] = null
+    currentProviders = next
+    events.push("provider-destroyed:" + kind)
+  }
+
+  function fail(message) {
+    console.error("bar-context-lifecycle-regression: " + message)
+    Qt.exit(1)
+  }
+
+  function require(condition, message) {
+    if (!condition) fail(message)
+  }
+
+  component ProviderBase: Item {
+    id: provider
+    required property string kind
+    property var bar: null
+    property string moduleName: ""
+    property var settings: ({})
+    property real availableWidth: 0
+    property var cachedBar: null
+    property int cachedBarSerial: -1
+
+    function registeredComponent(pluginId) {
+      void(host.registryRevision)
+      if (bar && typeof bar.registeredWidgetComponent === "function")
+        return bar.registeredWidgetComponent(pluginId)
+      const registry = bar ? bar.barWidgetRegistry : null
+      if (registry) void(registry.revision)
+      const widgets = registry && registry.widgets ? registry.widgets : ({})
+      const entry = widgets[pluginId]
+      return entry ? entry.component : null
+    }
+
+    function registeredSource(pluginId) {
+      void(host.registryRevision)
+      if (bar && typeof bar.registeredWidgetSource === "function")
+        return bar.registeredWidgetSource(pluginId)
+      const registry = bar && bar.shell && "pluginRegistry" in bar.shell
+        ? bar.shell.pluginRegistry : null
+      const manifest = registry && registry.installedPlugins
+        ? registry.installedPlugins[String(pluginId || "")] : null
+      return registry && typeof registry.entryPointUrl === "function"
+        ? registry.entryPointUrl(manifest, "barWidget") : ""
+    }
+
+    onBarChanged: {
+      if (bar) {
+        cachedBar = bar
+        cachedBarSerial = Number(bar.creationId)
+        host.events.push("provider-attached:" + kind + ":bar=" + cachedBarSerial)
+      } else if (cachedBar) {
+        host.recordProviderDetached(kind, cachedBar.loadedOwners.length)
+      }
+    }
+    Component.onCompleted: host.recordProviderCreated(kind, provider)
+    Component.onDestruction: host.recordProviderDestroyed(kind, provider)
+  }
+
+  component StatusProvider: ProviderBase {
+    kind: "status"
+    readonly property url updateSource: registeredSource("hancore.shibumi.update-center")
+    readonly property url traySource: registeredSource("omarchy.tray")
+    readonly property Component updateComponent: String(updateSource) ? null
+      : registeredComponent("hancore.shibumi.update-center")
+    readonly property Component trayComponent: String(traySource) ? null
+      : registeredComponent("omarchy.tray")
+  }
+
+  component CenterProvider: ProviderBase {
+    kind: "center"
+    readonly property url updateSource: registeredSource("omarchy.system-update")
+    readonly property Component updateComponent: String(updateSource) ? null
+      : registeredComponent("omarchy.system-update")
+  }
+
+  component AudioProvider: ProviderBase {
+    kind: "audio"
+    readonly property url backendPanelSource: registeredSource("omarchy.audio")
+    readonly property Component panelComponent: String(backendPanelSource) ? null
+      : registeredComponent("omarchy.audio")
+  }
+
+  component CatalogProvider: ProviderBase {
+    id: catalogProvider
+    kind: "control-center"
+    property QtObject controller: QtObject {
+      property var bar: catalogProvider.bar
+      onBarChanged: host.events.push("catalog-controller-bar:" + (bar ? "set" : "null"))
+    }
+    readonly property var unplacedPluginIds: {
+      void(host.registryRevision)
+      const candidate = controller && "bar" in controller ? controller.bar : null
+      const layout = candidate && "layoutController" in candidate
+        ? candidate.layoutController : null
+      if (!candidate || typeof candidate.activePluginSpecs !== "function"
+          || !layout || typeof layout.unplacedPluginIdsFor !== "function") return []
+      const specs = candidate.activePluginSpecs()
+      if (!Array.isArray(specs)) return []
+      const providers = !layout.v2Mode && "v1FamilySlotBindings" in candidate
+        ? Object.values(candidate.v1FamilySlotBindings || {}) : []
+      return layout.unplacedPluginIdsFor(specs.filter(function(spec) {
+        return !spec || providers.indexOf(spec.pluginId) < 0
+      }))
+    }
+    Component.onCompleted: host.cachedCatalogs = host.cachedCatalogs.concat([controller])
+  }
+
+  Component { id: statusHostComponent; StatusProvider {} }
+  Component { id: centerHostComponent; CenterProvider {} }
+  Component { id: audioHostComponent; AudioProvider {} }
+  Component { id: catalogHostComponent; CatalogProvider {} }
+
+  Component.onCompleted: barLoader.setSource("PrivateLifecycleBar.qml", {
+    hostState: host,
+    statusComponent: statusHostComponent,
+    centerComponent: centerHostComponent,
+    audioComponent: audioHostComponent,
+    catalogComponent: catalogHostComponent
+  })
+
+  Loader {
+    id: barLoader
+    active: true
+    onLoaded: {
+      host.events.push("bar-loaded:" + item.creationId)
+      lifecycleTimer.restart()
+    }
+  }
+
+  Timer {
+    id: lifecycleTimer
+    interval: 25
+    repeat: true
+    onTriggered: {
+      if (phase === 0) {
+        require(providerCreated === 4, "initial providers did not load")
+        require(barLoader.item && barLoader.item.loadedOwners.length === 4,
+          "initial owner sentinels missing")
+        initialProviders = Object.assign({}, currentProviders)
+        initialHelperCalls = helperMarks.length
+        events.push("registry-update-live")
+        registryRevision++
+        phase++
+        return
+      }
+      if (phase === 1) {
+        require(helperMarks.length > initialHelperCalls,
+          "live registry change did not reevaluate provider bindings")
+        for (const kind of ["status", "center", "audio", "control-center"])
+          require(currentProviders[kind] === initialProviders[kind],
+            "live registry change replaced " + kind)
+        slotRegion = "right"
+        phase++
+        return
+      }
+      if (phase === 2) {
+        for (const kind of ["status", "center", "audio", "control-center"])
+          require(currentProviders[kind] === initialProviders[kind],
+            "slot move replaced " + kind)
+        events.push("status-entry-enabled-false")
+        statusEntryEnabled = false
+        phase++
+        return
+      }
+      if (phase === 3) {
+        require(!currentProviders.status, "disabled status provider stayed live")
+        require(barLoader.item.loadedOwners.length === 3,
+          "disabled provider owner sentinel was not released on destruction")
+        const detachedIndex = events.indexOf(
+          "provider-detached:status:owners=4")
+        const destroyedIndex = events.indexOf("provider-destroyed:status")
+        require(detachedIndex >= 0,
+          "entry.enabled=false did not detach the resident Bar")
+        require(destroyedIndex > detachedIndex,
+          "entry.enabled=false destroyed the provider before Bar detach: "
+            + JSON.stringify(events))
+        statusEntryEnabled = true
+        phase++
+        return
+      }
+      if (phase === 4) {
+        require(currentProviders.status
+          && currentProviders.status !== initialProviders.status,
+          "status provider did not reload")
+        require(barLoader.item.loadedOwners.length === 4,
+          "reloaded provider owner sentinel missing")
+        oldBar = barLoader.item
+        events.push("host-reload-revoke")
+        barLoader.active = false
+        events.push("bar-loader-inactive")
+        require(providerDetached >= 5,
+          "resident providers were not detached synchronously: "
+            + providerDetached + " " + JSON.stringify(events))
+        events.push("registry-update-after-revoke")
+        registryRevision++
+        phase++
+        return
+      }
+      if (phase === 5) {
+        require(providerDestroyed >= 5,
+          "old providers survived bar Loader teardown")
+        require(ownerReleased >= 5,
+          "owner sentinels released before actual item destruction")
+        for (let index = 0; index < cachedCatalogs.length; index++) {
+          const controller = cachedCatalogs[index]
+          if (controller && controller.bar != null)
+            fail("cached Control Center controller retained the old bar")
+        }
+        oldBar = null
+        barLoader.active = true
+        phase++
+        return
+      }
+      if (phase === 6) {
+        require(barLoader.item && barLoader.item.creationId === 2,
+          "replacement bar did not load")
+        require(barLoader.item.loadedOwners.length === 4,
+          "replacement owner sentinels missing")
+        for (const kind of ["status", "center", "audio", "control-center"])
+          require(currentProviders[kind]
+            && currentProviders[kind].cachedBarSerial === 2,
+            "provider did not attach to replacement bar: " + kind)
+        events.push("registry-update-new-bar")
+        registryRevision++
+        phase++
+        return
+      }
+      if (phase === 7) {
+        lifecycleTimer.stop()
+        console.log("BAR_CONTEXT_TIMING " + JSON.stringify(events))
+        console.log("BAR_CONTEXT_COUNTS created=" + providerCreated
+          + " destroyed=" + providerDestroyed
+          + " detached=" + providerDetached
+          + " ownersCreated=" + ownerCreated
+          + " ownersReleased=" + ownerReleased
+          + " helperCalls=" + helperMarks.length)
+        console.log("bar context lifecycle regression passed")
+        Qt.exit(0)
+      }
+    }
+  }
+}

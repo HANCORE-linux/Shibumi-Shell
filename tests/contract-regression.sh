@@ -291,7 +291,7 @@ rg -Fq 'function submitLoaderSource(candidate)' \
   && rg -Fq '? resolvedComponent : null)' \
     hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "widget slots must gate controlled source submission with a legacy fallback"
-rg -q 'active: root\.slotComplete && root\.moduleEnabled' \
+rg -q 'active: root\._loaderSubmissionActive' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
   && rg -q 'root\._submission\.source !== null' \
     hancore.shibumi.bar/core/WidgetSlot.qml \
