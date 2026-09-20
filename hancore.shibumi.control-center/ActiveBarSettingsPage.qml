@@ -371,7 +371,7 @@ Column {
         controller: root.controller
         glyph: "splitscreen"
         label: "Edit layout"
-        detail: "Add slots and dividers"
+        detail: "Add slots, dividers and drag"
         foreground: root.foreground
         accent: root.accent
         onClicked: root.controller.beginBarEditing()
