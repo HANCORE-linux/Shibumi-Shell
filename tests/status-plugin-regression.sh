@@ -18,13 +18,20 @@ fail() {
 [[ -d $omarchy_path/shell ]] || fail "Omarchy shell not found: $omarchy_path/shell"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found: $quickshell_bin"
 
-mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures"
-chmod 700 "$tmpdir/runtime"
+mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home" \
+  "$tmpdir/config" "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" \
+  "$tmpdir/tmp" "$tmpdir/pipewire"
+chmod 700 "$tmpdir/runtime" "$tmpdir/home" "$tmpdir/config" \
+  "$tmpdir/cache" "$tmpdir/data" "$tmpdir/state" "$tmpdir/tmp"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
+printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
+  > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 mkdir -p "$tmpdir/hancore.shibumi.bar"
 cp -a -- "$repo_root/hancore.shibumi.bar/services" \
   "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.status" "$tmpdir/status"
+cp -- "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
+  "$tmpdir/status/ShibumiPanel.qml"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/status-plugin-smoke.qml" "$tmpdir/shell.qml"
@@ -34,12 +41,29 @@ install -m 0644 "$repo_root/tests/fixtures/StatusTestWidget.qml" \
   "$tmpdir/fixtures/"
 
 set +e
-output=$(timeout 8 env \
-  QT_QPA_PLATFORM=offscreen \
-  WAYLAND_DISPLAY= \
+output=$(timeout 8 env -i \
+  HOME="$tmpdir/home" \
+  XDG_CONFIG_HOME="$tmpdir/config" \
+  XDG_CACHE_HOME="$tmpdir/cache" \
+  XDG_DATA_HOME="$tmpdir/data" \
+  XDG_DATA_DIRS="$tmpdir/data" \
+  XDG_STATE_HOME="$tmpdir/state" \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
-  QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
-  QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
+  TMPDIR="$tmpdir/tmp" \
+  PIPEWIRE_RUNTIME_DIR="$tmpdir/pipewire" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-session-bus" \
+  DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/runtime/no-system-bus" \
+  HYPRLAND_INSTANCE_SIGNATURE= \
+  WAYLAND_DISPLAY= \
+  DISPLAY= \
+  PATH=/usr/bin:/bin \
+  LANG=C.UTF-8 \
+  QT_QPA_PLATFORM=offscreen \
+  QT_QPA_PLATFORMTHEME= \
+  QT_QUICK_BACKEND=software \
+  QML_DISABLE_DISK_CACHE=1 \
+  QML_IMPORT_PATH="$omarchy_path/shell" \
+  QML2_IMPORT_PATH="$omarchy_path/shell" \
   "$quickshell_bin" -p "$tmpdir" 2>&1)
 rc=$?
 set -e
@@ -48,9 +72,41 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'status plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
+unexpected_diagnostics=$(grep -E \
+  'WARN|ERROR|CRITICAL|TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error' \
+  <<<"$output" | grep -Fv \
+  'Module path contains invalid characters for a module name:  "/hancore.shibumi.bar/services"' \
+  || true)
+[[ -z $unexpected_diagnostics ]] \
+  || fail "component smoke emitted an unexpected runtime diagnostic"
 
 status_widget="$repo_root/hancore.shibumi.status/BarWidget.qml"
 status_service="$repo_root/hancore.shibumi.status/Service.qml"
+bar_widget="$repo_root/hancore.shibumi.bar/Bar.qml"
+python3 - "$bar_widget" "$status_widget" <<'PY'
+from pathlib import Path
+import sys
+
+bar = Path(sys.argv[1]).read_text()
+status = Path(sys.argv[2]).read_text()
+try:
+    bar_dtor = bar.index("  Component.onDestruction: {", bar.index("  Component.onCompleted: {"))
+    teardown_reset = bar.index("    tearingDown = true", bar_dtor)
+    status_dtor = status.index("  Component.onDestruction: {")
+    registered_reset = status.index("      updateWidget.registeredBar = null", status_dtor)
+    update_reset = status.index("    if (updateWidget && \"bar\" in updateWidget) updateWidget.bar = null", status_dtor)
+    tray_reset = status.index("    if (trayWidget && \"bar\" in trayWidget) trayWidget.bar = null", status_dtor)
+except ValueError:
+    raise SystemExit("Status teardown ordering source guard anchor drifted")
+if teardown_reset != bar_dtor + len("  Component.onDestruction: {\n"):
+    raise SystemExit("Bar teardown flag is not the first destruction statement")
+if not registered_reset < update_reset < tray_reset:
+    raise SystemExit("Status teardown ordering no longer guards child Bar reset")
+if ('else if (lifecycleBar && "tearingDown" in lifecycleBar\n'
+        '        && lifecycleBar.tearingDown === true)') not in status:
+    raise SystemExit("Status no longer handles WidgetSlot's pre-destruction Bar revoke")
+PY
+printf 'status teardown ordering source guard passed\n'
 rg -Fq '["full", "icon", "text"]' "$status_widget" \
   || fail "status widget does not expose Full/Icon/Text display modes"
 if rg -q 'SystemTray\.items|NotificationServer|makoctl|pgrep -x hypridle' \
@@ -191,6 +247,9 @@ rg -Fq 'notificationService.showHistory()' \
 rg -Fq 'text: "Recent"' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification panel has no recent-history action"
+rg -U -q 'id: tabRow\n[[:space:]]+visible: panel\.liveAvailable' \
+  "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
+  || fail "single-mode Recent view leaves a redundant tab row"
 rg -Fq 'notificationRow.bucket === "past" ? "RECENT" : "LIVE"' \
   "$repo_root/hancore.shibumi.status/NotificationPanel.qml" \
   || fail "V1 notification rows do not label live versus recent entries"

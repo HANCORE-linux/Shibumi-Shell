@@ -66,7 +66,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.14.1")
+        self.assertEqual(version, "0.1.1-beta.15")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -146,9 +146,19 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.14.1": {
                 "suiteVersion": "0.1.1-beta.14.1",
-                "sourceRevisions": ["package:0.1.1-beta.14.1"],
+                "sourceRevisions": [
+                    "7a6c853b1947d303bad9a5b640c224c01b669106",
+                    "b9bf65993bc04c1d49dc98a78b60d5594478a7bd",
+                    "package:0.1.1-beta.14.1",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "0350a8f66d81dc640b6d268ace149620ae78c40aea13ad2cd507ad6de93d8de3",
+            },
+            "public-beta.15": {
+                "suiteVersion": "0.1.1-beta.15",
+                "sourceRevisions": ["package:0.1.1-beta.15"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "7eeb2a88e0920d2fe647f4ef88b8a00ad54a205c3b627234b402d50b4709b11d",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -462,30 +472,79 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
-    def test_quattro_runtime_pins_predecessor_and_both_package_arms(self) -> None:
+    def test_quattro_runtime_pins_predecessors_and_all_three_arms(self) -> None:
         runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
-        predecessor = (
-            "predecessor_revision="
-            "2760cdb8272255790d5e4613fed8a48cb63c3555"
+        revision_pins = (
+            "package_predecessor_revision="
+            "2760cdb8272255790d5e4613fed8a48cb63c3555",
+            "package_candidate_revision="
+            "7a6c853b1947d303bad9a5b640c224c01b669106",
+            "source_predecessor_revision="
+            "7a6c853b1947d303bad9a5b640c224c01b669106",
         )
-        arm_markers = ("# Arm 1: package update", "# Arm 2: fresh install")
+        arm_markers = (
+            "# Arm 1: package update",
+            "# Arm 2: fresh source checkout install",
+            "# Arm 3: source checkout update",
+        )
+        package_candidate_archive = (
+            'archive "$package_candidate_revision" \\\n'
+            '  | tar -x -C "$package_candidate_root"'
+        )
+        fresh_source_assertion = (
+            'assert_install_state "$source_candidate_root" '
+            "'0.1.1-beta.15' checkout \\\n"
+            '  "$candidate_revision"'
+        )
 
         def assert_contract(text: str) -> None:
-            self.assertEqual(text.count(predecessor), 1)
+            for revision_pin in revision_pins:
+                self.assertEqual(text.count(revision_pin), 1)
             for marker in arm_markers:
                 self.assertEqual(text.count(marker), 1)
+            self.assertIn(
+                "# Published beta.14.1; lift to the next tag at release pin.",
+                text,
+            )
+            self.assertIn("clone --quiet --shared --no-checkout", text)
+            self.assertIn("checkout --quiet \\\n    --detach", text)
+            self.assertIn(package_candidate_archive, text)
+            self.assertIn('source_root="$source_candidate_root"', text)
+            self.assertIn(fresh_source_assertion, text)
+            self.assertIn("fresh candidate source checkout", text)
+            self.assertNotIn("fresh candidate package", text)
+            self.assertEqual(text.count("run_update_arm \"$"), 2)
+            self.assertIn(".installOrigin == $origin", text)
+            self.assertIn(".payloadRoot == $root", text)
+            self.assertIn(".sourceRoot == $root", text)
 
         runtime = runtime_path.read_text(encoding="utf-8")
         assert_contract(runtime)
         with tempfile.TemporaryDirectory(
             prefix="shibumi-quattro-arm-markers."
         ) as temporary:
-            missing_marker = Path(temporary) / "quattro-runtime-missing-arm.sh"
-            missing_marker.write_text(
-                runtime.replace(arm_markers[1], "", 1), encoding="utf-8"
+            mutations = (
+                runtime.replace(arm_markers[2], "", 1),
+                runtime.replace(
+                    package_candidate_archive,
+                    package_candidate_archive.replace(
+                        "$package_candidate_revision", "$candidate_revision"
+                    ),
+                    1,
+                ),
+                runtime.replace(
+                    fresh_source_assertion,
+                    fresh_source_assertion.replace(
+                        '"$source_candidate_root"', '"$package_candidate_root"'
+                    ),
+                    1,
+                ),
             )
-            with self.assertRaises(AssertionError):
-                assert_contract(missing_marker.read_text(encoding="utf-8"))
+            for index, mutated_runtime in enumerate(mutations):
+                mutation = Path(temporary) / f"quattro-runtime-mutation-{index}.sh"
+                mutation.write_text(mutated_runtime, encoding="utf-8")
+                with self.assertRaises(AssertionError):
+                    assert_contract(mutation.read_text(encoding="utf-8"))
 
     def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
@@ -607,6 +666,69 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertIn("refusing foreign fixture service", result.stderr)
             self.assertFalse(systemctl_log.exists())
 
+    def test_quattro_cleanup_removal_failure_is_fatal(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
+            encoding="utf-8"
+        )
+        helper_start = runtime.index("cleanup() {\n")
+        helper_end = runtime.index("\n}\ntrap cleanup EXIT", helper_start) + 3
+        cleanup = runtime[helper_start:helper_end]
+
+        with tempfile.TemporaryDirectory(
+            prefix="shibumi-cleanup-removal."
+        ) as temporary:
+            root = Path(temporary)
+            harness = root / "cleanup"
+            harness.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "tmpdir=$1\n"
+                "stop_shells=\n"
+                "cleanup_log=\n"
+                "service_prefix=shibumi-runtime-Ab12Cd\n"
+                "cleanup_probe_armed=0\n"
+                "failed=0\n"
+                f"{cleanup}\n"
+                "cleanup\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            failed_scratch = root / "failed-scratch"
+            failed_scratch.mkdir()
+            (failed_scratch / "sentinel").write_text("retained\n", encoding="utf-8")
+            stub_bin = root / "bin"
+            stub_bin.mkdir()
+            rm_stub = stub_bin / "rm"
+            rm_stub.write_text("#!/usr/bin/env bash\nexit 73\n", encoding="utf-8")
+            rm_stub.chmod(0o755)
+            environment = os.environ.copy()
+            environment["PATH"] = f"{stub_bin}:{environment['PATH']}"
+            failed = subprocess.run(
+                [str(harness), str(failed_scratch)],
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+            self.assertEqual(failed.returncode, 1, failed.stderr)
+            self.assertTrue((failed_scratch / "sentinel").is_file())
+            self.assertIn(
+                "Runtime fixture temporary directory cleanup failed",
+                failed.stderr,
+            )
+
+            removed_scratch = root / "removed-scratch"
+            removed_scratch.mkdir()
+            (removed_scratch / "sentinel").write_text("removed\n", encoding="utf-8")
+            removed = subprocess.run(
+                [str(harness), str(removed_scratch)],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(removed.returncode, 0, removed.stderr)
+            self.assertFalse(removed_scratch.exists())
+            self.assertFalse(removed_scratch.is_symlink())
+
     def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
@@ -622,8 +744,12 @@ puts JSON.generate(workflow.fetch("jobs"))
         self.assertIn('rm -f "$fixture_omarchy/bin/omarchy-restart-shell"', runtime)
         self.assertIn('"$fixture_omarchy/bin/omarchy-update-available"', runtime)
         self.assertIn("command -v omarchy-update-available", runtime)
-        self.assertIn("systemd-run --user --quiet --collect", runtime)
-        self.assertEqual(runtime.count("systemd-run --user"), 2)
+        self.assertIn("mkdir -m 0700 \"$fixture_runtime_dir\"", runtime)
+        self.assertIn('XDG_RUNTIME_DIR="$fixture_runtime_dir"', runtime)
+        self.assertIn('WAYLAND_DISPLAY="$fixture_wayland_display"', runtime)
+        self.assertIn('DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"', runtime)
+        self.assertIn("systemd-run --user --machine=@.host --quiet --collect", runtime)
+        self.assertEqual(runtime.count("systemd-run --user --machine=@.host"), 2)
         self.assertEqual(
             runtime.count("timeout --kill-after=1s 8s systemd-run --user"), 2
         )
@@ -632,7 +758,9 @@ puts JSON.generate(workflow.fetch("jobs"))
         self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
         self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
         self.assertIn("refusing foreign fixture service", runtime)
-        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-2])", runtime)
+        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])", runtime)
+        self.assertIn("package update (5) + fresh install (4) + source update (5) = 14", runtime)
+        self.assertIn("exact 14-shell generation budget", runtime)
         self.assertIn("--kill-whom=all --signal=TERM", runtime)
         self.assertIn("--kill-whom=all --signal=KILL", runtime)
         self.assertIn("timeout --kill-after=1s 8s", runtime)

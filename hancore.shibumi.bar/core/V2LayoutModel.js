@@ -289,6 +289,18 @@ function reconcilePluginGroups(value, specsValue, followRegionsValue) {
     }
     if (currentLocation) continue
     var placed = addDynamicGroup(result, spec.pluginId, spec.region)
+    if (!placed) {
+      for (var fallbackIndex = 0; fallbackIndex < Regions.length; fallbackIndex++) {
+        var fallbackRegion = Regions[fallbackIndex]
+        if (fallbackRegion === spec.region) continue
+        var hasSlot = result[fallbackRegion].some(function(id) {
+          return String(id || "") === ""
+        })
+        if (!hasSlot) continue
+        placed = addDynamicGroup(result, spec.pluginId, fallbackRegion)
+        if (placed) break
+      }
+    }
     if (!placed) unplaced.push(spec.pluginId)
     else result = placed
   }

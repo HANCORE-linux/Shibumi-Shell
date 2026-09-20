@@ -1,5 +1,6 @@
 import QtQuick
 import "../hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
+import "../hancore.shibumi.bar/core/V2LayoutModel.js" as V2LayoutModel
 import "../hancore.shibumi.state/ShibumiConfig.js" as ShibumiConfig
 
 QtObject {
@@ -48,7 +49,10 @@ QtObject {
       fail("malformed order was accepted")
 
     const toggled = LayoutModel.toggleSplit(splits, "left", 0, order)
+    const centerOrder = LayoutModel.addSlot(order, "center"), centerSplits = LayoutModel.resizeSplits(splits, centerOrder)
+    const centerToggled = LayoutModel.toggleSplit(centerSplits, "center", 0, centerOrder)
     if (!toggled || !toggled.left[0] || splits.left[0]
+        || !centerToggled || !centerToggled.center[0]
         || LayoutModel.toggleSplit(splits, "center", 0, order) !== null
         || LayoutModel.toggleSplit(splits, "left", 6, order) !== null)
       fail("split toggle contract")
@@ -59,10 +63,10 @@ QtObject {
         || !LayoutModel.splitEnabled(boundary, "boundaries", 1, order))
       fail("boundary split contract")
 
-    const splitAll = LayoutModel.allSplits(true, order)
-    if (!LayoutModel.validSplits(splitAll, order)
-        || !splitAll.left.every(Boolean) || !splitAll.right.every(Boolean)
-        || !splitAll.boundaries.every(Boolean)
+    const splitAll = LayoutModel.allSplits(true, centerOrder)
+    if (!LayoutModel.validSplits(splitAll, centerOrder)
+        || !splitAll.left.every(Boolean) || !splitAll.center.every(Boolean)
+        || !splitAll.right.every(Boolean) || !splitAll.boundaries.every(Boolean)
         || LayoutModel.allSplits("true") !== null)
       fail("split-all contract")
 
@@ -145,6 +149,14 @@ QtObject {
         || !LayoutModel.validSplits(withoutLeft.splits, withoutLeft.order))
       fail("dynamic group removal did not repair a swapped base slot")
 
+    const bA = LayoutModel.reconcilePluginGroups(order, splits, [
+      { pluginId: "custom.v2-to-v1", region: "right" }
+    ])
+    if (!bA || bA.unplaced.length !== 0
+        || LayoutModel.locationFor(bA.order, "G:custom.v2-to-v1").region !== "right"
+        || !LayoutModel.validSplits(bA.splits, bA.order))
+      fail("free V1 capacity did not place the V2-origin candidate")
+
     const full = LayoutModel.reconcilePluginGroups(order, splits, [
       { pluginId: "custom.a", region: "left" },
       { pluginId: "custom.b", region: "left" },
@@ -154,8 +166,60 @@ QtObject {
     ])
     if (!full || full.unplaced.length !== 1
         || full.unplaced[0] !== "custom.e"
-        || full.order.left.length !== 9 || full.order.right.length !== 9)
-      fail("dynamic group capacity must fail closed")
+        || full.order.left.length !== 9 || full.order.right.length !== 9
+        || !LayoutModel.locationFor(full.order, "G:custom.a")
+        || !LayoutModel.validSplits(full.splits, full.order))
+      fail("mixed V1 plan lost placeable candidates or capacity remainder")
+
+    const v2Fallback = V2LayoutModel.defaultLayout()
+    v2Fallback.right[10] = "G:custom.r1"
+    v2Fallback.right[11] = "G:custom.r2"
+    v2Fallback.right[12] = "G:custom.r3"
+    const v2FallbackSpecs = [
+      { pluginId: "custom.r1", region: "right" },
+      { pluginId: "custom.r2", region: "right" },
+      { pluginId: "custom.r3", region: "right" },
+      { pluginId: "custom.target", region: "right" }
+    ]
+    const v2FallbackPlan = V2LayoutModel.reconcilePluginGroups(
+      v2Fallback, v2FallbackSpecs, true)
+    const v2FallbackLocation = v2FallbackPlan
+      ? V2LayoutModel.locationFor(
+        v2FallbackPlan.layout, "G:custom.target") : null
+    if (!v2FallbackPlan || v2FallbackPlan.unplaced.length !== 0
+        || !v2FallbackLocation || v2FallbackLocation.region !== "left"
+        || v2FallbackLocation.index !== 3
+        || v2FallbackPlan.layout.right[10] !== "G:custom.r1"
+        || v2FallbackPlan.layout.right[11] !== "G:custom.r2"
+        || v2FallbackPlan.layout.right[12] !== "G:custom.r3")
+      fail("V2 did not use an existing fallback-region slot")
+
+    const v2Full = V2LayoutModel.defaultLayout()
+    v2Full.left[3] = "G:custom.l1"
+    v2Full.left[8] = "G:custom.l2"
+    v2Full.left[9] = "G:custom.l3"
+    v2Full.left.push("G:custom.l4", "G:custom.l5", "G:custom.l6")
+    v2Full.right[10] = "G:custom.move"
+    v2Full.right[11] = "G:custom.r1"
+    v2Full.right[12] = "G:custom.r2"
+    const v2Mixed = V2LayoutModel.reconcilePluginGroups(v2Full, [
+      { pluginId: "custom.blocked", region: "left" },
+      { pluginId: "custom.l1", region: "left" },
+      { pluginId: "custom.l2", region: "left" },
+      { pluginId: "custom.l3", region: "left" },
+      { pluginId: "custom.l4", region: "left" },
+      { pluginId: "custom.l5", region: "left" },
+      { pluginId: "custom.l6", region: "left" },
+      { pluginId: "custom.move", region: "left" },
+      { pluginId: "custom.r1", region: "right" },
+      { pluginId: "custom.r2", region: "right" }
+    ], true)
+    if (!v2Mixed || !V2LayoutModel.valid(v2Mixed.layout)
+        || v2Mixed.unplaced.length !== 1
+        || v2Mixed.unplaced[0] !== "custom.blocked"
+        || v2Mixed.layout.left[0] !== "G:custom.move"
+        || v2Mixed.layout.right[10] !== "G1")
+      fail("V2 full-region swap was lost beside an unplaced candidate")
 
     console.log("layout model regression passed")
     Qt.exit(0)

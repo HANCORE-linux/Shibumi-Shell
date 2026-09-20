@@ -90,6 +90,8 @@ ShellRoot {
     property var pendingTooltipTarget: null
     property var tooltipTarget: null
     property var activePopout: null
+    property var lastConnectedOwner: null
+    property var lastConnectedGeometry: null
 
     function entryId(entry) { return String(entry.id || "") }
     function entrySettings(entry) { return entry }
@@ -108,10 +110,18 @@ ShellRoot {
     function releasePopout(owner) {
       if (activePopout === owner) activePopout = null
     }
-    function publishConnectedPanel(_owner, _screenName, _x, _reveal, _geometry) {
+    function publishConnectedPanel(owner, _screenName, _x, _reveal, geometry) {
+      lastConnectedOwner = owner
+      lastConnectedGeometry = geometry
       return true
     }
-    function clearConnectedPanel(_owner) { return true }
+    function clearConnectedPanel(owner) {
+      if (lastConnectedOwner === owner) {
+        lastConnectedOwner = null
+        lastConnectedGeometry = null
+      }
+      return true
+    }
   }
 
   Core.WidgetSlot {
@@ -170,9 +180,9 @@ ShellRoot {
 
       if (root.phase === -1) {
         if (!eagerSlot.compatibilityPanel
-            || eagerSlot.compatibilityPanel.contentHeight <= 120) {
+            || Math.abs(eagerSlot.compatibilityPanel.contentHeight - 384) > 0.5) {
           if (root.attempts < 50) return
-          return root.fail("eager nested panel did not receive initial height repair")
+          return root.fail("eager nested panel lost its plugin-fitted 384px height")
         }
         eagerSlot.activeItem.openOnDemand()
         root.phase = -2
@@ -183,16 +193,8 @@ ShellRoot {
       if (root.phase === -2) {
         if (root.attempts < 6) return
         if (!eagerSlot.compatibilityPanel
-            || eagerSlot.compatibilityPanel.contentHeight <= 120)
-          return root.fail("opening eager nested panel dropped its repaired height")
-        root.phase = -3
-        root.attempts = 0
-        return
-      }
-
-      if (root.phase === -3) {
-        // Let the 800 ms construction window expire before changing content.
-        if (root.attempts < 50) return
+            || Math.abs(eagerSlot.compatibilityPanel.contentHeight - 384) > 0.5)
+          return root.fail("opening eager nested panel changed its plugin height")
         eagerSlot.activeItem.desiredContentHeight = 520
         root.phase = -4
         root.attempts = 0
@@ -200,10 +202,8 @@ ShellRoot {
       }
 
       if (root.phase === -4) {
-        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 544) > 0.5) {
-          if (root.attempts < 30) return
-          return root.fail("late hosted-panel growth was not reconciled")
-        }
+        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 544) > 0.5)
+          return root.fail("plugin-bound hosted-panel growth did not propagate")
         eagerSlot.activeItem.desiredContentHeight = 240
         root.phase = -5
         root.attempts = 0
@@ -211,10 +211,8 @@ ShellRoot {
       }
 
       if (root.phase === -5) {
-        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 264) > 0.5) {
-          if (root.attempts < 30) return
-          return root.fail("late hosted-panel shrink was not reconciled")
-        }
+        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 264) > 0.5)
+          return root.fail("plugin-bound hosted-panel shrink did not propagate")
         root.eagerReplacementGeneration
           = eagerSlot.activeItem.loadGeneration
         eagerSlot.activeItem.replaceWhileOpen()
@@ -231,10 +229,8 @@ ShellRoot {
           if (root.attempts < 50) return
           return root.fail("same-open Loader replacement was not rediscovered")
         }
-        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 264) > 0.5) {
-          if (root.attempts < 50) return
-          return root.fail("replacement panel lost repaired content height")
-        }
+        if (Math.abs(eagerSlot.compatibilityPanel.contentHeight - 264) > 0.5)
+          return root.fail("replacement panel lost its plugin-bound content height")
         root.eagerClosedSurfaceAttempts
           = eagerSlot.compatibilitySurfaceResolutionAttempts
         eagerSlot.activeItem.closeLoaded()
@@ -248,10 +244,9 @@ ShellRoot {
         if (!eagerSlot.activeItem.exposedPanel
             || !eagerSlot.compatibilityPanel)
           return root.fail("close-only path destroyed the hosted panel")
-        if (eagerSlot.compatibilityMeasurementRunning
-            || eagerSlot.compatibilitySurfaceResolutionAttempts
+        if (eagerSlot.compatibilitySurfaceResolutionAttempts
               !== root.eagerClosedSurfaceAttempts)
-          return root.fail("close-only path retained compatibility polling")
+          return root.fail("close-only path retained surface-discovery polling")
         eagerSlot.activeItem.openOnDemand()
         root.phase = -8
         root.attempts = 0
@@ -262,7 +257,7 @@ ShellRoot {
         if (root.attempts < 6) return
         if (!eagerSlot.compatibilityPanel
             || Math.abs(eagerSlot.compatibilityPanel.contentHeight - 264) > 0.5)
-          return root.fail("same-panel reopen lost repaired content height")
+          return root.fail("same-panel reopen lost plugin-bound content height")
         root.phase = 0
         root.attempts = 0
         return
@@ -289,8 +284,6 @@ ShellRoot {
           if (root.attempts < 50) return
           return root.fail("unloaded panel left stale compatibility objects")
         }
-        if (slot.compatibilityMeasurementRunning)
-          return root.fail("unloaded panel retained its measurement timer")
         root.closedSurfaceAttempts
           = slot.compatibilitySurfaceResolutionAttempts
         root.phase = 30
@@ -299,13 +292,12 @@ ShellRoot {
       }
 
       if (root.phase === 30) {
-        // Stay closed beyond the fast settling interval. Closing must not
-        // re-arm either compatibility worker before the next explicit open.
+        // Stay closed beyond the discovery interval. Closing must not re-arm
+        // surface traversal before the next explicit open.
         if (root.attempts < 6) return
         if (slot.compatibilitySurfaceResolutionAttempts
-              !== root.closedSurfaceAttempts
-            || slot.compatibilityMeasurementRunning)
-          return root.fail("closed panel re-armed compatibility polling")
+              !== root.closedSurfaceAttempts)
+          return root.fail("closed panel re-armed surface-discovery polling")
         fakeBar.position = "top"
         root.phase = 4
         root.attempts = 0
@@ -324,38 +316,41 @@ ShellRoot {
           || slot.compatibilityCard.objectName !== "nestedStandardPanelCard")
         return root.fail("adapter did not preserve the standard panel/card pair")
 
-      const expectedX = 700 + 12 - 210
-      if (Math.abs(slot.compatibilityCard.x - expectedX) > 0.5)
-        return root.fail("nested panel did not follow its invoking widget")
-      if (slot.compatibilityPanel.contentHeight <= 120) {
-        if (root.attempts < 50) return
-        return root.fail("nested panel remained at its collapsed native height"
-          + " measured=" + slot.compatibilityMeasuredContentHeight
-          + " desired=" + slot.compatibilityDesiredContentHeight
-          + " native=" + slot.compatibilityNativeContentHeight
-          + " placement=" + slot.hostPanelPlacementEnabled
-          + " repair=" + slot.hostPanelHeightRepairEnabled)
-      }
+      if (Math.abs(slot.compatibilityCard.x
+            - slot.compatibilityPanel.cardOrigin.x) > 0.5
+          || Math.abs(slot.compatibilityCard.y
+            - slot.compatibilityPanel.cardOrigin.y) > 0.5)
+        return root.fail("WidgetSlot replaced provider-owned card geometry")
       if (Math.abs(slot.compatibilityPanel.contentHeight - 384) > 0.5)
-        return root.fail("nested panel did not recover its complete content height")
+        return root.fail("nested panel lost its plugin-fitted 384px height")
 
       if (root.phase === 1) {
-        const expectedTopY = fakeBar.barSize + slot.compatibilityPanel.gap
-        if (Math.abs(slot.compatibilityCard.y - expectedTopY) > 0.5)
-          return root.fail("top panel remained at the screen bottom")
+        // This controlled offscreen provider does not prove native card math;
+        // it proves only that the V2 connector mirrors the card's actual data.
+        tokens.shellStyle = "full"
+        slot.publishCompatibilityConnection()
+        const geometry = fakeBar.lastConnectedGeometry
+        if (fakeBar.lastConnectedOwner !== slot.activeItem || !geometry
+            || Math.abs(geometry.cardX - slot.compatibilityCard.x) > 0.5
+            || Math.abs(geometry.cardY - slot.compatibilityCard.y) > 0.5
+            || Math.abs(geometry.cardWidth - slot.compatibilityCard.width) > 0.5
+            || Math.abs(geometry.cardHeight - slot.compatibilityCard.height) > 0.5)
+          return root.fail("V2 connector did not publish actual native card geometry")
         root.firstLoadGeneration = slot.activeItem.loadGeneration
         root.phase = 2
         root.attempts = 0
+        slot.activeItem.nativeCardOrigin = Qt.point(510, 44)
         fakeBar.position = "bottom"
         return
       }
 
       if (root.phase === 2) {
-        const expectedBottomY = slot.compatibilityPanel.screenH
-          - fakeBar.barSize - slot.compatibilityPanel.contentHeight
-          - slot.compatibilityPanel.gap
-        if (Math.abs(slot.compatibilityCard.y - expectedBottomY) > 0.5)
-          return root.fail("bottom panel did not follow the visible bar edge")
+        slot.publishCompatibilityConnection()
+        const geometry = fakeBar.lastConnectedGeometry
+        if (fakeBar.lastConnectedOwner !== slot.activeItem || !geometry
+            || Math.abs(geometry.cardX - 510) > 0.5
+            || Math.abs(geometry.cardY - 44) > 0.5)
+          return root.fail("V2 connector did not follow changed provider geometry")
         root.phase = 3
         root.attempts = 0
         slot.activeItem.closeAndUnload()
@@ -364,10 +359,9 @@ ShellRoot {
 
       if (slot.activeItem.loadGeneration <= root.firstLoadGeneration)
         return root.fail("panel Loader did not create a fresh panel owner")
-      const expectedReloadedTopY = fakeBar.barSize
-        + slot.compatibilityPanel.gap
-      if (Math.abs(slot.compatibilityCard.y - expectedReloadedTopY) > 0.5)
-        return root.fail("reloaded top panel lost visible-edge placement")
+      if (Math.abs(slot.compatibilityCard.x - 510) > 0.5
+          || Math.abs(slot.compatibilityCard.y - 44) > 0.5)
+        return root.fail("reloaded panel lost provider-owned card geometry")
 
       stop()
       console.log("hosted panel loader smoke passed")

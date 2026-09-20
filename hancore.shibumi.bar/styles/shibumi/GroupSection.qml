@@ -383,10 +383,11 @@ Item {
         if (index !== ownerIndex) return 0
         let siblings = root.canAddSlot ? root.groupSpacing + addSlotTarget.width : 0
         for (let i = 0; i < horizontalRepeater.count; i++) {
-          if (i === index) continue
           const cell = horizontalRepeater.itemAt(i)
-          if (cell && cell.effectiveHasContent)
+          if (!cell) continue
+          if (i !== index && cell.effectiveHasContent)
             siblings += cell.targetVisual.width + root.groupSpacing
+          if (cell.separated) siblings += root.splitGrow
         }
         // Zero is the host widget API's unconstrained sentinel.
         return Math.max(1, root.availableWidth - siblings)
@@ -843,7 +844,6 @@ Item {
             id: splitMarker
 
             readonly property bool hasFollowingGroup: root && horizontalRow
-              && (root.v2Mode || root.region !== "center")
               && horizontalCell.contentShown
               && (root.v2Mode
                 ? horizontalRow.hasContentAfter(horizontalCell.index)

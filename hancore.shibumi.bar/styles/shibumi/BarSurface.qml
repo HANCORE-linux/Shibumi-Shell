@@ -153,6 +153,7 @@ Item {
         : Math.max(minCenterX, Math.min(idealCenterX, maxCenterX))
       readonly property var runs: {
         void(leftGroups.groupGeometry)
+        void(centerGroups.groupGeometry)
         void(rightGroups.groupGeometry)
         void(leftRegion.x)
         void(leftRegion.width)
@@ -170,6 +171,11 @@ Item {
               x: leftRegion.x + leftGroups.x - runChrome.x,
               groups: leftGroups.groupGeometry,
               splits: root.bar.layoutController.splits.left
+            },
+            {
+              x: centerRegion.x + centerGroups.x - runChrome.x,
+              groups: centerGroups.groupGeometry,
+              splits: root.bar.layoutController.splits.center
             },
             {
               x: rightRegion.x + rightGroups.x - runChrome.x,
@@ -272,10 +278,14 @@ Item {
       }
 
       Rectangle {
+        objectName: "shibumi-editing-frame"
         x: runChrome.x - Commons.Style.space(3)
-        y: runChrome.y - Commons.Style.space(3)
+        y: root.bar.layoutController.v2Mode
+          ? runChrome.y - Commons.Style.space(3) : border.width
         width: runChrome.width + Commons.Style.space(6)
-        height: runChrome.height + Commons.Style.space(6)
+        height: root.bar.layoutController.v2Mode
+          ? runChrome.height + Commons.Style.space(6)
+          : Math.max(0, parent.height - 2 * border.width)
         visible: root.layoutSession && root.layoutSession.editing
         color: "transparent"
         border.width: 1

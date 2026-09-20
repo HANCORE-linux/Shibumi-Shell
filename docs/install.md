@@ -176,10 +176,9 @@ recovery or mutation. One fully admitted interrupted journal may be recovered
 before the lifecycle checks live payload identity again.
 
 Tag `v0.1.1-beta.14` was never published and is not a supported predecessor.
-Issue #56 recovery for a source checkout outside the admitted identities is
-supervised: run `./scripts/shibumi-suite uninstall --keep-settings --yes` from
-that exact checkout, then install `v0.1.1-beta.14.1`. Do not bypass admission by
-manually deleting lifecycle state, journals, markers, or plugin directories.
+For a source checkout outside the admitted identities, follow
+[supervised recovery](#supervised-recovery). Do not bypass admission by manually
+deleting lifecycle state, journals, markers, or plugin directories.
 
 ### Move from a checkout to the package
 
@@ -355,6 +354,36 @@ If an operation fails:
 3. rerun the same suite command so automatic recovery can complete;
 4. use [troubleshooting](development/troubleshooting.md) before removing files
    manually.
+
+### Supervised recovery
+
+#### Installed from `main` before a tagged release
+
+With maintainer guidance, identify the exact `sourceRevision` in `install.json`
+and use a clean checkout of that commit to uninstall with settings retained,
+then install the published tag. For example, only if the recorded revision is
+`e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb` (Beta.10, August 21):
+
+```bash
+git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
+./scripts/shibumi-suite uninstall --keep-settings --yes
+git checkout v0.1.1-beta.14.1
+./scripts/shibumi-suite install --yes
+```
+
+The stock Omarchy bar appears between uninstall and install. Do not substitute
+a different old revision or delete `install.json` to bypass admission.
+
+#### Plugin root without `.shibumi-managed.json`
+
+Only after the maintainer confirms an admitted `install.json`, a normal
+non-symlink plugin root whose marker alone is missing, and no pending recovery,
+move that root aside to a new, unused path outside the plugin directory (for
+example, `mv -T -- ~/.config/omarchy/plugins/hancore.shibumi.ai ~/shibumi-quarantine-ai`),
+then run `./scripts/shibumi-suite repair --dry-run` followed by
+`./scripts/shibumi-suite repair --yes` if the preview is correct.
+Keep the quarantined root even if repair fails; do not delete state, manufacture
+a marker, or use this procedure for unknown identities or invalid existing markers.
 
 ## Security boundary
 

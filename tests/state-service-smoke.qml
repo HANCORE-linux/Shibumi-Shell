@@ -55,7 +55,7 @@ ShellRoot {
     id: state
     omarchyPath: Quickshell.env("OMARCHY_PATH")
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.14.1", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.15", kinds: ["service"]})
   }
   Component.onCompleted: steps = [
     function() {
@@ -182,7 +182,7 @@ ShellRoot {
     }, function() {
       check(state.config.order.left.length === 8 && state.config.v1SlotRoles.left[7] === "extra" && state.config.splits.left.length === 7, "extra layout publication")
       const order = copy(state.config.order); order.center.push("")
-      check(state.setLayout(order, state.config.splits), "second center queue")
+      check(state.setLayout(order, Object.assign({}, state.config.splits, {center: [false]})), "second center queue")
     }, function() {
       check(state.config.order.center.length === 2 && state.config.v1SlotRoles.center[1] === "extra"
         && document.plugins[0].shibumi.order.center.length === 2 && state.config.v2Layout.center.length === 1, "persisted second center")
@@ -236,6 +236,25 @@ ShellRoot {
       const first = v1.left[0]; v1.left[0] = v1.left[1]; v1.left[1] = first
       const v2 = copy(state.config.v2Layout)
       const head = v2.left[0]; v2.left[0] = v2.left[1]; v2.left[1] = head
+      const guardOrder = copy(v1); guardOrder.center.push("")
+      const legacyGuardSplits = copy(state.config.splits); delete legacyGuardSplits.center
+      const legacyGuard = {v1Layout: {order: guardOrder, splits: legacyGuardSplits}}
+      const currentGuard = copy(legacyGuard); currentGuard.v1Layout.splits.center = [true]
+      const malformedGuard = copy(currentGuard); malformedGuard.v1Layout.splits.center = null
+      const guardWrites = fakeShell.writes
+      check(state.setLayoutFamilyTransition(legacyGuard)
+        && state.setLayoutFamilyTransition(currentGuard) && !state.setLayoutFamilyTransition(malformedGuard)
+        && fakeShell.writes === guardWrites, "three/four-field State split guards changed or wrote malformed input")
+      const extraGuardSerial = state.writeSerial, extraGuardPending = state.writePending
+      const legacyExtraGuard = copy(legacyGuard); legacyExtraGuard.v1Layout.splits.extra = []
+      const currentExtraGuard = copy(currentGuard); currentExtraGuard.v1Layout.splits.extra = []
+      currentExtraGuard.v1Layout.splits.center = [false]
+      check(!state.setLayoutFamilyTransition(legacyExtraGuard)
+        && state.writeSerial === extraGuardSerial && state.writePending === extraGuardPending
+        && fakeShell.writes === guardWrites, "three-field split extra key changed queue or writes")
+      check(!state.setLayoutFamilyTransition(currentExtraGuard)
+        && state.writeSerial === extraGuardSerial && state.writePending === extraGuardPending
+        && fakeShell.writes === guardWrites, "four-field split extra key changed queue or writes")
       familyPatch = {v1Layout: {order: v1, splits: copy(state.config.splits)},
         v2Layout: v2, v2Boundaries: [true, false], separators: {G1: null, G2: true, G3: false},
         familyStates: {G6: {v1: false, v2: true}, G7: {v1: null, v2: false}}}
@@ -254,7 +273,7 @@ ShellRoot {
           {familyStates: {G6: {v1: true}}},
           {familyStates: {G6: {v1: true, v2: false, extra: true}}}])
         check(!state.setLayoutFamilyTransition(invalid), "invalid transition admitted")
-      check(state.writeSerial === serial && fakeShell.writes === writes && !state.writePending,
+      check(state.writeSerial === serial && fakeShell.writes === writes && state.writePending,
         "invalid transition changed queue")
       familyWrites = writes
       check(state.setLayoutFamilyTransition(familyPatch), "atomic transition refused")

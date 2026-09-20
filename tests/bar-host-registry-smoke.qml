@@ -14,6 +14,11 @@ ShellRoot {
   property var retainedItems: []
   property var inlineStateItem: null
   property var inlineStateSlot: null
+  property var legacyRegistrySavedState: null
+  property var legacyRegistrySavedLayout: null
+  property var legacyRegistrySavedShell: null
+  property var legacyRegistrySavedPlugins: null
+  property int legacyRegistryRevisionBefore: -1
   property string commandMarker: testCommandMarker
 
   QtObject {
@@ -188,7 +193,8 @@ ShellRoot {
     try {
       const withCenter = LayoutModel.addSlot(LayoutModel.defaultOrder(), "center")
       const pair = LayoutModel.moveGroupToSlot(withCenter, "G4", "center", 1)
-      const added = LayoutModel.addDynamicGroup(pair, LayoutModel.defaultSplits(), "example.outer", "left")
+      const pairSplits = LayoutModel.resizeSplits(LayoutModel.defaultSplits(), pair)
+      const added = LayoutModel.addDynamicGroup(pair, pairSplits, "example.outer", "left")
       const swapped = LayoutModel.swapGroups(added.order, "G:example.outer", "G8")
       const state = JSON.parse(JSON.stringify(savedState))
       state.presentation.shellStyle = "shibumi"
@@ -213,7 +219,7 @@ ShellRoot {
           || !removalChecks.verify("example.outer", true)
           || !hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
           || JSON.stringify(stateService.config.order) !== JSON.stringify(pair)
-          || JSON.stringify(stateService.config.splits) !== JSON.stringify(LayoutModel.defaultSplits()))
+          || JSON.stringify(stateService.config.splits) !== JSON.stringify(pairSplits))
         return root.fail("explicit return-to-extra did not permit safe removal")
     } finally {
       stateService.config = savedState
@@ -744,13 +750,13 @@ ShellRoot {
       root.attempts++
       if ((!hostBar.hostReady || !hostBar.styleReady
            || !hostBar.barToggleStateLoaded
-           || hostBar.moduleSlots.length < 16)
+           || (root.stage < 29 && hostBar.moduleSlots.length < 16))
           && root.attempts < 100) return
 
       if (!hostBar.hostReady || !hostBar.styleReady
           || !hostBar.barToggleStateLoaded)
         return root.fail("bar host did not become ready")
-      if (hostBar.moduleSlots.length !== 16)
+      if (root.stage < 29 && hostBar.moduleSlots.length !== 16)
         return root.fail("expected 16 registry slots, got "
                          + hostBar.moduleSlots.length)
 
@@ -859,6 +865,62 @@ ShellRoot {
 
       if (restoreChecks.done && !layoutRestoreChecks.done) {
         layoutRestoreChecks.start()
+        return
+      }
+
+      if (root.stage === 29) {
+        if (root.attempts < 3) return
+        if (hostBar.v1FamilySlotBindings.G8 !== "example.family-change"
+            || hostBar.layoutController.groupLocation(
+              "G:example.family-change") !== null)
+          return root.fail("legacy family fixture did not start in the fixed V1 slot")
+        root.legacyRegistryRevisionBefore = hostBar.providerRegistryRevision
+        const changed = JSON.parse(JSON.stringify(
+          fakePluginRegistry.installedPlugins))
+        changed["example.family-change"].barWidget.semanticCapabilities = []
+        fakePluginRegistry.installedPlugins = changed
+        fakePluginRegistry.pluginsChanged()
+        root.stage = 30
+        root.attempts = 0
+        return
+      }
+
+      if (root.stage === 30) {
+        if (root.attempts < 3) return
+        const dynamic = hostBar.layoutController.groupLocation(
+          "G:example.family-change")
+        if (hostBar.providerRegistryRevision
+              !== root.legacyRegistryRevisionBefore + 1
+            || hostBar.v1FamilySlotBindings.G8 !== undefined
+            || !dynamic || dynamic.region !== "right"
+            || JSON.stringify(hostBar.layoutConfig)
+              !== JSON.stringify({ left: [], center: [{
+                id: "example.family-change", shibumiModule: true
+              }], right: [] }))
+          return root.fail("legacy metadata-only family change was not reconciled into persisted V1 order"
+            + " revision=" + hostBar.providerRegistryRevision
+            + "/" + root.legacyRegistryRevisionBefore
+            + " binding=" + JSON.stringify(hostBar.v1FamilySlotBindings)
+            + " dynamic=" + JSON.stringify(dynamic)
+            + " order=" + JSON.stringify(hostBar.layoutController.v1Slots)
+            + " layout=" + JSON.stringify(hostBar.layoutConfig))
+
+        fakePluginRegistry.installedPlugins = root.legacyRegistrySavedPlugins
+        stateService.config = root.legacyRegistrySavedState
+        hostBar.layoutConfig = root.legacyRegistrySavedLayout
+        fakeShell.shellConfig = root.legacyRegistrySavedShell
+        const providerRevision = hostBar.providerRegistryRevision
+        if (!hostBar.prepareForShutdown() || !hostBar.prepareForShutdown()
+            || !hostBar.shutdownPrepared || hostBar.hostReady
+            || hostBar.outputWindowsEnabled)
+          return root.fail("bar shutdown preparation did not settle idempotently")
+        fakePluginRegistry.pluginsChanged()
+        if (hostBar.providerRegistryRevision !== providerRevision)
+          return root.fail("bar shutdown accepted a late registry reconciliation")
+
+        stop()
+        console.log("bar host registry smoke passed")
+        Qt.exit(0)
         return
       }
 
@@ -1176,7 +1238,8 @@ ShellRoot {
           || !stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("rejected provider install did not roll back")
 
-      if (!removalChecks.verifyScopedActive("example.scoped", [])
+      if (!removalChecks.verifyPluginCatalogRegistryIsolation()
+          || !removalChecks.verifyScopedActive("example.scoped", [])
           || !removalChecks.verifyScopedActive(
             "example.scoped-provider", ["G6"])
           || !root.verifyV1FamilyCapacity() || !root.verifyV1RemovalAmbiguity()
@@ -1695,18 +1758,37 @@ ShellRoot {
       if (!root.verifyTransparencyContract())
         return root.fail("transparency contract did not settle opaque")
 
-      const providerRevision = hostBar.providerRegistryRevision
-      if (!hostBar.prepareForShutdown() || !hostBar.prepareForShutdown()
-          || !hostBar.shutdownPrepared || hostBar.hostReady
-          || hostBar.outputWindowsEnabled)
-        return root.fail("bar shutdown preparation did not settle idempotently")
-      fakePluginRegistry.pluginsChanged()
-      if (hostBar.providerRegistryRevision !== providerRevision)
-        return root.fail("bar shutdown accepted a late registry reconciliation")
-
-      stop()
-      console.log("bar host registry smoke passed")
-      Qt.exit(0)
+      root.legacyRegistrySavedState = JSON.parse(JSON.stringify(
+        stateService.config))
+      root.legacyRegistrySavedLayout = hostBar.currentLayoutSnapshot()
+      root.legacyRegistrySavedShell = JSON.parse(JSON.stringify(
+        fakeShell.shellConfig))
+      root.legacyRegistrySavedPlugins = fakePluginRegistry.installedPlugins
+      const legacyState = JSON.parse(JSON.stringify(stateService.config))
+      legacyState.presentation.shellStyle = "shibumi"
+      legacyState.order = LayoutModel.defaultOrder()
+      legacyState.splits = LayoutModel.defaultSplits()
+      stateService.config = legacyState
+      const familyPlugins = JSON.parse(JSON.stringify(
+        fakePluginRegistry.installedPlugins))
+      familyPlugins["example.family-change"] = {
+        id: "example.family-change",
+        kinds: ["bar-widget"],
+        entryPoints: { barWidget: "Fixture.qml" },
+        barWidget: {
+          allowMultiple: false,
+          semanticCapabilities: ["clock"]
+        }
+      }
+      fakePluginRegistry.installedPlugins = familyPlugins
+      const familyLayout = { left: [], center: [{
+        id: "example.family-change", shibumiModule: true
+      }], right: [] }
+      hostBar.layoutConfig = familyLayout
+      fakeShell.shellConfig.bar.layout = JSON.parse(JSON.stringify(
+        familyLayout))
+      root.stage = 29
+      root.attempts = 0
     }
   }
 }

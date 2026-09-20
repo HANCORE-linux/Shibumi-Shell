@@ -63,7 +63,7 @@ for lifecycle_contract in \
     'ControlSettings.qml:property string pendingConfigureRoute: ""' \
     'ControlSettings.qml:function scheduleConfigureRoute(value)' \
     'ControlSettings.qml:id: configureRouteSync' \
-    'control-center-smoke.qml:malformed Health result replaced the last report' \
+    'control-center-smoke.qml:Health projection case 7 treated an empty report as checked' \
     'control-center-smoke.qml:closing the panel stopped or destroyed Health' \
     'control-center-smoke.qml:reopened Health did not expose the completed report'; do
   file=${lifecycle_contract%%:*}
@@ -421,7 +421,7 @@ for configure_contract in \
   'ActiveBarSettingsPage.qml:property bool motionDetailOpen: false' \
   'ActiveBarSettingsPage.qml:columns: 3' \
   'ActiveBarSettingsPage.qml:motionEnabled && (selected || previewPointer.containsMouse)' \
-  'ActiveBarSettingsPage.qml:detail: "Add slots and dividers"' \
+  'ActiveBarSettingsPage.qml:detail: "Add slots, dividers and drag"' \
   'ControlSettings.qml:id: page.id === "main" ? "configure" : page.id' \
   'ControlCenterPanel.qml:: settings.restorePage === "configure" ? "CONFIGURE"'; do
   file=${configure_contract%%:*}
@@ -737,6 +737,8 @@ fi
 
 for landing_contract in \
   'id: barButtonColumn' \
+  'model: root.barOptions.length' \
+  'readonly property var modelData: root.barOptions[index]' \
   'width: parent.width' \
   'radius: root.controller.controlRadius' \
   'id: routeCanvas' \
@@ -939,7 +941,7 @@ rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
 rg -Fq 'visible: root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 slot and divider controls are not capability-gated"
-rg -Fq 'detail: "Add slots and dividers"' \
+rg -Fq 'detail: "Add slots, dividers and drag"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 edit mode does not explain its layout capability"
 
@@ -1071,7 +1073,7 @@ for health_contract in \
     'return controller.accentColor("color01")' \
     'return controller.accentColor("color03")' \
     '["runtime-errors", "bar-runtime", "managed-plugins"]' \
-    'return parts.length > 0 ? parts.join("  ·  ") : "Not checked yet"' \
+    'if (primaryChecks.length > 0) return "healthy"' \
     'verticalAlignment: Text.AlignVCenter' \
     'checkRow.interactive && checkRow.extra !== ""' \
     'readonly property int statusColumnWidth: 62' \
@@ -1099,12 +1101,58 @@ for health_contract in \
     || fail "Health route contract drifted: $health_contract"
 done
 
+for health_projection_contract in \
+    'HealthProjection.js:"runtime-errors", "runtime-errors-omarchy"' \
+    'HealthProjection.js:"runtime-errors-third-party", "runtime-errors-unknown"' \
+    'HealthProjection.js:"runtime-warnings", "runtime-warnings-omarchy"' \
+    'HealthProjection.js:"runtime-warnings-third-party", "runtime-warnings-unknown"' \
+    'HealthProjection.js:status === "error" || status === "warning"' \
+    'HealthProjection.js:String(check.owner || "unknown") !== "shibumi"' \
+    'HealthProjection.js:check.value === "Log unavailable"' \
+    'ControlCenterPanel.qml:HealthProjection.primaryChecks(healthReport)' \
+    'ControlMainPage.qml:controller.healthPrimaryChecks' \
+    'ControlMainPage.qml:if (primaryChecks.length > 0) return "healthy"' \
+    'ControlSettings.qml:healthChecked: healthPrimaryChecks.length > 0' \
+    'ControlCenterTestPanel.qml:HealthProjection.primaryChecks(healthReport)'; do
+  file=${health_projection_contract%%:*}
+  label=${health_projection_contract#*:}
+  target="$control_dir/$file"
+  if [[ $file == ControlCenterTestPanel.qml ]]; then
+    target="$repo_root/tests/fixtures/$file"
+  fi
+  rg -Fq "$label" "$target" \
+    || fail "Health presentation projection drifted: $label"
+done
+if rg -q 'check\.group|Number\([^)]*check\.value' \
+    "$control_dir/HealthProjection.js"; then
+  fail "Health presentation projection uses a broad group or numeric text parser"
+fi
+if rg -q 'otherRuntime|not attributed|No Shibumi findings|0 Shibumi findings' \
+    "$control_dir/ControlMainPage.qml" \
+    "$control_dir/ControlSettings.qml" \
+    "$control_dir/ControlCenterPanel.qml" \
+    "$repo_root/tests/fixtures/ControlCenterTestPanel.qml"; then
+  fail "Health still exposes non-Shibumi runtime findings"
+fi
+if rg -q 'otherRuntimeChecks|showCount|boundedTitle|tooltipText|ShibumiPillToolTip|readonly property alias tooltip' \
+    "$control_dir/HealthProjection.js" \
+    "$control_dir/PluginSectionHeader.qml"; then
+  fail "retired Health-only projection header support remains"
+fi
+
 for health_error_contract in \
     'id: "runtime-errors"' \
     'status: "error"' \
     'health.diagnosticCode(error)' \
     'health.diagnosticIssueUrl(error)' \
-    'health.copyDiagnostic(error)'; do
+    'health.copyDiagnostic(error)' \
+    'Health projection case 1 broke the exact-ID or owner boundary' \
+    'Health projection case 2 exposed or counted external runtime findings' \
+    'Health projection case 3 trusted raw overall or rendered a warning' \
+    'Health projection case 4 masked Log unavailable or a primary failure' \
+    'Health projection case 5 lost the schema-failure fallback' \
+    'Health projection case 6 lost the fetch-failure fallback' \
+    'Health projection case 7 treated an empty report as checked'; do
   rg -Fq "$health_error_contract" "$repo_root/tests/control-center-smoke.qml" \
     || fail "Health error-action smoke contract drifted: $health_error_contract"
 done
@@ -1667,7 +1715,7 @@ rg -Fq 'function beginBarEditing()' \
 rg -Fq 'visible: root.shibumiActive && !root.v2Active' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V1-only split and gap controls are not capability-gated"
-rg -Fq 'detail: "Add slots and dividers"' \
+rg -Fq 'detail: "Add slots, dividers and drag"' \
   "$control_dir/ActiveBarSettingsPage.qml" \
   || fail "V2 layout action does not explain its capability contract"
 if rg -Fq 'label: "Group separator"' "$control_dir/BarFunctionsPage.qml"; then

@@ -17,7 +17,12 @@ OMARCHY_PATH=/usr/share/omarchy ./tests/bar-host-registry-regression.sh
 ./tests/host-registry-prime-regression.sh
 ```
 
-The bar-host regression also exercises the process-singleton `omarchy.bar`
+The bar-host regression drives `entry.enabled=false` and unloads a private Bar
+Loader before a host-registry update. It verifies that real `WidgetSlot`
+residents revoke their Bar connection first, retain owner sentinels until item
+destruction, and attach to a replacement Bar without invalid-context or
+JavaScript diagnostics. It also exercises the
+process-singleton `omarchy.bar`
 visibility nudge in an isolated HOME, proving both host-owned marker directions,
 delayed admission behind an outgoing stock handler, synchronous revocation
 before stock takeover, and rejection of duplicate target registration.
@@ -245,12 +250,13 @@ handoff, and cancellation/rescheduling from a panel-open callback.
 python3 tests/state-restore-control-regression.py
 ```
 
-Ten narrowly calibrated mutations alter only the private staged Bar: incomplete
+Sixteen narrowly calibrated mutations alter only the private staged Bar: incomplete
 navigation rollback, duplicate output enrollment, missing admission revocation,
 missed synchronous settlement, rejected-existing changes, expired retry windows,
 premature pending-window consumption, premature native-publication-window
-consumption, false-success settlement and timer-snapshot replay. Positives run
-before and after the mutants;
+consumption, false-success settlement, timer-snapshot replay, same-owner veto,
+the two page-readiness gates, copied-record pruning, revision pruning and
+output-local pruning. Positives run before and after the mutants;
 each negative needs a nonzero exit and its intended diagnostic, without unrelated
 runtime errors. These objects simulate output identities; they prove no physical
 screen, keyboard focus, rendering or full-Bar handoff behavior.

@@ -17,8 +17,8 @@ QtObject {
       require(order && same(order.center, ["G8", ""]), "one optional center destination")
       require(Layout.maxCount("center") === 2 && Layout.addSlot(order, "center") === null,
         "third center slot refused")
-      require(same(splits, original.splits) && JSON.stringify(original) === before,
-        "legacy state and split schema unchanged")
+      require(same(splits.center, [false]) && JSON.stringify(original) === before,
+        "center split expansion changed its source state")
       require(same(Layout.slotRoles(order).center, ["base", "extra"]), "center roles")
       const changed = JSON.parse(before)
       changed.order = order
@@ -46,8 +46,8 @@ QtObject {
       const removed = Layout.removeSlot(returned, splits, "center")
       require(removed && same(removed.order, original.order)
         && same(removed.splits, original.splits), "empty center removal restores exact legacy layout")
-      require(Layout.toggleSplit(splits, "center", 0, order) === null,
-        "no implicit center separator field")
+      require(Layout.toggleSplit(splits, "center", 0, order).center[0],
+        "center separator did not toggle")
 
       const preferred = [{ pluginId: "custom.center", region: "center" }]
       const legacy = Layout.reconcilePluginGroups(original.order, original.splits, preferred)

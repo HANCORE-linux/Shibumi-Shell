@@ -17,6 +17,12 @@ CONTROLS = (
     ("native-window", "native publication wait spent restore window"),
     ("false-settlement", "refused request retained restore"),
     ("snapshot-replay", "timer revived cancelled restore or lost reentrant scheduling"),
+    ("same-owner-veto", "same ready owner was reopened instead of satisfying the restore"),
+    ("active-page-readiness", "unready active owner completed before page readiness"),
+    ("page-readiness", "late unready owner completed before page readiness"),
+    ("copied-record-prune", "reentrant record copy escaped expiry pruning"),
+    ("revision-prune", "old timer turn pruned a newer restore revision"),
+    ("output-prune", "one output expiry changed another output restore"),
     ("none", "bar host registry regression passed"),
 )
 

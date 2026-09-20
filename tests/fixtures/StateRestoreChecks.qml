@@ -22,24 +22,40 @@ Item {
   component Panel: QtObject {
     property bool opened: false
     property bool panelLoaded: true
-    property var panelItem: ({settingsPage: "bars"})
+    property bool pageReady: true
+    property string currentPage: "bars"
+    readonly property var panelItem: ({
+      settingsPage: currentPage,
+      settingsPageReady: pageReady
+    })
     property int opens: 0
     property var afterOpen: null
     function openPage(page) {
       opens++
-      panelItem = {settingsPage: page}
+      currentPage = page
       opened = true
       const action = afterOpen
       afterOpen = null
       if (action) action()
+      return true
     }
     function open() { openPage("bars") }
     function close() { opened = false }
+    function reset(openValue, page, ready) {
+      opened = openValue
+      currentPage = page
+      pageReady = ready
+      opens = 0
+      afterOpen = null
+    }
   }
   Panel { id: oldA; opened: true }
   Panel { id: oldB; opened: true }
   Panel { id: newA }
   Panel { id: newB }
+  Panel { id: probeA }
+  Panel { id: probeB }
+  Panel { id: probeC }
 
   function queue(owner, screen) {
     return bar.runWithControlCenterRestore(function() {
@@ -59,7 +75,7 @@ Item {
     bar.scheduleWidgetRestore(pluginId, "bars", false, oldA, "DP-A")
     const originalId = bar.pendingWidgetRestores[0].restoreId
     bar.pendingWidgetRestores[0].attempts = 19
-    oldA.panelItem = {settingsPage: "icons"}
+    oldA.currentPage = "icons"
     check(!bar.runWithControlCenterRestore(function() { return false }, "icons", true, oldA, "DP-A"),
       "rejected callback accepted")
     let record = bar.pendingWidgetRestores[0]
@@ -94,7 +110,7 @@ Item {
     bar.scheduleWidgetRestore(pluginId, "bars", true, oldA, "DP-A")
     check(bar.pendingWidgetRestores[0].attempts === 0, "new handoff inherited expired retry window")
     cancel(oldA, "DP-A")
-    oldA.panelItem = {settingsPage: "bars"}
+    oldA.currentPage = "bars"
     check(bar.runWithControlCenterRestore(function() {
       stateOwner.writeSerial++
       settle(stateOwner.writeSerial, "confirmed", true, false)
@@ -120,8 +136,8 @@ Item {
       {moduleName: pluginId, screenName: "", activeItem: oldA},
       {moduleName: pluginId, screenName: "", activeItem: oldB}
     ]
-    oldA.panelItem = {settingsPage: "icons"}
-    oldB.panelItem = {settingsPage: "health"}
+    oldA.currentPage = "icons"
+    oldB.currentPage = "health"
     bar.scheduleWidgetRestore(pluginId, "bars", false, oldA, "")
     bar.pendingWidgetRestores[0].attempts = 19
     const refs = bar.scheduleOpenControlCenterRestores("bars", true, oldB, "", true)
@@ -135,9 +151,22 @@ Item {
     check(!bar.runWithControlCenterRestore(function() { return false }, "bars", true, oldB, "")
       && bar.pendingWidgetRestores.length === 0, "rejected overlapping owners left a new restore")
     bar.moduleSlots = []
-    oldA.panelItem = {settingsPage: "bars"}
-    oldB.panelItem = {settingsPage: "bars"}
+    oldA.currentPage = "bars"
+    oldB.currentPage = "bars"
     stateOwner.writeSerial = 0 // Independent fake-State case; no outstanding request.
+  }
+  function beginMainChecks() {
+    bar.moduleSlots = []
+    oldA.reset(true, "bars", true); oldB.reset(true, "bars", true)
+    newA.reset(false, "bars", true); newB.reset(false, "bars", true)
+    check(queue(oldA, "DP-A") && queue(oldB, "DP-B"), "requests not queued")
+    bar.moduleSlots = [
+      {moduleName: pluginId, screenName: "DP-A", activeItem: newA},
+      {moduleName: pluginId, screenName: "DP-B", activeItem: newB}
+    ]
+    check(bar.pendingWidgetRestores.length === 2, "outputs shared a restore record")
+    phase = 0
+    began = Date.now()
   }
   function start() {
     if (started) return
@@ -145,12 +174,12 @@ Item {
     savedSlots = bar.moduleSlots
     bar.moduleSlots = []
     preflight()
-    check(queue(oldA, "DP-A") && queue(oldB, "DP-B"), "requests not queued")
-    bar.moduleSlots = [
-      {moduleName: pluginId, screenName: "DP-A", activeItem: newA},
-      {moduleName: pluginId, screenName: "DP-B", activeItem: newB}
-    ]
-    check(bar.pendingWidgetRestores.length === 2, "outputs shared a restore record")
+    probeA.reset(true, "bars", true)
+    bar.moduleSlots = [{moduleName: pluginId, screenName: "DP-A", activeItem: probeA}]
+    check(bar.scheduleWidgetRestore(pluginId, "bars", true, probeA, "DP-A"),
+      "same-owner restore not scheduled")
+    bar.pendingWidgetRestores[0].attempts = 19
+    phase = 100
     began = Date.now()
     poll.start()
   }
@@ -159,7 +188,107 @@ Item {
     interval: 10; repeat: true
     onTriggered: {
       root.check(Date.now() - root.began < 5000, "deadline phase " + root.phase)
-      if (root.phase === 0) {
+      if (root.phase === 100) {
+        if (root.pending("DP-A")) return
+        root.check(probeA.opens === 0,
+          "same ready owner was reopened instead of satisfying the restore")
+        probeA.reset(true, "bars", false)
+        root.bar.moduleSlots = [{moduleName: root.pluginId, screenName: "DP-A", activeItem: probeA}]
+        root.check(root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A"),
+          "unready active-owner restore not scheduled")
+        root.bar.pendingWidgetRestores[0].activeOwner = probeA
+        root.bar.pendingWidgetRestores[0].attempts = 17
+        root.phase = 101
+      } else if (root.phase === 101) {
+        if (!root.pending("DP-A")) root.check(false,
+          "unready active owner completed before page readiness")
+        if (probeA.opens < 2) return
+        root.check(probeA.pageReady === false,
+          "unready active-owner fixture became ready unexpectedly")
+        probeA.pageReady = true
+        root.phase = 102
+      } else if (root.phase === 102) {
+        if (root.pending("DP-A")) return
+        probeA.reset(false, "bars", false)
+        probeA.afterOpen = function() {
+          root.bar.trackWidgetRestorePage(root.pluginId, "bars", probeA, "DP-A")
+        }
+        root.bar.moduleSlots = [{moduleName: root.pluginId, screenName: "DP-A", activeItem: probeA}]
+        root.check(root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A"),
+          "copied-record restore not scheduled")
+        root.bar.pendingWidgetRestores[0].attempts = 19
+        root.phase = 103
+      } else if (root.phase === 103) {
+        if (probeA.opens === 0) return
+        root.check(!root.pending("DP-A"),
+          "reentrant record copy escaped expiry pruning")
+        probeA.reset(true, "bars", true)
+        probeB.reset(false, "bars", false)
+        probeC.reset(true, "bars", true)
+        root.bar.moduleSlots = [
+          {moduleName: root.pluginId, screenName: "DP-B", activeItem: probeC}
+        ]
+        root.check(root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A"),
+          "late-owner restore not scheduled")
+        root.bar.pendingWidgetRestores[0].attempts = 16
+        root.phase = 104
+      } else if (root.phase === 104) {
+        if (!root.pending("DP-A")) root.check(false,
+          "missing output-local owner completed a restore")
+        if (root.bar.pendingWidgetRestores[0].attempts < 17) return
+        root.check(probeC.opens === 0, "restore fell back to another output")
+        root.bar.moduleSlots = [
+          {moduleName: root.pluginId, screenName: "DP-A", activeItem: probeB},
+          {moduleName: root.pluginId, screenName: "DP-B", activeItem: probeC}
+        ]
+        root.phase = 105
+      } else if (root.phase === 105) {
+        if (!root.pending("DP-A")) root.check(false,
+          "late unready owner completed before page readiness")
+        if (probeB.opens < 2) return
+        root.check(probeB.pageReady === false && probeC.opens === 0,
+          "late owner lost readiness or output locality")
+        probeB.pageReady = true
+        root.phase = 106
+      } else if (root.phase === 106) {
+        if (root.pending("DP-A")) return
+        probeA.reset(false, "bars", false)
+        probeA.afterOpen = function() {
+          root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A")
+        }
+        root.bar.moduleSlots = [{moduleName: root.pluginId, screenName: "DP-A", activeItem: probeA}]
+        root.check(root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A"),
+          "new-generation restore not scheduled")
+        root.bar.pendingWidgetRestores[0].attempts = 19
+        root.phase = 107
+      } else if (root.phase === 107) {
+        if (probeA.opens === 0) return
+        root.check(root.pending("DP-A") && root.bar.pendingWidgetRestores.length === 1
+          && root.bar.pendingWidgetRestores[0].attempts === 0
+          && root.bar.pendingWidgetRestores[0].restoreRevision >= 2,
+          "old timer turn pruned a newer restore revision")
+        root.cancel(probeA, "DP-A")
+        probeA.reset(false, "bars", false)
+        probeB.reset(false, "bars", false)
+        probeA.afterOpen = function() {
+          root.bar.trackWidgetRestorePage(root.pluginId, "bars", probeA, "DP-A")
+        }
+        root.bar.moduleSlots = [
+          {moduleName: root.pluginId, screenName: "DP-B", activeItem: probeB},
+          {moduleName: root.pluginId, screenName: "DP-A", activeItem: probeA}
+        ]
+        root.check(root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeB, "DP-B")
+          && root.bar.scheduleWidgetRestore(root.pluginId, "bars", true, probeA, "DP-A"),
+          "two-output restores not scheduled")
+        root.bar.pendingWidgetRestores[1].attempts = 19
+        root.phase = 108
+      } else if (root.phase === 108) {
+        if (probeA.opens === 0) return
+        root.check(!root.pending("DP-A") && root.pending("DP-B"),
+          "one output expiry changed another output restore")
+        root.cancel(probeB, "DP-B")
+        root.beginMainChecks()
+      } else if (root.phase === 0) {
         if (Date.now() - root.began < 1800) return
         root.check(root.bar.pendingWidgetRestores.length === 2 && newA.opens === 0 && newB.opens === 0
           && root.bar.pendingWidgetRestores.every(record => record.attempts === 0),

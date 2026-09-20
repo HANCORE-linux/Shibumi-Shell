@@ -190,6 +190,7 @@ TestCase {
 
     const extendedOrder = Config.defaultOrder()
     extendedOrder.left.push("")
+    extendedOrder.center.push("")
     extendedOrder.right.push("")
     const extendedSplits = Config.defaultSplits(extendedOrder)
     extendedSplits.left[6] = true
@@ -206,6 +207,34 @@ TestCase {
         || extendedState.splits.left.length !== 7
         || extendedState.splits.left[6] !== true)
       fail("extended V1 slot state was not retained")
+
+    const legacySplits = JSON.parse(JSON.stringify(extendedSplits))
+    delete legacySplits.center
+    const legacyCenter = Config.normalize({version: 1, order: extendedOrder,
+      v1SlotRoles: extendedState.v1SlotRoles, splits: legacySplits})
+    if (!same(legacyCenter.order, extendedOrder)
+        || !same(legacyCenter.v1SlotRoles, extendedState.v1SlotRoles)
+        || !same({left: legacyCenter.splits.left, boundaries: legacyCenter.splits.boundaries, right: legacyCenter.splits.right}, legacySplits)
+        || !same(legacyCenter.splits.center, [false]))
+      fail("legacy three-field splits were not migrated without layout loss")
+
+    const currentSplits = JSON.parse(JSON.stringify(extendedSplits))
+    currentSplits.center[0] = true
+    const currentCenter = Config.normalize({version: 1, order: extendedOrder,
+      v1SlotRoles: extendedState.v1SlotRoles, splits: currentSplits})
+    if (!same(currentCenter.order, extendedOrder) || !same(currentCenter.splits, currentSplits))
+      fail("current four-field center split was not retained")
+
+    for (const invalidCenter of [null, "false", {}, [], [false, false]]) {
+      const malformedSplits = JSON.parse(JSON.stringify(currentSplits))
+      malformedSplits.center = invalidCenter
+      const malformedCenter = Config.normalize({version: 1, order: extendedOrder,
+        v1SlotRoles: extendedState.v1SlotRoles, splits: malformedSplits})
+      if (!same(malformedCenter.order, defaults.order)
+          || !same(malformedCenter.v1SlotRoles, defaults.v1SlotRoles)
+          || !same(malformedCenter.splits, defaults.splits))
+        fail("explicit malformed center split must reject the complete V1 layout")
+    }
 
     const dynamicOrder = Config.defaultOrder()
     dynamicOrder.left.push("G:custom.widget")

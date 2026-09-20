@@ -18,6 +18,18 @@ process.</sub></p>
 
 The published `0.1.1-beta.14.1` prerelease was validated on a single-output
 Omarchy 4.0.3 host; see the release notes for scope and known limits.
+
+Beta.15 keeps the horizontal bar window edge-local and exactly bar-high, also
+while editing, and constrains the V1 editing frame, including its border stroke,
+to that window at Top and Bottom. Hosted panels retain provider-owned content
+height and card placement. Recent notifications can be read from host-owned
+history, dismissed individually, or cleared.
+
+Host-registered widgets now detach before loader teardown. Basecamp refresh
+remains unavailable under Shibumi
+on the pinned Omarchy 4.0.3 host because the plugin has no widget-local service
+fallback and the host does not expose its shared service to replacement bars.
+
 The current pinned host contracts use Omarchy
 and Omarchy Settings `4.0.3-1` (source tag `v4.0.3`, revision `05349870`) with
 Quickshell `0.3.1-1`; the 4.0.2 manifests remain an optional compatibility

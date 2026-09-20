@@ -10,7 +10,9 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var notificationService
-  property bool showingRecent: false
+  readonly property bool liveAvailable: notificationService
+    && notificationService.liveAvailable === true
+  property bool showingRecent: !liveAvailable
   readonly property bool historyAvailable: notificationService
     && notificationService.historyAvailable === true
   function paletteColor(id, fallback) {
@@ -34,10 +36,8 @@ ShibumiPanel {
   readonly property int activeCount: pendingCount + recentCount
   readonly property int displayedCount: showingRecent
     ? recentCount : pendingCount
-  // The current host contract exposes live popupModel rows but no public
-  // recent-history model. The Recent tab asks the host to replay its
-  // host-owned history; the adapter then exposes that replay as recent rows.
-  // History is never reconstructed from private host files.
+  // Omarchy 4.0.3 exposes no history model. The adapter reads the same
+  // host-owned compact JSON directory when Recent is selected.
   readonly property var activeRows: {
     const rows = []
     function append(model, bucket) {
@@ -76,12 +76,13 @@ ShibumiPanel {
 
   function selectTab(tab) {
     const recent = String(tab || "") === "recent"
-    if (recent) {
-      if (!historyAvailable || !showHistory()) return false
-    }
+    if (recent && (!historyAvailable || !showHistory())) return false
+    if (!recent && !liveAvailable) return false
     showingRecent = recent
     return true
   }
+
+  Component.onCompleted: if (showingRecent) showHistory()
 
   function showHistory() {
     if (!notificationService || !historyAvailable
@@ -108,10 +109,12 @@ ShibumiPanel {
 
   function clearActive() {
     if (!notificationService) return
-    if (typeof notificationService.clearPending === "function")
-      notificationService.clearPending()
-    if (typeof notificationService.clearPast === "function")
+    if (showingRecent
+        && typeof notificationService.clearPast === "function")
       notificationService.clearPast()
+    else if (!showingRecent
+        && typeof notificationService.clearPending === "function")
+      notificationService.clearPending()
   }
 
   function openNotification(bucket, index) {
@@ -126,7 +129,8 @@ ShibumiPanel {
       return
     }
     const entry = model.get(index)
-    if (entry && typeof notificationService.focusApp === "function")
+    if (bucket === "pending" && entry
+        && typeof notificationService.focusApp === "function")
       notificationService.focusApp(entry)
     closePanel()
   }
@@ -230,12 +234,14 @@ ShibumiPanel {
 
       Row {
         id: tabRow
+        visible: panel.liveAvailable
         width: parent.width
-        height: 28
+        height: visible ? 28 : 0
         spacing: 6
 
         Rectangle {
-          width: (parent.width - parent.spacing) / 2
+          width: panel.liveAvailable
+            ? (parent.width - parent.spacing) / 2 : parent.width
           height: parent.height
           radius: panel.controlRadius
           color: panel.showingRecent
@@ -265,7 +271,8 @@ ShibumiPanel {
         }
 
         Rectangle {
-          width: (parent.width - parent.spacing) / 2
+          visible: panel.liveAvailable
+          width: visible ? (parent.width - parent.spacing) / 2 : 0
           height: parent.height
           radius: panel.controlRadius
           color: !panel.showingRecent
@@ -367,6 +374,7 @@ ShibumiPanel {
               Text {
                 width: parent.width
                 text: notificationRow.app || "App"
+                textFormat: Text.PlainText
                 color: panel.controlMutedHigh
                 font.family: panel.bar ? panel.bar.fontFamily
                   : Commons.Style.font.family
@@ -380,6 +388,7 @@ ShibumiPanel {
                 width: parent.width
                 visible: text.length > 0
                 text: notificationRow.summary
+                textFormat: Text.PlainText
                 color: panel.controlForeground
                 font.family: panel.bar ? panel.bar.fontFamily
                   : Commons.Style.font.family
@@ -405,7 +414,9 @@ ShibumiPanel {
             }
 
             Item {
-              width: 18
+              visible: notificationRow.bucket === "pending"
+                || notificationService.pastDismissAvailable === true
+              width: visible ? 18 : 0
               height: 18
               anchors.top: parent.top
               anchors.right: parent.right
@@ -452,7 +463,10 @@ ShibumiPanel {
       Rectangle {
         width: parent.width
         height: 28
-        visible: panel.activeCount > 0
+        visible: panel.showingRecent
+          ? panel.recentCount > 0
+            && notificationService.pastClearAvailable === true
+          : panel.pendingCount > 0
         radius: panel.controlRadius
         color: clearMouse.containsMouse
           ? panel.controlHoverFillColor : panel.controlFillColor

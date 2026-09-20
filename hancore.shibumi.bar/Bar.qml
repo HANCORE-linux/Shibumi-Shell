@@ -27,7 +27,7 @@ Item {
   SuiteRuntime.Provider {
     id: barRuntimeProvider
     pluginId: "hancore.shibumi.bar"
-    implementationVersion: "0.1.1-beta.14.1"
+    implementationVersion: "0.1.1-beta.15"
     owner: root
     host: suiteHostShell.host
     manifest: root.manifest
@@ -214,7 +214,18 @@ Item {
   property real connectedPanelCardWidth: 0
   property real connectedPanelCardHeight: 0
   property var moduleSlots: []
+  property var loadedOwners: []
+  property Component loadedOwnerSentinel: Component {
+    QtObject {
+      id: sentinel
+      required property Item slot
+      required property string screenName
+      Component.onCompleted: root.loadedOwners = root.loadedOwners.concat([sentinel])
+      Component.onDestruction: root.loadedOwners = root.loadedOwners.filter(candidate => candidate !== sentinel)
+    }
+  }
   property var clickTargets: []
+  property bool tearingDown: false
   property var layoutSessions: []
   property var tooltipTarget: null
   property string tooltipText: ""
@@ -769,20 +780,25 @@ Item {
 
   function unassignedLayoutEntries(region) {
     const entries = GroupRegistry.unassignedEntries(layoutConfig, region)
+    const removing = layoutTransitionBusy && layoutTransition.operation
+      && layoutTransition.operation.intent
+      && Array.isArray(layoutTransition.operation.intent.removeIds)
+      ? layoutTransition.operation.intent.removeIds : []
     if (layoutStateController.v2Mode) {
       // G16-G18 use V1 extension slots but remain native fixed groups in V2.
       // Keep their persisted V1 provider entries out of V2's unassigned deck,
       // otherwise the same widget would be rendered twice after a switch.
       return deduplicatedUnassignedEntries(entries.filter(function(entry) {
-        if (isV1AdditionalSuiteWidget(entryId(entry))) return false
-        const groupId = GroupRegistry.dynamicGroupIdForModule(entryId(entry))
+        const id = entryId(entry)
+        if (isV1AdditionalSuiteWidget(id) || removing.indexOf(id) >= 0) return false
+        const groupId = GroupRegistry.dynamicGroupIdForModule(id)
         return groupId === "" || !layoutStateController.groupLocation(groupId)
       }))
     }
     const familyProviders = Object.values(v1FamilySlotBindings)
     return deduplicatedUnassignedEntries(entries.filter(function(entry) {
       const id = entryId(entry)
-      if (familyProviders.indexOf(id) >= 0) return false
+      if (familyProviders.indexOf(id) >= 0 || removing.indexOf(id) >= 0) return false
       const groupId = GroupRegistry.dynamicGroupIdForModule(id)
       return groupId === "" || !layoutStateController.groupLocation(groupId)
     }))
@@ -857,10 +873,10 @@ Item {
       layoutConfig, excludeValue, includeSpec)
   }
 
-  function reconcileActivePluginGroups(specs, syncValue, followRegionsValue) {
+  function reconcileActivePluginGroups(specs, syncValue, followRegionsValue, allowPartialValue) {
     if (layoutStateController.v2Mode)
       return layoutStateController.reconcileV2PluginGroups(
-        specs, syncValue, followRegionsValue)
+        specs, syncValue, followRegionsValue, allowPartialValue)
     if (!Array.isArray(specs)) return false
     const bindings = WidgetFamilies.v1SlotBindings(specs,
       layoutStateController.currentV1Order(), pluginRegistry,
@@ -869,7 +885,7 @@ Item {
     return layoutStateController.reconcileV1PluginGroups(
       specs.filter(function(spec) {
         return !spec || familyProviders.indexOf(spec.pluginId) < 0
-      }))
+      }), allowPartialValue)
   }
 
   function reconcileV1PluginGroups() {
@@ -886,7 +902,7 @@ Item {
     // whose provider entry was moved outside the V2 editor. Explicit V2 drag
     // mutations update both stores first, so this does not undo an edit.
     if (!reconcileActivePluginGroups(
-          activePluginSpecs(), true, layoutStateController.v2Mode))
+          activePluginSpecs(), true, layoutStateController.v2Mode, true))
       return false
     return reconcileWidgetFamilyProviders()
   }
@@ -1595,7 +1611,11 @@ Item {
     const row = snapshot && snapshot.byId
       && Object.prototype.hasOwnProperty.call(snapshot.byId, id)
       ? snapshot.byId[id] : null
-    return !!(row && row.id === id && row.enabled === false
+    return !!(row && row.id === id
+      && (row.enabled === false || (row.enabled === true
+        && !layoutStateController.v2Mode
+        && isV1AdditionalSuiteWidget(id) && !layoutContains(id)
+        && registeredWidgetComponent(id) !== null))
       && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
   }
 
@@ -2245,6 +2265,14 @@ Item {
     moduleSlots = moduleSlots.filter(item => item !== slot)
   }
 
+  function widgetSlotLoadAdmitted(slot) {
+    return widgetAllowsMultiple(slot.moduleName) || !loadedOwners.some(candidate =>
+      candidate.objectName === slot.moduleName && candidate.screenName === slot.screenName && candidate.slot !== slot)
+  }
+  function claimLoadedOwner(slot, item) {
+    if (!widgetSlotLoadAdmitted(slot)) return false
+    return !!loadedOwnerSentinel.createObject(item, {slot, objectName: slot.moduleName, screenName: slot.screenName})
+  }
   function registerClickTarget(target) {
     if (!target || clickTargets.indexOf(target) !== -1) return
     const next = clickTargets.slice()
@@ -2700,18 +2728,14 @@ Item {
 
   function widgetRestoreSatisfied(record, widget) {
     if (!record || !widget || widget.opened !== true) return false
-    // A V1/V2 change replaces the WidgetSlot owner. The outgoing owner can
-    // remain alive long enough to satisfy an early timer tick, then disappear
-    // after the restore has already stopped. Only the replacement owner may
-    // complete a variant-switch restore.
-    if (record.needsReplacement && widget === record.owner) return false
-    // Once the replacement owner is established, navigation belongs to the
+    // Once an owner is established, navigation belongs to the
     // user. Follow its current page instead of forcing the page captured at
     // switch time; if this owner is replaced again, that latest page becomes
     // the handoff target for its successor.
     if (widget === record.activeOwner) {
-      if (record.id === "hancore.shibumi.control-center"
-          && widget.panelLoaded === true && widget.panelItem) {
+      if (record.id === "hancore.shibumi.control-center") {
+        if (widget.panelLoaded !== true || !widget.panelItem
+            || widget.panelItem.settingsPageReady !== true) return false
         const currentPage = String(widget.panelItem.settingsPage || "")
         if (currentPage !== "") record.page = currentPage
       }
@@ -2723,6 +2747,7 @@ Item {
       return true
     }
     const pageReady = widget.panelLoaded === true && widget.panelItem
+      && widget.panelItem.settingsPageReady === true
       && String(widget.panelItem.settingsPage || "") === record.page
     if (pageReady) record.activeOwner = widget
     return pageReady
@@ -2745,7 +2770,7 @@ Item {
         if (record.waitingWrites && record.waitingWrites.length) continue
         record.restoreRevision = Number(record.restoreRevision || 0) + 1
         record.attempts = Number(record.attempts || 0) + 1
-        // Never let a missing replacement owner fall back to another output.
+        // Never let a missing owner fall back to another output.
         const widget = root.findPanelWidgetOnScreen(
           record.id, record.screenName)
         const satisfied = root.widgetRestoreSatisfied(record, widget)
@@ -2761,7 +2786,9 @@ Item {
         // Filesystem-backed config publication and the layout delegate rebuild
         // can replace the panel owner more than once. Keep each output-local
         // handoff alive for its full 1.6 s window.
-        const current = root.pendingWidgetRestores.indexOf(record)
+        const current = root.pendingWidgetRestores.findIndex(item =>
+          item.restoreId === record.restoreId
+            && item.restoreRevision === record.restoreRevision)
         if (current >= 0 && record.attempts >= 20) root.removeWidgetRestoreAt(current)
       }
       // openPage()/open() can synchronously cancel or schedule another restore.
@@ -3139,6 +3166,7 @@ Item {
     scheduleStartupAdmission()
   }
   Component.onDestruction: {
+    tearingDown = true
     prepareForShutdown()
     releaseCatalogConsumer()
   }

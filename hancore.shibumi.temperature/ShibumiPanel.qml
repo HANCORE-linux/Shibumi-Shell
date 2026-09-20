@@ -236,9 +236,8 @@ PanelWindow {
     return Math.round(Math.min(desired, maxHeight))
   }
 
-  // The V1-compatible bar window is screen-sized so drag input remains stable.
-  // Keep the layer-surface dimensions separate from the visible bar strip used
-  // for panel placement and click forwarding.
+  // The bar anchor window is edge-local while this panel remains screen-sized.
+  // Keep anchor dimensions separate from screen dimensions for click forwarding.
   readonly property real anchorWindowW: anchorWindow
     ? Math.max(0, Number(anchorWindow.width) || 0) : 0
   readonly property real anchorWindowH: anchorWindow

@@ -7,6 +7,9 @@ Item {
 
   property var layoutController: null
   property string screenName: ""
+  property real originX: 0
+  property real originY: 0
+  property string geometryKey: ""
   property bool editing: false
   property bool active: false
   property bool returning: false
@@ -33,6 +36,9 @@ Item {
   width: 0
   height: 0
 
+  onOriginXChanged: cancelForGeometryChange()
+  onOriginYChanged: cancelForGeometryChange()
+  onGeometryKeyChanged: cancelForGeometryChange()
   onSourceItemChanged: {
     if (!sourceItem && (active || returning)) cancel()
   }
@@ -53,6 +59,12 @@ Item {
     function onHeightChanged() {
       if (target && !root.positiveSize(target)) root.cancel()
     }
+  }
+
+  function cancelForGeometryChange() {
+    if (!active && !returning) return false
+    cancel()
+    return true
   }
 
   function groupExists(groupId) {
@@ -137,21 +149,42 @@ Item {
     return true
   }
 
-  function targetAt(windowX, windowY) {
-    const px = Number(windowX)
-    const py = Number(windowY)
+  function toOutputPoint(localX, localY) {
+    const x = Number(localX)
+    const y = Number(localY)
+    const offsetX = Number(originX)
+    const offsetY = Number(originY)
+    if (!Number.isFinite(x) || !Number.isFinite(y)
+        || !Number.isFinite(offsetX) || !Number.isFinite(offsetY)) return null
+    return { x: x + offsetX, y: y + offsetY }
+  }
+
+  function itemOutputOrigin(item) {
+    if (!item || typeof item.mapToItem !== "function") return null
+    const local = item.mapToItem(null, 0, 0)
+    return local ? toOutputPoint(local.x, local.y) : null
+  }
+
+  function targetAtOutput(outputX, outputY) {
+    const px = Number(outputX)
+    const py = Number(outputY)
     if (!Number.isFinite(px) || !Number.isFinite(py)) return ""
     for (let i = targets.length - 1; i >= 0; i--) {
       const target = targets[i]
       const item = target ? target.item : null
       if (!item || !item.visible || item.width <= 0.5 || item.height <= 0.5)
         continue
-      const origin = item.mapToItem(null, 0, 0)
-      if (px >= origin.x && px <= origin.x + item.width
+      const origin = itemOutputOrigin(item)
+      if (origin && px >= origin.x && px <= origin.x + item.width
           && py >= origin.y && py <= origin.y + item.height)
         return target
     }
     return null
+  }
+
+  function targetAt(windowX, windowY) {
+    const point = toOutputPoint(windowX, windowY)
+    return point ? targetAtOutput(point.x, point.y) : ""
   }
 
   function positiveSize(item) {
@@ -167,8 +200,9 @@ Item {
         || typeof item.grabToImage !== "function") return false
     const window = item.Window.window
     if (!window || !window.visible || !positiveSize(window)) return false
-    const origin = item.mapToItem(null, 0, 0)
-    if (!Number.isFinite(origin.x) || !Number.isFinite(origin.y)) return false
+    const origin = itemOutputOrigin(item)
+    if (!origin) return false
+    const pointer = toOutputPoint(windowX, windowY)
 
     sourceGroupId = source
     sourceItem = item
@@ -177,14 +211,12 @@ Item {
     ghostHomeY = origin.y
     ghostWidth = item.width
     ghostHeight = item.height
-    ghostX = Number.isFinite(Number(windowX))
-      ? Number(windowX) - ghostWidth / 2 : ghostHomeX
-    ghostY = Number.isFinite(Number(windowY))
-      ? Number(windowY) - ghostHeight / 2 : ghostHomeY
+    ghostX = pointer ? pointer.x - ghostWidth / 2 : ghostHomeX
+    ghostY = pointer ? pointer.y - ghostHeight / 2 : ghostHomeY
     const generation = captureGeneration
     const capturedItem = sourceItem
-    // Bound the raster to this output's validated logical window size,
-    // preserving aspect ratio. Ghost geometry stays in logical coordinates.
+    // Bound the raster to the source bar window's validated logical size,
+    // preserving aspect ratio. Ghost geometry stays output-local and logical.
     const captureScale = Math.min(1,
       window.width / ghostWidth, window.height / ghostHeight)
     if (!sourceItem.grabToImage(function(result) {
@@ -208,12 +240,11 @@ Item {
 
   function move(windowX, windowY) {
     if (!active) return false
-    const px = Number(windowX)
-    const py = Number(windowY)
-    if (!Number.isFinite(px) || !Number.isFinite(py)) return false
-    ghostX = px - ghostWidth / 2
-    ghostY = py - ghostHeight / 2
-    return updateTarget(targetAt(px, py))
+    const point = toOutputPoint(windowX, windowY)
+    if (!point) return false
+    ghostX = point.x - ghostWidth / 2
+    ghostY = point.y - ghostHeight / 2
+    return updateTarget(targetAtOutput(point.x, point.y))
   }
 
   function updateTarget(target) {
@@ -271,6 +302,7 @@ Item {
 
   function cancel() {
     captureGeneration++
+    // Disable return Behaviors before resetting their bound coordinates.
     active = false
     returning = false
     sourceGroupId = ""

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "../control" as Control
 import "../control/HostIdentity.js" as HostIdentity
+import "../control/HealthProjection.js" as HealthProjection
 
 Item {
   id: root
@@ -17,6 +18,8 @@ Item {
 
   readonly property bool open: ownerWidget.opened
   readonly property var healthReport: healthService.report
+  readonly property var healthPrimaryChecks:
+    HealthProjection.primaryChecks(healthReport)
   readonly property bool healthRunning: healthService.running
   readonly property bool healthFetching: healthService.fetching
   readonly property string healthFailure: healthService.failure
@@ -275,6 +278,8 @@ Item {
   readonly property real compactWorkspacesPanelHeight:
     settings.compactWorkspacesPanelHeight
   readonly property int headerHealthErrorCount: settings.healthErrorCount
+  readonly property int headerHealthWarningCount: settings.healthWarningCount
+  readonly property bool headerHealthPassed: settings.healthPassed
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property bool pluginInstallerOpen: settings.paletteOpen
     && settings.installMode && settings.installerDirect
@@ -610,6 +615,141 @@ Item {
 
   function showSettingsPage(value) {
     return settings.setPage(value)
+  }
+
+  function findNamedItem(item, name) {
+    if (!item) return null
+    if (String(item.objectName || "") === name) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++) {
+      const match = findNamedItem(children[index], name)
+      if (match) return match
+    }
+    return null
+  }
+
+  function countNamedItems(item, name) {
+    if (!item) return 0
+    let count = String(item.objectName || "") === name ? 1 : 0
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++)
+      count += countNamedItems(children[index], name)
+    return count
+  }
+
+  function findTextItem(item, text) {
+    if (!item || item.visible !== true || item.enabled !== true) return null
+    if (item.text !== undefined && String(item.text) === text) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++) {
+      const match = findTextItem(children[index], text)
+      if (match) return match
+    }
+    return null
+  }
+
+  function findTextInput(item) {
+    if (!item) return null
+    if (item.text !== undefined && item.cursorPosition !== undefined
+        && item.visible === true && item.enabled === true) return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++) {
+      const match = findTextInput(children[index])
+      if (match) return match
+    }
+    return null
+  }
+
+  function findPointerItem(item) {
+    if (!item) return null
+    if (item.acceptedButtons !== undefined
+        && item.containsMouse !== undefined
+        && item.pressed !== undefined
+        && typeof item.clicked === "function") return item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++) {
+      const match = findPointerItem(children[index])
+      if (match) return match
+    }
+    return null
+  }
+
+  function collectQuickBarOptionDelegates(item, result) {
+    if (!item) return
+    const option = item.modelData
+    const optionId = option ? String(option.id || "") : ""
+    const optionIndex = Number(item.index)
+    if (typeof item.activate === "function"
+        && ["v1", "v2", "omarchy"].indexOf(optionId) >= 0
+        && optionIndex >= 0 && optionIndex < 3)
+      result[optionIndex] = item
+    const children = item.children || []
+    for (let index = 0; index < children.length; index++)
+      collectQuickBarOptionDelegates(children[index], result)
+  }
+
+  function quickBarOptionDelegates() {
+    const result = [null, null, null]
+    collectQuickBarOptionDelegates(settings.pageItem, result)
+    return result
+  }
+
+  function quickBarOptionPointerAreas() {
+    const delegates = quickBarOptionDelegates()
+    return delegates.map(function(delegateItem) {
+      return findPointerItem(delegateItem)
+    })
+  }
+
+  function widgetPaletteRoot() {
+    const dismissArea = findNamedItem(settings, "paletteDismissArea")
+    return dismissArea ? dismissArea.parent : null
+  }
+
+  function widgetPaletteLoaded() { return widgetPaletteRoot() !== null }
+  function widgetPaletteInstallMode() { return settings.installMode === true }
+  function widgetPaletteTileCount() {
+    return countNamedItems(widgetPaletteRoot(), "widgetPaletteTile")
+  }
+  function widgetPaletteInputFocused() {
+    const input = findTextInput(widgetPaletteRoot())
+    return input !== null && input.activeFocus === true
+  }
+  function activateWidgetPaletteControl(label) {
+    const palette = widgetPaletteRoot()
+    const labelItem = findTextItem(palette, String(label || ""))
+    let ancestor = labelItem ? labelItem.parent : null
+    while (ancestor && ancestor !== palette) {
+      const pointer = findPointerItem(ancestor)
+      if (pointer) {
+        pointer.clicked(null)
+        return true
+      }
+      ancestor = ancestor.parent
+    }
+    return false
+  }
+  function openEmbeddedPluginInstaller() {
+    return activateWidgetPaletteControl("Install plugin from Git …")
+  }
+  function backFromEmbeddedPluginInstaller() {
+    return activateWidgetPaletteControl("Back")
+  }
+  function setWidgetPaletteQuery(value) {
+    settings.query = String(value || "")
+  }
+  function dismissWidgetPaletteFromOutside() {
+    const area = findNamedItem(settings, "paletteDismissArea")
+    if (!area) return false
+    area.clicked(null)
+    return true
+  }
+  function appendWidgetPaletteProbe() {
+    const probe = JSON.parse(JSON.stringify(pluginEntries[0]))
+    probe.id = "fixture.palette"
+    probe.name = "Fixture Palette"
+    probe.installedInBar = false
+    pluginEntries = pluginEntries.concat([probe])
   }
 
   function openWidgetPicker() {

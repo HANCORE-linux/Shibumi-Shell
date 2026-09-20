@@ -18,12 +18,20 @@ ShellRoot {
   property bool requestedPreviewChecked: false
   property var stablePanelItem: null
   property int healthLifecycleStep: 0
+  property int healthProjectionStep: 0
+  property string projectionReportJson: ""
+  property var stableHealthReport: null
   property var lifecycleHealthService: null
   property int lifecycleReportEpoch: 0
   property int activeBarStatusStep: 0
   property bool statusStockHost: false
   property bool statusV2Layout: false
   property real widestActiveBarStatus: 0
+  property int paletteLifecycleStep: 0
+  property int paletteInitialTileCount: 0
+  property int quickBarIdentityStep: 0
+  property var quickBarDelegatesBefore: []
+  property var quickBarPointersBefore: []
 
   Control.PluginUpdateTestService { id: pluginUpdateService }
   Control.PluginUpdateTestService { id: replacementUpdateService }
@@ -35,6 +43,54 @@ ShellRoot {
     console.error("control-center-smoke:", message)
     Qt.exit(1)
     throw new Error(message)
+  }
+
+  function healthCheck(id, status, owner, label, value, detail) {
+    return {
+      id: id,
+      group: "Runtime",
+      label: label,
+      status: status,
+      value: value,
+      detail: detail,
+      component: "fixture component",
+      owner: owner,
+      issueEligible: owner === "shibumi" && status === "error",
+      action: "Review the attributed component."
+    }
+  }
+
+  function healthReport(overall, checks) {
+    return {
+      schemaVersion: 1,
+      generatedEpoch: 1785570000,
+      overall: overall,
+      summary: "Projection fixture",
+      checks: checks
+    }
+  }
+
+  function quickBarStateError(panel, delegates, activeId, v2Detail) {
+    const ids = ["v1", "v2", "omarchy"]
+    const labels = ["V1", "V2", "Omarchy Bar"]
+    const details = ["Shibumi split bar", v2Detail, "Stock Omarchy bar"]
+    for (let index = 0; index < ids.length; index++) {
+      const option = delegates[index]
+      const active = ids[index] === activeId
+      if (!option || String(option.modelData.id || "") !== ids[index]
+          || String(option.modelData.label || "") !== labels[index]
+          || String(option.modelData.detail || "") !== details[index]
+          || option.modelData.active !== active
+          || option.Accessible.role !== Accessible.RadioButton
+          || option.Accessible.name !== labels[index]
+          || option.Accessible.description !== details[index]
+          || option.Accessible.checked !== active
+          || !panel.findTextItem(option, labels[index])
+          || !panel.findTextItem(option, details[index])
+          || (panel.findTextItem(option, "ACTIVE") !== null) !== active)
+        return ids[index]
+    }
+    return ""
   }
 
   QtObject {
@@ -293,14 +349,22 @@ ShellRoot {
     shell: fakeShell
   }
 
-  Loader {
-    id: widgetLoader
-    active: true
-    sourceComponent: Component {
-      Control.BarWidget {
-        bar: fakeBar
-        panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
-        pluginUpdateServiceOverride: root.selectedUpdateService
+  Window {
+    id: testWindow
+    width: 800
+    height: 600
+    visible: root.phase === 8
+    onVisibleChanged: if (visible) requestActivate()
+
+    Loader {
+      id: widgetLoader
+      active: true
+      sourceComponent: Component {
+        Control.BarWidget {
+          bar: fakeBar
+          panelSource: Qt.resolvedUrl("fixtures/ControlCenterTestPanel.qml")
+          pluginUpdateServiceOverride: root.selectedUpdateService
+        }
       }
     }
   }
@@ -1518,77 +1582,292 @@ ShellRoot {
         const panel = widget.panelItem
         if (root.healthLifecycleStep === 0) {
           if (!panel || !panel.settingsPageReady
-              || panel.settingsPage !== "health"
-              || !panel.settingsPageItem
-              || panel.headerHealthErrorCount !== 1
-              || panel.settingsPageItem.attentionChecks.length !== 1)
+              || panel.settingsPage !== "health" || !panel.settingsPageItem)
             return root.fail("Health page did not instantiate")
           const health = panel.settingsPageItem
-          const v1HealthPanelHeight = panel.compactHealthPanelHeight
-          panel.v2LayoutActive = true
-          if (!panel.compactHealthPage
-              || Math.abs(panel.compactHealthPanelHeight
-                - health.implicitHeight
-                - panel.configureDetailPanelChromeHeight) > 0.5
-              || Math.abs(panel.compactHealthPanelHeight
-                - v1HealthPanelHeight) > 0.5)
-            return root.fail("Health did not fit its content height")
-          panel.v2LayoutActive = false
-          const error = health.attentionChecks[0]
-          const issueUrl = health.diagnosticIssueUrl(error)
-          if (health.diagnosticCode(error)
-                !== "SHIBUMI-HEALTH/RUNTIME-ERRORS"
-              || health.diagnosticReport(error).indexOf(
-                "Component: hancore.shibumi.example") < 0
-              || issueUrl.indexOf(
-                "github.com/HANCORE-linux/Shibumi-Shell/issues/new?title=") < 0
-              || decodeURIComponent(issueUrl).indexOf(
-                "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
-            return root.fail("Health error report or issue URL is incomplete")
-          if (health.diagnosticIssueUrl({
-                id: "runtime-errors-omarchy",
-                status: "error",
-                owner: "omarchy",
-                issueEligible: true
-              }) !== ""
-              || health.diagnosticIssueUrl({
-                id: "runtime-errors",
-                status: "warning",
-                owner: "shibumi",
-                issueEligible: true
-              }) !== "")
-            return root.fail("Health filing gate accepted an external or warning finding")
-          health.copyDiagnostic(error)
-          if (health.copiedCheckId !== "runtime-errors")
-            return root.fail("Health error report was not copied")
 
-          const stableReport = panel.healthService.report
-          const unsafeReport = JSON.stringify({
-            schemaVersion: 1,
-            summary: "unsafe fixture",
-            checks: [{
-              id: "runtime-errors",
-              status: "error",
-              label: "Sensitive fixture",
-              value: "1 error",
-              detail: "password=\"secret value\"",
-              owner: "shibumi",
-              issueEligible: true
-            }]
-          })
-          if (!panel.healthService.acceptReport(unsafeReport)
-              || panel.healthService.report.checks[0].issueEligible
-              || panel.healthService.report.checks[0].detail
-                .indexOf("secret value") >= 0)
-            return root.fail("Health report sanitization or filing gate failed")
-          panel.healthService.report = stableReport
-          if (panel.healthService.acceptReport("{broken")
-              || panel.healthService.report !== stableReport
-              || panel.healthService.failure === "")
-            return root.fail("malformed Health result replaced the last report")
-          panel.healthService.failure = ""
+          if (root.healthProjectionStep === 0) {
+            if (panel.headerHealthErrorCount !== 1
+                || health.attentionChecks.length !== 1)
+              return root.fail(
+                "Health page lost its initial Shibumi-owned runtime error")
+            const v1HealthPanelHeight = panel.compactHealthPanelHeight
+            panel.v2LayoutActive = true
+            if (!panel.compactHealthPage
+                || Math.abs(panel.compactHealthPanelHeight
+                  - health.implicitHeight
+                  - panel.configureDetailPanelChromeHeight) > 0.5
+                || Math.abs(panel.compactHealthPanelHeight
+                  - v1HealthPanelHeight) > 0.5)
+              return root.fail("Health did not fit its content height")
+            panel.v2LayoutActive = false
+            const error = health.attentionChecks[0]
+            const issueUrl = health.diagnosticIssueUrl(error)
+            if (health.diagnosticCode(error)
+                  !== "SHIBUMI-HEALTH/RUNTIME-ERRORS"
+                || health.diagnosticReport(error).indexOf(
+                  "Component: hancore.shibumi.example") < 0
+                || issueUrl.indexOf(
+                  "github.com/HANCORE-linux/Shibumi-Shell/issues/new?title=") < 0
+                || decodeURIComponent(issueUrl).indexOf(
+                  "Code: SHIBUMI-HEALTH/RUNTIME-ERRORS") < 0)
+              return root.fail("Health error report or issue URL is incomplete")
+            if (health.diagnosticIssueUrl({
+                  id: "runtime-errors-omarchy", status: "error",
+                  owner: "omarchy", issueEligible: true
+                }) !== ""
+                || health.diagnosticIssueUrl({
+                  id: "runtime-errors", status: "warning",
+                  owner: "shibumi", issueEligible: true
+                }) !== "")
+              return root.fail("Health filing gate accepted an external or warning finding")
+            health.copyDiagnostic(error)
+            if (health.copiedCheckId !== "runtime-errors")
+              return root.fail("Health error report was not copied")
+
+            root.stableHealthReport = panel.healthService.report
+            panel.healthService.report = root.healthReport("error", [
+              root.healthCheck("runtime-errors", "error", "omarchy",
+                "External runtime-errors", "1 error", "External detail"),
+              root.healthCheck("runtime-errors-omarchy", "warning", "omarchy",
+                "External runtime-errors-omarchy", "1 warning", "External detail"),
+              root.healthCheck("runtime-errors-third-party", "error",
+                "third-party", "External runtime-errors-third-party", "1 error",
+                "External detail"),
+              root.healthCheck("runtime-errors-unknown", "warning", "unknown",
+                "External runtime-errors-unknown", "1 warning", "External detail"),
+              root.healthCheck("runtime-warnings", "error", "third-party",
+                "External runtime-warnings", "1 error", "External detail"),
+              root.healthCheck("runtime-warnings-omarchy", "warning", "omarchy",
+                "External runtime-warnings-omarchy", "1 warning", "External detail"),
+              root.healthCheck("runtime-warnings-third-party", "error",
+                "third-party", "External runtime-warnings-third-party", "1 error",
+                "External detail"),
+              root.healthCheck("runtime-warnings-unknown", "warning", "unknown",
+                "External runtime-warnings-unknown", "1 warning", "External detail"),
+              root.healthCheck("runtime-errors", "error", "shibumi",
+                "Shibumi runtime error", "1 error", "Shibumi detail"),
+              root.healthCheck("runtime-errors", "warning", "unknown",
+                "Recent runtime findings", "Log unavailable", "Unavailable detail"),
+              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
+                "Sensitive runtime findings", "Details redacted", "Redacted"),
+              root.healthCheck("quickshell-process", "error", "unknown",
+                "Quickshell process", "missing", "Process detail"),
+              root.healthCheck("payload-integrity", "error", "unknown",
+                "Payload integrity", "mismatch", "Payload detail"),
+              root.healthCheck("audio-backend", "warning", "unknown",
+                "Audio backend", "unavailable", "Backend detail")
+            ])
+            root.projectionReportJson = JSON.stringify(panel.healthService.report)
+            root.healthProjectionStep = 1
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 1) {
+            const mixed = panel.healthService.report.checks
+            if (health.primaryChecks.length !== 6
+                || health.attentionChecks.length !== 6
+                || panel.headerHealthErrorCount !== 3
+                || panel.headerHealthWarningCount !== 3
+                || health.primaryChecks[0] !== mixed[8]
+                || health.primaryChecks[1] !== mixed[9]
+                || health.primaryChecks[2] !== mixed[10]
+                || health.primaryChecks[3] !== mixed[11]
+                || health.primaryChecks[4] !== mixed[12]
+                || health.primaryChecks[5] !== mixed[13]
+                || JSON.stringify(panel.healthService.report)
+                  !== root.projectionReportJson)
+              return root.fail(
+                "Health projection case 1 broke the exact-ID or owner boundary")
+            panel.healthService.report = root.healthReport("error", [
+              root.healthCheck("bar-runtime", "ok", "shibumi",
+                "Active bar", "Running", "Primary detail"),
+              root.healthCheck("quickshell-process", "ok", "unknown",
+                "Quickshell process", "1 process", "Primary detail"),
+              root.healthCheck("runtime-errors", "ok", "unknown",
+                "Recent runtime errors", "None detected", "Primary detail"),
+              root.healthCheck("runtime-errors-omarchy", "error", "omarchy",
+                "Omarchy runtime error", "1 error", "External detail"),
+              root.healthCheck("runtime-warnings-third-party", "warning",
+                "third-party", "Third-party runtime warning", "1 warning",
+                "External detail")
+            ])
+            root.projectionReportJson = JSON.stringify(panel.healthService.report)
+            root.healthProjectionStep = 2
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 2) {
+            const realistic = panel.healthService.report.checks
+            const oldGroupLabel = "2 runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
+            if (health.primaryChecks.length !== 3
+                || health.attentionChecks.length !== 0
+                || panel.headerHealthErrorCount !== 0
+                || panel.headerHealthWarningCount !== 0
+                || !panel.headerHealthPassed
+                || health.overallLabel() !== "Healthy"
+                || health.summaryLabel() !== "3 checks passed"
+                || panel.healthReport.overall !== "error"
+                || panel.healthReport.checks.length !== 5
+                || health.primaryChecks[0] !== realistic[0]
+                || health.primaryChecks[1] !== realistic[1]
+                || health.primaryChecks[2] !== realistic[2]
+                || panel.findTextItem(health, oldGroupLabel)
+                || !panel.findTextItem(panel, "HEALTH  ·  PASS")
+                || JSON.stringify(panel.healthService.report)
+                  !== root.projectionReportJson)
+              return root.fail(
+                "Health projection case 2 exposed or counted external runtime findings"
+                + " primary=" + health.primaryChecks.length
+                + " attention=" + health.attentionChecks.length
+                + " errors=" + panel.headerHealthErrorCount
+                + " warnings=" + panel.headerHealthWarningCount
+                + " passed=" + panel.headerHealthPassed
+                + " label=" + health.overallLabel()
+                + " summary=" + health.summaryLabel()
+                + " overall=" + panel.healthReport.overall
+                + " checks=" + panel.healthReport.checks.length
+                + " oldGroup=" + !!panel.findTextItem(health, oldGroupLabel)
+                + " chip=" + !!panel.findTextItem(panel, "HEALTH  ·  PASS")
+                + " immutable=" + (JSON.stringify(panel.healthService.report)
+                  === root.projectionReportJson))
+            panel.healthService.report = root.healthReport("warning", [
+              root.healthCheck("managed-plugins", "ok", "shibumi",
+                "Managed plugins", "Complete", "Primary detail"),
+              root.healthCheck("runtime-errors", "ok", "unknown",
+                "Recent runtime errors", "None detected", "Primary detail"),
+              root.healthCheck("runtime-warnings-unknown", "warning", "unknown",
+                "Qt portal runtime warning", "1 warning", "External detail")
+            ])
+            root.projectionReportJson = JSON.stringify(panel.healthService.report)
+            root.healthProjectionStep = 3
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 3) {
+            const oldGroupLabel = "1 runtime findings not attributed to Shibumi (Omarchy, Qt, third-party, unknown)"
+            if (health.primaryChecks.length !== 2
+                || health.attentionChecks.length !== 0
+                || !panel.headerHealthPassed
+                || health.overallLabel() !== "Healthy"
+                || panel.healthReport.overall !== "warning"
+                || panel.findTextItem(health, oldGroupLabel)
+                || JSON.stringify(panel.healthService.report)
+                  !== root.projectionReportJson)
+              return root.fail(
+                "Health projection case 3 trusted raw overall or rendered a warning")
+            panel.healthService.report = root.healthReport("error", [
+              root.healthCheck("runtime-errors", "warning", "unknown",
+                "Recent runtime findings", "Log unavailable", "Unavailable detail"),
+              root.healthCheck("runtime-warnings-omarchy", "warning", "omarchy",
+                "Omarchy runtime warnings", "many warnings", "External detail"),
+              root.healthCheck("runtime-errors-sensitive", "warning", "unknown",
+                "Sensitive runtime findings", "Details redacted", "Redacted"),
+              root.healthCheck("quickshell-process", "error", "unknown",
+                "Quickshell process", "0 processes", "Process detail"),
+              root.healthCheck("payload-integrity", "error", "unknown",
+                "Payload integrity", "mismatch", "Payload detail"),
+              root.healthCheck("audio-backend", "warning", "unknown",
+                "Audio backend", "unavailable", "Backend detail")
+            ])
+            root.healthProjectionStep = 4
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 4) {
+            const unsafeMasking = panel.healthService.report.checks
+            if (health.primaryChecks.length !== 5
+                || health.attentionChecks.length !== 5
+                || health.primaryChecks[0] !== unsafeMasking[0]
+                || health.primaryChecks[1] !== unsafeMasking[2]
+                || health.primaryChecks[2] !== unsafeMasking[3]
+                || health.primaryChecks[3] !== unsafeMasking[4]
+                || health.primaryChecks[4] !== unsafeMasking[5]
+                || health.primaryChecks[0].value !== "Log unavailable"
+                || health.primaryChecks[0].status !== "warning"
+                || health.primaryChecks[1].status !== "warning"
+                || health.primaryChecks[2].status !== "error"
+                || health.primaryChecks[3].status !== "error"
+                || health.primaryChecks[4].status !== "warning"
+                || panel.headerHealthErrorCount !== 2
+                || panel.headerHealthWarningCount !== 3
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed"
+                || panel.findTextItem(health, "Omarchy runtime warnings"))
+              return root.fail(
+                "Health projection case 4 masked Log unavailable or a primary failure")
+            const unsafeReport = JSON.stringify({
+              schemaVersion: 1,
+              summary: "unsafe fixture",
+              checks: [{
+                id: "runtime-errors", status: "error",
+                label: "Sensitive fixture", value: "1 error",
+                detail: "password=\"secret value\"", owner: "shibumi",
+                issueEligible: true
+              }]
+            })
+            if (!panel.healthService.acceptReport(unsafeReport)
+                || panel.healthService.report.checks[0].issueEligible
+                || panel.healthService.report.checks[0].detail
+                  .indexOf("secret value") >= 0)
+              return root.fail("Health report sanitization or filing gate failed")
+            panel.healthService.report = root.healthReport("healthy", [
+              root.healthCheck("runtime-errors", "ok", "unknown",
+                "Recent runtime errors", "None detected", "Clean sample")
+            ])
+            root.healthProjectionStep = 5
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 5) {
+            const healthyReport = panel.healthService.report
+            if (panel.healthService.acceptReport("{broken")
+                || panel.healthService.report !== healthyReport
+                || panel.healthService.failure === ""
+                || health.primaryChecks.length !== 1
+                || panel.headerHealthErrorCount !== 1
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed")
+              return root.fail(
+                "Health projection case 5 lost the schema-failure fallback")
+            panel.healthService.failure = "Health check failed (exit 1)."
+            root.healthProjectionStep = 6
+            root.ticks = 0
+            return
+          }
+
+          if (root.healthProjectionStep === 6) {
+            if (panel.headerHealthErrorCount !== 1
+                || panel.headerHealthPassed
+                || health.overallLabel() !== "Action needed")
+              return root.fail(
+                "Health projection case 6 lost the fetch-failure fallback")
+            panel.healthService.failure = ""
+            panel.healthService.report = root.healthReport("loading", [])
+            root.healthProjectionStep = 7
+            root.ticks = 0
+            return
+          }
+
+          if (health.primaryChecks.length !== 0
+              || health.attentionChecks.length !== 0
+              || panel.headerHealthErrorCount !== 0
+              || panel.headerHealthWarningCount !== 0
+              || panel.headerHealthPassed
+              || health.overallLabel() !== "Not checked"
+              || health.summaryLabel() !== "Not checked yet"
+              || panel.findTextItem(panel, "HEALTH  ·  PASS"))
+            return root.fail(
+              "Health projection case 7 treated an empty report as checked")
+          panel.healthService.report = root.stableHealthReport
           root.lifecycleHealthService = panel.healthService
-          root.lifecycleReportEpoch = Number(stableReport.generatedEpoch || 0)
+          root.lifecycleReportEpoch = Number(
+            root.stableHealthReport.generatedEpoch || 0)
           if (!panel.healthService.runChecks(false))
             return root.fail("Health check did not start")
           root.healthLifecycleStep = 1
@@ -1725,10 +2004,210 @@ ShellRoot {
         if (!widget || root.ticks < 2) return
         const panel = widget.panelItem
         const quick = panel ? panel.settingsPageItem : null
-        if (!panel || panel.settingsPage !== "quick" || !quick || !quick.ready
+        if (!panel) return root.fail("palette lifecycle panel disappeared")
+        if (root.paletteLifecycleStep === 0) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("closed widget palette retained production items")
+          if (panel.settingsPage !== "plugins") {
+            if (!panel.showSettingsPage("plugins"))
+              return root.fail("widget palette host page did not open")
+            root.ticks = 0
+            return
+          }
+          const buildStarted = Date.now()
+          if (!panel.openWidgetPicker())
+            return root.fail("widget palette did not open")
+          console.log("widget palette fixture initial open call ms:",
+            Date.now() - buildStarted)
+          root.paletteLifecycleStep = 1
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 1) {
+          if (!panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("open widget palette did not build and focus: loaded="
+              + panel.widgetPaletteLoaded() + " tiles="
+              + panel.widgetPaletteTileCount() + " expected="
+              + panel.availableWidgetCount + " focus="
+              + panel.widgetPaletteInputFocused())
+          root.paletteInitialTileCount = panel.widgetPaletteTileCount()
+          panel.setWidgetPaletteQuery("bluetooth")
+          root.paletteLifecycleStep = 2
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 2) {
+          if (panel.widgetPaletteTileCount() !== 1)
+            return root.fail("widget palette search did not filter current catalog")
+          if (!panel.dismissWidgetPaletteFromOutside())
+            return root.fail("widget palette outside dismissal was unavailable")
+          root.paletteLifecycleStep = 3
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 3) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0
+              || panel.widgetPaletteInputFocused())
+            return root.fail("outside dismissal did not unload widget palette")
+          panel.appendWidgetPaletteProbe()
+          const buildStarted = Date.now()
+          if (!panel.openWidgetPicker())
+            return root.fail("widget palette did not reopen")
+          console.log("widget palette fixture reopen call ms:",
+            Date.now() - buildStarted)
+          root.paletteLifecycleStep = 4
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 4) {
+          if (!panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || panel.widgetPaletteTileCount()
+                !== root.paletteInitialTileCount + 1
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("reopened widget palette retained stale catalog state")
+          if (!panel.handleEscape())
+            return root.fail("widget palette Escape dismissal failed")
+          root.paletteLifecycleStep = 5
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 5) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("Escape did not unload widget palette")
+          if (!panel.openPluginInstaller())
+            return root.fail("direct plugin installer did not open after unload")
+          root.paletteLifecycleStep = 6
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 6) {
+          if (!panel.pluginInstallerOpen || !panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== panel.availableWidgetCount
+              || !panel.widgetPaletteInputFocused())
+            return root.fail("reopened installer lost its production focus path")
+          if (!panel.handleEscape())
+            return root.fail("direct installer Escape dismissal failed")
+          root.paletteLifecycleStep = 7
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 7) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("installer close did not unload widget palette")
+          if (!panel.openWidgetPicker())
+            return root.fail("embedded installer picker did not open")
+          root.paletteLifecycleStep = 8
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 8) {
+          if (panel.widgetPaletteInstallMode() || !panel.widgetPaletteInputFocused()
+              || !panel.openEmbeddedPluginInstaller())
+            return root.fail("embedded installer production action was unavailable")
+          root.paletteLifecycleStep = 9
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 9) {
+          if (!panel.widgetPaletteInstallMode() || !panel.widgetPaletteInputFocused()
+              || !panel.backFromEmbeddedPluginInstaller())
+            return root.fail("embedded installer input did not receive focus")
+          root.paletteLifecycleStep = 10
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 10) {
+          if (panel.widgetPaletteInstallMode()
+              || !panel.widgetPaletteInputFocused() || !panel.handleEscape())
+            return root.fail("embedded installer Back did not refocus search")
+          root.paletteLifecycleStep = 11
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 11) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0)
+            return root.fail("embedded installer close did not unload palette")
+          if (!panel.openWidgetPicker() || !panel.handleEscape())
+            return root.fail("queued-focus teardown setup failed")
+          root.paletteLifecycleStep = 12
+          root.ticks = 0
+          return
+        }
+        if (root.paletteLifecycleStep === 12) {
+          if (panel.widgetPaletteLoaded()
+              || panel.widgetPaletteTileCount() !== 0
+              || panel.widgetPaletteInputFocused()
+              || !panel.showSettingsPage("quick"))
+            return root.fail("queued focus survived palette destruction")
+          root.paletteLifecycleStep = 13
+          root.ticks = 0
+          return
+        }
+        if (panel.settingsPage !== "quick" || !quick || !quick.ready
             || quick.barOptionCount !== 3 || quick.actionCount !== 8
             || quick.barOptions[2].label !== "Omarchy Bar")
           return root.fail("compact Quick switch/action deck did not instantiate")
+        const barDelegates = panel.quickBarOptionDelegates()
+        const barPointers = panel.quickBarOptionPointerAreas()
+        if (barDelegates.length !== 3 || barPointers.length !== 3
+            || barDelegates.some(function(item) { return item === null })
+            || barPointers.some(function(item) { return item === null }))
+          return root.fail("Quick bar delegate identity fixture did not find three options")
+        if (root.quickBarIdentityStep === 0) {
+          panel.v2LayoutActive = true
+          root.quickBarIdentityStep = 1
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 1) {
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v2", "Shibumi full bar")
+          if (stateError !== "")
+            return root.fail("Quick Full bar delegate data did not bind: "
+              + stateError)
+          if (!panel.setBarPresentation("shellStyle", "fit"))
+            return root.fail("Quick Full/Fit delegate transition was rejected")
+          root.quickBarIdentityStep = 2
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 2) {
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v2", "Shibumi fit bar")
+          if (stateError !== "")
+            return root.fail("Quick Fit bar delegate data did not rebound: "
+              + stateError)
+          root.quickBarDelegatesBefore = barDelegates
+          root.quickBarPointersBefore = barPointers
+          panel.v2LayoutActive = false
+          root.quickBarIdentityStep = 3
+          root.ticks = 0
+          return
+        }
+        if (root.quickBarIdentityStep === 3) {
+          for (let index = 0; index < 3; index++) {
+            if (barDelegates[index] !== root.quickBarDelegatesBefore[index])
+              return root.fail(
+                "Quick bar delegate identity changed across V2 to V1")
+            if (barPointers[index] !== root.quickBarPointersBefore[index])
+              return root.fail(
+                "Quick bar pointer identity changed across V2 to V1")
+          }
+          const stateError = root.quickBarStateError(
+            panel, barDelegates, "v1", "Shibumi fit bar")
+          if (stateError !== "")
+            return root.fail("Quick V1 bar delegate data did not rebound: "
+              + stateError)
+          root.quickBarIdentityStep = 4
+        }
         const activeBeforePreview = quick.activeBarId
         quick.hoveredBarIndex = 1
         if (quick.previewBar.id !== "v2"
@@ -1740,7 +2219,7 @@ ShellRoot {
             || panel.lastQuickSystemAction !== "screensaver")
           return root.fail("Quick action deck did not delegate to its owners")
         if (!quick.activateAction("add-plugin")
-            || !panel.pluginInstallerOpen)
+            || !panel.pluginInstallerOpen || panel.settingsPage !== "plugins")
           return root.fail("direct plugin installer did not open")
         const pluginRepository =
           "https://github.com/robzolkos/omarchy-github.git"

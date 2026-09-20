@@ -29,7 +29,10 @@ WARNING_PATTERN = re.compile(
     r"^[\s\d:.,+\-TZ\[\]]{0,96}warn(?:ing)?(?=\s|:)", re.IGNORECASE
 )
 LOG_TAIL_LINES = 400
+LOG_FULL_READ_LIMIT = 8 * 1024 * 1024
+LOG_TAIL_BYTES = 1024 * 1024
 LOG_DETAIL_FINDINGS = 8
+INSTANCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$")
 SENSITIVE_PATTERNS = re.compile(
     r"authorization|cookie|credential|password|secret|ssid|token",
     re.IGNORECASE,
@@ -222,6 +225,7 @@ class Probe:
         self.registry: list[dict[str, Any]] = []
         self.processes: list[dict[str, Any]] = []
         self.production_pids: list[int] = []
+        self.production_instance_id = ""
         self.production_responsive = False
         self.process_probe_failed = False
 
@@ -683,15 +687,22 @@ class Probe:
             production_config = os.path.normpath(
                 str(self.omarchy_root / "shell/shell.qml")
             )
+            production_instances = [
+                item for item in self.processes
+                if os.path.normpath(str(item.get("config_path") or ""))
+                == production_config
+                and int(item.get("pid", 0)) > 0
+            ]
             self.production_pids = sorted(
-                {
-                    int(item.get("pid", 0))
-                    for item in self.processes
-                    if os.path.normpath(str(item.get("config_path") or ""))
-                    == production_config
-                    and int(item.get("pid", 0)) > 0
-                }
+                {int(item["pid"]) for item in production_instances}
             )
+            if len(self.production_pids) == 1:
+                selected = [
+                    item for item in production_instances
+                    if int(item["pid"]) == self.production_pids[0]
+                ]
+                if len(selected) == 1 and isinstance(selected[0].get("id"), str):
+                    self.production_instance_id = selected[0]["id"]
 
             fixture_live = os.environ.get("SHIBUMI_HEALTH_PROCESS_LIVE")
             if fixture and fixture_live is not None:
@@ -1030,8 +1041,60 @@ class Probe:
                 status_path if status_path.is_file() else self.state_dir,
             )
 
+    def read_runtime_log(self) -> str:
+        instance_id = self.production_instance_id
+        if not INSTANCE_ID_PATTERN.fullmatch(instance_id):
+            raise ValueError("The production instance ID is missing or malformed.")
+        runtime_value = os.environ.get("XDG_RUNTIME_DIR", "")
+        runtime_root = Path(runtime_value)
+        if not runtime_value or not runtime_root.is_absolute() or str(runtime_root) != os.path.normpath(runtime_value):
+            raise ValueError("XDG_RUNTIME_DIR is missing or malformed.")
+
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+        directory_fd = os.open("/", directory_flags)
+        try:
+            for component in runtime_root.parts[1:]:
+                child_fd = os.open(component, directory_flags, dir_fd=directory_fd)
+                os.close(directory_fd)
+                directory_fd = child_fd
+            root_stat = os.fstat(directory_fd)
+            if not stat.S_ISDIR(root_stat.st_mode) or root_stat.st_uid != os.getuid():
+                raise ValueError("XDG_RUNTIME_DIR is not an owned directory.")
+            for component in ("quickshell", "by-id", instance_id):
+                child_fd = os.open(component, directory_flags, dir_fd=directory_fd)
+                os.close(directory_fd)
+                directory_fd = child_fd
+            log_fd = os.open(
+                "log.log",
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                dir_fd=directory_fd,
+            )
+            try:
+                metadata = os.fstat(log_fd)
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise ValueError("The production text log is not a regular file.")
+                if metadata.st_uid != os.getuid():
+                    raise ValueError("The production text log has a foreign owner.")
+                offset = metadata.st_size - LOG_TAIL_BYTES if metadata.st_size > LOG_FULL_READ_LIMIT else 0
+                remaining = LOG_TAIL_BYTES if offset else min(metadata.st_size, LOG_FULL_READ_LIMIT)
+                os.lseek(log_fd, offset, os.SEEK_SET)
+                blocks = []
+                while remaining:
+                    block = os.read(log_fd, min(remaining, 64 * 1024))
+                    if not block:
+                        break
+                    blocks.append(block)
+                    remaining -= len(block)
+                raw = b"".join(blocks)
+                if offset:
+                    raw = raw.partition(b"\n")[2]
+                return raw.decode("utf-8", errors="replace")
+            finally:
+                os.close(log_fd)
+        finally:
+            os.close(directory_fd)
+
     def check_logs(self) -> None:
-        fixture = os.environ.get("SHIBUMI_HEALTH_LOG_FILE")
         try:
             if self.process_probe_failed or len(self.production_pids) != 1:
                 if self.process_probe_failed:
@@ -1052,41 +1115,7 @@ class Probe:
                     owner=OWNER_UNKNOWN,
                 )
                 return
-            if fixture:
-                raw = Path(fixture).read_text(encoding="utf-8", errors="replace")
-            else:
-                result = run(
-                    [
-                        "qs",
-                        "log",
-                        "--pid",
-                        str(self.production_pids[0]),
-                        "--tail",
-                        str(LOG_TAIL_LINES),
-                        "--no-color",
-                        "--log-times",
-                    ],
-                    timeout=5,
-                )
-                if result.returncode != 0:
-                    raw_detail = (result.stderr or result.stdout).strip()
-                    if raw_detail and not SENSITIVE_PATTERNS.search(raw_detail):
-                        detail = self.redact_home_paths(safe_text(raw_detail, 280))
-                    else:
-                        detail = f"qs log exited with {result.returncode}"
-                    self.add(
-                        "runtime-errors",
-                        "Runtime",
-                        "Recent runtime findings",
-                        "warning",
-                        "Log unavailable",
-                        detail,
-                        "current Quickshell configuration",
-                        "Copy the bounded detail and inspect the affected component.",
-                        owner=OWNER_UNKNOWN,
-                    )
-                    return
-                raw = result.stdout
+            raw = self.read_runtime_log()
             returned_lines = raw.splitlines()
             if not returned_lines or not any(line.strip() for line in returned_lines):
                 self.add(
@@ -1243,7 +1272,7 @@ class Probe:
                     source_path="; ".join(source_paths),
                     plugin_id="; ".join(plugin_ids),
                 )
-        except (OSError, AttributeError, subprocess.TimeoutExpired) as error:
+        except (OSError, ValueError, AttributeError) as error:
             self.add(
                 "runtime-errors",
                 "Runtime",

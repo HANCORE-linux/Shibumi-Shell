@@ -5,7 +5,7 @@ var GroupIds = [
   "G9", "G10", "G11", "G12", "G13", "G14", "G15"
 ]
 var Regions = ["left", "center", "right"]
-var SplitRegions = ["left", "right", "boundaries"]
+var SplitRegions = ["left", "center", "right", "boundaries"]
 var BaseCounts = { left: 7, center: 1, right: 7 }
 var ExtraLimits = { left: 2, center: 1, right: 2 }
 var DynamicGroupPrefix = "G:"
@@ -21,6 +21,7 @@ function defaultOrder() {
 function defaultSplits() {
   return {
     left: [false, false, false, false, false, false],
+    center: [],
     boundaries: [false, false],
     right: [false, false, false, false, false, false]
   }
@@ -201,6 +202,7 @@ function copySplits(value, orderValue) {
   if (!validSplits(value, orderValue)) return null
   return {
     left: value.left.slice(),
+    center: value.center.slice(),
     boundaries: value.boundaries.slice(),
     right: value.right.slice()
   }
@@ -208,7 +210,7 @@ function copySplits(value, orderValue) {
 
 function resizeSplits(value, orderValue) {
   if (!isObject(value) || !validOrder(orderValue)) return null
-  var result = { left: [], boundaries: [], right: [] }
+  var result = { left: [], center: [], boundaries: [], right: [] }
   for (var r = 0; r < SplitRegions.length; r++) {
     var region = SplitRegions[r]
     var source = Array.isArray(value[region]) ? value[region] : []
@@ -227,13 +229,6 @@ function removeSlotAt(orderValue, splitsValue, regionValue, indexValue) {
   if (!order || !splits || !isExtraSlot(order, region, index)
       || order[region][index] !== "") return null
 
-  // V1 has no internal center split field. Preserve the existing schema and
-  // both section boundaries when removing its optional empty slot.
-  if (region === "center") {
-    order.center.splice(index, 1)
-    return validOrder(order) && validSplits(splits, order)
-      ? { order: order, splits: splits } : null
-  }
   var sourceSplits = splits[region].slice()
   var lastIndex = order[region].length - 1
   order[region].splice(index, 1)
@@ -424,7 +419,7 @@ function toggleSplit(value, regionValue, indexValue, orderValue) {
 function allSplits(enabledValue, orderValue) {
   if (typeof enabledValue !== "boolean") return null
   var order = validOrder(orderValue) ? orderValue : defaultOrder()
-  var result = { left: [], boundaries: [], right: [] }
+  var result = { left: [], center: [], boundaries: [], right: [] }
   for (var r = 0; r < SplitRegions.length; r++) {
     var region = SplitRegions[r]
     for (var i = 0; i < expectedSplitLength(region, order); i++)

@@ -445,11 +445,11 @@ Column {
 
       Repeater {
         id: barRepeater
-        model: root.barOptions
+        model: root.barOptions.length
 
         delegate: Rectangle {
           id: barOption
-          required property var modelData
+          readonly property var modelData: root.barOptions[index]
           required property int index
           readonly property color optionFill: modelData.active
             ? root.surfaceFill(true, optionPointer.containsMouse)

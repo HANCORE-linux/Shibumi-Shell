@@ -62,17 +62,30 @@ canonical data never falls back to the retired location.
 
 The page shows every warning or error, including its bounded evidence and next
 step. Runtime warning rows state the number of matches and lines in the sampled
-scope. The query remains the existing `qs log --pid <production-pid> --tail 400`
-on-demand read; Health adds no process, poller, timer, or background sampler.
-Because a tail can omit earlier records, Health does not extrapolate a
-since-boot or hourly warning rate unless a complete timed observation window is
-actually established. The current query does not establish one, so the rate is
-reported as unavailable. A missing, failed, or ambiguous production-process or
-log selection is **Log unavailable**, never a clean zero. In the healthy state
-only the active bar, installed Shibumi components, and recent runtime errors
-remain as quiet icon-and-text rows. Other successful implementation checks stay
-hidden: they provide no user action and surface automatically if their state
-becomes abnormal.
+scope. Health selects the exact production config from one `qs list` result and
+caches that instance ID for the rest of the check. It does not invoke `qs log`.
+Instead, it reads the selected instance's Quickshell text log directly from
+`$XDG_RUNTIME_DIR/quickshell/by-id/<instance-id>/log.log` without adding a
+process, poller, timer, or background sampler. The ID accepts only a bounded
+ASCII filename form. Every directory component is opened without following
+symbolic links, the runtime root must belong to the current user, and the final
+nonblocking descriptor must be a regular file owned by that user.
+
+The file size captured immediately after opening bounds the read and prevents
+later growth from extending it. Logs up to and including 8 MiB are read in
+bounded chunks. For a larger log, Health reads at most the final 1 MiB and drops
+the first, potentially partial line before applying the existing 400-line
+sample bound. Bytes that are not valid UTF-8 are replaced rather than causing
+an unbounded fallback. Because this tail can omit earlier records, Health does
+not extrapolate a since-boot or hourly warning rate unless a complete timed
+observation window is actually established. The current query does not
+establish one, so the rate is reported as unavailable. A missing, malformed,
+symlinked, non-regular, foreign-owned, failed, or ambiguous production-process
+or log selection is **Log unavailable**, never a clean zero. In the healthy
+state only the active bar, installed Shibumi components, and recent runtime
+errors remain as quiet icon-and-text rows. Other successful implementation
+checks stay hidden: they provide no user action and surface automatically if
+their state becomes abnormal.
 
 ### Ownership attribution
 
@@ -88,6 +101,15 @@ also remain `unknown`; a canonical Omarchy path with a competing local path or
 explicit foreign plugin ID is likewise ambiguous. An Omarchy path may still
 outvote an incidental, unanchored plugin name. Ownership must not be assigned
 by guesswork.
+
+The Control Center headline, its **HEALTH** chip, and the Health panel list only
+Shibumi-attributed runtime log findings together with every non-log process,
+payload, backend, and sensitive-detail check. An unreadable or ambiguous log
+remains a primary **Log unavailable** warning. Error and warning checks
+attributed to Omarchy, third-party code, or an unknown source are not listed in
+the panel; `shibumi-health` reports them under their owner. `unknown` means that
+responsibility is not established. This UI projection does not change
+`report.overall`, remove checks, or alter the complete CLI/JSON report.
 
 An expanded error exposes a stable `SHIBUMI-HEALTH/<CHECK-ID>` code and a
 **Copy** action. Copy places only the bounded, sanitized code, result, owner,

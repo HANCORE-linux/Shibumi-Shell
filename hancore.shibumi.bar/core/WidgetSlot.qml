@@ -90,6 +90,7 @@ Item {
   property bool _loaderSubmissionActive: false
   property var _residentLoad: null
   property var _completedLoad: null
+  property bool _barConnectionRevoked: false
   property var loadedComponent: null
   property var loadedItem: null
   property int resolutionAttempts: 0
@@ -139,53 +140,13 @@ Item {
   }
   property var compatibilityPanel: null
   property var compatibilityCard: null
-  property var compatibilityContentHolder: null
-  property real compatibilityNativeContentHeight: 0
-  property real compatibilityMeasuredContentHeight: 0
   property int compatibilitySurfaceResolutionAttempts: 0
-  property int compatibilityContentResolutionAttempts: 0
-  readonly property bool compatibilityMeasurementRunning:
-    compatibilityMeasureTimer.running || compatibilityOpenMeasureTimer.running
   readonly property int compatibilityTraversalDepthLimit: 8
   readonly property int compatibilityTraversalObjectLimit: 256
   readonly property bool hostPanelChromeEnabled: hostedModule
     && compatibilityPanel !== null
     && compatibilityCard !== null
     && bar && bar.visualTokens !== null
-  // Omarchy KeyboardPanel normally derives its perpendicular offset from
-  // the anchor window's dimensions. Shibumi deliberately keeps BarPanel
-  // screen-sized so V1 edit mode can own one stable input surface, therefore
-  // the host must translate that offset back to the visible bar edge.
-  readonly property bool hostPanelPlacementEnabled: hostPanelChromeEnabled
-    && "screenW" in compatibilityPanel
-    && "screenH" in compatibilityPanel
-    && Number(compatibilityPanel.screenW) > 0
-    && Number(compatibilityPanel.screenH) > 0
-  readonly property real compatibilityDesiredContentHeight: {
-    const card = compatibilityCard
-    if (!card || !compatibilityContentHolder) return 0
-    return Math.ceil(compatibilityMeasuredContentHeight
-      + (Number(card.contentTopInset) || 0)
-      + (Number(card.contentBottomInset) || 0))
-  }
-  readonly property real compatibilityAvailableContentHeight: {
-    const panel = compatibilityPanel
-    if (!panel || !bar) return 0
-    const screenHeight = Math.max(0, Number(panel.screenH) || 0)
-    const margin = Math.max(0, Number(panel.margin) || 0)
-    const gap = Math.max(0, Number(panel.gap) || 0)
-    const barThickness = Math.max(0, Number(bar.barSize) || 0)
-    return Math.max(120, screenHeight - barThickness - gap - margin)
-  }
-  readonly property real compatibilityHostedContentHeight: Math.min(
-    compatibilityDesiredContentHeight,
-    compatibilityAvailableContentHeight)
-  readonly property bool hostPanelHeightRepairEnabled:
-    hostPanelPlacementEnabled
-    && (bar.position === "top" || bar.position === "bottom")
-    && compatibilityNativeContentHeight <= 120
-    && compatibilityHostedContentHeight
-      > compatibilityNativeContentHeight + 0.5
   readonly property bool v2PanelConnectionEnabled: hostPanelChromeEnabled
     && String(bar.visualTokens.shellStyle || "shibumi") !== "shibumi"
     && (bar.position === "top" || bar.position === "bottom")
@@ -224,6 +185,7 @@ Item {
     ensureResolvedComponent()
   }
   Component.onDestruction: {
+    revokeBarConnection()
     clearCompatibilityConnection()
     if (bar.activePopout === activeItem
         && typeof bar.releasePopout === "function")
@@ -280,14 +242,8 @@ Item {
       clearCompatibilityConnection()
     compatibilityPanel = null
     compatibilityCard = null
-    compatibilityContentHolder = null
-    compatibilityNativeContentHeight = 0
-    compatibilityMeasuredContentHeight = 0
     compatibilitySurfaceResolutionAttempts = 0
-    compatibilityContentResolutionAttempts = 0
     compatibilitySurfaceTimer.stop()
-    compatibilityMeasureTimer.stop()
-    compatibilityOpenMeasureTimer.stop()
     syncActiveItemMetrics()
     deferredSync.restart()
   }
@@ -401,19 +357,22 @@ Item {
     const previousSubmission = _submission
     if (previousSubmission && previousSubmission.source === nextSource) return
 
-    // Claim the complete successor request before any invalidating write. Every
-    // later write can synchronously re-enter this function, so the outer call
-    // rechecks object identity before it can clear or dispatch anything else.
+    // Loader.active observes the request itself, so revoke the resident Bar
+    // connection before publishing a null source. Reentry during that revoke
+    // owns any changed submission and the outer call must not overwrite it.
     const request = {
       source: nextSource,
       generation: previousSubmission
         ? previousSubmission.generation + 1 : 1
     }
+    revokeBarConnection()
+    if (_submission !== previousSubmission) return
+    _submission = request
+    if (_submission !== request) return
     const activationRequired = nextSource !== null
       && (!previousSubmission || previousSubmission.source === null)
     if (activationRequired || nextSource === null)
       _loaderSubmissionActive = false
-    _submission = request
     if (_submission !== request) return
     if (!invalidateCompletedLoad(request)) return
     if (_submission !== request) return
@@ -436,7 +395,8 @@ Item {
         generation: request.generation,
         item: resident.item
       }
-      publishCompletedLoad(completion, request, resident)
+      if (publishCompletedLoad(completion, request, resident))
+        resumeBarConnection()
       return
     }
 
@@ -453,7 +413,7 @@ Item {
   }
 
   function synchronizeLoaderSource() {
-    submitLoaderSource(resolvedComponent)
+    submitLoaderSource(!("claimLoadedOwner" in bar) || bar.widgetSlotLoadAdmitted(root) ? resolvedComponent : null)
   }
 
   function requestLoaderSourceSync() {
@@ -588,129 +548,10 @@ Item {
     return null
   }
 
-  function compatibilityDescendantCount(item, depth) {
-    if (!item || depth > 16) return 0
-    const children = item.children || []
-    let count = children.length
-    for (let index = 0; index < children.length; index++)
-      count += compatibilityDescendantCount(children[index], depth + 1)
-    return count
-  }
-
-  function findCompatibilityContentHolder(card) {
-    const children = card && card.children ? card.children : []
-    let best = null
-    let bestCount = 0
-    for (let index = 0; index < children.length; index++) {
-      const candidate = children[index]
-      const count = compatibilityDescendantCount(candidate, 0)
-      if (count > bestCount) {
-        best = candidate
-        bestCount = count
-      }
-    }
-    return best
-  }
-
-  function measureCompatibilityContent(holder) {
-    if (!holder) return 0
-    let bottom = 0
-
-    function visit(item, depth) {
-      if (!item || depth > 16 || item.visible === false) return
-      if (depth > 0) {
-        let point = Qt.point(0, 0)
-        try { point = item.mapToItem(holder, 0, 0) } catch (error) {}
-        const itemHeight = Math.max(Number(item.height) || 0,
-          Number(item.implicitHeight) || 0)
-        const fillsHolder = Math.abs(Number(point.x) || 0) < 0.5
-          && Math.abs(Number(point.y) || 0) < 0.5
-          && Math.abs((Number(item.width) || 0)
-            - (Number(holder.width) || 0)) < 0.5
-          && Math.abs((Number(item.height) || 0)
-            - (Number(holder.height) || 0)) < 0.5
-        if (!fillsHolder)
-          bottom = Math.max(bottom, (Number(point.y) || 0) + itemHeight)
-      }
-      const children = item.children || []
-      for (let index = 0; index < children.length; index++)
-        visit(children[index], depth + 1)
-    }
-
-    visit(holder, 0)
-    return Math.ceil(Math.max(0, bottom))
-  }
-
-  function hostedCardOrigin(panel) {
-    if (!panel || !bar) return Qt.point(0, 0)
-    const screenWidth = Math.max(0, Number(panel.screenW) || 0)
-    const screenHeight = Math.max(0, Number(panel.screenH) || 0)
-    const contentWidth = Math.max(1, Number(panel.contentWidth) || 1)
-    const contentHeight = Math.max(1, Number(panel.contentHeight) || 1)
-    const margin = Math.max(0, Number(panel.margin) || 0)
-    const gap = Math.max(0, Number(panel.gap) || 0)
-    const barThickness = Math.max(0, Number(bar.barSize) || 0)
-    const barPosition = "barPos" in panel
-      ? String(panel.barPos || "top") : String(bar.position || "top")
-    const anchorPosition = "anchorScreenPos" in panel
-      ? panel.anchorScreenPos : slotWindowPosition
-    const anchorWidth = "anchorW" in panel
-      ? Math.max(0, Number(panel.anchorW) || 0) : width
-    const anchorHeight = "anchorH" in panel
-      ? Math.max(0, Number(panel.anchorH) || 0) : height
-    const centered = "centerOnBar" in panel && !!panel.centerOnBar
-    let x = 0
-    let y = 0
-
-    if (centered && (barPosition === "top" || barPosition === "bottom")) {
-      x = screenWidth / 2 - contentWidth / 2
-      y = barPosition === "bottom"
-        ? screenHeight - barThickness - contentHeight - gap
-        : barThickness + gap
-    } else if (centered) {
-      x = barPosition === "left" ? barThickness + gap
-        : screenWidth - barThickness - contentWidth - gap
-      y = screenHeight / 2 - contentHeight / 2
-    } else if (barPosition === "bottom") {
-      x = anchorPosition.x + anchorWidth / 2 - contentWidth / 2
-      y = screenHeight - barThickness - contentHeight - gap
-    } else if (barPosition === "left") {
-      x = barThickness + gap
-      y = anchorPosition.y + anchorHeight / 2 - contentHeight / 2
-    } else if (barPosition === "right") {
-      x = screenWidth - barThickness - contentWidth - gap
-      y = anchorPosition.y + anchorHeight / 2 - contentHeight / 2
-    } else {
-      x = anchorPosition.x + anchorWidth / 2 - contentWidth / 2
-      y = barThickness + gap
-    }
-
-    x = Math.max(margin, Math.min(x, screenWidth - contentWidth - margin))
-    y = Math.max(margin, Math.min(y, screenHeight - contentHeight - margin))
-    return Qt.point(Math.round(x), Math.round(y))
-  }
-
   function resolveCompatibilitySurface() {
-    const previousPanel = compatibilityPanel
     const panel = findCompatibilityPanel(activeItem)
-    const currentNativeHeight = panel
-      ? Math.max(0, Number(panel.contentHeight) || 0) : 0
     compatibilityPanel = panel
     compatibilityCard = findCompatibilityCard(panel)
-    // Opening an already-discovered panel emits openedChanged after the host
-    // height binding has expanded it. Preserve the smallest native height
-    // observed for the same panel so that re-resolution cannot mistake the
-    // host-repaired value for the provider's original geometry and collapse
-    // the card back to KeyboardPanel's 120px safety minimum.
-    compatibilityNativeContentHeight = panel && panel === previousPanel
-        && compatibilityNativeContentHeight > 0
-      ? Math.min(compatibilityNativeContentHeight, currentNativeHeight)
-      : currentNativeHeight
-    compatibilityContentHolder = findCompatibilityContentHolder(
-      compatibilityCard)
-    compatibilityMeasuredContentHeight = measureCompatibilityContent(
-      compatibilityContentHolder)
-    compatibilityContentResolutionAttempts = 0
     if (panel) {
       compatibilitySurfaceResolutionAttempts = 0
       compatibilitySurfaceTimer.stop()
@@ -719,27 +560,7 @@ Item {
       // A nested Loader can complete after the outer bar-widget Loader.
       compatibilitySurfaceTimer.restart()
     }
-    if (hostedModule && compatibilityCard) {
-      compatibilityOpenMeasureTimer.stop()
-      compatibilityMeasureTimer.restart()
-    } else {
-      compatibilityMeasureTimer.stop()
-      compatibilityOpenMeasureTimer.stop()
-    }
     publishCompatibilityConnection()
-  }
-
-  function refreshCompatibilityContent() {
-    if (!compatibilityCard || !activeItem) {
-      compatibilityMeasureTimer.stop()
-      compatibilityOpenMeasureTimer.stop()
-      return
-    }
-    compatibilityContentHolder = findCompatibilityContentHolder(
-      compatibilityCard)
-    compatibilityMeasuredContentHeight = measureCompatibilityContent(
-      compatibilityContentHolder)
-    compatibilityContentResolutionAttempts++
   }
 
   function clearCompatibilityConnection() {
@@ -788,9 +609,21 @@ Item {
     inlineSettingsSync.restart()
   }
 
+  function revokeBarConnection() {
+    if (_barConnectionRevoked) return
+    _barConnectionRevoked = true
+    const target = activeItem
+    if (target && "bar" in target) target.bar = null
+  }
+
+  function resumeBarConnection() {
+    _barConnectionRevoked = false
+    injectProperties()
+  }
+
   function injectProperties() {
     const target = activeItem
-    if (!target) return
+    if (!target || _barConnectionRevoked) return
     if ("bar" in target) target.bar = bar
     if ("moduleName" in target) target.moduleName = moduleName
     if ("hostGroupId" in target) target.hostGroupId = region
@@ -861,41 +694,12 @@ Item {
     restoreMode: Binding.RestoreBindingOrValue
   }
 
-  // KeyboardPanel measures its available height from the anchor window. The
-  // Shibumi bar host is intentionally screen-sized, so hosted panels otherwise
-  // mistake the whole screen for the bar and collapse to the 120px safety
-  // minimum. Recover the provider's actual content height and cap it against
-  // the visible screen edge; native-sized panels remain untouched.
-  Binding {
-    target: root.compatibilityPanel
-    property: "contentHeight"
-    value: root.compatibilityHostedContentHeight
-    when: root.hostPanelHeightRepairEnabled
-    restoreMode: Binding.RestoreBindingOrValue
-  }
-
   Binding {
     target: root.compatibilityCard
     property: "radius"
     value: root.bar && root.bar.visualTokens
       ? root.bar.visualTokens.panelRadius : 0
     when: root.hostPanelChromeEnabled
-    restoreMode: Binding.RestoreBindingOrValue
-  }
-
-  Binding {
-    target: root.compatibilityCard
-    property: "x"
-    value: root.hostedCardOrigin(root.compatibilityPanel).x
-    when: root.hostPanelPlacementEnabled
-    restoreMode: Binding.RestoreBindingOrValue
-  }
-
-  Binding {
-    target: root.compatibilityCard
-    property: "y"
-    value: root.hostedCardOrigin(root.compatibilityPanel).y
-    when: root.hostPanelPlacementEnabled
     restoreMode: Binding.RestoreBindingOrValue
   }
 
@@ -918,16 +722,10 @@ Item {
         root.resolveCompatibilitySurface()
         if (!panelOpened) {
           // A close may destroy an on-demand Loader. Resolve once to clear
-          // stale objects, but never leave discovery or measurement polling.
+          // stale objects, but never leave discovery polling running.
           compatibilitySurfaceTimer.stop()
-          compatibilityMeasureTimer.stop()
-          compatibilityOpenMeasureTimer.stop()
         }
       } else root.publishCompatibilityConnection()
-      if (panelOpened && root.hostedModule && root.compatibilityCard) {
-        root.compatibilityContentResolutionAttempts = 0
-        compatibilityMeasureTimer.restart()
-      }
     }
   }
 
@@ -949,7 +747,10 @@ Item {
     // evaluated. Defer that cache refresh to keep the fallback acyclic.
     function onRevisionChanged() { resolverRefresh.restart() }
   }
-
+  Connections {
+    target: "claimLoadedOwner" in root.bar ? root.bar : null
+    function onLoadedOwnersChanged() { root.requestLoaderSourceSync() }
+  }
   Timer {
     id: scopedLoaderSync
 
@@ -995,48 +796,6 @@ Item {
   }
 
   Timer {
-    id: compatibilityMeasureTimer
-
-    // Fast construction settling: 25 Hz for at most 800 ms after discovery
-    // or open, owned by this hosted slot and stopped on close/destruction.
-    interval: 40
-    repeat: true
-    onTriggered: {
-      root.refreshCompatibilityContent()
-      if (root.compatibilityContentResolutionAttempts >= 20) {
-        stop()
-        if (root.compatibilityPanel && root.compatibilityCard
-            && root.compatibilityPanel.open)
-          compatibilityOpenMeasureTimer.start()
-      }
-    }
-  }
-
-  Timer {
-    id: compatibilityOpenMeasureTimer
-
-    // Standard third-party panels such as Otoru change their rendered extent
-    // after asynchronous work or later user actions. Reconcile at 4 Hz only
-    // while that panel is open; close, unload and slot destruction stop it.
-    interval: 250
-    repeat: true
-    onTriggered: {
-      if (!root.activeItem || !root.compatibilityPanel
-          || !root.compatibilityCard || !root.compatibilityPanel.open) {
-        stop()
-        const providerOpen = root.activeItem
-          && "opened" in root.activeItem && root.activeItem.opened === true
-        if (providerOpen && !root.compatibilityPanel) {
-          root.compatibilitySurfaceResolutionAttempts = 0
-          compatibilitySurfaceTimer.restart()
-        }
-        return
-      }
-      root.refreshCompatibilityContent()
-    }
-  }
-
-  Timer {
     id: resolutionRetry
     interval: Math.min(400, 40 * (root.resolutionAttempts + 1))
     repeat: false
@@ -1046,11 +805,12 @@ Item {
   Loader {
     id: widgetLoader
     anchors.fill: parent
-    // Both activation and source submission stay gated until this exact slot
-    // is registered. sourceComponent has no binding: submitLoaderSource() is
-    // its single assignment path and records provenance before setter dispatch.
-    active: root.slotComplete && root.moduleEnabled
-      && root._loaderSubmissionActive
+    // Activation follows only the admitted submission. In particular, an
+    // entry disable must pass through submitLoaderSource(null), which revokes
+    // the resident Bar connection before deactivating this Loader.
+    // sourceComponent has no binding: submitLoaderSource() is its single
+    // assignment path and records provenance before setter dispatch.
+    active: root._loaderSubmissionActive
       && root._submission !== null
       && root._submission.source !== null
     onLoaded: {
@@ -1060,7 +820,10 @@ Item {
       const completedGeneration = completedSubmission
         ? completedSubmission.generation : -1
       const completedItem = widgetLoader.item
-      root.injectProperties()
+      if (completedSource !== null
+          && root._submission === completedSubmission
+          && root._dispatchedSubmission === completedSubmission)
+        root.resumeBarConnection()
       root.syncActiveItemMetrics()
       // Injection can synchronously submit a replacement. Confirm only the
       // exact atomic request and item that emitted this completion.
@@ -1100,6 +863,8 @@ Item {
             && typeof root.bar.noteHostWidgetResolution === "function") {
           root.bar.noteHostWidgetResolution(root, true)
         }
+        if ("claimLoadedOwner" in root.bar && !root.bar.claimLoadedOwner(
+            root, completedItem)) root.requestLoaderSourceSync()
       }
       deferredSync.restart()
     }

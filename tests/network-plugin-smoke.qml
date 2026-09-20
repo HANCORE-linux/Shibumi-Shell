@@ -10,6 +10,9 @@ ShellRoot {
   property int ticks: 0
   property real fullWidth: 0
   property var clickTargets: []
+  property var dynamicNetworkService: null
+  property int caseBLastTrafficOwners: -1
+  property int caseBLastTrafficEnds: -1
 
   function fail(message) {
     console.error("network-widget-smoke:", message)
@@ -26,6 +29,16 @@ ShellRoot {
   Fixtures.NetworkTestService { id: sharedNetworkService }
   Fixtures.NetworkTestService { id: replacementNetworkService }
   Fixtures.NetworkTestService { id: unavailableService; ready: false }
+  Fixtures.NetworkTestService { id: vanishedCaseAService; kind: "ethernet" }
+
+  Component {
+    id: dynamicNetworkServiceComponent
+
+    Fixtures.NetworkTestService {
+      kind: "ethernet"
+      trafficFailuresRemaining: 1000
+    }
+  }
 
   Item {
     id: fakeBar
@@ -118,6 +131,40 @@ ShellRoot {
     networkServiceOverride: unavailableService
   }
 
+  Loader {
+    id: vanishedCaseALoader
+    active: false
+    sourceComponent: Component {
+      Network.BarWidget {
+        bar: fakeBar
+        settings: root.appearanceSettings("full")
+        networkServiceOverride: vanishedCaseAService
+      }
+    }
+  }
+
+  Loader {
+    id: vanishedCaseBLoader
+    active: false
+    sourceComponent: Component {
+      Network.BarWidget {
+        bar: fakeBar
+        settings: root.appearanceSettings("full")
+      }
+    }
+  }
+
+  Connections {
+    target: root.dynamicNetworkService
+    ignoreUnknownSignals: true
+    function onTrafficConsumerCountChanged() {
+      root.caseBLastTrafficOwners = target.trafficConsumerCount
+    }
+    function onTrafficEndCountChanged() {
+      root.caseBLastTrafficEnds = target.trafficEndCount
+    }
+  }
+
   Timer {
     interval: 60
     repeat: true
@@ -128,7 +175,7 @@ ShellRoot {
         return root.fail("timed out in phase " + root.phase)
       const first = firstLoader.item
       const second = secondLoader.item
-      if (!first || root.phase < 5 && !second) return
+      if ((root.phase < 60 && !first) || (root.phase < 5 && !second)) return
 
       if (root.phase === 0) {
         if (!first.networkReady || !second.networkReady || root.ticks < 3) return
@@ -145,7 +192,8 @@ ShellRoot {
             || !first.ownsPanelWidget(first)
             || root.clickTargets.length !== 2
             || sharedNetworkService.sessionCount !== 0
-            || sharedNetworkService.trafficConsumerCount !== 0)
+            || sharedNetworkService.trafficConsumerCount !== 0
+            || "wiredConnected" in sharedNetworkService)
           return root.fail("shared native facade readiness/state/geometry")
         root.fullWidth = first.implicitWidth
         sharedNetworkService.label =
@@ -314,12 +362,97 @@ ShellRoot {
             || sharedNetworkService.trafficEndCount !== 2)
           return root.fail("Ethernet telemetry final release")
         firstLoader.active = false
-        Qt.callLater(function() {
-          if (root.clickTargets.length !== 0)
-            return root.fail("click target destruction cleanup")
-          console.log("network plugin smoke passed")
-          Qt.quit()
-        })
+        root.phase = 60
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 60) {
+        if (root.ticks < 2) return
+        if (root.clickTargets.length !== 0)
+          return root.fail("click target destruction cleanup")
+        vanishedCaseALoader.active = true
+        root.phase = 61
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 61) {
+        const caseA = vanishedCaseALoader.item
+        if (!caseA || !caseA.networkReady
+            || caseA.trafficService !== vanishedCaseAService
+            || vanishedCaseAService.trafficConsumerCount !== 1) return
+        if (vanishedCaseAService.trafficBeginCount !== 1
+            || vanishedCaseAService.trafficEndCount !== 0)
+          return root.fail("vanished service setup did not acquire one consumer")
+        caseA.networkServiceOverride = null
+        root.phase = 62
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 62) {
+        if (root.ticks < 2) return
+        const caseA = vanishedCaseALoader.item
+        if (!caseA || caseA.networkService !== null || caseA.networkReady
+            || caseA.trafficService !== null
+            || vanishedCaseAService.trafficConsumerCount !== 0
+            || vanishedCaseAService.trafficBeginCount !== 1
+            || vanishedCaseAService.trafficEndCount !== 1)
+          return root.fail("vanished service did not release its consumer")
+        console.log("network vanished-service release regression passed")
+        vanishedCaseALoader.active = false
+        vanishedCaseBLoader.active = true
+        root.phase = 70
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 70) {
+        const caseB = vanishedCaseBLoader.item
+        if (!caseB) return
+        root.dynamicNetworkService = dynamicNetworkServiceComponent.createObject(root)
+        if (!root.dynamicNetworkService)
+          return root.fail("dynamic network service creation")
+        root.caseBLastTrafficOwners = root.dynamicNetworkService.trafficConsumerCount
+        root.caseBLastTrafficEnds = root.dynamicNetworkService.trafficEndCount
+        caseB.networkServiceOverride = root.dynamicNetworkService
+        root.phase = 71
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 71) {
+        const caseB = vanishedCaseBLoader.item
+        const dynamicService = root.dynamicNetworkService
+        if (!caseB || !dynamicService || !caseB.networkReady
+            || dynamicService.trafficFailuresRemaining === 1000) return
+        if (caseB.networkService !== dynamicService
+            || caseB.trafficService !== null
+            || dynamicService.trafficFailuresRemaining <= 0
+            || dynamicService.trafficConsumerCount !== 0
+            || dynamicService.trafficBeginCount !== 0
+            || dynamicService.trafficEndCount !== 0)
+          return root.fail("failed traffic acquire unexpectedly retained a lease")
+        dynamicService.destroy()
+        root.phase = 72
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 72) {
+        if (root.ticks < 7) return
+        const caseB = vanishedCaseBLoader.item
+        if (!caseB || root.dynamicNetworkService !== null
+            || caseB.networkService !== null || caseB.networkReady
+            || caseB.mode !== "none" || caseB.trafficService !== null
+            || root.caseBLastTrafficOwners !== 0
+            || root.caseBLastTrafficEnds !== 0)
+          return root.fail("destroyed failed-acquire service was not cleared")
+        console.log("network failed-acquire destruction regression passed")
+        vanishedCaseBLoader.active = false
+        console.log("network plugin smoke passed")
+        Qt.quit()
         stop()
       }
     }

@@ -30,7 +30,8 @@ for contract in \
   '"SHIBUMI_HEALTH_FETCH_TIMEOUT", 12' \
   '["qs", "list", "--all", "--json"]' \
   '[str(command), "shell", "ping"]' \
-  '"--tail",' \
+  'def read_runtime_log(self) -> str:' \
+  'raw = self.read_runtime_log()' \
   'SENSITIVE_PATTERNS' \
   'OWNER_SHIBUMI' \
   'def attribute_source' \
@@ -44,6 +45,11 @@ for contract in \
     exit 1
   }
 done
+
+if rg -Uq '"qs",\s*"log"' "$health_runner"; then
+  printf 'health diagnostics regression failed: Health must not call qs log\n' >&2
+  exit 1
+fi
 
 for contract in \
   'function runChecks(fetchUpdates)' \

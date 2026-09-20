@@ -9,8 +9,13 @@ PanelWindow {
 
   required property var bar
   required property var layoutSession
+  required property bool barVisible
   property var targetScreen: null
 
+  readonly property bool validScreen: targetScreen !== null
+    && String(targetScreen.name || "") !== ""
+    && Number(targetScreen.width) > 0
+    && Number(targetScreen.height) > 0
   readonly property bool horizontal: !bar.vertical
   readonly property real outsideX: bar.position === "left" ? bar.barSize : 0
   readonly property real outsideY: bar.position === "top" ? bar.barSize : 0
@@ -20,12 +25,13 @@ PanelWindow {
     ? Math.max(0, height - bar.barSize) : height
 
   screen: targetScreen
-  visible: horizontal && layoutSession.editing
+  visible: layoutSession.editing && barVisible
+    && validScreen && bar.hostReady && bar.styleReady && !bar.barHidden
   color: "transparent"
   exclusionMode: ExclusionMode.Ignore
 
   WlrLayershell.namespace: "shibumi-bar-edit-backdrop"
-  WlrLayershell.layer: WlrLayer.Overlay
+  WlrLayershell.layer: WlrLayer.Top
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
   anchors {

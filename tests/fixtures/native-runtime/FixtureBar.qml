@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
 import qs.Ui as Ui
+import "core/LayoutModel.js" as V1Layout
 import "core/V2LayoutModel.js" as Layout
 import "../hancore.shibumi.state/runtime" as Shared
 Bar {
@@ -10,6 +11,7 @@ Bar {
   property var controlWidget: null
   property var transitionTarget: null
   property var capturedCatalogObservation: null
+  property var capacityBaseline: null
   QtObject { id: duplicateBarOwner }
   QtObject {
     id: incompleteState
@@ -88,6 +90,9 @@ Bar {
       const lease = Shared.Runtime._selected("hancore.shibumi.state")
       const updates = Shared.Runtime.serviceFor("hancore.shibumi.control-center")
       const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const hasUnplacedPluginIds = !!page && "unplacedPluginIds" in page
+      const hasCapacityMessage = !!page && "capacityMessage" in page
       return JSON.stringify({runtimeReady: Shared.Runtime.ready,
         barRegistered: Shared.Runtime.isActiveBar(probe),
         hostRegistryPrimePhase: Shared.Runtime.hostRegistryPrimePhase,
@@ -132,10 +137,16 @@ Bar {
               "hancore.shibumi.control-center").installedInBar : null,
         pageTransitionPending: !!panel && !!panel.settingsPageItem
           && panel.settingsPageItem.transitionPending,
-        pageFeedbackTitle: panel && panel.settingsPageItem
-          ? panel.settingsPageItem.feedbackTitle : "",
-        pageFeedbackVisible: !!panel && !!panel.settingsPageItem
-          && panel.settingsPageItem.feedbackVisible,
+        pageFeedbackTitle: page ? page.feedbackTitle : "",
+        pageFeedbackDetail: page ? page.feedbackDetail : "",
+        pageFeedbackVisible: !!page && page.feedbackVisible,
+        unplacedPluginIdsPropertyExists: hasUnplacedPluginIds,
+        unplacedPluginIds: hasUnplacedPluginIds
+          && Array.isArray(page.unplacedPluginIds)
+          ? page.unplacedPluginIds.slice() : [],
+        capacityMessagePropertyExists: hasCapacityMessage,
+        capacityMessage: hasCapacityMessage
+          ? String(page.capacityMessage || "") : "",
         pageUndoMode: panel && panel.settingsPageItem
           ? panel.settingsPageItem.undoMode : "",
         pageUndoSnapshot: panel && panel.settingsPageItem
@@ -449,6 +460,40 @@ Bar {
         canSet: probe.canSetBarWidgetInstalled("fixture.native-widget", true),
         pageEntry: page ? page.entryById("fixture.native-widget") : null})
     }
+    function expirePageFeedback(): bool {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      if (!page || typeof page.expireFeedback !== "function") return false
+      page.expireFeedback()
+      return page.feedbackVisible === false
+    }
+    function removeCapacityWidget(): string {
+      const panel = probe.controlWidget ? probe.controlWidget.panelItem : null
+      const page = panel ? panel.settingsPageItem : null
+      const pageEntry = page && typeof page.entryById === "function"
+        ? page.entryById("fixture.native-widget") : null
+      const snapshot = panel ? panel.pluginCatalogSnapshot : null
+      const catalogEntry = snapshot && snapshot.byId
+        ? snapshot.byId["fixture.native-widget"] : null
+      const before = JSON.stringify(probe.barConfig)
+      const beforeSerial = probe.layoutTransitionSerial
+      const accepted = panel
+        && panel.setPluginEnabled("fixture.native-widget", false)
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      return JSON.stringify({
+        accepted: accepted === true,
+        pageEntryPresent: pageEntry !== null,
+        actualPageEntryInstalledInBarBefore: pageEntry
+          ? pageEntry.installedInBar === true : null,
+        catalogEnabledBefore: catalogEntry ? catalogEntry.enabled === true : null,
+        stateWritePending: !!state && state.writePending,
+        layoutBusy: probe.layoutTransitionBusy,
+        layoutSerialAdvanced:
+          probe.layoutTransitionSerial === beforeSerial + 1,
+        nativeUnchangedBeforeSettlement:
+          JSON.stringify(probe.barConfig) === before
+      })
+    }
     function setControlGroupVisible(enabled: bool): string {
       const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
       return state && state.setGroupEnabledForVariant("G1", "v1", enabled)
@@ -518,6 +563,43 @@ Bar {
       const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
       return state && state.setPresentationSetting("shellStyle", value)
         ? "queued" : "not-ready"
+    }
+    function prepareFullV1Capacity(): string {
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      if (!state || !state.ready || state.writePending
+          || probe.layoutTransitionBusy || probe.layoutController.v2Mode)
+        return "not-ready"
+      const order = V1Layout.copyOrder(state.config.order)
+      const splits = V1Layout.copySplits(state.config.splits, order)
+      if (!order || !splits) return "invalid-baseline"
+      const target = {
+        left: ["", "", "G3", "G4", "G5", "G6", "G7", "G1", "G2"],
+        center: ["", "G8"],
+        right: ["", "", "G11", "G14", "G12", "G13", "G15", "G9", "G10"]
+      }
+      const targetSplits = V1Layout.resizeSplits(splits, target)
+      if (!targetSplits) return "invalid-target"
+      probe.capacityBaseline = {order: order, splits: splits}
+      return state.setLayout(target, targetSplits) ? "queued" : "refused"
+    }
+    function freeFullV1Slot(): string {
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const order = state ? V1Layout.copyOrder(state.config.order) : null
+      if (!state || state.writePending || probe.layoutTransitionBusy
+          || probe.layoutController.v2Mode || !order
+          || order.left[0] !== "" || order.left[7] !== "G1")
+        return "not-ready"
+      return probe.layoutController.moveGroupToSlot("G1", "left", 0)
+        ? "queued" : "refused"
+    }
+    function restoreCapacityBaseline(): string {
+      const state = Shared.Runtime.serviceFor("hancore.shibumi.state")
+      const baseline = probe.capacityBaseline
+      if (!state || state.writePending || probe.layoutTransitionBusy
+          || probe.layoutController.v2Mode || !baseline)
+        return "not-ready"
+      return state.setLayout(baseline.order, baseline.splits)
+        ? "queued" : "refused"
     }
     function setUndoConflict(enabled: bool): string {
       if (probe.layoutTransitionBusy || probe.providerSnapshotTransitionBusy)

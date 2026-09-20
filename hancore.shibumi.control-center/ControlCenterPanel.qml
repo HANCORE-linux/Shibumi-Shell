@@ -6,6 +6,7 @@ import Quickshell.Io
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "HostIdentity.js" as HostIdentity
+import "HealthProjection.js" as HealthProjection
 import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
@@ -287,6 +288,7 @@ ShibumiPanel {
   readonly property int headerHealthErrorCount: settings.healthErrorCount
   readonly property var settingsPageOptions: settings.pageOptions
   readonly property var healthReport: healthService.report
+  readonly property var healthPrimaryChecks: HealthProjection.primaryChecks(healthReport)
   readonly property bool healthRunning: healthService.running
   readonly property bool healthFetching: healthService.fetching
   readonly property string healthFailure: healthService.failure
@@ -472,10 +474,8 @@ ShibumiPanel {
     if (bar) void(bar.layoutConfig)
     void(stateConfig.widgets)
     const registry = pluginRegistry
-    let installed = registry && registry.installedPlugins
-      ? registry.installedPlugins : ({})
+    let installed = ({})
     if (nativeCatalogRequired) {
-      installed = ({})
       const snapshot = pluginCatalogSnapshot
       if (!snapshot || !snapshot.byId || !Object.isFrozen(snapshot.byId))
         return []
@@ -501,7 +501,8 @@ ShibumiPanel {
           __catalogClonedFrom: String(row.clonedFrom || "")
         }
       }
-    }
+    } else installed = registry && registry.installedPlugins
+      ? registry.installedPlugins : ({})
     const result = []
     const ids = Object.keys(installed).sort(function(left, right) {
       const leftName = String(installed[left].name || left).toLowerCase()
@@ -780,7 +781,7 @@ ShibumiPanel {
             id, enabled === true, section)
           if (!changed)
             pluginActionError = enabled === true
-              ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
+              ? "The widget could not be added to the V1 layout."
               : "The plugin could not be removed from the V1 layout."
           return changed
         }

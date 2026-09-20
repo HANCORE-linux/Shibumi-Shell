@@ -92,6 +92,9 @@ Ui.Panel {
   }
 
   function registeredComponent(id) {
+    if (bar && typeof bar.registeredEmbeddedWidgetComponent === "function")
+      return bar.registeredEmbeddedWidgetComponent(
+        "hancore.shibumi.center", id)
     if (bar && typeof bar.registeredWidgetComponent === "function")
       return bar.registeredWidgetComponent(id)
     const registry = bar ? bar.barWidgetRegistry : null

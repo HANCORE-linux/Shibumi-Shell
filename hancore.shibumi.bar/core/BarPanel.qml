@@ -24,12 +24,10 @@ PanelWindow {
 
   visible: bar.hostReady && bar.styleReady && validScreen && !bar.barHidden
     && windowRecovery.recoveryVisible
-  // Match the original V1 input model: keep one stable screen-sized surface
-  // and change only its input region. This avoids compositor resize flashes
-  // while allowing bar drag, Escape, and outside-click dismissal to share one
-  // focus owner during editing.
-  implicitWidth: bar.vertical && validScreen ? screen.width : 0
-  implicitHeight: !bar.vertical && validScreen ? screen.height : 0
+  // Keep the anchor window edge-local in every presentation and while editing.
+  // The reserved desktop area remains the independent exclusiveZone below.
+  implicitWidth: bar.vertical && validScreen ? bar.barSize : 0
+  implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0
   color: "transparent"
   surfaceFormat.opaque: false
 
@@ -46,19 +44,6 @@ PanelWindow {
   WlrLayershell.keyboardFocus: dragSession.editing
     ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
-  mask: Region {
-    x: dragSession.editing ? 0
-      : barWindow.bar.vertical && barWindow.bar.position === "right"
-        ? Math.max(0, barWindow.width - barWindow.bar.barSize) : 0
-    y: dragSession.editing ? 0
-      : !barWindow.bar.vertical && barWindow.bar.position === "bottom"
-        ? Math.max(0, barWindow.height - barWindow.bar.barSize) : 0
-    width: dragSession.editing || !barWindow.bar.vertical
-      ? barWindow.width : barWindow.bar.barSize
-    height: dragSession.editing || barWindow.bar.vertical
-      ? barWindow.height : barWindow.bar.barSize
-  }
-
   WindowRecovery {
     id: windowRecovery
     targetWindow: barWindow
@@ -72,6 +57,20 @@ PanelWindow {
     id: dragSession
     layoutController: barWindow.bar.layoutController
     screenName: barWindow.screen ? String(barWindow.screen.name || "") : ""
+    originX: barWindow.bar.vertical && barWindow.bar.position === "right"
+      && barWindow.validScreen
+        ? Math.max(0, barWindow.screen.width - barWindow.bar.barSize) : 0
+    originY: !barWindow.bar.vertical && barWindow.bar.position === "bottom"
+      && barWindow.validScreen
+        ? Math.max(0, barWindow.screen.height - barWindow.bar.barSize) : 0
+    geometryKey: JSON.stringify([
+      barWindow.screen ? String(barWindow.screen.name || "") : "",
+      barWindow.screen ? Number(barWindow.screen.width) || 0 : 0,
+      barWindow.screen ? Number(barWindow.screen.height) || 0 : 0,
+      barWindow.screen ? Number(barWindow.screen.devicePixelRatio) || 1 : 1,
+      String(barWindow.bar.position || ""),
+      Number(barWindow.bar.barSize) || 0
+    ])
   }
 
   Component.onCompleted: bar.registerLayoutSession(dragSession)
@@ -92,29 +91,37 @@ PanelWindow {
     targetScreen: barWindow.screen
   }
 
+  Loader {
+    id: editBackdropLoader
+
+    active: dragSession.editing
+      && barWindow.visible && barWindow.backingWindowVisible
+      && barWindow.bar.hostReady && barWindow.bar.styleReady
+      && barWindow.validScreen && !barWindow.bar.barHidden
+      && windowRecovery.recoveryVisible
+    sourceComponent: Component {
+      EditBackdropPanel {
+        bar: barWindow.bar
+        layoutSession: dragSession
+        targetScreen: barWindow.screen
+        barVisible: barWindow.visible && barWindow.backingWindowVisible
+          && windowRecovery.recoveryVisible
+      }
+    }
+  }
+
   Rectangle {
     anchors.fill: parent
     visible: dragSession.editing
     color: "#000000"
     opacity: 0.34
     z: 1
-
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.LeftButton
-      onClicked: dragSession.setEditing(false)
-    }
   }
 
   Loader {
     id: barSurfaceLoader
 
-    width: barWindow.bar.vertical ? barWindow.bar.barSize : parent.width
-    height: barWindow.bar.vertical ? parent.height : barWindow.bar.barSize
-    x: barWindow.bar.vertical && barWindow.bar.position === "right"
-      ? Math.max(0, parent.width - width) : 0
-    y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"
-      ? Math.max(0, parent.height - height) : 0
+    anchors.fill: parent
     active: barWindow.bar.hostReady && barWindow.bar.styleReady
       && barWindow.validScreen && barWindow.bar.visualTokens !== null
     sourceComponent: active ? barWindow.bar.activeStyle.barSurfaceComponent : null

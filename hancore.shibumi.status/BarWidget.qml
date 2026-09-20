@@ -26,6 +26,7 @@ Item {
   property var trayAppMenuAnchor: null
   property real trayAppMenuAnchorX: 0
   property bool notificationPanelOpen: false
+  property var lifecycleBar: null
 
   Presentation.HostTokens { id: hostTokens; bar: root.bar }
   readonly property var tokens: bar && "visualTokens" in bar
@@ -433,6 +434,14 @@ Item {
   }
 
   onBarChanged: {
+    if (bar) lifecycleBar = bar
+    else if (lifecycleBar && "tearingDown" in lifecycleBar
+        && lifecycleBar.tearingDown === true) {
+      if (updateWidget && "registeredBar" in updateWidget)
+        updateWidget.registeredBar = null
+      if (updateWidget && "bar" in updateWidget) updateWidget.bar = null
+      if (trayWidget && "bar" in trayWidget) trayWidget.bar = null
+    }
     scheduleChildSync()
     if (trayDrawerOpen) syncTrayDrawerLoader()
     if (notificationPanelOpen) syncNotificationPanelLoader()
@@ -465,10 +474,16 @@ Item {
   onBadgeContrastColorChanged: syncUpdateInk()
 
   Component.onCompleted: {
+    lifecycleBar = bar
     scheduleChildSync()
   }
   Component.onDestruction: {
     close()
+    const dyingBar = bar || lifecycleBar
+    if (dyingBar && "tearingDown" in dyingBar
+        && dyingBar.tearingDown === true && updateWidget
+        && "registeredBar" in updateWidget)
+      updateWidget.registeredBar = null
     if (updateWidget && "bar" in updateWidget) updateWidget.bar = null
     if (trayWidget && "bar" in trayWidget) trayWidget.bar = null
   }
