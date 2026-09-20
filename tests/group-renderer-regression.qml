@@ -1189,6 +1189,14 @@ ShellRoot {
     }
 
     ShibumiStyle.BarSurface {
+      id: editingFrameSurface
+      bar: tallAlignmentBar
+      layoutSession: editingSession
+      width: 1200
+      height: tallAlignmentBar.barSize
+    }
+
+    ShibumiStyle.BarSurface {
       id: shortAlignmentSurface
       bar: shortAlignmentBar
       width: 1200
@@ -1432,6 +1440,40 @@ ShellRoot {
         if (match) return match
       }
       return null
+    }
+
+    function namedItem(item, name) {
+      if (!item) return null
+      if (String(item.objectName || "") === name) return item
+      const children = item.children || []
+      for (const child of children) {
+        const match = namedItem(child, name)
+        if (match) return match
+      }
+      return null
+    }
+
+    function editingFrameGeometryError(surface) {
+      const frame = namedItem(surface, "shibumi-editing-frame")
+      if (!frame) return "editing frame did not load"
+      const origin = frame.mapToItem(surface, 0, 0)
+      const stroke = Number(frame.border.width) || 0
+      const left = origin.x - stroke / 2
+      const top = origin.y - stroke / 2
+      const right = origin.x + frame.width + stroke / 2
+      const bottom = origin.y + frame.height + stroke / 2
+      if (!closeEnough(surface.height, 35))
+        return "fixture bar height is " + surface.height + ", expected 35"
+      if (!closeEnough(origin.y, stroke)
+          || !closeEnough(frame.height, surface.height - 2 * stroke))
+        return "frame body is y=" + origin.y + ", height=" + frame.height
+          + ", stroke=" + stroke + ", surface=" + surface.height
+      if (left < -0.01 || top < -0.01
+          || right > surface.width + 0.01
+          || bottom > surface.height + 0.01)
+        return "stroked bounds escape surface: "
+          + [left, top, right, bottom].join(",")
+      return ""
     }
 
     function centerY(item, relativeTo) {
@@ -1784,6 +1826,7 @@ ShellRoot {
       property int shadowPhase: 0
       property int hiddenGapPhase: 0
       property int alignmentPhase: 0
+      property int editingFramePhase: 0
       property int centerRunPhase: 0
       property var centerSideCuts: []
       readonly property var alignmentCases: [
@@ -1847,6 +1890,33 @@ ShellRoot {
             + (directGroup.contentItem ? directGroup.contentItem.implicitWidth : -1)
             + ", childWidth="
             + (directGroup.contentItem ? directGroup.contentItem.childrenRect.width : -1))
+          return
+        }
+
+        if (editingFramePhase < 3) {
+          if (editingFramePhase === 0) {
+            editingSession.editing = true
+          } else {
+            const position = editingFramePhase === 1 ? "top" : "bottom"
+            const frameError = test.editingFrameGeometryError(
+              editingFrameSurface)
+            if (frameError !== "") {
+              if (attempts < 50) return
+              stop()
+              test.fail("V1 " + position + " editing frame escaped the 35px bar: "
+                + frameError)
+              return
+            }
+            console.log("P18A_EDIT_FRAME_GEOMETRY", position)
+            if (editingFramePhase === 1)
+              tallAlignmentBar.position = "bottom"
+            else {
+              tallAlignmentBar.position = "top"
+              editingSession.editing = false
+            }
+          }
+          editingFramePhase++
+          attempts = 0
           return
         }
 
