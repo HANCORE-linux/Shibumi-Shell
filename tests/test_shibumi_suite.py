@@ -1121,7 +1121,8 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def test_exact_beta141_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite(
-            source_revision=PUBLISHED_BETA141_REVISION
+            version="0.1.1-beta.14.1",
+            source_revision=PUBLISHED_BETA141_REVISION,
         )
         self.assertEqual(
             require_current_payload_identity(packaged_suite), "public-beta.14.1"
@@ -1191,13 +1192,12 @@ class SuiteLifecycleTests(unittest.TestCase):
             "public-beta.14.1",
         )
 
-    def test_current_payload_is_not_admitted_as_published_beta141(self) -> None:
+    def test_exact_beta15_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite()
 
-        with self.assertRaisesRegex(
-            AdmissionError, "exact declared revision identity"
-        ):
-            require_current_payload_identity(packaged_suite)
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.15"
+        )
         self.assertFalse(self.paths.state_dir.exists())
         self.assertFalse(self.paths.plugin_dir.exists())
         self.assertFalse(self.paths.config_file.exists())
@@ -1205,7 +1205,8 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def test_mutated_beta141_package_identity_is_rejected(self) -> None:
         packaged_suite = self.packaged_suite(
-            source_revision=PUBLISHED_BETA141_REVISION
+            version="0.1.1-beta.14.1",
+            source_revision=PUBLISHED_BETA141_REVISION,
         )
         self.assertEqual(
             require_current_payload_identity(packaged_suite), "public-beta.14.1"
@@ -1225,7 +1226,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_unknown_future_package_identity_is_rejected(self) -> None:
-        packaged_suite = self.packaged_suite("0.1.1-beta.15")
+        packaged_suite = self.packaged_suite("0.1.1-beta.16")
 
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
