@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import "hancore.shibumi.network" as Network
 
 ShellRoot {
   id: host
@@ -14,6 +15,13 @@ ShellRoot {
   property int providerCreated: 0
   property int providerDestroyed: 0
   property int providerDetached: 0
+  property int networkCreated: 0
+  property int networkDestroyed: 0
+  property int networkBarRevoked: 0
+  property int networkServiceRevoked: 0
+  property bool networkRevokedWithReady: false
+  property var currentNetworkWidget: null
+  property alias networkService: controlledNetworkService
   property bool statusEnabled: true
   property bool statusEntryEnabled: true
   property string slotRegion: "left"
@@ -132,6 +140,46 @@ ShellRoot {
       : registeredComponent("omarchy.audio")
   }
 
+  QtObject {
+    id: controlledNetworkService
+    property bool ready: true
+    property bool backendAvailable: true
+    property string kind: "wifi"
+    property string label: "Lifecycle Network"
+    property int signalStrength: 77
+    property real downloadRate: 4096
+    property real uploadRate: 2048
+  }
+
+  component NetworkProvider: Network.BarWidget {
+    id: networkWidget
+    property bool serviceAttached: false
+    Component.onCompleted: {
+      host.networkCreated++
+      host.currentNetworkWidget = networkWidget
+      host.events.push("network-created")
+    }
+    Component.onDestruction: {
+      host.networkDestroyed++
+      if (host.currentNetworkWidget === networkWidget)
+        host.currentNetworkWidget = null
+      host.events.push("network-destroyed")
+    }
+    onBarChanged: {
+      if (bar !== null) serviceAttached = true
+      else if (serviceAttached) host.networkBarRevoked++
+    }
+    onNetworkServiceChanged: {
+      if (serviceAttached && networkService === null && bar === null) {
+        host.networkServiceRevoked++
+        host.networkRevokedWithReady = networkReady === true
+        host.events.push("network-service-revoked:ready=" + networkReady
+          + ":rates=" + networkWidget.downloadRate
+          + "/" + networkWidget.uploadRate)
+      }
+    }
+  }
+
   component CatalogProvider: ProviderBase {
     id: catalogProvider
     kind: "control-center"
@@ -160,6 +208,7 @@ ShellRoot {
   Component { id: statusHostComponent; StatusProvider {} }
   Component { id: centerHostComponent; CenterProvider {} }
   Component { id: audioHostComponent; AudioProvider {} }
+  Component { id: networkHostComponent; NetworkProvider {} }
   Component { id: catalogHostComponent; CatalogProvider {} }
 
   Component.onCompleted: barLoader.setSource("PrivateLifecycleBar.qml", {
@@ -167,6 +216,7 @@ ShellRoot {
     statusComponent: statusHostComponent,
     centerComponent: centerHostComponent,
     audioComponent: audioHostComponent,
+    networkComponent: networkHostComponent,
     catalogComponent: catalogHostComponent
   })
 
@@ -186,8 +236,17 @@ ShellRoot {
     onTriggered: {
       if (phase === 0) {
         require(providerCreated === 4, "initial providers did not load")
-        require(barLoader.item && barLoader.item.loadedOwners.length === 4,
+        require(barLoader.item && barLoader.item.loadedOwners.length === 5,
           "initial owner sentinels missing")
+        require(networkCreated === 1 && currentNetworkWidget
+          && currentNetworkWidget.networkService === networkService
+          && currentNetworkWidget.networkReady
+          && currentNetworkWidget.mode === "wifi"
+          && currentNetworkWidget.label === "Lifecycle Network"
+          && currentNetworkWidget.signal === 77
+          && currentNetworkWidget.downloadRate === 4096
+          && currentNetworkWidget.uploadRate === 2048,
+          "actual Network widget did not bind the controlled service")
         initialProviders = Object.assign({}, currentProviders)
         initialHelperCalls = helperMarks.length
         events.push("registry-update-live")
@@ -216,10 +275,10 @@ ShellRoot {
       }
       if (phase === 3) {
         require(!currentProviders.status, "disabled status provider stayed live")
-        require(barLoader.item.loadedOwners.length === 3,
+        require(barLoader.item.loadedOwners.length === 4,
           "disabled provider owner sentinel was not released on destruction")
         const detachedIndex = events.indexOf(
-          "provider-detached:status:owners=4")
+          "provider-detached:status:owners=5")
         const destroyedIndex = events.indexOf("provider-destroyed:status")
         require(detachedIndex >= 0,
           "entry.enabled=false did not detach the resident Bar")
@@ -234,15 +293,22 @@ ShellRoot {
         require(currentProviders.status
           && currentProviders.status !== initialProviders.status,
           "status provider did not reload")
-        require(barLoader.item.loadedOwners.length === 4,
+        require(barLoader.item.loadedOwners.length === 5,
           "reloaded provider owner sentinel missing")
         oldBar = barLoader.item
+        // The private staged widget makes this binding writable so the fixture
+        // deterministically holds the incident's stale-ready intermediate state.
+        currentNetworkWidget.networkReady = true
         events.push("host-reload-revoke")
         barLoader.active = false
         events.push("bar-loader-inactive")
         require(providerDetached >= 5,
           "resident providers were not detached synchronously: "
             + providerDetached + " " + JSON.stringify(events))
+        require(networkBarRevoked === 1 && networkServiceRevoked === 1
+          && networkRevokedWithReady,
+          "Network service revoke did not expose the old ready state: "
+            + JSON.stringify(events))
         events.push("registry-update-after-revoke")
         registryRevision++
         phase++
@@ -251,8 +317,10 @@ ShellRoot {
       if (phase === 5) {
         require(providerDestroyed >= 5,
           "old providers survived bar Loader teardown")
-        require(ownerReleased >= 5,
+        require(ownerReleased >= 6,
           "owner sentinels released before actual item destruction")
+        require(networkDestroyed === 1,
+          "old Network widget survived bar Loader teardown")
         for (let index = 0; index < cachedCatalogs.length; index++) {
           const controller = cachedCatalogs[index]
           if (controller && controller.bar != null)
@@ -266,8 +334,12 @@ ShellRoot {
       if (phase === 6) {
         require(barLoader.item && barLoader.item.creationId === 2,
           "replacement bar did not load")
-        require(barLoader.item.loadedOwners.length === 4,
+        require(barLoader.item.loadedOwners.length === 5,
           "replacement owner sentinels missing")
+        require(networkCreated === 2 && currentNetworkWidget
+          && currentNetworkWidget.networkService === networkService
+          && currentNetworkWidget.networkReady,
+          "replacement Network widget did not bind the controlled service")
         for (const kind of ["status", "center", "audio", "control-center"])
           require(currentProviders[kind]
             && currentProviders[kind].cachedBarSerial === 2,

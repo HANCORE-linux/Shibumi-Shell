@@ -44,20 +44,19 @@ Ui.Panel {
   readonly property var networkService: networkServiceOverride
     || (bar && bar.shell && typeof bar.shell.serviceFor === "function"
       ? bar.shell.serviceFor("hancore.shibumi.network") : null)
+  function networkValue(fallback, reader) {
+    const service = networkService
+    return service && service.ready ? reader(service) : fallback
+  }
   readonly property bool networkReady: networkService && networkService.ready
-  readonly property bool backendAvailable: networkReady
-    && networkService.backendAvailable
-  readonly property string mode: !networkReady ? "none"
-    : networkService.kind === "wifi" ? "wifi"
-    : networkService.kind === "ethernet" ? "ethernet" : "none"
-  readonly property string label: networkReady ? networkService.label : ""
+  readonly property bool backendAvailable: networkValue(false, service => service.backendAvailable)
+  readonly property string mode: networkValue("none", service => service.kind === "wifi" ? "wifi" : service.kind === "ethernet" ? "ethernet" : "none")
+  readonly property string label: networkValue("", service => service.label)
   readonly property string displayLabel: mode === "none"
     ? "Offline" : mode === "ethernet" ? "Ethernet" : (label || "Wi-Fi")
-  readonly property int signal: networkReady ? networkService.signalStrength : 0
-  readonly property real downloadRate: networkReady
-    ? Math.max(0, Number(networkService.downloadRate || 0)) : 0
-  readonly property real uploadRate: networkReady
-    ? Math.max(0, Number(networkService.uploadRate || 0)) : 0
+  readonly property int signal: networkValue(0, service => service.signalStrength)
+  readonly property real downloadRate: networkValue(0, service => Math.max(0, Number(service.downloadRate || 0)))
+  readonly property real uploadRate: networkValue(0, service => Math.max(0, Number(service.uploadRate || 0)))
   readonly property bool v2Presentation: tokens && tokens.v2Shell === true
   readonly property string v2MonoFont: "JetBrainsMono Nerd Font"
   readonly property bool v1TrafficPresentation: mode === "ethernet"

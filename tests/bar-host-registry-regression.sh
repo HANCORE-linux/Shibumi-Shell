@@ -150,6 +150,27 @@ mkdir -p "$lifecycle_root/staged/barcore" "$lifecycle_root/home" \
 chmod 700 "$lifecycle_root/runtime" "$lifecycle_root/tmp" \
   "$lifecycle_root/pipewire"
 cp -a "$omarchy_path/shell/Commons" "$lifecycle_root/"
+cp -a "$omarchy_path/shell/Ui" "$lifecycle_root/"
+cp -a "$repo_root/hancore.shibumi.network" "$lifecycle_root/"
+# Freeze the actual widget's ready value at the confirmed teardown state. Only
+# its private readiness declaration is made writable; the production-derived
+# bindings remain byte-for-byte intact so the two incident rate failures (and
+# equivalent stale-ready dereferences) are real product-binding errors.
+python3 - "$lifecycle_root/hancore.shibumi.network/BarWidget.qml" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+old = "  readonly property bool networkReady: networkService && networkService.ready"
+new = "  property bool networkReady: networkService && networkService.ready"
+if source.count(old) != 1:
+    raise SystemExit("Network readiness fixture anchor drifted")
+path.write_text(source.replace(old, new))
+PY
+mkdir -p "$lifecycle_root/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/lib" \
+  "$lifecycle_root/hancore.shibumi.state/"
 install -m 0644 "$widget_slot_source" \
   "$lifecycle_root/staged/barcore/WidgetSlot.qml"
 install -m 0644 "$repo_root/tests/fixtures/BarContextLifecycleHost.qml" \

@@ -10,6 +10,7 @@ Item {
   required property Component statusComponent
   required property Component centerComponent
   required property Component audioComponent
+  required property Component networkComponent
   required property Component catalogComponent
   readonly property int creationId: hostState.allocateBarSerial()
   property var moduleSlots: []
@@ -20,13 +21,25 @@ Item {
   property real barSize: 35
   property var visualTokens: null
   property string position: "top"
-  property var shell: null
+  property string fontFamily: "monospace"
+  property color foreground: "#eeeeee"
+  property color barForeground: foreground
+  property color background: "#111111"
+  property color urgent: "#88bbee"
+  property bool foregroundAnimationEnabled: false
+  property var shell: QtObject {
+    function serviceFor(pluginId) {
+      return pluginId === "hancore.shibumi.network"
+        ? root.hostState.networkService : null
+    }
+  }
   property var v1FamilySlotBindings: ({})
   property var layoutConfig: ({
     left: [
       { id: "hancore.shibumi.status" },
       { id: "hancore.shibumi.center" },
       { id: "hancore.shibumi.audio" },
+      { id: "hancore.shibumi.network" },
       { id: "hancore.shibumi.control-center" }
     ],
     center: [],
@@ -51,6 +64,10 @@ Item {
         "hancore.shibumi.audio": {
           metadata: { pluginId: "hancore.shibumi.audio" },
           component: root.audioComponent
+        },
+        "hancore.shibumi.network": {
+          metadata: { pluginId: "hancore.shibumi.network" },
+          component: root.networkComponent
         },
         "hancore.shibumi.control-center": {
           metadata: { pluginId: "hancore.shibumi.control-center" },
@@ -121,6 +138,7 @@ Item {
   function unregisterClickTarget(target) {
     clickTargets = clickTargets.filter(candidate => candidate !== target)
   }
+  function showTooltip(target, text) {}
   function hideTooltip(target) {}
   function releasePopout(target) {}
 
@@ -142,6 +160,12 @@ Item {
   Core.WidgetSlot {
     bar: root
     entry: ({ id: "hancore.shibumi.audio", enabled: true })
+    region: root.hostState.slotRegion
+    screenName: "fixture-output"
+  }
+  Core.WidgetSlot {
+    bar: root
+    entry: ({ id: "hancore.shibumi.network", enabled: true })
     region: root.hostState.slotRegion
     screenName: "fixture-output"
   }
