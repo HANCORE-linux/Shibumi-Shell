@@ -203,6 +203,11 @@ class ContinuityManagerTests(unittest.TestCase):
         missing_target_profile: bool = False,
         fail_after_profile: bool = False,
         restore_profile_on_rollback: bool = False,
+        target_contains_plugin: bool = True,
+        configured_entry: dict[str, object] | None = None,
+        source_entry: dict[str, object] | None = None,
+        plugin_kinds: list[str] | None = None,
+        plugin_first_party: bool = False,
     ) -> dict[str, object]:
         case_root = self.root / "-".join(
             (
@@ -214,6 +219,9 @@ class ContinuityManagerTests(unittest.TestCase):
                 str(missing_target_profile),
                 str(fail_after_profile),
                 str(restore_profile_on_rollback),
+                str(target_contains_plugin),
+                str(configured_entry is not None),
+                str(source_entry is not None),
             )
         )
         omarchy_root = case_root / "omarchy"
@@ -232,12 +240,17 @@ class ContinuityManagerTests(unittest.TestCase):
             self.state,
             self.defaults["bar"]["layout"],
         )
-        current = inactive if target == "shibumi" else self.active
+        current = copy.deepcopy(inactive if target == "shibumi" else self.active)
+        if configured_entry is not None:
+            current["plugins"].append(copy.deepcopy(configured_entry))
+        if source_entry is not None:
+            current["bar"]["layout"]["right"].append(copy.deepcopy(source_entry))
         state = copy.deepcopy(self.state)
         target_layout = self.module["initial_layout"](
             target, self.defaults, state
         )
-        target_layout["left"].append({"id": plugin_id, "position": 7})
+        if target_contains_plugin:
+            target_layout["left"].append({"id": plugin_id, "position": 7})
         if missing_target_profile:
             self.assertEqual(target, "omarchy")
             state["previousBar"] = {
@@ -295,6 +308,8 @@ class ContinuityManagerTests(unittest.TestCase):
             values = [
                 {
                     "id": managed_id,
+                    "kinds": ["bar"] if managed_id.endswith(".bar") else ["service"],
+                    "firstParty": False,
                     "enabled": active_bar != "omarchy.bar"
                     or managed_id in allowed_stock,
                     "active": managed_id == active_bar,
@@ -304,6 +319,8 @@ class ContinuityManagerTests(unittest.TestCase):
             values.append(
                 {
                     "id": "omarchy.bar",
+                    "kinds": ["bar"],
+                    "firstParty": True,
                     "enabled": True,
                     "active": active_bar == "omarchy.bar",
                 }
@@ -312,6 +329,8 @@ class ContinuityManagerTests(unittest.TestCase):
                 values.append(
                     {
                         "id": plugin_id,
+                        "kinds": ["bar-widget"] if plugin_kinds is None else plugin_kinds,
+                        "firstParty": plugin_first_party,
                         "enabled": plugin_enabled,
                         "active": False,
                     }
@@ -355,6 +374,14 @@ class ContinuityManagerTests(unittest.TestCase):
                             for value in values
                             if value["id"] != self.state["plugins"][0]
                         ]
+                    elif initial_snapshot in ("missing-enabled", "nonbool-enabled", "empty-kinds"):
+                        row = values[0]
+                        if initial_snapshot == "missing-enabled":
+                            row.pop("enabled")
+                        elif initial_snapshot == "nonbool-enabled":
+                            row["enabled"] = 1
+                        else:
+                            row["kinds"] = []
                 stdout = json.dumps(values)
                 if reloads == 0 and initial_snapshot == "duplicate-id-key":
                     stdout = stdout[:-1] + (
@@ -489,6 +516,10 @@ class ContinuityManagerTests(unittest.TestCase):
             "stopCalls": stop.call_count,
             "reloadCalls": reloads,
         }
+        if configured_entry is not None:
+            evidence["configuredEntry"] = next(
+                entry for entry in final_config["plugins"] if entry.get("id") == plugin_id
+            )
         if failure_evidence is not None:
             evidence.update({
                 "failure": failure_evidence,
@@ -664,6 +695,157 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertNotIn(plugin_id, evidence["savedLayout"])
         self.assertTrue(evidence["profileChanged"])
 
+    def test_switch_appends_configured_installed_widget_to_target_profile(self) -> None:
+        plugin_id = "thirdparty.hey"
+        source_entry = {
+            "id": plugin_id,
+            "shibumiModule": True,
+            "inlineSettings": {"greeting": "Hej", "nested": [1, False]},
+        }
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id,
+            installed=True,
+            plugin_enabled=True,
+            target="omarchy",
+            target_contains_plugin=False,
+            source_entry=source_entry,
+            plugin_kinds=["bar-widget", "service"],
+        )
+
+        saved = evidence["savedProfiles"]["layouts"]
+        self.assertEqual(saved["shibumi"]["right"][-1], source_entry)
+        self.assertEqual(saved["omarchy"]["right"][-1], source_entry)
+        self.assertEqual(evidence["layout"].count(plugin_id), 1)
+        self.assertEqual(evidence["savedLayout"].count(plugin_id), 1)
+        self.assertNotIn("configuredEntry", evidence)
+        self.assertEqual(evidence["phase"], "complete")
+
+        service_id = "thirdparty.plugins-only-service"
+        service_entry = {"id": service_id, "serviceSettings": {"interval": 9}}
+        plugins_only = self._saved_profile_switch_evidence(
+            service_id,
+            installed=True,
+            plugin_enabled=True,
+            target="omarchy",
+            target_contains_plugin=False,
+            configured_entry=service_entry,
+            plugin_kinds=["bar-widget", "service"],
+        )
+        self.assertNotIn(service_id, plugins_only["layout"])
+        self.assertNotIn(service_id, plugins_only["savedLayout"])
+        self.assertEqual(plugins_only["configuredEntry"], service_entry)
+
+        rollback_id = "thirdparty.rollback-widget"
+        rollback = self._saved_profile_switch_evidence(
+            rollback_id,
+            installed=True,
+            plugin_enabled=True,
+            target="omarchy",
+            target_contains_plugin=False,
+            source_entry={"id": rollback_id},
+            fail_after_profile=True,
+        )
+        self.assertEqual(
+            rollback["failure"]["savedProfiles"]["layouts"]["shibumi"]["right"][-1],
+            {"id": rollback_id},
+        )
+        self.assertTrue(rollback["failure"]["profileChanged"])
+        self.assertEqual(rollback["retry"]["phase"], "complete")
+
+    def test_switch_does_not_append_disabled_mixed_kind_plugin(self) -> None:
+        plugin_id = "thirdparty.disabled-service-widget"
+        source_entry = {"id": plugin_id, "inlineSettings": {"interval": 9}}
+        evidence = self._saved_profile_switch_evidence(
+            plugin_id,
+            installed=True,
+            plugin_enabled=False,
+            target="omarchy",
+            target_contains_plugin=False,
+            source_entry=source_entry,
+            plugin_kinds=["bar-widget", "service"],
+        )
+
+        self.assertEqual(evidence["error"], "")
+        self.assertEqual(evidence["phase"], "complete")
+        self.assertNotIn(plugin_id, evidence["layout"])
+        self.assertNotIn(plugin_id, evidence["savedLayout"])
+
+    def test_layout_reconcile_is_capability_scoped_atomic_and_alias_free(self) -> None:
+        managed = set(self.state["plugins"])
+        source = {
+            "left": [
+                {"id": "thirdparty.hey", "inlineSettings": {"nested": ["Hej"]}},
+                {"id": "thirdparty.service", "serviceSettings": {"interval": 9}},
+            ],
+            "center": [
+                {"id": "thirdparty.existing", "inlineSettings": {"ignored": True}},
+                {"id": "hancore.shibumi.widget"},
+            ],
+            "right": [{"id": "omarchy.weather"}, {"id": "unknown.source"}],
+        }
+        plugins = {
+            plugin_id: {
+                "id": plugin_id, "kinds": ["service"], "firstParty": False, "enabled": True
+            }
+            for plugin_id in managed
+        }
+        plugins.update({
+            "thirdparty.hey": {"id": "thirdparty.hey", "kinds": ["bar-widget", "service"], "firstParty": False, "enabled": True},
+            "thirdparty.service": {"id": "thirdparty.service", "kinds": ["service"], "firstParty": False, "enabled": True},
+            "thirdparty.existing": {"id": "thirdparty.existing", "kinds": ["bar-widget"], "firstParty": False, "enabled": False},
+            "keep": {"id": "keep", "kinds": ["bar-widget"], "firstParty": False, "enabled": False},
+            "omarchy.weather": {"id": "omarchy.weather", "kinds": ["bar-widget"], "firstParty": True, "enabled": True},
+        })
+        layout = {
+            "left": [{"id": "thirdparty.removed"}, {"id": "omarchy.unknown"}],
+            "center": [{"id": "thirdparty.existing", "position": 7}],
+            "right": [{"id": "keep", "native": {"field": 1}}],
+        }
+
+        pruned = self.module["prune_uninstalled_layout_plugins"](
+            layout, plugins, managed, source
+        )
+        self.assertEqual(pruned, ["thirdparty.removed"])
+        self.assertEqual(layout["left"], [{"id": "omarchy.unknown"}])
+        self.assertEqual(layout["center"], [{"id": "thirdparty.existing", "position": 7}])
+        self.assertEqual(layout["right"], [
+            {"id": "keep", "native": {"field": 1}}, source["left"][0]
+        ])
+        self.assertNotIn("hancore.shibumi.widget", str(layout))
+        self.assertNotIn("omarchy.weather", str(layout))
+        source["left"][0]["inlineSettings"]["nested"].append("mutated")
+        self.assertEqual(layout["right"][-1]["inlineSettings"]["nested"], ["Hej"])
+
+        malformed_plugins = []
+        for field, value in (
+            ("kinds", "bar-widget"), ("kinds", [7]), ("kinds", []),
+            ("firstParty", 0), ("enabled", 1), ("enabled", None),
+        ):
+            malformed = copy.deepcopy(plugins)
+            if value is None:
+                malformed["thirdparty.hey"].pop(field)
+            else:
+                malformed["thirdparty.hey"][field] = value
+            malformed_plugins.append(malformed)
+        duplicate_source = copy.deepcopy(source)
+        duplicate_source["right"].append({"id": "thirdparty.hey"})
+        malformed_source = copy.deepcopy(source)
+        malformed_source["right"].append({"id": 7})
+        for bad_plugins, bad_source in (
+            ({}, source),
+            ({key: value for key, value in plugins.items() if key not in managed}, source),
+            *((malformed, source) for malformed in malformed_plugins),
+            (plugins, duplicate_source),
+            (plugins, malformed_source),
+        ):
+            with self.subTest(plugins=len(bad_plugins), source=bad_source["right"][-1]):
+                unchanged = {"left": [{"id": "thirdparty.removed"}], "center": [], "right": []}
+                before = copy.deepcopy(unchanged)
+                self.assertEqual(self.module["prune_uninstalled_layout_plugins"](
+                    unchanged, bad_plugins, managed, bad_source
+                ), [])
+                self.assertEqual(unchanged, before)
+
     def test_switch_keeps_installed_but_disabled_saved_plugin_as_failure(self) -> None:
         plugin_id = "thirdparty.disabled"
         evidence = self._saved_profile_switch_evidence(
@@ -723,6 +905,9 @@ class ContinuityManagerTests(unittest.TestCase):
             "duplicate-id-key",
             "empty-id",
             "incomplete-managed",
+            "missing-enabled",
+            "nonbool-enabled",
+            "empty-kinds",
         ):
             with self.subTest(snapshot=snapshot):
                 evidence = self._saved_profile_switch_evidence(

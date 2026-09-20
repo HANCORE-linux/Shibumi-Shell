@@ -902,21 +902,40 @@ def plugin_snapshot(runtime_paths: dict[str, Path]) -> dict[str, dict[str, Any]]
 
 
 def prune_uninstalled_layout_plugins(
-    layout: dict[str, list[Any]], plugins: dict[str, dict[str, Any]], managed: set[str]
+    layout: dict[str, list[Any]], plugins: dict[str, dict[str, Any]],
+    managed: set[str], source_layout: dict[str, list[Any]],
 ) -> list[str]:
     # Managed-row presence is necessary, not proof of completeness; pruning
     # relies on the pinned host's authoritative-snapshot contract.
-    if not plugins or not managed.issubset(plugins):
+    if (not plugins or not managed.issubset(plugins)
+            or any(not isinstance(row, dict)
+                   or not isinstance(row.get("kinds"), list) or not row["kinds"]
+                   or any(not isinstance(kind, str) or not kind for kind in row["kinds"])
+                   or any(not isinstance(row.get(field), bool) for field in ("firstParty", "enabled"))
+                   for row in plugins.values())):
         return []
-    missing = {
-        entry_id(entry) for region in REGIONS for entry in layout[region]
-    } - plugins.keys() - managed
+    source_entries = [entry for region in REGIONS for entry in source_layout[region]]
+    source_ids = [
+        entry if isinstance(entry, str)
+        else entry.get("id") if isinstance(entry, dict) else None
+        for entry in source_entries
+    ]
+    if (any(not isinstance(plugin_id, str) or not plugin_id for plugin_id in source_ids)
+            or len(source_ids) != len(set(source_ids))):
+        return []
+    present = {entry_id(entry) for region in REGIONS for entry in layout[region]}
+    missing = present - plugins.keys() - managed
     pruned = sorted(
         plugin_id for plugin_id in missing
         if plugin_id and not plugin_id.startswith("omarchy.")
     )
+    added = [copy.deepcopy(entry) for entry, plugin_id in zip(source_entries, source_ids)
+             if plugin_id not in present and plugin_id not in managed and plugin_id in plugins
+             and plugins[plugin_id]["enabled"] and not plugins[plugin_id]["firstParty"]
+             and "bar-widget" in plugins[plugin_id]["kinds"]]
     for region in REGIONS:
         layout[region] = [entry for entry in layout[region] if entry_id(entry) not in pruned]
+    layout["right"].extend(added)
     return pruned
 
 
@@ -1073,7 +1092,7 @@ def perform(target: str) -> int:
         except ManagerError:
             installed_plugins = {}
         pruned_ids = prune_uninstalled_layout_plugins(
-            target_layout, installed_plugins, set(state["plugins"])
+            target_layout, installed_plugins, set(state["plugins"]), layouts[current_shell]
         )
         layouts[runtime_target] = copy_layout(target_layout)
         target_center_anchor = center_anchors.get(runtime_target)
