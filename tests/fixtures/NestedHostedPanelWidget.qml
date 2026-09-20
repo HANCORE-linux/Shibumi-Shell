@@ -14,6 +14,11 @@ Item {
   property bool opened: false
   property int loadGeneration: 0
   property int desiredContentHeight: 360
+  readonly property int contentTopInset: 12
+  readonly property int contentBottomInset: 12
+  readonly property int fittedContentHeight: desiredContentHeight
+    + contentTopInset + contentBottomInset
+  property point nativeCardOrigin: Qt.point(900, 900)
   readonly property var exposedPanel: panelLoader.item
     ? panelLoader.item.standardPanel : null
 
@@ -97,12 +102,12 @@ Item {
 
           objectName: "nestedStandardKeyboardPanel"
           property Item anchorItem: anchor
-          property point cardOrigin: Qt.point(900, 900)
+          // Controlled provider geometry only: this offscreen fixture proves
+          // that WidgetSlot preserves plugin bindings, not native card math.
+          property point cardOrigin: root.nativeCardOrigin
           property var borderSpec: ({ source: "provider" })
           property int contentWidth: 420
-          // A screen-sized Shibumi anchor makes native KeyboardPanel cap its
-          // content to the 120px safety minimum before host repair.
-          property int contentHeight: 120
+          property int contentHeight: root.fittedContentHeight
           property bool open: root.opened
           property int margin: 8
           property int gap: 8
@@ -121,8 +126,8 @@ Item {
             y: standardPanel.cardOrigin.y
             width: standardPanel.contentWidth
             height: standardPanel.contentHeight
-            property int contentTopInset: 12
-            property int contentBottomInset: 12
+            property int contentTopInset: root.contentTopInset
+            property int contentBottomInset: root.contentBottomInset
             property var borderSpec: ({ source: "provider" })
             property int radius: 4
             property color color: "#202020"

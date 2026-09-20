@@ -306,18 +306,39 @@ for compatibility_contract in \
     'findCompatibilityCard' \
     'hostedModule' \
     'hostPanelChromeEnabled' \
-    'hostPanelPlacementEnabled' \
-    'hostPanelHeightRepairEnabled' \
-    'compatibilityAvailableContentHeight' \
-    'findCompatibilityContentHolder' \
-    'measureCompatibilityContent' \
     'compatibilitySurfaceTimer' \
-    'compatibilityMeasureTimer' \
-    'compatibilityOpenMeasureTimer' \
-    'hostedCardOrigin' \
     'publishCompatibilityConnection'; do
   rg -Fq "$compatibility_contract" hancore.shibumi.bar/core/WidgetSlot.qml \
     || fail "third-party host compatibility lost $compatibility_contract"
+done
+for retired_compatibility_contract in \
+    'compatibilityContentHolder' \
+    'compatibilityNativeContentHeight' \
+    'compatibilityMeasuredContentHeight' \
+    'compatibilityContentResolutionAttempts' \
+    'compatibilityMeasurementRunning' \
+    'hostPanelPlacementEnabled' \
+    'hostPanelHeightRepairEnabled' \
+    'compatibilityDesiredContentHeight' \
+    'compatibilityAvailableContentHeight' \
+    'compatibilityHostedContentHeight' \
+    'compatibilityDescendantCount' \
+    'findCompatibilityContentHolder' \
+    'measureCompatibilityContent' \
+    'refreshCompatibilityContent' \
+    'compatibilityMeasureTimer' \
+    'compatibilityOpenMeasureTimer' \
+    'hostedCardOrigin'; do
+  if rg -Fq "$retired_compatibility_contract" \
+      hancore.shibumi.bar/core/WidgetSlot.qml; then
+    fail "third-party host compatibility retained measurement repair: $retired_compatibility_contract"
+  fi
+done
+for foreign_geometry_property in contentHeight x y; do
+  if rg -Fq "property: \"$foreign_geometry_property\"" \
+      hancore.shibumi.bar/core/WidgetSlot.qml; then
+    fail "hosted panel adapter overrides provider-owned $foreign_geometry_property"
+  fi
 done
 rg -q 'readonly property bool hostedModule: !suiteNativeModule' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
@@ -325,22 +346,22 @@ rg -q 'readonly property bool hostedModule: !suiteNativeModule' \
 rg -Fq 'if (root.bar.pendingTooltipTarget || root.bar.tooltipTarget) return' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
   || fail "manifest tooltip fallback can override a plugin tooltip"
-rg -Fq 'Binding.RestoreBindingOrValue' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "third-party panel chrome cannot restore native bindings"
-[[ $(rg -c 'value: root\.hostedCardOrigin\(root\.compatibilityPanel\)' \
-  hancore.shibumi.bar/core/WidgetSlot.qml) -eq 2 ]] \
-  || fail "hosted panels do not translate both card axes to the visible bar"
-rg -Fq 'y = barThickness + gap' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "top hosted panels still derive their offset from the host window"
-rg -Fq 'property: "contentHeight"' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "screen-sized hosted panels do not repair KeyboardPanel height"
-rg -Fq 'screenHeight - barThickness - gap - margin' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "hosted panel height is not capped at the visible bar edge"
-rg -Fq 'Math.min(compatibilityNativeContentHeight, currentNativeHeight)' \
+[[ $(rg -c 'Binding.RestoreBindingOrValue' \
+  hancore.shibumi.bar/core/WidgetSlot.qml) -eq 3 ]] \
+  || fail "third-party panel chrome must restore native border, color, and radius bindings"
+rg -Fq 'compatibilitySurfaceResolutionAttempts < 20' \
   hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "opening a hosted panel can recapture its repaired height as native"
-rg -Fq 'item.mapToItem(holder, 0, 0)' hancore.shibumi.bar/core/WidgetSlot.qml \
-  || fail "hosted panel height does not follow rendered child geometry"
+  && rg -Uq 'id: compatibilitySurfaceTimer\n\n[[:space:]]*interval: 40' \
+    hancore.shibumi.bar/core/WidgetSlot.qml \
+  || fail "late hosted-panel discovery is not bounded at the dedicated 40 ms timer"
+for native_card_geometry in \
+    'cardX: Number(card.x) || 0' \
+    'cardY: Number(card.y) || 0' \
+    'cardWidth: Number(card.width) || 0' \
+    'cardHeight: Number(card.height) || 0'; do
+  rg -Fq "$native_card_geometry" hancore.shibumi.bar/core/WidgetSlot.qml \
+    || fail "hosted V2 connector does not read native geometry: $native_card_geometry"
+done
 rg -q '^PanelWindow \{' hancore.shibumi.bar/core/HostedPanelConnector.qml \
   || fail "hosted V2 caret overlay is missing"
 rg -q 'mask: Region \{\}' hancore.shibumi.bar/core/HostedPanelConnector.qml \
