@@ -5,28 +5,80 @@
 ### Added
 
 - Added a positional V1 split between G8 and the optional second center slot;
-  Edit slots, Split all, and Merge all use the existing split interaction
+  Edit slots, Split all, and Merge all use the existing split interaction.
+- Added explicit plugin-capacity feedback when an installed widget cannot yet
+  be placed in the active layout.
 
 ### Changed
 
-- Control Center Health shows only Shibumi-attributed runtime-log findings and
-  primary diagnostic checks; runtime findings attributed to Omarchy, Qt,
-  third-party code, or an unknown source are no longer listed in the panel. CLI
-  and JSON reports remain complete.
+- Health now reads the exact selected Quickshell instance log through a bounded,
+  no-follow file path. The Control Center headline and panel list only findings
+  attributed to Shibumi; CLI and JSON reports retain the complete owner-labelled
+  result.
+- The Control Center acquires plugin-catalog data only when needed and constructs
+  the widget palette only while it is open.
+- The V2 editor description now states that edit mode supports slots, dividers,
+  and drag.
+- Kept the horizontal bar window edge-local and bar-height in every presentation
+  and in edit mode without changing its exclusive zone. Dimming and outside-click
+  dismissal now use a dedicated output-local edit backdrop; drag geometry is
+  translated once into output coordinates and cancels if output geometry changes.
+- Removed the former WidgetSlot measurement and geometry-repair layer so hosted
+  panel providers retain ownership of content height and card placement. Bounded
+  surface discovery, shared chrome bindings, and the V2 connector remain.
 
-### Known limits
+### Fixed
+
+- Kept the V1 editing frame, including its border stroke, within the bar-high
+  window at both top and bottom.
+- Restored the stock predecessor instead of recording Shibumi as its own
+  predecessor when adopting an orphaned Shibumi selection, while preserving
+  settings and post-stop ownership changes.
+- Bound published Beta.14.1 package fixtures to the published payload, covered
+  source-checkout updates, isolated fixture runtime state, and rejected unknown
+  payload drift during update and repair.
+- Kept Control Center page restoration on the current output-local owner across
+  presentation rebuilds, stopped redundant registry reads, and retained Quick
+  controls while switching presentations.
+- Allowed neutrally configured optional Shibumi widgets to be re-enabled in V1.
+- Guarded the Network traffic consumer when its service disappears and routed
+  Notifications, Do Not Disturb, and Idle through the scoped suite host facade.
+- Restored the embedded system-update widget on scoped hosts.
+- Removed uninstalled third-party widgets from saved and lifecycle-written
+  layouts while preserving enabled, installed third-party bar widgets already
+  present in the current layout, including their layout settings, when switching
+  profiles.
+- Preserved placeable widgets during partial background reconciliation, kept
+  widgets in in-flight transitions out of the extra deck, and placed V2 plugin
+  groups into available fallback regions when their preferred region is full.
+- Prevented a moved single-instance widget from loading in its new slot before
+  the previous owner is destroyed.
+- Restored Recent notification history on hosts that expose DND and host-owned
+  history but no popup model. The unavailable Live tab stays hidden, and Recent
+  supports per-entry dismissal and clear-history through validated host history
+  filenames.
+- Detached host-registered widgets before loader teardown and restored each bar
+  reference only for its admitted submission, so hosted widgets no longer call
+  functions on a bar whose loader context is gone. Network reads one service
+  snapshot per derived binding, and Status detaches click-registered children
+  without unregistering against a bar that is tearing down.
+
+### Notes
+
+- Basecamp refresh is unavailable under Shibumi on the pinned Omarchy 4.0.3
+  host: the plugin has no widget-local service fallback, and the host does not
+  expose its shared service to replacement bars.
+- In edit mode, empty V1 slots are interactive; click the desktop or press
+  Escape to leave edit mode.
 
 - Quickshell can log `Failed to register with host portal … Connection already
-  associated with an application ID` once per shell start. The message comes
-  from Qt's portal integration and appears with and without Shibumi installed;
-  Health does not list it; `shibumi-health` reports it under its owner.
-- On Omarchy 4.0.3 (`0534987…`) Quickshell logs `Handler was registered but will
-  not be used … target omarchy.bar` once per shell start while the Shibumi bar is
-  active. Both the hidden stock bar and Shibumi's runtime register this IPC
-  target so `omarchy-toggle-bar` can nudge the active bar (Shibumi side since
-  `6eece9b`); the stock bar's handler is unused while it is not shown, so the
-  warning is informational. Under the stock bar there is no duplicate. This
-  describes one exact pairing, not a general allowance for duplicate handlers.
+  associated with an application ID` once per shell start. The message appears
+  with and without Shibumi installed; Health does not list it, while
+  `shibumi-health` retains its owner-labelled record.
+- On the pinned Omarchy 4.0.3 host, unused `omarchy.bar` handler warnings can
+  already be present while Shibumi is active. They remain separate host-warning
+  evidence, are not attributed as fixed by the hosted-widget teardown changes,
+  and are not a general allowance for duplicate IPC ownership.
 - Older Shibumi readers ignore `splits.center` and can drop it when rewriting
   layout state; current readers migrate a missing field to disabled without a
   settings-schema version bump.

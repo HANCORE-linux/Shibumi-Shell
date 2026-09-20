@@ -89,13 +89,17 @@ import sys
 
 bar = Path(sys.argv[1]).read_text()
 status = Path(sys.argv[2]).read_text()
-bar_dtor = bar.index("  Component.onDestruction: {", bar.index("  Component.onCompleted: {"))
-if bar.index("    tearingDown = true", bar_dtor) != bar_dtor + len("  Component.onDestruction: {\n"):
+try:
+    bar_dtor = bar.index("  Component.onDestruction: {", bar.index("  Component.onCompleted: {"))
+    teardown_reset = bar.index("    tearingDown = true", bar_dtor)
+    status_dtor = status.index("  Component.onDestruction: {")
+    registered_reset = status.index("      updateWidget.registeredBar = null", status_dtor)
+    update_reset = status.index("    if (updateWidget && \"bar\" in updateWidget) updateWidget.bar = null", status_dtor)
+    tray_reset = status.index("    if (trayWidget && \"bar\" in trayWidget) trayWidget.bar = null", status_dtor)
+except ValueError:
+    raise SystemExit("Status teardown ordering source guard anchor drifted")
+if teardown_reset != bar_dtor + len("  Component.onDestruction: {\n"):
     raise SystemExit("Bar teardown flag is not the first destruction statement")
-status_dtor = status.index("  Component.onDestruction: {")
-registered_reset = status.index("      updateWidget.registeredBar = null", status_dtor)
-update_reset = status.index("    if (updateWidget && \"bar\" in updateWidget) updateWidget.bar = null", status_dtor)
-tray_reset = status.index("    if (trayWidget && \"bar\" in trayWidget) trayWidget.bar = null", status_dtor)
 if not registered_reset < update_reset < tray_reset:
     raise SystemExit("Status teardown ordering no longer guards child Bar reset")
 if ('else if (lifecycleBar && "tearingDown" in lifecycleBar\n'
