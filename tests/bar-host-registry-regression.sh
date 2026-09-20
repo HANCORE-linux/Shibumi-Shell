@@ -8,6 +8,7 @@ shibumi_load_omarchy_baseline
 bar_root="$repo_root/hancore.shibumi.bar"
 omarchy_path=$OMARCHY_PATH
 widget_slot_source=${SHIBUMI_TEST_WIDGET_SLOT_SOURCE:-$bar_root/core/WidgetSlot.qml}
+private_lifecycle_bar_source=${SHIBUMI_TEST_PRIVATE_LIFECYCLE_BAR_SOURCE:-$repo_root/tests/fixtures/PrivateLifecycleBar.qml}
 
 fail() {
   printf 'bar host registry regression failed: %s\n' "$*" >&2
@@ -113,6 +114,8 @@ done
 [[ -n $omarchy_path && -d $omarchy_path/shell ]] \
   || fail 'OMARCHY_PATH must reference a Quattro checkout'
 [[ -f $widget_slot_source ]] || fail 'WidgetSlot fixture source is missing'
+[[ -f $private_lifecycle_bar_source ]] \
+  || fail 'private lifecycle Bar fixture source is missing'
 [[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'
 
 tmpdir=$(mktemp -d /tmp/shibumi-bar-host.XXXXXX)
@@ -175,7 +178,7 @@ install -m 0644 "$widget_slot_source" \
   "$lifecycle_root/staged/barcore/WidgetSlot.qml"
 install -m 0644 "$repo_root/tests/fixtures/BarContextLifecycleHost.qml" \
   "$lifecycle_root/shell.qml"
-install -m 0644 "$repo_root/tests/fixtures/PrivateLifecycleBar.qml" \
+install -m 0644 "$private_lifecycle_bar_source" \
   "$lifecycle_root/PrivateLifecycleBar.qml"
 set +e
 lifecycle_output=$(timeout --foreground --kill-after=1 10 env \

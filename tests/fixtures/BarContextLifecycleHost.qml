@@ -79,6 +79,7 @@ ShellRoot {
     property real availableWidth: 0
     property var cachedBar: null
     property int cachedBarSerial: -1
+    property var lifecycleChild: null
 
     function registeredComponent(pluginId) {
       void(host.registryRevision)
@@ -107,17 +108,51 @@ ShellRoot {
       if (bar) {
         cachedBar = bar
         cachedBarSerial = Number(bar.creationId)
+        if (lifecycleChild) lifecycleChild.bar = bar
         host.events.push("provider-attached:" + kind + ":bar=" + cachedBarSerial)
       } else if (cachedBar) {
+        if (cachedBar.tearingDown === true && lifecycleChild) {
+          lifecycleChild.registeredBar = null
+          lifecycleChild.bar = null
+          host.events.push("status-child-detached-during-bar-teardown")
+        }
         host.recordProviderDetached(kind, cachedBar.loadedOwners.length)
       }
     }
-    Component.onCompleted: host.recordProviderCreated(kind, provider)
-    Component.onDestruction: host.recordProviderDestroyed(kind, provider)
+    Component.onCompleted: {
+      if (lifecycleChild) lifecycleChild.bar = bar
+      host.recordProviderCreated(kind, provider)
+    }
+    Component.onDestruction: {
+      if (lifecycleChild) {
+        if (cachedBar && cachedBar.tearingDown === true)
+          lifecycleChild.registeredBar = null
+        lifecycleChild.bar = null
+      }
+      host.recordProviderDestroyed(kind, provider)
+    }
   }
 
   component StatusProvider: ProviderBase {
+    id: statusProvider
     kind: "status"
+    lifecycleChild: Item {
+      id: statusLifecycleChild
+      property var bar: statusProvider.bar
+      property var registeredBar: null
+
+      function syncClickRegistration() {
+        if (registeredBar)
+          registeredBar.unregisterClickTarget(statusLifecycleChild)
+        registeredBar = bar
+        if (registeredBar)
+          registeredBar.registerClickTarget(statusLifecycleChild)
+      }
+
+      onBarChanged: syncClickRegistration()
+      Component.onDestruction: if (registeredBar)
+        registeredBar.unregisterClickTarget(statusLifecycleChild)
+    }
     readonly property url updateSource: registeredSource("hancore.shibumi.update-center")
     readonly property url traySource: registeredSource("omarchy.tray")
     readonly property Component updateComponent: String(updateSource) ? null
@@ -238,6 +273,12 @@ ShellRoot {
         require(providerCreated === 4, "initial providers did not load")
         require(barLoader.item && barLoader.item.loadedOwners.length === 5,
           "initial owner sentinels missing")
+        require(barLoader.item.clickTargets.length === 2,
+          "status lifecycle child registration count="
+            + barLoader.item.clickTargets.length + ":child="
+            + !!currentProviders.status.lifecycleChild + ":bar="
+            + !!currentProviders.status.lifecycleChild.bar + ":registered="
+            + !!currentProviders.status.lifecycleChild.registeredBar)
         require(networkCreated === 1 && currentNetworkWidget
           && currentNetworkWidget.networkService === networkService
           && currentNetworkWidget.networkReady
@@ -275,6 +316,8 @@ ShellRoot {
       }
       if (phase === 3) {
         require(!currentProviders.status, "disabled status provider stayed live")
+        require(barLoader.item.clickTargets.length === 1,
+          "live Bar unload did not unregister the status lifecycle child")
         require(barLoader.item.loadedOwners.length === 4,
           "disabled provider owner sentinel was not released on destruction")
         const detachedIndex = events.indexOf(
@@ -295,6 +338,8 @@ ShellRoot {
           "status provider did not reload")
         require(barLoader.item.loadedOwners.length === 5,
           "reloaded provider owner sentinel missing")
+        require(barLoader.item.clickTargets.length === 2,
+          "reloaded status lifecycle child did not register")
         oldBar = barLoader.item
         // The private staged widget makes this binding writable so the fixture
         // deterministically holds the incident's stale-ready intermediate state.
@@ -317,6 +362,12 @@ ShellRoot {
       if (phase === 5) {
         require(providerDestroyed >= 5,
           "old providers survived bar Loader teardown")
+        const barDestructionIndex = events.indexOf("bar-destruction:1")
+        const childDetachIndex = events.indexOf(
+          "status-child-detached-during-bar-teardown")
+        require(barDestructionIndex >= 0 && childDetachIndex > barDestructionIndex,
+          "Bar teardown flag was not visible before Status revoke: "
+            + JSON.stringify(events))
         require(ownerReleased >= 6,
           "owner sentinels released before actual item destruction")
         require(networkDestroyed === 1,

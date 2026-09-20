@@ -82,6 +82,27 @@ unexpected_diagnostics=$(grep -E \
 
 status_widget="$repo_root/hancore.shibumi.status/BarWidget.qml"
 status_service="$repo_root/hancore.shibumi.status/Service.qml"
+bar_widget="$repo_root/hancore.shibumi.bar/Bar.qml"
+python3 - "$bar_widget" "$status_widget" <<'PY'
+from pathlib import Path
+import sys
+
+bar = Path(sys.argv[1]).read_text()
+status = Path(sys.argv[2]).read_text()
+bar_dtor = bar.index("  Component.onDestruction: {", bar.index("  Component.onCompleted: {"))
+if bar.index("    tearingDown = true", bar_dtor) != bar_dtor + len("  Component.onDestruction: {\n"):
+    raise SystemExit("Bar teardown flag is not the first destruction statement")
+status_dtor = status.index("  Component.onDestruction: {")
+registered_reset = status.index("      updateWidget.registeredBar = null", status_dtor)
+update_reset = status.index("    if (updateWidget && \"bar\" in updateWidget) updateWidget.bar = null", status_dtor)
+tray_reset = status.index("    if (trayWidget && \"bar\" in trayWidget) trayWidget.bar = null", status_dtor)
+if not registered_reset < update_reset < tray_reset:
+    raise SystemExit("Status teardown ordering no longer guards child Bar reset")
+if ('else if (lifecycleBar && "tearingDown" in lifecycleBar\n'
+        '        && lifecycleBar.tearingDown === true)') not in status:
+    raise SystemExit("Status no longer handles WidgetSlot's pre-destruction Bar revoke")
+PY
+printf 'status teardown ordering source guard passed\n'
 rg -Fq '["full", "icon", "text"]' "$status_widget" \
   || fail "status widget does not expose Full/Icon/Text display modes"
 if rg -q 'SystemTray\.items|NotificationServer|makoctl|pgrep -x hypridle' \

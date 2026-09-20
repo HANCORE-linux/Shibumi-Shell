@@ -16,6 +16,7 @@ Item {
   property var moduleSlots: []
   property var loadedOwners: []
   property var clickTargets: []
+  property bool tearingDown: false
   property var activePopout: null
   property bool vertical: false
   property real barSize: 35
@@ -142,7 +143,10 @@ Item {
   function hideTooltip(target) {}
   function releasePopout(target) {}
 
-  Component.onDestruction: hostState.events.push("bar-destruction:" + creationId)
+  Component.onDestruction: {
+    tearingDown = true
+    hostState.events.push("bar-destruction:" + creationId)
+  }
 
   Core.WidgetSlot {
     bar: root

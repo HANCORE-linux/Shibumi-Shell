@@ -225,6 +225,7 @@ Item {
     }
   }
   property var clickTargets: []
+  property bool tearingDown: false
   property var layoutSessions: []
   property var tooltipTarget: null
   property string tooltipText: ""
@@ -3165,6 +3166,7 @@ Item {
     scheduleStartupAdmission()
   }
   Component.onDestruction: {
+    tearingDown = true
     prepareForShutdown()
     releaseCatalogConsumer()
   }
