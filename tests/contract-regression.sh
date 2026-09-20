@@ -154,16 +154,43 @@ if ! {
 fi
 rg -q '^PanelWindow \{' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
-rg -Fq 'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
+rg -Fq 'implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0' \
   hancore.shibumi.bar/core/BarPanel.qml \
-  || fail "horizontal host must stay screen-sized to avoid edit resize flashes"
+  || fail "horizontal host must remain bar-height during edit"
+rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
+  hancore.shibumi.bar/core/BarPanel.qml \
+  || fail "vertical host must remain bar-width during edit"
 rg -Fq 'WlrLayershell.keyboardFocus: dragSession.editing' \
   hancore.shibumi.bar/core/BarPanel.qml \
   || fail "stable bar surface must own temporary edit focus"
-rg -q '^  mask: Region \{' hancore.shibumi.bar/core/BarPanel.qml \
-  || fail "screen-sized bar surface must constrain its locked input region"
-rg -Fq 'onClicked: dragSession.setEditing(false)' hancore.shibumi.bar/core/BarPanel.qml \
-  || fail "stable edit surface does not dismiss from outside clicks"
+if rg -q '^  mask: Region \{|MouseArea \{' hancore.shibumi.bar/core/BarPanel.qml; then
+  fail "bar-local window retained a fullscreen mask or outside-click area"
+fi
+for backdrop_contract in \
+  'id: editBackdropLoader' \
+  'active: dragSession.editing' \
+  '&& barWindow.visible && barWindow.backingWindowVisible' \
+  '&& windowRecovery.recoveryVisible' \
+  'EditBackdropPanel {' \
+  'barVisible: barWindow.visible && barWindow.backingWindowVisible'; do
+  rg -Fq "$backdrop_contract" hancore.shibumi.bar/core/BarPanel.qml \
+    || fail "edit backdrop lifecycle drifted: $backdrop_contract"
+done
+[[ $(rg -c 'EditBackdropPanel \{' hancore.shibumi.bar/core/BarPanel.qml) -eq 1 ]] \
+  || fail "each bar output must declare exactly one edit-only backdrop component"
+for backdrop_surface_contract in \
+  'visible: layoutSession.editing && barVisible' \
+  'readonly property real outsideY: bar.position === "top" ? bar.barSize : 0' \
+  '? Math.max(0, height - bar.barSize) : height' \
+  'WlrLayershell.layer: WlrLayer.Top' \
+  'WlrLayershell.keyboardFocus: WlrKeyboardFocus.None' \
+  'mask: Region { item: dismissArea }' \
+  'y: root.outsideY' \
+  'height: root.outsideHeight' \
+  'onClicked: root.layoutSession.setEditing(false)'; do
+  rg -Fq "$backdrop_surface_contract" hancore.shibumi.bar/core/EditBackdropPanel.qml \
+    || fail "edit backdrop surface drifted: $backdrop_surface_contract"
+done
 rg -q '^PanelWindow \{' hancore.shibumi.bar/core/DragGhostPanel.qml \
   || fail "drag ghost must be isolated from the edge-local bar window"
 rg -q 'mask: Region \{\}' hancore.shibumi.bar/core/DragGhostPanel.qml \
@@ -173,11 +200,12 @@ rg -Fq 'DragGhostVisual {' hancore.shibumi.bar/core/DragGhostPanel.qml \
 if rg -q 'barOrigin[XY]' hancore.shibumi.bar/core/DragGhostPanel.qml hancore.shibumi.bar/core/DragGhostVisual.qml; then
   fail "drag ghost must not add an edge offset to full-window coordinates"
 fi
-rg -Fq 'y: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
-  hancore.shibumi.bar/core/BarPanel.qml \
-  || fail "bottom bar surface must use stable explicit placement"
-if rg -q 'anchors\.(top|bottom):.*barWindow\.bar\.position' hancore.shibumi.bar/core/BarPanel.qml; then
-  fail "bar surface must not switch conditional vertical anchors at runtime"
+awk '/^[[:space:]]*id: barSurfaceLoader$/,/^  }$/' hancore.shibumi.bar/core/BarPanel.qml \
+  | rg -q '^    anchors.fill: parent$' \
+  || fail "bar surface must fill the edge-local bar window from local origin zero"
+if rg -q 'barSurfaceLoader[[:space:]]*\.|id: barSurfaceLoader' hancore.shibumi.bar/core/BarPanel.qml \
+    && rg -q '^[[:space:]]+(x|y): .*barWindow\.bar\.position' hancore.shibumi.bar/core/BarPanel.qml; then
+  fail "bar surface retained a fullscreen-window edge offset"
 fi
 rg -q '^Scope \{' hancore.shibumi.bar/core/WindowRecovery.qml \
   || fail "per-output window recovery scope is missing"
@@ -962,6 +990,31 @@ rg -q 'stateService\.setLayout' hancore.shibumi.bar/core/LayoutController.qml \
   || fail "layout mutations bypass the process-wide state owner"
 rg -q 'layoutController: barWindow\.bar\.layoutController' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "per-output drag session does not consume shared layout state"
+for drag_geometry_contract in \
+  'property real originX: 0' \
+  'property real originY: 0' \
+  'property string geometryKey: ""' \
+  'onOriginXChanged: cancelForGeometryChange()' \
+  'onOriginYChanged: cancelForGeometryChange()' \
+  'onGeometryKeyChanged: cancelForGeometryChange()' \
+  'function toOutputPoint(localX, localY)' \
+  'function targetAtOutput(outputX, outputY)'; do
+  rg -Fq "$drag_geometry_contract" hancore.shibumi.bar/core/DragSession.qml \
+    || fail "drag output-geometry contract drifted: $drag_geometry_contract"
+done
+for bound_geometry_contract in \
+  'originX: barWindow.bar.vertical && barWindow.bar.position === "right"' \
+  'originY: !barWindow.bar.vertical && barWindow.bar.position === "bottom"' \
+  'geometryKey: JSON.stringify([' \
+  'String(barWindow.screen.name || "")' \
+  'Number(barWindow.screen.width) || 0' \
+  'Number(barWindow.screen.height) || 0' \
+  'Number(barWindow.screen.devicePixelRatio) || 1' \
+  'String(barWindow.bar.position || "")' \
+  'Number(barWindow.bar.barSize) || 0'; do
+  rg -Fq "$bound_geometry_contract" hancore.shibumi.bar/core/BarPanel.qml \
+    || fail "bar does not bind complete primitive drag geometry: $bound_geometry_contract"
+done
 rg -q 'item\.layoutSession = dragSession' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "bar surface does not receive its per-output drag session"
 if rg -q 'LayoutController \{|DragSession \{' styles; then

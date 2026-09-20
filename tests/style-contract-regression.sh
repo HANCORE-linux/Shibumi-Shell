@@ -298,13 +298,45 @@ for dynamic_v1_contract in \
   rg -Fq "$dynamic_v1_contract" hancore.shibumi.bar/core/GroupSlot.qml \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
 done
-for edit_surface_contract in \
-  'implicitHeight: !bar.vertical && validScreen ? screen.height : 0' \
-  'mask: Region {' \
-  'onClicked: dragSession.setEditing(false)'; do
-  rg -Fq "$edit_surface_contract" hancore.shibumi.bar/core/BarPanel.qml \
-    || fail "stable V1 edit surface drifted: $edit_surface_contract"
+for bar_window_contract in \
+  'implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0' \
+  'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
+  'exclusiveZone: bar.barExclusiveSize' \
+  'WlrLayershell.keyboardFocus: dragSession.editing' \
+  'visible: dragSession.editing' \
+  'z: 1'; do
+  rg -Fq "$bar_window_contract" hancore.shibumi.bar/core/BarPanel.qml \
+    || fail "bar-local edit surface drifted: $bar_window_contract"
 done
+awk '/^[[:space:]]*id: barSurfaceLoader$/,/^  }$/' hancore.shibumi.bar/core/BarPanel.qml \
+  | rg -q '^    anchors.fill: parent$' \
+  || fail "bar surface loader must fill the edge-local window"
+if rg -q '^  mask: Region \{|MouseArea \{' hancore.shibumi.bar/core/BarPanel.qml; then
+  fail "bar window retained fullscreen edit input ownership"
+fi
+for backdrop_contract in \
+  'id: editBackdropLoader' \
+  'active: dragSession.editing' \
+  '&& barWindow.visible && barWindow.backingWindowVisible' \
+  '&& barWindow.validScreen && !barWindow.bar.barHidden' \
+  '&& windowRecovery.recoveryVisible' \
+  'EditBackdropPanel {' \
+  'visible: layoutSession.editing && barVisible' \
+  'readonly property real outsideY: bar.position === "top" ? bar.barSize : 0' \
+  '? Math.max(0, height - bar.barSize) : height' \
+  'WlrLayershell.layer: WlrLayer.Top' \
+  'WlrLayershell.keyboardFocus: WlrKeyboardFocus.None' \
+  'mask: Region { item: dismissArea }' \
+  'y: root.outsideY' \
+  'height: root.outsideHeight' \
+  'onClicked: root.layoutSession.setEditing(false)'; do
+  rg -Fq "$backdrop_contract" \
+    hancore.shibumi.bar/core/BarPanel.qml \
+    hancore.shibumi.bar/core/EditBackdropPanel.qml \
+    || fail "edit-only backdrop contract drifted: $backdrop_contract"
+done
+[[ $(rg -c 'EditBackdropPanel \{' hancore.shibumi.bar/core/BarPanel.qml) -eq 1 ]] \
+  || fail "bar output must declare one edit-only backdrop component"
 rg -Fq 'readonly property real appearancePadding: v2Shell && bar.visualTokens' \
   hancore.shibumi.bar/core/GroupSlot.qml \
   || fail "V2 widget padding leaked into the original V1 group geometry"
