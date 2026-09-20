@@ -411,12 +411,35 @@ Window {
       fail("protected V2 interaction state did not activate independently")
 
     const v2Baseline = ShibumiConfig.normalize(fakeStateService.config)
+    const fallbackV2 = V2LayoutModel.defaultLayout()
+    fallbackV2.right[10] = "G:custom.r1"
+    fallbackV2.right[11] = "G:custom.r2"
+    fallbackV2.right[12] = "G:custom.r3"
+    const fallbackV2State = ShibumiConfig.normalize(fakeStateService.config)
+    fallbackV2State.v2Layout = fallbackV2
+    fakeStateService.config = ShibumiConfig.normalize(fallbackV2State)
+    const fallbackV2Specs = [
+      { pluginId: "custom.r1", region: "right" },
+      { pluginId: "custom.r2", region: "right" },
+      { pluginId: "custom.r3", region: "right" },
+      { pluginId: "custom.target", region: "right" }
+    ]
+    if (!controller.reconcileV2PluginGroups(
+          fallbackV2Specs, false, true)
+        || controller.groupLocation("G:custom.target").region !== "left"
+        || controller.groupLocation("G:custom.target").index !== 3
+        || controller.unplacedPluginIdsFor(fallbackV2Specs).length !== 0)
+      fail("V2 fallback placement did not settle atomically")
+    fakeStateService.config = v2Baseline
+
     const fullV2 = V2LayoutModel.defaultLayout()
     fullV2.left[3] = "G:custom.l1"
     fullV2.left[8] = "G:custom.l2"
     fullV2.left[9] = "G:custom.l3"
     fullV2.left.push("G:custom.l4", "G:custom.l5", "G:custom.l6")
     fullV2.right[10] = "G:custom.move"
+    fullV2.right[11] = "G:custom.r1"
+    fullV2.right[12] = "G:custom.r2"
     const fullV2State = ShibumiConfig.normalize(fakeStateService.config)
     fullV2State.v2Layout = fullV2
     fakeStateService.config = ShibumiConfig.normalize(fullV2State)
@@ -428,7 +451,9 @@ Window {
       { pluginId: "custom.l4", region: "left" },
       { pluginId: "custom.l5", region: "left" },
       { pluginId: "custom.l6", region: "left" },
-      { pluginId: "custom.move", region: "left" }
+      { pluginId: "custom.move", region: "left" },
+      { pluginId: "custom.r1", region: "right" },
+      { pluginId: "custom.r2", region: "right" }
     ]
     fakeBar.layoutTransitionsSupported = true
     const requestsBeforeV2 = fakeBar.transitionRequests
