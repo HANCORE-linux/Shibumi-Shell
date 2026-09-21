@@ -25,13 +25,13 @@ ShellRoot {
     id: stateService
     shell: fakeShell
     omarchyPath: Quickshell.env("OMARCHY_PATH")
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.15", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.15.1", kinds: ["service"]})
   }
 
   Cpu.Service {
     id: cpuService
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.15", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.15.1", kinds: ["service"]})
     gpuProbeEnabled: false
   }
 

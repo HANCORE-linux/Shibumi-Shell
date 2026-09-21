@@ -20,14 +20,14 @@ ShellRoot {
     id: telemetry
     shell: fakeShell
     thermalProbeEnabled: false
-    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.15", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.15.1", kinds: ["service"]})
   }
 
   Cpu.Service {
     id: cpu
     shell: fakeShell
     gpuProbeEnabled: false
-    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.15", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.15.1", kinds: ["service"]})
   }
 
   QtObject {
@@ -40,7 +40,7 @@ ShellRoot {
   PowerState.Service {
     id: power
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.power-state", version: "0.1.1-beta.15", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.power-state", version: "0.1.1-beta.15.1", kinds: ["service"]})
     batterySnapshotOverride: ({ready: false})
     commandOverrides: ({}) // This pure projection smoke may never launch helpers.
   }
