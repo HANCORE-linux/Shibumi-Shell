@@ -1366,6 +1366,19 @@ puts JSON.generate(workflow.fetch("jobs"))
         module = importlib.util.module_from_spec(spec)
         loader.exec_module(module)
 
+        self.assertEqual(module.GATE_TIMEOUT_SECONDS, 1800)
+        release_runbook = (ROOT / "docs/development/release.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "Every evidence gate has a 30-minute process-group timeout.",
+            release_runbook,
+        )
+        self.assertNotIn(
+            "Every evidence gate has a 15-minute process-group timeout.",
+            release_runbook,
+        )
+
         with tempfile.TemporaryDirectory(
             prefix="shibumi-evidence-progress."
         ) as temporary:
@@ -1409,10 +1422,10 @@ puts JSON.generate(workflow.fetch("jobs"))
                 (str(temporary_path / "missing-command"),),
                 start_log,
                 [],
-                timeout_seconds=2,
             )
             self.assertEqual(start_error["status"], "start-error")
             self.assertIsNone(start_error["exitCode"])
+            self.assertEqual(start_error["timeoutSeconds"], 1800)
             self.assertIn("could not start gate", start_log.read_text(encoding="utf-8"))
 
             timeout_log = temporary_path / "timeout.log"

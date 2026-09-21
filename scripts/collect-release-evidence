@@ -30,7 +30,7 @@ HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("quickshellVersion", ("quickshell", "--version"), "Quickshell 0.3.1"),
 )
 
-GATE_TIMEOUT_SECONDS = 900
+GATE_TIMEOUT_SECONDS = 1800
 GATE_TERMINATION_GRACE_SECONDS = 10
 GATE_RAW_LOG_MAX_BYTES = 8 * 1024 * 1024
 TOTAL_RAW_LOG_MAX_BYTES = 64 * 1024 * 1024
