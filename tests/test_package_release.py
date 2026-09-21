@@ -516,9 +516,10 @@ puts JSON.generate(workflow.fetch("jobs"))
             'archive "$package_candidate_revision" \\\n'
             '  | tar -x -C "$package_candidate_root"'
         )
+        source_version_assignment = 'candidate_version=$(<"$repo_root/VERSION")'
         fresh_source_assertion = (
             'assert_install_state "$source_candidate_root" '
-            "'0.1.1-beta.15' checkout \\\n"
+            '"$(<"$repo_root/VERSION")" checkout \\\n'
             '  "$candidate_revision"'
         )
 
@@ -536,6 +537,7 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertIn(package_candidate_archive, text)
             self.assertIn('source_root="$source_candidate_root"', text)
             self.assertIn(fresh_source_assertion, text)
+            self.assertEqual(text.count(source_version_assignment), 1)
             self.assertIn("fresh candidate source checkout", text)
             self.assertNotIn("fresh candidate package", text)
             self.assertEqual(text.count("run_update_arm \"$"), 2)
@@ -549,6 +551,16 @@ puts JSON.generate(workflow.fetch("jobs"))
             prefix="shibumi-quattro-arm-markers."
         ) as temporary:
             mutations = (
+                runtime.replace(
+                    source_version_assignment, "candidate_version=0.1.1-beta.15", 1
+                ),
+                runtime.replace(
+                    fresh_source_assertion,
+                    fresh_source_assertion.replace(
+                        '\"$(<\"$repo_root/VERSION\")\"', "'0.1.1-beta.15'"
+                    ),
+                    1,
+                ),
                 runtime.replace(arm_markers[2], "", 1),
                 runtime.replace(
                     package_candidate_archive,
