@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The unreleased `0.1.1-beta.15` candidate is reviewed against the current
+The unreleased `0.1.1-beta.15.1` candidate is reviewed against the current
 official Omarchy Quattro baseline. The published Beta.13 remains the latest
 physically accepted release:
 
