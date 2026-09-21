@@ -57,7 +57,7 @@ ShellRoot {
   PowerState.Service {
     id: power
     shell: host
-    manifest: root.allowed ? ({id: "hancore.shibumi.power-state", version: "0.1.1-beta.15", kinds: ["service"]}) : null
+    manifest: root.allowed ? ({id: "hancore.shibumi.power-state", version: "0.1.1-beta.15.1", kinds: ["service"]}) : null
     batterySnapshotOverride: battery
     commandOverrides: ({
       profiles: ["/usr/bin/python3", "-I", root.helper, root.directory, "profiles"],

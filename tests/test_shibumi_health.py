@@ -247,6 +247,34 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.git("commit", "-m", "remote fixture change", cwd=writer)
         self.git("push", "origin", "main", cwd=writer)
 
+    def push_remote_tag(self, tag: str) -> None:
+        self.git(
+            "push",
+            "origin",
+            f"HEAD:refs/tags/{tag}",
+            cwd=self.source,
+        )
+
+    def use_timed_out_fetch(self) -> None:
+        real_git = shutil.which("git")
+        self.assertIsNotNone(real_git)
+        fake_bin = self.root / "fake-bin"
+        fake_bin.mkdir()
+        fake_git = fake_bin / "git"
+        fake_git.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, sys, time\n"
+            "if 'fetch' in sys.argv:\n"
+            "    time.sleep(10)\n"
+            f"os.execv({real_git!r}, [{real_git!r}, *sys.argv[1:]])\n",
+            encoding="utf-8",
+        )
+        fake_git.chmod(0o755)
+        self.environment["PATH"] = (
+            str(fake_bin) + os.pathsep + self.environment["PATH"]
+        )
+        self.environment["SHIBUMI_HEALTH_FETCH_TIMEOUT"] = "0.05"
+
     def write_json(self, path: Path, value: object) -> None:
         path.write_text(json.dumps(value) + "\n", encoding="utf-8")
 
@@ -498,6 +526,144 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(check["status"], "warning")
         self.assertEqual(check["value"], "Current · dirty")
 
+    def test_detached_exact_release_tag_is_a_clean_release_checkout(self) -> None:
+        # Lightweight release tags are accepted when they strictly match v<SemVer>.
+        tag = "v0.1.1-beta.15"
+        self.git("tag", tag, cwd=self.source)
+        self.git("checkout", "--detach", tag, cwd=self.source)
+        commit = self.git_output("rev-parse", "HEAD")
+
+        checks = self.by_id(self.run_health())
+        source = checks["source-status"]
+
+        self.assertEqual(source["label"], "Release checkout")
+        self.assertEqual(source["status"], "ok")
+        self.assertEqual(source["value"], f"{tag} · clean")
+        self.assertEqual(source["detail"], f"{tag} · {commit[:10]}")
+        self.assertEqual(source["action"], "")
+        self.assertEqual(checks["source-update"]["value"], "Not checked")
+
+    def test_detached_annotated_release_tag_reports_dirty_checkout(self) -> None:
+        tag = "v0.1.1-beta.15"
+        self.git("tag", "--annotate", tag, "-m", "fixture release", cwd=self.source)
+        self.git("checkout", "--detach", tag, cwd=self.source)
+        (self.source / "README.md").write_text("dirty release\n", encoding="utf-8")
+
+        source = self.by_id(self.run_health())["source-status"]
+
+        self.assertEqual(source["label"], "Release checkout")
+        self.assertEqual(source["status"], "warning")
+        self.assertEqual(source["value"], f"{tag} · dirty")
+        self.assertEqual(source["action"], "Review local changes before updating.")
+
+    def test_attached_branch_at_release_tag_remains_a_development_checkout(self) -> None:
+        self.git("tag", "v0.1.1-beta.15", cwd=self.source)
+
+        source = self.by_id(self.run_health())["source-status"]
+
+        self.assertEqual(source["label"], "Development checkout")
+        self.assertEqual(source["status"], "ok")
+        self.assertEqual(source["value"], "Current · clean")
+
+    def test_detached_untagged_checkout_uses_existing_development_warning(self) -> None:
+        self.git("checkout", "--detach", "HEAD", cwd=self.source)
+
+        source = self.by_id(self.run_health())["source-status"]
+
+        self.assertEqual(source["label"], "Development checkout")
+        self.assertEqual(source["status"], "warning")
+        self.assertEqual(source["value"], "Check failed")
+        self.assertIn("branch", source["action"])
+
+    def test_malformed_and_nonrelease_tags_do_not_claim_a_release(self) -> None:
+        for tag in (
+            "release-1.2.3",
+            "v1.2",
+            "v01.2.3",
+            "v1.2.3-alpha.01",
+        ):
+            self.git("tag", tag, cwd=self.source)
+        self.git("checkout", "--detach", "HEAD", cwd=self.source)
+
+        source = self.by_id(self.run_health())["source-status"]
+
+        self.assertEqual(source["label"], "Development checkout")
+        self.assertEqual(source["status"], "warning")
+        self.assertEqual(source["value"], "Check failed")
+
+    def test_missing_git_metadata_keeps_existing_warning(self) -> None:
+        shutil.rmtree(self.source / ".git")
+
+        source = self.by_id(self.run_health())["source-status"]
+
+        self.assertEqual(source["label"], "Development checkout")
+        self.assertEqual(source["status"], "warning")
+        self.assertEqual(source["value"], "Metadata unavailable")
+
+    def test_release_tag_probe_failure_falls_back_to_development_path(self) -> None:
+        self.git("checkout", "--detach", "HEAD", cwd=self.source)
+        probe = self.module["Probe"](fetch=False)
+        real_git = probe.git
+
+        def git_with_failed_tag_probe(root, arguments, timeout=5):
+            if arguments[:2] == ["tag", "--points-at"]:
+                raise RuntimeError("tag metadata unavailable")
+            return real_git(root, arguments, timeout)
+
+        with patch.object(probe, "source_root", return_value=self.source):
+            with patch.object(probe, "git", side_effect=git_with_failed_tag_probe):
+                probe.check_source()
+
+        source = next(check for check in probe.checks if check.id == "source-status")
+        self.assertEqual(source.label, "Development checkout")
+        self.assertEqual(source.status, "warning")
+        self.assertEqual(source.value, "Check failed")
+
+    def test_health_semver_key_matches_trusted_suite_implementation(self) -> None:
+        if str(REPO_ROOT) not in sys.path:
+            sys.path.insert(0, str(REPO_ROOT))
+        from scripts.shibumi_suite.cli import (  # trusted repository implementation
+            CliError,
+            version_key as canonical_version_key,
+        )
+
+        health_version_key = self.module["version_key"]
+        valid = (
+            "0.1.1-beta.9",
+            "0.1.1-beta.10",
+            "0.1.1-beta.15",
+            "0.1.1-beta.15.1",
+            "0.1.1",
+            "1.0.0+build.7",
+        )
+        for value in valid:
+            with self.subTest(value=value):
+                self.assertEqual(health_version_key(value), canonical_version_key(value))
+        for value in ("1.2", "01.2.3", "1.2.3-alpha.01", "unknown"):
+            with self.subTest(invalid=value):
+                with self.assertRaises(ValueError):
+                    health_version_key(value)
+                with self.assertRaises(CliError):
+                    canonical_version_key(value)
+
+        self.assertLess(health_version_key("0.1.1-beta.9"), health_version_key("0.1.1-beta.10"))
+        self.assertLess(health_version_key("0.1.1-beta.15"), health_version_key("0.1.1-beta.15.1"))
+        self.assertLess(health_version_key("0.1.1-beta.15.1"), health_version_key("0.1.1"))
+        self.assertEqual(health_version_key("1.0.0+aaa"), health_version_key("1.0.0+zzz"))
+
+    def test_latest_release_tag_skips_unknown_tags_deterministically(self) -> None:
+        latest = self.module["latest_release_tag"]
+
+        self.assertEqual(
+            latest(["v0.1.1-beta.9", "unknown", "v0.1.1-beta.10", "v01.2.3"]),
+            "v0.1.1-beta.10",
+        )
+        self.assertEqual(
+            latest(["v1.0.0+aaa", "v1.0.0+zzz"]),
+            "v1.0.0+zzz",
+        )
+        self.assertIsNone(latest(["release-1.0.0", "v1.0", "v1.0.0-alpha.01"]))
+
     def test_ahead_checkout_is_a_warning(self) -> None:
         self.commit_source("ahead\n")
         payload = self.run_health()
@@ -550,31 +716,94 @@ class HealthDiagnosticsTests(unittest.TestCase):
         self.assertEqual(checks["source-update"]["value"], "Check failed")
         self.assertEqual(checks["source-status"]["value"], "Current · clean")
 
+    def test_release_without_fetch_does_not_contact_or_import_remote_tags(self) -> None:
+        current = "v0.1.1-beta.15"
+        available = "v0.1.1-beta.15.1"
+        self.git("tag", current, cwd=self.source)
+        self.push_remote_tag(available)
+        self.git("checkout", "--detach", current, cwd=self.source)
+        before = self.git_output("rev-parse", "HEAD")
+
+        checks = self.by_id(self.run_health())
+
+        self.assertEqual(self.git_output("rev-parse", "HEAD"), before)
+        self.assertEqual(self.git_output("tag", "--list", available), "")
+        self.assertEqual(checks["source-status"]["value"], f"{current} · clean")
+        self.assertEqual(checks["source-update"]["status"], "info")
+        self.assertEqual(checks["source-update"]["value"], "Not checked")
+
+    def test_release_fetch_detects_semantically_newer_tag_without_changing_head(self) -> None:
+        current = "v0.1.1-beta.15"
+        available = "v0.1.1-beta.15.1"
+        self.git("tag", current, cwd=self.source)
+        self.push_remote_tag(available)
+        self.git("checkout", "--detach", current, cwd=self.source)
+        before = self.git_output("rev-parse", "HEAD")
+
+        checks = self.by_id(self.run_health("--fetch"))
+
+        self.assertEqual(self.git_output("rev-parse", "HEAD"), before)
+        self.assertEqual(checks["source-status"]["status"], "ok")
+        self.assertEqual(checks["source-status"]["value"], f"{current} · clean")
+        self.assertEqual(checks["source-update"]["status"], "warning")
+        self.assertEqual(
+            checks["source-update"]["value"], f"Update available · {available}"
+        )
+
+    def test_equal_build_metadata_precedence_is_not_an_update(self) -> None:
+        current = "v1.0.0+aaa"
+        self.git("tag", current, cwd=self.source)
+        self.push_remote_tag("v1.0.0+zzz")
+        self.git("checkout", "--detach", current, cwd=self.source)
+
+        checks = self.by_id(self.run_health("--fetch"))
+
+        self.assertEqual(checks["source-status"]["value"], f"{current} · clean")
+        self.assertEqual(checks["source-update"]["status"], "ok")
+        self.assertEqual(checks["source-update"]["value"], "Current")
+
+    def test_release_fetch_failure_preserves_meaningful_source_status(self) -> None:
+        tag = "v0.1.1-beta.15"
+        self.git("tag", tag, cwd=self.source)
+        self.git("checkout", "--detach", tag, cwd=self.source)
+        self.git(
+            "remote",
+            "set-url",
+            "origin",
+            str(self.root / "offline.git"),
+            cwd=self.source,
+        )
+
+        checks = self.by_id(self.run_health("--fetch"))
+
+        self.assertEqual(checks["source-status"]["status"], "ok")
+        self.assertEqual(checks["source-status"]["value"], f"{tag} · clean")
+        self.assertEqual(checks["source-update"]["status"], "warning")
+        self.assertEqual(checks["source-update"]["value"], "Check failed")
+        self.assertNotEqual(checks["source-update"]["value"], "Current")
+
     def test_hard_fetch_timeout_is_bounded_and_reported(self) -> None:
-        real_git = shutil.which("git")
-        self.assertIsNotNone(real_git)
-        fake_bin = self.root / "fake-bin"
-        fake_bin.mkdir()
-        fake_git = fake_bin / "git"
-        fake_git.write_text(
-            "#!/usr/bin/env python3\n"
-            "import os, sys, time\n"
-            "if 'fetch' in sys.argv:\n"
-            "    time.sleep(10)\n"
-            f"os.execv({real_git!r}, [{real_git!r}, *sys.argv[1:]])\n",
-            encoding="utf-8",
-        )
-        fake_git.chmod(0o755)
-        self.environment["PATH"] = (
-            str(fake_bin) + os.pathsep + self.environment["PATH"]
-        )
-        self.environment["SHIBUMI_HEALTH_FETCH_TIMEOUT"] = "0.05"
+        self.use_timed_out_fetch()
 
         payload = self.run_health("--fetch")
         check = self.by_id(payload)["source-update"]
         self.assertEqual(check["status"], "warning")
         self.assertEqual(check["value"], "Check failed")
         self.assertIn("timed out", check["detail"])
+
+    def test_release_fetch_timeout_preserves_meaningful_source_status(self) -> None:
+        tag = "v0.1.1-beta.15"
+        self.git("tag", tag, cwd=self.source)
+        self.git("checkout", "--detach", tag, cwd=self.source)
+        self.use_timed_out_fetch()
+
+        checks = self.by_id(self.run_health("--fetch"))
+
+        self.assertEqual(checks["source-status"]["status"], "ok")
+        self.assertEqual(checks["source-status"]["value"], f"{tag} · clean")
+        self.assertEqual(checks["source-update"]["status"], "warning")
+        self.assertEqual(checks["source-update"]["value"], "Check failed")
+        self.assertIn("timed out", checks["source-update"]["detail"])
 
     def test_inactive_managed_widget_is_not_a_runtime_failure(self) -> None:
         self.state["activation"]["enableServices"] = []

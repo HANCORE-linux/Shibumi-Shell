@@ -157,6 +157,54 @@ def configured_timeout(name: str, default: float) -> float:
     return min(default, max(0.05, value))
 
 
+def version_key(value: str) -> tuple[int, int, int, int, tuple[tuple[int, Any], ...]]:
+    """Match the suite CLI's strict SemVer precedence without importing a checkout."""
+    identifier = r"[0-9A-Za-z-]+"
+    match = re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+        rf"(?:-({identifier}(?:\.{identifier})*))?"
+        rf"(?:\+{identifier}(?:\.{identifier})*)?",
+        value,
+    )
+    if not match:
+        raise ValueError(f"unsupported Shibumi version: {value}")
+    prerelease = match.group(4)
+    prerelease_parts = prerelease.split(".") if prerelease else []
+    if any(
+        item.isdigit() and len(item) > 1 and item.startswith("0")
+        for item in prerelease_parts
+    ):
+        raise ValueError(f"unsupported Shibumi version: {value}")
+    identifiers: tuple[tuple[int, Any], ...] = tuple(
+        (0, int(item)) if item.isdigit() else (1, item)
+        for item in prerelease_parts
+    )
+    return (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3)),
+        0 if prerelease else 1,
+        identifiers,
+    )
+
+
+def latest_release_tag(values: list[str]) -> str | None:
+    """Return the greatest strict ``v<SemVer>`` tag, deterministically."""
+    candidates: list[
+        tuple[tuple[int, int, int, int, tuple[tuple[int, Any], ...]], str]
+    ] = []
+    for value in values:
+        tag = value.strip()
+        if not tag.startswith("v"):
+            continue
+        try:
+            key = version_key(tag[1:])
+        except ValueError:
+            continue
+        candidates.append((key, tag))
+    return max(candidates, default=(None, ""), key=lambda item: (item[0], item[1]))[1] or None
+
+
 def payload_digest(directory: Path) -> str:
     digest = hashlib.sha256()
     digest.update(b"shibumi-plugin-payload-v1\0")
@@ -1300,6 +1348,78 @@ class Probe:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "git failed")
         return result.stdout.strip()
 
+    def release_tags(self, root: Path, *, points_at_head: bool = False) -> list[str]:
+        arguments = ["tag"]
+        if points_at_head:
+            arguments.extend(["--points-at", "HEAD"])
+        arguments.extend(["--list", "v*"])
+        return self.git(root, arguments).splitlines()
+
+    def check_release_source(self, root: Path, tag: str, commit: str) -> None:
+        dirty_lines = self.git(
+            root, ["status", "--porcelain=v1", "--untracked-files=normal"]
+        ).splitlines()
+        dirty = bool(dirty_lines)
+        self.add(
+            "source-status",
+            "Source",
+            "Release checkout",
+            "warning" if dirty else "ok",
+            f"{tag} · {'dirty' if dirty else 'clean'}",
+            f"{tag} · {commit[:10]}",
+            root,
+            "Review local changes before updating." if dirty else "",
+        )
+        if not self.fetch:
+            self.add(
+                "source-update",
+                "Source",
+                "Update check",
+                "info",
+                "Not checked",
+                "Remote refs were not contacted during this local health run.",
+                root,
+                "Use Check for updates for a manual read-only fetch.",
+            )
+            return
+
+        try:
+            self.git(
+                root,
+                ["fetch", "--tags", "--quiet", "origin"],
+                timeout=configured_timeout("SHIBUMI_HEALTH_FETCH_TIMEOUT", 12),
+            )
+            latest = latest_release_tag(self.release_tags(root))
+            if latest is None:
+                raise RuntimeError("no valid release tags were found after fetch")
+            if version_key(latest[1:]) > version_key(tag[1:]):
+                status, value = "warning", f"Update available · {latest}"
+                action = "Review the newer release before updating."
+            else:
+                status, value = "ok", "Current"
+                action = ""
+            self.add(
+                "source-update",
+                "Source",
+                "Update check",
+                status,
+                value,
+                f"Checked release tags from origin; current checkout is {tag}.",
+                root,
+                action,
+            )
+        except (RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            self.add(
+                "source-update",
+                "Source",
+                "Update check",
+                "warning",
+                "Check failed",
+                safe_text(str(error).splitlines()[-1], 280),
+                root,
+                "Grant this machine read access to the remote, then retry.",
+            )
+
     def check_source(self) -> None:
         root = self.source_root()
         if not (root / ".git").exists():
@@ -1318,6 +1438,17 @@ class Probe:
         try:
             branch = self.git(root, ["branch", "--show-current"])
             commit = self.git(root, ["rev-parse", "HEAD"])
+            if not branch:
+                try:
+                    tag = latest_release_tag(
+                        self.release_tags(root, points_at_head=True)
+                    )
+                except (RuntimeError, subprocess.TimeoutExpired):
+                    tag = None
+                if tag is not None:
+                    self.check_release_source(root, tag, commit)
+                    return
+
             upstream_name = self.git(root, ["rev-parse", "--abbrev-ref", "@{upstream}"])
             if self.fetch:
                 if "/" not in upstream_name:

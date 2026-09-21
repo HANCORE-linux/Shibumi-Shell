@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1-beta.15.1] - 2026-09-21
+
+### Fixed
+
+- Health recognizes detached checkouts at exact release tags and reports
+  their clean or dirty status without requiring a branch upstream.
+
 ## [0.1.1-beta.15] - 2026-09-20
 
 ### Added

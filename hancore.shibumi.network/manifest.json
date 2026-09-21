@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "hancore.shibumi.network",
   "name": "Shibumi Network",
-  "version": "0.1.1-beta.15",
+  "version": "0.1.1-beta.15.1",
   "author": "HANCORE",
   "license": "MIT",
   "description": "Native Shibumi NetworkManager ownership, telemetry, actions, QR, and speed testing.",

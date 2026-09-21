@@ -20,6 +20,11 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from shibumi_suite.model import Suite, suite_payload_digest  # noqa: E402
+
+
 NAYUKI_NOTICE = """Third-party notice: QR Code generator library
 
 Copyright (c) Project Nayuki. (MIT License)
@@ -66,7 +71,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15")
+        self.assertEqual(version, "0.1.1-beta.15.1")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -160,6 +165,12 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "7eeb2a88e0920d2fe647f4ef88b8a00ad54a205c3b627234b402d50b4709b11d",
             },
+            "public-beta.15.1": {
+                "suiteVersion": "0.1.1-beta.15.1",
+                "sourceRevisions": ["package:0.1.1-beta.15.1"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "31a2e133191264e2e63919eed7f43c5393ac5c5aadda23ea9199afd211f53274",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():
@@ -180,6 +191,20 @@ class PackageReleaseTests(unittest.TestCase):
                     digest.update(plugin_digest.encode("ascii"))
                     digest.update(b"\0")
                 self.assertEqual(digest.hexdigest(), state["payloadDigest"])
+
+        suite = Suite.load(ROOT)
+        current_plugin_digests = {
+            plugin_id: spec.payload_digest()
+            for plugin_id, spec in suite.plugins.items()
+        }
+        self.assertEqual(
+            states["public-beta.15.1"]["pluginDigests"],
+            current_plugin_digests,
+        )
+        self.assertEqual(
+            states["public-beta.15.1"]["payloadDigest"],
+            suite_payload_digest(current_plugin_digests),
+        )
         self.assertNotIn(
             "package:0.1.1-beta.12",
             states["public-beta.12"]["sourceRevisions"],
