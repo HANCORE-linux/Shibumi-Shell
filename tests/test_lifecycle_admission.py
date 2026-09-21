@@ -264,6 +264,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
             "public-beta.14.1",
             "public-beta.15",
             "public-beta.15.1",
+            "public-beta.15.2",
         ):
             identity = next(
                 item for item in self.identities if item["id"] == identity_id

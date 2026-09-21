@@ -132,7 +132,7 @@ def catalog_probe():
           "actual native catalog identity DTO mismatch")
     control = ready["snapshot"]["byId"]["hancore.shibumi.control-center"]
     check(control["description"] and control["author"] == "HANCORE"
-          and control["version"] == "0.1.1-beta.15.1"
+          and control["version"] == "0.1.1-beta.15.2"
           and control["barWidget"]["defaultSection"] == "left",
           "package-bound catalog presentation metadata was lost")
     check(host_config() == original, "read-only catalog changed native config")

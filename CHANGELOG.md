@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.1-beta.15.2] - 2026-09-21
+
+### Changed
+
+- Increased each release-evidence gate's process-group timeout from 15 to 30
+  minutes while retaining the existing fail-closed evidence controls.
+
+### Fixed
+
+- Made the Quattro source-update and fresh-install arms read the candidate
+  version from `VERSION` instead of retaining a stale Beta.15 expectation.
+
 ## [0.1.1-beta.15.1] - 2026-09-21
 
 ### Fixed
