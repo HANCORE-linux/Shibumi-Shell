@@ -36,7 +36,7 @@ ShellRoot {
     id: state
     shell: host
     omarchyPath: Quickshell.env("OMARCHY_PATH")
-    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.15.1",
+    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.15.2",
       kinds: ["service"], __sourceDir: Quickshell.env("DECOY_MARKER_DIR") })
   }
   BarProbe.Marker {

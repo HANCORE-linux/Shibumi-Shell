@@ -24,6 +24,7 @@ from unittest.mock import Mock, patch
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED_BETA141_REVISION = "7a6c853b1947d303bad9a5b640c224c01b669106"
 PUBLISHED_BETA15_REVISION = "4e91c26ebf4da07476d4be6176f29d7662fed9c1"
+PUBLISHED_BETA151_REVISION = "36e4b9f0de428c17248d40592461a9e3f3f750f8"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from shibumi_suite.admission import (  # noqa: E402
@@ -1221,23 +1222,49 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_exact_beta151_package_identity_is_admitted(self) -> None:
-        packaged_suite = self.packaged_suite()
+        packaged_suite = self.packaged_suite(
+            version="0.1.1-beta.15.1",
+            source_revision=PUBLISHED_BETA151_REVISION,
+        )
 
         self.assertEqual(
             require_current_payload_identity(packaged_suite), "public-beta.15.1"
+        )
+        beta151 = next(
+            item
+            for item in supported_install_identities(packaged_suite)
+            if item["id"] == "public-beta.15.1"
+        )
+        self.assertEqual(
+            suite_payload_digest({
+                plugin_id: spec.payload_digest()
+                for plugin_id, spec in packaged_suite.plugins.items()
+            }),
+            beta151["payloadDigest"],
         )
         self.assertFalse(self.paths.state_dir.exists())
         self.assertFalse(self.paths.plugin_dir.exists())
         self.assertFalse(self.paths.config_file.exists())
         self.assertEqual(self.runtime.events, [])
 
-    def test_mutated_beta15_package_bytes_are_rejected(self) -> None:
+    def test_exact_beta152_package_identity_is_admitted(self) -> None:
+        packaged_suite = self.packaged_suite()
+
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.15.2"
+        )
+        self.assertFalse(self.paths.state_dir.exists())
+        self.assertFalse(self.paths.plugin_dir.exists())
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertEqual(self.runtime.events, [])
+
+    def test_mutated_beta151_package_bytes_are_rejected(self) -> None:
         packaged_suite = self.packaged_suite(
-            version="0.1.1-beta.15",
-            source_revision=PUBLISHED_BETA15_REVISION,
+            version="0.1.1-beta.15.1",
+            source_revision=PUBLISHED_BETA151_REVISION,
         )
         self.assertEqual(
-            require_current_payload_identity(packaged_suite), "public-beta.15"
+            require_current_payload_identity(packaged_suite), "public-beta.15.1"
         )
         drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
         payload = drift_path.read_bytes()
@@ -1253,13 +1280,13 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertFalse(self.paths.config_file.exists())
         self.assertEqual(self.runtime.events, [])
 
-    def test_mutated_beta15_package_mode_is_rejected(self) -> None:
+    def test_mutated_beta151_package_mode_is_rejected(self) -> None:
         packaged_suite = self.packaged_suite(
-            version="0.1.1-beta.15",
-            source_revision=PUBLISHED_BETA15_REVISION,
+            version="0.1.1-beta.15.1",
+            source_revision=PUBLISHED_BETA151_REVISION,
         )
         self.assertEqual(
-            require_current_payload_identity(packaged_suite), "public-beta.15"
+            require_current_payload_identity(packaged_suite), "public-beta.15.1"
         )
         drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
         drift_path.chmod(drift_path.stat().st_mode | stat.S_IXUSR)
@@ -1296,7 +1323,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_unknown_future_package_identity_is_rejected(self) -> None:
-        packaged_suite = self.packaged_suite("0.1.1-beta.15.2")
+        packaged_suite = self.packaged_suite("0.1.1-beta.15.3")
 
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
@@ -1529,7 +1556,7 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def packaged_suite(
         self,
-        version: str = "0.1.1-beta.15.1",
+        version: str = "0.1.1-beta.15.2",
         source_revision: str | None = None,
     ) -> Suite:
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
@@ -1832,8 +1859,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.15.1")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.15.1")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.15.2")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.15.2")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -1852,7 +1879,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.15.1")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.15.2")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_sandbox_update_advances_beta_7_to_beta_9(self) -> None:
@@ -1924,7 +1951,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             plugin_id: spec.payload_digest()
             for plugin_id, spec in self.suite.plugins.items()
         }
-        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.1")
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.2")
         self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
@@ -1942,7 +1969,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], "0.1.1-beta.15.1")
+            self.assertEqual(manifest["version"], "0.1.1-beta.15.2")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -2151,7 +2178,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.15.1+installed.9"
+                state["suiteVersion"] = "0.1.1-beta.15.2+installed.9"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -2160,7 +2187,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.1")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.2")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -2223,9 +2250,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.15.1")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.15.1")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.15.1")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.15.2")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.15.2")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.15.2")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

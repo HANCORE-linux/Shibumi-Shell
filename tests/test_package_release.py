@@ -71,7 +71,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.1")
+        self.assertEqual(version, "0.1.1-beta.15.2")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -171,6 +171,12 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "31a2e133191264e2e63919eed7f43c5393ac5c5aadda23ea9199afd211f53274",
             },
+            "public-beta.15.2": {
+                "suiteVersion": "0.1.1-beta.15.2",
+                "sourceRevisions": ["package:0.1.1-beta.15.2"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "5401b03f80a876f636d2635478cbe5af3da75c49022a614823a5c6586a3170d0",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():
@@ -198,11 +204,11 @@ class PackageReleaseTests(unittest.TestCase):
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.1"]["pluginDigests"],
+            states["public-beta.15.2"]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.1"]["payloadDigest"],
+            states["public-beta.15.2"]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(
@@ -516,9 +522,10 @@ puts JSON.generate(workflow.fetch("jobs"))
             'archive "$package_candidate_revision" \\\n'
             '  | tar -x -C "$package_candidate_root"'
         )
+        source_version_assignment = 'candidate_version=$(<"$repo_root/VERSION")'
         fresh_source_assertion = (
             'assert_install_state "$source_candidate_root" '
-            "'0.1.1-beta.15' checkout \\\n"
+            '"$(<"$repo_root/VERSION")" checkout \\\n'
             '  "$candidate_revision"'
         )
 
@@ -536,6 +543,7 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertIn(package_candidate_archive, text)
             self.assertIn('source_root="$source_candidate_root"', text)
             self.assertIn(fresh_source_assertion, text)
+            self.assertEqual(text.count(source_version_assignment), 1)
             self.assertIn("fresh candidate source checkout", text)
             self.assertNotIn("fresh candidate package", text)
             self.assertEqual(text.count("run_update_arm \"$"), 2)
@@ -549,6 +557,16 @@ puts JSON.generate(workflow.fetch("jobs"))
             prefix="shibumi-quattro-arm-markers."
         ) as temporary:
             mutations = (
+                runtime.replace(
+                    source_version_assignment, "candidate_version=0.1.1-beta.15", 1
+                ),
+                runtime.replace(
+                    fresh_source_assertion,
+                    fresh_source_assertion.replace(
+                        '\"$(<\"$repo_root/VERSION\")\"', "'0.1.1-beta.15'"
+                    ),
+                    1,
+                ),
                 runtime.replace(arm_markers[2], "", 1),
                 runtime.replace(
                     package_candidate_archive,
@@ -1354,6 +1372,19 @@ puts JSON.generate(workflow.fetch("jobs"))
         module = importlib.util.module_from_spec(spec)
         loader.exec_module(module)
 
+        self.assertEqual(module.GATE_TIMEOUT_SECONDS, 1800)
+        release_runbook = (ROOT / "docs/development/release.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "Every evidence gate has a 30-minute process-group timeout.",
+            release_runbook,
+        )
+        self.assertNotIn(
+            "Every evidence gate has a 15-minute process-group timeout.",
+            release_runbook,
+        )
+
         with tempfile.TemporaryDirectory(
             prefix="shibumi-evidence-progress."
         ) as temporary:
@@ -1397,10 +1428,10 @@ puts JSON.generate(workflow.fetch("jobs"))
                 (str(temporary_path / "missing-command"),),
                 start_log,
                 [],
-                timeout_seconds=2,
             )
             self.assertEqual(start_error["status"], "start-error")
             self.assertIsNone(start_error["exitCode"])
+            self.assertEqual(start_error["timeoutSeconds"], 1800)
             self.assertIn("could not start gate", start_log.read_text(encoding="utf-8"))
 
             timeout_log = temporary_path / "timeout.log"
