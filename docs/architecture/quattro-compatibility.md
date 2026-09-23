@@ -8,22 +8,23 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The unreleased `0.1.1-beta.15.2` candidate is reviewed against the current
-official Omarchy Quattro baseline. The published Beta.13 remains the latest
-physically accepted release:
+The Beta.15.3 maintenance worktree targets the exact official Omarchy 4.0.4
+baseline for validation. This is not physical release acceptance. The published
+Beta.13 remains the latest release with recorded physical host acceptance on
+Omarchy 4.0.3:
 
 | Component | Observed value |
 | --- | --- |
-| Omarchy package reference | `omarchy 4.0.3-1`, `omarchy-settings 4.0.3-1` |
-| Official Omarchy source tag | `v4.0.3` (`0534987009061cbe2dacdde4ad564092ab698d12`) |
-| Immutable source-parity revision | `0534987009061cbe2dacdde4ad564092ab698d12` |
+| Candidate Omarchy package reference | `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` |
+| Candidate official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
+| Candidate source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
 | Immutable forward-compatibility revision | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 | Quickshell package | `quickshell 0.3.1-1` |
-| Validation date | 2026-09-13 |
+| Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
-The installed package is the primary host-build identity. The complete
-immutable source-parity checkout is pinned to the official `v4.0.3` tag. The
+The installed package is the primary host-build identity. The new complete
+source-parity checkout is pinned to the official `v4.0.4` tag. The 4.0.3 and
 4.0.2 package and source manifests remain immutable optional compatibility
 references. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
@@ -44,11 +45,13 @@ The table is a human-readable set of important anchors, not the complete
 machine identity. Three separate manifests bind every file or symlink below the
 consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 
-- [`omarchy-installed-package-v4.0.3.json`](../../contracts/baselines/omarchy-installed-package-v4.0.3.json)
-  records the package-managed `omarchy 4.0.3-1` and
-  `omarchy-settings 4.0.3-1` layout;
-- [`omarchy-installed-source-parity-v4.0.3.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.3.json)
-  records the full Git checkout of the official `v4.0.3` source tag;
+- [`omarchy-installed-package-v4.0.4.json`](../../contracts/baselines/omarchy-installed-package-v4.0.4.json)
+  records the package-managed `omarchy 4.0.4-1` and
+  `omarchy-settings 4.0.4-1` layout;
+- [`omarchy-installed-source-parity-v4.0.4.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.4.json)
+  records the full Git checkout of the official `v4.0.4` source tag;
+- the immutable 4.0.3 package/source manifests retain the previous physical
+  acceptance baseline without claiming that acceptance for 4.0.4;
 - [`omarchy-forward-compat-ed7bae4a.json`](../../contracts/baselines/omarchy-forward-compat-ed7bae4a.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
@@ -85,7 +88,7 @@ Run the repository contract suite separately against all four host proof gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.3 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
@@ -93,9 +96,10 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-If any recorded host file changes, Shibumi remains on the previous accepted
-baseline until the affected contracts and live workflows pass again. Only then
-are the package version and hashes in this record advanced.
+The 4.0.4 manifest records exact observed bytes and package provenance; it
+does not by itself establish live acceptance. If any recorded host file changes,
+Shibumi remains on the previous accepted baseline until the affected contracts
+and live workflows pass again.
 
 A complete aggregate run ends with `Shibumi complete contract regression
 passed` and names the accepted baseline and full source revision. Absence of

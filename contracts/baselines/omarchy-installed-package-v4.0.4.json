@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "id": "installed-package-v4.0.4",
+  "profile": "installed-package",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "c668141e9c42b13c80c9ca4ea108e11708c5e8a5",
+  "provenance": {
+    "kind": "package",
+    "packages": [
+      {
+        "name": "omarchy",
+        "version": "4.0.4-1"
+      },
+      {
+        "name": "omarchy-settings",
+        "version": "4.0.4-1"
+      }
+    ],
+    "subtreeOwners": {
+      "bin": "omarchy",
+      "config": "omarchy-settings",
+      "shell": "omarchy"
+    }
+  },
+  "quickshellPackage": {
+    "name": "quickshell",
+    "version": "0.3.1-1"
+  },
+  "subtrees": [
+    {
+      "path": "shell",
+      "entryPolicy": "regular-files",
+      "entryCount": 222,
+      "inventorySha256": "be094886de039e6569034aebe40777521b799df2f4d4cf006e90655cadf0fb63",
+      "structureSha256": "beb84ff10f06fe0ae77660bf28f235fffeed89094de9e07b76cabd80b0e6dc66",
+      "contentSha256": "f4a39cde2f4a5f2df906c7de805aabb14020cbf1f0e7c97a41dbe0970a93cb5d"
+    },
+    {
+      "path": "bin",
+      "entryPolicy": "absolute-symlinks",
+      "entryCount": 441,
+      "inventorySha256": "4fa3a657a6c2fd0434edf828d31694feb3e417a687226c0a42779175547cad89",
+      "structureSha256": "36503272eb4e9fcd9d1ee93b07f9be95718194608d38f6541fae50d0442801a6",
+      "contentSha256": "fd3ec1246c77e925e2db31a70e0758d1e3b7f27be9f8f8dc187e6356866bfedf"
+    },
+    {
+      "path": "config",
+      "entryPolicy": "regular-files",
+      "entryCount": 73,
+      "inventorySha256": "576674b5731e0832d3f9704de876ec85b0ad37d9bed7fc6493d2192a80506dcb",
+      "structureSha256": "295fd338df3aa39e640b09e044ce7e62509bccda90ac7ff2cfd56373fd1f44e5",
+      "contentSha256": "5be4b9c00807432f7febe0078548caf0e5eb07b8f8b1931f1235569c7ea8618f"
+    }
+  ]
+}

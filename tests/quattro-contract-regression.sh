@@ -104,7 +104,7 @@ for needle in \
 done
 
 case $SHIBUMI_OMARCHY_SOURCE_REVISION in
-  0534987009061cbe2dacdde4ad564092ab698d12)
+  0534987009061cbe2dacdde4ad564092ab698d12|c668141e9c42b13c80c9ca4ea108e11708c5e8a5)
     for needle in \
       'target.shell = shell.pluginShellFor(manifest)' \
       'target.manifest = shell.publicPluginManifest(manifest)' \
@@ -114,7 +114,7 @@ case $SHIBUMI_OMARCHY_SOURCE_REVISION in
       'function publicPluginManifest(manifest)' \
       'function publicBarWidgetSnapshot()'; do
       rg -Fq "$needle" "$shell_root" \
-        || fail "scoped 4.0.3 shell contract drift: $needle"
+        || fail "scoped host shell contract drift: $needle"
     done
     for legacy_assignment in \
       'if ("shell" in target) target.shell = shell' \
@@ -123,7 +123,7 @@ case $SHIBUMI_OMARCHY_SOURCE_REVISION in
       'if ("pluginRegistry" in target) target.pluginRegistry = shell.pluginRegistry' \
       'if ("barConfig" in target) target.barConfig = shell.barConfig'; do
       if rg -Fxq "    $legacy_assignment" "$shell_root"; then
-        fail "4.0.3 shell restored raw host injection: $legacy_assignment"
+        fail "scoped host shell restored raw host injection: $legacy_assignment"
       fi
     done
     ;;

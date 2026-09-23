@@ -20,11 +20,11 @@ from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.3-"),
+    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.4-"),
     (
         "omarchySettingsPackage",
         ("pacman", "-Q", "omarchy-settings"),
-        "omarchy-settings 4.0.3-",
+        "omarchy-settings 4.0.4-",
     ),
     ("quickshellPackage", ("pacman", "-Q", "quickshell"), "quickshell 0.3.1-"),
     ("quickshellVersion", ("quickshell", "--version"), "Quickshell 0.3.1"),
@@ -51,7 +51,7 @@ IDENTITY_FIELDS = (
 EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     (
         "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.3.json",
+        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.4.json",
     ),
     (
         "SHIBUMI_AGENTS_OMARCHY_PATH",

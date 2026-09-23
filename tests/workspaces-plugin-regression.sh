@@ -9,6 +9,17 @@ omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
 tmpdir=$(mktemp -d /tmp/shibumi-workspaces.XXXXXX)
 trap 'rm -rf -- "$tmpdir"' EXIT
+fixture_home="$tmpdir/home"
+mkdir -m 0700 "$fixture_home"
+# QML Style reads HOME directly for shell.toml. Never let a user's font or
+# spacing overrides change the fixed-geometry fixture expectations.
+fixture_env=(
+  HOME="$fixture_home"
+  XDG_CONFIG_HOME="$fixture_home/.config"
+  XDG_CACHE_HOME="$fixture_home/.cache"
+  XDG_DATA_HOME="$fixture_home/.local/share"
+  XDG_STATE_HOME="$fixture_home/.local/state"
+)
 
 fail() {
   printf 'workspaces plugin regression failed: %s\n' "$*" >&2
@@ -31,6 +42,7 @@ install -m 0644 "$repo_root/tests/fixtures/WorkspaceTestPanel.qml" \
 
 set +e
 output=$(timeout 8 env \
+  "${fixture_env[@]}" \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/runtime" \
@@ -51,6 +63,7 @@ cp "$repo_root/tests/workspaces-runtime-smoke.qml" "$tmpdir/runtime-shell.qml"
 mkdir -m 700 "$tmpdir/scoped-runtime"
 set +e
 runtime_output=$(timeout 8 env \
+  "${fixture_env[@]}" \
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/scoped-runtime" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
@@ -74,6 +87,7 @@ cp "$repo_root/hancore.shibumi.bar/styles/shibumi/VisualTokens.qml" \
 cp "$repo_root/tests/workspaces-geometry-regression.qml" "$tmpdir/geometry-shell.qml"
 set +e
 geometry_output=$(timeout 8 env \
+  "${fixture_env[@]}" \
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_SCALE_FACTOR=1 WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/geometry-runtime" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
