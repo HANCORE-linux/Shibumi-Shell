@@ -161,19 +161,32 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15": {
                 "suiteVersion": "0.1.1-beta.15",
-                "sourceRevisions": ["package:0.1.1-beta.15"],
+                "sourceRevisions": [
+                    "4e91c26ebf4da07476d4be6176f29d7662fed9c1",
+                    "91b2cd0f886c15962a2627aea3269f4c09cae828",
+                    "7c0499289c48b9f4b3dfd28687a23824e752f15d",
+                    "package:0.1.1-beta.15",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "7eeb2a88e0920d2fe647f4ef88b8a00ad54a205c3b627234b402d50b4709b11d",
             },
             "public-beta.15.1": {
                 "suiteVersion": "0.1.1-beta.15.1",
-                "sourceRevisions": ["package:0.1.1-beta.15.1"],
+                "sourceRevisions": [
+                    "36e4b9f0de428c17248d40592461a9e3f3f750f8",
+                    "533110d7abda296b56369f304a618f9313e1f12f",
+                    "package:0.1.1-beta.15.1",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "31a2e133191264e2e63919eed7f43c5393ac5c5aadda23ea9199afd211f53274",
             },
             "public-beta.15.2": {
                 "suiteVersion": "0.1.1-beta.15.2",
-                "sourceRevisions": ["package:0.1.1-beta.15.2"],
+                "sourceRevisions": [
+                    "c45af77c8333b691ac36522247b6e5b5481a3666",
+                    "aaf7611d66ed5f99078fc5419bc3ba4db6164bed",
+                    "package:0.1.1-beta.15.2",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "5401b03f80a876f636d2635478cbe5af3da75c49022a614823a5c6586a3170d0",
             },
@@ -503,7 +516,7 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
-    def test_quattro_runtime_pins_predecessors_and_all_three_arms(self) -> None:
+    def test_quattro_runtime_pins_predecessors_and_all_four_arms(self) -> None:
         runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
         revision_pins = (
             "package_predecessor_revision="
@@ -511,12 +524,21 @@ puts JSON.generate(workflow.fetch("jobs"))
             "package_candidate_revision="
             "7a6c853b1947d303bad9a5b640c224c01b669106",
             "source_predecessor_revision="
-            "7a6c853b1947d303bad9a5b640c224c01b669106",
+            "c45af77c8333b691ac36522247b6e5b5481a3666",
+            "source_beta15_revision="
+            "4e91c26ebf4da07476d4be6176f29d7662fed9c1",
         )
         arm_markers = (
             "# Arm 1: package update",
             "# Arm 2: fresh source checkout install",
-            "# Arm 3: source checkout update",
+            "# Arm 3: beta.15 source checkout update",
+            "# Arm 4: beta.15.2 source checkout update",
+        )
+        source_arms = (
+            'run_update_arm "$source_beta15_root" "$source_candidate_root" checkout \\\n'
+            '  source-beta15 0.1.1-beta.15 "$source_beta15_revision"',
+            'run_update_arm "$source_predecessor_root" "$source_candidate_root" checkout \\\n'
+            '  source-beta152 0.1.1-beta.15.2 "$source_predecessor_revision"',
         )
         package_candidate_archive = (
             'archive "$package_candidate_revision" \\\n'
@@ -546,7 +568,13 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertEqual(text.count(source_version_assignment), 1)
             self.assertIn("fresh candidate source checkout", text)
             self.assertNotIn("fresh candidate package", text)
-            self.assertEqual(text.count("run_update_arm \"$"), 2)
+            self.assertEqual(text.count("run_update_arm \"$"), 3)
+            for arm in source_arms:
+                self.assertEqual(text.count(arm), 1)
+            self.assertIn('"$source_beta15_root:$source_beta15_revision"', text)
+            self.assertIn('"$source_predecessor_root:$source_predecessor_revision"', text)
+            self.assertIn('      arm=$4\n      predecessor_version=$5\n'
+                          '      predecessor_identity=$6', text)
             self.assertIn(".installOrigin == $origin", text)
             self.assertIn(".payloadRoot == $root", text)
             self.assertIn(".sourceRoot == $root", text)
@@ -568,6 +596,12 @@ puts JSON.generate(workflow.fetch("jobs"))
                     1,
                 ),
                 runtime.replace(arm_markers[2], "", 1),
+                runtime.replace(arm_markers[3], "", 1),
+                *(runtime.replace(arm, "", 1) for arm in source_arms),
+                runtime.replace('predecessor_version=$5',
+                                'predecessor_version=0.1.1-beta.14.1', 1),
+                runtime.replace('predecessor_identity=$6',
+                                'predecessor_identity=$source_predecessor_revision', 1),
                 runtime.replace(
                     package_candidate_archive,
                     package_candidate_archive.replace(
@@ -801,9 +835,12 @@ puts JSON.generate(workflow.fetch("jobs"))
         self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
         self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
         self.assertIn("refusing foreign fixture service", runtime)
-        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])", runtime)
-        self.assertIn("package update (5) + fresh install (4) + source update (5) = 14", runtime)
-        self.assertIn("exact 14-shell generation budget", runtime)
+        self.assertEqual(runtime.count(
+            "^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-9])"), 2)
+        self.assertIn("package update (5) + fresh install (4) + two source updates (5 each) = 19", runtime)
+        self.assertIn("(( ${#units[@]} < 19 ))", runtime)
+        self.assertIn("[[ $(service_generation_count) -eq 19 ]]", runtime)
+        self.assertIn("exact 19-shell generation budget", runtime)
         self.assertIn("--kill-whom=all --signal=TERM", runtime)
         self.assertIn("--kill-whom=all --signal=KILL", runtime)
         self.assertIn("timeout --kill-after=1s 8s", runtime)

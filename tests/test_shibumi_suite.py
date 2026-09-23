@@ -25,6 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED_BETA141_REVISION = "7a6c853b1947d303bad9a5b640c224c01b669106"
 PUBLISHED_BETA15_REVISION = "4e91c26ebf4da07476d4be6176f29d7662fed9c1"
 PUBLISHED_BETA151_REVISION = "36e4b9f0de428c17248d40592461a9e3f3f750f8"
+PUBLISHED_BETA152_REVISION = "c45af77c8333b691ac36522247b6e5b5481a3666"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from shibumi_suite.admission import (  # noqa: E402
@@ -1195,6 +1196,95 @@ class SuiteLifecycleTests(unittest.TestCase):
             "public-beta.14.1",
         )
 
+    def assert_published_checkout_can_update_from_tag(
+        self, tag: str, revision: str, identity_id: str
+    ) -> None:
+        source_root = self.root / "published-tag-source"
+        source_root.mkdir()
+        resolved = subprocess.run(
+            ["git", "--no-replace-objects", "rev-parse", f"refs/tags/{tag}^{{commit}}"],
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual(resolved, revision)
+        archive = subprocess.run(
+            [
+                "git", "--no-replace-objects", "archive", "--format=tar",
+                revision, "--", "contracts/plugin-suite-v1.json",
+                *self.suite.plugins.keys(),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as stream:
+            stream.extractall(source_root, filter="data")
+        published = Suite.load(source_root)
+        published.revision = Mock(return_value=revision)  # type: ignore[method-assign]
+
+        self.assertEqual(
+            command_install(self.args(), published, self.paths, self.runtime), 0
+        )
+        installed = load_install_state(self.paths, published)
+        self.assertEqual(installed["sourceRevision"], revision)
+        self.assertEqual(installed["installOrigin"], "checkout")
+        # Admit the old on-disk plugin markers before any mutation begins.
+        self.assertEqual(
+            preflight_lifecycle_state(self.paths, self.suite), identity_id
+        )
+        self.assertEqual(
+            command_update(self.args(), self.suite, self.paths, self.runtime), 0
+        )
+        updated = load_install_state(self.paths, self.suite)
+        self.assertEqual(updated["suiteVersion"], self.suite.version)
+        self.assertEqual(updated["installOrigin"], "checkout")
+        self.assertNotEqual(updated["sourceRevision"], revision)
+
+    def test_published_beta15_checkout_can_update_from_its_tag(self) -> None:
+        self.assert_published_checkout_can_update_from_tag(
+            "v0.1.1-beta.15", PUBLISHED_BETA15_REVISION, "public-beta.15"
+        )
+
+    def test_published_beta151_checkout_can_update_from_its_tag(self) -> None:
+        self.assert_published_checkout_can_update_from_tag(
+            "v0.1.1-beta.15.1", PUBLISHED_BETA151_REVISION, "public-beta.15.1"
+        )
+
+    def test_published_beta152_checkout_can_update_from_its_tag(self) -> None:
+        self.assert_published_checkout_can_update_from_tag(
+            "v0.1.1-beta.15.2", PUBLISHED_BETA152_REVISION, "public-beta.15.2"
+        )
+
+    def test_admitted_beta15_merge_payloads_match_their_exact_tags(self) -> None:
+        releases = (
+            (PUBLISHED_BETA15_REVISION, (
+                "91b2cd0f886c15962a2627aea3269f4c09cae828",
+                "7c0499289c48b9f4b3dfd28687a23824e752f15d",
+            )),
+            (PUBLISHED_BETA151_REVISION, (
+                "533110d7abda296b56369f304a618f9313e1f12f",
+            )),
+            (PUBLISHED_BETA152_REVISION, (
+                "aaf7611d66ed5f99078fc5419bc3ba4db6164bed",
+            )),
+        )
+        payload_paths = ["contracts/plugin-suite-v1.json", *self.suite.plugins]
+        for tag_revision, merges in releases:
+            for merge_revision in merges:
+                with self.subTest(tag=tag_revision, merge=merge_revision):
+                    result = subprocess.run(
+                        [
+                            "git", "--no-replace-objects", "diff", "--exit-code",
+                            tag_revision, merge_revision, "--", *payload_paths,
+                        ],
+                        cwd=REPO_ROOT,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_exact_beta15_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite(
             version="0.1.1-beta.15",
@@ -1248,7 +1338,10 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_exact_beta152_package_identity_is_admitted(self) -> None:
-        packaged_suite = self.packaged_suite()
+        packaged_suite = self.packaged_suite(
+            version="0.1.1-beta.15.2",
+            source_revision=PUBLISHED_BETA152_REVISION,
+        )
 
         self.assertEqual(
             require_current_payload_identity(packaged_suite), "public-beta.15.2"

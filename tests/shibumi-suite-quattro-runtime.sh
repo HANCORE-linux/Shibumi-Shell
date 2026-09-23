@@ -97,6 +97,7 @@ fresh_cache_home="$fresh_home/.cache"
 package_predecessor_root="$tmpdir/predecessor-package"
 package_candidate_root="$tmpdir/candidate-package"
 source_predecessor_root="$tmpdir/predecessor-source"
+source_beta15_root="$tmpdir/beta15-source"
 source_candidate_root="$tmpdir/candidate-source"
 source_root=""
 stub_bin="$tmpdir/bin"
@@ -106,18 +107,23 @@ mkdir -p "$fresh_home" "$package_predecessor_root" \
 package_predecessor_revision=2760cdb8272255790d5e4613fed8a48cb63c3555
 # Published beta.14.1; lift to the next tag at release pin.
 package_candidate_revision=7a6c853b1947d303bad9a5b640c224c01b669106
-source_predecessor_revision=7a6c853b1947d303bad9a5b640c224c01b669106
+# Exercise the current installed checkout's published beta.15.2 tag.
+source_predecessor_revision=c45af77c8333b691ac36522247b6e5b5481a3666
+# Also cover the original documented update path that beta.15.2 rejected.
+source_beta15_revision=4e91c26ebf4da07476d4be6176f29d7662fed9c1
 # Only committed payload is tested; uncommitted plugin changes are invisible to this gate.
 candidate_revision=$(git --no-replace-objects -C "$repo_root" rev-parse HEAD)
 [[ $candidate_revision =~ ^[0-9a-f]{40}$ ]] \
   || fail 'candidate HEAD did not resolve to a full commit identity'
 [[ $package_predecessor_revision != "$package_candidate_revision" ]] \
   || fail 'package predecessor and candidate revisions must differ'
-[[ $source_predecessor_revision != "$candidate_revision" ]] \
-  || fail 'source predecessor and candidate revisions must differ'
+[[ $source_predecessor_revision != "$candidate_revision" \
+    && $source_beta15_revision != "$candidate_revision" ]] \
+  || fail 'source predecessors and candidate revisions must differ'
 
 for source_spec in \
     "$source_predecessor_root:$source_predecessor_revision" \
+    "$source_beta15_root:$source_beta15_revision" \
     "$source_candidate_root:$candidate_revision"; do
   checkout_root=${source_spec%%:*}
   checkout_revision=${source_spec#*:}
@@ -204,7 +210,7 @@ mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
 [[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
   || exit 1
 for unit in "${units[@]}"; do
-  if [[ ! $unit =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])\.service$ \
+  if [[ ! $unit =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-9])\.service$ \
       && $unit != "$SHIBUMI_TEST_SERVICE_PREFIX-cleanup-probe.service" ]]; then
     printf 'refusing foreign fixture service: %s\n' "$unit" >&2
     exit 1
@@ -273,11 +279,11 @@ mapfile -t units < <(awk 'NF && !seen[$0]++' "$SHIBUMI_TEST_SERVICE_FILE")
 [[ $SHIBUMI_TEST_SERVICE_PREFIX =~ ^shibumi-runtime-[A-Za-z0-9]{6}$ ]] \
   || exit 1
 for existing in "${units[@]}"; do
-  [[ $existing =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])\.service$ ]] \
+  [[ $existing =~ ^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-9])\.service$ ]] \
     || exit 1
 done
-# package update (5) + fresh install (4) + source update (5) = 14 shells.
-(( ${#units[@]} < 14 )) || {
+# package update (5) + fresh install (4) + two source updates (5 each) = 19 shells.
+(( ${#units[@]} < 19 )) || {
   printf 'isolated shell service generation limit exceeded\n' >&2
   exit 1
 }
@@ -504,9 +510,9 @@ run_update_arm() {
       candidate_identity="package:$candidate_version"
       ;;
     checkout)
-      arm=source
-      predecessor_version=0.1.1-beta.14.1
-      predecessor_identity=$source_predecessor_revision
+      arm=$4
+      predecessor_version=$5
+      predecessor_identity=$6
       candidate_version=$(<"$repo_root/VERSION")
       candidate_identity=$candidate_revision
       ;;
@@ -530,6 +536,9 @@ run_update_arm() {
   set_arm_environment "$arm" "$arm_home" "$arm_config_home" \
     "$arm_state_home" "$arm_cache_home"
   source_root=$predecessor_src
+  printf 'Update arm %s: %s (%s) -> %s (%s)\n' \
+    "$arm" "$predecessor_version" "$predecessor_identity" \
+    "$candidate_version" "$candidate_identity"
   start_stock_shell
 
   suite_cli install --yes || fail "$arm predecessor install command failed"
@@ -644,10 +653,14 @@ fresh_generations=$(( $(service_generation_count) - fresh_generation_start ))
   || fail "fresh arm used $fresh_generations shell generations instead of 4"
 fresh_elapsed=$(( SECONDS - fresh_started ))
 
-# Arm 3: source checkout update
-run_update_arm "$source_predecessor_root" "$source_candidate_root" checkout
-[[ $(service_generation_count) -eq 14 ]] \
-  || fail 'runtime arms did not use the exact 14-shell generation budget'
+# Arm 3: beta.15 source checkout update
+run_update_arm "$source_beta15_root" "$source_candidate_root" checkout \
+  source-beta15 0.1.1-beta.15 "$source_beta15_revision"
+# Arm 4: beta.15.2 source checkout update
+run_update_arm "$source_predecessor_root" "$source_candidate_root" checkout \
+  source-beta152 0.1.1-beta.15.2 "$source_predecessor_revision"
+[[ $(service_generation_count) -eq 19 ]] \
+  || fail 'runtime arms did not use the exact 19-shell generation budget'
 
 if grep -Eq \
     'hancore\.shibumi[^ ]*.*(Binding loop|TypeError|ReferenceError|is not a type|failed to load)|plugin hancore\.shibumi.*failed|bar option hancore\.shibumi.*failed' \
@@ -684,15 +697,18 @@ printf 'Fresh arm preflight/verifyPayload: %s/%s deactivated=%s\n' \
   "$fresh_preflight" "$fresh_reply" "$fresh_deactivated_reply"
 printf 'Fresh arm timing/generations: %ss/%s\n' \
   "$fresh_elapsed" "$fresh_generations"
-printf 'Source update arm verifyPayload: predecessor=%s candidate=%s deactivated=%s\n' \
-  "${arm_predecessor_reply[source]}" "${arm_candidate_reply[source]}" \
-  "${arm_deactivated_reply[source]}"
-printf 'Source update arm timing/generations: %ss/%s\n' \
-  "${arm_elapsed[source]}" "${arm_generations[source]}"
+for arm in source-beta15 source-beta152; do
+  printf '%s update arm verifyPayload: predecessor=%s candidate=%s deactivated=%s\n' \
+    "$arm" "${arm_predecessor_reply[$arm]}" "${arm_candidate_reply[$arm]}" \
+    "${arm_deactivated_reply[$arm]}"
+  printf '%s update arm timing/generations: %ss/%s\n' \
+    "$arm" "${arm_elapsed[$arm]}" "${arm_generations[$arm]}"
+done
 printf 'Cleanup evidence: normal=%s; deliberate-probe=%s; fixture-services=inactive\n' \
   "$normal_cleanup_records" "$probe_cleanup_record"
 printf 'Package revisions: predecessor=%s candidate=%s\n' \
   "$package_predecessor_revision" "$package_candidate_revision"
-printf 'Source revisions: predecessor=%s candidate=%s; total elapsed: %ss\n' \
-  "$source_predecessor_revision" "$candidate_revision" "$total_elapsed"
+printf 'Source revisions: beta.15=%s beta.15.2=%s candidate=%s; total elapsed: %ss\n' \
+  "$source_beta15_revision" "$source_predecessor_revision" \
+  "$candidate_revision" "$total_elapsed"
 printf 'Shibumi suite Quattro runtime passed\n'
