@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pinned 4.0.3 all-suite scoped service publication regression.
+"""Pinned 4.0.4 all-suite scoped service publication regression.
 
 This is an isolated no-output construction and lifecycle gate. Platform owners
 are withheld; it is not physical desktop, backend, or multi-output acceptance.

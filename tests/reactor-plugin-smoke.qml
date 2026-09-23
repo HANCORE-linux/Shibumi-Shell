@@ -76,7 +76,7 @@ ShellRoot {
   Audio.Service {
     id: fakeAudio
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.15.2", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.audio", version: "0.1.1-beta.15.3", kinds: ["service"]})
     nativeBackendEnabled: false
   }
 
@@ -115,7 +115,7 @@ ShellRoot {
 
   Reactor.Service {
     id: reactorService
-    manifest: ({id: "hancore.shibumi.reactor", version: "0.1.1-beta.15.2", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.reactor", version: "0.1.1-beta.15.3", kinds: ["service"]})
     shell: fakeShell
     runtimeProbesEnabled: false
   }

@@ -44,7 +44,7 @@ jq -e '.schemaVersion == 1
   and (.states | map(.id)) == [
     "public-beta.11", "step-5-tip", "public-beta.12", "public-beta.13",
     "source-beta.14", "public-beta.14.1", "public-beta.15", "public-beta.15.1",
-    "public-beta.15.2"
+    "public-beta.15.2", "public-beta.15.3"
   ]' \
   contracts/lifecycle-predecessors-v1.json >/dev/null
 grep -Fq 'contracts/lifecycle-predecessors-v1.json' "$pkgbuild" || {

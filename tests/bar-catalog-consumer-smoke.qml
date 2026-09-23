@@ -67,10 +67,10 @@ ShellRoot {
   SuiteRuntime.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.15.2"
+    implementationVersion: "0.1.1-beta.15.3"
     owner: stateService
     host: stateHost
-    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.15.2",
+    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.15.3",
       kinds: ["service"] })
   }
 
@@ -92,7 +92,7 @@ ShellRoot {
     id: fakePluginRegistry
     property string pluginId: "hancore.shibumi.bar"
     property var manifest: ({ id: "hancore.shibumi.bar",
-      version: "0.1.1-beta.15.2", kinds: ["bar"] })
+      version: "0.1.1-beta.15.3", kinds: ["bar"] })
     property bool enabled: true
     property var _entryPointUrl: null
     readonly property var installedPlugins: {
@@ -138,11 +138,11 @@ ShellRoot {
       property int catalogReadSerial: currentObservation ? currentObservation.serial : 0
       property int catalogGeneration: currentObservation ? currentObservation.generation : 0
       property var providerManifest: ({ id: "hancore.shibumi.control-center",
-        version: "0.1.1-beta.15.2", kinds: ["service"] })
+        version: "0.1.1-beta.15.3", kinds: ["service"] })
       QtObject { id: serviceHost; property string pluginId: "hancore.shibumi.control-center" }
       SuiteRuntime.Provider {
         pluginId: "hancore.shibumi.control-center"
-        implementationVersion: "0.1.1-beta.15.2"
+        implementationVersion: "0.1.1-beta.15.3"
         owner: service
         host: serviceHost
         manifest: service.providerManifest
@@ -192,7 +192,7 @@ ShellRoot {
         root.bar = barFactory.createObject(root, {
           omarchyPath: "/fixture/omarchy",
           shell: scopedBarHost,
-          manifest: ({ id: "hancore.shibumi.bar", version: "0.1.1-beta.15.2",
+          manifest: ({ id: "hancore.shibumi.bar", version: "0.1.1-beta.15.3",
             kinds: ["bar"] }),
           pluginRegistry: fakePluginRegistry,
           barWidgetRegistry: fakeWidgetRegistry,
@@ -243,7 +243,7 @@ ShellRoot {
         // pluginsChanged signal for Bar's legacy listener to receive.
         fakePluginRegistry.enabled = false
         fakePluginRegistry.manifest = ({ id: "hancore.shibumi.bar",
-          version: "0.1.1-beta.15.2-metadata", kinds: ["bar"] })
+          version: "0.1.1-beta.15.3-metadata", kinds: ["bar"] })
         root.stage = 20; root.waits = 0
       } else if (root.stage === 20) {
         if (root.waits < 3) return
@@ -339,7 +339,7 @@ ShellRoot {
       } else if (root.stage === 4) {
         if (root.firstService.acquireCalls !== 2) return
         root.firstService.providerManifest = ({ id: "invalid",
-          version: "0.1.1-beta.15.2", kinds: ["service"] })
+          version: "0.1.1-beta.15.3", kinds: ["service"] })
         root.stage = 5; root.waits = 0
       } else if (root.stage === 5) {
         if (root.firstService.releaseCalls !== 2) return
@@ -365,7 +365,7 @@ ShellRoot {
             || root.replacementService.acquireCalls !== 1)
           root.fail("shutdown retained or reacquired the catalog consumer")
         fakePluginRegistry.manifest = ({ id: "hancore.shibumi.bar",
-          version: "0.1.1-beta.15.2-shutdown", kinds: ["bar"] })
+          version: "0.1.1-beta.15.3-shutdown", kinds: ["bar"] })
         if (root.bar.providerRegistryRevision !== providerRevision)
           root.fail("shutdown accepted a late scoped registry publication")
         root.stage = 8; root.waits = 0

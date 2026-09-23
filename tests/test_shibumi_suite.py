@@ -1351,6 +1351,47 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertFalse(self.paths.config_file.exists())
         self.assertEqual(self.runtime.events, [])
 
+    def test_exact_beta153_package_identity_is_admitted(self) -> None:
+        packaged_suite = self.packaged_suite()
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.15.3"
+        )
+        self.assertFalse(self.paths.state_dir.exists())
+        self.assertFalse(self.paths.plugin_dir.exists())
+        self.assertFalse(self.paths.config_file.exists())
+        self.assertEqual(self.runtime.events, [])
+
+    def test_beta153_package_rejects_byte_and_mode_drift(self) -> None:
+        packaged_suite = self.packaged_suite()
+        drift_path = self.source / "hancore.shibumi.bar/Bar.qml"
+        payload = drift_path.read_bytes()
+        mode = stat.S_IMODE(drift_path.stat().st_mode)
+        for mutation in ("bytes", "mode"):
+            with self.subTest(mutation=mutation):
+                self.assertEqual(
+                    require_current_payload_identity(packaged_suite), "public-beta.15.3"
+                )
+                try:
+                    if mutation == "bytes":
+                        replacement = b" " if payload[-1:] != b" " else b"\n"
+                        drift_path.write_bytes(payload[:-1] + replacement)
+                    else:
+                        drift_path.chmod(mode ^ stat.S_IXUSR)
+                    with self.assertRaisesRegex(
+                        AdmissionError, "exact declared revision identity"
+                    ):
+                        require_current_payload_identity(packaged_suite)
+                    self.assertFalse(self.paths.state_dir.exists())
+                    self.assertFalse(self.paths.plugin_dir.exists())
+                    self.assertFalse(self.paths.config_file.exists())
+                    self.assertEqual(self.runtime.events, [])
+                finally:
+                    drift_path.write_bytes(payload)
+                    drift_path.chmod(mode)
+        self.assertEqual(
+            require_current_payload_identity(packaged_suite), "public-beta.15.3"
+        )
+
     def test_mutated_beta151_package_bytes_are_rejected(self) -> None:
         packaged_suite = self.packaged_suite(
             version="0.1.1-beta.15.1",
@@ -1416,7 +1457,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_unknown_future_package_identity_is_rejected(self) -> None:
-        packaged_suite = self.packaged_suite("0.1.1-beta.15.3")
+        packaged_suite = self.packaged_suite("0.1.1-beta.15.4")
 
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
@@ -1649,7 +1690,7 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def packaged_suite(
         self,
-        version: str = "0.1.1-beta.15.2",
+        version: str = "0.1.1-beta.15.3",
         source_revision: str | None = None,
     ) -> Suite:
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
@@ -1952,8 +1993,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         state = load_install_state(self.paths, suite)
         self.assertEqual(state["installOrigin"], "package")
         self.assertEqual(state["packageName"], "shibumi-shell")
-        self.assertEqual(state["packageVersion"], "0.1.1-beta.15.2")
-        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.15.2")
+        self.assertEqual(state["packageVersion"], "0.1.1-beta.15.3")
+        self.assertEqual(state["sourceRevision"], "package:0.1.1-beta.15.3")
         self.assertNotIn("sourceRoot", state)
         self.assertEqual(state["payloadRoot"], str(self.source.resolve()))
 
@@ -1972,7 +2013,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         package_state = load_install_state(self.paths, suite)
         self.assertEqual(package_state["installOrigin"], "package")
         self.assertEqual(package_state["packageName"], "shibumi-shell")
-        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.15.2")
+        self.assertEqual(package_state["packageVersion"], "0.1.1-beta.15.3")
         self.assertNotIn("sourceRoot", package_state)
 
     def test_sandbox_update_advances_beta_7_to_beta_9(self) -> None:
@@ -2044,7 +2085,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             plugin_id: spec.payload_digest()
             for plugin_id, spec in self.suite.plugins.items()
         }
-        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.2")
+        self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.3")
         self.assertEqual(updated["sourceRoot"], str(self.source.resolve()))
         self.assertEqual(updated["pluginDigests"], expected_digests)
         self.assertEqual(len(updated["plugins"]), 24)
@@ -2062,7 +2103,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], "0.1.1-beta.15.2")
+            self.assertEqual(manifest["version"], "0.1.1-beta.15.3")
 
     def test_locked_update_discards_staging_without_live_reconciliation(self) -> None:
         self.install()
@@ -2271,7 +2312,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         for operation in (command_update, command_repair):
             with self.subTest(operation=operation.__name__):
                 state = json.loads(state_path.read_text(encoding="utf-8"))
-                state["suiteVersion"] = "0.1.1-beta.15.2+installed.9"
+                state["suiteVersion"] = "0.1.1-beta.15.3+installed.9"
                 state_path.write_text(
                     json.dumps(state, indent=2) + "\n", encoding="utf-8"
                 )
@@ -2280,7 +2321,7 @@ class SuiteLifecycleTests(unittest.TestCase):
                     0,
                 )
                 updated = json.loads(state_path.read_text(encoding="utf-8"))
-                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.2")
+                self.assertEqual(updated["suiteVersion"], "0.1.1-beta.15.3")
 
         self.assertEqual(
             version_key("1.0.0+build.7"),
@@ -2343,9 +2384,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
 
         rolled_back = load_install_state(self.paths, suite)
-        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.15.2")
-        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.15.2")
-        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.15.2")
+        self.assertEqual(rolled_back["suiteVersion"], "0.1.1-beta.15.3")
+        self.assertEqual(rolled_back["packageVersion"], "0.1.1-beta.15.3")
+        self.assertEqual(rolled_back["sourceRevision"], "package:0.1.1-beta.15.3")
 
     def test_rescan_uses_shell_ipc_contract(self) -> None:
         runtime = OmarchyRuntime()

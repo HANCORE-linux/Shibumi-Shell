@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.1-beta.15.3] - Unreleased
+
+### Fixed
+
+- Admit exact Beta.15, Beta.15.1 (tagged but not released), and Beta.15.2
+  checkout tag and merge revisions as update predecessors while retaining the
+  existing package, payload-integrity, and transactional admission checks.
+
+### Validation
+
+- Pin the separate Omarchy 4.0.4 package and source baselines for the candidate
+  host gates; retain historical 4.0.3 evidence. Isolate workspace fixture
+  configuration so a local font preference does not alter test geometry.
+
 ## [0.1.1-beta.15.2] - 2026-09-21
 
 ### Changed
