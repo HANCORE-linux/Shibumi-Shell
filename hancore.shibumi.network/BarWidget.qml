@@ -197,6 +197,7 @@ Ui.Panel {
   }
 
   function syncPanelLoader() {
+    const service = networkService
     popupLoader.source = ""
     if (!opened || !String(popupSource)) {
       pendingPresentationMode = ""
@@ -205,27 +206,27 @@ Ui.Panel {
       releaseSession()
       return
     }
-    if (!networkReady) {
+    if (!service || !service.ready) {
       sessionRetry.stop()
       releaseSession()
       if (pendingPresentationMode !== "") presentationRetry.restart()
       return
     }
-    if (sessionService !== networkService) {
+    if (sessionService !== service) {
       releaseSession()
-      if (typeof networkService.beginSession !== "function"
-          || networkService.beginSession(root) !== true) {
+      if (typeof service.beginSession !== "function"
+          || service.beginSession(root) !== true) {
         sessionRetry.restart()
         return
       }
-      sessionService = networkService
+      sessionService = service
     }
     sessionRetry.stop()
     popupLoader.setSource(popupSource, {
       anchorItem: surface,
       bar: root.bar,
       ownerWidget: root,
-      networkService: networkService
+      networkService: service
     })
   }
 

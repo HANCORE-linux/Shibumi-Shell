@@ -1263,7 +1263,7 @@ rg -Fq 'networkService.runSpeedTest(root) !== true' "$widget" \
   || fail "cold speed IPC clears before the native owner accepts it"
 rg -Fq 'function onSpeedTestReadyChanged()' "$widget" \
   || fail "cold speed IPC does not retry when telemetry becomes ready"
-rg -Fq 'if (!networkReady) {' "$widget" \
+rg -Fq 'if (!service || !service.ready) {' "$widget" \
   || fail "cold speed IPC is not preserved before service readiness"
 rg -Fq 'beginTrafficConsumer(root)' "$widget" \
   || fail "Ethernet bar does not acquire demand-driven telemetry"
