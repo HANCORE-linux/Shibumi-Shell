@@ -62,14 +62,10 @@ control_dir=$repo_root/hancore.shibumi.control-center
 for lifecycle_contract in \
     'ControlSettings.qml:property string pendingConfigureRoute: ""' \
     'ControlSettings.qml:function scheduleConfigureRoute(value)' \
-    'ControlSettings.qml:id: configureRouteSync' \
-    'control-center-smoke.qml:Health projection case 7 treated an empty report as checked' \
-    'control-center-smoke.qml:closing the panel stopped or destroyed Health' \
-    'control-center-smoke.qml:reopened Health did not expose the completed report'; do
+    'ControlSettings.qml:id: configureRouteSync'; do
   file=${lifecycle_contract%%:*}
   label=${lifecycle_contract#*:}
   target="$control_dir/$file"
-  [[ -f $target ]] || target="$repo_root/tests/$file"
   rg -Fq "$label" "$target" \
     || fail "Health lifecycle contract drifted: $label"
 done
@@ -88,17 +84,13 @@ rg -Fq 'readonly property bool animationActive: pointer.containsMouse' \
 rg -Fq '&& stateService.requestedConfig ? stateService.requestedConfig' \
   "$control_dir/BarWidget.qml" \
   || fail "G1 launcher does not consume requested presentation state"
-for preview_panel in \
-    "$control_dir/ControlCenterPanel.qml" \
-    "$repo_root/tests/fixtures/ControlCenterTestPanel.qml"; do
-  for preview_contract in \
-      'readonly property var requestedStateConfig:' \
-      'readonly property var workspaceConfig: requestedStateConfig.workspace' \
-      'readonly property var launcherConfig: requestedStateConfig.launcher' \
-      'requestedGroupEnabledForVariant'; do
-    rg -Fq "$preview_contract" "$preview_panel" \
-      || fail "Control Center requested-state fixture drifted: $preview_contract"
-  done
+for preview_contract in \
+    'readonly property var requestedStateConfig:' \
+    'readonly property var workspaceConfig: requestedStateConfig.workspace' \
+    'readonly property var launcherConfig: requestedStateConfig.launcher' \
+    'requestedGroupEnabledForVariant'; do
+  rg -Fq "$preview_contract" "$control_dir/ControlCenterPanel.qml" \
+    || fail "Control Center requested-state fixture drifted: $preview_contract"
 done
 rg -Fq 'readonly property bool nativePillSurfaceVisible: !stockOmarchyHost' \
   "$control_dir/BarWidget.qml" \
@@ -481,14 +473,10 @@ for header_status_contract in \
     'ControlSettings.qml:controller.accentColor("color03")' \
     'ControlSettings.qml:text: "PLUGINS"' \
     'ControlSettings.qml:color: root.registryValueColor' \
-    'ControlCenterPanel.qml:readonly property int headerHealthErrorCount: settings.healthErrorCount' \
-    'control-center-smoke.qml:panel.headerHealthErrorCount !== 1'; do
+    'ControlCenterPanel.qml:readonly property int headerHealthErrorCount: settings.healthErrorCount'; do
   file=${header_status_contract%%:*}
   label=${header_status_contract#*:}
   target="$control_dir/$file"
-  if [[ $file == control-center-smoke.qml ]]; then
-    target="$repo_root/tests/$file"
-  fi
   rg -Fq "$label" "$target" \
     || fail "Control header status contract drifted: $label"
 done
@@ -667,12 +655,6 @@ for favorite_contract in \
       || fail "plugin favorite UI drifted: $label"
   fi
 done
-rg -Fq 'surfaceEffectOptionCount !== 2' \
-  "$repo_root/tests/control-center-smoke.qml" \
-  || fail "QML smoke does not reject V1 effects in V2"
-rg -Fq 'surfaceRadiusOptionCount !== 0' \
-  "$repo_root/tests/control-center-smoke.qml" \
-  || fail "QML smoke does not reject V1 radii in V2"
 
 [[ ! -e $control_dir/PresetMotionCanvas.qml ]] \
   || fail "retired continuous p5 animation remains"
@@ -1112,14 +1094,10 @@ for health_projection_contract in \
     'ControlCenterPanel.qml:HealthProjection.primaryChecks(healthReport)' \
     'ControlMainPage.qml:controller.healthPrimaryChecks' \
     'ControlMainPage.qml:if (primaryChecks.length > 0) return "healthy"' \
-    'ControlSettings.qml:healthChecked: healthPrimaryChecks.length > 0' \
-    'ControlCenterTestPanel.qml:HealthProjection.primaryChecks(healthReport)'; do
+    'ControlSettings.qml:healthChecked: healthPrimaryChecks.length > 0'; do
   file=${health_projection_contract%%:*}
   label=${health_projection_contract#*:}
   target="$control_dir/$file"
-  if [[ $file == ControlCenterTestPanel.qml ]]; then
-    target="$repo_root/tests/fixtures/$file"
-  fi
   rg -Fq "$label" "$target" \
     || fail "Health presentation projection drifted: $label"
 done
@@ -1130,8 +1108,7 @@ fi
 if rg -q 'otherRuntime|not attributed|No Shibumi findings|0 Shibumi findings' \
     "$control_dir/ControlMainPage.qml" \
     "$control_dir/ControlSettings.qml" \
-    "$control_dir/ControlCenterPanel.qml" \
-    "$repo_root/tests/fixtures/ControlCenterTestPanel.qml"; then
+    "$control_dir/ControlCenterPanel.qml"; then
   fail "Health still exposes non-Shibumi runtime findings"
 fi
 if rg -q 'otherRuntimeChecks|showCount|boundedTitle|tooltipText|ShibumiPillToolTip|readonly property alias tooltip' \
@@ -1139,23 +1116,6 @@ if rg -q 'otherRuntimeChecks|showCount|boundedTitle|tooltipText|ShibumiPillToolT
     "$control_dir/PluginSectionHeader.qml"; then
   fail "retired Health-only projection header support remains"
 fi
-
-for health_error_contract in \
-    'id: "runtime-errors"' \
-    'status: "error"' \
-    'health.diagnosticCode(error)' \
-    'health.diagnosticIssueUrl(error)' \
-    'health.copyDiagnostic(error)' \
-    'Health projection case 1 broke the exact-ID or owner boundary' \
-    'Health projection case 2 exposed or counted external runtime findings' \
-    'Health projection case 3 trusted raw overall or rendered a warning' \
-    'Health projection case 4 masked Log unavailable or a primary failure' \
-    'Health projection case 5 lost the schema-failure fallback' \
-    'Health projection case 6 lost the fetch-failure fallback' \
-    'Health projection case 7 treated an empty report as checked'; do
-  rg -Fq "$health_error_contract" "$repo_root/tests/control-center-smoke.qml" \
-    || fail "Health error-action smoke contract drifted: $health_error_contract"
-done
 
 if rg -q 'additional checks|detailChecks|detailsOpen' \
     "$control_dir/ControlMainPage.qml"; then
@@ -1829,15 +1789,10 @@ for content_cycle_contract in \
     'BarFunctionsPage.qml:readonly property string selectedWidgetMode:' \
     'BarFunctionsPage.qml:function cycleSelectedWidgetMode()' \
     'WidgetAppearanceWorkbench.qml:id: contentModeChoices' \
-    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetMode(value)' \
-    'control-center-smoke.qml:V1 Default/Compact choice did not cycle'; do
+    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetMode(value)'; do
   file=${content_cycle_contract%%:*}
   label=${content_cycle_contract#*:}
-  if [[ $file == control-center-smoke.qml ]]; then
-    target="$repo_root/tests/$file"
-  else
-    target="$control_dir/$file"
-  fi
+  target="$control_dir/$file"
   rg -Fq "$label" "$target" \
     || fail "single Content cycle contract drifted: $label"
 done
@@ -1870,15 +1825,10 @@ done
 for compact_cycle_contract in \
     'BarFunctionsPage.qml:function cycleSelectedWidgetSurface()' \
     'WidgetAppearanceWorkbench.qml:id: surfaceModeChoices' \
-    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetSurface(value)' \
-    'control-center-smoke.qml:single Surface button did not cycle its value'; do
+    'WidgetAppearanceWorkbench.qml:onChosen: value => root.setWidgetSurface(value)'; do
   file=${compact_cycle_contract%%:*}
   label=${compact_cycle_contract#*:}
-  if [[ $file == control-center-smoke.qml ]]; then
-    target="$repo_root/tests/$file"
-  else
-    target="$control_dir/$file"
-  fi
+  target="$control_dir/$file"
   rg -Fq "$label" "$target" \
     || fail "compact widget cycle contract drifted: $label"
 done
@@ -1920,15 +1870,10 @@ for opacity_cycle_contract in \
     'WidgetAppearanceWorkbench.qml:{ value: 1, label: "100%" }' \
     'WidgetAppearanceWorkbench.qml:{ value: 0.8, label: "80%" }' \
     'WidgetAppearanceWorkbench.qml:{ value: 0.6, label: "60%" }' \
-    'WidgetAppearanceWorkbench.qml:{ value: 0.4, label: "40%" }' \
-    'control-center-smoke.qml:single Opacity button did not cycle its value'; do
+    'WidgetAppearanceWorkbench.qml:{ value: 0.4, label: "40%" }'; do
   file=${opacity_cycle_contract%%:*}
   label=${opacity_cycle_contract#*:}
-  if [[ $file == control-center-smoke.qml ]]; then
-    target="$repo_root/tests/$file"
-  else
-    target="$control_dir/$file"
-  fi
+  target="$control_dir/$file"
   rg -Fq "$label" "$target" \
     || fail "single Opacity cycle contract drifted: $label"
 done

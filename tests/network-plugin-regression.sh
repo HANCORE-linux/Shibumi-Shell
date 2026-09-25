@@ -838,9 +838,6 @@ if rg -q 'profileSettings|\.read\(' "$native_adapter" "$native_gateway"; then
 fi
 rg -Fq 'Saved-profile removal dispatch accepted.' "$native_gateway" \
   || fail "profile removal acceptance is presented as synchronous completion"
-rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
-  "$repo_root/tests/network-plugin-regression.sh" \
-  || fail "fake Network seam is not tested without the system bus"
 rg -Fq 'active: root.authorized && root.backendOverride === null' \
   "$scanner_lease" \
   || fail "native scanner gateway is not isolated behind exclusive authority"

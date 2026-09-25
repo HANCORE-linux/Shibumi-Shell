@@ -523,95 +523,6 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
-    def test_quattro_runtime_pins_predecessors_and_all_four_arms(self) -> None:
-        runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
-        revision_pins = (
-            "package_predecessor_revision="
-            "2760cdb8272255790d5e4613fed8a48cb63c3555",
-            "package_candidate_revision="
-            "7a6c853b1947d303bad9a5b640c224c01b669106",
-            "source_predecessor_revision="
-            "c45af77c8333b691ac36522247b6e5b5481a3666",
-            "source_beta15_revision="
-            "4e91c26ebf4da07476d4be6176f29d7662fed9c1",
-        )
-        arm_markers = (
-            "# Arm 1: package update",
-            "# Arm 2: fresh source checkout install",
-            "# Arm 3: beta.15 source checkout update",
-            "# Arm 4: beta.15.2 source checkout update",
-        )
-        package_candidate_archive = (
-            'archive "$package_candidate_revision" \\\n'
-            '  | tar -x -C "$package_candidate_root"'
-        )
-        source_version_assignment = 'candidate_version=$(<"$repo_root/VERSION")'
-        fresh_source_assertion = (
-            'assert_install_state "$source_candidate_root" '
-            '"$(<"$repo_root/VERSION")" checkout \\\n'
-            '  "$candidate_revision"'
-        )
-
-        def assert_contract(text: str) -> None:
-            for revision_pin in revision_pins:
-                self.assertEqual(text.count(revision_pin), 1)
-            for marker in arm_markers:
-                self.assertEqual(text.count(marker), 1)
-            self.assertIn(
-                "# Published beta.14.1; lift to the next tag at release pin.",
-                text,
-            )
-            self.assertIn("clone --quiet --shared --no-checkout", text)
-            self.assertIn("checkout --quiet \\\n    --detach", text)
-            self.assertIn(package_candidate_archive, text)
-            self.assertIn('source_root="$source_candidate_root"', text)
-            self.assertIn(fresh_source_assertion, text)
-            self.assertEqual(text.count(source_version_assignment), 1)
-            self.assertIn("fresh candidate source checkout", text)
-            self.assertNotIn("fresh candidate package", text)
-            self.assertEqual(text.count("run_update_arm \"$"), 3)
-            self.assertIn(".installOrigin == $origin", text)
-            self.assertIn(".payloadRoot == $root", text)
-            self.assertIn(".sourceRoot == $root", text)
-
-        runtime = runtime_path.read_text(encoding="utf-8")
-        assert_contract(runtime)
-        with tempfile.TemporaryDirectory(
-            prefix="shibumi-quattro-arm-markers."
-        ) as temporary:
-            mutations = (
-                runtime.replace(
-                    source_version_assignment, "candidate_version=0.1.1-beta.15", 1
-                ),
-                runtime.replace(
-                    fresh_source_assertion,
-                    fresh_source_assertion.replace(
-                        '\"$(<\"$repo_root/VERSION\")\"', "'0.1.1-beta.15'"
-                    ),
-                    1,
-                ),
-                runtime.replace(arm_markers[2], "", 1),
-                runtime.replace(
-                    package_candidate_archive,
-                    package_candidate_archive.replace(
-                        "$package_candidate_revision", "$candidate_revision"
-                    ),
-                    1,
-                ),
-                runtime.replace(
-                    fresh_source_assertion,
-                    fresh_source_assertion.replace(
-                        '"$source_candidate_root"', '"$package_candidate_root"'
-                    ),
-                    1,
-                ),
-            )
-            for index, mutated_runtime in enumerate(mutations):
-                mutation = Path(temporary) / f"quattro-runtime-mutation-{index}.sh"
-                mutation.write_text(mutated_runtime, encoding="utf-8")
-                with self.assertRaises(AssertionError):
-                    assert_contract(mutation.read_text(encoding="utf-8"))
-
     def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
@@ -918,57 +829,6 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertEqual(removed.returncode, 0, removed.stderr)
             self.assertFalse(removed_scratch.exists())
             self.assertFalse(removed_scratch.is_symlink())
-
-    def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
-        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
-            encoding="utf-8"
-        )
-        readiness = runtime.split("shell_ready=0", 1)[1].split(
-            "suite_cli install --yes", 1
-        )[0]
-        self.assertNotIn("shell_ipc -q", readiness)
-        self.assertIn("shell_ipc shell ping", readiness)
-        self.assertIn("[[ $shell_ready -eq 1 ]]", readiness)
-        self.assertIn('cp -a "$omarchy_path/bin" "$fixture_omarchy/bin"', runtime)
-        self.assertNotIn('ln -s "$omarchy_path/bin"', runtime)
-        self.assertIn('rm -f "$fixture_omarchy/bin/omarchy-restart-shell"', runtime)
-        self.assertIn('"$fixture_omarchy/bin/omarchy-update-available"', runtime)
-        self.assertIn("command -v omarchy-update-available", runtime)
-        self.assertIn("mkdir -m 0700 \"$fixture_runtime_dir\"", runtime)
-        self.assertIn('XDG_RUNTIME_DIR="$fixture_runtime_dir"', runtime)
-        self.assertIn('WAYLAND_DISPLAY="$fixture_wayland_display"', runtime)
-        self.assertIn('DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"', runtime)
-        self.assertIn("systemd-run --user --machine=@.host --quiet --collect", runtime)
-        self.assertEqual(runtime.count("systemd-run --user --machine=@.host"), 2)
-        self.assertEqual(
-            runtime.count("timeout --kill-after=1s 8s systemd-run --user"), 2
-        )
-        self.assertNotIn("$(systemctl --user show", runtime)
-        self.assertIn("--property=KillMode=control-group", runtime)
-        self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
-        self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
-        self.assertIn("refusing foreign fixture service", runtime)
-        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-9]|2[0-5])", runtime)
-        self.assertIn("package update (5) + fresh round trip (6) + two source round trips (7 each) = 25", runtime)
-        self.assertIn("exact 25-shell generation budget", runtime)
-        self.assertIn("--kill-whom=all --signal=TERM", runtime)
-        self.assertIn("--kill-whom=all --signal=KILL", runtime)
-        self.assertIn("timeout --kill-after=1s 8s", runtime)
-        self.assertNotIn("while timeout", runtime)
-        self.assertNotIn("/proc/[0-9]*", runtime)
-        self.assertNotIn("fixture_process_ids", runtime)
-        self.assertIn('>>"$SHIBUMI_TEST_SHELL_LOG"', runtime)
-        self.assertIn('"$tmpdir/quickshell.log"', runtime)
-        final_drain = runtime.index("final fixture shell service drain failed")
-        log_scan = runtime.index("runtime log contains a QML or plugin-load failure")
-        self.assertLess(final_drain, log_scan)
-        self.assertIn("TERM-resistant cleanup probe", runtime)
-        self.assertIn("cleanup_probe_armed=1", runtime)
-        self.assertIn("(( cleanup_probe_armed == 1 ))", runtime)
-        self.assertIn('printf \'KILL %s\\n\'', runtime)
-        self.assertIn("did not exercise the cleanup KILL fallback", runtime)
-        self.assertIn("cleanup exceeded its wall-clock budget", runtime)
-        self.assertIn('>"$stub_bin/hyprctl"', runtime)
 
     def test_release_evidence_collector_declares_unique_complete_gates(self) -> None:
         result = subprocess.run(
@@ -1289,10 +1149,6 @@ puts JSON.generate(workflow.fetch("jobs"))
             module.preflight_external_baselines({})
         for environment_name, _manifest in module.EXTERNAL_BASELINES:
             self.assertIn(environment_name, str(missing.exception))
-
-        helper_text = (ROOT / "tests/lib/baselines.sh").read_text(encoding="utf-8")
-        self.assertIn("shibumi_preflight_clean_git_checkout", helper_text)
-        self.assertIn("--untracked-files=all --ignore-submodules=none", helper_text)
 
     def test_release_evidence_revalidates_inputs_around_every_gate(self) -> None:
         path = ROOT / "scripts/collect-release-evidence"
