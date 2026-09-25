@@ -13,6 +13,8 @@
 - Treat plugin helper scripts as executable whenever their owner may execute
   them, so source checkouts cloned with a restrictive `umask` keep a stable
   payload identity and can be updated.
+- Avoid a Network widget error in the shell log when the shell stops with the
+  Network panel open, for example during uninstall.
 
 ### Validation
 
