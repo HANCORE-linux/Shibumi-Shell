@@ -1476,7 +1476,11 @@ time.sleep(30)
                 if not status_path.exists():
                     child_active = False
                     break
-                fields = status_path.read_text(encoding="utf-8").rsplit(") ", 1)
+                try:
+                    fields = status_path.read_text(encoding="utf-8").rsplit(") ", 1)
+                except OSError:
+                    child_active = False
+                    break
                 if len(fields) == 2 and fields[1].startswith("Z "):
                     child_active = False
                     break

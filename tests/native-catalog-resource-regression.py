@@ -213,10 +213,12 @@ def require_three_plus_three_measurement(output):
 
 def run_positive(native, base, label):
     captured = io.StringIO()
-    with contextlib.redirect_stdout(captured):
-        native.run(base, (SUCCESS_MARKER, CLEANUP_MARKER))
+    try:
+        with contextlib.redirect_stdout(captured):
+            native.run(base, (SUCCESS_MARKER, CLEANUP_MARKER))
+    finally:
+        print(captured.getvalue(), end="", flush=True)
     output = captured.getvalue()
-    print(output, end="", flush=True)
     result = require_three_plus_three_measurement(output)
     print(label + " EXACT 3+3 PSS MEASUREMENT PASSED " + json.dumps({
         "coldInitializationGrowthKiB":
