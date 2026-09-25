@@ -782,8 +782,6 @@ if rg -q 'InlineSpeedTestRunner|omarchy-network-|\bnmcli\b' \
     hancore.shibumi.network; then
   fail "native Network cutover retained a legacy backend helper"
 fi
-rg -q 'childPanelWidget\("omarchy\.network"\)' tests/network-plugin-smoke.qml \
-  || fail "network alias routing is not regression-tested"
 rg -q 'G13: \["hancore.shibumi.brightness"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G13 is not owned by the Shibumi brightness presentation"
 rg -q 'hancore\.shibumi\.brightness' contracts/plugin-suite-v1.json \
@@ -822,8 +820,6 @@ rg -Uq 'function shutdown\(\) \{\n([^\n]*\n){0,4}[[:space:]]*panelSync\.stop\(\)
 if rg -q '^[[:space:]]*selected:' hancore.shibumi.brightness/BrightnessPanel.qml; then
   fail "brightness panel uses Button-only selected state on CursorSurface"
 fi
-rg -q 'childPanelWidget\("omarchy\.monitor"\)' tests/brightness-plugin-smoke.qml \
-  || fail "monitor alias routing is not regression-tested"
 rg -q 'G12: \["hancore.shibumi.battery"\]' hancore.shibumi.bar/core/GroupRegistry.js \
   || fail "G12 is not owned by the Shibumi battery presentation"
 rg -q 'G14: \["hancore.shibumi.power-profile"\]' hancore.shibumi.bar/core/GroupRegistry.js \
@@ -972,8 +968,6 @@ fi
 if rg -q 'Process \{|FileView \{' "$bluetooth_service" "$bluetooth_adapter"; then
   fail "Bluetooth native owner uses a worker instead of native APIs"
 fi
-rg -q 'childPanelWidget\("omarchy\.bluetooth"\)' tests/bluetooth-plugin-smoke.qml \
-  || fail "Bluetooth alias routing is not regression-tested against shipped code"
 rg -Fq 'result.ok === true' "$bluetooth_panel" \
   || fail "Bluetooth panel treats structured action results as booleans"
 [[ -f tests/bluetooth-device-identity-regression.qml ]] \

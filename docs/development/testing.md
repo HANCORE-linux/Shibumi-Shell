@@ -49,16 +49,16 @@ baseline jobs. The installed-package job defaults to the package-managed host:
 ```
 
 The installed-source-parity job requires an explicit clean Git checkout of the
-official `v4.0.3` source revision used by the installed package:
+official `v4.0.4` source revision used by the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.3 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 ```
 
 For an additional 4.0.2 compatibility run, invoke the aggregate contract with
 the historical selector and its exact checkout. Release jobs themselves pin
-4.0.3 and never inherit this selector:
+4.0.4 and never inherit this selector:
 
 ```bash
 OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
@@ -90,12 +90,15 @@ Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The complete-host jobs select three repository-owned manifests with
 non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-v4.0.3.json` validates the
-  package-managed `omarchy 4.0.3-1`, `omarchy-settings 4.0.3-1` layout;
-- `contracts/baselines/omarchy-installed-source-parity-v4.0.3.json` proves that
-  the official `v4.0.3` source form satisfies the same complete suite;
-- the corresponding 4.0.2 manifests remain immutable optional compatibility
-  baselines selected only with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
+- `contracts/baselines/omarchy-installed-package-v4.0.4.json` binds the
+  package-managed `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.0.4.json` binds the
+  official `v4.0.4` source form at `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`;
+- the `contracts/baselines/omarchy-installed-package-v4.0.3.json` and
+  `contracts/baselines/omarchy-installed-source-parity-v4.0.3.json` manifests
+  remain immutable optional compatibility references alongside 4.0.2; choose
+  a historical manifest with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3` or
+  `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
 - `contracts/baselines/omarchy-forward-compat-ed7bae4a.json` proves forward
   compatibility with the recorded upstream snapshot.
 
@@ -607,17 +610,17 @@ python3 tests/source-snapshot-regression.py
 python3 tests/isolated-files-regression.py
 python3 tests/isolated-resource-regression.py
 python3 tests/native-runtime-regression.py \
-  --native-shell /path/to/omarchy-v4.0.3/shell
+  --native-shell /path/to/omarchy-v4.0.4/shell
 python3 tests/native-catalog-fallback-regression.py \
-  --native-shell /path/to/omarchy-v4.0.3/shell
+  --native-shell /path/to/omarchy-v4.0.4/shell
 python3 tests/native-catalog-resource-regression.py \
-  --native-shell /path/to/omarchy-v4.0.3/shell
+  --native-shell /path/to/omarchy-v4.0.4/shell
 python3 tests/all24-scoped-service-regression.py \
-  --native-shell /path/to/omarchy-v4.0.3/shell
+  --native-shell /path/to/omarchy-v4.0.4/shell
 ```
 
 The runner admits exactly 183 regular files from commit
-`0534987009061cbe2dacdde4ad564092ab698d12`, with the whole source inventory bound
+`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, with the whole source inventory bound
 to SHA256 `2cd0ffb0c38f31868e28c3556f0efc530f4fcd04765856ec157bc070eac748a0`.
 Its inventory serialization is specified beside the constant. Symlinks,
 nonregular nodes, extra/missing/drifted bytes and unbound empty directories refuse

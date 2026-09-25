@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pinned 4.0.3 native-root integration in a private Bubblewrap namespace.
+"""Pinned 4.0.4 native-root integration in a private Bubblewrap namespace.
 
 Only State/Bar/Control Center; explicit window/Health substitutions and no
 native platform services. This is not complete-host or desktop acceptance.
@@ -17,7 +17,7 @@ from lib.source_snapshot import snapshot, fingerprint, materialize
 from lib.owned_cgroup import OwnedCgroup
 
 ROOT = Path(__file__).resolve().parents[1]
-COMMIT = "0534987009061cbe2dacdde4ad564092ab698d12"
+COMMIT = "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
 # SHA256 of canonical JSON inventory records: path relative to shell/, sha256,
 # size, executable; sort_keys=True, separators=(',', ':'), records sorted by path.
 # Derived from all 183 Git-blob-verified files at the exact commit above.
@@ -28,7 +28,7 @@ PLUGINS = ("hancore.shibumi.state", "hancore.shibumi.bar", "hancore.shibumi.cont
 def admitted_native(path):
     files = snapshot(path)
     if len(files) != 183 or fingerprint(files) != SHELL_FINGERPRINT:
-        raise ValueError("native shell does not match pinned 4.0.3 source")
+        raise ValueError("native shell does not match pinned 4.0.4 source")
     return files
 
 
@@ -94,7 +94,7 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_audio / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.audio", "name": "Shibumi Audio",
-        "version": "0.1.1-beta.15.2", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.15.3", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi Audio", "category": "Audio",
@@ -109,7 +109,7 @@ def stage(base, native):
         "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}))
     (shibumi_cpu / "manifest.json").write_text(json.dumps({
         "schemaVersion": 1, "id": "hancore.shibumi.cpu", "name": "Shibumi CPU",
-        "version": "0.1.1-beta.15.2", "kinds": ["bar-widget"],
+        "version": "0.1.1-beta.15.3", "kinds": ["bar-widget"],
         "entryPoints": {"barWidget": "Widget.qml"},
         "x-shibumi": {"suiteId": "hancore.shibumi"},
         "barWidget": {"displayName": "Shibumi CPU", "category": "System",
@@ -233,7 +233,7 @@ def main():
     args = parser.parse_args()
     native = admitted_native(args.native_shell)
     if args.admit_only:
-        print("Pinned native 4.0.3 source admitted: " + SHELL_FINGERPRINT)
+        print("Pinned native 4.0.4 source admitted: " + SHELL_FINGERPRINT)
         return
     with tempfile.TemporaryDirectory(prefix="shibumi-native-runtime-", dir="/tmp") as temporary:
         base = Path(temporary)

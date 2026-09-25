@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pinned native missed-hint fallback control in the maintained isolated runner.
 
-This instruments only a private materialization of the admitted Omarchy 4.0.3
+This instruments only a private materialization of the admitted Omarchy 4.0.4
 root. It is fixture evidence, not a production patch or desktop acceptance.
 """
 import argparse
@@ -23,7 +23,7 @@ from lib.source_snapshot import open_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE_RUNNER = ROOT / "tests/native-runtime-regression.py"
-EXPECTED_COMMIT = "0534987009061cbe2dacdde4ad564092ab698d12"
+EXPECTED_COMMIT = "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
 EXPECTED_NATIVE_FINGERPRINT = "2cd0ffb0c38f31868e28c3556f0efc530f4fcd04765856ec157bc070eac748a0"
 SUCCESS_MARKER = b"ACTUAL NATIVE FALLBACK CHANGED DTO WITHOUT PUBLIC HINT PASSED"
 EXPECTED_COUNTEREXAMPLE = "RuntimeError: last public hint did not capture selected failed bar"

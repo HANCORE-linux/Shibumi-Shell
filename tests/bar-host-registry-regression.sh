@@ -178,6 +178,8 @@ install -m 0644 "$widget_slot_source" \
   "$lifecycle_root/staged/barcore/WidgetSlot.qml"
 install -m 0644 "$repo_root/tests/fixtures/BarContextLifecycleHost.qml" \
   "$lifecycle_root/shell.qml"
+install -m 0644 "$repo_root/tests/fixtures/NetworkTestView.qml" \
+  "$lifecycle_root/NetworkTestView.qml"
 install -m 0644 "$private_lifecycle_bar_source" \
   "$lifecycle_root/PrivateLifecycleBar.qml"
 set +e

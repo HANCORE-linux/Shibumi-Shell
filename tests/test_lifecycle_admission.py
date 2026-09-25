@@ -265,6 +265,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
             "public-beta.15",
             "public-beta.15.1",
             "public-beta.15.2",
+            "public-beta.15.3",
         ):
             identity = next(
                 item for item in self.identities if item["id"] == identity_id
@@ -290,6 +291,50 @@ class LifecycleAdmissionTests(unittest.TestCase):
             classify_install_state(migrated, self.suite, self.identities),
             "step-5-tip",
         )
+
+    def test_published_beta15_checkout_revisions_keep_exact_identity(self) -> None:
+        published = {
+            "public-beta.15": (
+                "4e91c26ebf4da07476d4be6176f29d7662fed9c1",
+                "91b2cd0f886c15962a2627aea3269f4c09cae828",
+                "7c0499289c48b9f4b3dfd28687a23824e752f15d",
+                "package:0.1.1-beta.15",
+            ),
+            "public-beta.15.1": (
+                "36e4b9f0de428c17248d40592461a9e3f3f750f8",
+                "533110d7abda296b56369f304a618f9313e1f12f",
+                "package:0.1.1-beta.15.1",
+            ),
+            "public-beta.15.2": (
+                "c45af77c8333b691ac36522247b6e5b5481a3666",
+                "aaf7611d66ed5f99078fc5419bc3ba4db6164bed",
+                "package:0.1.1-beta.15.2",
+            ),
+        }
+        for identity_id, revisions in published.items():
+            identity = next(
+                item for item in self.identities if item["id"] == identity_id
+            )
+            self.assertEqual(identity["sourceRevisions"], list(revisions))
+            for revision in revisions:
+                with self.subTest(identity=identity_id, revision=revision):
+                    state = self.state_for(identity, revision)
+                    self.assertEqual(
+                        classify_install_state(state, self.suite, self.identities),
+                        identity_id,
+                    )
+                    wrong_revision = dict(state, sourceRevision="0" * 40)
+                    with self.assertRaises(AdmissionError):
+                        classify_install_state(
+                            wrong_revision, self.suite, self.identities
+                        )
+                    wrong_digest = dict(state, payloadDigest="0" * 64)
+                    with self.assertRaisesRegex(
+                        AdmissionError, "revision/digest identity"
+                    ):
+                        classify_install_state(
+                            wrong_digest, self.suite, self.identities
+                        )
 
     def test_predecessor_contract_parser_is_exact_and_bounded(self) -> None:
         contract = json.loads(

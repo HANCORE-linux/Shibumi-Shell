@@ -11,6 +11,37 @@ release or AUR package. Beta.13 is published as GitHub prerelease
 It retains the 24-plugin, Omarchy 4.0.3 runtime, bar, and lifecycle work and
 contains no Step-6 product functionality or automatic Step-6 migration.
 
+## Beta.15.3 worktree (not accepted)
+
+The maintenance candidate fixes exact checkout predecessor admission for Beta.15,
+Beta.15.1 (tagged, not released), and Beta.15.2. It retains strict payload and
+lifecycle authority checks and contains no panel or global presentation changes.
+Its package identity is `public-beta.15.3`, with only
+`package:0.1.1-beta.15.3`; exact future tag/merge checkout identities belong in
+Beta.15.4 once those revisions exist.
+
+Release checklist, still open:
+
+- review the complete candidate and the proposed versioned release notes;
+- obtain explicit commit approval, then run the complete clean-commit collector,
+  including separate Beta.15 and Beta.15.2 checkout-update runtime arms;
+- provision and verify the three exact external host baselines through separately
+  authorized operations; prior working-tree passes are not this candidate's
+  clean-commit evidence;
+- before tagging, confirm the registered validation runner uses Omarchy and Omarchy
+  Settings 4.0.4-1 with Quickshell 0.3.1-1, and that its
+  `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` repository variable names a clean
+  4.0.4 checkout at `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` (runner/variable
+  changes need separate authorization);
+- build the reproducible clean-commit archive, then pin PKGBUILD and `.SRCINFO`
+  in the separately approved checksum step and verify a byte-identical rebuild;
+- complete independent review, applicable physical acceptance, hosted gates and
+  release-asset verification before claiming release acceptance. Each delivery
+  phase and any production update requires its own authorization.
+
+The Beta.13 and Beta.14 records below remain historical, not acceptance of
+this maintenance candidate.
+
 ## Beta.14 worktree (not accepted)
 
 The [candidate validation record](development/beta14-validation.md) tracks the
@@ -98,31 +129,32 @@ rollback.
 
 ## Current tested host contract
 
-The primary source and installed-package compatibility contracts are pinned to
-Omarchy 4.0.3. The published Beta.13 package was physically accepted on
+The Beta.15.3 worktree's primary source and installed-package compatibility
+contracts target Omarchy 4.0.4. This is candidate gate configuration, not
+physical acceptance. The published Beta.13 package was physically accepted on
 Omarchy 4.0.3 using one physical output; Beta.14 still
 requires its own physical output and coredump acceptance.
 
 | Component | Accepted identity |
 | --- | --- |
 | Physical Beta.13 release host | Omarchy `4.0.3`; single-output acceptance |
-| Omarchy | `omarchy 4.0.3-1` |
-| Omarchy settings | `omarchy-settings 4.0.3-1` |
-| Official source | `v4.0.3`, `0534987009061cbe2dacdde4ad564092ab698d12` |
+| Candidate Omarchy | `omarchy 4.0.4-1` |
+| Candidate Omarchy settings | `omarchy-settings 4.0.4-1` |
+| Candidate official source | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Quickshell | `quickshell 0.3.1-1` |
-| Installed-package profile | `installed-package-v4.0.3` |
-| Source-parity profile | `installed-source-parity-v4.0.3` |
+| Candidate installed-package profile | `installed-package-v4.0.4` |
+| Candidate source-parity profile | `installed-source-parity-v4.0.4` |
 | Optional compatibility source | `v4.0.2`, `346e69e1cec6c4e8924531874af6ba010a1bc99e` |
 | Agents reference | `v4.0.0`, retained for that isolated contract only |
 | Forward reference | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 
-The installed package and pinned `v4.0.3` source have exact `shell` and
+The installed package and pinned `v4.0.4` source have exact `shell` and
 `config` parity. Installed `/usr/share/omarchy/bin` links resolve to the source
 payload except for the three source-only maintenance helpers `omarchy-debug`,
 `omarchy-debug-idle`, and `omarchy-upload-log`. The machine-readable manifests
 bind the complete consumed subtrees. The immutable 4.0.2 manifests remain
 available through the explicit `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`
-compatibility selector; release jobs pin 4.0.3 directly.
+compatibility selector; candidate release jobs pin 4.0.4 directly.
 
 ## Bluetooth ST-01
 

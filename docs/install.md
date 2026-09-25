@@ -20,7 +20,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 ## Install from the Arch package
 
 > [!NOTE]
-> `0.1.1-beta.15.2` is a local candidate and is not published to AUR. This is
+> `0.1.1-beta.15.3` is a local candidate and is not published to AUR. This is
 > the supported flow only after the release gates pass and publication is
 > separately authorized.
 
@@ -48,7 +48,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.15.2
+git checkout v0.1.1-beta.15.3
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -63,7 +63,7 @@ To inspect the transaction before installing:
 ```bash
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.15.2
+git checkout v0.1.1-beta.15.3
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -143,12 +143,12 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-For a trusted source checkout (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.15):
+For a trusted source checkout (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.15.2):
 
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.15.2
+git checkout v0.1.1-beta.15.3
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update
 ```
@@ -367,7 +367,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.1.1-beta.15.2
+git checkout v0.1.1-beta.15.3
 ./scripts/shibumi-suite install --yes
 ```
 

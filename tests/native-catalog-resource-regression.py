@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pinned-native NativeCatalog cadence, cleanup, CPU and warm-PSS regression.
 
-The maintained native-runtime runner supplies exact 4.0.3 admission, private
+The maintained native-runtime runner supplies exact 4.0.4 admission, private
 staging, Bubblewrap namespaces and the owned cgroup. Measurements are isolated
 fixture evidence only; they are not physical desktop or real-consumer acceptance.
 """
@@ -30,7 +30,7 @@ from lib.source_snapshot import open_directory
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE_RUNNER = ROOT / "tests/native-runtime-regression.py"
-EXPECTED_COMMIT = "0534987009061cbe2dacdde4ad564092ab698d12"
+EXPECTED_COMMIT = "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
 EXPECTED_NATIVE_FINGERPRINT = "2cd0ffb0c38f31868e28c3556f0efc530f4fcd04765856ec157bc070eac748a0"
 BETA13_COMMIT = "2760cdb8272255790d5e4613fed8a48cb63c3555"
 BETA13_VERSION = "0.1.1-beta.13"
@@ -213,10 +213,12 @@ def require_three_plus_three_measurement(output):
 
 def run_positive(native, base, label):
     captured = io.StringIO()
-    with contextlib.redirect_stdout(captured):
-        native.run(base, (SUCCESS_MARKER, CLEANUP_MARKER))
+    try:
+        with contextlib.redirect_stdout(captured):
+            native.run(base, (SUCCESS_MARKER, CLEANUP_MARKER))
+    finally:
+        print(captured.getvalue(), end="", flush=True)
     output = captured.getvalue()
-    print(output, end="", flush=True)
     result = require_three_plus_three_measurement(output)
     print(label + " EXACT 3+3 PSS MEASUREMENT PASSED " + json.dumps({
         "coldInitializationGrowthKiB":

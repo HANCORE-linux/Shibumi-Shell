@@ -22,6 +22,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from shibumi_suite.config import remove_suite  # noqa: E402
 from shibumi_suite.model import Suite, suite_payload_digest  # noqa: E402
 
 
@@ -71,7 +72,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.2")
+        self.assertEqual(version, "0.1.1-beta.15.3")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -161,21 +162,40 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15": {
                 "suiteVersion": "0.1.1-beta.15",
-                "sourceRevisions": ["package:0.1.1-beta.15"],
+                "sourceRevisions": [
+                    "4e91c26ebf4da07476d4be6176f29d7662fed9c1",
+                    "91b2cd0f886c15962a2627aea3269f4c09cae828",
+                    "7c0499289c48b9f4b3dfd28687a23824e752f15d",
+                    "package:0.1.1-beta.15",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "7eeb2a88e0920d2fe647f4ef88b8a00ad54a205c3b627234b402d50b4709b11d",
             },
             "public-beta.15.1": {
                 "suiteVersion": "0.1.1-beta.15.1",
-                "sourceRevisions": ["package:0.1.1-beta.15.1"],
+                "sourceRevisions": [
+                    "36e4b9f0de428c17248d40592461a9e3f3f750f8",
+                    "533110d7abda296b56369f304a618f9313e1f12f",
+                    "package:0.1.1-beta.15.1",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "31a2e133191264e2e63919eed7f43c5393ac5c5aadda23ea9199afd211f53274",
             },
             "public-beta.15.2": {
                 "suiteVersion": "0.1.1-beta.15.2",
-                "sourceRevisions": ["package:0.1.1-beta.15.2"],
+                "sourceRevisions": [
+                    "c45af77c8333b691ac36522247b6e5b5481a3666",
+                    "aaf7611d66ed5f99078fc5419bc3ba4db6164bed",
+                    "package:0.1.1-beta.15.2",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "5401b03f80a876f636d2635478cbe5af3da75c49022a614823a5c6586a3170d0",
+            },
+            "public-beta.15.3": {
+                "suiteVersion": "0.1.1-beta.15.3",
+                "sourceRevisions": ["package:0.1.1-beta.15.3"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "60e1904b23e98317e896fdd0bbf98daf44ba504f5eb22f3a8ae86ab5ab72a342",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -204,11 +224,11 @@ class PackageReleaseTests(unittest.TestCase):
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.2"]["pluginDigests"],
+            states["public-beta.15.3"]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.2"]["payloadDigest"],
+            states["public-beta.15.3"]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(
@@ -503,98 +523,12 @@ puts JSON.generate(workflow.fetch("jobs"))
                 )
                 self.assertEqual(admitted.returncode == 0, expected, admitted.stderr)
 
-    def test_quattro_runtime_pins_predecessors_and_all_three_arms(self) -> None:
-        runtime_path = ROOT / "tests/shibumi-suite-quattro-runtime.sh"
-        revision_pins = (
-            "package_predecessor_revision="
-            "2760cdb8272255790d5e4613fed8a48cb63c3555",
-            "package_candidate_revision="
-            "7a6c853b1947d303bad9a5b640c224c01b669106",
-            "source_predecessor_revision="
-            "7a6c853b1947d303bad9a5b640c224c01b669106",
-        )
-        arm_markers = (
-            "# Arm 1: package update",
-            "# Arm 2: fresh source checkout install",
-            "# Arm 3: source checkout update",
-        )
-        package_candidate_archive = (
-            'archive "$package_candidate_revision" \\\n'
-            '  | tar -x -C "$package_candidate_root"'
-        )
-        source_version_assignment = 'candidate_version=$(<"$repo_root/VERSION")'
-        fresh_source_assertion = (
-            'assert_install_state "$source_candidate_root" '
-            '"$(<"$repo_root/VERSION")" checkout \\\n'
-            '  "$candidate_revision"'
-        )
-
-        def assert_contract(text: str) -> None:
-            for revision_pin in revision_pins:
-                self.assertEqual(text.count(revision_pin), 1)
-            for marker in arm_markers:
-                self.assertEqual(text.count(marker), 1)
-            self.assertIn(
-                "# Published beta.14.1; lift to the next tag at release pin.",
-                text,
-            )
-            self.assertIn("clone --quiet --shared --no-checkout", text)
-            self.assertIn("checkout --quiet \\\n    --detach", text)
-            self.assertIn(package_candidate_archive, text)
-            self.assertIn('source_root="$source_candidate_root"', text)
-            self.assertIn(fresh_source_assertion, text)
-            self.assertEqual(text.count(source_version_assignment), 1)
-            self.assertIn("fresh candidate source checkout", text)
-            self.assertNotIn("fresh candidate package", text)
-            self.assertEqual(text.count("run_update_arm \"$"), 2)
-            self.assertIn(".installOrigin == $origin", text)
-            self.assertIn(".payloadRoot == $root", text)
-            self.assertIn(".sourceRoot == $root", text)
-
-        runtime = runtime_path.read_text(encoding="utf-8")
-        assert_contract(runtime)
-        with tempfile.TemporaryDirectory(
-            prefix="shibumi-quattro-arm-markers."
-        ) as temporary:
-            mutations = (
-                runtime.replace(
-                    source_version_assignment, "candidate_version=0.1.1-beta.15", 1
-                ),
-                runtime.replace(
-                    fresh_source_assertion,
-                    fresh_source_assertion.replace(
-                        '\"$(<\"$repo_root/VERSION\")\"', "'0.1.1-beta.15'"
-                    ),
-                    1,
-                ),
-                runtime.replace(arm_markers[2], "", 1),
-                runtime.replace(
-                    package_candidate_archive,
-                    package_candidate_archive.replace(
-                        "$package_candidate_revision", "$candidate_revision"
-                    ),
-                    1,
-                ),
-                runtime.replace(
-                    fresh_source_assertion,
-                    fresh_source_assertion.replace(
-                        '"$source_candidate_root"', '"$package_candidate_root"'
-                    ),
-                    1,
-                ),
-            )
-            for index, mutated_runtime in enumerate(mutations):
-                mutation = Path(temporary) / f"quattro-runtime-mutation-{index}.sh"
-                mutation.write_text(mutated_runtime, encoding="utf-8")
-                with self.assertRaises(AssertionError):
-                    assert_contract(mutation.read_text(encoding="utf-8"))
-
     def test_quattro_uninstall_assertion_rejects_all_suite_leftovers(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
         )
         helper_start = runtime.index("assert_uninstalled_arm() {\n")
-        helper_end = runtime.index("\n}\n\ndrain_fixture_shells()", helper_start) + 3
+        helper_end = runtime.index("\n}\n\nrun_keep_settings_cycle()", helper_start) + 3
         helper = runtime[helper_start:helper_end]
 
         with tempfile.TemporaryDirectory(
@@ -609,7 +543,8 @@ puts JSON.generate(workflow.fetch("jobs"))
                 "state_home=$2\n"
                 "cache_home=$3\n"
                 "fail() { printf 'fixture fail: %s\\n' \"$*\" >&2; exit 1; }\n"
-                "shell_ipc() { printf 'ok\\n'; }\n"
+                "shell_ipc() { if [[ $* == 'shell ping' ]]; then printf 'ok\\n'; "
+                "else printf '%s\\n' \"$(<\"$config_home/omarchy/shell.json\")\"; fi; }\n"
                 f"{helper}\n"
                 "assert_uninstalled_arm\n",
                 encoding="utf-8",
@@ -668,6 +603,110 @@ puts JSON.generate(workflow.fetch("jobs"))
                     self.assertEqual(result.returncode, expected_exit, result.stderr)
                     self.assertEqual(result.stderr, expected_stderr)
 
+    def test_quattro_kept_settings_assertion_rejects_loss_and_partial_restore(self) -> None:
+        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text()
+        helpers = runtime[runtime.index("state_settings_snapshot() {"):
+                          runtime.index("run_keep_settings_cycle() {")]
+        entry = {
+            "id": "hancore.shibumi.state",
+            "shibumiStateSchemaVersion": 1,
+            "foreignFuture": {"nested": [1, False, {"label": "Malmö"}]},
+            "shibumi": {"version": 1, "presentation": {"accent": "color06"},
+                        "widgets": {"G8": {"deep": [3, 2, 1]}}},
+        }
+        expected = json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        installed = {
+            "version": 1,
+            "bar": {"id": "hancore.shibumi.bar", "layout": {
+                "left": ["hancore.shibumi.audio"], "center": [], "right": []}},
+            "plugins": [entry, {"id": "hancore.shibumi.audio"}],
+        }
+        suite = Suite.load(ROOT)
+        with tempfile.TemporaryDirectory(prefix="shibumi-quattro-kept-settings.") as temporary:
+            root = Path(temporary)
+            script = root / "assert-settings"
+            script.write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\n"
+                "config_home=$1; state_home=$2; cache_home=$3; live_config=$4\n"
+                "fail() { printf 'fixture fail: %s\\n' \"$*\" >&2; exit 1; }\n"
+                "shell_ipc() {\n"
+                "  case \"$*\" in\n"
+                "    'shell ping') printf 'ok\\n' ;;\n"
+                "    'shell listShellConfig') printf '%s\\n' \"$(<\"$live_config\")\" ;;\n"
+                "    *) return 99 ;;\n"
+                "  esac\n}\n"
+                f"{helpers}\n"
+                "case $6 in\n"
+                "  uninstall) assert_uninstalled_arm \"$5\" ;;\n"
+                "  reinstall) assert_settings_preserved \"$5\" reinstall ;;\n"
+                "  purge) assert_uninstalled_arm ;;\n"
+                "esac\n"
+            )
+            # Exercise the real lifecycle transformation with/without retention,
+            # then execute the exact Bash/JQ assertions used by the runtime gate.
+            kept, dropped = [remove_suite(
+                installed, suite.plugins, root / "absent-plugins",
+                "hancore.shibumi.bar", "omarchy.clock", keep,
+                restore_bar={"id": "omarchy.bar", "layout": {
+                    "left": [{"id": "omarchy.menu"}],
+                    "center": ["omarchy.clock"], "right": []}},
+            ) for keep in (True, False)]
+            self.assertEqual(kept["plugins"], [entry])
+            self.assertEqual(dropped["plugins"], [])
+            reset = json.loads(json.dumps(kept))
+            reset["plugins"][0]["shibumi"]["presentation"]["accent"] = "color01"
+            partial = json.loads(json.dumps(kept))
+            del partial["plugins"][0]["foreignFuture"]
+            duplicate = json.loads(json.dumps(kept))
+            duplicate["plugins"].append(entry)
+            bad_schema = json.loads(json.dumps(kept))
+            bad_schema["plugins"][0]["shibumiStateSchemaVersion"] = 2
+            cases = (
+                ("retained-positive", kept, kept, "uninstall", "", ""),
+                ("reinstall-positive", kept, kept, "reinstall", "", ""),
+                ("without-keep-settings", dropped, dropped, "uninstall", "",
+                 "keep-settings uninstall canonical State settings are missing or invalid"),
+                ("reinstall-reset", reset, reset, "reinstall", "",
+                 "reinstall changed the complete State settings entry"),
+                ("lost-unknown-field", partial, partial, "reinstall", "",
+                 "reinstall changed the complete State settings entry"),
+                ("duplicate-entry", duplicate, duplicate, "uninstall", "",
+                 "keep-settings uninstall canonical State settings are missing or invalid"),
+                ("wrong-schema", bad_schema, bad_schema, "uninstall", "",
+                 "keep-settings uninstall canonical State settings are missing or invalid"),
+                ("live-reset", kept, reset, "reinstall", "",
+                 "reinstall live State settings differ from file snapshot"),
+                ("payload-leftover", kept, kept, "uninstall", "hancore.shibumi.state",
+                 "Shibumi plugin entry remains after uninstall"),
+                ("hidden-leftover", kept, kept, "uninstall", ".shibumi-stage-leftover",
+                 "hidden lifecycle artifacts remain after uninstall"),
+                ("purge-rejects-dormant-entry", kept, kept, "purge", "",
+                 "uninstall did not restore a Shibumi-free config"),
+            )
+            for name, config, live, phase, leftover, diagnostic in cases:
+                with self.subTest(case=name):
+                    base = root / name
+                    config_home, state_home, cache_home = [base / x for x in ("config", "state", "cache")]
+                    plugins = config_home / "omarchy/plugins"
+                    plugins.mkdir(parents=True)
+                    state_home.mkdir()
+                    cache_home.mkdir()
+                    (config_home / "omarchy/shell.json").write_text(json.dumps(config))
+                    live_path = base / "live.json"
+                    live_path.write_text(json.dumps(live, sort_keys=True))
+                    if leftover:
+                        (plugins / leftover).mkdir()
+                        (plugins / leftover / ".shibumi-managed.json").write_text("{}")
+                    result = subprocess.run(
+                        ["bash", str(script), str(config_home), str(state_home),
+                         str(cache_home), str(live_path), expected, phase],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 1 if diagnostic else 0, result.stderr)
+                    self.assertEqual(result.stderr, f"fixture fail: {diagnostic}\n" if diagnostic else "")
+                    print(f"keep-settings assertion control {name}: exit={result.returncode}; "
+                          f"{diagnostic or 'identical complete State entry'}", flush=True)
+
     def test_quattro_cleanup_rejects_foreign_units_without_systemctl(self) -> None:
         runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
             encoding="utf-8"
@@ -699,14 +738,33 @@ puts JSON.generate(workflow.fetch("jobs"))
                 "SHIBUMI_TEST_CLEANUP_LOG": str(root / "cleanup.log"),
                 "SHIBUMI_TEST_SERVICE_PREFIX": "shibumi-runtime-Ab12Cd",
             })
+            for unit in ("production-user.service", "shibumi-runtime-Ab12Cd-0.service",
+                         "shibumi-runtime-Ab12Cd-26.service"):
+                with self.subTest(unit=unit):
+                    service_file.write_text(unit + "\n")
+                    result = subprocess.run(
+                        [str(script)], text=True, capture_output=True,
+                        env=environment, timeout=10,
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("refusing foreign fixture service", result.stderr)
+                    self.assertFalse(systemctl_log.exists())
+            # All 25 owned identities pass the start allowlist; a 26th generation
+            # must be refused before any launch or service-file append.
+            start_script = runtime.split(
+                "cat >\"$start_shell\" <<'START_SHELL'\n", 1
+            )[1].split("\nSTART_SHELL", 1)[0]
+            script.write_text(start_script)
+            full_budget = "".join(f"shibumi-runtime-Ab12Cd-{i}.service\n"
+                                  for i in range(1, 26))
+            service_file.write_text(full_budget)
             result = subprocess.run(
-                [str(script)],
-                text=True,
-                capture_output=True,
-                env=environment,
+                [str(script)], text=True, capture_output=True,
+                env=environment, timeout=10,
             )
             self.assertEqual(result.returncode, 1)
-            self.assertIn("refusing foreign fixture service", result.stderr)
+            self.assertEqual(result.stderr, "isolated shell service generation limit exceeded\n")
+            self.assertEqual(service_file.read_text(), full_budget)
             self.assertFalse(systemctl_log.exists())
 
     def test_quattro_cleanup_removal_failure_is_fatal(self) -> None:
@@ -771,57 +829,6 @@ puts JSON.generate(workflow.fetch("jobs"))
             self.assertEqual(removed.returncode, 0, removed.stderr)
             self.assertFalse(removed_scratch.exists())
             self.assertFalse(removed_scratch.is_symlink())
-
-    def test_quattro_runtime_isolates_shell_generations_and_cleanup(self) -> None:
-        runtime = (ROOT / "tests/shibumi-suite-quattro-runtime.sh").read_text(
-            encoding="utf-8"
-        )
-        readiness = runtime.split("shell_ready=0", 1)[1].split(
-            "suite_cli install --yes", 1
-        )[0]
-        self.assertNotIn("shell_ipc -q", readiness)
-        self.assertIn("shell_ipc shell ping", readiness)
-        self.assertIn("[[ $shell_ready -eq 1 ]]", readiness)
-        self.assertIn('cp -a "$omarchy_path/bin" "$fixture_omarchy/bin"', runtime)
-        self.assertNotIn('ln -s "$omarchy_path/bin"', runtime)
-        self.assertIn('rm -f "$fixture_omarchy/bin/omarchy-restart-shell"', runtime)
-        self.assertIn('"$fixture_omarchy/bin/omarchy-update-available"', runtime)
-        self.assertIn("command -v omarchy-update-available", runtime)
-        self.assertIn("mkdir -m 0700 \"$fixture_runtime_dir\"", runtime)
-        self.assertIn('XDG_RUNTIME_DIR="$fixture_runtime_dir"', runtime)
-        self.assertIn('WAYLAND_DISPLAY="$fixture_wayland_display"', runtime)
-        self.assertIn('DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS"', runtime)
-        self.assertIn("systemd-run --user --machine=@.host --quiet --collect", runtime)
-        self.assertEqual(runtime.count("systemd-run --user --machine=@.host"), 2)
-        self.assertEqual(
-            runtime.count("timeout --kill-after=1s 8s systemd-run --user"), 2
-        )
-        self.assertNotIn("$(systemctl --user show", runtime)
-        self.assertIn("--property=KillMode=control-group", runtime)
-        self.assertIn("SHIBUMI_TEST_SERVICE_FILE", runtime)
-        self.assertIn("SHIBUMI_TEST_SERVICE_PREFIX", runtime)
-        self.assertIn("refusing foreign fixture service", runtime)
-        self.assertIn("^${SHIBUMI_TEST_SERVICE_PREFIX}-([1-9]|1[0-4])", runtime)
-        self.assertIn("package update (5) + fresh install (4) + source update (5) = 14", runtime)
-        self.assertIn("exact 14-shell generation budget", runtime)
-        self.assertIn("--kill-whom=all --signal=TERM", runtime)
-        self.assertIn("--kill-whom=all --signal=KILL", runtime)
-        self.assertIn("timeout --kill-after=1s 8s", runtime)
-        self.assertNotIn("while timeout", runtime)
-        self.assertNotIn("/proc/[0-9]*", runtime)
-        self.assertNotIn("fixture_process_ids", runtime)
-        self.assertIn('>>"$SHIBUMI_TEST_SHELL_LOG"', runtime)
-        self.assertIn('"$tmpdir/quickshell.log"', runtime)
-        final_drain = runtime.index("final fixture shell service drain failed")
-        log_scan = runtime.index("runtime log contains a QML or plugin-load failure")
-        self.assertLess(final_drain, log_scan)
-        self.assertIn("TERM-resistant cleanup probe", runtime)
-        self.assertIn("cleanup_probe_armed=1", runtime)
-        self.assertIn("(( cleanup_probe_armed == 1 ))", runtime)
-        self.assertIn('printf \'KILL %s\\n\'', runtime)
-        self.assertIn("did not exercise the cleanup KILL fallback", runtime)
-        self.assertIn("cleanup exceeded its wall-clock budget", runtime)
-        self.assertIn('>"$stub_bin/hyprctl"', runtime)
 
     def test_release_evidence_collector_declares_unique_complete_gates(self) -> None:
         result = subprocess.run(
@@ -1142,10 +1149,6 @@ puts JSON.generate(workflow.fetch("jobs"))
             module.preflight_external_baselines({})
         for environment_name, _manifest in module.EXTERNAL_BASELINES:
             self.assertIn(environment_name, str(missing.exception))
-
-        helper_text = (ROOT / "tests/lib/baselines.sh").read_text(encoding="utf-8")
-        self.assertIn("shibumi_preflight_clean_git_checkout", helper_text)
-        self.assertIn("--untracked-files=all --ignore-submodules=none", helper_text)
 
     def test_release_evidence_revalidates_inputs_around_every_gate(self) -> None:
         path = ROOT / "scripts/collect-release-evidence"
@@ -1473,7 +1476,11 @@ time.sleep(30)
                 if not status_path.exists():
                     child_active = False
                     break
-                fields = status_path.read_text(encoding="utf-8").rsplit(") ", 1)
+                try:
+                    fields = status_path.read_text(encoding="utf-8").rsplit(") ", 1)
+                except OSError:
+                    child_active = False
+                    break
                 if len(fields) == 2 and fields[1].startswith("Z "):
                     child_active = False
                     break

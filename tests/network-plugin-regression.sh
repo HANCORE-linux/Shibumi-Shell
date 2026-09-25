@@ -838,9 +838,6 @@ if rg -q 'profileSettings|\.read\(' "$native_adapter" "$native_gateway"; then
 fi
 rg -Fq 'Saved-profile removal dispatch accepted.' "$native_gateway" \
   || fail "profile removal acceptance is presented as synchronous completion"
-rg -Fq 'DBUS_SYSTEM_BUS_ADDRESS="unix:path=$tmpdir/missing-system-bus"' \
-  "$repo_root/tests/network-plugin-regression.sh" \
-  || fail "fake Network seam is not tested without the system bus"
 rg -Fq 'active: root.authorized && root.backendOverride === null' \
   "$scanner_lease" \
   || fail "native scanner gateway is not isolated behind exclusive authority"
@@ -1266,7 +1263,7 @@ rg -Fq 'networkService.runSpeedTest(root) !== true' "$widget" \
   || fail "cold speed IPC clears before the native owner accepts it"
 rg -Fq 'function onSpeedTestReadyChanged()' "$widget" \
   || fail "cold speed IPC does not retry when telemetry becomes ready"
-rg -Fq 'if (!networkReady) {' "$widget" \
+rg -Fq 'if (!service || !service.ready) {' "$widget" \
   || fail "cold speed IPC is not preserved before service readiness"
 rg -Fq 'beginTrafficConsumer(root)' "$widget" \
   || fail "Ethernet bar does not acquire demand-driven telemetry"

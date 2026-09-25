@@ -18,6 +18,7 @@ OMARCHY_PLUGIN_PREFIX = "omarchy."
 IDENTITY_VERSION = 3
 STATE_PLUGIN_ID = "hancore.shibumi.state"
 STATE_STORAGE_SCHEMA = "shibumiStateSchemaVersion"
+RETAINED_LAYOUT = "shibumiRetainedLayout"
 
 
 class ConfigError(RuntimeError):
@@ -277,6 +278,28 @@ def _prune_missing_layout_plugins(layout: dict[str, list[Any]], managed_ids: set
         ]
 
 
+def retained_layout(config: dict[str, Any]) -> dict[str, Any] | None:
+    """Lifecycle-only round-trip record; never infer layout from a stock bar."""
+    entry = state_entry(config)
+    if entry is None or RETAINED_LAYOUT not in entry:
+        return None
+    record = entry[RETAINED_LAYOUT]
+    if (not isinstance(record, dict) or set(record) != {"schemaVersion", "layout"}
+            or type(record.get("schemaVersion")) not in (int, float)
+            or record["schemaVersion"] != 1):
+        raise ConfigError("invalid retained Shibumi layout record")
+    layout = record["layout"]
+    if (not isinstance(layout, dict) or not set(REGIONS).issubset(layout)
+            or any(not isinstance(layout[r], list) for r in REGIONS)
+            or any(not (isinstance(entry, str) and entry
+                        or isinstance(entry, dict) and isinstance(entry.get("id"), str)
+                        and entry["id"])
+                   for r in REGIONS for entry in layout[r])):
+        raise ConfigError("invalid retained Shibumi layout entries")
+    validate_state_settings(config)
+    return copy.deepcopy(layout)
+
+
 def apply_profile(
     config: dict[str, Any],
     profile: ProfileSpec,
@@ -289,6 +312,10 @@ def apply_profile(
         plugin_id for plugin_id, spec in plugins.items() if spec.is_bar_widget
     }
 
+    saved_layout = retained_layout(config)
+    if saved_layout is not None and result["bar"].get("id") == profile.active_bar:
+        # An older release may have left the record behind; the active bar wins.
+        saved_layout = copy.deepcopy(result["bar"]["layout"])
     existing_entries: dict[str, Any] = {}
     for region in REGIONS:
         for entry in result["bar"]["layout"][region]:
@@ -296,13 +323,16 @@ def apply_profile(
             if plugin_id in managed_widget_ids and plugin_id not in existing_entries:
                 existing_entries[plugin_id] = copy.deepcopy(entry)
 
+    imported: set[str] = set()
     for region in REGIONS:
-        extras = [
-            entry
-            for entry in result["bar"]["layout"][region]
-            if entry_id(entry) not in managed_widget_ids
-            and not entry_id(entry).startswith(OMARCHY_PLUGIN_PREFIX)
-        ]
+        extras = []
+        for entry in result["bar"]["layout"][region]:
+            plugin_id = entry_id(entry)
+            if (plugin_id not in managed_widget_ids
+                    and not plugin_id.startswith(OMARCHY_PLUGIN_PREFIX)
+                    and (not plugin_id or plugin_id not in imported)):
+                extras.append(entry)
+                imported.add(plugin_id)
         managed = [
             copy.deepcopy(existing_entries.get(plugin_id, {"id": plugin_id}))
             for plugin_id in profile.layout[region]
@@ -329,7 +359,14 @@ def apply_profile(
     result["bar"]["style"] = "shibumi"
     if result["bar"].get("position") not in ("top", "bottom"):
         result["bar"]["position"] = "top"
-    _prune_missing_layout_plugins(result["bar"]["layout"], set(plugins), plugin_dir)
+    if saved_layout is not None:
+        # Reinstall restores the exact previous Shibumi layout, not the profile
+        # plus stock extras. Consume only our sibling field before publication
+        # and shell start, restoring the complete pre-uninstall State entry.
+        result["bar"]["layout"] = saved_layout
+        state_entry(result).pop(RETAINED_LAYOUT)
+    else:
+        _prune_missing_layout_plugins(result["bar"]["layout"], set(plugins), plugin_dir)
     return result
 
 
@@ -339,6 +376,9 @@ def reconcile_profile_services(
 ) -> dict[str, Any]:
     """Enable newly introduced suite services without rewriting user layout."""
     result = _normalize(config)
+    # Installed/external-mode reconciliation must not leave a replayable record.
+    if (entry := state_entry(result)) is not None:
+        entry.pop(RETAINED_LAYOUT, None)
     enabled = {entry_id(entry) for entry in result["plugins"]}
     for plugin_id in profile.enable_services:
         if plugin_id not in enabled:
@@ -413,9 +453,19 @@ def remove_suite(
     keep_settings: bool,
     preserve_ids: set[str] | None = None,
     restore_bar: dict[str, Any] | None = None,
+    *, retain_layout: bool = False,
 ) -> dict[str, Any]:
+    retained_layout(config)  # Refuse malformed/colliding lifecycle metadata.
     result = _normalize(config)
     current_bar = copy.deepcopy(result["bar"])
+    if retain_layout and keep_settings and current_bar.get("id") == active_bar:
+        validate_state_settings(config)
+        entry = state_entry(result)
+        entry[RETAINED_LAYOUT] = {"schemaVersion": 1,
+                                  "layout": copy.deepcopy(current_bar["layout"])}
+        retained_layout(result)
+    elif not retain_layout and (entry := state_entry(result)) is not None:
+        entry.pop(RETAINED_LAYOUT, None)
     retained_entry = copy.deepcopy(state_entry(result)) if keep_settings else None
     plugin_ids = set(plugins)
     preserved = preserve_ids or set()
@@ -441,14 +491,17 @@ def remove_suite(
         restored = _object(restore_bar)
         restored_layout = _object(restored.get("layout"))
         filtered_layout = result["bar"]["layout"]
+        # Do not tidy existing stock duplicates. Only additions are globally
+        # unique, including repeated IDs within the additions themselves.
+        known = {entry_id(entry) for region in REGIONS
+                 for entry in _array(restored_layout.get(region))}
         for region in REGIONS:
             entries = _array(restored_layout.get(region))
-            known = {entry_id(entry) for entry in entries}
-            entries.extend(
-                copy.deepcopy(entry)
-                for entry in filtered_layout[region]
-                if entry_id(entry) and entry_id(entry) not in known
-            )
+            for entry in filtered_layout[region]:
+                plugin_id = entry_id(entry)
+                if plugin_id and plugin_id not in known:
+                    entries.append(copy.deepcopy(entry))
+                    known.add(plugin_id)
             restored_layout[region] = entries
         restored["layout"] = restored_layout
         result["bar"] = restored
@@ -474,6 +527,10 @@ def remove_suite(
         result["bar"].pop("style", None)
     if not keep_settings:
         result["bar"].pop("shibumi", None)
+    if retained_layout(result) is not None:
+        # The snapshot plus restored stock bar must fit the canonical parser.
+        parse_config_bytes(encode_config(result), Path("<retained-layout>"),
+                           user_config_exists=True)
     return result
 
 

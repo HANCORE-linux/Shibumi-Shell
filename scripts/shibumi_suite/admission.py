@@ -1611,7 +1611,7 @@ def _bounded_plugin_payload_digest(
             digest.update(b"file\0")
             digest.update(relative.encode("utf-8"))
             digest.update(b"\0")
-            digest.update(f"{before.st_mode & 0o111:o}".encode("ascii"))
+            digest.update(("111" if before.st_mode & 0o100 else "0").encode("ascii"))
             digest.update(b"\0")
             remaining = before.st_size
             while remaining:

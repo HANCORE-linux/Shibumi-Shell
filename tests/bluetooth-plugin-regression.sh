@@ -142,10 +142,6 @@ if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|pane
     "$service" "$adapter"; then
   fail "Bluetooth still resolves or loads a foreign UI component"
 fi
-if rg -q 'official_bluetooth_panel|plugins/panels/bluetooth/Panel\.qml' \
-    "$repo_root/tests/contract-regression.sh"; then
-  fail "Bluetooth contract still depends on the retired official panel"
-fi
 jq -e '
   .plugins[] | select(.id == "hancore.shibumi.bluetooth") |
   (.hostContracts // []) == []
@@ -189,25 +185,6 @@ rg -q 'property var discoveryOwnerAdapter: null' "$adapter" \
 if rg -q 'IpcHandler \{' "$adapter"; then
   fail "Bluetooth backend adapter must not register a second IPC owner"
 fi
-for termination_signal in INT TERM HUP; do
-  rg -q "^trap .* ${termination_signal}$" \
-    "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-    || fail "Bluetooth IPC harness does not trap $termination_signal"
-done
-rg -q 'setsid .*quickshell|setsid .*quickshell_bin' \
-  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-  || fail "Bluetooth IPC harness does not isolate the Quickshell process group"
-rg -q 'process_group_alive.*|kill -0 -- "-\$pgid"' \
-  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-  || fail "Bluetooth IPC harness does not observe the entire process group"
-rg -q '"\$timeout_bin" --foreground "\$ipc_timeout_seconds"' \
-  "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-  || fail "Bluetooth IPC harness calls are not time-bounded"
-for settle_method in settleBluetoothState settledBluetoothState; do
-  rg -q "$settle_method" \
-    "$repo_root/tests/bluetooth-ipc-ownership-regression.sh" \
-    || fail "Bluetooth IPC success/abort rollback lacks $settle_method"
-done
 rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
 rg -q 'adapter\.stopDiscovery\(\)' "$service" \

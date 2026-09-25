@@ -20,6 +20,7 @@ ShellRoot {
   property int networkBarRevoked: 0
   property int networkServiceRevoked: 0
   property bool networkRevokedWithReady: false
+  property bool networkRevokedWhileOpened: false
   property var currentNetworkWidget: null
   property alias networkService: controlledNetworkService
   property bool statusEnabled: true
@@ -184,10 +185,19 @@ ShellRoot {
     property int signalStrength: 77
     property real downloadRate: 4096
     property real uploadRate: 2048
+    property int viewLoadCount: 0
+    property int sessionBegins: 0
+    property int sessionEnds: 0
+    function beginSession(owner) {
+      sessionBegins++
+      return true
+    }
+    function endSession(owner) { sessionEnds++ }
   }
 
   component NetworkProvider: Network.BarWidget {
     id: networkWidget
+    popupSource: Qt.resolvedUrl("NetworkTestView.qml")
     property bool serviceAttached: false
     Component.onCompleted: {
       host.networkCreated++
@@ -208,7 +218,8 @@ ShellRoot {
       if (serviceAttached && networkService === null && bar === null) {
         host.networkServiceRevoked++
         host.networkRevokedWithReady = networkReady === true
-        host.events.push("network-service-revoked:ready=" + networkReady
+        host.networkRevokedWhileOpened = opened === true
+        host.events.push("network-service-revoked:ready=" + networkReady + ":opened=" + opened
           + ":rates=" + networkWidget.downloadRate
           + "/" + networkWidget.uploadRate)
       }
@@ -329,6 +340,7 @@ ShellRoot {
           "entry.enabled=false destroyed the provider before Bar detach: "
             + JSON.stringify(events))
         statusEntryEnabled = true
+        currentNetworkWidget.open()
         phase++
         return
       }
@@ -341,6 +353,11 @@ ShellRoot {
         require(barLoader.item.clickTargets.length === 2,
           "reloaded status lifecycle child did not register")
         oldBar = barLoader.item
+        require(currentNetworkWidget.opened && currentNetworkWidget.panelLoaded
+          && currentNetworkWidget.sessionService === networkService
+          && currentNetworkWidget.panelItem.networkService === networkService
+          && networkService.sessionBegins === 1 && networkService.viewLoadCount === 1,
+          "Network panel did not acquire its session before revoke")
         // The private staged widget makes this binding writable so the fixture
         // deterministically holds the incident's stale-ready intermediate state.
         currentNetworkWidget.networkReady = true
@@ -351,9 +368,11 @@ ShellRoot {
           "resident providers were not detached synchronously: "
             + providerDetached + " " + JSON.stringify(events))
         require(networkBarRevoked === 1 && networkServiceRevoked === 1
-          && networkRevokedWithReady,
+          && networkRevokedWithReady && networkRevokedWhileOpened,
           "Network service revoke did not expose the old ready state: "
             + JSON.stringify(events))
+        require(networkService.sessionBegins === 1 && networkService.sessionEnds === 1,
+          "Network teardown did not release the open panel session")
         events.push("registry-update-after-revoke")
         registryRevision++
         phase++

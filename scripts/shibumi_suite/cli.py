@@ -1232,6 +1232,7 @@ def command_uninstall(
                 str(state.get("activeBar") or "hancore.shibumi.bar"),
                 default_center_anchor(defaults),
                 args.keep_settings,
+                retain_layout=args.keep_settings,
                 restore_bar=(
                     previous_bar_for_state(state, defaults)
                     if str(state.get("activation", {}).get("mode") or "managed")

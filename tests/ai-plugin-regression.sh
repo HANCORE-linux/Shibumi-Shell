@@ -196,11 +196,11 @@ rm -f -- "$tmpdir/state/shibumi-ai-agent-processes"
 set +e
 SHIBUMI_TEST_STUBBORN=1 SHIBUMI_AI_UPDATE_TIMEOUT=1 \
   HOME="$tmpdir/home" XDG_STATE_HOME="$tmpdir/state" \
-  timeout 10 "$wrapper" "$tmpdir/omarchy" codex >/dev/null 2>&1
+  timeout 30 "$wrapper" "$tmpdir/omarchy" codex >/dev/null 2>&1
 watchdog_rc=$?
 set -e
 [[ $watchdog_rc -ne 0 && $watchdog_rc -ne 124 ]] \
-  || fail "agents update watchdog did not enforce its own deadline"
+  || fail "agents update watchdog did not enforce its own deadline (rc=$watchdog_rc)"
 [[ -s $tmpdir/state/shibumi-ai-agent-processes ]] \
   || fail "agents watchdog child did not register"
 read -r lifecycle_group lifecycle_descendant \

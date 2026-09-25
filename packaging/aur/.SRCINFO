@@ -1,6 +1,6 @@
 pkgbase = shibumi-shell
 	pkgdesc = Transactional Shibumi desktop shell plugins for Omarchy Quattro
-	pkgver = 0.1.1beta.15.2
+	pkgver = 0.1.1beta.15.3
 	pkgrel = 1
 	url = https://github.com/HANCORE-linux/Shibumi-Shell
 	arch = any
@@ -30,7 +30,7 @@ pkgbase = shibumi-shell
 	optdepends = btop: battery panel system monitor action
 	optdepends = nvidia-utils: NVIDIA GPU telemetry
 	optdepends = git: source-checkout diagnostics and migration
-	source = shibumi-shell-0.1.1-beta.15.2.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.15.2/shibumi-shell-0.1.1-beta.15.2.tar.gz
-	sha256sums = e82f54aa2017803abe0bd29e4b1370c2ebfe1f610039469546658d02bb089371
+	source = shibumi-shell-0.1.1-beta.15.3.tar.gz::https://github.com/HANCORE-linux/Shibumi-Shell/releases/download/v0.1.1-beta.15.3/shibumi-shell-0.1.1-beta.15.3.tar.gz
+	sha256sums = c92e40a26557740ac0263e56604ce693585005ce3646224a1885f31b185ab5b6
 
 pkgname = shibumi-shell
