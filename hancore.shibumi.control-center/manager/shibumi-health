@@ -224,7 +224,7 @@ def payload_digest(directory: Path) -> str:
         digest.update(b"file\0")
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(f"{metadata.st_mode & 0o111:o}".encode("ascii"))
+        digest.update(("111" if metadata.st_mode & 0o100 else "0").encode("ascii"))
         digest.update(b"\0")
         with path.open("rb") as handle:
             for block in iter(lambda: handle.read(1024 * 1024), b""):

@@ -7,6 +7,7 @@ import json
 import io
 import os
 import re
+import runpy
 import shutil
 import stat
 import subprocess
@@ -32,6 +33,7 @@ from shibumi_suite.admission import (  # noqa: E402
     AdmissionError,
     JOURNAL_SCHEMA_VERSION,
     MAX_STATE_BYTES,
+    _bounded_plugin_payload_digest,
     preflight_lifecycle_state,
     require_current_payload_identity,
     supported_install_identities,
@@ -1122,6 +1124,39 @@ class SuiteLifecycleTests(unittest.TestCase):
             PluginTransaction(self.paths, self.runtime)
         self.assertTrue(changed)
         self.assertFalse(self.paths.state_dir.exists())
+
+    def test_payload_identity_uses_owner_execute_bit(self) -> None:
+        published = self.packaged_suite(
+            version="0.1.1-beta.15.2", source_revision=PUBLISHED_BETA152_REVISION
+        )
+        (self.source / "PACKAGE-METADATA.json").unlink()
+        published.revision = Mock(return_value=PUBLISHED_BETA152_REVISION)
+        identity = next(item for item in supported_install_identities(self.suite)
+                        if item["id"] == "public-beta.15.2")
+        health_digest = runpy.run_path(str(
+            REPO_ROOT / "hancore.shibumi.control-center/manager/shibumi-health"
+        ))["payload_digest"]
+        for mode in (0o755, 0o700):
+            for plugin_id, spec in published.plugins.items():
+                for path in spec.source.rglob("*"):
+                    if path.is_file() and path.stat().st_mode & 0o100:
+                        path.chmod(mode)
+                digests = (
+                    plugin_payload_digest(spec.source),
+                    _bounded_plugin_payload_digest(
+                        spec.source, {"entries": 0, "bytes": 0}
+                    ),
+                    health_digest(spec.source),
+                )
+                for probe, actual in zip(("model", "admission", "health"), digests):
+                    with self.subTest(mode=oct(mode), plugin=plugin_id, probe=probe):
+                        self.assertEqual(actual, identity["pluginDigests"][plugin_id])
+        self.assertEqual(
+            command_install(self.args(), published, self.paths, self.runtime), 0
+        )
+        self.assertEqual(
+            preflight_lifecycle_state(self.paths, self.suite), "public-beta.15.2"
+        )
 
     def test_exact_beta141_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite(
