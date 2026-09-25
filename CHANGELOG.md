@@ -10,6 +10,9 @@
 - Keep the Shibumi bar layout, including the placement of third-party widgets,
   across `uninstall --keep-settings` and a later install, and never add a
   third-party widget twice when importing or restoring the stock bar.
+- Treat plugin helper scripts as executable whenever their owner may execute
+  them, so source checkouts cloned with a restrictive `umask` keep a stable
+  payload identity and can be updated.
 
 ### Validation
 
