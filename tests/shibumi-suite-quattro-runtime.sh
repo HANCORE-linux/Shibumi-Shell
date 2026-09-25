@@ -461,6 +461,28 @@ assert_install_state() {
     || fail "installed $expected_origin has $marker_count managed markers instead of 24"
 }
 
+prepare_foreign_widget_fixture() {
+  # Private fixture HOME only, before its first shell starts.
+  local directory="$config_home/omarchy/plugins/fixture.kept-widget"
+  mkdir -p "$directory"
+  jq -n '{schemaVersion:1, id:"fixture.kept-widget", name:"Retention fixture", version:"1.0.0",
+    kinds:["bar-widget"], entryPoints:{barWidget:"Widget.qml"},
+    barWidget:{defaultSection:"left", allowMultiple:false}}' >"$directory/manifest.json"
+  printf 'import QtQuick\nItem { implicitWidth: 1; implicitHeight: 1 }\n' >"$directory/Widget.qml"
+  jq '.bar.layout.left += [{id:"fixture.kept-widget", opaque:{keep:[1,false]}}]' \
+    "$fixture_omarchy/config/omarchy/shell.json" >"$config_home/omarchy/shell.json"
+}
+
+assert_host_layout_preserved() {
+  local expected=$1 phase=$2 observed
+  observed=$(jq -ceS '.bar.layout' "$config_home/omarchy/shell.json") \
+    || fail "$phase host layout file is invalid"
+  [[ $observed == "$expected" ]] || fail "$phase changed the complete host layout"
+  observed=$(shell_ipc shell listShellConfig | jq -ceS '.bar.layout') \
+    || fail "$phase live host layout is invalid"
+  [[ $observed == "$expected" ]] || fail "$phase live host layout differs from snapshot"
+}
+
 state_settings_snapshot() {
   # Preserve the complete service-entry envelope, not only the changed setting.
   jq -ceS '
@@ -521,7 +543,21 @@ assert_uninstalled_arm() {
 
 run_keep_settings_cycle() {
   local arm=$1 version=$2 origin=$3 revision=$4 digest=$5
-  local snapshot live_snapshot reply settled=false settle_attempt
+  local snapshot retained_snapshot live_snapshot reply settled=false settle_attempt layout_snapshot style
+  case $arm in
+    fresh) style=shibumi ;; # V1: foreign widget remains in the Extra-Deck, without a V1 slot.
+    source-beta15) style=full ;;
+    source-beta152) style=notch ;;
+    *) fail "unexpected keep-settings arm: $arm" ;;
+  esac
+  # Supported native and State IPC only once the fixture shell is running.
+  [[ $(shell_ipc shell moveBarWidget fixture.kept-widget '{"section":"right"}') == ok ]] \
+    || fail "$arm foreign widget move failed"
+  if [[ $(state_settings_snapshot "$config_home/omarchy/shell.json" |
+      jq -r '.shibumi.presentation.shellStyle // "shibumi"') != "$style" ]]; then
+    [[ $(shell_ipc shibumi-suite setBarAppearance shellStyle "\"$style\"") == ok ]] \
+      || fail "$arm style setup failed"
+  fi
   snapshot=$(state_settings_snapshot "$config_home/omarchy/shell.json") \
     || fail "$arm initial State settings are missing or invalid"
   [[ $(jq -r '.shibumi.presentation.accent // empty' <<<"$snapshot") != color06 ]] \
@@ -534,7 +570,14 @@ run_keep_settings_cycle() {
   for settle_attempt in {1..100}; do
     snapshot=$(state_settings_snapshot "$config_home/omarchy/shell.json") \
       || fail "$arm settings readback is invalid"
-    if jq -e '.shibumi.presentation.accent == "color06"' <<<"$snapshot" >/dev/null; then
+    if jq -e --arg style "$style" '
+      .shibumi.presentation.accent == "color06" and
+      (.shibumi.presentation.shellStyle // "shibumi") == $style and
+      (if $style == "shibumi" then
+        ([.shibumi.order.left[]?, .shibumi.order.center[]?, .shibumi.order.right[]?] |
+         index("G:fixture.kept-widget")) == null
+       else ((.shibumi.v2Layout.right // []) | index("G:fixture.kept-widget")) != null end)
+    ' <<<"$snapshot" >/dev/null; then
       live_snapshot=$(shell_ipc shell listShellConfig | state_settings_snapshot) \
         || fail "$arm live settings readback is invalid"
       if [[ $live_snapshot == "$snapshot" ]]; then
@@ -546,17 +589,28 @@ run_keep_settings_cycle() {
   done
   [[ $settled == true ]] || fail "$arm settings IPC write did not settle on disk and in the live shell"
 
+  jq -e 'any(.bar.layout.right[]; .id == "fixture.kept-widget")' \
+    "$config_home/omarchy/shell.json" >/dev/null || fail "$arm foreign widget did not move right"
+  layout_snapshot=$(jq -ceS '.bar.layout' "$config_home/omarchy/shell.json")
+  retained_snapshot=$(jq -ceS --argjson layout "$layout_snapshot" \
+    '. + {shibumiRetainedLayout:{schemaVersion:1, layout:$layout}}' <<<"$snapshot")
   suite_cli uninstall --keep-settings --yes \
     || fail "$arm keep-settings uninstall command failed"
-  assert_uninstalled_arm "$snapshot"
+  assert_uninstalled_arm "$retained_snapshot"
   suite_cli install --yes || fail "$arm candidate reinstall command failed"
   assert_install_state "$source_root" "$version" "$origin" "$revision"
   reply=$(shell_ipc shibumi-suite-runtime verifyPayload "$digest") \
     || fail "$arm reinstalled state service payload query failed"
   [[ $reply == ok ]] || fail "$arm reinstalled state service did not confirm its payload digest"
   assert_settings_preserved "$snapshot" "$arm reinstall"
+  assert_host_layout_preserved "$layout_snapshot" "$arm reinstall"
+  [[ $(shell_ipc shell reloadConfig) == ok ]] || fail "$arm config reload failed"
+  sleep 5
+  assert_settings_preserved "$snapshot" "$arm settled reinstall"
+  assert_host_layout_preserved "$layout_snapshot" "$arm settled reinstall"
+  printf '%s layout retention: host=identical State=identical style=%s settle-delay=5s\n' "$arm" "$style"
   suite_cli status >/dev/null || fail "$arm reinstalled candidate status is not clean"
-  printf '%s keep-settings/reinstall: retained=identical reinstalled=identical verifyPayload=%s settle-polls=%s/100 poll-interval=0.1s\n' \
+  printf '%s keep-settings/reinstall: retained=entry+layout-record reinstalled=identical verifyPayload=%s settle-polls=%s/100 poll-interval=0.1s\n' \
     "$arm" "$reply" "$settle_attempt"
 }
 
@@ -612,6 +666,7 @@ run_update_arm() {
   set_arm_environment "$arm" "$arm_home" "$arm_config_home" \
     "$arm_state_home" "$arm_cache_home"
   source_root=$predecessor_src
+  if [[ $origin == checkout ]]; then prepare_foreign_widget_fixture; fi
   printf 'Update arm %s: %s (%s) -> %s (%s)\n' \
     "$arm" "$predecessor_version" "$predecessor_identity" \
     "$candidate_version" "$candidate_identity"
@@ -701,6 +756,7 @@ fresh_generation_start=$(service_generation_count)
 set_arm_environment fresh "$fresh_home" "$fresh_config_home" \
   "$fresh_state_home" "$fresh_cache_home"
 source_root="$source_candidate_root"
+prepare_foreign_widget_fixture
 start_stock_shell
 suite_cli install --yes || fail 'fresh candidate source checkout install command failed'
 assert_install_state "$source_candidate_root" "$(<"$repo_root/VERSION")" checkout \

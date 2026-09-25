@@ -589,7 +589,7 @@ puts JSON.generate(workflow.fetch("jobs"))
                 "shell_ipc shibumi-suite setBarAppearance accent '\"color06\"'",
                 '[[ $settled == true ]]',
                 'suite_cli uninstall --keep-settings --yes',
-                'assert_uninstalled_arm "$snapshot"',
+                'assert_uninstalled_arm "$retained_snapshot"',
                 'suite_cli install --yes',
                 'assert_install_state "$source_root" "$version" "$origin" "$revision"',
                 'shell_ipc shibumi-suite-runtime verifyPayload "$digest"',

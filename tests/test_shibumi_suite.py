@@ -3047,6 +3047,88 @@ class SuiteLifecycleTests(unittest.TestCase):
             else:
                 self.assertIs(type(state_entry(migrate_state_settings(config))["shibumi"]["version"]), int)
 
+    def test_foreign_layout_keep_settings_round_trip(self) -> None:
+        """Real lifecycle transforms: .140 stock duplicates, V1 extras and V2 slots."""
+        foreign_ids = {"hancore.omaq", "basecamp", "hey"}
+        stock = json.loads(self.defaults.read_text())
+        stock["bar"]["layout"] = {
+            "left": [{"id": "hancore.omaq", "side": "stock-left"}, {"id": "basecamp"}],
+            "center": [], "right": [{"id": "hancore.omaq"}, {"id": "hey"}]}
+        for plugin in foreign_ids:
+            (self.paths.plugin_dir / plugin).mkdir(parents=True, exist_ok=True)
+        for style in ("shibumi", "full", "fit", "dock", "notch"):
+            atomic_write(self.paths.config_file, encode_config(stock))
+            self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
+            before = json.loads(self.paths.config_file.read_text())
+            with self.subTest(style=style, phase="fresh-import"):
+                foreign = {r: [e for e in entries if entry_id(e) in foreign_ids]
+                           for r, entries in before["bar"]["layout"].items()}
+                self.assertEqual(foreign, {"left": stock["bar"]["layout"]["left"],
+                                          "center": [], "right": [{"id": "hey"}]})
+            stale_record = {"schemaVersion": 1, "layout": copy.deepcopy(before["bar"]["layout"])}
+            for region in ("left", "center", "right"):
+                before["bar"]["layout"][region] = [e for e in before["bar"]["layout"][region]
+                    if entry_id(e) not in foreign_ids]
+            before["bar"]["layout"]["left"].reverse()
+            before["bar"]["layout"]["right"] += [{"id": "hancore.omaq", "opaque": [False, "Malmö"]}, {"id": "hey"}]
+            settings = state_entry(before)["shibumi"]
+            settings["presentation"] = {"shellStyle": style}
+            # V1 has no foreign group positions: these widgets use the Extra-Deck.
+            settings["order"] = {"left": ["G1", "G2", "G3", "G4", "G5", "G6", "G7"],
+                "center": ["G8"], "right": ["G9", "G10", "G11", "G14", "G12", "G13", "G15"]}
+            settings["v2Layout"] = {
+                "left": ["G1", "G2", "G3", "", "G5", "G6", "G4", "G7", "", ""], "center": ["G8"],
+                "right": ["G9", "G10", "G11", "G14", "G12", "G13", "G16", "G18", "G17", "G15", "G:hancore.omaq", "G:hey", ""]}
+            entry_bytes = encode_config(state_entry(before))
+            # An older release preserves this unknown sibling after reinstall.
+            state_entry(before)["shibumiRetainedLayout"] = stale_record
+            atomic_write(self.paths.config_file, encode_config(before))
+            with self.subTest(style=style, phase="stale-repair"):
+                self.assertEqual(command_repair(self.args(), self.suite, self.paths, self.runtime), 0)
+                repaired = json.loads(self.paths.config_file.read_text())
+                self.assertEqual(repaired["bar"]["layout"], before["bar"]["layout"])
+                self.assertEqual(encode_config(state_entry(repaired)), entry_bytes)
+            # Reintroduce the stale sibling: uninstall must replace it, not refuse.
+            atomic_write(self.paths.config_file, encode_config(before))
+            self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
+            kept = json.loads(self.paths.config_file.read_text())
+            with self.subTest(style=style, phase="kept"):
+                self.assertEqual(kept["bar"]["layout"], stock["bar"]["layout"])
+                expected = {**state_entry(before), "shibumiRetainedLayout": {
+                    "schemaVersion": 1, "layout": before["bar"]["layout"]}}
+                self.assertEqual(state_entry(kept), expected)
+                self.assertNotIn("shibumiRetainedLayout", kept)
+            kept["idle"] = {"enabled": False, "future": {"minutes": 17}}
+            kept["plugins"].append({"id": "local.stock-service", "opaque": [False, "Malmö"]})
+            kept["bar"]["layout"]["left"][1]["stockOption"] = "changed"
+            atomic_write(self.paths.config_file, encode_config(kept))
+            real_restart = self.runtime.restart_shell
+            def inspect_before_load() -> None:
+                current = json.loads(self.paths.config_file.read_text())
+                self.assertEqual(encode_config(state_entry(current)), entry_bytes)
+                real_restart()
+            with patch.object(self.runtime, "restart_shell", side_effect=inspect_before_load):
+                self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
+            after = json.loads(self.paths.config_file.read_text())
+            with self.subTest(style=style, phase="reinstalled"):
+                self.assertEqual(after["bar"]["layout"], before["bar"]["layout"])
+                self.assertEqual(encode_config(state_entry(after)), entry_bytes)
+                self.assertEqual(after["idle"], kept["idle"])
+                self.assertIn(kept["plugins"][-1], after["plugins"])
+                self.assertEqual(load_install_state(self.paths, self.suite)["previousBar"], kept["bar"])
+            self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
+            external_bar = json.loads(self.paths.config_file.read_text())["bar"]
+            self.assertEqual(command_install(self.args(no_activate=True, keep_layout=True), self.suite, self.paths, self.runtime), 0)
+            external = json.loads(self.paths.config_file.read_text())
+            self.assertEqual(external["bar"], external_bar)
+            self.assertEqual(encode_config(state_entry(external)), entry_bytes)
+            state_entry(external)["shibumiRetainedLayout"] = stale_record
+            atomic_write(self.paths.config_file, encode_config(external))
+            self.assertEqual(command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0)
+            self.assertNotIn("shibumiRetainedLayout", state_entry(json.loads(self.paths.config_file.read_text())))
+            self.assertEqual(command_uninstall(self.args(), self.suite, self.paths, self.runtime), 0)
+            self.assertIsNone(state_entry(json.loads(self.paths.config_file.read_text())))
+
     def test_state_storage_keeps_complete_entry_through_uninstall_reinstall(self) -> None:
         self.install()
         config = json.loads(self.paths.config_file.read_text())
@@ -3058,7 +3140,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
         kept = json.loads(self.paths.config_file.read_text())
-        self.assertEqual(state_entry(kept), retained)
+        self.assertEqual(state_entry(kept), {**retained, "shibumiRetainedLayout": {
+            "schemaVersion": 1, "layout": config["bar"]["layout"]}})
         self.assertFalse((self.paths.plugin_dir / "hancore.shibumi.state").exists())
         self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
         self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text())), retained)
