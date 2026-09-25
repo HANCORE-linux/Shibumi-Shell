@@ -7,6 +7,9 @@
 - Admit exact Beta.15, Beta.15.1 (tagged but not released), and Beta.15.2
   checkout tag and merge revisions as update predecessors while retaining the
   existing package, payload-integrity, and transactional admission checks.
+- Keep the Shibumi bar layout, including the placement of third-party widgets,
+  across `uninstall --keep-settings` and a later install, and never add a
+  third-party widget twice when importing or restoring the stock bar.
 
 ### Validation
 
