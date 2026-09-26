@@ -19,6 +19,7 @@ Item {
   readonly property string shellStyle: "shibumi"
   readonly property string popoutScreenName: ""
   readonly property color renderedSurfaceColor: "#181818"
+  readonly property real renderedSurfaceRadius: shibumiTokens.panelRadius
   readonly property color controlForeground: "#eeeeee"
   readonly property color controlFillColor: "transparent"
   readonly property color controlAccent: "#d75f5f"

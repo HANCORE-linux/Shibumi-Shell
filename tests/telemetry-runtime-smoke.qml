@@ -143,7 +143,7 @@ ShellRoot {
         root.check(!cpu.gpu.probeEnabled && !telemetry.thermal.probeEnabled
           && !storage.storage.runtimeProbesEnabled, "fixture probe suppression lost")
         root.check(telemetry.system.cpuPanelConsumers === 0 && telemetry.system.cpuModel === "" && telemetry.system.loadAverage.length === 0, "detail probe before panel demand")
-        cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
+        cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
         telemetry.thermal.parseDetailed("55|63|80|100|44|70|90|39")
         storage.storage.parseUsage("/dev/fixture 1000 400 600 40%")
         for (const item of items) item.open()
@@ -159,7 +159,17 @@ ShellRoot {
         telemetry.system.parseCpuModel("processor : 0\nmodel name : Fixture CPU\n")
         telemetry.system.parseLoad("0.25 1.50 2.75 1/300 12345\n")
         root.check(cpuPanel.cpuModelText === "Fixture CPU" && cpuPanel.loadAverageText.indexOf("0.25 / 1.50 / 2.75") >= 0
-          && telemetry.system.cpuPanelConsumers === 1 && cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42, "CPU model/load or GPU card missing")
+          && telemetry.system.cpuPanelConsumers === 1 && !cpuPanel.gpuUsageView.visible, "CPU model/load or initially hidden GPU row missing")
+        cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
+        root.check(cpu.gpu.available && !cpuPanel.gpuUsageView.visible, "GPU without reported utilization stayed visible")
+        cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
+        root.check(!cpuPanel.gpuUsageView.visible, "zero-utilization GPU stayed visible")
+        cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42, "GPU utilization did not restore its row")
+        cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 0, "observed GPU row disappeared at idle")
+        items[0].close(); items[0].open(); root.panels[0] = items[0].panelItem
+        root.check(root.panels[0] && root.panels[0].gpuUsageView.visible, "GPU activity latch lost on panel reopen")
         telemetry.system.parseLoad("invalid"); root.check(telemetry.system.loadAverage.length === 0, "invalid load accepted")
         const memoryPanel = root.panels[1], oldMemory = [telemetry.system.memTotalMiB, telemetry.system.memAvailableMiB]
         telemetry.system.memTotalMiB = 8192; telemetry.system.memAvailableMiB = 3072
@@ -191,6 +201,7 @@ ShellRoot {
       } else if (root.phase === 5) {
         if (!cpu.ready || !telemetry.ready || !storage.ready) return
         root.samePanels()
+        root.check(!root.panels[0].gpuUsageView.visible, "GPU activity latch leaked to replacement owner")
         root.check(cpu.gpu !== root.firstGpu && cpu.gpu.consumers === 3
           && root.panels[0].gpuTelemetry === cpu.gpu
           && root.panels[0].acquiredGpuTelemetry === cpu.gpu && telemetry.system.cpuPanelConsumers === 1
