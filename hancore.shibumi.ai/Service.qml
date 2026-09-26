@@ -270,6 +270,35 @@ Item {
     return result
   }
 
+  function agentModels(usage) {
+    const rows = Object.keys(usage || {}).map(name => {
+      const data = usage[name] || {}, row = { name: name }, fields = {
+        input: "inputTokens", output: "outputTokens", cacheRead: "cacheReadInputTokens", cacheWrite: "cacheCreationInputTokens" }
+      let total = 0
+      for (const key in fields) {
+        const value = AgentUsageModel.nonNegativeNumber(data[fields[key]])
+        total += value; row[key + "Label"] = formatTokens(value)
+      }
+      return Object.assign(row, { total: total, totalLabel: formatTokens(total) })
+    }).filter(row => row.total > 0).sort((a, b) => b.total - a.total).slice(0, 16)
+    return rows.map(row => Object.assign(row, { pct: row.total / rows[0].total * 100 }))
+  }
+
+  function limitWindows(provider) {
+    if (!provider) return []
+    const limits = provider.limits || [
+      { label: provider.rateLimitLabel || "Primary", percent: provider.rateLimitPercent, resetsAt: provider.rateLimitResetAt },
+      { label: provider.secondaryRateLimitLabel || "Secondary", percent: provider.secondaryRateLimitPercent, resetsAt: provider.secondaryRateLimitResetAt }]
+    return limits.slice(0, 6).map(limit => Object.assign({}, limit, {
+      title: limit.title || String(limit.label).replace(/\s*\(.*\)\s*/, "").trim(),
+      percent: displayPercent(provider, limit.percent)
+    })).filter(limit => limit.percent >= 0)
+  }
+
+  function bindingWindow(provider) {
+    return limitWindows(provider).reduce((best, limit) => !best || limit.percent > best.percent ? limit : best, null)
+  }
+
   function agentRecordFresh(record, nowMs) {
     if (!record || String(record.backend || "") !== "omarchy.agents")
       return true
@@ -306,7 +335,9 @@ Item {
       todaySessions: Math.max(0, Number(provider.todaySessions) || 0),
       windowTokens: Math.max(0, Number(provider.windowTokens) || 0),
       hourlyTokens: Math.max(0, Number(provider.hourlyTokens) || 0),
-      models: cloneModels(provider.models),
+      limits: provider.limits,
+      recentDays: provider.recentDays || [],
+      models: cloneModels(provider.backend === "omarchy.agents" ? agentModels(provider.modelUsage) : provider.models),
       tierLabel: String(provider.tierLabel || "").slice(0, 512),
       usageStatusText: String(provider.usageStatusText || "").slice(0, 512),
       authHelpText: String(provider.authHelpText || "").slice(0, 512),
@@ -403,7 +434,7 @@ Item {
       || Number(provider.todaySessions) > 0
       || Number(provider.windowTokens) > 0
       || Number(provider.hourlyTokens) > 0
-      || (Array.isArray(provider.models) && provider.models.length > 0)
+      || (provider.backend !== "omarchy.agents" && Array.isArray(provider.models) && provider.models.length > 0)
       || String(provider.latestModel || "") !== ""
   }
 
@@ -437,10 +468,10 @@ Item {
     return label
   }
 
-  function resetText(_provider, timestamp) {
+  function resetText(_provider, timestamp, nowMs) {
     if (!timestamp) return ""
     const reset = new Date(timestamp)
-    const diffMs = reset.getTime() - Date.now()
+    const diffMs = reset.getTime() - (nowMs === undefined ? Date.now() : nowMs)
     if (!isFinite(diffMs)) return ""
     if (diffMs <= 0) return "now"
     const hours = Math.floor(diffMs / 3600000)
@@ -463,70 +494,16 @@ Item {
   }
 
   function tooltipText() {
-    if (providers.length === 0) return "No AI usage providers detected"
-    const lines = []
-    for (let index = 0; index < providers.length; index++) {
-      const provider = providers[index]
-      if (lines.length) lines.push("")
-      let heading = String(provider.providerName || provider.providerId || "AI")
-      if (displayTierLabel(provider.tierLabel))
-        heading += " (" + displayTierLabel(provider.tierLabel) + ")"
-      const status = providerStatusText(provider)
-      if (status !== "live") heading += " · " + status
-      lines.push(heading)
-      if (Number(provider.rateLimitPercent) >= 0) {
-        const reset = resetText(provider, provider.rateLimitResetAt)
-        lines.push(String(provider.rateLimitLabel || "Primary") + ": "
-          + Math.round(displayPercent(provider, provider.rateLimitPercent)) + "%"
-          + (reset ? " · resets in " + reset : ""))
-      }
-      if (Number(provider.secondaryRateLimitPercent) >= 0) {
-        const reset = resetText(provider, provider.secondaryRateLimitResetAt)
-        lines.push(String(provider.secondaryRateLimitLabel || "Secondary") + ": "
-          + Math.round(displayPercent(provider,
-            provider.secondaryRateLimitPercent)) + "%"
-          + (reset ? " · resets in " + reset : ""))
-      }
-      if (String(provider.providerId || "") === "codex"
-          && !providerReportsFiveHour(provider))
-        lines.push("5h: not reported by Codex RPC")
-      if (String(provider.usageStatusText || "")
-          && String(provider.providerId || "") === "codex")
-        lines.push("General limit: " + String(provider.usageStatusText))
-      const providerId = String(provider.providerId || "")
-      if (providerId === "opencode") {
-        if (Number(provider.windowTokens) > 0)
-          lines.push("5h tokens: " + formatTokens(provider.windowTokens))
-        if (Number(provider.hourlyTokens) > 0)
-          lines.push("1h rate: " + formatTokens(provider.hourlyTokens) + "/h")
-      } else if (Number(provider.windowTokens) > 0) {
-        let activity = formatTokens(provider.windowTokens) + " tokens"
-        if (Number(provider.hourlyTokens) > 0)
-          activity += " · " + formatTokens(provider.hourlyTokens) + "/h"
-        lines.push(activity)
-      } else if (Number(provider.hourlyTokens) > 0) {
-        lines.push("Rate: " + formatTokens(provider.hourlyTokens) + "/h")
-      }
-      if (provider.todayTotalTokens !== undefined
-          && Number(provider.todayTotalTokens) > 0)
-        lines.push("Today: " + formatTokens(provider.todayTotalTokens) + " tokens")
-      const todayPrompts = Math.max(0, Number(provider.todayPrompts) || 0)
-      const todaySessions = Math.max(0, Number(provider.todaySessions) || 0)
-      if (todayPrompts > 0 || todaySessions > 0) {
-        const activity = []
-        if (todayPrompts > 0)
-          activity.push(todayPrompts + (todayPrompts === 1 ? " prompt" : " prompts"))
-        if (todaySessions > 0)
-          activity.push(todaySessions + (todaySessions === 1 ? " session" : " sessions"))
-        lines.push("Today activity: " + activity.join(" · "))
-      }
-      if (String(provider.latestModel || ""))
-        lines.push((providerId === "opencode" ? "Latest today: " : "")
-          + String(provider.latestModel))
-      const currentDataMessage = providerCurrentDataMessage(provider)
-      if (currentDataMessage) lines.push(currentDataMessage)
-    }
-    return lines.join("\n")
+    const provider = selectedProvider
+    if (!provider) return "No AI usage providers detected"
+    const heading = String(provider.providerName || provider.providerId || "AI")
+      + " · " + providerStatusText(provider)
+    if (provider.ready === false) return heading
+    const limit = bindingWindow(provider)
+    if (!limit) return heading + "\nLimits: Unavailable"
+    const reset = resetText(provider, limit.resetsAt)
+    return heading + "\n" + limit.title + ": " + Math.round(limit.percent) + "%"
+      + (reset ? " · resets in " + reset : "")
   }
 
   function formatTokens(value) {

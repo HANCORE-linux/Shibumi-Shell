@@ -12,8 +12,31 @@ ShibumiPanel {
   required property var aiService
   readonly property var provider: aiService ? aiService.selectedProvider : null
   readonly property int renderedProviderCount: providerTabs.count
-  readonly property bool primaryUsageVisible: primaryUsage.visible
-  readonly property bool secondaryUsageVisible: secondaryUsage.visible
+  readonly property var limitWindows: aiService ? aiService.limitWindows(provider) : []
+  readonly property var headline: aiService ? aiService.bindingWindow(provider) : null
+  readonly property bool headlineAlarm: !!headline && headline.percent >= 90
+  readonly property color headlineColor: headlineUsage.usageColor
+  readonly property bool primaryUsageVisible: limitWindows.length > 0
+  readonly property bool secondaryUsageVisible: limitWindows.length > 1
+  readonly property var days: provider ? provider.recentDays || [] : []
+  readonly property int renderedDayCount: dayRepeater.count
+  readonly property bool clockRunning: panelClock.running
+  property double nowMs: Date.now()
+  onOpenChanged: if (open) nowMs = Date.now()
+  property Timer presentationClock: Timer {
+    id: panelClock
+    interval: 30000; repeat: true; running: panel.open
+    onTriggered: panel.nowMs = Date.now()
+  }
+  readonly property bool limitsUnavailableVisible: limitsUnavailable.visible
+  readonly property string todaySummary: provider && aiService ? [
+    Number(provider.todayTotalTokens) > 0
+      ? aiService.formatTokens(provider.todayTotalTokens) + " tokens" : "",
+    Number(provider.todayPrompts) > 0 ? Math.round(Number(provider.todayPrompts))
+      + (Number(provider.todayPrompts) === 1 ? " prompt" : " prompts") : "",
+    Number(provider.todaySessions) > 0 ? Math.round(Number(provider.todaySessions))
+      + (Number(provider.todaySessions) === 1 ? " session" : " sessions") : ""
+  ].filter(value => value !== "").join(" · ") : ""
   readonly property var providerModels: provider
     && Array.isArray(provider.models) ? provider.models : []
   readonly property int renderedModelCount: modelRepeater.count
@@ -55,7 +78,17 @@ ShibumiPanel {
 
   function resetText(timestamp) {
     return provider && aiService
-      ? aiService.resetText(provider, timestamp) : ""
+      ? aiService.resetText(provider, timestamp, nowMs) : ""
+  }
+
+  function paceText(limit) {
+    const label = String(limit.label || "") + " " + String(limit.title || "")
+    const match = /\b(\d+(?:\.\d+)?)\s*-?\s*(hours?|h|days?|d)\b/i.exec(label)
+    const span = match ? Number(match[1]) * (/^h/i.test(match[2]) ? 3600000 : 86400000)
+      : /\bweekly\b/i.test(label) ? 604800000 : /\bmonthly\b/i.test(label) ? 2592000000 : 0
+    const remaining = Date.parse(limit.resetsAt) - nowMs, elapsed = span - remaining
+    return providerReady && span > 0 && remaining > 0 && elapsed > 0
+      ? "Pace: " + (limit.percent / 100 * span / elapsed).toFixed(1) + "×" : ""
   }
 
   function providerTabLabel(providerValue) {
@@ -117,7 +150,10 @@ ShibumiPanel {
           Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "AI USAGE"
+            width: parent.width - actionRow.width - Commons.Style.space(8)
+            elide: Text.ElideRight
+            text: panel.provider ? panel.providerHeading(panel.provider)
+              + " · " + panel.providerStatusLabel : "AI USAGE"
             color: panel.controlForeground
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.subtitle
@@ -208,31 +244,18 @@ ShibumiPanel {
         }
 
         Item {
-          visible: panel.provider !== null
+          visible: panel.tierLabel(panel.provider) !== ""
           width: parent.width
           height: visible ? Commons.Style.space(16) : 0
 
           Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: panel.provider ? panel.providerHeading(panel.provider)
-              + (panel.tierLabel(panel.provider) !== ""
-                ? "  · " + panel.tierLabel(panel.provider) : "") : ""
+            text: panel.tierLabel(panel.provider)
             color: panel.controlForeground
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.body
             font.weight: Font.Medium
-            renderType: Text.NativeRendering
-          }
-
-          Text {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            text: panel.providerStatusLabel
-            color: panel.providerStatusLabel === "live" ? panel.controlMuted
-              : panel.controlAccent
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.caption
             renderType: Text.NativeRendering
           }
         }
@@ -249,36 +272,36 @@ ShibumiPanel {
         }
 
         UsageRow {
-          id: primaryUsage
-          visible: panel.provider && Number(panel.provider.rateLimitPercent) >= 0
-          label: panel.provider ? String(panel.provider.rateLimitLabel || "Primary") : ""
-          value: panel.provider ? panel.displayPercent(panel.provider,
-            panel.provider.rateLimitPercent) : 0
+          id: headlineUsage
+          visible: !!panel.headline
+          label: panel.headline ? panel.headline.title : ""
+          value: panel.headline ? panel.headline.percent : 0
           dimmed: !panel.providerReady
         }
-
-        UsageRow {
-          id: secondaryUsage
-          visible: panel.provider && Number(panel.provider.secondaryRateLimitPercent) >= 0
-          label: panel.provider
-            ? String(panel.provider.secondaryRateLimitLabel || "Secondary") : ""
-          value: panel.provider ? panel.displayPercent(panel.provider,
-            panel.provider.secondaryRateLimitPercent) : 0
-          dimmed: !panel.providerReady
+        Repeater {
+          model: panel.limitWindows
+          delegate: Column {
+            id: windowRow
+            required property var modelData
+            width: contentColumn.width
+            spacing: Commons.Style.space(4)
+            UsageRow {
+              label: windowRow.modelData.title
+              value: windowRow.modelData.percent
+              dimmed: !panel.providerReady
+            }
+            DetailRow {
+              label: panel.resetText(windowRow.modelData.resetsAt) ? "Resets in" : ""
+              value: [panel.resetText(windowRow.modelData.resetsAt), panel.paceText(windowRow.modelData)].filter(Boolean).join(" · ")
+              wrapValue: true
+            }
+          }
         }
-
         DetailRow {
-          visible: primaryUsage.visible && panel.resetText(
-            panel.provider.rateLimitResetAt) !== ""
-          label: primaryUsage.label + " resets in"
-          value: visible ? panel.resetText(panel.provider.rateLimitResetAt) : ""
-        }
-        DetailRow {
-          visible: secondaryUsage.visible && panel.resetText(
-            panel.provider.secondaryRateLimitResetAt) !== ""
-          label: secondaryUsage.label + " resets in"
-          value: visible ? panel.resetText(
-            panel.provider.secondaryRateLimitResetAt) : ""
+          id: limitsUnavailable
+          visible: panel.provider && !panel.providerHasUsage
+          label: "Limits"
+          value: "Unavailable"
         }
         DetailRow {
           visible: panel.provider && String(panel.provider.usageStatusText || "") !== ""
@@ -301,22 +324,10 @@ ShibumiPanel {
             ? panel.aiService.formatTokens(panel.provider.hourlyTokens) + "/h" : ""
         }
         DetailRow {
-          visible: panel.provider && Number(panel.provider.todayTotalTokens) > 0
+          visible: panel.todaySummary !== ""
           label: "Today"
-          value: visible && panel.aiService
-            ? panel.aiService.formatTokens(panel.provider.todayTotalTokens) + " tokens" : ""
-        }
-        DetailRow {
-          visible: panel.provider && Number(panel.provider.todayPrompts) > 0
-          label: "Today prompts"
-          value: visible ? String(Math.round(
-            Number(panel.provider.todayPrompts) || 0)) : ""
-        }
-        DetailRow {
-          visible: panel.provider && Number(panel.provider.todaySessions) > 0
-          label: "Today sessions"
-          value: visible ? String(Math.round(
-            Number(panel.provider.todaySessions) || 0)) : ""
+          value: panel.todaySummary
+          wrapValue: true
         }
         DetailRow {
           visible: panel.provider && String(panel.provider.latestModel || "") !== ""
@@ -325,6 +336,21 @@ ShibumiPanel {
           value: panel.provider ? String(panel.provider.latestModel || "") : ""
         }
 
+        DetailRow {
+          visible: panel.days.length > 0
+          label: "TOKENS BY DAY"
+          value: ""
+        }
+        Repeater {
+          id: dayRepeater
+          model: panel.days
+          delegate: ModelUsageRow {
+            required property var modelData
+            width: contentColumn.width
+            entry: ({ name: modelData.date, totalLabel: panel.aiService.formatTokens(modelData.messageCount),
+              pct: modelData.messageCount / Math.max(1, ...panel.days.map(day => day.messageCount)) * 100, detail: "" })
+          }
+        }
         Item {
           visible: panel.providerModels.length > 0
           width: parent.width
@@ -344,7 +370,7 @@ ShibumiPanel {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: panel.provider && String(panel.provider.providerId || "")
-              === "opencode" ? "today" : "recent"
+              === "opencode" ? "today" : panel.provider && panel.provider.backend === "omarchy.agents" ? "all time" : "recent"
             color: panel.controlMuted
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
@@ -404,6 +430,8 @@ ShibumiPanel {
     required property string label
     required property real value
     property bool dimmed: false
+    readonly property color usageColor: dimmed ? panel.controlMuted
+      : value >= 90 ? Commons.Color.urgent : panel.controlAccent
     width: parent.width
     height: Commons.Style.space(16)
 
@@ -412,6 +440,9 @@ ShibumiPanel {
       anchors.left: parent.left
       anchors.verticalCenter: parent.verticalCenter
       text: usageRow.label
+      textFormat: Text.PlainText
+      width: Math.min(implicitWidth, parent.width * 0.45)
+      elide: Text.ElideRight
       color: panel.controlMutedHigh
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: Commons.Style.font.bodySmall
@@ -424,7 +455,7 @@ ShibumiPanel {
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       text: Math.round(usageRow.value) + "%"
-      color: usageRow.dimmed ? panel.controlMuted : panel.controlAccent
+      color: usageRow.usageColor
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: Commons.Style.font.bodySmall
       font.weight: Font.Medium
@@ -444,7 +475,7 @@ ShibumiPanel {
         width: parent.width * Math.max(0, Math.min(100, usageRow.value)) / 100
         height: parent.height
         radius: height / 2
-        color: panel.controlAccent
+        color: usageRow.usageColor
         Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
       }
     }
@@ -453,8 +484,10 @@ ShibumiPanel {
   component DetailRow: Row {
     required property string label
     required property string value
+    property bool wrapValue: false
     width: parent.width
-    height: Commons.Style.space(16)
+    height: wrapValue ? Math.max(Commons.Style.space(16), detailValue.implicitHeight)
+      : Commons.Style.space(16)
 
     Text {
       width: parent.width * 0.45
@@ -465,7 +498,9 @@ ShibumiPanel {
       renderType: Text.NativeRendering
     }
     Text {
+      id: detailValue
       width: parent.width * 0.55
+      wrapMode: parent.wrapValue ? Text.WordWrap : Text.NoWrap
       horizontalAlignment: Text.AlignRight
       elide: Text.ElideLeft
       text: parent.value
@@ -489,6 +524,7 @@ ShibumiPanel {
       anchors.top: parent.top
       width: parent.width * 0.68
       text: String(modelRow.entry && modelRow.entry.name || "")
+      textFormat: Text.PlainText
       elide: Text.ElideRight
       color: panel.controlForeground
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -530,7 +566,8 @@ ShibumiPanel {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.bottom: parent.bottom
-      text: "I " + String(modelRow.entry && modelRow.entry.inputLabel || "0")
+      text: modelRow.entry && modelRow.entry.detail !== undefined ? modelRow.entry.detail
+        : "I " + String(modelRow.entry && modelRow.entry.inputLabel || "0")
         + "  O " + String(modelRow.entry && modelRow.entry.outputLabel || "0")
         + (String(modelRow.entry && modelRow.entry.reasoningLabel || "0") !== "0"
           ? "  R " + String(modelRow.entry.reasoningLabel) : "")

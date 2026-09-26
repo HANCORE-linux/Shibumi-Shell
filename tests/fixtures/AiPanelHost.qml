@@ -25,7 +25,7 @@ Item {
   readonly property color controlActiveFillColor: "#442222"
   readonly property color dividerColor: controlBorderColor
 
-  default property alias panelContent: content.data
+  default property alias panelContent: content.children
 
   function fittedContentWidth(preferred) { return preferred }
   function fittedContentHeight(preferred, maximum) {

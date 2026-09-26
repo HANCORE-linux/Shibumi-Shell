@@ -41,6 +41,48 @@ ShellRoot {
     Qt.exit(1)
   }
 
+  function compactTooltipContract() {
+    claudeProvider.rateLimitResetAt = "2000-01-01T00:00:00Z"
+    const checks = { selectedReset: aiService.tooltipText() === "Claude Code · live\nSession: 3% · resets in now" }
+    claudeProvider.ready = false; checks.stale = aiService.tooltipText() === "Claude Code · stale"
+    claudeProvider.ready = true; claudeProvider.rateLimitPercent = -1
+    claudeProvider.secondaryRateLimitPercent = 0; claudeProvider.secondaryRateLimitLabel = "Weekly"
+    checks.secondaryZero = aiService.tooltipText() === "Claude Code · live\nWeekly: 0%"
+    claudeProvider.secondaryRateLimitPercent = -1
+    checks.missingLimit = aiService.tooltipText() === "Claude Code · live\nLimits: Unavailable"
+    emptyAgentsPanel.aiService = aiService; checks.missingPanel = emptyAgentsPanel.limitsUnavailableVisible === true
+    claudeProvider.rateLimitPercent = 0.025; claudeProvider.rateLimitResetAt = "invalid"
+    checks.invalidReset = aiService.tooltipText() === "Claude Code · live\nSession: 3%"
+    claudeProvider.rateLimitResetAt = ""; claudeProvider.secondaryRateLimitLabel = ""
+    checks.emptyTooltip = missingStateService.tooltipText() === "No AI usage providers detected"
+    emptyAgentsPanel.aiService = missingStateService; checks.emptyPanel = emptyAgentsPanel.providerEmptyStateText === "No supported AI usage data was found."
+    emptyAgentsPanel.aiService = agentsService
+    const original = agentsService.agentsClaudeRecord, now = Date.now(), record = JSON.parse(codexStatusRecord(true, true))
+    record.id = "claude"; record.name = "Claude Code"
+    record.limits = [{ label: "Session (5-hour)", percent: 0.5, resetsAt: new Date(now + 13500000).toISOString() }, { label: "Weekly (7-day)", percent: 0.8, resetsAt: "" }, { label: "Weekly (7-day)", title: "Fable Weekly", percent: 0.9, resetsAt: new Date(now + 302400000).toISOString() }]
+    record.recentDays = Array.from({length: 8}, (_, i) => ({date: "2026-09-" + (19 + i), messageCount: i * 100}))
+    agentsService.applyAgentRecord("claude", JSON.stringify(record)); if ("nowMs" in emptyAgentsPanel) emptyAgentsPanel.nowMs = now
+    const p = agentsService.providerFor("claude")
+    checks.windows = !!p.limits && p.limits.length === 3 && p.limits[2].title === "Fable Weekly"
+    checks.headline = !!emptyAgentsPanel.headline && emptyAgentsPanel.headline.title === "Fable Weekly" && emptyAgentsPanel.headlineAlarm && agentsService.tooltipText().indexOf("Fable Weekly: 90% · resets in ") > 0
+    const alarmColor = String(emptyAgentsPanel.headlineColor)
+    checks.pace = typeof emptyAgentsPanel.paceText === "function" && emptyAgentsPanel.paceText({label: "Session (5-hour)", percent: 50, resetsAt: record.limits[0].resetsAt}) === "Pace: 2.0×"
+    checks.longPace = typeof emptyAgentsPanel.paceText === "function" && ["Weekly", "Monthly"].every((label, i) => emptyAgentsPanel.paceText({label: label, percent: 50, resetsAt: new Date(now + [302400000, 1296000000][i]).toISOString()}) === "Pace: 1.0×")
+    checks.noPace = typeof emptyAgentsPanel.paceText === "function" && [{label: "Unknown", resetsAt: record.limits[0].resetsAt}, {label: "Weekly", resetsAt: ""}, {label: "Weekly", resetsAt: new Date(now - 1).toISOString()}, {label: "1-hour", resetsAt: record.limits[0].resetsAt}].every(w => emptyAgentsPanel.paceText(Object.assign({percent: 50}, w)) === "")
+    checks.days = !!p.recentDays && p.recentDays.length === 7 && p.recentDays[0].date === "2026-09-20" && p.recentDays[6].messageCount === 700 && emptyAgentsPanel.renderedDayCount === 7
+    checks.codex = typeof agentsService.limitWindows === "function" && agentsService.limitWindows(agentsService.providerFor("codex")).length === 1 && agentsService.providerFor("codex").models[0].totalLabel === "1.03M"
+    record.limits[2].percent = 0.899; agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.threshold = emptyAgentsPanel.headlineAlarm === false && String(emptyAgentsPanel.headlineColor) !== String(alarmColor)
+    record.limits = record.limits.concat(Array.from({length: 4}, () => record.limits[0])); agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.cap = !!agentsService.providerFor("claude").limits && agentsService.providerFor("claude").limits.length === 6 && emptyAgentsPanel.limitWindows.length === 6
+    agentsService.agentsClaudeRecord = original; agentsService.providerRevision++
+    checks.clock = emptyAgentsPanel.clockRunning === false; emptyPanelOwner.opened = true
+    checks.clock = checks.clock && emptyAgentsPanel.clockRunning === true; emptyPanelOwner.opened = false
+    checks.clock = checks.clock && emptyAgentsPanel.clockRunning === false
+    console.log("AI_PRESENTATION_CASES", JSON.stringify(checks))
+    return Object.values(checks).every(value => value)
+  }
+
   function linearChannel(value) {
     return value <= 0.04045 ? value / 12.92
       : Math.pow((value + 0.055) / 1.055, 2.4)
@@ -81,8 +123,8 @@ ShellRoot {
       && agentsService.usagePercent(codex) === 24
       && claude.rateLimitPercent === -1
       && claude.secondaryRateLimitPercent === -1
-      && claude.models.length === 0
-      && codex.models.length === 0
+      && claude.models.length === 1
+      && codex.models.length === 1
       && codex.todayTotalTokens === 1031649
       && codex.latestModel === ""
       && claude.ready && codex.ready
@@ -141,6 +183,7 @@ ShellRoot {
     if (codexStatusProbeStage === 1) {
       if (agentsService.providerStatusText(provider) !== "partial"
           || emptyAgentsPanel.providerStatusLabel !== "partial"
+          || !emptyAgentsPanel.limitsUnavailableVisible
           || agentsService.tooltipText().indexOf("Codex · partial") < 0) {
         fail("Codex partial status did not propagate")
         return false
@@ -204,7 +247,7 @@ ShellRoot {
     const provider = agentsService.providerFor("claude")
     const accepted = provider && provider.ready
       && agentsService.usagePercent(provider) === -1
-      && provider.models.length === 0
+      && provider.models.length === 1
       && provider.latestModel === ""
       && agentsService.providerCurrentDataMessage(provider)
         === "Authenticate Claude"
@@ -928,6 +971,7 @@ ShellRoot {
               || delayedSelectionState.confirmedTool !== "claude")
             return root.fail("AI selection did not preview before persistence readback")
           delayedSelectionState.previewTool = "claude"
+          if (!root.compactTooltipContract()) return root.fail("compact selected-provider tooltip or unavailable panel")
         }
         if (!first.visible || !second.visible || first.aiService !== aiService
             || second.aiService !== aiService
@@ -954,13 +998,9 @@ ShellRoot {
                 !== "Run `claude auth login` to restore authoritative usage."
               || emptyAgentsPanel.primaryUsageVisible
               || emptyAgentsPanel.secondaryUsageVisible
-              || emptyAgentsPanel.renderedModelCount !== 0
+              || emptyAgentsPanel.renderedModelCount !== 1
               || first.childPanelWidget("omarchy.agents") !== first
-              || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
-              || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
-              || first.tooltipText.indexOf("5h tokens: 2.3K") < 0
-              || first.tooltipText.indexOf("1h rate: 180/h") < 0
-              || first.tooltipText.indexOf("Latest today: local-test") < 0
+              || first.tooltipText !== "Claude Code · live\nSession: 3%"
               || !root.openCodeParserContract()))
           return root.fail("Claude/agents provider metadata")
         if (root.phase === 0) {
