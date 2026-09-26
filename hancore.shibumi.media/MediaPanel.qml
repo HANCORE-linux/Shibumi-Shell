@@ -434,11 +434,11 @@ ShibumiPanel {
       Row {
         visible: panel.active
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Commons.Style.space(12)
+        spacing: Commons.Style.space(8)
 
         MediaPanelButton {
           id: shuffleButton
-          icon: checked ? "shuffle_on" : "shuffle"; action: "shuffle"; controlIndex: -1
+          icon: "shuffle"; action: "shuffle"; controlIndex: -1
           tooltipText: checked ? "Shuffle: On" : "Shuffle: Off"
           checked: !!panel.player && panel.player.shuffle === true
           enabled: panel.directAvailable && !!panel.player && panel.player.shuffleSupported === true
@@ -499,7 +499,7 @@ ShibumiPanel {
 
             width: parent.width
             height: Commons.Style.space(34)
-            radius: panel.controlRadius
+            radius: panel.renderedSurfaceRadius
             color: cursor || sourceMouse.containsMouse
               ? panel.bar ? Qt.rgba(panel.bar.urgent.r, panel.bar.urgent.g,
                 panel.bar.urgent.b, 0.14) : Commons.Color.background
@@ -649,7 +649,7 @@ ShibumiPanel {
     signal clicked()
     implicitWidth: Commons.Style.space(28)
     implicitHeight: Commons.Style.space(28)
-    radius: panel.controlRadius
+    radius: panel.renderedSurfaceRadius
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
@@ -676,28 +676,28 @@ ShibumiPanel {
     }
   }
 
-  component MediaPanelButton: Ui.PanelActionButton {
+  // Outline button structure inspired by 0xSero/omarchy-local-ai; see Local-AI-LICENSE.
+  component MediaPanelButton: Rectangle {
+    id: button
     required property string icon
     required property string action
     required property int controlIndex
     property bool accent: false
     property bool checked: false
-
-    iconText: icon
-    foreground: checked ? panel.controlAccent : accent && panel.bar
-      ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
-    hoverColor: panel.bar ? panel.bar.urgent : Commons.Color.accent
-    fontFamily: "Material Symbols Rounded"
-    fontSize: accent ? Commons.Style.font.iconLarge : Commons.Style.font.icon
-    size: accent ? Commons.Style.space(34) : Commons.Style.space(28)
-    radius: panel.controlRadius
-    hasCursor: panel.focusSection === "controls" && panel.cursorIndex === controlIndex
-    onHovered: function(isHovered) {
-      if (isHovered) {
-        panel.focusSection = "controls"
-        panel.cursorIndex = controlIndex
-      }
+    property string tooltipText: ""
+    signal clicked()
+    readonly property bool hot: enabled && (buttonMouse.containsMouse || panel.focusSection === "controls" && panel.cursorIndex === controlIndex)
+    width: Commons.Style.space(36); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
+    color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
+    border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
+    Ui.OpticalGlyph { anchors.fill: parent; text: button.icon; color: button.checked || button.accent ? panel.controlAccent : panel.controlForeground
+      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon) }
+    MouseArea {
+      id: buttonMouse; anchors.fill: parent; enabled: button.enabled; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+      onContainsMouseChanged: if (containsMouse) { panel.focusSection = "controls"; panel.cursorIndex = button.controlIndex }
+      onClicked: button.clicked()
     }
+    Presentation.ShibumiPillToolTip { panel: panel; visible: button.tooltipText !== "" && buttonMouse.containsMouse; text: button.tooltipText }
     onClicked: panel.controlAction(action)
   }
 }
