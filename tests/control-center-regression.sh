@@ -35,6 +35,8 @@ install -Dm0644 "$repo_root/tests/fixtures/PluginUpdateTestService.qml" \
 install -Dm0755 "$repo_root/tests/fixtures/slow-health-report" \
   "$tmpdir/home/.config/omarchy/plugins/hancore.shibumi.control-center/manager/shibumi-health"
 mkdir -m 700 "$tmpdir/runtime"
+"$repo_root/tests/panel-window-geometry-regression.sh" \
+  --stage-control-center "$tmpdir/control"
 
 set +e
 output=$(timeout 8 env \

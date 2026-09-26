@@ -166,9 +166,10 @@ Item {
     && configureDetailPage === "health"
     && settingsQuery.trim() === ""
     && pageLoader.item !== null
+  // Short reports must not shrink away the left navigation's Health route.
   readonly property real compactHealthPanelHeight:
     configureDetailPanelChromeHeight
-    + Math.max(1, Number(pageLoader.item
+    + Math.max(1, configureLanding.implicitHeight, Number(pageLoader.item
       ? pageLoader.item.implicitHeight : 1))
   readonly property bool compactPickersPage:
     currentPage === "configure"

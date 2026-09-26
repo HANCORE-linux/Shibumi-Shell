@@ -206,6 +206,13 @@ for directory in (base / "Ui", base / "shared"):
         qmldir.write_text(current + "\nFixturePanelWindow 1.0 FixturePanelWindow.qml\n", encoding="utf-8")
 PY
 
+if [[ ${1:-} == --stage-control-center ]]; then
+  [[ $# -eq 2 && $2 == /tmp/shibumi-control-center.*/control && -d $2 ]] \
+    || fail 'expected a private Control Center staging directory'
+  cp -- "$base/shared/ShibumiPanel.qml" "$base/shared/FixturePanelWindow.qml" "$2/"
+  exit 0
+fi
+
 run_case() {
   local name=$1 expected=$2 diagnostic=$3
   local root="$tmpdir/$name"
