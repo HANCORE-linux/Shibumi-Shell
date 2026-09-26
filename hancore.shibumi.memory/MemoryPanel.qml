@@ -9,6 +9,7 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var telemetry
+  readonly property var usageRing: memoryRing
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -74,63 +75,56 @@ ShibumiPanel {
           panel.bar.foreground.b, 0.18) : Commons.Color.popups.border
       }
 
-      Item {
+      Row {
         width: parent.width
-        height: 30
+        height: memoryRing.height
+        spacing: Commons.Style.space(16)
 
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          text: (panel.telemetry ? panel.telemetry.memPercent : 0) + "%"
-          color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          font.family: panel.bar ? panel.bar.fontFamily
-            : Commons.Style.font.family
-          font.pixelSize: 11
-          font.weight: Font.Medium
-          renderType: Text.NativeRendering
-        }
+        // Panel-local dimensions and colors; MemoryRing's bar defaults stay intact.
+        MemoryRing {
+          id: memoryRing
+          width: Commons.Style.space(80)
+          height: width
+          percent: panel.telemetry ? panel.telemetry.memPercent : 0
+          foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+          accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+          onWidthChanged: requestPaint()
+          onHeightChanged: requestPaint()
 
-        Rectangle {
-          anchors.bottom: parent.bottom
-          width: parent.width
-          height: 8
-          radius: height / 2
-          color: panel.controlActiveFillColor
-
-          Rectangle {
-            width: parent.width * (panel.telemetry ? panel.telemetry.memPercent : 0) / 100
-            height: parent.height
-            radius: height / 2
-            color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-            Behavior on width { NumberAnimation { duration: 300 } }
+          Text {
+            anchors.centerIn: parent
+            text: memoryRing.percent + "%"
+            color: memoryRing.accent
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            renderType: Text.NativeRendering
           }
         }
-      }
 
-      Column {
-        width: parent.width
-        spacing: 4
+        Column {
+          width: parent.width - memoryRing.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: 4
 
-        MemoryStatRow {
-          width: parent.width
-          label: "Used"
-          value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memUsedMiB : 0) + " MiB"
-          bar: panel.bar
-        }
-        MemoryStatRow {
-          width: parent.width
-          label: "Available"
-          value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memAvailableMiB : 0) + " MiB"
-          bar: panel.bar
-        }
-        MemoryStatRow {
-          width: parent.width
-          label: "Total"
-          value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memTotalMiB : 0) + " MiB"
-          bar: panel.bar
+          MemoryStatRow {
+            width: parent.width
+            label: "Used"
+            value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
+            bar: panel.bar
+          }
+          MemoryStatRow {
+            width: parent.width
+            label: "Available"
+            value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
+            bar: panel.bar
+          }
+          MemoryStatRow {
+            width: parent.width
+            label: "Total"
+            value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
+            bar: panel.bar
+          }
         }
       }
 
@@ -176,7 +170,6 @@ ShibumiPanel {
   component MemoryStatRow: Row {
     required property string label
     required property string value
-    required property string detail
     required property var bar
 
     Text {
@@ -191,19 +184,10 @@ ShibumiPanel {
     }
     Text {
       id: valueText
-      width: parent.width * 0.3
+      width: parent.width * 0.6
+      horizontalAlignment: Text.AlignRight
       text: parent.value
       color: parent.bar ? parent.bar.foreground : Commons.Color.foreground
-      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
-      renderType: Text.NativeRendering
-    }
-    Text {
-      id: detailText
-      width: parent.width * 0.3
-      text: parent.detail
-      color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
-        parent.bar.foreground.b, 0.58) : Commons.Color.foreground
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: 11
       renderType: Text.NativeRendering

@@ -158,6 +158,14 @@ ShellRoot {
           && cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42,
           "CPU panel history or equal GPU presentation missing")
         telemetry.system.cpuHistory = oldHistory
+        const memoryPanel = root.panels[1], oldMemory = [telemetry.system.memTotalMiB, telemetry.system.memAvailableMiB]
+        telemetry.system.memTotalMiB = 8192; telemetry.system.memAvailableMiB = 3072
+        function texts(item) { return ("text" in item ? [String(item.text)] : []).concat(item.children.reduce((out, child) => out.concat(texts(child)), [])) }
+        const memoryText = texts(memoryPanel)
+        root.check(memoryPanel.usageRing && memoryPanel.usageRing.percent === 63
+          && ["5.0 GiB", "3.0 GiB", "8.0 GiB"].every(value => memoryText.indexOf(value) >= 0)
+          && memoryText.every(value => !/\bMiB\b/.test(value)), "Memory ring or GiB-only details missing")
+        telemetry.system.memTotalMiB = oldMemory[0]; telemetry.system.memAvailableMiB = oldMemory[1]
         root.firstGpu = cpu.gpu
         items[0].bar = replacementBar
         cpu.shell = null; telemetry.shell = null; storage.shell = null
