@@ -22,6 +22,8 @@ Item {
     id: state
     property var hostService: null
     property int hostGeneration: 0
+    property real liveRevision: 0
+    function token(entry) { return hostGeneration + ":" + liveRevision + ":" + JSON.stringify(entry) }
     property var historyReadHost: null
     property int historyReadGeneration: -1
     property var queuedHistoryHost: null
@@ -131,6 +133,7 @@ Item {
       image: String(value.image || ""),
       glyph: String(value.glyph || ""),
       exec: String(value.exec || ""),
+      execArgv: String(value.execArgv || ""),
       urgency: typeof value.urgency === "number" ? value.urgency : -1,
       expireTimeout: Number(value.expireTimeout || 0),
       timestamp: Number(value.timestamp || 0),
@@ -146,11 +149,14 @@ Item {
       const entry = model.get(index)
       if (!entry || Number(entry.originalId || entry.id || 0) < 0)
         continue
-      target.append(primitiveEntry(entry))
+      const copy = primitiveEntry(entry)
+      if (target === pendingRows) copy.liveToken = state.token(copy)
+      target.append(copy)
     }
   }
 
   function syncModels() {
+    state.liveRevision++
     rebuild(pendingRows, sourceModel())
     const archived = historySourceModel()
     if (archived) {
@@ -204,6 +210,23 @@ Item {
         return index
     }
     return -1
+  }
+
+  function invokeLive(token) {
+    const service = state.hostService, revision = state.liveRevision
+    const model = service ? service.popupModel : null
+    if (!token || !model || model !== sourceModel()
+        || typeof service.invokePopupDefault !== "function") return false
+    let match = -1
+    for (let index = 0; index < model.count; index++) {
+      const row = primitiveEntry(model.get(index))
+      if (row.originalId <= 0 || !isFinite(row.timestamp) || row.timestamp <= 0
+          || state.token(row) !== token) continue
+      if (match >= 0) return false
+      match = index
+    }
+    if (match < 0 || revision !== state.liveRevision || service !== state.hostService) return false
+    try { return service.invokePopupDefault(match) !== false } catch (_error) { return false }
   }
 
   function setDoNotDisturb(value) {
@@ -389,6 +412,7 @@ Item {
   Connections {
     target: root.sourceModel()
     ignoreUnknownSignals: true
+    function onRowsMoved() { root.syncModels() }
     function onRowsInserted() { root.syncModels() }
     function onRowsRemoved() { root.syncModels() }
     function onDataChanged() { root.syncModels() }

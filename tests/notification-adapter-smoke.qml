@@ -16,6 +16,7 @@ ShellRoot {
   property int mutationPhase: 0
   property int mutationStartTick: 0
 
+  function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
     console.error("notification-adapter-smoke:", message)
     Qt.exit(1)
@@ -60,6 +61,8 @@ ShellRoot {
     property int dismissCount: 0
     property int clearCount: 0
     property string focusedSummary: ""
+    property string clickResult: ""
+    function invokePopupDefault(index) { if (clickResult === "error") throw Error("fixture action"); clickResult = popupModel.get(index).summary; focusApp(popupModel.get(index)) }
     function setDoNotDisturb(value) { doNotDisturb = value === true }
     function dismissPopup(index) {
       if (index < 0 || index >= popupModel.count) return
@@ -254,6 +257,18 @@ ShellRoot {
         glyph: "", exec: "", urgency: 1, expireTimeout: 8000,
         timestamp: 101
       })
+      const token = String(adapter.pendingModel.get(0).liveToken || ""), checks = {}
+      checks.defaultPath = clickLive(token) && currentHost.clickResult === "Current notification"
+      liveRows.move(0, 1, 1); checks.reorder = !clickLive(token) && clickLive(String(adapter.pendingModel.get(1).liveToken || "")) && currentHost.clickResult === "Current notification"
+      const reordered = String(adapter.pendingModel.get(1).liveToken || ""), replacement = adapter.primitiveEntry(liveRows.get(1)); liveRows.remove(1); liveRows.insert(1, replacement)
+      checks.replacement = !clickLive(reordered) && JSON.stringify(adapter.primitiveEntry(liveRows.get(1))) === JSON.stringify(replacement)
+      const latest = String(adapter.pendingModel.get(1).liveToken || ""); currentHost.clickResult = "error"; currentHost.focusedSummary = ""
+      checks.error = !clickLive(latest) && currentHost.focusedSummary === ""; currentHost.clickResult = ""
+      checks.fallback = clickLive(latest) && currentHost.focusedSummary === "Current notification"
+      adapter.attachShell(null); adapter.attachShell(currentShell); checks.generation = !clickLive(latest)
+      const dying = String(adapter.pendingModel.get(0).liveToken || ""), removed = adapter.primitiveEntry(liveRows.get(0)); liveRows.remove(0)
+      checks.expiry = !clickLive(dying); checks.missing = !clickLive("missing"); liveRows.append(removed)
+      console.log("235_LIVE_CLICK", JSON.stringify(checks)); if (Object.values(checks).some(ok => !ok)) return root.fail("live click identity/default/error")
       if (adapter.pendingCount !== 2
           || !adapter.focusApp(adapter.pendingModel.get(0))
           || currentHost.focusedSummary !== "Current notification"

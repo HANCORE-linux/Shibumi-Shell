@@ -80,6 +80,9 @@ ShellRoot {
     id: fakeNotifications
     property bool doNotDisturb: false
     property var pendingModel: pendingNotifications
+    property var popupModel: pendingNotifications
+    function focusApp(_entry) {}
+    function invokePopupDefault(index) { dismissPendingCount += index + 1 }
     property var pastModel: pastNotifications
     property int dndToggleCount: 0
     property int markAllSeenCount: 0
@@ -765,6 +768,8 @@ ShellRoot {
             || fakeNotifications.markAllSeenCount !== 1
             || fakeNotifications.dismissPendingCount !== 1)
           return root.fail("notification actions bypassed official service")
+        pendingNotifications.setProperty(0, "originalId", 7); notificationPanel.openNotification("pending", String(notificationPanel.activeRows[0].liveToken || ""))
+        if (fakeNotifications.dismissPendingCount !== 2) return root.fail("panel did not use exact Live dispatch")
         status.trayWidget.managePopupOpen = true
         status.close()
         root.phase++

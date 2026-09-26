@@ -64,7 +64,8 @@ ShibumiPanel {
           appIcon: String(entry.appIcon || ""),
           summary: String(entry.summary || ""),
           body: String(entry.body || ""),
-          details: rowDetails(entry)
+          details: rowDetails(entry),
+          liveToken: bucket === "pending" ? String(entry.liveToken || "") : ""
         })
       }
     }
@@ -133,22 +134,10 @@ ShibumiPanel {
       notificationService.clearPending()
   }
 
-  function openNotification(bucket, index) {
-    if (!notificationService) {
-      closePanel()
-      return
-    }
-    const model = bucket === "past" ? notificationService.pastModel
-      : notificationService.pendingModel
-    if (!model || index < 0 || index >= model.count) {
-      closePanel()
-      return
-    }
-    const entry = model.get(index)
-    if (bucket === "pending" && entry
-        && typeof notificationService.focusApp === "function")
-      notificationService.focusApp(entry)
-    closePanel()
+  // The entry is the identity captured on press, never a current model index.
+  function openNotification(bucket, entry) {
+    if (bucket === "pending" && entry && notificationService
+        && notificationService.invokeLive(entry)) closePanel()
   }
 
   function safeIconSource(icon) {
@@ -370,6 +359,7 @@ ShibumiPanel {
             required property string appIcon
             required property string summary
             required property string body
+            required property string liveToken
             required property string details
             required property int groupCount
             required property bool groupStart
@@ -388,11 +378,13 @@ ShibumiPanel {
 
             MouseArea {
               id: rowHover
+              property string pressedToken: ""
+              enabled: notificationRow.bucket === "pending"
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: panel.openNotification(notificationRow.bucket,
-                notificationRow.sourceIndex)
+              onPressed: pressedToken = notificationRow.liveToken
+              onClicked: panel.openNotification(notificationRow.bucket, pressedToken)
             }
 
             Image {
