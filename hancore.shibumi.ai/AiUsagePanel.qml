@@ -1,14 +1,13 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
-import Qt.labs.folderlistmodel
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 // Layout derived from MIT-licensed Omarchy v4.0.4 plugins/agents/Panel.qml.
 // See Omarchy-LICENSE. Shibumi retains its own data, selection and lifecycle.
+// Chart/metric structure adapted from 0xSero/omarchy-local-ai; see Local-AI-LICENSE.
 ShibumiPanel {
   id: panel
 
@@ -21,7 +20,6 @@ ShibumiPanel {
   readonly property bool headlineAlarm: !!headline && headline.percent >= 90
   readonly property color headlineColor: !providerReady ? panel.controlMuted
     : headlineAlarm ? Commons.Color.urgent : panel.controlForeground
-  readonly property var providerLogo: heroMark
   readonly property string heroTitle: heroName.text
   readonly property string heroTier: heroPlan.text
   readonly property bool providerSwitchVisible: providerRow.visible
@@ -37,7 +35,19 @@ ShibumiPanel {
   readonly property bool primaryUsageVisible: limitWindows.length > 0
   readonly property bool secondaryUsageVisible: limitWindows.length > 1
   readonly property var days: provider ? provider.recentDays || [] : []
-  readonly property int renderedDayCount: dayRepeater.count
+  readonly property int renderedDayCount: days.length
+  // Omarchy's legacy recentDays.messageCount field contains token totals, not messages.
+  readonly property var weekDays: Array.from({length: 7}, (_, i) => {
+    const date = dayKey(i - 6), day = days.find(entry => entry.date === date)
+    return {date: date, messageCount: day ? day.messageCount : null}
+  })
+  readonly property int reportedDays: weekDays.filter(day => day.messageCount !== null).length
+  readonly property real messageTotal: weekDays.reduce((sum, day) => sum + (day.messageCount || 0), 0)
+  readonly property real messageMax: Math.max(1, ...weekDays.map(day => day.messageCount || 0))
+  function dayKey(offset) {
+    const date = new Date(nowMs); date.setDate(date.getDate() + offset)
+    return Qt.formatDateTime(date, "yyyy-MM-dd")
+  }
   readonly property bool clockRunning: panelClock.running
   property double nowMs: Date.now()
   onOpenChanged: if (open) nowMs = Date.now()
@@ -169,54 +179,19 @@ ShibumiPanel {
       Column {
         id: contentColumn
         width: scroller.width
-        spacing: Commons.Style.space(12)
+        spacing: Commons.Style.space(7)
 
         Item {
           id: header
           width: parent.width
-          height: Commons.Style.space(52)
-
-          Item {
-            width: Commons.Style.space(36); height: width
-            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
-            Image {
-              id: heroMark
-              anchors.fill: parent
-              readonly property string hostBase: {
-                const id = panel.provider ? String(panel.provider.providerId || "") : "", root = panel.aiService ? String(panel.aiService.omarchyPath || "") : ""
-                return /^[A-Za-z0-9_-]{1,64}$/.test(id) && /^\/(?!\/)/.test(root) && id !== "codex" && id !== "opencode" ? root.replace(/\/$/, "") + "/shell/plugins/agents/assets/" + id : ""
-              }
-              property FolderListModel hostMarks: FolderListModel {
-                folder: heroMark.hostBase ? Commons.Util.fileUrl(heroMark.hostBase.slice(0, heroMark.hostBase.lastIndexOf("/"))) : Qt.resolvedUrl("assets")
-                nameFilters: ["*.svg"]; showDirs: false }
-              readonly property color surface: panel.shibumiTokens ? panel.shibumiTokens.panelBackground : Commons.Color.popups.background
-              readonly property bool light: [surface.r, surface.g, surface.b].map(c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
-                .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0) >= 0.5
-              visible: status === Image.Ready
-              source: panel.provider && panel.provider.providerId === "codex" ? Qt.resolvedUrl("assets/codex.svg")
-                : panel.provider && panel.provider.providerId === "opencode" ? Qt.resolvedUrl("assets/opencode-mark.svg") : !hostBase || hostMarks.status !== FolderListModel.Ready ? ""
-                : hostMarks.count && light && hostMarks.indexOf(Commons.Util.fileUrl(hostBase + "-light.svg")) >= 0 ? Commons.Util.fileUrl(hostBase + "-light.svg")
-                : hostMarks.count && hostMarks.indexOf(Commons.Util.fileUrl(hostBase + ".svg")) >= 0 ? Commons.Util.fileUrl(hostBase + ".svg") : ""
-              fillMode: Image.PreserveAspectFit
-              layer.enabled: hostBase === ""
-              layer.effect: MultiEffect { colorization: 1; colorizationColor: panel.controlForeground }
-            }
-            Presentation.IconText {
-              anchors.centerIn: parent
-              visible: heroMark.status !== Image.Ready
-              text: "smart_toy"
-              color: panel.controlForeground
-              font.pixelSize: Commons.Style.font.display
-            }
-          }
+          height: Commons.Style.space(44)
 
           Text {
             id: heroName
             anchors.left: parent.left
-            anchors.leftMargin: Commons.Style.space(48)
             anchors.top: parent.top
             anchors.topMargin: Commons.Style.space(6)
-            width: parent.width - actionRow.width - Commons.Style.space(56)
+            width: Math.max(0, parent.width - actionRow.width - Commons.Style.space(8))
             elide: Text.ElideRight
             textFormat: Text.PlainText
             text: panel.provider ? panel.providerHeading(panel.provider) : "AI USAGE"
@@ -233,9 +208,12 @@ ShibumiPanel {
             width: heroName.width; elide: Text.ElideRight
             textFormat: Text.PlainText
             text: panel.tierLabel(panel.provider)
-            color: panel.controlMutedHigh
+            visible: text !== ""
+            color: panel.controlForeground
             font.family: heroName.font.family
-            font.pixelSize: Commons.Style.font.bodySmall
+            font.pixelSize: Commons.Style.font.body
+            font.weight: Font.DemiBold
+            renderType: Text.NativeRendering
           }
 
           Row {
@@ -263,7 +241,8 @@ ShibumiPanel {
         Row {
           id: providerRow
           visible: providerTabs.count > 1
-          width: parent.width
+          x: panel.controlBorderWidth
+          width: Math.max(0, parent.width - 2 * x)
           height: Commons.Style.space(28)
           spacing: Commons.Style.space(6)
 
@@ -277,11 +256,10 @@ ShibumiPanel {
               readonly property bool selected:
                 panel.aiService.selectedTool === modelData.providerId
               readonly property bool hovered: tabMouse.containsMouse
-              width: (providerRow.width - Math.max(0,
-                (panel.aiService.providers.length - 1) * providerRow.spacing))
-                / Math.max(1, panel.aiService.providers.length)
+              width: Math.max(0, Math.floor((providerRow.width - Math.max(0,
+                (providerTabs.count - 1) * providerRow.spacing)) / Math.max(1, providerTabs.count)))
               height: parent.height
-              radius: panel.controlRadius
+              radius: panel.renderedSurfaceRadius
               color: selected ? panel.controlActiveFillColor
                 : hovered ? panel.controlHoverFillColor : panel.controlFillColor
               border.width: panel.controlBorderWidth
@@ -292,7 +270,9 @@ ShibumiPanel {
               Behavior on border.color { ColorAnimation { duration: 100 } }
 
               Text {
-                anchors.centerIn: parent
+                anchors.fill: parent; anchors.margins: Commons.Style.space(6)
+                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight; textFormat: Text.PlainText
                 text: panel.providerTabLabel(providerTab.modelData)
                 color: providerTab.selected || providerTab.hovered
                   ? panel.controlAccent : panel.controlForeground
@@ -331,17 +311,60 @@ ShibumiPanel {
           renderType: Text.NativeRendering
         }
 
-        Rectangle {
-          visible: !!panel.provider
-          width: parent.width; height: statusRow.height + Commons.Style.space(16)
-          radius: panel.controlRadius; color: panel.controlFillColor
-          border.width: panel.controlBorderWidth; border.color: panel.controlBorderColor
-          DetailRow {
-            id: statusRow
-            anchors.centerIn: parent; width: parent.width - Commons.Style.space(16)
-            label: "Status"
-            value: panel.provider ? String(panel.provider.usageStatusText || panel.providerStatusLabel) : ""
-            wrapValue: true
+        DetailRow {
+          visible: !!panel.provider; label: "Status"
+          value: panel.provider ? String(panel.provider.usageStatusText || panel.providerStatusLabel) : ""; wrapValue: true
+        }
+        Grid {
+          id: metrics
+          visible: !!panel.provider; width: parent.width
+          columns: 4; columnSpacing: Commons.Style.space(4)
+          Repeater {
+            model: [{label:"Today tokens",value:panel.provider && panel.aiService ? panel.aiService.formatTokens(panel.provider.todayTotalTokens || 0) : "—"},
+              {label:"Prompts",value:panel.provider ? panel.provider.todayPrompts || 0 : "—"}, {label:"Sessions",value:panel.provider ? panel.provider.todaySessions || 0 : "—"},
+              {label:"7D tokens",value:panel.reportedDays && panel.aiService ? panel.aiService.formatTokens(panel.messageTotal) : "—"}]
+            Column {
+              required property var modelData
+              width: (metrics.width - 3 * metrics.columnSpacing) / 4; spacing: Commons.Style.space(3)
+              Text { text: String(modelData.value); color: panel.controlForeground; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering }
+              Text { text: modelData.label; color: panel.controlMutedHigh; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
+            }
+          }
+        }
+        Column {
+          visible: panel.reportedDays > 0; width: parent.width; spacing: Commons.Style.space(4)
+          DetailRow { label: "TOKENS · LAST 7 DAYS"; value: panel.reportedDays < 7 ? panel.reportedDays + "/7 days reported" : "" }
+          Canvas {
+            width: parent.width; height: Commons.Style.space(38)
+            readonly property var values: panel.weekDays
+            readonly property color ink: panel.controlForeground
+            onValuesChanged: requestPaint()
+            onInkChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+            onPaint: {
+              const g = getContext("2d"), step = width / 7; g.clearRect(0, 0, width, height)
+              g.fillStyle = Commons.Util.alpha(ink, 0.08); g.strokeStyle = Commons.Util.alpha(ink, 0.5); g.lineWidth = 1
+              for (let i = 0; i < 7; i++) {
+                if (values[i].messageCount === null) continue // Missing days remain gaps, never fabricated zeroes.
+                const y = height - 1 - values[i].messageCount / panel.messageMax * (height - 4)
+                g.fillRect(i * step, y, step, height - y); g.beginPath(); g.moveTo(i * step, y); g.lineTo((i + 1) * step, y)
+                if (i < 6 && values[i + 1].messageCount !== null) g.lineTo((i + 1) * step, height - 1 - values[i + 1].messageCount / panel.messageMax * (height - 4))
+                g.stroke()
+              }
+            }
+          }
+          Row {
+            width: parent.width
+            Repeater {
+              model: panel.weekDays
+              Column {
+                required property var modelData
+                width: contentColumn.width / 7; spacing: Commons.Style.space(2)
+                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData.messageCount === null ? "—" : panel.aiService.formatTokens(modelData.messageCount); color: panel.controlForeground; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
+                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: panel.dayLabel(modelData.date); color: panel.controlMutedHigh; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
+              }
+            }
           }
         }
         Column {
@@ -403,34 +426,12 @@ ShibumiPanel {
             ? panel.aiService.formatTokens(panel.provider.hourlyTokens) + "/h" : ""
         }
         DetailRow {
-          visible: panel.todaySummary !== ""
-          label: "Today"
-          value: panel.todaySummary
-          wrapValue: true
-        }
-        DetailRow {
           visible: panel.provider && String(panel.provider.latestModel || "") !== ""
           label: panel.provider && String(panel.provider.providerId || "")
             === "opencode" ? "Latest today" : "Latest"
           value: panel.provider ? String(panel.provider.latestModel || "") : ""
         }
 
-        DetailRow {
-          visible: panel.days.length > 0
-          label: "TOKENS BY DAY"
-          value: ""
-        }
-        Repeater {
-          id: dayRepeater
-          model: panel.days
-          delegate: ModelUsageRow {
-            required property var modelData
-            width: contentColumn.width
-            daily: true
-            entry: ({ name: panel.dayLabel(modelData.date), totalLabel: panel.aiService.formatTokens(modelData.messageCount),
-              pct: modelData.messageCount / Math.max(1, ...panel.days.map(day => day.messageCount)) * 100, detail: "" })
-          }
-        }
         Item {
           visible: panel.providerModels.length > 0
           width: parent.width
@@ -478,15 +479,14 @@ ShibumiPanel {
     required property var action
     implicitWidth: Commons.Style.space(28)
     implicitHeight: Commons.Style.space(28)
-    radius: panel.controlRadius
+    radius: panel.renderedSurfaceRadius
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
-    Presentation.IconText {
-      anchors.centerIn: parent
-      text: iconAction.icon
-      color: iconAction.foreground
-      font.pixelSize: Commons.Style.font.body
+    Ui.OpticalGlyph {
+      anchors.fill: parent
+      text: iconAction.icon; color: iconAction.foreground
+      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.body)
     }
 
     MouseArea {
@@ -513,7 +513,7 @@ ShibumiPanel {
     readonly property color usageColor: dimmed ? panel.controlMuted
       : value >= 90 ? Commons.Color.urgent : panel.controlForeground
     width: parent.width
-    height: Commons.Style.space(30)
+    height: Commons.Style.space(24)
 
     Text {
       id: usageLabel
@@ -593,7 +593,7 @@ ShibumiPanel {
     id: modelRow
     required property var entry
     property bool daily: false
-    height: Commons.Style.space(daily ? 20 : 30)
+    height: Commons.Style.space(22)
     readonly property real percent: Math.max(0, Math.min(100,
       Number(entry && entry.pct) || 0))
 
@@ -632,8 +632,8 @@ ShibumiPanel {
       anchors.right: modelRow.daily ? modelValue.left : parent.right
       anchors.margins: modelRow.daily ? Commons.Style.space(8) : 0
       anchors.verticalCenter: parent.verticalCenter
-      height: modelRow.daily ? Commons.Style.space(4) : parent.height
-      radius: height / 2
+      height: Commons.Style.space(2); anchors.verticalCenterOffset: Commons.Style.space(10)
+      radius: 0
       color: Commons.Util.alpha(panel.controlAccent, 0.14)
 
       Rectangle {

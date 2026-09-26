@@ -32,8 +32,6 @@ mkdir -p "$tmpdir/runtime" "$tmpdir/fixtures" "$tmpdir/home/.claude" \
   "$tmpdir/home/.codex" "$tmpdir/state/omarchy/agents/usage" \
   "$tmpdir/omarchy/bin"
 chmod 700 "$tmpdir/runtime"
-mkdir -p "$tmpdir/omarchy/shell/plugins/agents/assets"
-printf '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="orange"/></svg>\n' | tee "$tmpdir/omarchy/shell/plugins/agents/assets/claude.svg" >"$tmpdir/omarchy/shell/plugins/agents/assets/claude-light.svg"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 cp -a -- "$repo_root/hancore.shibumi.ai" "$tmpdir/ai"
 install -m 0644 "$repo_root/tests/fixtures/AiPanelHost.qml" \

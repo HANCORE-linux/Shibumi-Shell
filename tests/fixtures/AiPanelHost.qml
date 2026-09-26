@@ -13,6 +13,7 @@ Item {
   property int contentHeight: 560
   readonly property var shibumiTokens: bar && "visualTokens" in bar
     ? bar.visualTokens : null
+  readonly property real renderedSurfaceRadius: shibumiTokens && shibumiTokens.panelRadius !== undefined ? shibumiTokens.panelRadius : 8
   readonly property real controlRadius: 8
   readonly property color controlForeground: bar ? bar.foreground : "white"
   readonly property color controlAccent: bar ? bar.urgent : "red"

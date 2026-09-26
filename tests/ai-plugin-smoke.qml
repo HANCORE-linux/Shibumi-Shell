@@ -8,7 +8,7 @@ ShellRoot {
   id: root
 
   property int phase: 0
-  property int logoStage: 0
+  property int headerStage: 0
   property int ticks: 0
   property real stableProviderWidth: 0
   property var clickTargets: []
@@ -71,6 +71,14 @@ ShellRoot {
     checks.longPace = typeof emptyAgentsPanel.paceText === "function" && ["Weekly", "Monthly"].every((label, i) => emptyAgentsPanel.paceText({label: label, percent: 50, resetsAt: new Date(now + [302400000, 1296000000][i]).toISOString()}) === "Pace: 1.0×")
     checks.noPace = typeof emptyAgentsPanel.paceText === "function" && [{label: "Unknown", resetsAt: record.limits[0].resetsAt}, {label: "Weekly", resetsAt: ""}, {label: "Weekly", resetsAt: new Date(now - 1).toISOString()}, {label: "1-hour", resetsAt: record.limits[0].resetsAt}].every(w => emptyAgentsPanel.paceText(Object.assign({percent: 50}, w)) === "")
     checks.days = !!p.recentDays && p.recentDays.length === 7 && p.recentDays[0].date === "2026-09-20" && p.recentDays[6].messageCount === 700 && emptyAgentsPanel.renderedDayCount === 7
+    emptyAgentsPanel.nowMs = Date.parse("2026-09-26T12:00:00Z")
+    checks.tokenDays = emptyAgentsPanel.messageTotal === 2800 && emptyAgentsPanel.reportedDays === 7
+    const days = record.recentDays; record.recentDays = days.slice(0, -1)
+    agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.missingDay = emptyAgentsPanel.reportedDays === 6 && emptyAgentsPanel.messageTotal === 2100
+      && emptyAgentsPanel.weekDays[6].messageCount === null
+    record.recentDays = days; agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    emptyAgentsPanel.nowMs = now
     checks.codex = typeof agentsService.limitWindows === "function" && agentsService.limitWindows(agentsService.providerFor("codex")).length === 1 && agentsService.providerFor("codex").models[0].totalLabel === "1.03M"
     record.limits[2].percent = 0.899; agentsService.applyAgentRecord("claude", JSON.stringify(record))
     checks.threshold = emptyAgentsPanel.headlineAlarm === false && String(emptyAgentsPanel.headlineColor) !== String(alarmColor)
@@ -91,6 +99,22 @@ ShellRoot {
     layout.multiple = emptyAgentsPanel.providerSwitchVisible === true
     console.log("243_AI_LAYOUT", JSON.stringify(layout))
     return Object.values(checks).every(value => value) && Object.values(layout).every(value => value)
+  }
+
+  function descendants(item) {
+    return Array.from(item.children || []).reduce((items, child) => items.concat([child], descendants(child)), [])
+  }
+
+  function panelHeaderMatches() {
+    const items = descendants(emptyAgentsPanel), tier = aiService.displayTierLabel(aiService.selectedProvider.tierLabel)
+    const plan = items.find(item => item.text === tier && "font" in item)
+    const tabs = items.filter(item => "selected" in item && item.modelData && item.modelData.providerId)
+    return items.every(item => !("sourceSize" in item)) && emptyAgentsPanel.heroTier === tier
+      && plan && plan.visible && !plan.truncated && plan.width > 0 && plan.y + plan.height <= plan.parent.height
+      && tabs.length === 3 && tabs.filter(item => item.selected).length === 1
+      && tabs.every(item => item.width > 0 && Number.isInteger(item.width)
+        && item.mapToItem(item.parent.parent, 0, 0).x >= 0
+        && item.mapToItem(item.parent.parent, item.width, 0).x <= item.parent.parent.width)
   }
 
   function linearChannel(value) {
@@ -1080,12 +1104,20 @@ ShellRoot {
               || agentsService.providerFor("claude") === null
               || agentsService.providerFor("codex") === null)
             return root.fail("queued Agents update did not become current")
-          if (root.logoStage < 3) {
-            const mark = emptyAgentsPanel.providerLogo, ready = mark && mark.status === Image.Ready && mark.visible, glyph = mark && mark.parent.children[1].visible
-            if (!mark || (root.logoStage < 2 ? !ready || glyph || String(mark.source) !== "file://" + agentsService.omarchyPath + "/shell/plugins/agents/assets/claude" + (root.logoStage === 1 ? "-light" : "") + ".svg" : ready || !glyph || String(mark.source) !== "")) return root.fail("host Claude logo/glyph stage " + root.logoStage)
-            console.log("244_AI_LOGO", root.logoStage, "image=" + ready, "glyph=" + glyph)
-            if (root.logoStage++ === 0) { fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {panelBackground: "#ffffff"}); return }
-            if (root.logoStage === 2) { emptyAgentsPanel.aiService = {selectedProvider: agentsService.providerFor("claude"), omarchyPath: agentsService.omarchyPath + "/absent", providers: [], limitWindows: () => [], bindingWindow: () => null, formatTokens: value => String(value)}; return }
+          if (root.headerStage > 0) {
+            if (!root.panelHeaderMatches()) return root.fail("text-only provider header or tab bounds stage " + root.headerStage)
+            console.log("247_AI_HEADER", root.headerStage, aiService.selectedTool, emptyAgentsPanel.heroTier, emptyAgentsPanel.contentWidth)
+          }
+          if (root.headerStage < 6) {
+            const index = root.headerStage++ % 3
+            emptyAgentsPanel.aiService = aiService; emptyPanelOwner.opened = true
+            emptyAgentsPanel.contentWidth = [347, 320, 273][index]
+            fakeBar.v2ShellMode = root.headerStage > 3
+            claudeProvider.tierLabel = root.headerStage > 3 ? "Max 20x" : "Max 5x"
+            const tab = root.descendants(emptyAgentsPanel).find(item => "selected" in item && item.modelData && item.modelData.providerId === ["claude", "codex", "opencode"][index])
+            tab.children.find(item => typeof item.clicked === "function").clicked(null)
+            if (aiService.selectedTool !== tab.modelData.providerId) return root.fail("provider tab did not dispatch selection")
+            return
           }
           stop()
           watchdog.stop()
