@@ -72,7 +72,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.3")
+        self.assertEqual(version, "0.1.1-beta.15.4")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -193,7 +193,11 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15.3": {
                 "suiteVersion": "0.1.1-beta.15.3",
-                "sourceRevisions": ["package:0.1.1-beta.15.3"],
+                "sourceRevisions": [
+                    "5b1d21f0cea73bb9e7997278a828b3ef295e6c94",
+                    "db579163a4b1004a7cc09ee565cac616db9ff627",
+                    "package:0.1.1-beta.15.3",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "60e1904b23e98317e896fdd0bbf98daf44ba504f5eb22f3a8ae86ab5ab72a342",
             },
@@ -224,11 +228,11 @@ class PackageReleaseTests(unittest.TestCase):
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.3"]["pluginDigests"],
+            states["public-beta.15.4"]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.3"]["payloadDigest"],
+            states["public-beta.15.4"]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(
