@@ -92,11 +92,7 @@ ShibumiPanel {
           onWidthChanged: requestPaint()
           onHeightChanged: requestPaint()
 
-          Ui.OpticalGlyph {
-            anchors.centerIn: parent; width: Commons.Style.space(32); height: width
-            text: "memory_alt"; color: panel.controlForeground
-            fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.space(26))
-          }
+          water: true
         }
 
         Grid {

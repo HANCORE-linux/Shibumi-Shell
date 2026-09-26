@@ -1,3 +1,4 @@
+// Plugin-local copy of Shibumi's MemoryRing; no cross-plugin presentation import.
 import QtQuick
 import qs.Commons as Commons
 

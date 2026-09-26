@@ -64,29 +64,12 @@ ShibumiPanel {
       spacing: 8
 
       Item {
-        id: header
         width: parent.width
-        height: Commons.Style.space(42)
-
-        Ui.OpticalGlyph {
-          text: "memory"; color: panel.controlForeground
-          fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon)
-          width: Commons.Style.space(20); height: width
-          anchors.verticalCenter: parent.verticalCenter
-        }
-        Text {
-          id: cpuModelLabel
-          x: Commons.Style.space(28); anchors.bottom: parent.bottom
-          width: parent.width - x; elide: Text.ElideRight; textFormat: Text.PlainText
-          text: panel.systemTelemetry ? panel.systemTelemetry.cpuModel : ""
-          color: panel.controlMutedHigh; renderType: Text.NativeRendering
-          font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption
-        }
+        height: 24
 
         Text {
           anchors.left: parent.left
-          anchors.top: parent.top
-          anchors.leftMargin: Commons.Style.space(28)
+          anchors.verticalCenter: parent.verticalCenter
           text: "CPU · GPU"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -119,11 +102,56 @@ ShibumiPanel {
         }
       }
 
+      Text {
+        id: cpuModelLabel
+        width: parent.width; elide: Text.ElideRight; textFormat: Text.PlainText
+        text: panel.systemTelemetry ? panel.systemTelemetry.cpuModel : ""
+        color: panel.controlMutedHigh; renderType: Text.NativeRendering
+        font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+        font.pixelSize: Commons.Style.font.caption
+      }
+
       Rectangle {
         width: parent.width
         height: 1
         color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
           panel.bar.foreground.b, 0.18) : Commons.Color.popups.border
+      }
+
+      Row {
+        width: parent.width
+        height: cpuRing.height
+        spacing: Commons.Style.space(16)
+
+        CpuRing {
+          id: cpuRing
+          width: Commons.Style.space(80)
+          height: width
+          percent: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
+          foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+          accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+          onWidthChanged: requestPaint()
+          onHeightChanged: requestPaint()
+
+          water: true
+        }
+
+        Grid {
+          width: parent.width - cpuRing.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter
+          columns: 2; columnSpacing: Commons.Style.space(8); rowSpacing: Commons.Style.space(8)
+          Repeater {
+            model: ["Usage", "Load 1 min", "Load 5 min", "Load 15 min"]
+            CpuStatRow {
+              required property int index; required property string modelData
+              width: (parent.width - parent.columnSpacing) / 2
+              label: modelData
+              value: index === 0 ? cpuRing.percent + "%"
+                : panel.systemTelemetry && panel.systemTelemetry.loadAverage.length === 3 ? panel.systemTelemetry.loadAverage[index - 1].toFixed(2) : "—"
+              bar: panel.bar
+            }
+          }
+        }
       }
 
       CpuWave {
@@ -133,22 +161,6 @@ ShibumiPanel {
         accent: panel.controlMutedHigh
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
-      }
-      Row {
-        width: parent.width
-        Repeater {
-          model: ["CPU", "LOAD 1 MIN", "LOAD 5 MIN", "LOAD 15 MIN"]
-          Column {
-            required property int index; required property string modelData
-            width: panelColumn.width / 4; spacing: Commons.Style.space(3)
-            Text {
-              text: index === 0 ? (panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0) + "%"
-                : panel.systemTelemetry && panel.systemTelemetry.loadAverage.length === 3 ? panel.systemTelemetry.loadAverage[index - 1].toFixed(2) : "—"
-              color: panel.controlForeground; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering
-            }
-            Text { text: modelData; color: panel.controlMutedHigh; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
-          }
-        }
       }
 
       UsageRow {
@@ -250,6 +262,33 @@ ShibumiPanel {
           onClicked: panel.openMonitor()
         }
       }
+    }
+  }
+
+  component CpuStatRow: Item {
+    required property string label
+    required property string value
+    required property var bar
+    implicitHeight: valueText.height + Commons.Style.space(3) + labelText.height
+
+    Text {
+      id: labelText
+      y: valueText.height + Commons.Style.space(3); width: parent.width
+      text: parent.label.toUpperCase()
+      color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
+        parent.bar.foreground.b, 0.65) : Commons.Color.foreground
+      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
+      font.pixelSize: Commons.Style.font.caption
+      renderType: Text.NativeRendering
+    }
+    Text {
+      id: valueText
+      width: parent.width
+      text: parent.value
+      color: parent.bar ? parent.bar.foreground : Commons.Color.foreground
+      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
+      font.pixelSize: Commons.Style.font.subtitle
+      renderType: Text.NativeRendering
     }
   }
 
