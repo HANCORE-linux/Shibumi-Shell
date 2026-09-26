@@ -184,7 +184,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             maximumLineCount: 1
-            renderType: Text.NativeRendering
+            renderType: Text.QtRendering
           }
 
           Rectangle {
