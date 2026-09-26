@@ -81,7 +81,8 @@ ShellRoot {
     property bool doNotDisturb: false
     property var pendingModel: pendingNotifications
     property var popupModel: pendingNotifications
-    function focusApp(_entry) {}
+    property var focusedApps: []
+    function focusApp(entry) { focusedApps = focusedApps.concat([entry.app]) }
     function invokePopupDefault(index) { dismissPendingCount += index + 1 }
     property var pastModel: pastNotifications
     property int dndToggleCount: 0
@@ -724,6 +725,13 @@ ShellRoot {
       } else if (root.phase === 3) {
         if (!status.notificationPanelLoaded || root.phaseTicks < 3) return
         const notificationPanel = status.notificationPanelItem
+        if (!fakeNotifications.focusedApps.length) {
+          ["", "  ", "bad\napp", null, {}].forEach(app => notificationPanel.openNotification("past", app))
+          if (fakeNotifications.focusedApps.length) return root.fail("invalid Recent app dispatched")
+          notificationPanel.openNotification("past", notificationPanel.notificationService.pastModel.get(0).app)
+          if (fakeNotifications.focusedApps.join() !== "Fixture" || status.notificationPanelOpen || fakeNotifications.dismissPendingCount !== 0) return root.fail("Recent focus/close invoked a Live action")
+          status.open(); root.phaseTicks = 0; return
+        }
         if (notificationPanel.ownerWidget !== status
             || notificationPanel.notificationService
               !== status.notificationService

@@ -330,13 +330,14 @@ Item {
     return clearPending()
   }
 
-  function focusApp(entry) {
+  function focusApp(entry, focusOnly) {
     const service = state.hostService
     if (!service || !entry) return false
     if (typeof service.focusApp === "function") {
       service.focusApp(entry)
       return true
     }
+    if (focusOnly === true) return false // Recent must never invoke a Live action.
     const source = sourceIndex(entry, sourceModel())
     if (source < 0 || typeof service.invokePopupDefault !== "function")
       return false

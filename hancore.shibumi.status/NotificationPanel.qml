@@ -138,6 +138,9 @@ ShibumiPanel {
   function openNotification(bucket, entry) {
     if (bucket === "pending" && entry && notificationService
         && notificationService.invokeLive(entry)) closePanel()
+    else if (bucket === "past" && typeof entry === "string"
+        && entry.trim() && !/[\x00-\x1f\x7f]/.test(entry)
+        && notificationService && notificationService.focusApp({ app: entry.trim() }, true)) closePanel()
   }
 
   function safeIconSource(icon) {
@@ -379,11 +382,11 @@ ShibumiPanel {
             MouseArea {
               id: rowHover
               property string pressedToken: ""
-              enabled: notificationRow.bucket === "pending"
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onPressed: pressedToken = notificationRow.liveToken
+              onPressed: pressedToken = notificationRow.bucket === "pending"
+                ? notificationRow.liveToken : notificationRow.app
               onClicked: panel.openNotification(notificationRow.bucket, pressedToken)
             }
 
