@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Services.Mpris
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -34,6 +35,12 @@ ShibumiPanel {
   readonly property bool vinylRotating: vinylArtwork.rotating
   readonly property bool albumVisible: albumText.visible
   readonly property bool playerNameVisible: playerText.visible
+  readonly property var shuffleControl: shuffleButton
+  readonly property var repeatControl: repeatButton
+  readonly property var seekControl: seekMouse
+  readonly property bool directAvailable: open && active && !!player && player.canControl === true && sourcePlayers.indexOf(player) >= 0
+  readonly property bool seekAvailable: directAvailable && !!player && player.canSeek === true
+    && player.positionSupported === true && player.lengthSupported === true && isFinite(player.length) && player.length > 0
   readonly property bool spectrumWorkerRunning: spectrumService
     ? spectrumService.workerRunning === true : false
   readonly property string spectrumState: spectrumService
@@ -64,6 +71,28 @@ ShibumiPanel {
         playerKey(player)) === true : false
   }
 
+  // Approved exception: only shuffle, repeat and seek mutate the selected native
+  // player directly. Transport still belongs to Omarchy; no discovery, IPC or OSD.
+  function directAction(action, target, value, trackId) {
+    if (!directAvailable || !target || target !== player || target.canControl !== true) return false
+    try {
+      if (action === "shuffle" && target.shuffleSupported === true) {
+        target.shuffle = !target.shuffle
+      } else if (action === "repeat" && target.loopSupported === true) {
+        target.loopState = target.loopState === MprisLoopState.None ? MprisLoopState.Track
+          : target.loopState === MprisLoopState.Track ? MprisLoopState.Playlist : MprisLoopState.None
+      } else if (action === "seek" && seekAvailable && target.uniqueId === trackId && typeof value === "number" && isFinite(value)) {
+        target.position = Math.max(0, Math.min(target.length, value)) // Native API uses seconds.
+        resetPosition()
+      } else return false
+      return true
+    } catch (_error) { return false }
+  }
+
+  function controlAction(action) {
+    return action === "shuffle" || action === "repeat" ? directAction(action, player) : runAction(action)
+  }
+
   function selectSource(index) {
     if (index < 0 || index >= sourcePlayers.length || !mediaService
         || typeof mediaService.selectPlayer !== "function") return false
@@ -72,6 +101,8 @@ ShibumiPanel {
 
   function activateCursor() {
     if (focusSection === "sources") return selectSource(cursorIndex)
+    if (cursorIndex === -1) return controlAction("shuffle")
+    if (cursorIndex === 3) return controlAction("repeat")
     if (cursorIndex === 0) return runAction("previous")
     if (cursorIndex === 2) return runAction("next")
     return runAction("playPause")
@@ -83,7 +114,7 @@ ShibumiPanel {
         focusSection = "sources"
         cursorIndex = 0
       } else if (dx !== 0) {
-        cursorIndex = Math.max(0, Math.min(2, cursorIndex + dx))
+        cursorIndex = Math.max(-1, Math.min(3, cursorIndex + dx))
       }
       return
     }
@@ -302,6 +333,21 @@ ShibumiPanel {
         height: Commons.Style.space(18)
         visible: panel.active && panel.currentLength > 0
 
+        MouseArea {
+          id: seekMouse
+          anchors.fill: parent; z: 1
+          enabled: panel.seekAvailable
+          cursorShape: Qt.PointingHandCursor
+          property var pressedPlayer: null
+          property var pressedTrack: null
+          onPressed: { pressedPlayer = panel.player; pressedTrack = pressedPlayer.uniqueId }
+          onCanceled: pressedPlayer = null
+          onClicked: function(mouse) {
+            if (pressedPlayer && pressedPlayer === panel.player && pressedTrack === pressedPlayer.uniqueId)
+              panel.directAction("seek", pressedPlayer, mouse.x / Math.max(1, width) * pressedPlayer.length, pressedTrack)
+            pressedPlayer = null
+          }
+        }
         Rectangle {
           id: progressTrack
           anchors.left: parent.left
@@ -391,6 +437,13 @@ ShibumiPanel {
         spacing: Commons.Style.space(12)
 
         MediaPanelButton {
+          id: shuffleButton
+          icon: checked ? "shuffle_on" : "shuffle"; action: "shuffle"; controlIndex: -1
+          tooltipText: checked ? "Shuffle: On" : "Shuffle: Off"
+          checked: !!panel.player && panel.player.shuffle === true
+          enabled: panel.directAvailable && !!panel.player && panel.player.shuffleSupported === true
+        }
+        MediaPanelButton {
           icon: "skip_previous"
           action: "previous"
           controlIndex: 0
@@ -409,6 +462,14 @@ ShibumiPanel {
           action: "next"
           controlIndex: 2
           enabled: panel.player && panel.player.canGoNext === true
+        }
+        MediaPanelButton {
+          id: repeatButton
+          icon: panel.player && panel.player.loopState === MprisLoopState.Track ? "repeat_one" : "repeat"
+          action: "repeat"; controlIndex: 3
+          tooltipText: "Repeat: " + (!checked ? "Off" : panel.player.loopState === MprisLoopState.Track ? "Track" : "Playlist")
+          checked: !!panel.player && (panel.player.loopState === MprisLoopState.Track || panel.player.loopState === MprisLoopState.Playlist)
+          enabled: panel.directAvailable && !!panel.player && panel.player.loopSupported === true
         }
       }
 
@@ -620,9 +681,10 @@ ShibumiPanel {
     required property string action
     required property int controlIndex
     property bool accent: false
+    property bool checked: false
 
     iconText: icon
-    foreground: accent && panel.bar
+    foreground: checked ? panel.controlAccent : accent && panel.bar
       ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
     hoverColor: panel.bar ? panel.bar.urgent : Commons.Color.accent
     fontFamily: "Material Symbols Rounded"
@@ -636,6 +698,6 @@ ShibumiPanel {
         panel.cursorIndex = controlIndex
       }
     }
-    onClicked: panel.runAction(action)
+    onClicked: panel.controlAction(action)
   }
 }

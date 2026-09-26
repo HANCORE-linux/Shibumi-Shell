@@ -238,7 +238,8 @@ The lifecycle contract and uncompleted physical gates are defined in
 
 ### Ownership, Performance, And Safety
 
-- Every platform capability has one authoritative state and action owner.
+- Every platform capability has one authoritative state and action owner,
+  except the explicitly scoped media-panel controls documented under G9 below.
   Quattro or Quickshell remains authoritative when it exposes a sufficient
   service contract.
 - Shibumi adds a narrow adapter only when the host contract cannot produce the
@@ -843,9 +844,13 @@ Current Phase 2 foundation:
   repository-owned compatibility contract rather than inferred from mutable
   installed files.
 - G9 replaces only the official media presentation. The keep-loaded
-  `omarchy.media` service remains the sole MPRIS/PipeWire selection and action
+  `omarchy.media` service remains the MPRIS/PipeWire selection and transport-action
   owner while Shibumi views supply the default row, FULL/muse row, lazy panel,
-  progress, cover art, and source selection;
+  progress, cover art, and source selection. The approved panel-only exception is
+  direct shuffle, repeat and seek through the selected native MprisPlayer's public
+  properties, gated by its current capabilities. Seek also requires supported
+  position/length and the same player/track as at press. No discovery, process,
+  IPC owner or OSD is added; previous/play/pause/next still use Omarchy `runAction`;
 - closed media views are worker-free. One lazy process-wide Shibumi spectrum
   service owns the optional Cava capability/default-sink probe, bounded Cava
   process, streamed configuration, degraded state, and cleanup. It runs only

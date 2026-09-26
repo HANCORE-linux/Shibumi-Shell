@@ -34,6 +34,10 @@ ShellRoot {
     property bool canTogglePlaying: true
     property bool canPlay: true
     property bool canPause: true
+    property bool canControl: true
+    property bool shuffleSupported: true; property bool loopSupported: true
+    property bool canSeek: true; property bool positionSupported: true; property bool lengthSupported: true
+    property bool shuffle: false; property int loopState: 0; property int uniqueId: 1
     property real position: 61
     property real length: 245
   }
@@ -53,6 +57,10 @@ ShellRoot {
     property bool canTogglePlaying: true
     property bool canPlay: true
     property bool canPause: true
+    property bool canControl: true
+    property bool shuffleSupported: false; property bool loopSupported: false
+    property bool canSeek: false; property bool positionSupported: true; property bool lengthSupported: true
+    property bool shuffle: false; property int loopState: 0; property int uniqueId: 2
     property real position: 0
     property real length: 180
   }
@@ -70,6 +78,7 @@ ShellRoot {
     function playerKey(player) { return player ? String(player.key || "") : "" }
 
     function runAction(action, showFeedback, targetKey) {
+      if (showFeedback) root.fail("unexpected media OSD")
       lastAction = String(action || "")
       lastTarget = String(targetKey || "")
       actionCount++
@@ -338,6 +347,24 @@ ShellRoot {
         playerA.trackAlbum = album; playerA.identity = identity; playerA.desktopEntry = desktop
         console.log("241_MEDIA_PANEL", JSON.stringify(checks))
         if (Object.values(checks).some(value => !value)) return root.fail("vinyl, metadata or source-list presentation")
+        if (typeof panel.directAction !== "function") return root.fail("direct MPRIS controls missing")
+        const actionCount = mediaState.actionCount, direct = { supported: panel.shuffleControl.enabled && panel.repeatControl.enabled && panel.seekControl.enabled }
+        panel.shuffleControl.clicked(); direct.shuffle = playerA.shuffle && panel.shuffleControl.checked
+        direct.cycle = [1, 2, 0].every(state => { panel.repeatControl.clicked(); return playerA.loopState === state && panel.repeatControl.checked === (state !== 0) })
+        direct.seek = panel.directAction("seek", playerA, -5, 1) && playerA.position === 0 && panel.directAction("seek", playerA, 80, 1) && playerA.position === 80 && panel.directAction("seek", playerA, 999, 1) && playerA.position === 245
+        direct.invalid = !panel.directAction("seek", playerA, NaN, 1) && !panel.directAction("seek", playerB, 30, 2)
+        panel.selectSource(1)
+        direct.unsupported = !panel.shuffleControl.enabled && !panel.repeatControl.enabled && !panel.seekControl.enabled && !panel.directAction("shuffle", playerB) && !panel.directAction("repeat", playerB) && !panel.directAction("seek", playerB, 30, 2)
+        playerB.shuffleSupported = true; playerB.loopSupported = true; playerB.canSeek = true
+        panel.shuffleControl.clicked(); direct.selected = !panel.directAction("shuffle", playerA) && playerB.shuffle && playerA.shuffle && panel.directAction("repeat", playerB) && playerB.loopState === 1 && panel.directAction("seek", playerB, 50, 2) && playerB.position === 50
+        playerB.uniqueId = 3; direct.stale = !panel.directAction("seek", playerB, 10, 2) && playerB.position === 50
+        playerB.positionSupported = false; direct.noPosition = !panel.seekControl.enabled && !panel.directAction("seek", playerB, 10, 3); playerB.positionSupported = true
+        playerB.lengthSupported = false; direct.noLength = !panel.seekControl.enabled && !panel.directAction("seek", playerB, 10, 3); playerB.lengthSupported = true
+        playerB.canControl = false; direct.noControl = !panel.shuffleControl.enabled && !panel.repeatControl.enabled && !panel.seekControl.enabled && !panel.directAction("shuffle", playerB); playerB.canControl = true
+        mediaState.sourcePlayers = [playerA]; direct.detached = !panel.shuffleControl.enabled && !panel.directAction("shuffle", playerB); mediaState.sourcePlayers = [playerA, playerB]
+        panel.selectSource(0); direct.owner = mediaState.actionCount === actionCount && panel.runAction("next") && mediaState.actionCount === actionCount + 1 && mediaState.lastTarget === "player-a"
+        console.log("243_MPRIS_CONTROLS", JSON.stringify(direct))
+        if (Object.values(direct).some(value => !value)) return root.fail("direct MPRIS capability, target or owner path")
         if (media.panelItem.renderedSourceCount !== 2
             || media.panelItem.spectrumWorkerRunning
             || media.panelItem.formatTime(61) !== "1:01"

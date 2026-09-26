@@ -168,7 +168,10 @@ Shibumi component consumes `shell.firstPartyServiceFor("omarchy.media")` and
 the original `omarchy.media` bar alias is suppressed, but the official service
 stays loaded and authoritative for player selection, ghost filtering, action
 routing, source switching, PipeWire stream correlation, and OSD feedback. The
-Shibumi views own only presentation and lazy panel state. One lazy process-wide
+Shibumi views own presentation and lazy panel state, with the approved panel-only
+exception of capability-gated shuffle/repeat/seek on the selected native player.
+Transport still delegates to Omarchy; no discovery, IPC owner or OSD is added.
+One lazy process-wide
 Shibumi spectrum service owns the optional Cava probe, process, degraded state,
 lease accounting, and cleanup. Per-output, per-panel, or per-view Cava owners
 are prohibited even though the spectrum is not a second media-state owner.
