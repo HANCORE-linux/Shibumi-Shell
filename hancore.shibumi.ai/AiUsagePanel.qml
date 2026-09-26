@@ -211,7 +211,7 @@ ShibumiPanel {
             visible: text !== ""
             color: panel.controlForeground
             font.family: heroName.font.family
-            font.pixelSize: Commons.Style.font.body
+            font.pixelSize: Commons.Style.font.bodySmall
             font.weight: Font.DemiBold
             renderType: Text.NativeRendering
           }
@@ -326,14 +326,14 @@ ShibumiPanel {
             Column {
               required property var modelData
               width: (metrics.width - 3 * metrics.columnSpacing) / 4; spacing: Commons.Style.space(3)
-              Text { text: String(modelData.value); color: panel.controlForeground; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering }
-              Text { text: modelData.label; color: panel.controlMutedHigh; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
+              Text { text: String(modelData.value); color: panel.controlForeground; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family; font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering }
+              Text { text: modelData.label; color: panel.controlMutedHigh; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
             }
           }
         }
         Column {
           visible: panel.reportedDays > 0; width: parent.width; spacing: Commons.Style.space(4)
-          DetailRow { label: "TOKENS · LAST 7 DAYS"; value: panel.reportedDays < 7 ? panel.reportedDays + "/7 days reported" : "" }
+          DetailRow { label: "TOKENS · LAST 7 DAYS"; value: panel.reportedDays < 7 ? panel.reportedDays + "/7 days reported" : ""; textSize: Commons.Style.font.caption }
           Canvas {
             width: parent.width; height: Commons.Style.space(38)
             readonly property var values: panel.weekDays
@@ -361,8 +361,8 @@ ShibumiPanel {
               Column {
                 required property var modelData
                 width: contentColumn.width / 7; spacing: Commons.Style.space(2)
-                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData.messageCount === null ? "—" : panel.aiService.formatTokens(modelData.messageCount); color: panel.controlForeground; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
-                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: panel.dayLabel(modelData.date); color: panel.controlMutedHigh; font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering }
+                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: modelData.messageCount === null ? "—" : panel.aiService.formatTokens(modelData.messageCount); color: panel.controlForeground; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family; font.pixelSize: Commons.Style.font.bodySmall; renderType: Text.NativeRendering }
+                Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; text: panel.dayLabel(modelData.date); color: panel.controlMutedHigh; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family; font.pixelSize: Commons.Style.font.bodySmall; renderType: Text.NativeRendering }
               }
             }
           }
@@ -371,7 +371,7 @@ ShibumiPanel {
           id: balanceSection
           visible: !!panel.balance
           width: parent.width; spacing: Commons.Style.space(6)
-          DetailRow { label: "BALANCE"; value: "" }
+          DetailRow { label: "BALANCE"; value: ""; textSize: Commons.Style.font.caption }
           DetailRow { label: "Prepaid credits"; value: panel.balance ? panel.money(panel.balance.remaining) : "" }
           Rectangle {
             width: parent.width; height: Commons.Style.space(4); radius: height / 2
@@ -385,7 +385,7 @@ ShibumiPanel {
           }
         }
         DetailRow { visible: panel.balanceDetail !== ""; label: ""; value: panel.balanceDetail; wrapValue: true }
-        DetailRow { visible: panel.limitWindows.length > 0; label: "LIMITS"; value: "" }
+        DetailRow { visible: panel.limitWindows.length > 0; label: "LIMITS"; value: ""; textSize: Commons.Style.font.caption }
         Repeater {
           model: panel.limitWindows
           delegate: Column {
@@ -563,6 +563,7 @@ ShibumiPanel {
     required property string label
     required property string value
     property bool wrapValue: false
+    property int textSize: Commons.Style.font.bodySmall
     width: parent.width
     height: wrapValue ? Math.max(Commons.Style.space(16), detailValue.implicitHeight)
       : Commons.Style.space(16)
@@ -572,7 +573,7 @@ ShibumiPanel {
       text: parent.label
       color: panel.controlMutedHigh
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.bodySmall
+      font.pixelSize: parent.textSize
       renderType: Text.NativeRendering
     }
     Text {
@@ -584,7 +585,7 @@ ShibumiPanel {
       text: parent.value
       color: panel.controlForeground
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.bodySmall
+      font.pixelSize: parent.textSize
       renderType: Text.NativeRendering
     }
   }
@@ -608,7 +609,7 @@ ShibumiPanel {
       elide: Text.ElideRight
       color: panel.controlForeground
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.caption
+      font.pixelSize: Commons.Style.font.bodySmall
       font.weight: Font.Medium
       renderType: Text.NativeRendering
     }
@@ -621,7 +622,7 @@ ShibumiPanel {
       text: String(modelRow.entry && modelRow.entry.totalLabel || "")
       color: panel.controlAccent
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.caption
+      font.pixelSize: Commons.Style.font.bodySmall
       font.weight: Font.Medium
       renderType: Text.NativeRendering
     }
