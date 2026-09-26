@@ -4,6 +4,7 @@ import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
 
+// Compact metric layout inspired by 0xSero/omarchy-local-ai; see Local-AI-LICENSE.
 ShibumiPanel {
   id: panel
 
@@ -36,7 +37,7 @@ ShibumiPanel {
         Text {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
-          text: "Memory"
+          text: "MEMORY"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 13
@@ -91,36 +92,32 @@ ShibumiPanel {
           onWidthChanged: requestPaint()
           onHeightChanged: requestPaint()
 
-          Text {
-            anchors.centerIn: parent
-            text: memoryRing.percent + "%"
-            color: memoryRing.accent
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: 11
-            font.weight: Font.Medium
-            renderType: Text.NativeRendering
+          Ui.OpticalGlyph {
+            anchors.centerIn: parent; width: Commons.Style.space(32); height: width
+            text: "memory_alt"; color: panel.controlForeground
+            fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.space(26))
           }
         }
 
-        Column {
+        Grid {
           width: parent.width - memoryRing.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
-          spacing: 4
-
+          columns: 2; columnSpacing: Commons.Style.space(8); rowSpacing: Commons.Style.space(8)
+          MemoryStatRow { width: (parent.width - parent.columnSpacing) / 2; label: "Usage"; value: memoryRing.percent + "%"; bar: panel.bar }
           MemoryStatRow {
-            width: parent.width
+            width: (parent.width - parent.columnSpacing) / 2
             label: "Used"
             value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
             bar: panel.bar
           }
           MemoryStatRow {
-            width: parent.width
+            width: (parent.width - parent.columnSpacing) / 2
             label: "Available"
             value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
             bar: panel.bar
           }
           MemoryStatRow {
-            width: parent.width
+            width: (parent.width - parent.columnSpacing) / 2
             label: "Total"
             value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
             bar: panel.bar
@@ -137,7 +134,7 @@ ShibumiPanel {
       Rectangle {
         width: parent.width
         height: 28
-        radius: panel.controlRadius
+        radius: panel.renderedSurfaceRadius
         color: monitorMouse.containsMouse
           ? panel.controlPrimaryHoverColor
           : panel.bar ? panel.bar.urgent : Commons.Color.accent
@@ -167,29 +164,29 @@ ShibumiPanel {
     }
   }
 
-  component MemoryStatRow: Row {
+  component MemoryStatRow: Item {
     required property string label
     required property string value
     required property var bar
+    implicitHeight: valueText.height + Commons.Style.space(3) + labelText.height
 
     Text {
       id: labelText
-      width: parent.width * 0.4
-      text: parent.label
+      y: valueText.height + Commons.Style.space(3); width: parent.width
+      text: parent.label.toUpperCase()
       color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
         parent.bar.foreground.b, 0.65) : Commons.Color.foreground
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
+      font.pixelSize: Commons.Style.font.caption
       renderType: Text.NativeRendering
     }
     Text {
       id: valueText
-      width: parent.width * 0.6
-      horizontalAlignment: Text.AlignRight
+      width: parent.width
       text: parent.value
       color: parent.bar ? parent.bar.foreground : Commons.Color.foreground
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
+      font.pixelSize: Commons.Style.font.subtitle
       renderType: Text.NativeRendering
     }
   }
