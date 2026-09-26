@@ -131,7 +131,7 @@ Item {
       image: String(value.image || ""),
       glyph: String(value.glyph || ""),
       exec: String(value.exec || ""),
-      urgency: Number(value.urgency || 0),
+      urgency: typeof value.urgency === "number" ? value.urgency : -1,
       expireTimeout: Number(value.expireTimeout || 0),
       timestamp: Number(value.timestamp || 0),
       fileName: String(value.fileName || "")

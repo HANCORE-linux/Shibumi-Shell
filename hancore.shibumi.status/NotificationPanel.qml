@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -13,6 +14,14 @@ ShibumiPanel {
   readonly property bool liveAvailable: notificationService
     && notificationService.liveAvailable === true
   property bool showingRecent: !liveAvailable
+  property double nowMs: Date.now()
+  onOpenChanged: if (open) nowMs = Date.now()
+  property Timer relativeClock: Timer {
+    interval: 60000
+    repeat: true
+    running: panel.open
+    onTriggered: panel.nowMs = Date.now()
+  }
   readonly property bool historyAvailable: notificationService
     && notificationService.historyAvailable === true
   function paletteColor(id, fallback) {
@@ -38,20 +47,24 @@ ShibumiPanel {
     ? recentCount : pendingCount
   // Omarchy 4.0.3 exposes no history model. The adapter reads the same
   // host-owned compact JSON directory independently of this panel.
+  readonly property var notificationListView: notificationList
   readonly property var activeRows: {
-    const rows = []
+    const groups = new Map()
     function append(model, bucket) {
       if (!model) return
       for (let index = 0; index < model.count; index++) {
         const entry = model.get(index)
         if (!entry) continue
-        rows.push({
+        const app = String(entry.app || "").trim()
+        if (!groups.has(app)) groups.set(app, [])
+        groups.get(app).push({
           bucket: bucket,
           sourceIndex: index,
-          app: String(entry.app || ""),
+          app: app,
           appIcon: String(entry.appIcon || ""),
           summary: String(entry.summary || ""),
-          body: String(entry.body || "")
+          body: String(entry.body || ""),
+          details: rowDetails(entry)
         })
       }
     }
@@ -59,6 +72,9 @@ ShibumiPanel {
       ? (notificationService ? notificationService.pastModel : null)
       : (notificationService ? notificationService.pendingModel : null)
     append(model, showingRecent ? "past" : "pending")
+    const rows = []
+    groups.forEach(group => group.forEach((row, index) =>
+      rows.push(Object.assign(row, { groupCount: group.length, groupStart: index === 0 }))))
     return rows
   }
 
@@ -135,6 +151,31 @@ ShibumiPanel {
     closePanel()
   }
 
+  function safeIconSource(icon) {
+    let value = String(icon || "")
+    if (value.startsWith("file:///")) {
+      try { value = decodeURIComponent(value.slice(7)) } catch (_error) { return "" }
+    }
+    return /^(?:[a-z0-9][a-z0-9._-]*|\/[^\x00-\x1f?#]+)$/i.test(value)
+      ? Quickshell.iconPath(value, true) : ""
+  }
+
+  function relativeTime(timestamp) {
+    const stamp = Number(timestamp), age = nowMs - stamp
+    if (!(stamp > 0) || !isFinite(age) || age < 0) return ""
+    if (age < 60000) return "now"
+    if (age < 3600000) return Math.floor(age / 60000) + "m ago"
+    if (age < 86400000) return Math.floor(age / 3600000) + "h ago"
+    if (age < 604800000) return Math.floor(age / 86400000) + "d ago"
+    const date = new Date(stamp)
+    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()]
+      + " " + date.getDate() + (date.getFullYear() === new Date(nowMs).getFullYear() ? "" : ", " + date.getFullYear())
+  }
+
+  function rowDetails(entry) {
+    return [relativeTime(entry.timestamp), ["Low", "Normal", "Critical"][entry.urgency] || ""].filter(Boolean).join(" · ")
+  }
+
   function sanitizedBody(body, app, appIcon) {
     let text = String(body || "").replace(/<img[^>]*>/gi, "")
     const source = (String(app || "") + "\n"
@@ -144,10 +185,12 @@ ShibumiPanel {
       || source.indexOf("vivaldi") >= 0
       || source.indexOf("microsoft-edge") >= 0
       || source.indexOf("opera") >= 0
-    if (!chromium) return text
-    return text
+    if (chromium) text = text
       .replace(/^\s*<a\b[^>]*>\s*(?:https?:\/\/|www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^<\s]*)?\s*<\/a>\s*/i, "")
       .replace(/^\s*(?:https?:\/\/|www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/\S*)?\s+/i, "")
+    return text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "")
+      .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_match, key) =>
+        ({ amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " })[key]).trim()
   }
 
   Ui.PanelKeyCatcher {
@@ -327,6 +370,9 @@ ShibumiPanel {
             required property string appIcon
             required property string summary
             required property string body
+            required property string details
+            required property int groupCount
+            required property bool groupStart
 
             readonly property string cleanBody: panel.sanitizedBody(
               body, app, appIcon)
@@ -349,6 +395,16 @@ ShibumiPanel {
                 notificationRow.sourceIndex)
             }
 
+            Image {
+              id: appImage
+              anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 8
+              width: 18; height: 18
+              source: panel.safeIconSource(notificationRow.appIcon)
+              visible: status === Image.Ready
+              fillMode: Image.PreserveAspectFit
+              asynchronous: true
+            }
+
             Column {
               id: rowContent
               anchors.left: parent.left
@@ -356,11 +412,14 @@ ShibumiPanel {
               anchors.top: parent.top
               anchors.margins: 8
               anchors.rightMargin: 26
+              anchors.leftMargin: appImage.visible ? 32 : 8
               spacing: 3
 
               Text {
                 width: parent.width
-                text: notificationRow.bucket === "past" ? "RECENT" : "LIVE"
+                text: (notificationRow.bucket === "past" ? "RECENT" : "LIVE")
+                  + (notificationRow.details ? " · " + notificationRow.details : "")
+                elide: Text.ElideRight
                 color: notificationRow.bucket === "past"
                   ? panel.recentHighlight : panel.liveHighlight
                 font.family: panel.bar ? panel.bar.fontFamily
@@ -373,7 +432,8 @@ ShibumiPanel {
 
               Text {
                 width: parent.width
-                text: notificationRow.app || "App"
+                visible: notificationRow.groupStart
+                text: (notificationRow.app || "App") + " · " + notificationRow.groupCount
                 textFormat: Text.PlainText
                 color: panel.controlMutedHigh
                 font.family: panel.bar ? panel.bar.fontFamily
