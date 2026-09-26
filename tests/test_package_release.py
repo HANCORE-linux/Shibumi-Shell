@@ -1263,6 +1263,8 @@ puts JSON.generate(workflow.fetch("jobs"))
                 ["git", "-C", str(candidate), "checkout", "-q", _candidate_revision],
                 check=True,
             )
+            # Git recreated this fixture file using the caller's umask.
+            candidate_tracked.chmod(0o644)
             replacement_program = "\n".join((
                 "import subprocess",
                 f"repo = {str(candidate)!r}",

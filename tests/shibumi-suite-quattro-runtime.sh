@@ -147,10 +147,11 @@ for source_spec in \
 done
 
 # Package fixtures mirror the root metadata projection performed by PKGBUILD:62.
+# Preserve archived package modes below the private 0700 fixture parent.
 git --no-replace-objects -C "$repo_root" archive "$package_predecessor_revision" \
-  | tar -x -C "$package_predecessor_root"
+  | tar -x --same-permissions -C "$package_predecessor_root"
 git --no-replace-objects -C "$repo_root" archive "$package_candidate_revision" \
-  | tar -x -C "$package_candidate_root"
+  | tar -x --same-permissions -C "$package_candidate_root"
 for package_root in "$package_predecessor_root" "$package_candidate_root"; do
   [[ -d $package_root && ! -L $package_root ]] \
     || fail "package fixture root is not an isolated real directory: $package_root"
