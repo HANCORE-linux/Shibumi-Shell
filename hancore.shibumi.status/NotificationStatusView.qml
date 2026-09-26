@@ -23,6 +23,15 @@ Item {
     && notificationService.pastModel
     ? Math.max(0, Number(notificationService.pastModel.count) || 0) : 0
   readonly property int notificationCount: pendingCount + recentCount
+  readonly property bool countsKnown: notificationService
+    && notificationService.liveAvailable === true && notificationService.historyState === "ready"
+  readonly property string tooltipText: (notificationService && notificationService.liveAvailable
+    ? pendingCount + " Live" : "Live: Unavailable") + " · "
+    + (notificationService && notificationService.historyState === "ready"
+      ? recentCount + " Recent" : "Recent: " + (notificationService
+        && notificationService.historyState === "loading" ? "Loading" : "Unavailable"))
+    + (notificationService && notificationService.doNotDisturb ? " · DND" : "")
+  onTooltipTextChanged: if (tooltipHovered && bar) bar.showTooltip(root, tooltipText)
   readonly property bool presented: notificationService !== null
   readonly property color badgeFillColor: notificationBadge.color
   readonly property color badgeTextColor: badgeText.color
@@ -68,7 +77,7 @@ Item {
 
   Rectangle {
     id: notificationBadge
-    visible: root.notificationCount > 0
+    visible: root.notificationCount > 0 || !root.countsKnown
     width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
     height: Commons.Style.space(12)
     radius: height / 2
@@ -84,8 +93,9 @@ Item {
     Text {
       id: badgeText
       anchors.centerIn: parent
-      text: root.notificationCount > 99 ? "99"
-        : String(root.notificationCount)
+      text: !root.countsKnown ? (root.notificationService
+        && root.notificationService.historyState === "loading" ? "…" : "?")
+        : root.notificationCount > 99 ? "99" : String(root.notificationCount)
       color: root.customToneActive
         ? root.badgeContrastColor
         : root.bar ? root.bar.background : Commons.Color.background
@@ -101,11 +111,7 @@ Item {
     acceptedButtons: Qt.LeftButton | Qt.RightButton
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
-    onEntered: if (root.bar) root.bar.showTooltip(root,
-      root.notificationCount > 0
-        ? root.notificationCount + (root.notificationCount === 1
-          ? " notification" : " notifications")
-        : "No notifications")
+    onEntered: if (root.bar) root.bar.showTooltip(root, root.tooltipText)
     onExited: if (root.bar) root.bar.hideTooltip(root)
     onClicked: function(mouse) {
       if (root.bar) root.bar.hideTooltip(root)

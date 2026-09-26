@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "status" as Status
 
 ShellRoot {
@@ -102,12 +103,16 @@ ShellRoot {
   Status.NotificationAdapter { id: dndOnlyAdapter }
   Status.NotificationAdapter { id: legacyAdapter }
   Status.NotificationAdapter { id: unavailableAdapter }
+  Status.NotificationStatusView { id: counts; bar: null; notificationService: dndOnlyAdapter }
+  Process { id: externalClear; command: ["sh", "-c", "rm -f \"$1\"/*.json", "--", dndOnlyAdapter.historyDir] }
 
   Component.onCompleted: {
-    adapter.attachShell(currentShell)
     dndOnlyAdapter.attachShell(dndOnlyShell)
+    adapter.attachShell(currentShell)
     legacyAdapter.attachShell(legacyShell)
     unavailableAdapter.attachShell(null)
+    if (dndOnlyAdapter.historyState !== "loading" || counts.tooltipText !== "Live: Unavailable · Recent: Loading · DND")
+      root.fail("initial history state is not loading without hover/open")
   }
 
   Timer {
@@ -126,7 +131,7 @@ ShellRoot {
             || unavailableAdapter.available
             || unavailableAdapter.historyAvailable)
           return root.fail("capabilities do not match the host models")
-        if (!dndOnlyAdapter.showHistory())
+        if (root.historyRace && !dndOnlyAdapter.showHistory())
           return root.fail("Recent did not start the private history read")
         if (root.historyRace === "refresh") {
           dndOnlyAdapter.attachShell(currentShell)
@@ -137,7 +142,7 @@ ShellRoot {
             return root.fail("same-host refresh was not accepted")
           dndOnlyAdapter.attachShell(dndOnlyShell)
         } else {
-          if (!adapter.showHistory())
+          if (root.historyRace && !adapter.showHistory())
             return root.fail("live-host history read was not accepted")
           if (root.historyRace === "detach") {
             dndOnlyAdapter.attachShell(null)
@@ -149,12 +154,17 @@ ShellRoot {
         }
       }
       if (root.ticks < (root.historyRace ? 40 : 12)) return
+      if (!root.historyRace && !root.mutationPhase
+          && (adapter.historyState !== (Quickshell.env("SHIBUMI_HISTORY_MODE") === "missing" ? "unavailable" : "ready")
+            || counts.tooltipText !== "Live: Unavailable · " + (adapter.historyState === "ready"
+              ? root.expectedHistoryCount + " Recent" : "Recent: Unavailable") + " · DND"))
+        return root.fail("eager snapshot/tooltip state without hover/open")
       if (root.historyRace && root.historyRace !== "mutation-replace") {
         const refresh = root.historyRace === "refresh"
           || root.historyRace === "same-refresh"
         const expected = root.historyRace === "replace" || refresh ? 1 : 0
         const summary = refresh ? "New host history" : "Legacy recent"
-        if (adapter.recentCount !== (refresh ? 0 : root.expectedHistoryCount)
+        if (adapter.recentCount !== (refresh ? 1 : root.expectedHistoryCount)
             || dndOnlyAdapter.recentCount !== expected
             || (expected && dndOnlyAdapter.pastModel.get(0).summary
               !== summary)
@@ -173,14 +183,15 @@ ShellRoot {
         return
       }
       if (root.mutationPhase === 2) {
-        if (dndOnlyAdapter.recentCount !== 0) return
+        if (dndOnlyAdapter.recentCount !== 0 || dndOnlyAdapter.historyState !== "ready") return
         console.log("notification history clear passed")
         Qt.exit(0)
         return
       }
       if (root.mutationPhase === 3) {
         if (root.ticks < root.mutationStartTick + 20) return
-        if (dndOnlyAdapter.recentCount !== 0
+        if (dndOnlyAdapter.recentCount !== root.expectedHistoryCount
+            || dndOnlyAdapter.pastModel.get(0).summary !== "History 11"
             || dndOnlyAdapter.pendingCount !== 1)
           return root.fail("stale mutation callback crossed host replacement")
         console.log("notification history mutation replace race passed")
@@ -197,6 +208,11 @@ ShellRoot {
       if (adapter.pendingCount !== 1
           || adapter.pendingModel.get(0).summary !== "Current notification")
         return root.fail("history read mutated the live popup model")
+      if (root.historyMutation === "external-clear") {
+        externalClear.running = true
+        root.mutationPhase = 2
+        return
+      }
       if (!dndOnlyAdapter.setDoNotDisturb(false)
           || dndOnlyAdapter.doNotDisturb)
         return root.fail("DND-only proxy action failed")
@@ -228,6 +244,10 @@ ShellRoot {
         root.mutationPhase = 2
         return
       }
+      counts.notificationService = adapter
+      adapter.setDoNotDisturb(true)
+      if (counts.tooltipText !== "1 Live · " + (adapter.historyState === "ready" ? root.expectedHistoryCount + " Recent" : "Recent: Unavailable") + " · DND")
+        return root.fail("live/recent tooltip with DND")
       liveRows.append({
         id: 8, originalId: 8, app: "Live fixture", appIcon: "",
         summary: "Second notification", body: "Reactive row", image: "",

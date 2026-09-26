@@ -37,7 +37,7 @@ ShibumiPanel {
   readonly property int displayedCount: showingRecent
     ? recentCount : pendingCount
   // Omarchy 4.0.3 exposes no history model. The adapter reads the same
-  // host-owned compact JSON directory when Recent is selected.
+  // host-owned compact JSON directory independently of this panel.
   readonly property var activeRows: {
     const rows = []
     function append(model, bucket) {
@@ -451,7 +451,9 @@ ShibumiPanel {
           id: emptyLabel
           anchors.centerIn: parent
           visible: notificationList.count === 0
-          text: "No notifications"
+          text: panel.showingRecent && notificationService.historyState !== "ready"
+            ? notificationService.historyState === "loading" ? "Loading recent notifications…"
+              : "Recent notifications unavailable" : "No notifications"
           color: Commons.Util.alpha(panel.controlForeground, 0.3)
           font.family: panel.bar ? panel.bar.fontFamily
             : Commons.Style.font.family

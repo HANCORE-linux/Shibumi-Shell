@@ -118,6 +118,7 @@ EOF
     SHIBUMI_EXPECTED_HISTORY_COUNT="$expected" \
     SHIBUMI_HISTORY_RACE="$race" \
     SHIBUMI_HISTORY_MUTATION="$mutation" \
+    SHIBUMI_HISTORY_MODE="$history_mode" \
     SHIBUMI_HELPER_STATE="$root/helper-state" \
     QML_IMPORT_PATH="$omarchy_path/shell" \
     QML2_IMPORT_PATH="$omarchy_path/shell" \
@@ -163,6 +164,7 @@ EOF
 }
 
 run_case populated 10 populated
+run_case external-clear 10 populated 'notification history clear passed' '' external-clear
 run_case empty 0 empty
 run_case read-failure 0 missing
 run_case detach-race 10 populated 'notification history detach race passed' detach

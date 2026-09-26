@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQml.Models
 import Quickshell
 import Quickshell.Io
 
@@ -35,6 +36,7 @@ Item {
     && state.hostService.doNotDisturb === true
   readonly property int pendingCount: pendingRows.count
   readonly property int recentCount: pastRows.count
+  property string historyState: "unavailable"
   readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
   readonly property bool pastDismissAvailable: available &&
@@ -52,6 +54,35 @@ Item {
   ListModel { id: pendingRows }
   ListModel { id: pastRows }
 
+  // Watch creation/removal and in-place writes, never poll or replay host popups.
+  // Trailing slash keeps FileView's implicit parent inside notifications.
+  readonly property var historyWatchPaths: {
+    const paths = []
+    if (!available || historySourceModel()) return paths
+    paths.push(historyDir, historyDir.slice(0, historyDir.lastIndexOf("/") + 1))
+    for (let index = 0; index < Math.min(10, pastRows.count); index++) {
+      const name = pastRows.get(index).fileName
+      if (validHistoryFileName(name)) paths.push(historyDir + "/" + name)
+    }
+    return paths
+  }
+  Instantiator {
+    model: root.historyWatchPaths
+    delegate: FileView {
+      required property string modelData
+      path: modelData
+      preload: false
+      watchChanges: true
+      onFileChanged: if (!historyRefresh.running) historyRefresh.start()
+    }
+  }
+  Timer {
+    id: historyRefresh
+    interval: 100
+    repeat: false
+    onTriggered: root.showHistory()
+  }
+
   function attachShell(shellValue) {
     const service = shellValue
       && typeof shellValue.firstPartyServiceFor === "function"
@@ -61,8 +92,10 @@ Item {
       syncModels()
       return
     }
+    historyRefresh.stop()
     state.hostGeneration++
     state.hostService = nextService
+    historyState = nextService ? "loading" : "unavailable"
     state.historyOutput = ""
     state.queuedHistoryHost = null
     state.queuedHistoryGeneration = -1
@@ -108,7 +141,8 @@ Item {
   function rebuild(target, model) {
     target.clear()
     if (!model || typeof model.get !== "function") return
-    for (let index = 0; index < model.count; index++) {
+    const limit = target === pastRows ? Math.min(10, model.count) : model.count
+    for (let index = 0; index < limit; index++) {
       const entry = model.get(index)
       if (!entry || Number(entry.originalId || entry.id || 0) < 0)
         continue
@@ -119,7 +153,10 @@ Item {
   function syncModels() {
     rebuild(pendingRows, sourceModel())
     const archived = historySourceModel()
-    if (archived) rebuild(pastRows, archived)
+    if (archived) {
+      rebuild(pastRows, archived)
+      historyState = "ready"
+    } else if (available && !historyRefresh.running) historyRefresh.start()
   }
 
   // Derived from MIT-licensed Omarchy v4.0.3 NotificationLogic.historyRows:
@@ -285,6 +322,7 @@ Item {
   }
 
   function startHistoryRead() {
+    historyState = "loading"
     state.historyOutput = ""
     state.historyReadHost = state.hostService
     state.historyReadGeneration = state.hostGeneration
@@ -325,8 +363,10 @@ Item {
   }
   Process {
     id: historyReader
-    command: ["sh", "-c", "awk '{ print FILENAME \"\\t\" $0 }' \"$1\"/*.json",
-      "--", historyDir]
+    command: ["timeout", "--foreground", "--kill-after=1", "2", "sh", "-c",
+      "dir=$1; set -- \"$dir\"/*.json; "
+      + "if [ -d \"$dir\" ] && [ -r \"$dir\" ] && [ -x \"$dir\" ] && [ ! -e \"$1\" ]; then exit 0; fi; "
+      + "exec awk '{ print FILENAME \"\\t\" $0 }' \"$@\"", "--", historyDir]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: state.historyOutput = text
@@ -339,8 +379,10 @@ Item {
         && state.hostGeneration === state.historyReadGeneration
       state.historyReadHost = null
       state.historyReadGeneration = -1
-      if (current)
+      if (current && !root.historySourceModel()) {
+        root.historyState = exitCode === 0 ? "ready" : "unavailable"
         root.applyHistory(exitCode === 0 ? state.historyOutput : "")
+      }
     }
   }
 
