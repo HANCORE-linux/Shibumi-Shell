@@ -312,7 +312,8 @@ ShellRoot {
             return root.fail("open panel did not replace its spectrum provider")
           fakeShell.serviceAvailable = false
         } else if (root.rebindPhase === 5) {
-          if (panel.mediaService !== null || replacementSpectrum.clientCount !== 0)
+          if (panel.mediaService !== null || replacementSpectrum.clientCount !== 0
+              || ("vinylRotating" in panel && panel.vinylRotating))
             return root.fail("open panel retained revoked media authority")
           fakeShell.serviceAvailable = true
           fakeShell.spectrumBackend = null
@@ -324,6 +325,19 @@ ShellRoot {
           fakeShell.spectrumBackend = fakeSpectrum
         }
         if (root.rebindPhase++ < 7) return
+        const checks = { playing: panel.vinylRotating === true,
+          metadata: panel.albumVisible === true && panel.playerNameVisible === true,
+          multiple: panel.sourcesVisible === true }
+        playerA.isPlaying = false; checks.paused = panel.vinylRotating === false
+        playerA.isPlaying = true; checks.resumed = panel.vinylRotating === true
+        mediaState.sourcePlayers = [playerA]; checks.single = panel.sourcesVisible === false
+        mediaState.sourcePlayers = [playerA, playerB]
+        const album = playerA.trackAlbum, identity = playerA.identity, desktop = playerA.desktopEntry
+        playerA.trackAlbum = ""; playerA.identity = ""; playerA.desktopEntry = ""
+        checks.absentMetadata = panel.albumVisible === false && panel.playerNameVisible === false
+        playerA.trackAlbum = album; playerA.identity = identity; playerA.desktopEntry = desktop
+        console.log("241_MEDIA_PANEL", JSON.stringify(checks))
+        if (Object.values(checks).some(value => !value)) return root.fail("vinyl, metadata or source-list presentation")
         if (media.panelItem.renderedSourceCount !== 2
             || media.panelItem.spectrumWorkerRunning
             || media.panelItem.formatTime(61) !== "1:01"

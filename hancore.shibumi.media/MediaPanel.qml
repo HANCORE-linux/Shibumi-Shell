@@ -30,6 +30,10 @@ ShibumiPanel {
   readonly property var spectrumThemeColors: spectrumService
     && spectrumService.themeColors ? spectrumService.themeColors : []
   readonly property int renderedSourceCount: sourceRepeater.count
+  readonly property bool sourcesVisible: sourceList.visible
+  readonly property bool vinylRotating: vinylArtwork.rotating
+  readonly property bool albumVisible: albumText.visible
+  readonly property bool playerNameVisible: playerText.visible
   readonly property bool spectrumWorkerRunning: spectrumService
     ? spectrumService.workerRunning === true : false
   readonly property string spectrumState: spectrumService
@@ -199,18 +203,6 @@ ShibumiPanel {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(8)
 
-          Text {
-            visible: panel.active && panel.playerName !== ""
-            anchors.verticalCenter: parent.verticalCenter
-            text: panel.playerName
-            color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
-              panel.bar.foreground.g, panel.bar.foreground.b, 0.45)
-              : Commons.Color.foreground
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.caption
-            renderType: Text.NativeRendering
-          }
-
           IconAction {
             anchors.verticalCenter: parent.verticalCenter
             icon: "close"
@@ -229,36 +221,18 @@ ShibumiPanel {
         spacing: Commons.Style.space(10)
         visible: panel.active
 
-        Rectangle {
-          width: Commons.Style.space(56)
+        PanelVinyl {
+          id: vinylArtwork
+          width: Commons.Style.space(80)
           height: width
-          radius: Commons.Style.space(5)
-          color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
-            panel.bar.foreground.g, panel.bar.foreground.b, 0.10)
-            : Commons.Color.background
-          clip: true
-
-          Image {
-            anchors.fill: parent
-            source: panel.player ? String(panel.player.trackArtUrl || "") : ""
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: true
-            retainWhileLoading: true
-          }
-
-          Presentation.IconText {
-            anchors.centerIn: parent
-            visible: !panel.player || !panel.player.trackArtUrl
-            text: "music_note"
-            color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-            font.pixelSize: Commons.Style.font.displayLarge
-            fill: 1
-          }
+          tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
+          artSource: panel.player ? String(panel.player.trackArtUrl || "") : ""
+          spinning: panel.open && panel.playing
+          revolutionMs: 6000
         }
 
         Column {
-          width: parent.width - Commons.Style.space(66)
+          width: parent.width - vinylArtwork.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(3)
 
@@ -287,6 +261,7 @@ ShibumiPanel {
           }
 
           Text {
+            id: albumText
             width: parent.width
             visible: text !== ""
             text: panel.player ? String(panel.player.trackAlbum || "") : ""
@@ -298,7 +273,28 @@ ShibumiPanel {
             elide: Text.ElideRight
             renderType: Text.NativeRendering
           }
+          Text {
+            id: playerText
+            width: parent.width
+            visible: text !== ""
+            text: panel.playerName
+            color: panel.controlMutedHigh
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption
+            elide: Text.ElideRight
+            renderType: Text.NativeRendering
+          }
         }
+      }
+
+      MediaSpectrum {
+        width: parent.width
+        height: Commons.Style.space(40)
+        visible: panel.active
+        levels: panel.levels
+        tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
+        themeColors: panel.spectrumThemeColors
+        opacity: panel.playing ? 1 : 0.5
       }
 
       Item {
@@ -357,15 +353,7 @@ ShibumiPanel {
       Item {
         width: parent.width
         height: Commons.Style.space(40)
-
-        MediaSpectrum {
-          anchors.fill: parent
-          visible: panel.active
-          levels: panel.levels
-          tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          themeColors: panel.spectrumThemeColors
-          opacity: panel.playing ? 1 : 0.5
-        }
+        visible: !panel.active
 
         Column {
           anchors.centerIn: parent
@@ -430,6 +418,7 @@ ShibumiPanel {
       }
 
       Column {
+        id: sourceList
         width: parent.width
         visible: panel.sourcePlayers.length > 1
         spacing: Commons.Style.space(2)
@@ -522,6 +511,73 @@ ShibumiPanel {
           }
         }
       }
+    }
+  }
+
+  // Panel-local Muse-style mark: no bar geometry, band or animation defaults change.
+  component PanelVinyl: Item {
+    id: vinyl
+    required property color tint
+    required property string artSource
+    required property bool spinning
+    property int revolutionMs: 6000
+    readonly property bool rotating: spin.running
+
+    Canvas {
+      anchors.fill: parent
+      antialiasing: true
+      property color canvasTint: vinyl.tint
+      onCanvasTintChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+      Component.onCompleted: requestPaint()
+      onPaint: {
+        const ctx = getContext("2d"), radius = Math.min(width, height) * 0.46
+        ctx.clearRect(0, 0, width, height)
+        ctx.save()
+        ctx.translate(width / 2, height / 2)
+        ctx.strokeStyle = canvasTint
+        ctx.lineWidth = Math.max(1, radius * 0.045)
+        ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke()
+        ctx.globalAlpha = 0.55
+        for (let i = 0; i < 2; i++) {
+          ctx.beginPath()
+          ctx.arc(0, 0, radius * 0.64, i * Math.PI - 0.35, i * Math.PI + 2.35)
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+    }
+    Rectangle {
+      anchors.centerIn: parent
+      width: parent.width * 0.38
+      height: width
+      radius: width / 2
+      color: Commons.Util.alpha(vinyl.tint, 0.2)
+      Image {
+        anchors.centerIn: parent
+        width: parent.width * 0.66
+        height: width
+        source: vinyl.artSource
+        visible: status === Image.Ready
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+      }
+      Rectangle {
+        anchors.centerIn: parent
+        width: Commons.Style.space(3)
+        height: width
+        radius: width / 2
+        color: panel.bar ? panel.bar.background : Commons.Color.background
+      }
+    }
+    NumberAnimation on rotation {
+      id: spin
+      from: 0; to: 360
+      duration: vinyl.revolutionMs
+      loops: Animation.Infinite
+      running: vinyl.visible && vinyl.spinning
     }
   }
 
