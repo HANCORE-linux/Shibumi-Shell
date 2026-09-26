@@ -8,6 +8,7 @@ ShellRoot {
   id: root
 
   property int phase: 0
+  property int logoStage: 0
   property int ticks: 0
   property real stableProviderWidth: 0
   property var clickTargets: []
@@ -80,7 +81,16 @@ ShellRoot {
     checks.clock = checks.clock && emptyAgentsPanel.clockRunning === true; emptyPanelOwner.opened = false
     checks.clock = checks.clock && emptyAgentsPanel.clockRunning === false
     console.log("AI_PRESENTATION_CASES", JSON.stringify(checks))
-    return Object.values(checks).every(value => value)
+    const savedService = emptyAgentsPanel.aiService
+    const layout = { noBalance: emptyAgentsPanel.balanceVisible === false }
+    emptyAgentsPanel.aiService = { selectedProvider: { providerId: "fixture", providerName: "Fixture", tierLabel: "Pro", balance: {remaining: 12, funded: 20, spent: 8, currency: "USD"} }, providers: [{providerId: "fixture"}], selectedTool: "fixture", limitWindows: () => [], bindingWindow: () => null, formatTokens: value => String(value) }
+    layout.hero = emptyAgentsPanel.heroTitle === "Fixture" && emptyAgentsPanel.heroTier === "Pro"
+    layout.balance = emptyAgentsPanel.balanceVisible === true
+    layout.single = emptyAgentsPanel.providerSwitchVisible === false
+    emptyAgentsPanel.aiService = savedService
+    layout.multiple = emptyAgentsPanel.providerSwitchVisible === true
+    console.log("243_AI_LAYOUT", JSON.stringify(layout))
+    return Object.values(checks).every(value => value) && Object.values(layout).every(value => value)
   }
 
   function linearChannel(value) {
@@ -1070,6 +1080,13 @@ ShellRoot {
               || agentsService.providerFor("claude") === null
               || agentsService.providerFor("codex") === null)
             return root.fail("queued Agents update did not become current")
+          if (root.logoStage < 3) {
+            const mark = emptyAgentsPanel.providerLogo, ready = mark && mark.status === Image.Ready && mark.visible, glyph = mark && mark.parent.children[1].visible
+            if (!mark || (root.logoStage < 2 ? !ready || glyph || String(mark.source) !== "file://" + agentsService.omarchyPath + "/shell/plugins/agents/assets/claude" + (root.logoStage === 1 ? "-light" : "") + ".svg" : ready || !glyph || String(mark.source) !== "")) return root.fail("host Claude logo/glyph stage " + root.logoStage)
+            console.log("244_AI_LOGO", root.logoStage, "image=" + ready, "glyph=" + glyph)
+            if (root.logoStage++ === 0) { fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {panelBackground: "#ffffff"}); return }
+            if (root.logoStage === 2) { emptyAgentsPanel.aiService = {selectedProvider: agentsService.providerFor("claude"), omarchyPath: agentsService.omarchyPath + "/absent", providers: [], limitWindows: () => [], bindingWindow: () => null, formatTokens: value => String(value)}; return }
+          }
           stop()
           watchdog.stop()
           console.log("ai plugin smoke passed")

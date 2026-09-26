@@ -1,10 +1,14 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
+import Qt.labs.folderlistmodel
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
 
+// Layout derived from MIT-licensed Omarchy v4.0.4 plugins/agents/Panel.qml.
+// See Omarchy-LICENSE. Shibumi retains its own data, selection and lifecycle.
 ShibumiPanel {
   id: panel
 
@@ -15,7 +19,21 @@ ShibumiPanel {
   readonly property var limitWindows: aiService ? aiService.limitWindows(provider) : []
   readonly property var headline: aiService ? aiService.bindingWindow(provider) : null
   readonly property bool headlineAlarm: !!headline && headline.percent >= 90
-  readonly property color headlineColor: headlineUsage.usageColor
+  readonly property color headlineColor: !providerReady ? panel.controlMuted
+    : headlineAlarm ? Commons.Color.urgent : panel.controlForeground
+  readonly property var providerLogo: heroMark
+  readonly property string heroTitle: heroName.text
+  readonly property string heroTier: heroPlan.text
+  readonly property bool providerSwitchVisible: providerRow.visible
+  readonly property bool balanceVisible: balanceSection.visible
+  readonly property var balance: provider && provider.balance
+    && typeof provider.balance.remaining === "number" && isFinite(provider.balance.remaining)
+    && provider.balance.remaining >= 0 ? provider.balance : null
+  readonly property real balanceRatio: balance && typeof balance.funded === "number"
+    && isFinite(balance.funded) && balance.funded > 0 ? Math.min(1, balance.remaining / balance.funded) : -1
+  readonly property string balanceDetail: balanceRatio >= 0 && typeof balance.spent === "number"
+    && isFinite(balance.spent) && balance.spent >= 0
+    ? money(balance.spent) + " spent of " + money(balance.funded) + " funded" + (balance.estimated === true ? " · estimated" : "") : ""
   readonly property bool primaryUsageVisible: limitWindows.length > 0
   readonly property bool secondaryUsageVisible: limitWindows.length > 1
   readonly property var days: provider ? provider.recentDays || [] : []
@@ -68,9 +86,9 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.opened
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Commons.Style.space(360))
+  contentWidth: fittedContentWidth(Commons.Style.space(380))
   contentHeight: fittedContentHeight(contentColumn.implicitHeight,
-    Commons.Style.space(560))
+    Commons.Style.space(640))
 
   function moveProvider(direction) {
     if (aiService) aiService.cycleTool(direction)
@@ -89,6 +107,17 @@ ShibumiPanel {
     const remaining = Date.parse(limit.resetsAt) - nowMs, elapsed = span - remaining
     return providerReady && span > 0 && remaining > 0 && elapsed > 0
       ? "Pace: " + (limit.percent / 100 * span / elapsed).toFixed(1) + "×" : ""
+  }
+
+  function dayLabel(date) {
+    const day = new Date(date + "T00:00:00"), today = new Date(nowMs)
+    return day.toDateString() === today.toDateString() ? "Today"
+      : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day.getDay()] || date
+  }
+
+  function money(value) {
+    const currency = String(balance ? balance.currency || "USD" : "USD")
+    return ({USD: "$", EUR: "€", GBP: "£"}[currency] || currency + " ") + Number(value).toFixed(2)
   }
 
   function providerTabLabel(providerValue) {
@@ -140,26 +169,73 @@ ShibumiPanel {
       Column {
         id: contentColumn
         width: scroller.width
-        spacing: Commons.Style.space(8)
+        spacing: Commons.Style.space(12)
 
         Item {
           id: header
           width: parent.width
-          height: Commons.Style.space(28)
+          height: Commons.Style.space(52)
+
+          Item {
+            width: Commons.Style.space(36); height: width
+            anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+            Image {
+              id: heroMark
+              anchors.fill: parent
+              readonly property string hostBase: {
+                const id = panel.provider ? String(panel.provider.providerId || "") : "", root = panel.aiService ? String(panel.aiService.omarchyPath || "") : ""
+                return /^[A-Za-z0-9_-]{1,64}$/.test(id) && /^\/(?!\/)/.test(root) && id !== "codex" && id !== "opencode" ? root.replace(/\/$/, "") + "/shell/plugins/agents/assets/" + id : ""
+              }
+              property FolderListModel hostMarks: FolderListModel {
+                folder: heroMark.hostBase ? Commons.Util.fileUrl(heroMark.hostBase.slice(0, heroMark.hostBase.lastIndexOf("/"))) : Qt.resolvedUrl("assets")
+                nameFilters: ["*.svg"]; showDirs: false }
+              readonly property color surface: panel.shibumiTokens ? panel.shibumiTokens.panelBackground : Commons.Color.popups.background
+              readonly property bool light: [surface.r, surface.g, surface.b].map(c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4))
+                .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0) >= 0.5
+              visible: status === Image.Ready
+              source: panel.provider && panel.provider.providerId === "codex" ? Qt.resolvedUrl("assets/codex.svg")
+                : panel.provider && panel.provider.providerId === "opencode" ? Qt.resolvedUrl("assets/opencode-mark.svg") : !hostBase || hostMarks.status !== FolderListModel.Ready ? ""
+                : hostMarks.count && light && hostMarks.indexOf(Commons.Util.fileUrl(hostBase + "-light.svg")) >= 0 ? Commons.Util.fileUrl(hostBase + "-light.svg")
+                : hostMarks.count && hostMarks.indexOf(Commons.Util.fileUrl(hostBase + ".svg")) >= 0 ? Commons.Util.fileUrl(hostBase + ".svg") : ""
+              fillMode: Image.PreserveAspectFit
+              layer.enabled: hostBase === ""
+              layer.effect: MultiEffect { colorization: 1; colorizationColor: panel.controlForeground }
+            }
+            Presentation.IconText {
+              anchors.centerIn: parent
+              visible: heroMark.status !== Image.Ready
+              text: "smart_toy"
+              color: panel.controlForeground
+              font.pixelSize: Commons.Style.font.display
+            }
+          }
 
           Text {
+            id: heroName
             anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - actionRow.width - Commons.Style.space(8)
+            anchors.leftMargin: Commons.Style.space(48)
+            anchors.top: parent.top
+            anchors.topMargin: Commons.Style.space(6)
+            width: parent.width - actionRow.width - Commons.Style.space(56)
             elide: Text.ElideRight
-            text: panel.provider ? panel.providerHeading(panel.provider)
-              + " · " + panel.providerStatusLabel : "AI USAGE"
+            textFormat: Text.PlainText
+            text: panel.provider ? panel.providerHeading(panel.provider) : "AI USAGE"
             color: panel.controlForeground
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.subtitle
-            font.letterSpacing: 2
-            font.weight: Font.Medium
+            font.weight: Font.DemiBold
             renderType: Text.NativeRendering
+          }
+
+          Text {
+            id: heroPlan
+            anchors.left: heroName.left; anchors.top: heroName.bottom
+            width: heroName.width; elide: Text.ElideRight
+            textFormat: Text.PlainText
+            text: panel.tierLabel(panel.provider)
+            color: panel.controlMutedHigh
+            font.family: heroName.font.family
+            font.pixelSize: Commons.Style.font.bodySmall
           }
 
           Row {
@@ -186,6 +262,7 @@ ShibumiPanel {
 
         Row {
           id: providerRow
+          visible: providerTabs.count > 1
           width: parent.width
           height: Commons.Style.space(28)
           spacing: Commons.Style.space(6)
@@ -243,25 +320,8 @@ ShibumiPanel {
           color: panel.dividerColor
         }
 
-        Item {
-          visible: panel.tierLabel(panel.provider) !== ""
-          width: parent.width
-          height: visible ? Commons.Style.space(16) : 0
-
-          Text {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: panel.tierLabel(panel.provider)
-            color: panel.controlForeground
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.body
-            font.weight: Font.Medium
-            renderType: Text.NativeRendering
-          }
-        }
-
         Text {
-          visible: panel.providerEmptyStateText !== ""
+          visible: panel.providerEmptyStateText !== "" && !panel.balance
           width: parent.width
           text: panel.providerEmptyStateText
           wrapMode: Text.WordWrap
@@ -271,13 +331,38 @@ ShibumiPanel {
           renderType: Text.NativeRendering
         }
 
-        UsageRow {
-          id: headlineUsage
-          visible: !!panel.headline
-          label: panel.headline ? panel.headline.title : ""
-          value: panel.headline ? panel.headline.percent : 0
-          dimmed: !panel.providerReady
+        Rectangle {
+          visible: !!panel.provider
+          width: parent.width; height: statusRow.height + Commons.Style.space(16)
+          radius: panel.controlRadius; color: panel.controlFillColor
+          border.width: panel.controlBorderWidth; border.color: panel.controlBorderColor
+          DetailRow {
+            id: statusRow
+            anchors.centerIn: parent; width: parent.width - Commons.Style.space(16)
+            label: "Status"
+            value: panel.provider ? String(panel.provider.usageStatusText || panel.providerStatusLabel) : ""
+            wrapValue: true
+          }
         }
+        Column {
+          id: balanceSection
+          visible: !!panel.balance
+          width: parent.width; spacing: Commons.Style.space(6)
+          DetailRow { label: "BALANCE"; value: "" }
+          DetailRow { label: "Prepaid credits"; value: panel.balance ? panel.money(panel.balance.remaining) : "" }
+          Rectangle {
+            width: parent.width; height: Commons.Style.space(4); radius: height / 2
+            visible: panel.balanceRatio >= 0
+            color: panel.controlActiveFillColor
+            Rectangle {
+              height: parent.height; radius: parent.radius
+              width: parent.width * Math.max(0, panel.balanceRatio)
+              color: width <= parent.width * 0.1 ? Commons.Color.urgent : panel.controlForeground
+            }
+          }
+        }
+        DetailRow { visible: panel.balanceDetail !== ""; label: ""; value: panel.balanceDetail; wrapValue: true }
+        DetailRow { visible: panel.limitWindows.length > 0; label: "LIMITS"; value: "" }
         Repeater {
           model: panel.limitWindows
           delegate: Column {
@@ -299,15 +384,9 @@ ShibumiPanel {
         }
         DetailRow {
           id: limitsUnavailable
-          visible: panel.provider && !panel.providerHasUsage
+          visible: panel.provider && !panel.providerHasUsage && !panel.balance
           label: "Limits"
           value: "Unavailable"
-        }
-        DetailRow {
-          visible: panel.provider && String(panel.provider.usageStatusText || "") !== ""
-          label: panel.provider && String(panel.provider.providerId || "") === "codex"
-            ? "General limit" : "Status"
-          value: panel.provider ? String(panel.provider.usageStatusText || "") : ""
         }
         DetailRow {
           visible: panel.provider && Number(panel.provider.windowTokens) > 0
@@ -347,7 +426,8 @@ ShibumiPanel {
           delegate: ModelUsageRow {
             required property var modelData
             width: contentColumn.width
-            entry: ({ name: modelData.date, totalLabel: panel.aiService.formatTokens(modelData.messageCount),
+            daily: true
+            entry: ({ name: panel.dayLabel(modelData.date), totalLabel: panel.aiService.formatTokens(modelData.messageCount),
               pct: modelData.messageCount / Math.max(1, ...panel.days.map(day => day.messageCount)) * 100, detail: "" })
           }
         }
@@ -359,7 +439,7 @@ ShibumiPanel {
           Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "MODELS"
+            text: "TOKENS BY MODEL"
             color: panel.controlMutedHigh
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
@@ -431,17 +511,17 @@ ShibumiPanel {
     required property real value
     property bool dimmed: false
     readonly property color usageColor: dimmed ? panel.controlMuted
-      : value >= 90 ? Commons.Color.urgent : panel.controlAccent
+      : value >= 90 ? Commons.Color.urgent : panel.controlForeground
     width: parent.width
-    height: Commons.Style.space(16)
+    height: Commons.Style.space(30)
 
     Text {
       id: usageLabel
       anchors.left: parent.left
-      anchors.verticalCenter: parent.verticalCenter
+      anchors.top: parent.top
       text: usageRow.label
       textFormat: Text.PlainText
-      width: Math.min(implicitWidth, parent.width * 0.45)
+      width: parent.width - usageValue.width - Commons.Style.space(8)
       elide: Text.ElideRight
       color: panel.controlMutedHigh
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -453,7 +533,7 @@ ShibumiPanel {
     Text {
       id: usageValue
       anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
+      anchors.top: parent.top
       text: Math.round(usageRow.value) + "%"
       color: usageRow.usageColor
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -463,12 +543,10 @@ ShibumiPanel {
     }
 
     Rectangle {
-      anchors.left: usageLabel.right
-      anchors.leftMargin: Commons.Style.space(8)
-      anchors.right: usageValue.left
-      anchors.rightMargin: Commons.Style.space(8)
-      anchors.verticalCenter: parent.verticalCenter
-      height: Commons.Style.space(8)
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      height: Commons.Style.space(4)
       radius: height / 2
       color: Commons.Util.alpha(panel.controlAccent, 0.15)
       Rectangle {
@@ -514,15 +592,17 @@ ShibumiPanel {
   component ModelUsageRow: Item {
     id: modelRow
     required property var entry
-    height: Commons.Style.space(42)
+    property bool daily: false
+    height: Commons.Style.space(daily ? 20 : 30)
     readonly property real percent: Math.max(0, Math.min(100,
       Number(entry && entry.pct) || 0))
 
     Text {
       id: modelName
       anchors.left: parent.left
-      anchors.top: parent.top
-      width: parent.width * 0.68
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: modelRow.daily ? 0 : Commons.Style.space(8)
+      width: modelRow.daily ? Commons.Style.space(52) : parent.width * 0.68
       text: String(modelRow.entry && modelRow.entry.name || "")
       textFormat: Text.PlainText
       elide: Text.ElideRight
@@ -534,8 +614,10 @@ ShibumiPanel {
     }
 
     Text {
+      id: modelValue
       anchors.right: parent.right
-      anchors.top: parent.top
+      anchors.rightMargin: modelRow.daily ? 0 : Commons.Style.space(8)
+      anchors.verticalCenter: parent.verticalCenter
       text: String(modelRow.entry && modelRow.entry.totalLabel || "")
       color: panel.controlAccent
       font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -545,11 +627,12 @@ ShibumiPanel {
     }
 
     Rectangle {
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.top: modelName.bottom
-      anchors.topMargin: Commons.Style.space(5)
-      height: Commons.Style.space(6)
+      z: -1
+      anchors.left: modelRow.daily ? modelName.right : parent.left
+      anchors.right: modelRow.daily ? modelValue.left : parent.right
+      anchors.margins: modelRow.daily ? Commons.Style.space(8) : 0
+      anchors.verticalCenter: parent.verticalCenter
+      height: modelRow.daily ? Commons.Style.space(4) : parent.height
       radius: height / 2
       color: Commons.Util.alpha(panel.controlAccent, 0.14)
 
@@ -557,15 +640,15 @@ ShibumiPanel {
         width: parent.width * modelRow.percent / 100
         height: parent.height
         radius: height / 2
-        color: panel.controlAccent
+        color: modelRow.daily ? panel.controlForeground : panel.controlActiveFillColor
         Behavior on width { NumberAnimation { duration: 300 } }
       }
     }
 
-    Text {
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.bottom: parent.bottom
+    MouseArea { id: modelHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+    Presentation.ShibumiPillToolTip {
+      panel: panel
+      visible: !modelRow.daily && modelHover.containsMouse && text !== ""
       text: modelRow.entry && modelRow.entry.detail !== undefined ? modelRow.entry.detail
         : "I " + String(modelRow.entry && modelRow.entry.inputLabel || "0")
         + "  O " + String(modelRow.entry && modelRow.entry.outputLabel || "0")
@@ -577,11 +660,6 @@ ShibumiPanel {
           ? "  CW " + String(modelRow.entry.cacheWriteLabel) : "")
         + (String(modelRow.entry && modelRow.entry.todayLabel || "0") !== "0"
           ? "  today " + String(modelRow.entry.todayLabel) : "")
-      elide: Text.ElideRight
-      color: panel.controlMutedHigh
-      font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.space(9)
-      renderType: Text.NativeRendering
     }
   }
 }
