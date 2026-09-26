@@ -10,6 +10,8 @@ ShibumiPanel {
   required property var ownerWidget
   required property var systemTelemetry
   required property var gpuTelemetry
+  readonly property var cpuHistoryView: cpuUsage.historyView
+  readonly property var gpuUsageView: gpuUsage
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -89,13 +91,17 @@ ShibumiPanel {
       }
 
       UsageRow {
+        id: cpuUsage
         width: parent.width
+        history: panel.systemTelemetry ? panel.systemTelemetry.cpuHistory : []
+        maxSamples: panel.systemTelemetry ? panel.systemTelemetry.cpuMaxSamples : 30
         label: "CPU"
         value: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
         bar: panel.bar
       }
 
       UsageRow {
+        id: gpuUsage
         width: parent.width
         visible: panel.gpuTelemetry && panel.gpuTelemetry.available
         label: "GPU"
@@ -129,7 +135,8 @@ ShibumiPanel {
 
       Row {
         width: parent.width
-        visible: panel.gpuTelemetry && panel.gpuTelemetry.memoryTotalMiB > 0
+        visible: panel.gpuTelemetry && panel.gpuTelemetry.available
+          && panel.gpuTelemetry.memoryTotalMiB > 0
 
         Text {
           width: parent.width * 0.4
@@ -197,13 +204,16 @@ ShibumiPanel {
     required property string label
     required property int value
     required property var bar
+    property var history: null
+    property int maxSamples: 30
+    readonly property alias historyView: historyGraph
 
-    height: 16
+    height: Commons.Style.space(72)
 
     Text {
       id: usageLabel
       anchors.left: parent.left
-      anchors.verticalCenter: parent.verticalCenter
+      anchors.top: parent.top
       text: parent.label
       color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
         parent.bar.foreground.b, 0.65) : Commons.Color.foreground
@@ -216,7 +226,7 @@ ShibumiPanel {
     Text {
       id: usageValue
       anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
+      anchors.top: parent.top
       text: parent.value + "%"
       color: parent.bar ? parent.bar.urgent : Commons.Color.accent
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
@@ -225,13 +235,25 @@ ShibumiPanel {
       renderType: Text.NativeRendering
     }
 
+    // A separate panel instance; the bar's CpuWave defaults stay untouched.
+    CpuWave {
+      id: historyGraph
+      visible: usageRow.history !== null
+      width: parent.width
+      height: Commons.Style.space(48)
+      anchors.bottom: parent.bottom
+      history: usageRow.history || []
+      maxSamples: usageRow.maxSamples
+      accent: usageRow.bar ? usageRow.bar.urgent : Commons.Color.accent
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+    }
+
     Rectangle {
-      anchors.left: usageLabel.right
-      anchors.leftMargin: 8
-      anchors.right: usageValue.left
-      anchors.rightMargin: 8
-      anchors.verticalCenter: parent.verticalCenter
-      height: 8
+      visible: usageRow.history === null
+      anchors.bottom: parent.bottom
+      width: parent.width
+      height: Commons.Style.space(48)
       radius: height / 2
       color: panel.controlActiveFillColor
 

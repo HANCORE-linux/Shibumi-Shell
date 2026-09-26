@@ -151,12 +151,21 @@ ShellRoot {
         root.check(cpu.gpu.consumers === 3 && telemetry.system.cpuConsumers === 1
           && telemetry.system.memoryConsumers === 1 && storage.storage.consumers === 1
           && telemetry.thermal.consumers === 1, "open panel/widget leases unbalanced")
+        const cpuPanel = root.panels[0], oldHistory = telemetry.system.cpuHistory
+        telemetry.system.cpuHistory = [0.12, 0.55, 0.31]
+        root.check(cpuPanel.cpuHistoryView && cpuPanel.cpuHistoryView.history.join() === "0.12,0.55,0.31"
+          && cpuPanel.cpuHistoryView.maxSamples === telemetry.system.cpuMaxSamples
+          && cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42,
+          "CPU panel history or equal GPU presentation missing")
+        telemetry.system.cpuHistory = oldHistory
         root.firstGpu = cpu.gpu
         items[0].bar = replacementBar
         cpu.shell = null; telemetry.shell = null; storage.shell = null
         root.phase++
       } else if (root.phase === 4) {
         root.samePanels()
+        root.check(root.panels[0].gpuUsageView && !root.panels[0].gpuUsageView.visible
+          && root.panels[0].cpuHistoryView.history.length === 0, "revoked CPU panel retained GPU/history")
         root.check(!cpu.ready && !telemetry.ready && !storage.ready
           && !cpu.backendLoaded && !telemetry.backendLoaded && !storage.backendLoaded
           && cpu.gpu === null && telemetry.system === null && storage.storage === null
