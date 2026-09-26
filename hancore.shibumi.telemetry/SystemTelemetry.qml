@@ -7,7 +7,11 @@ Scope {
 
   property int cpuConsumers: 0
   property int memoryConsumers: 0
-  readonly property bool active: cpuConsumers > 0 || memoryConsumers > 0
+  property int cpuPanelConsumers: 0
+  property string cpuModel: ""
+  property var loadAverage: []
+  property bool cpuModelRead: false
+  readonly property bool active: cpuConsumers > 0 || memoryConsumers > 0 || cpuPanelConsumers > 0
   readonly property int intervalMs: 2000
 
   property int cpuPercent: 0
@@ -35,12 +39,18 @@ Scope {
     } else if (kind === "memory") {
       memoryConsumers++
       if (memoryConsumers === 1) memoryFile.reload()
+    } else if (kind === "cpuPanel") {
+      if (++cpuPanelConsumers === 1) {
+        if (!cpuModelRead) { cpuModelRead = true; modelFile.reload() }
+        loadFile.reload()
+      }
     }
   }
 
   function release(kind) {
     if (kind === "cpu") cpuConsumers = Math.max(0, cpuConsumers - 1)
     else if (kind === "memory") memoryConsumers = Math.max(0, memoryConsumers - 1)
+    else if (kind === "cpuPanel") cpuPanelConsumers = Math.max(0, cpuPanelConsumers - 1)
   }
 
   function parseCpu(text) {
@@ -102,7 +112,18 @@ Scope {
     memCachedMiB = Math.round(cached / 1024)
   }
 
+  function parseCpuModel(text) {
+    const match = /^(?:model name|Hardware)\s*:\s*([^\r\n]{1,256})/m.exec(String(text || "").slice(0, 8192))
+    cpuModel = match ? match[1].trim() : ""
+  }
+
+  function parseLoad(text) {
+    const values = String(text || "").slice(0, 256).trim().split(/\s+/).slice(0, 3).map(Number)
+    loadAverage = values.length === 3 && values.every(value => isFinite(value) && value >= 0) ? values : []
+  }
+
   function refresh() {
+    if (cpuPanelConsumers > 0) loadFile.reload()
     if (cpuConsumers > 0) cpuFile.reload()
     if (memoryConsumers > 0) memoryFile.reload()
   }
@@ -119,6 +140,22 @@ Scope {
     path: "/proc/meminfo"
     printErrors: false
     onLoaded: root.parseMemory(text())
+  }
+
+  FileView {
+    id: modelFile
+    path: "/proc/cpuinfo"
+    preload: false
+    printErrors: false
+    onLoaded: root.parseCpuModel(text())
+  }
+  FileView {
+    id: loadFile
+    path: "/proc/loadavg"
+    preload: false
+    printErrors: false
+    onLoaded: if (root.cpuPanelConsumers > 0) root.parseLoad(text())
+    onLoadFailed: root.loadAverage = []
   }
 
   Timer {

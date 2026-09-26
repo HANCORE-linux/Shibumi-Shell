@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -10,7 +11,8 @@ ShibumiPanel {
   required property var ownerWidget
   required property var systemTelemetry
   required property var gpuTelemetry
-  readonly property var cpuHistoryView: cpuUsage.historyView
+  readonly property string cpuModelText: cpuModelLabel.text
+  readonly property string loadAverageText: loadValue.text
   readonly property var gpuUsageView: gpuUsage
 
   owner: ownerWidget
@@ -21,7 +23,19 @@ ShibumiPanel {
   contentHeight: fittedContentHeight(panelColumn.implicitHeight)
 
   property var acquiredGpuTelemetry: null
+  property var acquiredSystemTelemetry: null
+  function openMonitor() {
+    const owner = panel.ownerWidget, accepted = panel.ownerWidget.openSystemMonitor()
+    if (accepted) owner.close()
+    return accepted
+  }
   function syncGpuLease() {
+    const system = open ? systemTelemetry : null
+    if (acquiredSystemTelemetry !== system) {
+      if (acquiredSystemTelemetry) acquiredSystemTelemetry.release("cpuPanel")
+      acquiredSystemTelemetry = system
+      if (system) system.acquire("cpuPanel")
+    }
     const next = open ? gpuTelemetry : null
     if (acquiredGpuTelemetry === next) return
     if (acquiredGpuTelemetry) acquiredGpuTelemetry.release()
@@ -29,9 +43,13 @@ ShibumiPanel {
     if (acquiredGpuTelemetry) acquiredGpuTelemetry.acquire()
   }
   onGpuTelemetryChanged: syncGpuLease()
+  onSystemTelemetryChanged: syncGpuLease()
   onOpenChanged: syncGpuLease()
   Component.onCompleted: syncGpuLease()
-  Component.onDestruction: if (acquiredGpuTelemetry) acquiredGpuTelemetry.release()
+  Component.onDestruction: {
+    if (acquiredGpuTelemetry) acquiredGpuTelemetry.release()
+    if (acquiredSystemTelemetry) acquiredSystemTelemetry.release("cpuPanel")
+  }
 
   Ui.PanelKeyCatcher {
     id: keyCatcher
@@ -45,12 +63,28 @@ ShibumiPanel {
       spacing: 8
 
       Item {
+        id: header
         width: parent.width
-        height: 24
+        height: Commons.Style.space(52)
+
+        Presentation.IconText {
+          text: "memory"; color: panel.controlAccent
+          font.pixelSize: Commons.Style.font.icon
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        Text {
+          id: cpuModelLabel
+          x: Commons.Style.space(28); anchors.bottom: parent.bottom
+          width: parent.width - x - monitorButton.width - Commons.Style.space(8); elide: Text.ElideRight; textFormat: Text.PlainText
+          text: panel.systemTelemetry ? panel.systemTelemetry.cpuModel : ""
+          color: panel.controlMutedHigh
+          font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption
+        }
 
         Text {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
+          anchors.leftMargin: Commons.Style.space(28)
           text: "CPU · GPU"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -63,6 +97,7 @@ ShibumiPanel {
         Text {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
+          anchors.rightMargin: monitorButton.width + Commons.Style.space(8)
           text: "\u2715"
           color: closeMouse.containsMouse
             ? panel.controlAccent : panel.controlMuted
@@ -93,16 +128,23 @@ ShibumiPanel {
       UsageRow {
         id: cpuUsage
         width: parent.width
-        history: panel.systemTelemetry ? panel.systemTelemetry.cpuHistory : []
-        maxSamples: panel.systemTelemetry ? panel.systemTelemetry.cpuMaxSamples : 30
         label: "CPU"
         value: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
         bar: panel.bar
+        Text {
+          id: loadValue
+          x: Commons.Style.space(10); y: Commons.Style.space(46)
+          text: "Load Average (1/5/15 min)\n" + (panel.systemTelemetry && panel.systemTelemetry.loadAverage.length === 3
+            ? panel.systemTelemetry.loadAverage.map(value => value.toFixed(2)).join(" / ") : "—")
+          color: panel.controlMutedHigh
+          font.family: Commons.Style.font.family; font.pixelSize: Commons.Style.font.caption
+        }
       }
 
       UsageRow {
         id: gpuUsage
         width: parent.width
+        height: Commons.Style.space(100)
         visible: panel.gpuTelemetry && panel.gpuTelemetry.available
         label: "GPU"
         value: panel.gpuTelemetry ? panel.gpuTelemetry.utilization : 0
@@ -110,7 +152,10 @@ ShibumiPanel {
       }
 
       Row {
-        width: parent.width
+        id: temperatureRow
+        parent: gpuUsage
+        x: Commons.Style.space(10); y: Commons.Style.space(46)
+        width: parent.width - 2 * x
         visible: panel.gpuTelemetry && panel.gpuTelemetry.available
           && panel.gpuTelemetry.temperatureC > 0
 
@@ -124,7 +169,7 @@ ShibumiPanel {
           renderType: Text.NativeRendering
         }
         Text {
-          width: parent.width * 0.3
+          width: parent.width * 0.6
           text: panel.gpuTelemetry ? panel.gpuTelemetry.temperatureC + "°C" : ""
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -134,7 +179,9 @@ ShibumiPanel {
       }
 
       Row {
-        width: parent.width
+        parent: gpuUsage
+        x: Commons.Style.space(10); y: temperatureRow.visible ? temperatureRow.y + temperatureRow.height + Commons.Style.space(8) : Commons.Style.space(46)
+        width: parent.width - 2 * x
         visible: panel.gpuTelemetry && panel.gpuTelemetry.available
           && panel.gpuTelemetry.memoryTotalMiB > 0
 
@@ -148,7 +195,8 @@ ShibumiPanel {
           renderType: Text.NativeRendering
         }
         Text {
-          width: parent.width * 0.3
+          width: parent.width * 0.6
+          elide: Text.ElideRight
           text: panel.gpuTelemetry
             ? panel.gpuTelemetry.memoryUsedMiB + " / " + panel.gpuTelemetry.memoryTotalMiB + " MiB"
             : ""
@@ -160,13 +208,10 @@ ShibumiPanel {
       }
 
       Rectangle {
-        width: parent.width
-        height: 1
-        color: panel.dividerColor
-      }
-
-      Rectangle {
-        width: parent.width
+        id: monitorButton
+        parent: header
+        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+        width: Commons.Style.space(70)
         height: 28
         radius: panel.controlRadius
         color: monitorMouse.containsMouse
@@ -177,7 +222,7 @@ ShibumiPanel {
 
         Text {
           anchors.centerIn: parent
-          text: "Open btop"
+          text: "btop"
           color: panel.bar ? panel.bar.background : Commons.Color.background
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 11
@@ -189,10 +234,7 @@ ShibumiPanel {
           anchors.fill: parent
           hoverEnabled: true
           cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            panel.ownerWidget.close()
-            panel.ownerWidget.openSystemMonitor()
-          }
+          onClicked: panel.openMonitor()
         }
       }
     }
@@ -204,16 +246,19 @@ ShibumiPanel {
     required property string label
     required property int value
     required property var bar
-    property var history: null
-    property int maxSamples: 30
-    readonly property alias historyView: historyGraph
+    height: Commons.Style.space(90)
 
-    height: Commons.Style.space(72)
+    Rectangle {
+      anchors.fill: parent; z: -1
+      radius: panel.controlRadius; color: panel.controlFillColor
+      border.width: panel.controlBorderWidth; border.color: panel.controlBorderColor
+    }
 
     Text {
       id: usageLabel
       anchors.left: parent.left
       anchors.top: parent.top
+      anchors.margins: Commons.Style.space(10)
       text: parent.label
       color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
         parent.bar.foreground.b, 0.65) : Commons.Color.foreground
@@ -227,6 +272,7 @@ ShibumiPanel {
       id: usageValue
       anchors.right: parent.right
       anchors.top: parent.top
+      anchors.margins: Commons.Style.space(10)
       text: parent.value + "%"
       color: parent.bar ? parent.bar.urgent : Commons.Color.accent
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
@@ -235,25 +281,10 @@ ShibumiPanel {
       renderType: Text.NativeRendering
     }
 
-    // A separate panel instance; the bar's CpuWave defaults stay untouched.
-    CpuWave {
-      id: historyGraph
-      visible: usageRow.history !== null
-      width: parent.width
-      height: Commons.Style.space(48)
-      anchors.bottom: parent.bottom
-      history: usageRow.history || []
-      maxSamples: usageRow.maxSamples
-      accent: usageRow.bar ? usageRow.bar.urgent : Commons.Color.accent
-      onWidthChanged: requestPaint()
-      onHeightChanged: requestPaint()
-    }
-
     Rectangle {
-      visible: usageRow.history === null
-      anchors.bottom: parent.bottom
-      width: parent.width
-      height: Commons.Style.space(48)
+      x: Commons.Style.space(10); y: Commons.Style.space(30)
+      width: parent.width - 2 * x
+      height: Commons.Style.space(6)
       radius: height / 2
       color: panel.controlActiveFillColor
 
