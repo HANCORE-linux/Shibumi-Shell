@@ -672,10 +672,16 @@ rg -q 'hancore\.shibumi\.media' contracts/plugin-suite-v1.json \
   || fail "Shibumi media presentation is not registered"
 rg -q 'firstPartyServiceFor\("omarchy\.media"\)' hancore.shibumi.media/BarWidget.qml \
   || fail "media presentation does not reuse the official service"
+# Approved panel-only exception: native shuffle, repeat and seek (ARCHITECTURE.md, G9).
 if rg -q 'Quickshell\.Services\.(Mpris|Pipewire)|Mpris\.|Pipewire\.' \
-  hancore.shibumi.media/BarWidget.qml hancore.shibumi.media/MediaPanel.qml hancore.shibumi.media/MediaPulse.qml \
+  hancore.shibumi.media/BarWidget.qml hancore.shibumi.media/MediaPulse.qml \
   hancore.shibumi.media/MediaSpectrum.qml hancore.shibumi.media/MediaMuse.qml \
-  hancore.shibumi.media/Service.qml; then
+  hancore.shibumi.media/Service.qml \
+  || rg -q 'Quickshell\.Services\.Pipewire|Mpris\.|Pipewire\.' \
+    hancore.shibumi.media/MediaPanel.qml \
+  || ! awk '/Quickshell[.]Services[.]Mpris/ {
+    if ($0 != "import Quickshell.Services.Mpris" || ++imports > 1) exit 1
+  }' hancore.shibumi.media/MediaPanel.qml; then
   fail "Shibumi media presentation must not create a second media owner"
 fi
 if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.media/BarWidget.qml \
