@@ -676,7 +676,7 @@ ShibumiPanel {
     }
   }
 
-  // Outline button structure inspired by 0xSero/omarchy-local-ai; see Local-AI-LICENSE.
+  // Outline button structure inspired by 0xSero's Omarchy Local AI plugin (MIT); see Local-AI-LICENSE.
   component MediaPanelButton: Rectangle {
     id: button
     required property string icon

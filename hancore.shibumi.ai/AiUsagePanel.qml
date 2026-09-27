@@ -7,7 +7,7 @@ import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 // Layout derived from MIT-licensed Omarchy v4.0.4 plugins/agents/Panel.qml.
 // See Omarchy-LICENSE. Shibumi retains its own data, selection and lifecycle.
-// Chart/metric structure adapted from 0xSero/omarchy-local-ai; see Local-AI-LICENSE.
+// Chart/metric structure adapted from 0xSero's Omarchy Local AI plugin (MIT); see Local-AI-LICENSE.
 ShibumiPanel {
   id: panel
 
