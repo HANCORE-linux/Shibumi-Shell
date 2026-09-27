@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
-// Compact chart/metric layout inspired by 0xSero's Omarchy Local AI plugin (MIT); see Local-AI-LICENSE.
 
 ShibumiPanel {
   id: panel
