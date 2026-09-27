@@ -119,7 +119,7 @@ ShellRoot {
     adapter.attachShell(currentShell)
     legacyAdapter.attachShell(legacyShell)
     unavailableAdapter.attachShell(null)
-    if (dndOnlyAdapter.historyState !== "loading" || counts.tooltipText !== "Live: Unavailable · Recent: Loading · DND")
+    if (dndOnlyAdapter.historyState !== "loading" || counts.tooltipText !== "Recent: Loading · DND")
       root.fail("initial history state is not loading without hover/open")
   }
 
@@ -137,6 +137,7 @@ ShellRoot {
         if (root.proxyPhase === 0) {
           root.proxyChecks.emptyReady = !dndOnlyAdapter.liveAvailable && counts.countsKnown
             && !badge.visible && badge.children[0].text !== "?"
+            && counts.tooltipText === "0 Recent · DND"
           proxyHistory.setText(JSON.stringify({app: Quickshell.env("SHIBUMI_PROXY_APP"), summary: "Proxy recent", timestamp: 1}))
           root.proxyPhase = 1
           return
@@ -144,6 +145,7 @@ ShellRoot {
         if (root.proxyPhase === 1) {
           if (dndOnlyAdapter.recentCount !== 1) return
           root.proxyChecks.one = badge.visible && counts.notificationCount === 1 && badge.children[0].text === "1"
+            && counts.tooltipText === "1 Recent · DND"
           root.proxyChecks.emptyApp = !dndOnlyAdapter.focusApp({app: ""}, true)
           root.proxyChecks.focus = dndOnlyAdapter.focusApp(dndOnlyAdapter.pastModel.get(0), true)
           console.log("259_PROXY", JSON.stringify(root.proxyChecks))
@@ -191,7 +193,7 @@ ShellRoot {
       if (root.ticks < (root.historyRace ? 40 : 12)) return
       if (!root.historyRace && !root.mutationPhase
           && (adapter.historyState !== (Quickshell.env("SHIBUMI_HISTORY_MODE") === "missing" ? "unavailable" : "ready")
-            || counts.tooltipText !== "Live: Unavailable · " + (adapter.historyState === "ready"
+            || counts.tooltipText !== (adapter.historyState === "ready"
               ? root.expectedHistoryCount + " Recent" : "Recent: Unavailable") + " · DND"))
         return root.fail("eager snapshot/tooltip state without hover/open")
       if (root.historyRace && root.historyRace !== "mutation-replace") {

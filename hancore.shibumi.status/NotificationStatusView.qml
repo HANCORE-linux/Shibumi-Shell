@@ -25,8 +25,8 @@ Item {
   readonly property int notificationCount: pendingCount + recentCount
   readonly property bool countsKnown: notificationService
     && notificationService.historyState === "ready"
-  readonly property string tooltipText: (notificationService && notificationService.liveAvailable
-    ? pendingCount + " Live" : "Live: Unavailable") + " · "
+  readonly property string tooltipText: (notificationService && notificationService.liveAvailable === true
+    ? pendingCount + " Live · " : "")
     + (notificationService && notificationService.historyState === "ready"
       ? recentCount + " Recent" : "Recent: " + (notificationService
         && notificationService.historyState === "loading" ? "Loading" : "Unavailable"))
