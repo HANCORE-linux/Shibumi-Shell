@@ -79,7 +79,7 @@ ShellRoot {
       && emptyAgentsPanel.weekDays[6].messageCount === null
     record.recentDays = days; agentsService.applyAgentRecord("claude", JSON.stringify(record))
     emptyAgentsPanel.nowMs = now
-    checks.codex = typeof agentsService.limitWindows === "function" && agentsService.limitWindows(agentsService.providerFor("codex")).length === 1 && agentsService.providerFor("codex").models[0].totalLabel === "1.03M"
+    checks.codex = typeof agentsService.limitWindows === "function" && agentsService.limitWindows(agentsService.providerFor("codex")).length === 1 && agentsService.providerFor("codex").models[0].totalLabel === "1.0M"
     record.limits[2].percent = 0.899; agentsService.applyAgentRecord("claude", JSON.stringify(record))
     checks.threshold = emptyAgentsPanel.headlineAlarm === false && String(emptyAgentsPanel.headlineColor) !== String(alarmColor)
     record.limits = record.limits.concat(Array.from({length: 4}, () => record.limits[0])); agentsService.applyAgentRecord("claude", JSON.stringify(record))
@@ -103,6 +103,37 @@ ShellRoot {
 
   function descendants(item) {
     return Array.from(item.children || []).reduce((items, child) => items.concat([child], descendants(child)), [])
+  }
+
+  function compactDailyTokenLabels() {
+    const record = JSON.parse(codexStatusRecord(true, true))
+    record.id = "claude"; record.name = "Claude Code"
+    emptyAgentsPanel.aiService = agentsService
+    emptyAgentsPanel.contentWidth = 320
+    emptyAgentsPanel.nowMs = Date.now()
+    const values = [1054540000, 1002400000, 1295660000, 1765390000,
+      2054540000, 3002400000, 4007230000]
+    record.recentDays = values.map((value, i) => ({
+      date: emptyAgentsPanel.dayKey(i - 6), messageCount: value }))
+    agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    agentsService.selectTool("claude")
+    Qt.callLater(function() {
+      const columns = root.descendants(emptyAgentsPanel).filter(item =>
+        item.modelData && typeof item.modelData.messageCount === "number"
+        && item.modelData.date && item.children.length === 2)
+      const labels = columns.map(column => ({ value: column.modelData.messageCount,
+        text: column.children[0].text, implicitWidth: column.children[0].implicitWidth,
+        columnWidth: column.width }))
+      const example = agentsService.formatTokens(1054540000)
+      console.log("AI_DAILY_TOKEN_LABELS", JSON.stringify({example: example, labels: labels}))
+      if (example !== "1.1B" || labels.length !== 7 || !labels.every(label =>
+          label.value >= 1e9 && label.columnWidth > 0
+          && label.implicitWidth <= label.columnWidth))
+        return root.fail("daily token labels exceed their columns or compact format drifted")
+      watchdog.stop()
+      console.log("ai plugin smoke passed")
+      Qt.quit()
+    })
   }
 
   function panelHeaderMatches() {
@@ -1160,9 +1191,7 @@ ShellRoot {
             return
           }
           stop()
-          watchdog.stop()
-          console.log("ai plugin smoke passed")
-          Qt.quit()
+          root.compactDailyTokenLabels()
           return
         }
         if (first.panelLoaded || secondLoader.item !== null
