@@ -613,8 +613,14 @@ for radius_owner in \
   hancore.shibumi.status/TrayDrawerPanel.qml \
   hancore.shibumi.update-center/UpdateCenterPanel.qml \
   hancore.shibumi.workspaces/WorkspacePanelContent.qml; do
-  rg -q 'radius: (panel|controller|root\.controller)\.controlRadius' \
-    "$radius_owner" \
+  # Approved beta.15.4 panel buttons follow their rendered panel radius.
+  case "$radius_owner" in
+    hancore.shibumi.ai/AiUsagePanel.qml|hancore.shibumi.cpu/CpuPanel.qml|\
+    hancore.shibumi.media/MediaPanel.qml|hancore.shibumi.memory/MemoryPanel.qml)
+      radius_pattern='radius: panel\.renderedSurfaceRadius' ;;
+    *) radius_pattern='radius: (panel|controller|root\.controller)\.controlRadius' ;;
+  esac
+  rg -q "$radius_pattern" "$radius_owner" \
     || fail "$radius_owner bypasses the dynamic Shibumi control radius"
 done
 

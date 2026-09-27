@@ -30,7 +30,7 @@ from pathlib import Path
 
 repo = Path(sys.argv[1])
 expected = {
-    "hancore.shibumi.ai/AiUsagePanel.qml": "215bc466aff11b593c9731a13e90316b1702aeed19d696654e8f0f555a12f946",
+    "hancore.shibumi.ai/AiUsagePanel.qml": "adb7e154226a79de1aea92070517c775d2f51144c3c6fef0a38f750c249a7284",
     "hancore.shibumi.audio/AudioPanel.qml": "fedbe78ccc91b1e86764eaa5234f64b1f2519555b47cc6043ded86e6127d7d4e",
     "hancore.shibumi.battery/BatteryPanel.qml": "46f3fad436b76672cb1344822f40f6441a95d166aee66ba4ee1b8877d7daf6f9",
     "hancore.shibumi.bluetooth/BluetoothPanel.qml": "44a5f3dd0346cf31ec470f783a46b97fd7dffbc4aa2e97cc6f8fabee533988fa",

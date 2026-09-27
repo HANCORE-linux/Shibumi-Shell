@@ -1080,8 +1080,12 @@ if rg -q 'CACHE_FILE|stale_last' \
     hancore.shibumi.ai/scripts/opencode-usage; then
   fail "OpenCode provider must not persist a V1 usage cache"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' \
+# Approved reset-countdown display: one open-only clock, with no provider work.
+if rg -Uq '\b(Process|Timer|FileView)[[:space:]]*\{' \
     hancore.shibumi.ai/BarWidget.qml \
+  || rg -Uq '\b(Process|FileView)[[:space:]]*\{' hancore.shibumi.ai/AiUsagePanel.qml \
+  || [[ $(rg -Uo '\bTimer[[:space:]]*\{' hancore.shibumi.ai/AiUsagePanel.qml | wc -l) -ne 1 ]] \
+  || ! rg -Uq '^  property Timer presentationClock: Timer \{\n    id: panelClock\n    interval: 30000; repeat: true; running: panel\.open\n    onTriggered: panel\.nowMs = Date\.now\(\)\n  \}$' \
     hancore.shibumi.ai/AiUsagePanel.qml; then
   fail "AI views must not own provider polling or file watchers"
 fi
