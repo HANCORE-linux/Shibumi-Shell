@@ -154,15 +154,6 @@ ShibumiPanel {
         }
       }
 
-      CpuWave {
-        width: parent.width; height: Commons.Style.space(64)
-        history: panel.systemTelemetry ? panel.systemTelemetry.cpuHistory : []
-        maxSamples: panel.systemTelemetry ? panel.systemTelemetry.cpuMaxSamples : 30
-        accent: panel.controlMutedHigh
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-      }
-
       UsageRow {
         id: gpuUsage
         width: parent.width
