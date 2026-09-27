@@ -201,6 +201,12 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "60e1904b23e98317e896fdd0bbf98daf44ba504f5eb22f3a8ae86ab5ab72a342",
             },
+            "public-beta.15.4": {
+                "suiteVersion": "0.1.1-beta.15.4",
+                "sourceRevisions": ["package:0.1.1-beta.15.4"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "977af8d8622042c2348f522016d6655a89e8e80e51e55343acc953ea7993fc5c",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():
@@ -743,7 +749,7 @@ puts JSON.generate(workflow.fetch("jobs"))
                 "SHIBUMI_TEST_SERVICE_PREFIX": "shibumi-runtime-Ab12Cd",
             })
             for unit in ("production-user.service", "shibumi-runtime-Ab12Cd-0.service",
-                         "shibumi-runtime-Ab12Cd-26.service"):
+                         "shibumi-runtime-Ab12Cd-33.service"):
                 with self.subTest(unit=unit):
                     service_file.write_text(unit + "\n")
                     result = subprocess.run(
@@ -753,14 +759,14 @@ puts JSON.generate(workflow.fetch("jobs"))
                     self.assertEqual(result.returncode, 1)
                     self.assertIn("refusing foreign fixture service", result.stderr)
                     self.assertFalse(systemctl_log.exists())
-            # All 25 owned identities pass the start allowlist; a 26th generation
+            # All 32 owned identities pass the start allowlist; a 33rd generation
             # must be refused before any launch or service-file append.
             start_script = runtime.split(
                 "cat >\"$start_shell\" <<'START_SHELL'\n", 1
             )[1].split("\nSTART_SHELL", 1)[0]
             script.write_text(start_script)
             full_budget = "".join(f"shibumi-runtime-Ab12Cd-{i}.service\n"
-                                  for i in range(1, 26))
+                                  for i in range(1, 33))
             service_file.write_text(full_budget)
             result = subprocess.run(
                 [str(script)], text=True, capture_output=True,
