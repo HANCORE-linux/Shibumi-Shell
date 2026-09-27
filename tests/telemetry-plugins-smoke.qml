@@ -186,6 +186,39 @@ ShellRoot {
     }
   }
 
+  // Keep real panels alive while closed, without acquiring telemetry.
+  Item { id: waterOwner; property bool opened: false }
+  Cpu.CpuPanel {
+    id: cpuWaterPanel
+    anchorItem: waterOwner; ownerWidget: waterOwner; bar: fakeBar
+    systemTelemetry: null; gpuTelemetry: null
+  }
+  Memory.MemoryPanel {
+    id: memoryWaterPanel
+    anchorItem: waterOwner; ownerWidget: waterOwner; bar: fakeBar
+    telemetry: null
+  }
+
+  function checkWaterAnimationCost() {
+    function rings(item) {
+      return Array.from(item.children || []).reduce((out, child) =>
+        out.concat(child.water === true ? [child] : rings(child)), [])
+    }
+    const waterRings = rings(cpuWaterPanel).concat(rings(memoryWaterPanel))
+    if (waterRings.length !== 2) return root.fail("panel water rings missing")
+    const states = []
+    for (const open of [false, true, false]) {
+      waterOwner.opened = open
+      // Closing must also stop an in-flight level transition.
+      if (open) waterRings.forEach(ring => ring.percent = 75)
+      const running = waterRings.map(ring => ring.animating)
+      states.push({open: open, running: running})
+      if (!waterRings.every(ring => ring.panelOpen === open && ring.animating === open))
+        return root.fail("water animation escaped panel-open cost guard")
+    }
+    console.log("PANEL_WATER_COST", JSON.stringify(states))
+  }
+
   Timer {
     interval: 40
     running: true
@@ -400,6 +433,7 @@ ShellRoot {
           || cpuService.gpu.consumers !== 0
           || telemetryService.thermal.consumers !== 0)
         return root.fail("widget destruction leaked telemetry leases")
+      root.checkWaterAnimationCost()
       console.log("telemetry plugins smoke passed")
       Qt.quit()
     }

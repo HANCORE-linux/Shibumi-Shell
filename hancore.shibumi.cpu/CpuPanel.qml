@@ -129,10 +129,8 @@ ShibumiPanel {
           percent: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
           foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          onWidthChanged: requestPaint()
-          onHeightChanged: requestPaint()
-
           water: true
+          panelOpen: panel.open
         }
 
         Grid {

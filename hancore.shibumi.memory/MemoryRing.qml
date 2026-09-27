@@ -8,25 +8,45 @@ Canvas {
   required property color foreground
   required property color accent
   property bool water: false
+  property bool panelOpen: false
+  readonly property bool animationActive: water && panelOpen
+  readonly property bool animating: waveClock.running
+  property int waveFrame: 0
+  property real displayedPercent: percent
+
+  NumberAnimation on waveFrame {
+    id: waveClock
+    from: 0; to: 72; duration: 3600; loops: Animation.Infinite
+    running: root.animationActive
+  }
+  onAnimationActiveChanged: if (animationActive) displayedPercent = percent
+  // One ~20 Hz clock advances both the wave and the gently settling level.
+  onWaveFrameChanged: {
+    if (!animationActive) return
+    const delta = percent - displayedPercent
+    displayedPercent = Math.abs(delta) < 0.1 ? percent : displayedPercent + delta * 0.25
+    requestPaint()
+  }
 
   width: Commons.Style.space(16)
   height: width
 
-  onPercentChanged: requestPaint()
-  onWaterChanged: requestPaint()
-  onForegroundChanged: requestPaint()
-  onAccentChanged: requestPaint()
-  Component.onCompleted: requestPaint()
+  onPercentChanged: if (!water) requestPaint()
+  onWaterChanged: if (!water) requestPaint()
+  onForegroundChanged: if (!water) requestPaint()
+  onAccentChanged: if (!water) requestPaint()
+  Component.onCompleted: if (!water) requestPaint()
 
   onPaint: {
+    if (water && !panelOpen) return
     const context = getContext("2d")
     context.clearRect(0, 0, width, height)
     const center = width / 2
     const radius = width / 2 - 1.5
-    const ratio = Math.max(0, Math.min(1, percent / 100))
+    const ratio = Math.max(0, Math.min(1, (water ? displayedPercent : percent) / 100))
     const start = -Math.PI / 2
 
-    // Static waterline: height follows the clamped value; no clock or animation.
+    // Two slow crests, with the subtle amplitude of the former cubic waterline.
     if (water && ratio > 0) {
       const inner = radius - 3
       const left = center - inner, right = center + inner, bottom = center + inner
@@ -37,8 +57,11 @@ Canvas {
       context.arc(center, center, inner, 0, Math.PI * 2)
       context.clip()
       context.beginPath()
-      context.moveTo(left, level)
-      context.bezierCurveTo(center - inner / 3, level - wave, center + inner / 3, level + wave, right, level)
+      context.moveTo(left, bottom)
+      for (let step = 0; step <= 40; step++) {
+        const phase = step / 40 * Math.PI * 4 - waveFrame / 72 * Math.PI * 2
+        context.lineTo(left + (right - left) * step / 40, level + wave * 0.3 * Math.sin(phase))
+      }
       context.lineTo(right, bottom)
       context.lineTo(left, bottom)
       context.closePath()
