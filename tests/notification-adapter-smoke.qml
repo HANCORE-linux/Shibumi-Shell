@@ -15,6 +15,9 @@ ShellRoot {
     Quickshell.env("SHIBUMI_HISTORY_MUTATION")
   property int mutationPhase: 0
   property int mutationStartTick: 0
+  readonly property bool proxyCase: Quickshell.env("SHIBUMI_HISTORY_MODE") === "proxy"
+  property int proxyPhase: 0
+  property var proxyChecks: ({})
 
   function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
@@ -75,7 +78,7 @@ ShellRoot {
     }
   }
 
-  // The 4.0.3 host proxy can expose DND while withholding popupModel.
+  // The real notification proxy exposes only DND, not models or focus actions.
   QtObject {
     id: dndOnlyHost
     property bool doNotDisturb: true
@@ -108,6 +111,8 @@ ShellRoot {
   Status.NotificationAdapter { id: unavailableAdapter }
   Status.NotificationStatusView { id: counts; bar: null; notificationService: dndOnlyAdapter }
   Process { id: externalClear; command: ["sh", "-c", "rm -f \"$1\"/*.json", "--", dndOnlyAdapter.historyDir] }
+  FileView { id: proxyHistory; path: dndOnlyAdapter.historyDir + "/proxy.json"; preload: false; printErrors: false }
+  FileView { id: proxyReceipt; path: Quickshell.env("SHIBUMI_FOCUS_ARGV"); preload: false; printErrors: false }
 
   Component.onCompleted: {
     dndOnlyAdapter.attachShell(dndOnlyShell)
@@ -124,6 +129,33 @@ ShellRoot {
     running: true
     onTriggered: {
       root.ticks++
+      if (root.proxyCase) {
+        if (root.ticks > 100) return root.fail("proxy badge/focus deadline")
+        if (dndOnlyAdapter.historyState !== "ready") return
+        const badge = Array.from(counts.children).find(child => child.z === counts.badgeLayer)
+        if (!badge) return root.fail("proxy badge missing")
+        if (root.proxyPhase === 0) {
+          root.proxyChecks.emptyReady = !dndOnlyAdapter.liveAvailable && counts.countsKnown
+            && !badge.visible && badge.children[0].text !== "?"
+          proxyHistory.setText(JSON.stringify({app: Quickshell.env("SHIBUMI_PROXY_APP"), summary: "Proxy recent", timestamp: 1}))
+          root.proxyPhase = 1
+          return
+        }
+        if (root.proxyPhase === 1) {
+          if (dndOnlyAdapter.recentCount !== 1) return
+          root.proxyChecks.one = badge.visible && counts.notificationCount === 1 && badge.children[0].text === "1"
+          root.proxyChecks.emptyApp = !dndOnlyAdapter.focusApp({app: ""}, true)
+          root.proxyChecks.focus = dndOnlyAdapter.focusApp(dndOnlyAdapter.pastModel.get(0), true)
+          console.log("259_PROXY", JSON.stringify(root.proxyChecks))
+          if (Object.values(root.proxyChecks).some(ok => !ok)) return root.fail("proxy badge/focus")
+          root.proxyPhase = 2
+        }
+        proxyReceipt.reload()
+        if (!proxyReceipt.text().length) return
+        console.log("notification proxy badge/focus passed")
+        Qt.exit(0)
+        return
+      }
       if (root.ticks === 2) {
         if (!adapter.available || !adapter.liveAvailable
             || !adapter.historyAvailable || adapter.pendingCount !== 1

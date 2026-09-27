@@ -17,14 +17,14 @@ Item {
   readonly property real iconHorizontalOffset: Commons.Style.space(1)
   property var notificationService: null
   readonly property int pendingCount: notificationService
-    && notificationService.pendingModel
+    && notificationService.liveAvailable === true && notificationService.pendingModel
     ? Math.max(0, Number(notificationService.pendingModel.count) || 0) : 0
   readonly property int recentCount: notificationService
     && notificationService.pastModel
     ? Math.max(0, Number(notificationService.pastModel.count) || 0) : 0
   readonly property int notificationCount: pendingCount + recentCount
   readonly property bool countsKnown: notificationService
-    && notificationService.liveAvailable === true && notificationService.historyState === "ready"
+    && notificationService.historyState === "ready"
   readonly property string tooltipText: (notificationService && notificationService.liveAvailable
     ? pendingCount + " Live" : "Live: Unavailable") + " · "
     + (notificationService && notificationService.historyState === "ready"

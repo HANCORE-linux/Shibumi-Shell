@@ -33,6 +33,7 @@ Item {
     property int mutationGeneration: -1
   }
 
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   readonly property bool available: state.hostService !== null
   readonly property bool doNotDisturb: available
     && state.hostService.doNotDisturb === true
@@ -337,7 +338,14 @@ Item {
       service.focusApp(entry)
       return true
     }
-    if (focusOnly === true) return false // Recent must never invoke a Live action.
+    if (focusOnly === true) {
+      const app = typeof entry.app === "string" ? entry.app.trim() : ""
+      if (!app || /[\x00-\x1f\x7f]/.test(entry.app)
+          || !omarchyPath.startsWith("/") || focusProcess.running) return false
+      focusProcess.command = [omarchyPath + "/bin/omarchy-hyprland-focus-app", app]
+      focusProcess.running = true
+      return true // Request accepted, not confirmation of a focused window.
+    }
     const source = sourceIndex(entry, sourceModel())
     if (source < 0 || typeof service.invokePopupDefault !== "function")
       return false
@@ -375,6 +383,7 @@ Item {
     return true
   }
 
+  Process { id: focusProcess }
   Process {
     id: mutationProcess
     onExited: function(exitCode, _exitStatus) {

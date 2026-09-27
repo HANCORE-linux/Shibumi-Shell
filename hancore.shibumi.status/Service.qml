@@ -11,6 +11,7 @@ Item {
   id: root
 
   property var shell: null
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var manifest: null
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
@@ -33,6 +34,7 @@ Item {
 
   NotificationAdapter {
     id: notificationAdapter
+    omarchyPath: root.omarchyPath
   }
 
   onShellChanged: notificationAdapter.attachShell(suiteShell)

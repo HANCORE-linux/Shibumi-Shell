@@ -47,6 +47,7 @@ run_case() {
   local marker=${4:-notification adapter smoke passed}
   local race=${5:-} mutation=${6:-} path=/usr/bin:/bin
   local root="$tmpdir/$name" output="$tmpdir/$name.log"
+  local proxy_app='Proxy App $(printf unsafe); "quoted"'
   mkdir -p "$root"/{home,config,cache,state,data,runtime,tmp,pipewire}
   chmod 700 "$root/runtime"
   if [[ -n $race ]]; then
@@ -98,6 +99,15 @@ EOF
       >"$root/state/omarchy/notifications/history/poison.json"
   fi
 
+  if [[ $history_mode == proxy ]]; then
+    mkdir -p "$root/omarchy fixture/bin"
+    printf '#!/bin/sh\nprintf '\''%%s\\0'\'' "$0" "$@" >"$SHIBUMI_FOCUS_ARGV"\n' \
+      >"$root/omarchy fixture/bin/omarchy-hyprland-focus-app"
+    chmod 755 "$root/omarchy fixture/bin/omarchy-hyprland-focus-app"
+    : >"$root/focus.argv"
+    printf '%s\0' "$root/omarchy fixture/bin/omarchy-hyprland-focus-app" "$proxy_app" >"$root/expected.argv"
+  fi
+
   setsid env -i \
     HOME="$root/home" \
     XDG_CONFIG_HOME="$root/config" \
@@ -120,6 +130,9 @@ EOF
     SHIBUMI_HISTORY_MUTATION="$mutation" \
     SHIBUMI_HISTORY_MODE="$history_mode" \
     SHIBUMI_HELPER_STATE="$root/helper-state" \
+    OMARCHY_PATH="$root/omarchy fixture" \
+    SHIBUMI_FOCUS_ARGV="$root/focus.argv" \
+    SHIBUMI_PROXY_APP="$proxy_app" \
     QML_IMPORT_PATH="$omarchy_path/shell" \
     QML2_IMPORT_PATH="$omarchy_path/shell" \
     "$quickshell_bin" -p "$tmpdir" --no-color >"$output" 2>&1 &
@@ -145,6 +158,10 @@ EOF
   if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' "$output"; then
     fail "$name runtime log contains a composition error"
   fi
+  if [[ $history_mode == proxy ]]; then
+    cmp -s "$root/expected.argv" "$root/focus.argv" || fail 'proxy focus helper argv differs'
+    printf '259_PROXY_HELPER_ARGV exact [helper, app]\n'
+  fi
   if [[ $mutation == dismiss ]]; then
     [[ ! -e $history/12.json && -e $history/11.json && -e $history/1.json \
       && -e "$history/"$'bad\tname.json' ]] \
@@ -163,6 +180,7 @@ EOF
   fi
 }
 
+run_case proxy 0 proxy 'notification proxy badge/focus passed'
 run_case populated 10 populated
 run_case external-clear 10 populated 'notification history clear passed' '' external-clear
 run_case empty 0 empty
