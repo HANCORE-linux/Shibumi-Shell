@@ -11,6 +11,7 @@ ShibumiPanel {
   required property var ownerWidget
   required property var telemetry
   readonly property var usageRing: memoryRing
+  readonly property var hardwareInfoView: hardwareInfo
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -18,6 +19,19 @@ ShibumiPanel {
   padding: 12
   contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(panelColumn.implicitHeight)
+
+  property var acquiredTelemetry: null
+  function syncHardwareLease() {
+    const next = open ? telemetry : null
+    if (acquiredTelemetry === next) return
+    if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
+    acquiredTelemetry = next
+    if (next) next.acquire("memoryPanel")
+  }
+  onTelemetryChanged: syncHardwareLease()
+  onOpenChanged: syncHardwareLease()
+  Component.onCompleted: syncHardwareLease()
+  Component.onDestruction: if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
 
   Ui.PanelKeyCatcher {
     id: keyCatcher
@@ -67,6 +81,16 @@ ShibumiPanel {
             onClicked: panel.ownerWidget.close()
           }
         }
+      }
+
+      Text {
+        id: hardwareInfo
+        width: parent.width; elide: Text.ElideRight; textFormat: Text.PlainText
+        text: panel.telemetry ? panel.telemetry.memoryHardwareInfo : ""
+        visible: text.length > 0
+        color: panel.controlMutedHigh; renderType: Text.NativeRendering
+        font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+        font.pixelSize: Commons.Style.font.caption
       }
 
       Rectangle {
