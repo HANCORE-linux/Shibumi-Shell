@@ -1,6 +1,53 @@
 # Changelog
 
-## [0.1.1-beta.15.3] - Unreleased
+## [0.1.1-beta.15.4] - Unreleased
+
+### Added
+
+- Show reported AI limit windows with reset countdowns and pace, a seven-day
+  token chart, and the provider's plan name when available.
+- Show the CPU model and load averages when the CPU panel opens, and optional
+  RAM type and speed in MT/s when the Memory panel opens.
+- Add player-supported Shuffle, Repeat, and seek controls to the media panel.
+- Count notifications without opening the panel, group them by app, show
+  relative times, and focus an existing app window from a Recent entry.
+- Admit the exact Beta.15.3 tag and merge checkout revisions as update
+  predecessors while preserving strict payload and lifecycle checks.
+
+### Changed
+
+- Use consistent text roles in the compact AI panel.
+- Arrange CPU and Memory metrics around water-filled load rings. Remove the
+  CPU panel history chart while retaining the bar's history.
+- Show the GPU row only after reported activity and retain it while idle;
+  use "CPU · GPU" as the title only while the row is visible.
+- Arrange the five media buttons in one row and make buttons in the
+  redesigned panels follow the panel radius.
+- Omit the notification tooltip's Live section when the host exposes no
+  Live model; keep Recent counts and Do Not Disturb status.
+
+### Fixed
+
+- Keep the AI usage value visible when a slow provider refresh exceeds its
+  time limit, and mark usage older than two refresh intervals as stale in
+  the panel.
+- Bind Live notification actions to the exact current row and reject stale
+  clicks after replacement or reordering.
+- Keep Hearthstone picker card titles sharp during transforms.
+- Keep the Health page visible in the compact Control Center.
+
+### Validation
+
+- Pin the final 24-plugin Beta.15.4 payload and package identity without
+  inventing future tag or merge revisions.
+- Add a Beta.15.3 tag-checkout update arm to the isolated Quattro runtime
+  fixture, retaining the existing package, fresh-install, Beta.15, and
+  Beta.15.2 arms and their lifecycle checks.
+- Cover the changed panels, lazy telemetry reads, notification counts and
+  actions with scoped regressions. Keep restrictive-umask fixtures independent
+  of the caller's umask.
+
+## [0.1.1-beta.15.3] - 2026-09-26
 
 ### Fixed
 
