@@ -55,7 +55,6 @@ Item {
       expiries.push(Number(agentsCodexRecord.expiresAtMs))
     return expiries.length > 0 ? Math.min.apply(null, expiries) : 0
   }
-  property bool agentsUpdateHealthy: false
   property int providerRevision: 0
   property string backendProcessKind: ""
   property string backendOutput: ""
@@ -310,15 +309,16 @@ Item {
   }
 
   function providerSnapshot(provider, nowMs) {
-    if (!provider || !agentRecordFresh(provider, nowMs)) return null
+    const currentMs = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
+    if (!provider || !agentRecordFresh(provider, currentMs)) return null
     const id = String(provider.providerId || "")
     if (!id || !providerEnabled(id)) return null
     return {
       providerId: id,
       providerName: String(provider.providerName || id).slice(0, 512),
-      ready: (provider.ready !== undefined ? provider.ready === true : true)
-        && (String(provider.backend || "") !== "omarchy.agents"
-          || agentsUpdateHealthy),
+      ready: provider.ready !== undefined ? provider.ready === true : true,
+      fresh: String(provider.backend || "") !== "omarchy.agents"
+        || currentMs - Number(provider.updatedAtMs) <= 2 * agentsRefreshInterval,
       rateLimitPercent: Number(provider.rateLimitPercent) >= 0
         ? Number(provider.rateLimitPercent) : -1,
       rateLimitLabel: String(provider.rateLimitLabel || "").slice(0, 512),
@@ -445,7 +445,7 @@ Item {
   }
 
   function providerStatusText(provider) {
-    if (!provider || provider.ready === false) return "stale"
+    if (!provider || provider.ready === false || provider.fresh === false) return "stale"
     if (String(provider.providerId || "") === "codex"
         && Number(provider.rateLimitPercent) < 0
         && Number(provider.secondaryRateLimitPercent) < 0)
@@ -548,7 +548,8 @@ Item {
       agentsCodexRecord = null
       changed = true
     }
-    if (changed) providerRevision++
+    // Recheck status by age even before the record's admission expires.
+    if (changed || agentsClaudeRecord || agentsCodexRecord) providerRevision++
     return changed
   }
 
@@ -626,7 +627,6 @@ Item {
 
   function reconcileBackendLifecycle(force) {
     providerSettingsGeneration++
-    agentsUpdateHealthy = false
     pendingBackendRefresh = false
     pendingBackendForce = false
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled) {
@@ -660,9 +660,6 @@ Item {
     const error = backendError
     backendProcessKind = ""
     if (completedKind === "agents-update") {
-      agentsUpdateHealthy = Number(exitCode) === 0
-        && runningSettingsGeneration === providerSettingsGeneration
-        && !pendingBackendRefresh
       if (Number(exitCode) === 66) {
         agentsBackendUnavailable = true
       } else {

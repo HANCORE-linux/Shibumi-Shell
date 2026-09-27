@@ -255,6 +255,47 @@ ShellRoot {
     return true
   }
 
+  function failedRefreshKeepsFreshUsage() {
+    if (agentsService.backendRunning || agentsService.backendProcessKind !== "")
+      return false
+    const raw = JSON.parse(codexStatusRecord(true, true))
+    raw.id = "claude"; raw.name = "Claude Code"
+    agentsService.applyAgentRecord("claude", JSON.stringify(raw))
+    // Deliver the same nonzero completion as a timed-out update, without
+    // waiting 120 seconds or invoking a real account collector.
+    agentsService.backendProcessKind = "agents-update"
+    agentsService.backendError = ""
+    agentsService.finishBackendProcess(1)
+    const fresh = agentsService.providerFor("claude")
+    const checks = { freshAfterFailure: fresh && fresh.ready
+      && agentsService.usagePercent(fresh) === 24
+      && agentsService.providerStatusText(fresh) === "live"
+      && emptyAgentsPanel.providerStatusLabel === "live"
+      && agentsService.tooltipText() === "Claude Code · live\nWeekly: 24%" }
+    const record = agentsService.agentsClaudeRecord
+    const threshold = 2 * agentsService.agentsRefreshInterval
+    const boundary = agentsService.providerSnapshot(record,
+      record.updatedAtMs + threshold)
+    checks.atThreshold = boundary && boundary.ready
+      && agentsService.usagePercent(boundary) === 24
+      && agentsService.providerStatusText(boundary) === "live"
+    // Age the same record in place: only the existing expiry/revision path
+    // may invalidate the already cached provider snapshot.
+    record.updatedAtMs = Date.now() - threshold - 1
+    record.updatedAt = new Date(record.updatedAtMs).toISOString()
+    record.expiresAtMs = record.updatedAtMs + 24 * 60 * 60 * 1000
+    const revision = agentsService.providerRevision
+    agentsService.expireAgentRecords(Date.now())
+    const aged = agentsService.providerFor("claude")
+    checks.staleByAge = agentsService.providerRevision > revision
+      && aged && aged.ready && agentsService.usagePercent(aged) === 24
+      && agentsService.providerStatusText(aged) === "stale"
+      && emptyAgentsPanel.providerStatusLabel === "stale"
+      && agentsService.tooltipText() === "Claude Code · stale\nWeekly: 24%"
+    console.log("268_AI_REFRESH_AGE", JSON.stringify(checks))
+    return Object.values(checks).every(value => value)
+  }
+
   function readyRecordWithoutCurrentDataAccepted() {
     const recordNow = Date.now()
     const currentUpdatedAt = new Date(recordNow).toISOString()
@@ -1098,8 +1139,7 @@ ShellRoot {
               return root.fail("queued backend transition did not complete")
             return
           }
-          if (!agentsService.agentsUpdateHealthy
-              || agentsService.runningSettingsGeneration
+          if (agentsService.runningSettingsGeneration
                 !== agentsService.providerSettingsGeneration
               || agentsService.providerFor("claude") === null
               || agentsService.providerFor("codex") === null)
@@ -1152,20 +1192,11 @@ ShellRoot {
             return root.fail("loaded agent record expiry timer")
           return
         }
+        if (!root.failedRefreshKeepsFreshUsage())
+          return root.fail("failed refresh or stale status hid valid Claude usage")
         agentsService.agentsClaudeRecord = root.expiryProbeRecord
         agentsService.providerRevision++
         root.waitingExpiryProbe = false
-        agentsService.agentsUpdateHealthy = false
-        agentsService.providerRevision++
-        if (agentsService.providerFor("claude").ready
-            || agentsService.providerFor("codex").ready
-            || agentsService.providerStatusText(
-              agentsService.providerFor("codex")) !== "stale"
-            || agentsService.usagePercent(
-              agentsService.providerFor("claude")) !== -1
-            || agentsService.usagePercent(
-              agentsService.providerFor("codex")) !== -1)
-          return root.fail("failed agents update did not suppress live quota")
         const backendGeneration = agentsService.providerSettingsGeneration
         agentsService.modelUsageSourceOverride =
           Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")
