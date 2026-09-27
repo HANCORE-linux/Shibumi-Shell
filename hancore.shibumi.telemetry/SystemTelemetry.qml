@@ -41,8 +41,10 @@ Scope {
       if (memoryConsumers === 1) memoryFile.reload()
     } else if (kind === "cpuPanel") {
       if (++cpuPanelConsumers === 1) {
-        if (!cpuModelRead) { cpuModelRead = true; modelFile.reload() }
+        // Lazy FileViews start async reads on text(), not on reload() alone.
+        if (!cpuModelRead) { cpuModelRead = true; modelFile.text() }
         loadFile.reload()
+        loadFile.text()
       }
     }
   }
@@ -123,7 +125,7 @@ Scope {
   }
 
   function refresh() {
-    if (cpuPanelConsumers > 0) loadFile.reload()
+    if (cpuPanelConsumers > 0) { loadFile.reload(); loadFile.text() }
     if (cpuConsumers > 0) cpuFile.reload()
     if (memoryConsumers > 0) memoryFile.reload()
   }

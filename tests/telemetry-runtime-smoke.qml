@@ -13,6 +13,7 @@ ShellRoot {
   id: root
   property int phase: 0
   property int ticks: 0
+  property int detailReadStartedTick: 0
   property var panels: []
   property var firstGpu: null
   function check(value, message) {
@@ -146,6 +147,7 @@ ShellRoot {
         cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
         telemetry.thermal.parseDetailed("55|63|80|100|44|70|90|39")
         storage.storage.parseUsage("/dev/fixture 1000 400 600 40%")
+        root.detailReadStartedTick = root.ticks
         for (const item of items) item.open()
         root.phase++
       } else if (root.phase === 3) {
@@ -155,10 +157,17 @@ ShellRoot {
           && telemetry.system.memoryConsumers === 1 && storage.storage.consumers === 1
           && telemetry.thermal.consumers === 1, "open panel/widget leases unbalanced")
         const cpuPanel = root.panels[0]
-        root.check(typeof telemetry.system.parseLoad === "function", "CPU panel demand metrics missing")
-        telemetry.system.parseCpuModel("processor : 0\nmodel name : Fixture CPU\n")
-        telemetry.system.parseLoad("0.25 1.50 2.75 1/300 12345\n")
-        root.check(cpuPanel.cpuModelText === "Fixture CPU" && cpuPanel.loadAverageText.indexOf("0.25 / 1.50 / 2.75") >= 0
+        // Exercise the lazy FileView path, not synthetic parser success calls.
+        if (telemetry.system.cpuModel.length === 0 || telemetry.system.loadAverage.length !== 3) {
+          root.check(root.ticks - root.detailReadStartedTick < 25,
+            "CPU panel real /proc read missing after acquire(cpuPanel): model="
+              + JSON.stringify(telemetry.system.cpuModel) + " load=" + JSON.stringify(telemetry.system.loadAverage))
+          return
+        }
+        console.log("252_CPU_PROC_READ", "ticks", root.ticks - root.detailReadStartedTick,
+          "model", telemetry.system.cpuModel, "load", JSON.stringify(telemetry.system.loadAverage))
+        root.check(cpuPanel.cpuModelText === telemetry.system.cpuModel
+          && cpuPanel.loadAverageText === telemetry.system.loadAverage.map(value => value.toFixed(2)).join(" / ")
           && telemetry.system.cpuPanelConsumers === 1 && !cpuPanel.gpuUsageView.visible, "CPU model/load or initially hidden GPU row missing")
         cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
         root.check(cpu.gpu.available && !cpuPanel.gpuUsageView.visible, "GPU without reported utilization stayed visible")
