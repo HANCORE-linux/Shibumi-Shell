@@ -150,9 +150,9 @@ for plugin in memory cpu; do
     "$repo_root/hancore.shibumi.$plugin/${plugin^}Panel.qml" \
     || fail "$plugin panel bypasses its owner action"
 done
-rg -q 'text: "CPU · GPU"' \
+rg -Fq 'text: gpuUsage.visible ? "CPU · GPU" : "CPU"' \
   "$repo_root/hancore.shibumi.cpu/CpuPanel.qml" \
-  || fail "CPU panel lost the V1 CPU/GPU heading"
+  || fail "CPU panel heading does not follow GPU row visibility"
 rg -q 'visible: panel\.gpuTelemetry && panel\.gpuTelemetry\.available' \
   "$repo_root/hancore.shibumi.cpu/CpuPanel.qml" \
   || fail "CPU panel does not gate GPU data on a real telemetry backend"
