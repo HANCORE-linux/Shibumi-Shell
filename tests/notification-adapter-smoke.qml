@@ -190,7 +190,9 @@ ShellRoot {
           }
         }
       }
-      if (root.ticks < (root.historyRace ? 40 : 12)) return
+      if (root.ticks < (root.historyRace ? 40 : 2)) return
+      if (!root.historyRace && (adapter.historyState === "loading"
+          || dndOnlyAdapter.historyState === "loading")) return
       if (!root.historyRace && !root.mutationPhase
           && (adapter.historyState !== (Quickshell.env("SHIBUMI_HISTORY_MODE") === "missing" ? "unavailable" : "ready")
             || counts.tooltipText !== (adapter.historyState === "ready"
