@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Services.Mpris
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -30,6 +31,16 @@ ShibumiPanel {
   readonly property var spectrumThemeColors: spectrumService
     && spectrumService.themeColors ? spectrumService.themeColors : []
   readonly property int renderedSourceCount: sourceRepeater.count
+  readonly property bool sourcesVisible: sourceList.visible
+  readonly property bool vinylRotating: vinylArtwork.rotating
+  readonly property bool albumVisible: albumText.visible
+  readonly property bool playerNameVisible: playerText.visible
+  readonly property var shuffleControl: shuffleButton
+  readonly property var repeatControl: repeatButton
+  readonly property var seekControl: seekMouse
+  readonly property bool directAvailable: open && active && !!player && player.canControl === true && sourcePlayers.indexOf(player) >= 0
+  readonly property bool seekAvailable: directAvailable && !!player && player.canSeek === true
+    && player.positionSupported === true && player.lengthSupported === true && isFinite(player.length) && player.length > 0
   readonly property bool spectrumWorkerRunning: spectrumService
     ? spectrumService.workerRunning === true : false
   readonly property string spectrumState: spectrumService
@@ -60,6 +71,28 @@ ShibumiPanel {
         playerKey(player)) === true : false
   }
 
+  // Approved exception: only shuffle, repeat and seek mutate the selected native
+  // player directly. Transport still belongs to Omarchy; no discovery, IPC or OSD.
+  function directAction(action, target, value, trackId) {
+    if (!directAvailable || !target || target !== player || target.canControl !== true) return false
+    try {
+      if (action === "shuffle" && target.shuffleSupported === true) {
+        target.shuffle = !target.shuffle
+      } else if (action === "repeat" && target.loopSupported === true) {
+        target.loopState = target.loopState === MprisLoopState.None ? MprisLoopState.Track
+          : target.loopState === MprisLoopState.Track ? MprisLoopState.Playlist : MprisLoopState.None
+      } else if (action === "seek" && seekAvailable && target.uniqueId === trackId && typeof value === "number" && isFinite(value)) {
+        target.position = Math.max(0, Math.min(target.length, value)) // Native API uses seconds.
+        resetPosition()
+      } else return false
+      return true
+    } catch (_error) { return false }
+  }
+
+  function controlAction(action) {
+    return action === "shuffle" || action === "repeat" ? directAction(action, player) : runAction(action)
+  }
+
   function selectSource(index) {
     if (index < 0 || index >= sourcePlayers.length || !mediaService
         || typeof mediaService.selectPlayer !== "function") return false
@@ -68,6 +101,8 @@ ShibumiPanel {
 
   function activateCursor() {
     if (focusSection === "sources") return selectSource(cursorIndex)
+    if (cursorIndex === -1) return controlAction("shuffle")
+    if (cursorIndex === 3) return controlAction("repeat")
     if (cursorIndex === 0) return runAction("previous")
     if (cursorIndex === 2) return runAction("next")
     return runAction("playPause")
@@ -79,7 +114,7 @@ ShibumiPanel {
         focusSection = "sources"
         cursorIndex = 0
       } else if (dx !== 0) {
-        cursorIndex = Math.max(0, Math.min(2, cursorIndex + dx))
+        cursorIndex = Math.max(-1, Math.min(3, cursorIndex + dx))
       }
       return
     }
@@ -199,18 +234,6 @@ ShibumiPanel {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(8)
 
-          Text {
-            visible: panel.active && panel.playerName !== ""
-            anchors.verticalCenter: parent.verticalCenter
-            text: panel.playerName
-            color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
-              panel.bar.foreground.g, panel.bar.foreground.b, 0.45)
-              : Commons.Color.foreground
-            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.caption
-            renderType: Text.NativeRendering
-          }
-
           IconAction {
             anchors.verticalCenter: parent.verticalCenter
             icon: "close"
@@ -229,36 +252,18 @@ ShibumiPanel {
         spacing: Commons.Style.space(10)
         visible: panel.active
 
-        Rectangle {
-          width: Commons.Style.space(56)
+        PanelVinyl {
+          id: vinylArtwork
+          width: Commons.Style.space(80)
           height: width
-          radius: Commons.Style.space(5)
-          color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
-            panel.bar.foreground.g, panel.bar.foreground.b, 0.10)
-            : Commons.Color.background
-          clip: true
-
-          Image {
-            anchors.fill: parent
-            source: panel.player ? String(panel.player.trackArtUrl || "") : ""
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: true
-            retainWhileLoading: true
-          }
-
-          Presentation.IconText {
-            anchors.centerIn: parent
-            visible: !panel.player || !panel.player.trackArtUrl
-            text: "music_note"
-            color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-            font.pixelSize: Commons.Style.font.displayLarge
-            fill: 1
-          }
+          tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
+          artSource: panel.player ? String(panel.player.trackArtUrl || "") : ""
+          spinning: panel.open && panel.playing
+          revolutionMs: 6000
         }
 
         Column {
-          width: parent.width - Commons.Style.space(66)
+          width: parent.width - vinylArtwork.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           spacing: Commons.Style.space(3)
 
@@ -287,6 +292,7 @@ ShibumiPanel {
           }
 
           Text {
+            id: albumText
             width: parent.width
             visible: text !== ""
             text: panel.player ? String(panel.player.trackAlbum || "") : ""
@@ -298,7 +304,28 @@ ShibumiPanel {
             elide: Text.ElideRight
             renderType: Text.NativeRendering
           }
+          Text {
+            id: playerText
+            width: parent.width
+            visible: text !== ""
+            text: panel.playerName
+            color: panel.controlMutedHigh
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption
+            elide: Text.ElideRight
+            renderType: Text.NativeRendering
+          }
         }
+      }
+
+      MediaSpectrum {
+        width: parent.width
+        height: Commons.Style.space(40)
+        visible: panel.active
+        levels: panel.levels
+        tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
+        themeColors: panel.spectrumThemeColors
+        opacity: panel.playing ? 1 : 0.5
       }
 
       Item {
@@ -306,6 +333,21 @@ ShibumiPanel {
         height: Commons.Style.space(18)
         visible: panel.active && panel.currentLength > 0
 
+        MouseArea {
+          id: seekMouse
+          anchors.fill: parent; z: 1
+          enabled: panel.seekAvailable
+          cursorShape: Qt.PointingHandCursor
+          property var pressedPlayer: null
+          property var pressedTrack: null
+          onPressed: { pressedPlayer = panel.player; pressedTrack = pressedPlayer.uniqueId }
+          onCanceled: pressedPlayer = null
+          onClicked: function(mouse) {
+            if (pressedPlayer && pressedPlayer === panel.player && pressedTrack === pressedPlayer.uniqueId)
+              panel.directAction("seek", pressedPlayer, mouse.x / Math.max(1, width) * pressedPlayer.length, pressedTrack)
+            pressedPlayer = null
+          }
+        }
         Rectangle {
           id: progressTrack
           anchors.left: parent.left
@@ -357,15 +399,7 @@ ShibumiPanel {
       Item {
         width: parent.width
         height: Commons.Style.space(40)
-
-        MediaSpectrum {
-          anchors.fill: parent
-          visible: panel.active
-          levels: panel.levels
-          tint: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          themeColors: panel.spectrumThemeColors
-          opacity: panel.playing ? 1 : 0.5
-        }
+        visible: !panel.active
 
         Column {
           anchors.centerIn: parent
@@ -400,8 +434,15 @@ ShibumiPanel {
       Row {
         visible: panel.active
         anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Commons.Style.space(12)
+        spacing: Commons.Style.space(8)
 
+        MediaPanelButton {
+          id: shuffleButton
+          icon: "shuffle"; action: "shuffle"; controlIndex: -1
+          tooltipText: checked ? "Shuffle: On" : "Shuffle: Off"
+          checked: !!panel.player && panel.player.shuffle === true
+          enabled: panel.directAvailable && !!panel.player && panel.player.shuffleSupported === true
+        }
         MediaPanelButton {
           icon: "skip_previous"
           action: "previous"
@@ -422,6 +463,14 @@ ShibumiPanel {
           controlIndex: 2
           enabled: panel.player && panel.player.canGoNext === true
         }
+        MediaPanelButton {
+          id: repeatButton
+          icon: panel.player && panel.player.loopState === MprisLoopState.Track ? "repeat_one" : "repeat"
+          action: "repeat"; controlIndex: 3
+          tooltipText: "Repeat: " + (!checked ? "Off" : panel.player.loopState === MprisLoopState.Track ? "Track" : "Playlist")
+          checked: !!panel.player && (panel.player.loopState === MprisLoopState.Track || panel.player.loopState === MprisLoopState.Playlist)
+          enabled: panel.directAvailable && !!panel.player && panel.player.loopSupported === true
+        }
       }
 
       Ui.PanelSeparator {
@@ -430,6 +479,7 @@ ShibumiPanel {
       }
 
       Column {
+        id: sourceList
         width: parent.width
         visible: panel.sourcePlayers.length > 1
         spacing: Commons.Style.space(2)
@@ -449,7 +499,7 @@ ShibumiPanel {
 
             width: parent.width
             height: Commons.Style.space(34)
-            radius: panel.controlRadius
+            radius: panel.renderedSurfaceRadius
             color: cursor || sourceMouse.containsMouse
               ? panel.bar ? Qt.rgba(panel.bar.urgent.r, panel.bar.urgent.g,
                 panel.bar.urgent.b, 0.14) : Commons.Color.background
@@ -525,6 +575,73 @@ ShibumiPanel {
     }
   }
 
+  // Panel-local Muse-style mark: no bar geometry, band or animation defaults change.
+  component PanelVinyl: Item {
+    id: vinyl
+    required property color tint
+    required property string artSource
+    required property bool spinning
+    property int revolutionMs: 6000
+    readonly property bool rotating: spin.running
+
+    Canvas {
+      anchors.fill: parent
+      antialiasing: true
+      property color canvasTint: vinyl.tint
+      onCanvasTintChanged: requestPaint()
+      onWidthChanged: requestPaint()
+      onHeightChanged: requestPaint()
+      Component.onCompleted: requestPaint()
+      onPaint: {
+        const ctx = getContext("2d"), radius = Math.min(width, height) * 0.46
+        ctx.clearRect(0, 0, width, height)
+        ctx.save()
+        ctx.translate(width / 2, height / 2)
+        ctx.strokeStyle = canvasTint
+        ctx.lineWidth = Math.max(1, radius * 0.045)
+        ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke()
+        ctx.globalAlpha = 0.55
+        for (let i = 0; i < 2; i++) {
+          ctx.beginPath()
+          ctx.arc(0, 0, radius * 0.64, i * Math.PI - 0.35, i * Math.PI + 2.35)
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+    }
+    Rectangle {
+      anchors.centerIn: parent
+      width: parent.width * 0.38
+      height: width
+      radius: width / 2
+      color: Commons.Util.alpha(vinyl.tint, 0.2)
+      Image {
+        anchors.centerIn: parent
+        width: parent.width * 0.66
+        height: width
+        source: vinyl.artSource
+        visible: status === Image.Ready
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: true
+      }
+      Rectangle {
+        anchors.centerIn: parent
+        width: Commons.Style.space(3)
+        height: width
+        radius: width / 2
+        color: panel.bar ? panel.bar.background : Commons.Color.background
+      }
+    }
+    NumberAnimation on rotation {
+      id: spin
+      from: 0; to: 360
+      duration: vinyl.revolutionMs
+      loops: Animation.Infinite
+      running: vinyl.visible && vinyl.spinning
+    }
+  }
+
   component IconAction: Ui.CursorSurface {
     id: action
     property string icon: ""
@@ -532,7 +649,7 @@ ShibumiPanel {
     signal clicked()
     implicitWidth: Commons.Style.space(28)
     implicitHeight: Commons.Style.space(28)
-    radius: panel.controlRadius
+    radius: panel.renderedSurfaceRadius
     foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
     accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
 
@@ -559,27 +676,27 @@ ShibumiPanel {
     }
   }
 
-  component MediaPanelButton: Ui.PanelActionButton {
+  component MediaPanelButton: Rectangle {
+    id: button
     required property string icon
     required property string action
     required property int controlIndex
     property bool accent: false
-
-    iconText: icon
-    foreground: accent && panel.bar
-      ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
-    hoverColor: panel.bar ? panel.bar.urgent : Commons.Color.accent
-    fontFamily: "Material Symbols Rounded"
-    fontSize: accent ? Commons.Style.font.iconLarge : Commons.Style.font.icon
-    size: accent ? Commons.Style.space(34) : Commons.Style.space(28)
-    radius: panel.controlRadius
-    hasCursor: panel.focusSection === "controls" && panel.cursorIndex === controlIndex
-    onHovered: function(isHovered) {
-      if (isHovered) {
-        panel.focusSection = "controls"
-        panel.cursorIndex = controlIndex
-      }
+    property bool checked: false
+    property string tooltipText: ""
+    signal clicked()
+    readonly property bool hot: enabled && (buttonMouse.containsMouse || panel.focusSection === "controls" && panel.cursorIndex === controlIndex)
+    width: Commons.Style.space(36); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
+    color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
+    border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
+    Ui.OpticalGlyph { anchors.fill: parent; text: button.icon; color: button.checked || button.accent ? panel.controlAccent : panel.controlForeground
+      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon) }
+    MouseArea {
+      id: buttonMouse; anchors.fill: parent; enabled: button.enabled; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+      onContainsMouseChanged: if (containsMouse) { panel.focusSection = "controls"; panel.cursorIndex = button.controlIndex }
+      onClicked: button.clicked()
     }
-    onClicked: panel.runAction(action)
+    Presentation.ShibumiPillToolTip { panel: panel; visible: button.tooltipText !== "" && buttonMouse.containsMouse; text: button.tooltipText }
+    onClicked: panel.controlAction(action)
   }
 }

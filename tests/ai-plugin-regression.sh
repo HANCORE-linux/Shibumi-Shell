@@ -311,8 +311,8 @@ rg -q 'providerReportsFiveHour' "$service" \
 rg -q 'displayPercent' "$service" \
   || fail "AI service lost provider percentage normalization"
 panel="$repo_root/hancore.shibumi.ai/AiUsagePanel.qml"
-rg -q 'text: "AI USAGE"' "$panel" \
-  || fail "AI panel lost the V1 heading"
+rg -Fq 'text: panel.provider ? panel.providerHeading(panel.provider)' "$panel" \
+  || fail "AI panel lost the selected-provider heading"
 rg -q 'font\.pixelSize: Commons\.Style\.font\.subtitle' "$panel" \
   || fail "AI panel heading does not retain the V1 13px role"
 rg -q 'color: selected \? panel\.controlActiveFillColor' "$panel" \
@@ -330,10 +330,12 @@ rg -q 'renderType: Text\.NativeRendering' "$panel" \
 if rg -q 'rgba\([^\n]*urgent[^\n]*0\.22' "$panel"; then
   fail "AI panel reintroduced an ad-hoc active fill"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' \
-    "$widget" "$panel"; then
+if rg -q 'Process \{|FileView \{' "$widget" "$panel" \
+    || rg -q 'Timer \{' "$widget"; then
   fail "AI screen-local views own provider workers"
 fi
+[[ $(rg -c 'Timer \{' "$panel") -eq 1 ]] && grep -Fq 'interval: 30000; repeat: true; running: panel.open' "$panel" \
+  || fail "AI panel clock must be singular, bounded and open-only"
 [[ $(rg -c 'Process \{' "$service") -eq 1 ]] \
   || fail "AI providers do not have exactly one process owner"
 [[ $(rg -c 'FileView \{' "$service") -eq 2 ]] \

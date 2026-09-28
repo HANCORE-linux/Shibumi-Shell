@@ -40,6 +40,7 @@ install -m 0644 "$repo_root/tests/fixtures/StatusTestWidget.qml" \
   "$repo_root/tests/fixtures/NotificationPanelTestView.qml" \
   "$tmpdir/fixtures/"
 
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><path d="M0 0h8v8H0z"/></svg>\n' >"$tmpdir/fixtures/app.svg"
 set +e
 output=$(timeout 8 env -i \
   HOME="$tmpdir/home" \

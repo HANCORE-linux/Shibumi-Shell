@@ -310,6 +310,11 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 "aaf7611d66ed5f99078fc5419bc3ba4db6164bed",
                 "package:0.1.1-beta.15.2",
             ),
+            "public-beta.15.3": (
+                "5b1d21f0cea73bb9e7997278a828b3ef295e6c94",
+                "db579163a4b1004a7cc09ee565cac616db9ff627",
+                "package:0.1.1-beta.15.3",
+            ),
         }
         for identity_id, revisions in published.items():
             identity = next(

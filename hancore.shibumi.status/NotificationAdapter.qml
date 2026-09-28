@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQml.Models
 import Quickshell
 import Quickshell.Io
 
@@ -21,6 +22,8 @@ Item {
     id: state
     property var hostService: null
     property int hostGeneration: 0
+    property real liveRevision: 0
+    function token(entry) { return hostGeneration + ":" + liveRevision + ":" + JSON.stringify(entry) }
     property var historyReadHost: null
     property int historyReadGeneration: -1
     property var queuedHistoryHost: null
@@ -30,11 +33,13 @@ Item {
     property int mutationGeneration: -1
   }
 
+  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   readonly property bool available: state.hostService !== null
   readonly property bool doNotDisturb: available
     && state.hostService.doNotDisturb === true
   readonly property int pendingCount: pendingRows.count
   readonly property int recentCount: pastRows.count
+  property string historyState: "unavailable"
   readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
   readonly property bool pastDismissAvailable: available &&
@@ -52,6 +57,35 @@ Item {
   ListModel { id: pendingRows }
   ListModel { id: pastRows }
 
+  // Watch creation/removal and in-place writes, never poll or replay host popups.
+  // Trailing slash keeps FileView's implicit parent inside notifications.
+  readonly property var historyWatchPaths: {
+    const paths = []
+    if (!available || historySourceModel()) return paths
+    paths.push(historyDir, historyDir.slice(0, historyDir.lastIndexOf("/") + 1))
+    for (let index = 0; index < Math.min(10, pastRows.count); index++) {
+      const name = pastRows.get(index).fileName
+      if (validHistoryFileName(name)) paths.push(historyDir + "/" + name)
+    }
+    return paths
+  }
+  Instantiator {
+    model: root.historyWatchPaths
+    delegate: FileView {
+      required property string modelData
+      path: modelData
+      preload: false
+      watchChanges: true
+      onFileChanged: if (!historyRefresh.running) historyRefresh.start()
+    }
+  }
+  Timer {
+    id: historyRefresh
+    interval: 100
+    repeat: false
+    onTriggered: root.showHistory()
+  }
+
   function attachShell(shellValue) {
     const service = shellValue
       && typeof shellValue.firstPartyServiceFor === "function"
@@ -61,8 +95,10 @@ Item {
       syncModels()
       return
     }
+    historyRefresh.stop()
     state.hostGeneration++
     state.hostService = nextService
+    historyState = nextService ? "loading" : "unavailable"
     state.historyOutput = ""
     state.queuedHistoryHost = null
     state.queuedHistoryGeneration = -1
@@ -98,7 +134,8 @@ Item {
       image: String(value.image || ""),
       glyph: String(value.glyph || ""),
       exec: String(value.exec || ""),
-      urgency: Number(value.urgency || 0),
+      execArgv: String(value.execArgv || ""),
+      urgency: typeof value.urgency === "number" ? value.urgency : -1,
       expireTimeout: Number(value.expireTimeout || 0),
       timestamp: Number(value.timestamp || 0),
       fileName: String(value.fileName || "")
@@ -108,18 +145,25 @@ Item {
   function rebuild(target, model) {
     target.clear()
     if (!model || typeof model.get !== "function") return
-    for (let index = 0; index < model.count; index++) {
+    const limit = target === pastRows ? Math.min(10, model.count) : model.count
+    for (let index = 0; index < limit; index++) {
       const entry = model.get(index)
       if (!entry || Number(entry.originalId || entry.id || 0) < 0)
         continue
-      target.append(primitiveEntry(entry))
+      const copy = primitiveEntry(entry)
+      if (target === pendingRows) copy.liveToken = state.token(copy)
+      target.append(copy)
     }
   }
 
   function syncModels() {
+    state.liveRevision++
     rebuild(pendingRows, sourceModel())
     const archived = historySourceModel()
-    if (archived) rebuild(pastRows, archived)
+    if (archived) {
+      rebuild(pastRows, archived)
+      historyState = "ready"
+    } else if (available && !historyRefresh.running) historyRefresh.start()
   }
 
   // Derived from MIT-licensed Omarchy v4.0.3 NotificationLogic.historyRows:
@@ -167,6 +211,23 @@ Item {
         return index
     }
     return -1
+  }
+
+  function invokeLive(token) {
+    const service = state.hostService, revision = state.liveRevision
+    const model = service ? service.popupModel : null
+    if (!token || !model || model !== sourceModel()
+        || typeof service.invokePopupDefault !== "function") return false
+    let match = -1
+    for (let index = 0; index < model.count; index++) {
+      const row = primitiveEntry(model.get(index))
+      if (row.originalId <= 0 || !isFinite(row.timestamp) || row.timestamp <= 0
+          || state.token(row) !== token) continue
+      if (match >= 0) return false
+      match = index
+    }
+    if (match < 0 || revision !== state.liveRevision || service !== state.hostService) return false
+    try { return service.invokePopupDefault(match) !== false } catch (_error) { return false }
   }
 
   function setDoNotDisturb(value) {
@@ -270,12 +331,20 @@ Item {
     return clearPending()
   }
 
-  function focusApp(entry) {
+  function focusApp(entry, focusOnly) {
     const service = state.hostService
     if (!service || !entry) return false
     if (typeof service.focusApp === "function") {
       service.focusApp(entry)
       return true
+    }
+    if (focusOnly === true) {
+      const app = typeof entry.app === "string" ? entry.app.trim() : ""
+      if (!app || /[\x00-\x1f\x7f]/.test(entry.app)
+          || !omarchyPath.startsWith("/") || focusProcess.running) return false
+      focusProcess.command = [omarchyPath + "/bin/omarchy-hyprland-focus-app", app]
+      focusProcess.running = true
+      return true // Request accepted, not confirmation of a focused window.
     }
     const source = sourceIndex(entry, sourceModel())
     if (source < 0 || typeof service.invokePopupDefault !== "function")
@@ -285,6 +354,7 @@ Item {
   }
 
   function startHistoryRead() {
+    historyState = "loading"
     state.historyOutput = ""
     state.historyReadHost = state.hostService
     state.historyReadGeneration = state.hostGeneration
@@ -313,6 +383,7 @@ Item {
     return true
   }
 
+  Process { id: focusProcess }
   Process {
     id: mutationProcess
     onExited: function(exitCode, _exitStatus) {
@@ -325,8 +396,10 @@ Item {
   }
   Process {
     id: historyReader
-    command: ["sh", "-c", "awk '{ print FILENAME \"\\t\" $0 }' \"$1\"/*.json",
-      "--", historyDir]
+    command: ["timeout", "--foreground", "--kill-after=1", "2", "sh", "-c",
+      "dir=$1; set -- \"$dir\"/*.json; "
+      + "if [ -d \"$dir\" ] && [ -r \"$dir\" ] && [ -x \"$dir\" ] && [ ! -e \"$1\" ]; then exit 0; fi; "
+      + "exec awk '{ print FILENAME \"\\t\" $0 }' \"$@\"", "--", historyDir]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: state.historyOutput = text
@@ -339,14 +412,17 @@ Item {
         && state.hostGeneration === state.historyReadGeneration
       state.historyReadHost = null
       state.historyReadGeneration = -1
-      if (current)
+      if (current && !root.historySourceModel()) {
+        root.historyState = exitCode === 0 ? "ready" : "unavailable"
         root.applyHistory(exitCode === 0 ? state.historyOutput : "")
+      }
     }
   }
 
   Connections {
     target: root.sourceModel()
     ignoreUnknownSignals: true
+    function onRowsMoved() { root.syncModels() }
     function onRowsInserted() { root.syncModels() }
     function onRowsRemoved() { root.syncModels() }
     function onDataChanged() { root.syncModels() }

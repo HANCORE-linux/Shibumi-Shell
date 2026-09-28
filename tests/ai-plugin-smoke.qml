@@ -8,6 +8,7 @@ ShellRoot {
   id: root
 
   property int phase: 0
+  property int headerStage: 0
   property int ticks: 0
   property real stableProviderWidth: 0
   property var clickTargets: []
@@ -39,6 +40,112 @@ ShellRoot {
   function fail(message) {
     console.error("ai-plugin-smoke:", message)
     Qt.exit(1)
+  }
+
+  function compactTooltipContract() {
+    claudeProvider.rateLimitResetAt = "2000-01-01T00:00:00Z"
+    const checks = { selectedReset: aiService.tooltipText() === "Claude Code · live\nSession: 3% · resets in now" }
+    claudeProvider.ready = false; checks.stale = aiService.tooltipText() === "Claude Code · stale"
+    claudeProvider.ready = true; claudeProvider.rateLimitPercent = -1
+    claudeProvider.secondaryRateLimitPercent = 0; claudeProvider.secondaryRateLimitLabel = "Weekly"
+    checks.secondaryZero = aiService.tooltipText() === "Claude Code · live\nWeekly: 0%"
+    claudeProvider.secondaryRateLimitPercent = -1
+    checks.missingLimit = aiService.tooltipText() === "Claude Code · live\nLimits: Unavailable"
+    emptyAgentsPanel.aiService = aiService; checks.missingPanel = emptyAgentsPanel.limitsUnavailableVisible === true
+    claudeProvider.rateLimitPercent = 0.025; claudeProvider.rateLimitResetAt = "invalid"
+    checks.invalidReset = aiService.tooltipText() === "Claude Code · live\nSession: 3%"
+    claudeProvider.rateLimitResetAt = ""; claudeProvider.secondaryRateLimitLabel = ""
+    checks.emptyTooltip = missingStateService.tooltipText() === "No AI usage providers detected"
+    emptyAgentsPanel.aiService = missingStateService; checks.emptyPanel = emptyAgentsPanel.providerEmptyStateText === "No supported AI usage data was found."
+    emptyAgentsPanel.aiService = agentsService
+    const original = agentsService.agentsClaudeRecord, now = Date.now(), record = JSON.parse(codexStatusRecord(true, true))
+    record.id = "claude"; record.name = "Claude Code"
+    record.limits = [{ label: "Session (5-hour)", percent: 0.5, resetsAt: new Date(now + 13500000).toISOString() }, { label: "Weekly (7-day)", percent: 0.8, resetsAt: "" }, { label: "Weekly (7-day)", title: "Fable Weekly", percent: 0.9, resetsAt: new Date(now + 302400000).toISOString() }]
+    record.recentDays = Array.from({length: 8}, (_, i) => ({date: "2026-09-" + (19 + i), messageCount: i * 100}))
+    agentsService.applyAgentRecord("claude", JSON.stringify(record)); if ("nowMs" in emptyAgentsPanel) emptyAgentsPanel.nowMs = now
+    const p = agentsService.providerFor("claude")
+    checks.windows = !!p.limits && p.limits.length === 3 && p.limits[2].title === "Fable Weekly"
+    checks.headline = !!emptyAgentsPanel.headline && emptyAgentsPanel.headline.title === "Fable Weekly" && emptyAgentsPanel.headlineAlarm && agentsService.tooltipText().indexOf("Fable Weekly: 90% · resets in ") > 0
+    const alarmColor = String(emptyAgentsPanel.headlineColor)
+    checks.pace = typeof emptyAgentsPanel.paceText === "function" && emptyAgentsPanel.paceText({label: "Session (5-hour)", percent: 50, resetsAt: record.limits[0].resetsAt}) === "Pace: 2.0×"
+    checks.longPace = typeof emptyAgentsPanel.paceText === "function" && ["Weekly", "Monthly"].every((label, i) => emptyAgentsPanel.paceText({label: label, percent: 50, resetsAt: new Date(now + [302400000, 1296000000][i]).toISOString()}) === "Pace: 1.0×")
+    checks.noPace = typeof emptyAgentsPanel.paceText === "function" && [{label: "Unknown", resetsAt: record.limits[0].resetsAt}, {label: "Weekly", resetsAt: ""}, {label: "Weekly", resetsAt: new Date(now - 1).toISOString()}, {label: "1-hour", resetsAt: record.limits[0].resetsAt}].every(w => emptyAgentsPanel.paceText(Object.assign({percent: 50}, w)) === "")
+    checks.days = !!p.recentDays && p.recentDays.length === 7 && p.recentDays[0].date === "2026-09-20" && p.recentDays[6].messageCount === 700 && emptyAgentsPanel.renderedDayCount === 7
+    emptyAgentsPanel.nowMs = Date.parse("2026-09-26T12:00:00Z")
+    checks.tokenDays = emptyAgentsPanel.messageTotal === 2800 && emptyAgentsPanel.reportedDays === 7
+    const days = record.recentDays; record.recentDays = days.slice(0, -1)
+    agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.missingDay = emptyAgentsPanel.reportedDays === 6 && emptyAgentsPanel.messageTotal === 2100
+      && emptyAgentsPanel.weekDays[6].messageCount === null
+    record.recentDays = days; agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    emptyAgentsPanel.nowMs = now
+    checks.codex = typeof agentsService.limitWindows === "function" && agentsService.limitWindows(agentsService.providerFor("codex")).length === 1 && agentsService.providerFor("codex").models[0].totalLabel === "1.0M"
+    record.limits[2].percent = 0.899; agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.threshold = emptyAgentsPanel.headlineAlarm === false && String(emptyAgentsPanel.headlineColor) !== String(alarmColor)
+    record.limits = record.limits.concat(Array.from({length: 4}, () => record.limits[0])); agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    checks.cap = !!agentsService.providerFor("claude").limits && agentsService.providerFor("claude").limits.length === 6 && emptyAgentsPanel.limitWindows.length === 6
+    agentsService.agentsClaudeRecord = original; agentsService.providerRevision++
+    checks.clock = emptyAgentsPanel.clockRunning === false; emptyPanelOwner.opened = true
+    checks.clock = checks.clock && emptyAgentsPanel.clockRunning === true; emptyPanelOwner.opened = false
+    checks.clock = checks.clock && emptyAgentsPanel.clockRunning === false
+    console.log("AI_PRESENTATION_CASES", JSON.stringify(checks))
+    const savedService = emptyAgentsPanel.aiService
+    const layout = { noBalance: emptyAgentsPanel.balanceVisible === false }
+    emptyAgentsPanel.aiService = { selectedProvider: { providerId: "fixture", providerName: "Fixture", tierLabel: "Pro", balance: {remaining: 12, funded: 20, spent: 8, currency: "USD"} }, providers: [{providerId: "fixture"}], selectedTool: "fixture", limitWindows: () => [], bindingWindow: () => null, formatTokens: value => String(value) }
+    layout.hero = emptyAgentsPanel.heroTitle === "Fixture" && emptyAgentsPanel.heroTier === "Pro"
+    layout.balance = emptyAgentsPanel.balanceVisible === true
+    layout.single = emptyAgentsPanel.providerSwitchVisible === false
+    emptyAgentsPanel.aiService = savedService
+    layout.multiple = emptyAgentsPanel.providerSwitchVisible === true
+    console.log("243_AI_LAYOUT", JSON.stringify(layout))
+    return Object.values(checks).every(value => value) && Object.values(layout).every(value => value)
+  }
+
+  function descendants(item) {
+    return Array.from(item.children || []).reduce((items, child) => items.concat([child], descendants(child)), [])
+  }
+
+  function compactDailyTokenLabels() {
+    const record = JSON.parse(codexStatusRecord(true, true))
+    record.id = "claude"; record.name = "Claude Code"
+    emptyAgentsPanel.aiService = agentsService
+    emptyAgentsPanel.contentWidth = 320
+    emptyAgentsPanel.nowMs = Date.now()
+    const values = [1054540000, 1002400000, 1295660000, 1765390000,
+      2054540000, 3002400000, 4007230000]
+    record.recentDays = values.map((value, i) => ({
+      date: emptyAgentsPanel.dayKey(i - 6), messageCount: value }))
+    agentsService.applyAgentRecord("claude", JSON.stringify(record))
+    agentsService.selectTool("claude")
+    Qt.callLater(function() {
+      const columns = root.descendants(emptyAgentsPanel).filter(item =>
+        item.modelData && typeof item.modelData.messageCount === "number"
+        && item.modelData.date && item.children.length === 2)
+      const labels = columns.map(column => ({ value: column.modelData.messageCount,
+        text: column.children[0].text, implicitWidth: column.children[0].implicitWidth,
+        columnWidth: column.width }))
+      const example = agentsService.formatTokens(1054540000)
+      console.log("AI_DAILY_TOKEN_LABELS", JSON.stringify({example: example, labels: labels}))
+      if (example !== "1.1B" || labels.length !== 7 || !labels.every(label =>
+          label.value >= 1e9 && label.columnWidth > 0
+          && label.implicitWidth <= label.columnWidth))
+        return root.fail("daily token labels exceed their columns or compact format drifted")
+      watchdog.stop()
+      console.log("ai plugin smoke passed")
+      Qt.quit()
+    })
+  }
+
+  function panelHeaderMatches() {
+    const items = descendants(emptyAgentsPanel), tier = aiService.displayTierLabel(aiService.selectedProvider.tierLabel)
+    const plan = items.find(item => item.text === tier && "font" in item)
+    const tabs = items.filter(item => "selected" in item && item.modelData && item.modelData.providerId)
+    return items.every(item => !("sourceSize" in item)) && emptyAgentsPanel.heroTier === tier
+      && plan && plan.visible && !plan.truncated && plan.width > 0 && plan.y + plan.height <= plan.parent.height
+      && tabs.length === 3 && tabs.filter(item => item.selected).length === 1
+      && tabs.every(item => item.width > 0 && Number.isInteger(item.width)
+        && item.mapToItem(item.parent.parent, 0, 0).x >= 0
+        && item.mapToItem(item.parent.parent, item.width, 0).x <= item.parent.parent.width)
   }
 
   function linearChannel(value) {
@@ -81,8 +188,8 @@ ShellRoot {
       && agentsService.usagePercent(codex) === 24
       && claude.rateLimitPercent === -1
       && claude.secondaryRateLimitPercent === -1
-      && claude.models.length === 0
-      && codex.models.length === 0
+      && claude.models.length === 1
+      && codex.models.length === 1
       && codex.todayTotalTokens === 1031649
       && codex.latestModel === ""
       && claude.ready && codex.ready
@@ -141,6 +248,7 @@ ShellRoot {
     if (codexStatusProbeStage === 1) {
       if (agentsService.providerStatusText(provider) !== "partial"
           || emptyAgentsPanel.providerStatusLabel !== "partial"
+          || !emptyAgentsPanel.limitsUnavailableVisible
           || agentsService.tooltipText().indexOf("Codex · partial") < 0) {
         fail("Codex partial status did not propagate")
         return false
@@ -178,6 +286,47 @@ ShellRoot {
     return true
   }
 
+  function failedRefreshKeepsFreshUsage() {
+    if (agentsService.backendRunning || agentsService.backendProcessKind !== "")
+      return false
+    const raw = JSON.parse(codexStatusRecord(true, true))
+    raw.id = "claude"; raw.name = "Claude Code"
+    agentsService.applyAgentRecord("claude", JSON.stringify(raw))
+    // Deliver the same nonzero completion as a timed-out update, without
+    // waiting 120 seconds or invoking a real account collector.
+    agentsService.backendProcessKind = "agents-update"
+    agentsService.backendError = ""
+    agentsService.finishBackendProcess(1)
+    const fresh = agentsService.providerFor("claude")
+    const checks = { freshAfterFailure: fresh && fresh.ready
+      && agentsService.usagePercent(fresh) === 24
+      && agentsService.providerStatusText(fresh) === "live"
+      && emptyAgentsPanel.providerStatusLabel === "live"
+      && agentsService.tooltipText() === "Claude Code · live\nWeekly: 24%" }
+    const record = agentsService.agentsClaudeRecord
+    const threshold = 2 * agentsService.agentsRefreshInterval
+    const boundary = agentsService.providerSnapshot(record,
+      record.updatedAtMs + threshold)
+    checks.atThreshold = boundary && boundary.ready
+      && agentsService.usagePercent(boundary) === 24
+      && agentsService.providerStatusText(boundary) === "live"
+    // Age the same record in place: only the existing expiry/revision path
+    // may invalidate the already cached provider snapshot.
+    record.updatedAtMs = Date.now() - threshold - 1
+    record.updatedAt = new Date(record.updatedAtMs).toISOString()
+    record.expiresAtMs = record.updatedAtMs + 24 * 60 * 60 * 1000
+    const revision = agentsService.providerRevision
+    agentsService.expireAgentRecords(Date.now())
+    const aged = agentsService.providerFor("claude")
+    checks.staleByAge = agentsService.providerRevision > revision
+      && aged && aged.ready && agentsService.usagePercent(aged) === 24
+      && agentsService.providerStatusText(aged) === "stale"
+      && emptyAgentsPanel.providerStatusLabel === "stale"
+      && agentsService.tooltipText() === "Claude Code · stale\nWeekly: 24%"
+    console.log("268_AI_REFRESH_AGE", JSON.stringify(checks))
+    return Object.values(checks).every(value => value)
+  }
+
   function readyRecordWithoutCurrentDataAccepted() {
     const recordNow = Date.now()
     const currentUpdatedAt = new Date(recordNow).toISOString()
@@ -204,7 +353,7 @@ ShellRoot {
     const provider = agentsService.providerFor("claude")
     const accepted = provider && provider.ready
       && agentsService.usagePercent(provider) === -1
-      && provider.models.length === 0
+      && provider.models.length === 1
       && provider.latestModel === ""
       && agentsService.providerCurrentDataMessage(provider)
         === "Authenticate Claude"
@@ -928,6 +1077,7 @@ ShellRoot {
               || delayedSelectionState.confirmedTool !== "claude")
             return root.fail("AI selection did not preview before persistence readback")
           delayedSelectionState.previewTool = "claude"
+          if (!root.compactTooltipContract()) return root.fail("compact selected-provider tooltip or unavailable panel")
         }
         if (!first.visible || !second.visible || first.aiService !== aiService
             || second.aiService !== aiService
@@ -954,13 +1104,9 @@ ShellRoot {
                 !== "Run `claude auth login` to restore authoritative usage."
               || emptyAgentsPanel.primaryUsageVisible
               || emptyAgentsPanel.secondaryUsageVisible
-              || emptyAgentsPanel.renderedModelCount !== 0
+              || emptyAgentsPanel.renderedModelCount !== 1
               || first.childPanelWidget("omarchy.agents") !== first
-              || first.tooltipText.indexOf("5h: not reported by Codex RPC") < 0
-              || first.tooltipText.indexOf("Codex (Pro Lite)") < 0
-              || first.tooltipText.indexOf("5h tokens: 2.3K") < 0
-              || first.tooltipText.indexOf("1h rate: 180/h") < 0
-              || first.tooltipText.indexOf("Latest today: local-test") < 0
+              || first.tooltipText !== "Claude Code · live\nSession: 3%"
               || !root.openCodeParserContract()))
           return root.fail("Claude/agents provider metadata")
         if (root.phase === 0) {
@@ -1024,16 +1170,28 @@ ShellRoot {
               return root.fail("queued backend transition did not complete")
             return
           }
-          if (!agentsService.agentsUpdateHealthy
-              || agentsService.runningSettingsGeneration
+          if (agentsService.runningSettingsGeneration
                 !== agentsService.providerSettingsGeneration
               || agentsService.providerFor("claude") === null
               || agentsService.providerFor("codex") === null)
             return root.fail("queued Agents update did not become current")
+          if (root.headerStage > 0) {
+            if (!root.panelHeaderMatches()) return root.fail("text-only provider header or tab bounds stage " + root.headerStage)
+            console.log("247_AI_HEADER", root.headerStage, aiService.selectedTool, emptyAgentsPanel.heroTier, emptyAgentsPanel.contentWidth)
+          }
+          if (root.headerStage < 6) {
+            const index = root.headerStage++ % 3
+            emptyAgentsPanel.aiService = aiService; emptyPanelOwner.opened = true
+            emptyAgentsPanel.contentWidth = [347, 320, 273][index]
+            fakeBar.v2ShellMode = root.headerStage > 3
+            claudeProvider.tierLabel = root.headerStage > 3 ? "Max 20x" : "Max 5x"
+            const tab = root.descendants(emptyAgentsPanel).find(item => "selected" in item && item.modelData && item.modelData.providerId === ["claude", "codex", "opencode"][index])
+            tab.children.find(item => typeof item.clicked === "function").clicked(null)
+            if (aiService.selectedTool !== tab.modelData.providerId) return root.fail("provider tab did not dispatch selection")
+            return
+          }
           stop()
-          watchdog.stop()
-          console.log("ai plugin smoke passed")
-          Qt.quit()
+          root.compactDailyTokenLabels()
           return
         }
         if (first.panelLoaded || secondLoader.item !== null
@@ -1063,20 +1221,11 @@ ShellRoot {
             return root.fail("loaded agent record expiry timer")
           return
         }
+        if (!root.failedRefreshKeepsFreshUsage())
+          return root.fail("failed refresh or stale status hid valid Claude usage")
         agentsService.agentsClaudeRecord = root.expiryProbeRecord
         agentsService.providerRevision++
         root.waitingExpiryProbe = false
-        agentsService.agentsUpdateHealthy = false
-        agentsService.providerRevision++
-        if (agentsService.providerFor("claude").ready
-            || agentsService.providerFor("codex").ready
-            || agentsService.providerStatusText(
-              agentsService.providerFor("codex")) !== "stale"
-            || agentsService.usagePercent(
-              agentsService.providerFor("claude")) !== -1
-            || agentsService.usagePercent(
-              agentsService.providerFor("codex")) !== -1)
-          return root.fail("failed agents update did not suppress live quota")
         const backendGeneration = agentsService.providerSettingsGeneration
         agentsService.modelUsageSourceOverride =
           Quickshell.env("SHIBUMI_TEST_MODEL_USAGE_SOURCE")

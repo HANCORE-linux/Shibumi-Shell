@@ -648,6 +648,22 @@ Item {
     return null
   }
 
+  function healthGeometryFits(panel) {
+    const label = Array.from(panel.panelContent)
+      .map(item => findTextItem(item, "Health")).find(item => item)
+    if (!label || !panel.settingsPageItem) return false
+    let fits = true
+    for (const item of [label.parent.parent.parent, panel.settingsPageItem])
+      for (let clip = item.parent; clip; clip = clip.parent)
+        if (clip.clip) {
+          const bottom = item.mapToItem(clip, 0, item.height).y
+          console.log("HEALTH_FIT", panel.v2LayoutActive, panel.contentHeight,
+            item === panel.settingsPageItem ? "page" : "route", bottom, clip.height)
+          fits = fits && bottom <= clip.height + 0.5
+        }
+    return fits
+  }
+
   function findTextInput(item) {
     if (!item) return null
     if (item.text !== undefined && item.cursorPosition !== undefined

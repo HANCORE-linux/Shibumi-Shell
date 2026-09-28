@@ -104,7 +104,7 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
             model="current-a",
             input_tokens=100,
             output_tokens=50,
-            cache_read=500,
+            cache_read=1054540000,
         )
         self.add_message(
             session="current-b",
@@ -147,7 +147,7 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
         self.assertEqual(current_a["total"], 150)
         self.assertEqual(current_a["inputLabel"], "100")
         self.assertEqual(current_a["outputLabel"], "50")
-        self.assertEqual(current_a["cacheReadLabel"], "500")
+        self.assertEqual(current_a["cacheReadLabel"], "1.1B")
         self.assertEqual(current_a["todayLabel"], "0")
         self.assertEqual(current_a["pct"], 100)
         self.assertEqual(current_b["total"], 65)

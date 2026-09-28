@@ -672,10 +672,16 @@ rg -q 'hancore\.shibumi\.media' contracts/plugin-suite-v1.json \
   || fail "Shibumi media presentation is not registered"
 rg -q 'firstPartyServiceFor\("omarchy\.media"\)' hancore.shibumi.media/BarWidget.qml \
   || fail "media presentation does not reuse the official service"
+# Approved panel-only exception: native shuffle, repeat and seek (ARCHITECTURE.md, G9).
 if rg -q 'Quickshell\.Services\.(Mpris|Pipewire)|Mpris\.|Pipewire\.' \
-  hancore.shibumi.media/BarWidget.qml hancore.shibumi.media/MediaPanel.qml hancore.shibumi.media/MediaPulse.qml \
+  hancore.shibumi.media/BarWidget.qml hancore.shibumi.media/MediaPulse.qml \
   hancore.shibumi.media/MediaSpectrum.qml hancore.shibumi.media/MediaMuse.qml \
-  hancore.shibumi.media/Service.qml; then
+  hancore.shibumi.media/Service.qml \
+  || rg -q 'Quickshell\.Services\.Pipewire|Mpris\.|Pipewire\.' \
+    hancore.shibumi.media/MediaPanel.qml \
+  || ! awk '/Quickshell[.]Services[.]Mpris/ {
+    if ($0 != "import Quickshell.Services.Mpris" || ++imports > 1) exit 1
+  }' hancore.shibumi.media/MediaPanel.qml; then
   fail "Shibumi media presentation must not create a second media owner"
 fi
 if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.media/BarWidget.qml \
@@ -1074,8 +1080,12 @@ if rg -q 'CACHE_FILE|stale_last' \
     hancore.shibumi.ai/scripts/opencode-usage; then
   fail "OpenCode provider must not persist a V1 usage cache"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' \
+# Approved reset-countdown display: one open-only clock, with no provider work.
+if rg -Uq '\b(Process|Timer|FileView)[[:space:]]*\{' \
     hancore.shibumi.ai/BarWidget.qml \
+  || rg -Uq '\b(Process|FileView)[[:space:]]*\{' hancore.shibumi.ai/AiUsagePanel.qml \
+  || [[ $(rg -Uo '\bTimer[[:space:]]*\{' hancore.shibumi.ai/AiUsagePanel.qml | wc -l) -ne 1 ]] \
+  || ! rg -Uq '^  property Timer presentationClock: Timer \{\n    id: panelClock\n    interval: 30000; repeat: true; running: panel\.open\n    onTriggered: panel\.nowMs = Date\.now\(\)\n  \}$' \
     hancore.shibumi.ai/AiUsagePanel.qml; then
   fail "AI views must not own provider polling or file watchers"
 fi

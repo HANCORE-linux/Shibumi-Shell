@@ -13,6 +13,7 @@ ShellRoot {
   id: root
   property int phase: 0
   property int ticks: 0
+  property int detailReadStartedTick: 0
   property var panels: []
   property var firstGpu: null
   function check(value, message) {
@@ -21,7 +22,7 @@ ShellRoot {
     Qt.exit(1)
     throw new Error(message)
   }
-  function manifest(id) { return {id: id, version: "0.1.1-beta.15.3", kinds: ["service"]} }
+  function manifest(id) { return {id: id, version: "0.1.1-beta.15.4", kinds: ["service"]} }
   component ScopedHost: QtObject {
     property string pluginId: ""
     function serviceFor(id) { root.check(false, "raw scoped lookup: " + id); return null }
@@ -42,7 +43,7 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.15.3"
+    implementationVersion: "0.1.1-beta.15.4"
     host: stateHost
     owner: state
     manifest: root.manifest("hancore.shibumi.state")
@@ -67,6 +68,8 @@ ShellRoot {
     }
     function requestPopout(owner) { activePopout = owner }
     function releasePopout(owner) { if (activePopout === owner) activePopout = null }
+    property string lastCommand: ""
+    function run(command) { lastCommand = command }
     function showTooltip(target, text) {}
     function hideTooltip(target) {}
     function switchPanelFrom(owner, direction) { return false }
@@ -140,9 +143,13 @@ ShellRoot {
           && telemetry.gpuTelemetry === cpu.gpu, "shared scoped owner identity mismatch")
         root.check(!cpu.gpu.probeEnabled && !telemetry.thermal.probeEnabled
           && !storage.storage.runtimeProbesEnabled, "fixture probe suppression lost")
-        cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
+        root.check(telemetry.system.cpuPanelConsumers === 0 && telemetry.system.cpuModel === "" && telemetry.system.loadAverage.length === 0, "detail probe before panel demand")
+        root.check(telemetry.system.memoryPanelConsumers === 0 && !telemetry.system.memoryHardwareRead
+          && !telemetry.system.memoryHardwareReady && telemetry.system.memoryHardwareInfo === "", "memory hardware read before panel demand")
+        cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
         telemetry.thermal.parseDetailed("55|63|80|100|44|70|90|39")
         storage.storage.parseUsage("/dev/fixture 1000 400 600 40%")
+        root.detailReadStartedTick = root.ticks
         for (const item of items) item.open()
         root.phase++
       } else if (root.phase === 3) {
@@ -151,18 +158,63 @@ ShellRoot {
         root.check(cpu.gpu.consumers === 3 && telemetry.system.cpuConsumers === 1
           && telemetry.system.memoryConsumers === 1 && storage.storage.consumers === 1
           && telemetry.thermal.consumers === 1, "open panel/widget leases unbalanced")
+        if (!telemetry.system.memoryHardwareReady) {
+          root.check(root.ticks - root.detailReadStartedTick < 25, "Memory panel real udev read did not complete after acquire(memoryPanel)")
+          return
+        }
+        const cpuPanel = root.panels[0]
+        // Exercise the lazy FileView path, not synthetic parser success calls.
+        if (telemetry.system.cpuModel.length === 0 || telemetry.system.loadAverage.length !== 3) {
+          root.check(root.ticks - root.detailReadStartedTick < 25,
+            "CPU panel real /proc read missing after acquire(cpuPanel): model="
+              + JSON.stringify(telemetry.system.cpuModel) + " load=" + JSON.stringify(telemetry.system.loadAverage))
+          return
+        }
+        console.log("252_CPU_PROC_READ", "ticks", root.ticks - root.detailReadStartedTick,
+          "model", telemetry.system.cpuModel, "load", JSON.stringify(telemetry.system.loadAverage))
+        root.check(cpuPanel.cpuModelText === telemetry.system.cpuModel
+          && cpuPanel.loadAverageText === telemetry.system.loadAverage.map(value => value.toFixed(2)).join(" / ")
+          && telemetry.system.cpuPanelConsumers === 1 && !cpuPanel.gpuUsageView.visible, "CPU model/load or initially hidden GPU row missing")
+        cpu.gpu.parse("sysfs||61|0|0\nstatus|ok")
+        root.check(cpu.gpu.available && !cpuPanel.gpuUsageView.visible, "GPU without reported utilization stayed visible")
+        cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
+        root.check(!cpuPanel.gpuUsageView.visible, "zero-utilization GPU stayed visible")
+        cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42, "GPU utilization did not restore its row")
+        cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 0, "observed GPU row disappeared at idle")
+        items[0].close(); items[0].open(); root.panels[0] = items[0].panelItem
+        root.check(root.panels[0] && root.panels[0].gpuUsageView.visible, "GPU activity latch lost on panel reopen")
+        telemetry.system.parseLoad("invalid"); root.check(telemetry.system.loadAverage.length === 0, "invalid load accepted")
+        const memoryPanel = root.panels[1], oldMemory = [telemetry.system.memTotalMiB, telemetry.system.memAvailableMiB]
+        const hasInfo = Quickshell.env("SHIBUMI_TEST_MEMORY_PRESENT") === "1", info = memoryPanel.hardwareInfoView
+        root.check(telemetry.system.memoryHardwareRead && telemetry.system.memoryPanelConsumers === 1
+          && info && info.text === telemetry.system.memoryHardwareInfo
+          && (hasInfo ? /^.+ · [1-9][0-9]* MT\/s$/.test(info.text) && info.visible : !info.visible),
+          "Memory real udev data/visibility mismatch: " + JSON.stringify(telemetry.system.memoryHardwareInfo))
+        console.log("257_MEMORY_UDEV_READ", "present", hasInfo, "ticks", root.ticks - root.detailReadStartedTick,
+          "info", JSON.stringify(info.text), "visible", info.visible)
+        telemetry.system.memTotalMiB = 8192; telemetry.system.memAvailableMiB = 3072
+        function texts(item) { return ("text" in item ? [String(item.text)] : []).concat(item.children.reduce((out, child) => out.concat(texts(child)), [])) }
+        const memoryText = texts(memoryPanel)
+        root.check(memoryPanel.usageRing && memoryPanel.usageRing.percent === 63
+          && ["5.0 GiB", "3.0 GiB", "8.0 GiB"].every(value => memoryText.indexOf(value) >= 0)
+          && memoryText.every(value => !/\bMiB\b/.test(value)), "Memory ring or GiB-only details missing")
+        telemetry.system.memTotalMiB = oldMemory[0]; telemetry.system.memAvailableMiB = oldMemory[1]
         root.firstGpu = cpu.gpu
         items[0].bar = replacementBar
         cpu.shell = null; telemetry.shell = null; storage.shell = null
         root.phase++
       } else if (root.phase === 4) {
         root.samePanels()
+        root.check(root.panels[0].gpuUsageView && !root.panels[0].gpuUsageView.visible
+          && root.panels[0].cpuModelText === "", "revoked CPU panel retained GPU/model")
         root.check(!cpu.ready && !telemetry.ready && !storage.ready
           && !cpu.backendLoaded && !telemetry.backendLoaded && !storage.backendLoaded
           && cpu.gpu === null && telemetry.system === null && storage.storage === null
           && root.panels[0].gpuTelemetry === null && root.panels[0].systemTelemetry === null
-          && root.panels[0].acquiredGpuTelemetry === null
-          && root.panels[1].telemetry === null && root.panels[2].gpuTelemetry === null
+          && root.panels[0].acquiredGpuTelemetry === null && root.panels[0].acquiredSystemTelemetry === null
+          && root.panels[1].telemetry === null && root.panels[1].acquiredTelemetry === null && root.panels[2].gpuTelemetry === null
           && root.panels[3].telemetry === null && root.panels[4].storage === null
           && root.panels[0].bar === replacementBar && root.panels[1].bar === memoryBar,
           "scope loss retained panel backend or crossed local bar")
@@ -171,10 +223,12 @@ ShellRoot {
       } else if (root.phase === 5) {
         if (!cpu.ready || !telemetry.ready || !storage.ready) return
         root.samePanels()
+        root.check(!root.panels[0].gpuUsageView.visible, "GPU activity latch leaked to replacement owner")
         root.check(cpu.gpu !== root.firstGpu && cpu.gpu.consumers === 3
           && root.panels[0].gpuTelemetry === cpu.gpu
-          && root.panels[0].acquiredGpuTelemetry === cpu.gpu
-          && root.panels[1].telemetry === telemetry.system
+          && root.panels[0].acquiredGpuTelemetry === cpu.gpu && telemetry.system.cpuPanelConsumers === 1
+          && root.panels[1].telemetry === telemetry.system && root.panels[1].acquiredTelemetry === telemetry.system
+          && telemetry.system.memoryPanelConsumers === 1
           && root.panels[2].gpuTelemetry === cpu.gpu
           && root.panels[3].telemetry === telemetry.thermal
           && root.panels[4].storage === storage.storage,
@@ -195,10 +249,12 @@ ShellRoot {
         root.samePanels()
         root.check(cpu.gpu.consumers === 3 && !duplicateCpu.ready,
           "duplicate removal did not restore the sole GPU owner")
+        root.check(root.panels[0].openMonitor() && replacementBar.lastCommand === "omarchy-launch-or-focus-tui btop", "panel btop action")
         for (const item of items) item.close()
         root.phase++
       } else if (root.phase === 8) {
-        root.check(cpu.gpu.consumers === 2, "CPU panel close retained its GPU lease")
+        root.check(cpu.gpu.consumers === 2 && telemetry.system.cpuPanelConsumers === 0
+          && telemetry.system.memoryPanelConsumers === 0, "panel close retained GPU/detail lease")
         for (const item of items) root.check(item.panelItem === null, "closed panel retained")
         views.active = false
         root.phase++

@@ -72,7 +72,7 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.3")
+        self.assertEqual(version, "0.1.1-beta.15.4")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -193,9 +193,19 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15.3": {
                 "suiteVersion": "0.1.1-beta.15.3",
-                "sourceRevisions": ["package:0.1.1-beta.15.3"],
+                "sourceRevisions": [
+                    "5b1d21f0cea73bb9e7997278a828b3ef295e6c94",
+                    "db579163a4b1004a7cc09ee565cac616db9ff627",
+                    "package:0.1.1-beta.15.3",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "60e1904b23e98317e896fdd0bbf98daf44ba504f5eb22f3a8ae86ab5ab72a342",
+            },
+            "public-beta.15.4": {
+                "suiteVersion": "0.1.1-beta.15.4",
+                "sourceRevisions": ["package:0.1.1-beta.15.4"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "5686a127809125ea0b715f41fd4cf9d9bc6817b372ce8b0370dcb42337a616fa",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -224,11 +234,11 @@ class PackageReleaseTests(unittest.TestCase):
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.3"]["pluginDigests"],
+            states["public-beta.15.4"]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.3"]["payloadDigest"],
+            states["public-beta.15.4"]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(
@@ -739,7 +749,7 @@ puts JSON.generate(workflow.fetch("jobs"))
                 "SHIBUMI_TEST_SERVICE_PREFIX": "shibumi-runtime-Ab12Cd",
             })
             for unit in ("production-user.service", "shibumi-runtime-Ab12Cd-0.service",
-                         "shibumi-runtime-Ab12Cd-26.service"):
+                         "shibumi-runtime-Ab12Cd-33.service"):
                 with self.subTest(unit=unit):
                     service_file.write_text(unit + "\n")
                     result = subprocess.run(
@@ -749,14 +759,14 @@ puts JSON.generate(workflow.fetch("jobs"))
                     self.assertEqual(result.returncode, 1)
                     self.assertIn("refusing foreign fixture service", result.stderr)
                     self.assertFalse(systemctl_log.exists())
-            # All 25 owned identities pass the start allowlist; a 26th generation
+            # All 32 owned identities pass the start allowlist; a 33rd generation
             # must be refused before any launch or service-file append.
             start_script = runtime.split(
                 "cat >\"$start_shell\" <<'START_SHELL'\n", 1
             )[1].split("\nSTART_SHELL", 1)[0]
             script.write_text(start_script)
             full_budget = "".join(f"shibumi-runtime-Ab12Cd-{i}.service\n"
-                                  for i in range(1, 26))
+                                  for i in range(1, 33))
             service_file.write_text(full_budget)
             result = subprocess.run(
                 [str(script)], text=True, capture_output=True,
@@ -1259,6 +1269,8 @@ puts JSON.generate(workflow.fetch("jobs"))
                 ["git", "-C", str(candidate), "checkout", "-q", _candidate_revision],
                 check=True,
             )
+            # Git recreated this fixture file using the caller's umask.
+            candidate_tracked.chmod(0o644)
             replacement_program = "\n".join((
                 "import subprocess",
                 f"repo = {str(candidate)!r}",

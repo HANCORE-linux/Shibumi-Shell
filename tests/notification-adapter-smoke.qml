@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "status" as Status
 
 ShellRoot {
@@ -14,7 +15,11 @@ ShellRoot {
     Quickshell.env("SHIBUMI_HISTORY_MUTATION")
   property int mutationPhase: 0
   property int mutationStartTick: 0
+  readonly property bool proxyCase: Quickshell.env("SHIBUMI_HISTORY_MODE") === "proxy"
+  property int proxyPhase: 0
+  property var proxyChecks: ({})
 
+  function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
     console.error("notification-adapter-smoke:", message)
     Qt.exit(1)
@@ -59,6 +64,8 @@ ShellRoot {
     property int dismissCount: 0
     property int clearCount: 0
     property string focusedSummary: ""
+    property string clickResult: ""
+    function invokePopupDefault(index) { if (clickResult === "error") throw Error("fixture action"); clickResult = popupModel.get(index).summary; focusApp(popupModel.get(index)) }
     function setDoNotDisturb(value) { doNotDisturb = value === true }
     function dismissPopup(index) {
       if (index < 0 || index >= popupModel.count) return
@@ -71,7 +78,7 @@ ShellRoot {
     }
   }
 
-  // The 4.0.3 host proxy can expose DND while withholding popupModel.
+  // The real notification proxy exposes only DND, not models or focus actions.
   QtObject {
     id: dndOnlyHost
     property bool doNotDisturb: true
@@ -102,12 +109,18 @@ ShellRoot {
   Status.NotificationAdapter { id: dndOnlyAdapter }
   Status.NotificationAdapter { id: legacyAdapter }
   Status.NotificationAdapter { id: unavailableAdapter }
+  Status.NotificationStatusView { id: counts; bar: null; notificationService: dndOnlyAdapter }
+  Process { id: externalClear; command: ["sh", "-c", "rm -f \"$1\"/*.json", "--", dndOnlyAdapter.historyDir] }
+  FileView { id: proxyHistory; path: dndOnlyAdapter.historyDir + "/proxy.json"; preload: false; printErrors: false }
+  FileView { id: proxyReceipt; path: Quickshell.env("SHIBUMI_FOCUS_ARGV"); preload: false; printErrors: false }
 
   Component.onCompleted: {
-    adapter.attachShell(currentShell)
     dndOnlyAdapter.attachShell(dndOnlyShell)
+    adapter.attachShell(currentShell)
     legacyAdapter.attachShell(legacyShell)
     unavailableAdapter.attachShell(null)
+    if (dndOnlyAdapter.historyState !== "loading" || counts.tooltipText !== "Recent: Loading · DND")
+      root.fail("initial history state is not loading without hover/open")
   }
 
   Timer {
@@ -116,6 +129,35 @@ ShellRoot {
     running: true
     onTriggered: {
       root.ticks++
+      if (root.proxyCase) {
+        if (root.ticks > 100) return root.fail("proxy badge/focus deadline")
+        if (dndOnlyAdapter.historyState !== "ready") return
+        const badge = Array.from(counts.children).find(child => child.z === counts.badgeLayer)
+        if (!badge) return root.fail("proxy badge missing")
+        if (root.proxyPhase === 0) {
+          root.proxyChecks.emptyReady = !dndOnlyAdapter.liveAvailable && counts.countsKnown
+            && !badge.visible && badge.children[0].text !== "?"
+            && counts.tooltipText === "0 Recent · DND"
+          proxyHistory.setText(JSON.stringify({app: Quickshell.env("SHIBUMI_PROXY_APP"), summary: "Proxy recent", timestamp: 1}))
+          root.proxyPhase = 1
+          return
+        }
+        if (root.proxyPhase === 1) {
+          if (dndOnlyAdapter.recentCount !== 1) return
+          root.proxyChecks.one = badge.visible && counts.notificationCount === 1 && badge.children[0].text === "1"
+            && counts.tooltipText === "1 Recent · DND"
+          root.proxyChecks.emptyApp = !dndOnlyAdapter.focusApp({app: ""}, true)
+          root.proxyChecks.focus = dndOnlyAdapter.focusApp(dndOnlyAdapter.pastModel.get(0), true)
+          console.log("259_PROXY", JSON.stringify(root.proxyChecks))
+          if (Object.values(root.proxyChecks).some(ok => !ok)) return root.fail("proxy badge/focus")
+          root.proxyPhase = 2
+        }
+        proxyReceipt.reload()
+        if (!proxyReceipt.text().length) return
+        console.log("notification proxy badge/focus passed")
+        Qt.exit(0)
+        return
+      }
       if (root.ticks === 2) {
         if (!adapter.available || !adapter.liveAvailable
             || !adapter.historyAvailable || adapter.pendingCount !== 1
@@ -126,7 +168,7 @@ ShellRoot {
             || unavailableAdapter.available
             || unavailableAdapter.historyAvailable)
           return root.fail("capabilities do not match the host models")
-        if (!dndOnlyAdapter.showHistory())
+        if (root.historyRace && !dndOnlyAdapter.showHistory())
           return root.fail("Recent did not start the private history read")
         if (root.historyRace === "refresh") {
           dndOnlyAdapter.attachShell(currentShell)
@@ -137,7 +179,7 @@ ShellRoot {
             return root.fail("same-host refresh was not accepted")
           dndOnlyAdapter.attachShell(dndOnlyShell)
         } else {
-          if (!adapter.showHistory())
+          if (root.historyRace && !adapter.showHistory())
             return root.fail("live-host history read was not accepted")
           if (root.historyRace === "detach") {
             dndOnlyAdapter.attachShell(null)
@@ -149,12 +191,17 @@ ShellRoot {
         }
       }
       if (root.ticks < (root.historyRace ? 40 : 12)) return
+      if (!root.historyRace && !root.mutationPhase
+          && (adapter.historyState !== (Quickshell.env("SHIBUMI_HISTORY_MODE") === "missing" ? "unavailable" : "ready")
+            || counts.tooltipText !== (adapter.historyState === "ready"
+              ? root.expectedHistoryCount + " Recent" : "Recent: Unavailable") + " · DND"))
+        return root.fail("eager snapshot/tooltip state without hover/open")
       if (root.historyRace && root.historyRace !== "mutation-replace") {
         const refresh = root.historyRace === "refresh"
           || root.historyRace === "same-refresh"
         const expected = root.historyRace === "replace" || refresh ? 1 : 0
         const summary = refresh ? "New host history" : "Legacy recent"
-        if (adapter.recentCount !== (refresh ? 0 : root.expectedHistoryCount)
+        if (adapter.recentCount !== (refresh ? 1 : root.expectedHistoryCount)
             || dndOnlyAdapter.recentCount !== expected
             || (expected && dndOnlyAdapter.pastModel.get(0).summary
               !== summary)
@@ -173,14 +220,15 @@ ShellRoot {
         return
       }
       if (root.mutationPhase === 2) {
-        if (dndOnlyAdapter.recentCount !== 0) return
+        if (dndOnlyAdapter.recentCount !== 0 || dndOnlyAdapter.historyState !== "ready") return
         console.log("notification history clear passed")
         Qt.exit(0)
         return
       }
       if (root.mutationPhase === 3) {
         if (root.ticks < root.mutationStartTick + 20) return
-        if (dndOnlyAdapter.recentCount !== 0
+        if (dndOnlyAdapter.recentCount !== root.expectedHistoryCount
+            || dndOnlyAdapter.pastModel.get(0).summary !== "History 11"
             || dndOnlyAdapter.pendingCount !== 1)
           return root.fail("stale mutation callback crossed host replacement")
         console.log("notification history mutation replace race passed")
@@ -197,6 +245,11 @@ ShellRoot {
       if (adapter.pendingCount !== 1
           || adapter.pendingModel.get(0).summary !== "Current notification")
         return root.fail("history read mutated the live popup model")
+      if (root.historyMutation === "external-clear") {
+        externalClear.running = true
+        root.mutationPhase = 2
+        return
+      }
       if (!dndOnlyAdapter.setDoNotDisturb(false)
           || dndOnlyAdapter.doNotDisturb)
         return root.fail("DND-only proxy action failed")
@@ -228,12 +281,28 @@ ShellRoot {
         root.mutationPhase = 2
         return
       }
+      counts.notificationService = adapter
+      adapter.setDoNotDisturb(true)
+      if (counts.tooltipText !== "1 Live · " + (adapter.historyState === "ready" ? root.expectedHistoryCount + " Recent" : "Recent: Unavailable") + " · DND")
+        return root.fail("live/recent tooltip with DND")
       liveRows.append({
         id: 8, originalId: 8, app: "Live fixture", appIcon: "",
         summary: "Second notification", body: "Reactive row", image: "",
         glyph: "", exec: "", urgency: 1, expireTimeout: 8000,
         timestamp: 101
       })
+      const token = String(adapter.pendingModel.get(0).liveToken || ""), checks = {}
+      checks.defaultPath = clickLive(token) && currentHost.clickResult === "Current notification"
+      liveRows.move(0, 1, 1); checks.reorder = !clickLive(token) && clickLive(String(adapter.pendingModel.get(1).liveToken || "")) && currentHost.clickResult === "Current notification"
+      const reordered = String(adapter.pendingModel.get(1).liveToken || ""), replacement = adapter.primitiveEntry(liveRows.get(1)); liveRows.remove(1); liveRows.insert(1, replacement)
+      checks.replacement = !clickLive(reordered) && JSON.stringify(adapter.primitiveEntry(liveRows.get(1))) === JSON.stringify(replacement)
+      const latest = String(adapter.pendingModel.get(1).liveToken || ""); currentHost.clickResult = "error"; currentHost.focusedSummary = ""
+      checks.error = !clickLive(latest) && currentHost.focusedSummary === ""; currentHost.clickResult = ""
+      checks.fallback = clickLive(latest) && currentHost.focusedSummary === "Current notification"
+      adapter.attachShell(null); adapter.attachShell(currentShell); checks.generation = !clickLive(latest)
+      const dying = String(adapter.pendingModel.get(0).liveToken || ""), removed = adapter.primitiveEntry(liveRows.get(0)); liveRows.remove(0)
+      checks.expiry = !clickLive(dying); checks.missing = !clickLive("missing"); liveRows.append(removed)
+      console.log("235_LIVE_CLICK", JSON.stringify(checks)); if (Object.values(checks).some(ok => !ok)) return root.fail("live click identity/default/error")
       if (adapter.pendingCount !== 2
           || !adapter.focusApp(adapter.pendingModel.get(0))
           || currentHost.focusedSummary !== "Current notification"

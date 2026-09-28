@@ -77,11 +77,7 @@ Item {
   readonly property int pendingCount: notificationView.pendingCount
   readonly property int recentCount: notificationView.recentCount
   readonly property int notificationCount: notificationView.notificationCount
-  readonly property string textLabel: notificationService
-    && notificationService.doNotDisturb === true ? "DND"
-    : notificationCount > 0
-      ? notificationCount + (notificationCount === 1
-        ? " NOTIFICATION" : " NOTIFICATIONS") : "CLEAR"
+  readonly property string textLabel: notificationView.tooltipText
   readonly property bool ready: updateWidget !== null || trayWidget !== null
     || notificationService !== null
   readonly property bool opened: trayDrawerOpen || trayAppMenuOpen
@@ -656,6 +652,10 @@ Item {
         }
       }
 
+      Connections {
+        target: root
+        function onTextLabelChanged() { if (textStatusMouse.containsMouse && root.bar) root.bar.showTooltip(textStatus, root.textLabel) }
+      }
       onVisibleChanged: syncRegistration()
       Component.onCompleted: syncRegistration()
       Component.onDestruction: if (root.bar && registered)
@@ -674,14 +674,12 @@ Item {
       }
 
       MouseArea {
+        id: textStatusMouse
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onEntered: if (root.bar) root.bar.showTooltip(textStatus,
-          root.notificationCount > 0
-            ? root.notificationCount + (root.notificationCount === 1
-              ? " notification" : " notifications") : root.textLabel)
+        onEntered: if (root.bar) root.bar.showTooltip(textStatus, root.textLabel)
         onExited: if (root.bar) root.bar.hideTooltip(textStatus)
         onClicked: function(mouse) {
           if (root.bar) root.bar.hideTooltip(textStatus)

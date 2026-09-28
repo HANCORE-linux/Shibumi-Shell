@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import qs.Commons as Commons
 import "hancore.shibumi.state" as State
 import "control" as Control
 import "control/HostIdentity.js" as HostIdentity
@@ -14,6 +15,9 @@ ShellRoot {
   property var clickTargets: []
   property int barsRouteStep: 0
   property int iconsNoScrollStep: 0
+  property var healthFitProbe: null
+  property bool healthFitOk: true
+  Component { id: healthFitComponent; Control.ControlCenterPanel {} }
   property bool panelIdempotenceStarted: false
   property bool requestedPreviewChecked: false
   property var stablePanelItem: null
@@ -118,6 +122,7 @@ ShellRoot {
     id: fakeBar
 
     property var shell: fakeShell
+    property var layoutController: ({v2Mode: false})
     property bool vertical: false
     property int barSize: 35
     property string position: "top"
@@ -143,6 +148,10 @@ ShellRoot {
     property var visualTokens: ({
       shellStyle: "shibumi",
       v2Shell: false,
+      ink: "#eeeeee",
+      seal: "#d75f5f",
+      fontFamily: "monospace",
+      tileRadius: 6,
       pillHeight: 24,
       pillRadius: 12,
       pill: "#332f2f",
@@ -1594,9 +1603,9 @@ ShellRoot {
             const v1HealthPanelHeight = panel.compactHealthPanelHeight
             panel.v2LayoutActive = true
             if (!panel.compactHealthPage
-                || Math.abs(panel.compactHealthPanelHeight
+                || (panel.compactHealthPanelHeight
                   - health.implicitHeight
-                  - panel.configureDetailPanelChromeHeight) > 0.5
+                  - panel.configureDetailPanelChromeHeight) < -0.5
                 || Math.abs(panel.compactHealthPanelHeight
                   - v1HealthPanelHeight) > 0.5)
               return root.fail("Health did not fit its content height")
@@ -2321,6 +2330,28 @@ ShellRoot {
           return root.fail("V2 Icons selection requires scrolling"
             + " actual=" + panel.compactIconsSelectionPanelHeight
             + " required=" + requiredV2)
+        if (!root.healthFitProbe) {
+          Commons.Style.fontBaseSize = 11
+          root.healthFitProbe = healthFitComponent.createObject(root, {
+            anchorItem: widget, bar: fakeBar, ownerWidget: widget, stateService: stateService,
+            healthService: panel.healthService, switchService: panel.switchService, pluginUpdateService: pluginUpdateService, open: true
+          })
+          if (!root.healthFitProbe) return root.fail("real Health fit component unavailable")
+          root.healthFitProbe.showSettingsPage("health")
+          root.ticks = 0; return
+        }
+        if (root.ticks < 9) return
+        console.log("HEALTH_FIT_CONTEXT", Commons.Style.fontBaseSize, root.healthFitProbe.availableCardHeight, root.healthFitProbe.settingsPage)
+        root.healthFitOk = panel.healthGeometryFits(root.healthFitProbe) && root.healthFitOk
+        if (!root.healthFitProbe.v2LayoutActive) {
+          fakeBar.layoutController = {v2Mode: true}
+          fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {v2Shell: true, shellStyle: "full"})
+          root.ticks = 0; return
+        }
+        if (!root.healthFitOk) return root.fail("Health route/page clipped at actual 11px V1/V2 fit height")
+        root.healthFitProbe.destroy(); Commons.Style.fontBaseSize = 12
+        fakeBar.layoutController = {v2Mode: false}
+        fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {v2Shell: false, shellStyle: "shibumi"})
         appearance.controller.resetGroupAppearance("G4")
         panel.v2LayoutActive = false
         fakeShell.activeBarId = ""

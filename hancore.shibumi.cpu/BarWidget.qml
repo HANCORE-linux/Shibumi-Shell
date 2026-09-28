@@ -41,6 +41,13 @@ Ui.Panel {
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property var gpuTelemetry: cpuService ? cpuService.gpu : null
+  // Presentation latch survives lazy panel recreation, but not owner replacement.
+  property bool gpuActivitySeen: false
+  onGpuTelemetryChanged: gpuActivitySeen = !!gpuTelemetry && gpuTelemetry.utilization > 0
+  Connections {
+    target: root.gpuTelemetry
+    function onUtilizationChanged() { if (root.gpuTelemetry.utilization > 0) root.gpuActivitySeen = true }
+  }
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"

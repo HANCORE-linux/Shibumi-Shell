@@ -9,6 +9,8 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var telemetry
+  readonly property var usageRing: memoryRing
+  readonly property var hardwareInfoView: hardwareInfo
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -16,6 +18,19 @@ ShibumiPanel {
   padding: 12
   contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(panelColumn.implicitHeight)
+
+  property var acquiredTelemetry: null
+  function syncHardwareLease() {
+    const next = open ? telemetry : null
+    if (acquiredTelemetry === next) return
+    if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
+    acquiredTelemetry = next
+    if (next) next.acquire("memoryPanel")
+  }
+  onTelemetryChanged: syncHardwareLease()
+  onOpenChanged: syncHardwareLease()
+  Component.onCompleted: syncHardwareLease()
+  Component.onDestruction: if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
 
   Ui.PanelKeyCatcher {
     id: keyCatcher
@@ -35,7 +50,7 @@ ShibumiPanel {
         Text {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
-          text: "Memory"
+          text: "MEMORY"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 13
@@ -67,6 +82,16 @@ ShibumiPanel {
         }
       }
 
+      Text {
+        id: hardwareInfo
+        width: parent.width; elide: Text.ElideRight; textFormat: Text.PlainText
+        text: panel.telemetry ? panel.telemetry.memoryHardwareInfo : ""
+        visible: text.length > 0
+        color: panel.controlMutedHigh; renderType: Text.NativeRendering
+        font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+        font.pixelSize: Commons.Style.font.caption
+      }
+
       Rectangle {
         width: parent.width
         height: 1
@@ -74,63 +99,46 @@ ShibumiPanel {
           panel.bar.foreground.b, 0.18) : Commons.Color.popups.border
       }
 
-      Item {
+      Row {
         width: parent.width
-        height: 30
+        height: memoryRing.height
+        spacing: Commons.Style.space(16)
 
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          text: (panel.telemetry ? panel.telemetry.memPercent : 0) + "%"
-          color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          font.family: panel.bar ? panel.bar.fontFamily
-            : Commons.Style.font.family
-          font.pixelSize: 11
-          font.weight: Font.Medium
-          renderType: Text.NativeRendering
+        // Panel-local dimensions and colors; MemoryRing's bar defaults stay intact.
+        MemoryRing {
+          id: memoryRing
+          width: Commons.Style.space(80)
+          height: width
+          percent: panel.telemetry ? panel.telemetry.memPercent : 0
+          foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+          accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+          water: true
+          panelOpen: panel.open
         }
 
-        Rectangle {
-          anchors.bottom: parent.bottom
-          width: parent.width
-          height: 8
-          radius: height / 2
-          color: panel.controlActiveFillColor
-
-          Rectangle {
-            width: parent.width * (panel.telemetry ? panel.telemetry.memPercent : 0) / 100
-            height: parent.height
-            radius: height / 2
-            color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-            Behavior on width { NumberAnimation { duration: 300 } }
+        Grid {
+          width: parent.width - memoryRing.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter
+          columns: 2; columnSpacing: Commons.Style.space(8); rowSpacing: Commons.Style.space(8)
+          MemoryStatRow { width: (parent.width - parent.columnSpacing) / 2; label: "Usage"; value: memoryRing.percent + "%"; bar: panel.bar }
+          MemoryStatRow {
+            width: (parent.width - parent.columnSpacing) / 2
+            label: "Used"
+            value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
+            bar: panel.bar
           }
-        }
-      }
-
-      Column {
-        width: parent.width
-        spacing: 4
-
-        MemoryStatRow {
-          width: parent.width
-          label: "Used"
-          value: (panel.telemetry ? panel.telemetry.memUsedGiB : 0).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memUsedMiB : 0) + " MiB"
-          bar: panel.bar
-        }
-        MemoryStatRow {
-          width: parent.width
-          label: "Available"
-          value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memAvailableMiB : 0) + " MiB"
-          bar: panel.bar
-        }
-        MemoryStatRow {
-          width: parent.width
-          label: "Total"
-          value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
-          detail: (panel.telemetry ? panel.telemetry.memTotalMiB : 0) + " MiB"
-          bar: panel.bar
+          MemoryStatRow {
+            width: (parent.width - parent.columnSpacing) / 2
+            label: "Available"
+            value: ((panel.telemetry ? panel.telemetry.memAvailableMiB : 0) / 1024).toFixed(1) + " GiB"
+            bar: panel.bar
+          }
+          MemoryStatRow {
+            width: (parent.width - parent.columnSpacing) / 2
+            label: "Total"
+            value: (panel.telemetry ? panel.telemetry.memTotalGiB : 0).toFixed(1) + " GiB"
+            bar: panel.bar
+          }
         }
       }
 
@@ -143,7 +151,7 @@ ShibumiPanel {
       Rectangle {
         width: parent.width
         height: 28
-        radius: panel.controlRadius
+        radius: panel.renderedSurfaceRadius
         color: monitorMouse.containsMouse
           ? panel.controlPrimaryHoverColor
           : panel.bar ? panel.bar.urgent : Commons.Color.accent
@@ -173,39 +181,29 @@ ShibumiPanel {
     }
   }
 
-  component MemoryStatRow: Row {
+  component MemoryStatRow: Item {
     required property string label
     required property string value
-    required property string detail
     required property var bar
+    implicitHeight: valueText.height + Commons.Style.space(3) + labelText.height
 
     Text {
       id: labelText
-      width: parent.width * 0.4
-      text: parent.label
+      y: valueText.height + Commons.Style.space(3); width: parent.width
+      text: parent.label.toUpperCase()
       color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
         parent.bar.foreground.b, 0.65) : Commons.Color.foreground
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
+      font.pixelSize: Commons.Style.font.caption
       renderType: Text.NativeRendering
     }
     Text {
       id: valueText
-      width: parent.width * 0.3
+      width: parent.width
       text: parent.value
       color: parent.bar ? parent.bar.foreground : Commons.Color.foreground
       font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
-      renderType: Text.NativeRendering
-    }
-    Text {
-      id: detailText
-      width: parent.width * 0.3
-      text: parent.detail
-      color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
-        parent.bar.foreground.b, 0.58) : Commons.Color.foreground
-      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
+      font.pixelSize: Commons.Style.font.subtitle
       renderType: Text.NativeRendering
     }
   }

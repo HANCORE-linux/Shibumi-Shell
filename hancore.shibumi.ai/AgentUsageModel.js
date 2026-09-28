@@ -72,7 +72,7 @@ function validRecordShape(record, expectedId) {
 
 function hasDisplayData(record, limits) {
   // All-time counters establish that this fresh record represents an actually
-  // used provider, but they are never copied into Shibumi's current model rows.
+  // used provider; all-time model rows do not imply current activity.
   return limits.length > 0
     || nonNegativeNumber(record.todayPrompts) > 0
     || nonNegativeNumber(record.todaySessions) > 0
@@ -109,6 +109,7 @@ function limitSnapshot(limits, index) {
     label: boundedString(limit.label,
       index === 0 ? "Primary" : "Secondary"),
     percent: limit.percent,
+    title: typeof limit.title === "string" ? boundedString(limit.title, "") : "",
     resetsAt: boundedString(limit.resetsAt, "")
   }
 }
@@ -133,7 +134,7 @@ function parseRecord(raw, expectedId, nowMs) {
   for (var index = 0; index < rawLimits.length; index++) {
     var limit = limitSnapshot(rawLimits, index)
     if (!limit) return null
-    if (limits.length < 2) limits.push(limit)
+    if (limits.length < 6) limits.push(limit)
   }
   if (!hasDisplayData(record, limits)) return null
 
@@ -143,6 +144,13 @@ function parseRecord(raw, expectedId, nowMs) {
     providerId: boundedString(record.id, ""),
     providerName: boundedString(record.name, record.id),
     ready: record.ready === true,
+    limits: limits,
+    recentDays: (Array.isArray(record.recentDays) ? record.recentDays : [])
+      .filter(day => isPlainObject(day) && typeof day.date === "string" && validTimestamp(day.date + "T00:00:00Z")
+        && isNonNegativeRecordNumber(day.messageCount))
+      .map(day => ({ date: day.date, messageCount: day.messageCount }))
+      .sort((a, b) => a.date.localeCompare(b.date)).slice(-7),
+    modelUsage: record.modelUsage,
     rateLimitPercent: primary ? primary.percent : -1,
     rateLimitLabel: primary ? primary.label : "",
     rateLimitResetAt: primary ? primary.resetsAt : "",
@@ -157,9 +165,7 @@ function parseRecord(raw, expectedId, nowMs) {
     activeDays: nonNegativeNumber(record.activeDays),
     windowTokens: 0,
     hourlyTokens: 0,
-    // Keep the existing Shibumi presentation stable. Omarchy's agents record
-    // exposes all-time model aggregates, while the current panel's model rows
-    // are explicitly labeled as recent activity.
+    // The service formats modelUsage separately as all-time aggregates.
     models: [],
     tierLabel: boundedString(record.tierLabel, ""),
     usageStatusText: boundedString(record.usageStatusText, ""),
