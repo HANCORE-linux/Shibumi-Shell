@@ -16,9 +16,9 @@ contains no Step-6 product functionality or automatic Step-6 migration.
 The maintenance candidate fixes exact checkout predecessor admission for Beta.15,
 Beta.15.1 (tagged, not released), and Beta.15.2. It retains strict payload and
 lifecycle authority checks and contains no panel or global presentation changes.
-Its package identity is `public-beta.15.3`, with only
-`package:0.1.1-beta.15.3`; exact future tag/merge checkout identities belong in
-Beta.15.4 once those revisions exist.
+Beta.15.4's package identity is `public-beta.15.4`, with only
+`package:0.1.1-beta.15.4`; exact future tag/merge checkout identities belong in
+Beta.15.5 once those revisions exist.
 
 Release checklist, still open:
 
@@ -129,7 +129,7 @@ rollback.
 
 ## Current tested host contract
 
-The Beta.15.3 worktree's primary source and installed-package compatibility
+The Beta.15.4 worktree's primary source and installed-package compatibility
 contracts target Omarchy 4.0.4. This is candidate gate configuration, not
 physical acceptance. The published Beta.13 package was physically accepted on
 Omarchy 4.0.3 using one physical output; Beta.14 still

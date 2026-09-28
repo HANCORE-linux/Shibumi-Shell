@@ -1,6 +1,7 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.15.3` local candidate contract
+Status: `0.1.1-beta.15.4` is published as a GitHub prerelease; AUR publication
+remains deferred.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi

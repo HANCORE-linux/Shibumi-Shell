@@ -8,7 +8,7 @@ not yet passed Shibumi's release gates.
 
 ## Current tested host
 
-The Beta.15.3 maintenance worktree targets the exact official Omarchy 4.0.4
+The Beta.15.4 maintenance worktree targets the exact official Omarchy 4.0.4
 baseline for validation. This is not physical release acceptance. The published
 Beta.13 remains the latest release with recorded physical host acceptance on
 Omarchy 4.0.3:
