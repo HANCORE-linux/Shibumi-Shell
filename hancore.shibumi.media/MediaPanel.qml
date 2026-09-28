@@ -689,8 +689,30 @@ ShibumiPanel {
     width: Commons.Style.space(36); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
     color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
     border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
-    Ui.OpticalGlyph { anchors.fill: parent; text: button.icon; color: button.checked || button.accent ? panel.controlAccent : panel.controlForeground
-      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon) }
+    readonly property bool transport: action === "previous" || action === "playPause" || action === "next"
+    Ui.OpticalGlyph {
+      visible: !button.transport
+      anchors.fill: parent; text: button.icon
+      color: button.checked ? panel.controlAccent : panel.controlForeground
+      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon)
+    }
+    TextMetrics {
+      id: transportMetrics
+      text: button.icon
+      font.family: "Material Symbols Rounded"
+      // Native Material Symbols ink matches Shuffle/Repeat, without scaling a texture.
+      font.pixelSize: Math.round(Commons.Style.font.icon * (button.icon === "pause" ? 19 : 21) / 13)
+    }
+    Text {
+      visible: button.transport
+      text: button.icon; font: transportMetrics.font
+      color: button.accent ? panel.controlAccent : panel.controlForeground
+      renderType: Text.NativeRendering
+      // Tight horizontal bounds; the hinted native line box centers these raster sizes.
+      // TextMetrics' ligature vertical bounds include blank baseline space.
+      x: Math.round((parent.width - transportMetrics.tightBoundingRect.width) / 2 - transportMetrics.tightBoundingRect.x)
+      y: Math.round((parent.height - height) / 2)
+    }
     MouseArea {
       id: buttonMouse; anchors.fill: parent; enabled: button.enabled; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
       onContainsMouseChanged: if (containsMouse) { panel.focusSection = "controls"; panel.cursorIndex = button.controlIndex }
