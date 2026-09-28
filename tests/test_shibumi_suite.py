@@ -30,6 +30,7 @@ PUBLISHED_BETA15_REVISION = "4e91c26ebf4da07476d4be6176f29d7662fed9c1"
 PUBLISHED_BETA151_REVISION = "36e4b9f0de428c17248d40592461a9e3f3f750f8"
 PUBLISHED_BETA152_REVISION = "c45af77c8333b691ac36522247b6e5b5481a3666"
 PUBLISHED_BETA153_REVISION = "5b1d21f0cea73bb9e7997278a828b3ef295e6c94"
+PUBLISHED_BETA154_REVISION = "6594b989c9f5edfe557669b0413a9bd3e50f8e81"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from shibumi_suite.admission import (  # noqa: E402
@@ -1300,6 +1301,11 @@ class SuiteLifecycleTests(unittest.TestCase):
             "v0.1.1-beta.15.3", PUBLISHED_BETA153_REVISION, "public-beta.15.3"
         )
 
+    def test_published_beta154_checkout_can_update_from_its_tag(self) -> None:
+        self.assert_published_checkout_can_update_from_tag(
+            "v0.1.1-beta.15.4", PUBLISHED_BETA154_REVISION, "public-beta.15.4"
+        )
+
     def test_admitted_beta15_merge_payloads_match_their_exact_tags(self) -> None:
         releases = (
             (PUBLISHED_BETA15_REVISION, (
@@ -1314,6 +1320,10 @@ class SuiteLifecycleTests(unittest.TestCase):
             )),
             (PUBLISHED_BETA153_REVISION, (
                 "db579163a4b1004a7cc09ee565cac616db9ff627",
+            )),
+            (PUBLISHED_BETA154_REVISION, (
+                "67d87c5d7f61fca4b05e79a089238805e0e0737f",
+                "81f6bcd28cf0e0b5c435761150b2b73083f1e4fa",
             )),
         )
         payload_paths = ["contracts/plugin-suite-v1.json", *self.suite.plugins]

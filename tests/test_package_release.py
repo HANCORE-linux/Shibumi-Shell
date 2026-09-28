@@ -202,7 +202,12 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15.4": {
                 "suiteVersion": "0.1.1-beta.15.4",
-                "sourceRevisions": ["package:0.1.1-beta.15.4"],
+                "sourceRevisions": [
+                    "6594b989c9f5edfe557669b0413a9bd3e50f8e81",
+                    "67d87c5d7f61fca4b05e79a089238805e0e0737f",
+                    "81f6bcd28cf0e0b5c435761150b2b73083f1e4fa",
+                    "package:0.1.1-beta.15.4",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "5686a127809125ea0b715f41fd4cf9d9bc6817b372ce8b0370dcb42337a616fa",
             },
