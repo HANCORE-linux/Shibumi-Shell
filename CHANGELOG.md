@@ -25,6 +25,9 @@
   redesigned panels follow the panel radius.
 - Omit the notification tooltip's Live section when the host exposes no
   Live model; keep Recent counts and Do Not Disturb status.
+- Show AI token counts in compact K/M/B units, matching Omarchy.
+- Animate the water rings in the CPU and Memory panels while a panel is
+  open.
 
 ### Fixed
 
