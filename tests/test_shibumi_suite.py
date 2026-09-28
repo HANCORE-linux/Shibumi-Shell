@@ -1512,7 +1512,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
 
     def test_unknown_future_package_identity_is_rejected(self) -> None:
-        packaged_suite = self.packaged_suite("0.1.1-beta.15.5")
+        packaged_suite = self.packaged_suite("0.1.1-beta.17")
 
         with self.assertRaisesRegex(
             AdmissionError, "exact declared revision identity"
