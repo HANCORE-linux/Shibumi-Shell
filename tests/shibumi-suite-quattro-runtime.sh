@@ -580,7 +580,7 @@ run_keep_settings_cycle() {
     fresh) style=shibumi ;; # V1: foreign widget remains in the Extra-Deck, without a V1 slot.
     source-beta15) style=full ;;
     source-beta152) style=notch ;;
-    source-beta153) style=shibumi ;;
+    source-rolling) style=shibumi ;;
     *) fail "unexpected keep-settings arm: $arm" ;;
   esac
   # Supported native and State IPC only once the fixture shell is running.
