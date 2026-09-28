@@ -7,6 +7,8 @@ import "memory" as Memory
 import "cpu" as Cpu
 import "gpu" as Gpu
 import "temperature" as Temperature
+import "battery" as Battery
+import "fixtures" as Fixtures
 
 ShellRoot {
   id: root
@@ -187,11 +189,15 @@ ShellRoot {
   }
 
   // Keep real panels alive while closed, without acquiring telemetry.
-  Item { id: waterOwner; property bool opened: false }
+  Item { id: waterOwner; property bool opened: false; property bool gpuActivitySeen: true
+    property int temperatureC: 62; property string sourceLabel: "CPU"; property string temperatureUnit: "metric"; property string selectedSource: "cpu"
+    function temperatureText(value) { return value + "°C" }
+  }
   Cpu.CpuPanel {
     id: cpuWaterPanel
     anchorItem: waterOwner; ownerWidget: waterOwner; bar: fakeBar
-    systemTelemetry: null; gpuTelemetry: null
+    systemTelemetry: null
+    gpuTelemetry: ({ available: true, utilization: 70, temperatureC: 48, memoryTotalMiB: 0, acquire: function() {}, release: function() {} })
   }
   Memory.MemoryPanel {
     id: memoryWaterPanel
@@ -199,13 +205,17 @@ ShellRoot {
     telemetry: null
   }
 
+  Fixtures.PowerTestService { id: ringPower; hasBattery: true }
+  Battery.BatteryPanel { id: batteryWaterPanel; anchorItem: waterOwner; ownerWidget: waterOwner; bar: fakeBar; powerService: ringPower }
+  Temperature.TemperaturePanel { id: thermalWaterPanel; anchorItem: waterOwner; ownerWidget: waterOwner; bar: fakeBar; telemetry: null }
+
   function checkWaterAnimationCost() {
     function rings(item) {
       return Array.from(item.children || []).reduce((out, child) =>
         out.concat(child.water === true ? [child] : rings(child)), [])
     }
-    const waterRings = rings(cpuWaterPanel).concat(rings(memoryWaterPanel))
-    if (waterRings.length !== 2) return root.fail("panel water rings missing")
+    const waterRings = rings(cpuWaterPanel).concat(rings(memoryWaterPanel), rings(batteryWaterPanel), rings(thermalWaterPanel))
+    if (waterRings.length !== 5) return root.fail("panel water rings missing")
     const states = []
     for (const open of [false, true, false]) {
       waterOwner.opened = open
@@ -215,6 +225,11 @@ ShellRoot {
       states.push({open: open, running: running})
       if (!waterRings.every(ring => ring.panelOpen === open && ring.animating === open))
         return root.fail("water animation escaped panel-open cost guard")
+      const batteryRing = rings(batteryWaterPanel)[0]
+      if (batteryRing.plasmaAnimating !== open) return root.fail("plasma escaped panel-open guard")
+      ringPower.charging = false
+      if (batteryRing.animating !== open || batteryRing.plasmaAnimating) return root.fail("discharge wave/plasma escaped its cost guard")
+      ringPower.charging = true
     }
     console.log("PANEL_WATER_COST", JSON.stringify(states))
   }

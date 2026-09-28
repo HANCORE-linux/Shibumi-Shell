@@ -27,7 +27,9 @@ printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$repo_root/hancore.shibumi.temperature" "$tmpdir/temperature"
 cp -a -- "$repo_root/hancore.shibumi.storage" "$tmpdir/storage"
-for plugin in cpu memory gpu temperature storage; do
+cp -a -- "$repo_root/hancore.shibumi.battery" "$tmpdir/battery"
+install -Dm0644 "$repo_root/tests/fixtures/PowerTestService.qml" "$tmpdir/fixtures/PowerTestService.qml"
+for plugin in cpu memory gpu temperature storage battery; do
   install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
     "$tmpdir/$plugin/ShibumiPanel.qml"
 done
