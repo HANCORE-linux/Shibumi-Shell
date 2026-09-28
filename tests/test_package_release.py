@@ -72,7 +72,6 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.4")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -229,16 +228,18 @@ class PackageReleaseTests(unittest.TestCase):
                 self.assertEqual(digest.hexdigest(), state["payloadDigest"])
 
         suite = Suite.load(ROOT)
+        current_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        current_id = f"public-{current_version.split('-', 1)[-1]}"
         current_plugin_digests = {
             plugin_id: spec.payload_digest()
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.4"]["pluginDigests"],
+            states[current_id]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.4"]["payloadDigest"],
+            states[current_id]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(

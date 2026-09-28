@@ -23,6 +23,27 @@ tag must agree.
    lift `predecessor_revision` in `tests/shibumi-suite-quattro-runtime.sh` to the last
    tag validated on that baseline and run the gate locally before tagging.
 
+## Version pin categories
+
+- Current-candidate expectations in the package, suite-lifecycle, and shared
+  runtime-import Python tests read `VERSION`; package-origin strings follow it.
+  Current public identity lookups use `public-<prerelease>` (for example,
+  `public-beta.16`). This is a naming convention, not an admission shortcut.
+- Published predecessor versions, revisions, payload digests, and their exact
+  test tables remain explicit immutable pins, including the published release
+  whose version is still in `VERSION` while the next candidate is prepared.
+  Add the next candidate identity separately; never relabel an old payload.
+- Negative, downgrade, SemVer, and inert-fixture versions describe their own
+  scenarios. Do not globally replace version strings across tests.
+- Plugin manifests and code-bound QML `implementationVersion` literals remain
+  independent identities, updated together with release metadata. Do not load
+  a running provider's identity from a newly loaded manifest or add a runtime
+  version loader. Canonical and vendored copies must stay synchronized.
+- Reading candidate expectations from `VERSION` does not regenerate lifecycle
+  pins or validate payload bytes. Recompute the final candidate payload and
+  review exact admission identities during the authorized version/pin step;
+  modified product bytes with old pins must still fail identity checks.
+
 ## Prepare the package checksum
 
 Finish every file included in the release payload before pinning its checksum.
