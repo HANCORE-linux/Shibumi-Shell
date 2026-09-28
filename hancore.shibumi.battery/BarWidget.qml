@@ -138,9 +138,9 @@ Ui.Panel {
       id: content
       anchors.centerIn: parent
       sourceComponent: !root.bar || !root.tokens ? null
+        : root.displayMode === "text" ? textContent
         : root.bar.vertical || root.displayMode === "icon" ? compactContent
-        : root.tokens.v2Shell === true && root.displayMode === "full" ? compactContent
-        : root.displayMode === "text" ? textContent : fullContent
+        : root.tokens.v2Shell === true && root.displayMode === "full" ? compactContent : fullContent
     }
 
     MouseArea {
@@ -279,7 +279,7 @@ Ui.Panel {
         Rectangle {
           visible: gauge.charging
           anchors.fill: parent
-          anchors.margins: Commons.Style.space(1.8)
+          anchors.margins: parent.border.width + 1
           radius: Commons.Style.space(1.2)
           color: Qt.rgba(gauge.color.r, gauge.color.g, gauge.color.b, 0.28)
         }
@@ -289,9 +289,9 @@ Ui.Panel {
           anchors.left: parent.left
           anchors.top: parent.top
           anchors.bottom: parent.bottom
-          anchors.margins: Commons.Style.space(1.8)
+          anchors.margins: parent.border.width + 1
           width: Math.max(gauge.ratio > 0 ? Commons.Style.space(1.5) : 0,
-            (parent.width - Commons.Style.space(3.6)) * Math.max(0, Math.min(1, gauge.ratio)))
+            (parent.width - 2 * anchors.margins) * Math.max(0, Math.min(1, gauge.ratio)))
           radius: Commons.Style.space(1.2)
           clip: true
           color: gauge.color
@@ -320,40 +320,46 @@ Ui.Panel {
         Canvas {
           id: chargingBolt
           visible: gauge.charging || gauge.full
-          anchors.centerIn: parent
-          width: Commons.Style.space(6)
-          height: Commons.Style.space(8)
+          x: Math.round((parent.width - width) / 2)
+          y: 0
+          width: 7
+          height: Math.floor(parent.height)
+          antialiasing: false
+          smooth: false
+          readonly property color ink: root.bar ? root.bar.foreground : Commons.Color.foreground
+          readonly property color outline: root.bar ? root.bar.background : Commons.Color.background
+          onInkChanged: requestPaint()
+          onOutlineChanged: requestPaint()
+          onVisibleChanged: if (visible) requestPaint()
 
           onPaint: {
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
-            ctx.beginPath()
-            ctx.moveTo(width * 0.55, 0)
-            ctx.lineTo(width * 0.12, height * 0.55)
-            ctx.lineTo(width * 0.45, height * 0.55)
-            ctx.lineTo(width * 0.38, height)
-            ctx.lineTo(width * 0.88, height * 0.45)
-            ctx.lineTo(width * 0.55, height * 0.45)
-            ctx.closePath()
-            ctx.fillStyle = gauge.detailColor
-            ctx.fill()
+            // Five columns, six rows: a stepped bolt, not an antialiased polygon.
+            const rows = [8, 12, 30, 12, 4, 2], pixels = []
+            const inset = batteryBody.border.width, inside = height - 2 * inset
+            for (let y = 0; y < inside; y++)
+              for (let x = 0; x < 5; x++)
+                if (rows[Math.floor(y * rows.length / inside)] & (1 << x)) pixels.push([x + 1, y + inset])
+            ctx.fillStyle = Qt.rgba(chargingBolt.outline.r, chargingBolt.outline.g, chargingBolt.outline.b, 1)
+            for (const p of pixels)
+              for (let dy = -1; dy <= 1; dy++)
+                for (let dx = -1; dx <= 1; dx++) ctx.fillRect(p[0] + dx, p[1] + dy, 1, 1)
+            ctx.fillStyle = chargingBolt.ink
+            for (const p of pixels) ctx.fillRect(p[0], p[1], 1, 1)
           }
 
           Component.onCompleted: requestPaint()
-          Connections {
-            target: gauge
-            function onDetailColorChanged() { chargingBolt.requestPaint() }
-          }
         }
       }
 
       Rectangle {
-        anchors.left: batteryBody.right
-        anchors.leftMargin: -Commons.Style.space(0.5)
+        // Keep a whole unpainted pixel between body and terminal, even at 100%.
+        x: Math.ceil(batteryBody.width) + 1
         anchors.verticalCenter: parent.verticalCenter
-        width: Commons.Style.space(2.5)
-        height: Commons.Style.space(5)
-        radius: Commons.Style.space(1.2)
+        width: Math.max(1, parent.width - x)
+        height: Commons.Style.space(3)
+        radius: 0
         color: gauge.color
       }
     }
