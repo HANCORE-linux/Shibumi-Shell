@@ -771,7 +771,11 @@ Item {
         "if [[ -f $d/.git/config ]]; then",
         "repo=$(sed -nE 's#^[[:space:]]*url = (.*)$#\\1#p' \"$d/.git/config\" | head -1);",
         "author=$(printf '%s' \"$repo\" | sed -nE 's#.*github\\.com[:/]+([^/]+)/.*#\\1#p'); fi;",
-        "palette=$(awk -F'\"' '$2 ~ /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/ { if (out != \"\") out=out \",\"; out=out $2; if (++n == 6) exit } END { print out }' \"$d/colors.toml\" 2>/dev/null);",
+        "palette=$(awk -F'\"' '$2 ~ /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/ {",
+        "key=$1; gsub(/[[:space:]=]/, \"\", key); colors[key]=$2",
+        "} END { split(\"red green yellow blue magenta cyan\", names, \" \");",
+        "for (i=1; i<=6; i++) { color=colors[\"color\" i]; if (color == \"\") color=colors[names[i]];",
+        "if (color != \"\") { printf \"%s%s\", sep, color; sep=\",\" } } print \"\" }' \"$d/colors.toml\" 2>/dev/null);",
         "printf '%s\\t%s\\t%s\\n' \"$author\" \"$repo\" \"$palette\""
       ].join(" "), "shibumi-theme-meta", directory]
       themeMetaProc.running = true

@@ -694,6 +694,16 @@ ShellRoot {
           if (quickAccessService.lastActionFailure
               !== "Could not apply broken-theme. theme denied by fixture")
             return root.fail("failed theme action was not reported")
+          if (root.phase === 8) {
+            quickAccessService.mode = "theme"
+            quickAccessService.filterText = ""
+            quickAccessService.entries = [{ directory: root.fixtureImageDir }]
+            root.phase++
+            return
+          }
+          if (!quickAccessService.selectedThemePalette.length) return
+          if (quickAccessService.selectedThemePalette.join(",") !== "#f38ba8,#a6e3a1,#f9e2af,#89b4fa,#f5c2e7,#94e2d5")
+            return root.fail("theme palette is not ANSI 1–6: " + quickAccessService.selectedThemePalette)
           stop()
           watchdog.stop()
           console.log("quick access plugin smoke passed")
