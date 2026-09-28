@@ -180,9 +180,9 @@ ShellRoot {
         cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
         root.check(!cpuPanel.gpuUsageView.visible, "zero-utilization GPU stayed visible")
         cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
-        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42, "GPU utilization did not restore its row")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.percent === 42, "GPU utilization did not restore its row")
         cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
-        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 0, "observed GPU row disappeared at idle")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.percent === 0, "observed GPU row disappeared at idle")
         items[0].close(); items[0].open(); root.panels[0] = items[0].panelItem
         root.check(root.panels[0] && root.panels[0].gpuUsageView.visible, "GPU activity latch lost on panel reopen")
         telemetry.system.parseLoad("invalid"); root.check(telemetry.system.loadAverage.length === 0, "invalid load accepted")

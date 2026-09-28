@@ -17,6 +17,7 @@ esac
 # State presentation library. Keep its existing copies drift-checked until its
 # scheduling contract can be separated without changing panel behavior.
 mappings=(
+  "shared/presentation/WaterRing.qml:hancore.shibumi.cpu/WaterRing.qml"
   "shared/presentation/ShibumiPanel.qml:widgets/ShibumiPanel.qml"
   "shared/presentation/ShibumiPanel.qml:hancore.shibumi.control-center/ShibumiPanel.qml"
   "shared/presentation/ShibumiPanel.qml:hancore.shibumi.update-center/ShibumiPanel.qml"

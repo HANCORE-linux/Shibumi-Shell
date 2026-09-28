@@ -574,9 +574,9 @@ directly and State precedes them in suite order.
 The ownership, lifetime, version and publication rules are normative in
 [`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
 This is not a QML sandbox or an authorization to expose private host services.
-`ShibumiPanel.qml` retains three UI-lifecycle timers and therefore remains the
-only canonical source under `shared/presentation/`; its existing plugin and
-`widgets/` copies stay deterministically vendored and drift-checked. Bar-host
+`ShibumiPanel.qml` and the open-panel-only `WaterRing.qml` retain UI-lifecycle
+clocks and therefore stay canonical under `shared/presentation/`, outside the
+passive State library. Their copies are deterministically vendored and drift-checked. Bar-host
 and feature-owner sources are maintained directly in their
 `hancore.shibumi.*` plugin roots. Panels may consume services; services do not
 import panels.

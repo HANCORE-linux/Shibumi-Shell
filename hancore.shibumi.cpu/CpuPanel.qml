@@ -119,101 +119,73 @@ ShibumiPanel {
 
       Row {
         width: parent.width
-        height: cpuRing.height
+        height: cpuDial.height
         spacing: Commons.Style.space(16)
 
-        CpuRing {
-          id: cpuRing
-          width: Commons.Style.space(80)
-          height: width
-          percent: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
-          foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-          accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          water: true
-          panelOpen: panel.open
+        Item {
+          id: cpuDial
+          width: Commons.Style.space(80); height: width
+          WaterRing {
+            id: gpuUsage
+            anchors.fill: parent
+            visible: panel.gpuTelemetry && panel.gpuTelemetry.available
+              && panel.ownerWidget.gpuActivitySeen === true
+            percent: panel.gpuTelemetry ? panel.gpuTelemetry.utilization : 0
+            readonly property color panelBackground: panel.surfaceOverrideEnabled ? panel.surfaceColorOverride
+              : panel.shibumiTokens ? panel.shibumiTokens.panelBackground : Commons.Color.popups.background
+            readonly property bool lightSurface: panelBackground.hslLightness > panel.controlForeground.hslLightness
+            readonly property color lightTone: lightSurface ? panelBackground : panel.controlForeground
+            foreground: panel.controlForeground
+            accent: Qt.tint(panel.controlAccent, Qt.rgba(lightTone.r, lightTone.g, lightTone.b, lightSurface ? 0.78 : 0.55))
+            waterOpacity: 0.65
+            holeRatio: 0.78; phaseOffset: Math.PI; progressArc: false
+            panelOpen: panel.open && visible
+          }
+          CpuRing {
+            id: cpuRing
+            anchors.centerIn: parent
+            width: gpuUsage.visible ? Commons.Style.space(48) : parent.width
+            height: width
+            percent: panel.systemTelemetry ? panel.systemTelemetry.cpuPercent : 0
+            foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+            accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+            water: true; panelOpen: panel.open; outlined: !gpuUsage.visible
+          }
+          Text {
+            visible: gpuUsage.visible
+            anchors.centerIn: parent; text: "CPU"
+            color: panel.controlForeground; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering
+          }
+          Text {
+            visible: gpuUsage.visible
+            anchors.horizontalCenter: parent.horizontalCenter; y: Commons.Style.space(3)
+            text: "GPU"; color: panel.controlMutedHigh
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering
+          }
         }
 
         Grid {
-          width: parent.width - cpuRing.width - parent.spacing
+          width: parent.width - cpuDial.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           columns: 2; columnSpacing: Commons.Style.space(8); rowSpacing: Commons.Style.space(8)
           Repeater {
-            model: ["Usage", "Load 1 min", "Load 5 min", "Load 15 min"]
+            model: gpuUsage.visible ? ["CPU", "GPU", "Load 1 min", "Load 5 / 15"]
+              : ["Usage", "Load 1 min", "Load 5 min", "Load 15 min"]
             CpuStatRow {
               required property int index; required property string modelData
               width: (parent.width - parent.columnSpacing) / 2
               label: modelData
               value: index === 0 ? cpuRing.percent + "%"
-                : panel.systemTelemetry && panel.systemTelemetry.loadAverage.length === 3 ? panel.systemTelemetry.loadAverage[index - 1].toFixed(2) : "—"
+                : gpuUsage.visible && index === 1 ? panel.gpuTelemetry.utilization + "%"
+                : panel.systemTelemetry && panel.systemTelemetry.loadAverage.length === 3
+                  ? gpuUsage.visible ? index === 2 ? panel.systemTelemetry.loadAverage[0].toFixed(2)
+                    : panel.systemTelemetry.loadAverage.slice(1).map(value => value.toFixed(2)).join(" / ")
+                  : panel.systemTelemetry.loadAverage[index - 1].toFixed(2) : "—"
               bar: panel.bar
             }
           }
-        }
-      }
-
-      UsageRow {
-        id: gpuUsage
-        width: parent.width
-        height: Commons.Style.space(80)
-        visible: !!panel.gpuTelemetry && panel.gpuTelemetry.available && panel.ownerWidget.gpuActivitySeen === true
-        label: "GPU"
-        value: panel.gpuTelemetry ? panel.gpuTelemetry.utilization : 0
-        bar: panel.bar
-      }
-
-      Row {
-        id: temperatureRow
-        parent: gpuUsage
-        x: 0; y: Commons.Style.space(34)
-        width: parent.width - 2 * x
-        visible: panel.gpuTelemetry && panel.gpuTelemetry.available
-          && panel.gpuTelemetry.temperatureC > 0
-
-        Text {
-          width: parent.width * 0.4
-          text: "Temperature"
-          color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
-            panel.bar.foreground.b, 0.65) : Commons.Color.foreground
-          font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 11
-          renderType: Text.NativeRendering
-        }
-        Text {
-          width: parent.width * 0.6
-          text: panel.gpuTelemetry ? panel.gpuTelemetry.temperatureC + "°C" : ""
-          color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-          font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 11
-          renderType: Text.NativeRendering
-        }
-      }
-
-      Row {
-        parent: gpuUsage
-        x: 0; y: temperatureRow.visible ? temperatureRow.y + temperatureRow.height + Commons.Style.space(4) : Commons.Style.space(34)
-        width: parent.width - 2 * x
-        visible: panel.gpuTelemetry && panel.gpuTelemetry.available
-          && panel.gpuTelemetry.memoryTotalMiB > 0
-
-        Text {
-          width: parent.width * 0.4
-          text: "VRAM"
-          color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
-            panel.bar.foreground.b, 0.65) : Commons.Color.foreground
-          font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 11
-          renderType: Text.NativeRendering
-        }
-        Text {
-          width: parent.width * 0.6
-          elide: Text.ElideRight
-          text: panel.gpuTelemetry
-            ? panel.gpuTelemetry.memoryUsedMiB + " / " + panel.gpuTelemetry.memoryTotalMiB + " MiB"
-            : ""
-          color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-          font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 11
-          renderType: Text.NativeRendering
         }
       }
 
@@ -280,55 +252,4 @@ ShibumiPanel {
     }
   }
 
-  component UsageRow: Item {
-    id: usageRow
-
-    required property string label
-    required property int value
-    required property var bar
-    height: Commons.Style.space(90)
-
-    Text {
-      id: usageLabel
-      anchors.left: parent.left
-      anchors.top: parent.top
-      anchors.margins: 0
-      text: parent.label
-      color: parent.bar ? Qt.rgba(parent.bar.foreground.r, parent.bar.foreground.g,
-        parent.bar.foreground.b, 0.65) : Commons.Color.foreground
-      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
-      font.letterSpacing: 1
-      renderType: Text.NativeRendering
-    }
-
-    Text {
-      id: usageValue
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.margins: 0
-      text: parent.value + "%"
-      color: parent.bar ? parent.bar.urgent : Commons.Color.accent
-      font.family: parent.bar ? parent.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: 11
-      font.weight: Font.Medium
-      renderType: Text.NativeRendering
-    }
-
-    Rectangle {
-      x: 0; y: Commons.Style.space(22)
-      width: parent.width
-      height: Commons.Style.space(3)
-      radius: height / 2
-      color: panel.controlActiveFillColor
-
-      Rectangle {
-        width: parent.width * Math.max(0, Math.min(100, usageRow.value)) / 100
-        height: parent.height
-        radius: height / 2
-        color: usageRow.bar ? usageRow.bar.urgent : Commons.Color.accent
-        Behavior on width { NumberAnimation { duration: 300 } }
-      }
-    }
-  }
 }
