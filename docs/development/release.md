@@ -19,9 +19,8 @@ tag must agree.
 6. Confirm the repository visibility and remaining public-release blockers.
 7. Keep AUR publication behind the source, package, and clean-build gates in
    [packaging and AUR strategy](packaging.md).
-8. On host baseline change (`SHIBUMI_*_OMARCHY_PATH`, `quattro-compatibility.md` pins),
-   lift `predecessor_revision` in `tests/shibumi-suite-quattro-runtime.sh` to the last
-   tag validated on that baseline and run the gate locally before tagging.
+8. On host baseline change, rerun every retained update arm before tagging;
+   do not silently drop an arm or choose an older rolling predecessor.
 
 ## Version pin categories
 
@@ -43,6 +42,22 @@ tag must agree.
   pins or validate payload bytes. Recompute the final candidate payload and
   review exact admission identities during the authorized version/pin step;
   modified product bytes with old pins must still fail identity checks.
+
+## Rolling predecessor selection and freeze
+
+Before candidate freeze, review the repository's actual GitHub releases and
+select the most recently published non-draft release by `published_at`, including
+prereleases. Do not use `/releases/latest`, tag order, or the highest admission ID;
+a tag without a published release is not eligible.
+Record version, tag, peeled commit, payload digest, release ID/URL, publication
+time, and prerelease status in `tests/fixtures/release-predecessor.json`. Verify
+the archived plugin bytes and admit that exact identity before freezing the file.
+Recheck publication and remote tag identity before release evidence; a changed
+selection requires review and another full runtime gate, not an in-run fetch.
+The runtime gate consumes only this offline reference and checks the local tag
+and admission pin. Its candidate is committed `HEAD`, never dirty plugin bytes.
+The rolling checkout arm replaces the former latest fixed arm; keep Beta 15 and
+15.2, the historical package arm, and the fresh arm: exactly 32 shell generations.
 
 ## Prepare the package checksum
 

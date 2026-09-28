@@ -98,7 +98,7 @@ package_predecessor_root="$tmpdir/predecessor-package"
 package_candidate_root="$tmpdir/candidate-package"
 source_predecessor_root="$tmpdir/predecessor-source"
 source_beta15_root="$tmpdir/beta15-source"
-source_beta153_root="$tmpdir/beta153-source"
+source_rolling_root="$tmpdir/rolling-source"
 source_candidate_root="$tmpdir/candidate-source"
 source_root=""
 stub_bin="$tmpdir/bin"
@@ -112,8 +112,30 @@ package_candidate_revision=7a6c853b1947d303bad9a5b640c224c01b669106
 source_predecessor_revision=c45af77c8333b691ac36522247b6e5b5481a3666
 # Also cover the original documented update path that beta.15.2 rejected.
 source_beta15_revision=4e91c26ebf4da07476d4be6176f29d7662fed9c1
-# Exercise the documented beta.15.3 tag-checkout update path.
-source_beta153_revision=5b1d21f0cea73bb9e7997278a828b3ef295e6c94
+# Frozen offline publication reference; selecting the release is a review step.
+release_reference="$repo_root/tests/fixtures/release-predecessor.json"
+jq -e 'type == "object" and keys == ["payloadDigest", "prerelease", "publishedAt",
+    "releaseId", "releaseUrl", "revision", "schemaVersion", "tag", "version"]
+  and .schemaVersion == 1 and (.version | type == "string" and length > 0)
+  and .tag == ("v" + .version) and (.revision | test("^[0-9a-f]{40}$"))
+  and (.payloadDigest | test("^[0-9a-f]{64}$"))
+  and (.releaseId | type == "number" and . > 0 and . == floor)
+  and (.prerelease | type == "boolean")
+  and (.publishedAt | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$"))
+  and .releaseUrl == ("https://github.com/HANCORE-linux/Shibumi-Shell/releases/tag/" + .tag)
+' "$release_reference" >/dev/null || fail 'invalid offline release predecessor'
+source_rolling_version=$(jq -r '.version' "$release_reference")
+source_rolling_tag=$(jq -r '.tag' "$release_reference")
+source_rolling_revision=$(jq -r '.revision' "$release_reference")
+[[ $(git --no-replace-objects -C "$repo_root" rev-parse \
+    "refs/tags/$source_rolling_tag^{commit}") == "$source_rolling_revision" ]] \
+  || fail 'rolling release tag does not match the frozen revision'
+jq -e --slurpfile release "$release_reference" '
+  any(.states[]; .suiteVersion == $release[0].version
+    and .payloadDigest == $release[0].payloadDigest
+    and (.sourceRevisions | index($release[0].revision)) != null)
+' "$repo_root/contracts/lifecycle-predecessors-v1.json" >/dev/null \
+  || fail 'rolling predecessor is not an exact admitted release identity'
 # Only committed payload is tested; uncommitted plugin changes are invisible to this gate.
 candidate_revision=$(git --no-replace-objects -C "$repo_root" rev-parse HEAD)
 [[ $candidate_revision =~ ^[0-9a-f]{40}$ ]] \
@@ -122,13 +144,13 @@ candidate_revision=$(git --no-replace-objects -C "$repo_root" rev-parse HEAD)
   || fail 'package predecessor and candidate revisions must differ'
 [[ $source_predecessor_revision != "$candidate_revision" \
     && $source_beta15_revision != "$candidate_revision" \
-    && $source_beta153_revision != "$candidate_revision" ]] \
+    && $source_rolling_revision != "$candidate_revision" ]] \
   || fail 'source predecessors and candidate revisions must differ'
 
 for source_spec in \
     "$source_predecessor_root:$source_predecessor_revision" \
     "$source_beta15_root:$source_beta15_revision" \
-    "$source_beta153_root:$source_beta153_revision" \
+    "$source_rolling_root:$source_rolling_revision" \
     "$source_candidate_root:$candidate_revision"; do
   checkout_root=${source_spec%%:*}
   checkout_revision=${source_spec#*:}
@@ -811,9 +833,9 @@ run_update_arm "$source_beta15_root" "$source_candidate_root" checkout \
 # Arm 4: beta.15.2 source checkout update
 run_update_arm "$source_predecessor_root" "$source_candidate_root" checkout \
   source-beta152 0.1.1-beta.15.2 "$source_predecessor_revision"
-# Arm 5: beta.15.3 source checkout update
-run_update_arm "$source_beta153_root" "$source_candidate_root" checkout \
-  source-beta153 0.1.1-beta.15.3 "$source_beta153_revision"
+# Arm 5: last published release (including prereleases), frozen before validation.
+run_update_arm "$source_rolling_root" "$source_candidate_root" checkout \
+  source-rolling "$source_rolling_version" "$source_rolling_revision"
 [[ $(service_generation_count) -eq 32 ]] \
   || fail 'runtime arms did not use the exact 32-shell generation budget'
 
@@ -852,7 +874,7 @@ printf 'Fresh arm preflight/verifyPayload: %s/%s deactivated=%s\n' \
   "$fresh_preflight" "$fresh_reply" "$fresh_deactivated_reply"
 printf 'Fresh arm timing/generations: %ss/%s\n' \
   "$fresh_elapsed" "$fresh_generations"
-for arm in source-beta15 source-beta152 source-beta153; do
+for arm in source-beta15 source-beta152 source-rolling; do
   printf '%s update arm verifyPayload: predecessor=%s candidate=%s deactivated=%s\n' \
     "$arm" "${arm_predecessor_reply[$arm]}" "${arm_candidate_reply[$arm]}" \
     "${arm_deactivated_reply[$arm]}"
@@ -863,7 +885,7 @@ printf 'Cleanup evidence: normal=%s; deliberate-probe=%s; fixture-services=inact
   "$normal_cleanup_records" "$probe_cleanup_record"
 printf 'Package revisions: predecessor=%s candidate=%s\n' \
   "$package_predecessor_revision" "$package_candidate_revision"
-printf 'Source revisions: beta.15=%s beta.15.2=%s beta.15.3=%s candidate=%s; total elapsed: %ss\n' \
+printf 'Source revisions: beta.15=%s beta.15.2=%s rolling=%s (%s) candidate=%s; total elapsed: %ss\n' \
   "$source_beta15_revision" "$source_predecessor_revision" \
-  "$source_beta153_revision" "$candidate_revision" "$total_elapsed"
+  "$source_rolling_revision" "$source_rolling_version" "$candidate_revision" "$total_elapsed"
 printf 'Shibumi suite Quattro runtime passed\n'
