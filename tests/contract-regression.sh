@@ -1142,7 +1142,6 @@ for pair in \
   'hancore.shibumi.brightness/BrightnessPanel.qml:panel.controlActiveFillColor' \
   'hancore.shibumi.brightness/BrightnessPanel.qml:panel.controlBorderColor' \
   'hancore.shibumi.network/NetworkPanel.qml:panel.controlBorderColor' \
-  'hancore.shibumi.power-profile/PowerProfilePanel.qml:panel.controlBorderColor' \
   'hancore.shibumi.workspaces/WorkspacePanelContent.qml:root.controller.controlFillColor'; do
   file=${pair%%:*}
   token=${pair#*:}
