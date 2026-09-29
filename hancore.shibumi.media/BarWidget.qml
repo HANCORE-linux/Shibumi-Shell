@@ -382,8 +382,11 @@ Ui.Panel {
     implicitHeight: mediaSurface.height
     opacity: enabled ? 1 : 0.28
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
       anchors.centerIn: parent
+      optical: true
+      nativeLineBox: true
+      paintPixelSize: Math.round(Commons.Style.font.icon * (parent.icon === "pause" ? 19 : 21) / 13)
       text: parent.icon
       color: parent.accent ? root.widgetInk
         : Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.72)

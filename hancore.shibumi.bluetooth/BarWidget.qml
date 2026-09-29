@@ -165,7 +165,9 @@ Ui.Panel {
   Component {
     id: fullContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
+      opticalBias: root.contentHorizontalOffset
       spacing: root.tokens.contentGap
 
       Text {
@@ -212,7 +214,9 @@ Ui.Panel {
   Component {
     id: compactContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
+      opticalBias: root.contentHorizontalOffset
       spacing: root.tokens.compactGap
 
       Item {

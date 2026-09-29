@@ -389,14 +389,16 @@ Ui.Panel {
     Row {
       spacing: 5
 
-      Text {
+      Presentation.BarGlyph {
+        centerInkY: false
+        referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         text: "NET"
         color: root.mode === "none"
           ? Qt.rgba(root.v1Seal.r, root.v1Seal.g, root.v1Seal.b, 0.7)
           : Qt.rgba(root.v1Ink.r, root.v1Ink.g, root.v1Ink.b, 0.6)
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: 12
+        font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 0.5
         renderType: Text.NativeRendering
       }
@@ -509,13 +511,15 @@ Ui.Panel {
         font.pixelSize: 14
       }
 
-      Text {
+      Presentation.BarGlyph {
+        centerInkY: false
+        referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         visible: root.mode === "wifi"
         text: root.label
         color: root.v1Seal
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: 12
+        font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 1
         renderType: Text.NativeRendering
       }

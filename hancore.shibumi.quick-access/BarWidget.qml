@@ -188,10 +188,12 @@ Item {
     implicitWidth: Commons.Style.space(22)
     implicitHeight: root.tokens ? root.tokens.slotHeight : Commons.Style.space(28)
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
+      compactInk: true
       anchors.centerIn: parent
       visible: !action.nerdGlyph
       text: action.icon
+      optical: !root.bar || !root.bar.vertical
       color: action.iconColor
       font.pixelSize: 14
       font.weight: Font.Medium
@@ -199,14 +201,15 @@ Item {
       Behavior on color { ColorAnimation { duration: 150 } }
     }
 
-    Text {
+    Presentation.BarGlyph {
+      compactInk: true
       anchors.centerIn: parent
       visible: action.nerdGlyph
+      optical: !root.bar || !root.bar.vertical
       text: action.icon
       color: action.iconColor
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: Commons.Style.space(14)
-      renderType: Text.QtRendering
       Behavior on color { ColorAnimation { duration: 150 } }
     }
 

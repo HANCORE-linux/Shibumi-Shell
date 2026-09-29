@@ -128,8 +128,10 @@ Ui.Panel {
         (parent.height - root.tokens.pillHeight) / 2)
     }
 
-    Row {
+    Presentation.InkRow {
       id: content
+      boundLastAdvance: true
+      optical: !root.bar || !root.bar.vertical
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.compactIconOpticalOffset
       readonly property real visibleContentWidth:
@@ -147,8 +149,12 @@ Ui.Panel {
         height: root.iconSlotSize
         anchors.verticalCenter: parent.verticalCenter
 
-        Text {
+        readonly property real inkLeft: storageIcon.x + storageIcon.inkLeft
+        readonly property real inkRight: storageIcon.x + storageIcon.inkRight
+
+        Presentation.BarGlyph {
           id: storageIcon
+          optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           text: "󰋊"
           color: root.widgetInk

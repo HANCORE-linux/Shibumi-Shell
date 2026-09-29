@@ -61,8 +61,11 @@ Item {
   Component.onCompleted: syncRegistration()
   Component.onDestruction: if (bar && registered) bar.unregisterClickTarget(root)
 
-  Presentation.IconText {
+  Presentation.BarGlyph {
     id: bellIcon
+    nativeLineBox: true
+    paintPixelSize: Math.round(Commons.Style.font.icon * 12 / 13)
+    optical: !root.bar || !root.bar.vertical
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.iconHorizontalOffset
     text: "\uE7F4"

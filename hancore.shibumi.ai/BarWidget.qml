@@ -138,8 +138,10 @@ Ui.Panel {
       }
     }
 
-    Row {
+    Presentation.InkRow {
       id: contentRow
+      boundLastAdvance: root.tokens.v2Shell === true
+      optical: !root.bar || !root.bar.vertical
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.providerContentHorizontalOffset
       spacing: root.tokens ? root.tokens.compactGap : Commons.Style.space(5)
@@ -150,6 +152,8 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.providerIconSlotWidth
         height: root.providerIconSlotHeight
+        readonly property real inkLeft: (width - root.providerGlyphWidth) / 2
+        readonly property real inkRight: inkLeft + root.providerGlyphWidth
 
         Item {
           id: providerGlyph

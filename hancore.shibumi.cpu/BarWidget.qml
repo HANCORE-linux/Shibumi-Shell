@@ -171,11 +171,14 @@ Ui.Panel {
         accent: root.widgetInk
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         visible: root.displayMode === "icon"
           || (root.tokens.v2Shell === true && root.displayMode === "full")
         anchors.verticalCenter: parent.verticalCenter
         text: "planner_review"
+        optical: true
+        nativeLineBox: true
+        paintPixelSize: Math.round(root.tokens.iconSize * 16 / 14)
         color: root.widgetInk
         font.pixelSize: root.tokens.iconSize
         font.weight: Font.DemiBold

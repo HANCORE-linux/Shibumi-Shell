@@ -139,8 +139,9 @@ Ui.Panel {
         (parent.height - root.tokens.pillHeight) / 2)
     }
 
-    Row {
+    Presentation.InkRow {
       id: content
+      optical: !root.bar || !root.bar.vertical
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.contentHorizontalOffset
       spacing: root.tokens.compactGap
@@ -151,8 +152,15 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.iconSlotSize
         height: root.iconSlotSize
+        readonly property real inkLeft: temperatureIcon.x + temperatureIcon.inkLeft
+        readonly property real inkRight: temperatureIcon.x + temperatureIcon.inkRight
 
-        Text {
+        Presentation.BarGlyph {
+          id: temperatureIcon
+          paintPixelSize: Math.round(root.tokens.iconSize * 9 / 13)
+          inkCenterY: surface.height / 2 - content.y
+            - temperatureIconSlot.y - temperatureIcon.y
+          optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           anchors.horizontalCenterOffset: root.iconGlyphHorizontalOffset
           text: ""

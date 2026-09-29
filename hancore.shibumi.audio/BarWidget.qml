@@ -384,7 +384,8 @@ Ui.Panel {
   Component {
     id: compactHorizontalContent
 
-    Row {
+    Presentation.InkRow {
+      optical: root.tokens.v2Shell === true
       spacing: root.tokens.compactGap
 
       Presentation.IconText {
