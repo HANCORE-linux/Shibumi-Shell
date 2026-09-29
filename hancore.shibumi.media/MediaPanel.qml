@@ -686,7 +686,7 @@ ShibumiPanel {
     property string tooltipText: ""
     signal clicked()
     readonly property bool hot: enabled && (buttonMouse.containsMouse || panel.focusSection === "controls" && panel.cursorIndex === controlIndex)
-    width: Commons.Style.space(36); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
+    width: Commons.Style.space(24); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
     color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
     border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
     readonly property bool transport: action === "previous" || action === "playPause" || action === "next"
