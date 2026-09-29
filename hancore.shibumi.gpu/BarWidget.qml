@@ -139,8 +139,10 @@ Ui.Panel {
         width: Commons.Style.space(20)
         height: Commons.Style.space(14)
 
-        GpuCardIcon {
+        Presentation.BarGlyph {
           anchors.fill: parent
+          text: "󰢮"
+          font.family: Commons.Style.font.family
           color: root.widgetInk
         }
       }

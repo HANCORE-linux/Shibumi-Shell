@@ -291,7 +291,7 @@ class PresentationImports(unittest.TestCase):
             if PRESENTATION_LINE.strip() in source.read_text(encoding="utf-8"):
                 actual.add(source.relative_to(ROOT).as_posix())
         self.assertEqual(actual, PRESENTATION_IMPORTERS)
-        self.assertEqual(len(actual), 61)
+        self.assertEqual(len(actual), 62)
 
         contract = json.loads(
             (ROOT / "contracts/plugin-suite-v1.json").read_text())

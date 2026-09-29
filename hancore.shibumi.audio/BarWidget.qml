@@ -353,7 +353,9 @@ Ui.Panel {
         }
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        nativeText: outputIcon(root.displayedOutputVolume, root.muted, root.audioReady)
+        optical: !root.bar || !root.bar.vertical
         visible: root.displayMode === "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: "graphic_eq"
@@ -388,7 +390,9 @@ Ui.Panel {
       optical: root.tokens.v2Shell === true
       spacing: root.tokens.compactGap
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        nativeText: outputIcon(root.displayedOutputVolume, root.muted, root.audioReady)
+        optical: !root.bar || !root.bar.vertical
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
         text: "graphic_eq"
@@ -422,7 +426,8 @@ Ui.Panel {
     Column {
       spacing: Commons.Style.space(2)
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        nativeText: outputIcon(root.displayedOutputVolume, root.muted, root.audioReady)
         anchors.horizontalCenter: parent.horizontalCenter
         text: "graphic_eq"
         color: root.widgetInk

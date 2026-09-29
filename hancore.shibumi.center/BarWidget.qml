@@ -252,7 +252,7 @@ Ui.Panel {
       contentColor: root.widgetInk
     }
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
       visible: root.displayMode === "icon"
       anchors.verticalCenter: parent.verticalCenter
       text: "schedule"

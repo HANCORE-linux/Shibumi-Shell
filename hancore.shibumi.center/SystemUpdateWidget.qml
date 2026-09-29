@@ -57,7 +57,7 @@ Ui.BarWidget {
     return false
   }
 
-  Presentation.IconText {
+  Presentation.BarGlyph {
     id: updateIcon
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.opticalCenterOffset

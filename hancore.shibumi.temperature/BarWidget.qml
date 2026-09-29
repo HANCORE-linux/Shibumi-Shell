@@ -157,7 +157,6 @@ Ui.Panel {
 
         Presentation.BarGlyph {
           id: temperatureIcon
-          paintPixelSize: Math.round(root.tokens.iconSize * 9 / 13)
           inkCenterY: surface.height / 2 - content.y
             - temperatureIconSlot.y - temperatureIcon.y
           optical: !root.bar || !root.bar.vertical

@@ -167,8 +167,10 @@ Ui.Panel {
             anchors.fill: parent
             visible: root.providerId === "claude"
 
-            Text {
+            Presentation.BarGlyph {
               id: claudeGlyphBase
+              // Keep the original advance/line box for both aligned layers.
+              optical: !root.bar || !root.bar.vertical
               anchors.centerIn: parent
               text: "\udb85\ude7a"
               color: Qt.rgba(root.baseIconColor.r,
@@ -189,8 +191,9 @@ Ui.Panel {
               clip: true
               Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
 
-              Text {
+              Presentation.BarGlyph {
                 id: claudeUsageGlyph
+                optical: !root.bar || !root.bar.vertical
                 x: claudeGlyphBase.x
                 y: claudeGlyphBase.y - claudeUsageClip.y
                 width: claudeGlyphBase.width

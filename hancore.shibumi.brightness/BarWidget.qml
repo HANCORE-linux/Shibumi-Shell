@@ -290,32 +290,12 @@ Ui.Panel {
     width: Commons.Style.space(13)
     height: Commons.Style.space(13)
 
-    Rectangle {
-      anchors.centerIn: parent
-      width: Commons.Style.space(6.5)
-      height: width
-      radius: width / 2
+    Presentation.BarGlyph {
+      anchors.fill: parent
+      text: "󰖙"
+      font.family: Commons.Style.font.family
       color: sun.color
       Behavior on color { ColorAnimation { duration: 200 } }
-    }
-
-    Repeater {
-      model: 8
-      delegate: Item {
-        required property int index
-        anchors.fill: parent
-        rotation: index * 45
-
-        Rectangle {
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          width: Commons.Style.space(1.5)
-          height: Commons.Style.space(2 + 1.4 * sun.ratio)
-          radius: width / 2
-          color: sun.color
-          opacity: 0.35 + 0.65 * sun.ratio
-        }
-      }
     }
   }
 }

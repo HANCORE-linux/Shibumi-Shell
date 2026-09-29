@@ -175,7 +175,7 @@ Ui.Panel {
       }
     }
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
       id: idleIcon
       anchors.centerIn: parent
       visible: !root.active
@@ -321,7 +321,7 @@ Ui.Panel {
       }
     }
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
       id: activeIcon
       visible: root.active && root.iconMode
         && (!root.bar || !root.bar.vertical)
@@ -354,7 +354,7 @@ Ui.Panel {
       anchors.centerIn: parent
       spacing: Commons.Style.space(2)
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.playing ? "pause" : "play_arrow"
         color: root.widgetInk
@@ -385,8 +385,6 @@ Ui.Panel {
     Presentation.BarGlyph {
       anchors.centerIn: parent
       optical: true
-      nativeLineBox: true
-      paintPixelSize: Math.round(Commons.Style.font.icon * (parent.icon === "pause" ? 19 : 21) / 13)
       text: parent.icon
       color: parent.accent ? root.widgetInk
         : Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.72)

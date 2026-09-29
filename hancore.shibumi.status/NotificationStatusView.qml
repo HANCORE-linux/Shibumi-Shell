@@ -63,8 +63,6 @@ Item {
 
   Presentation.BarGlyph {
     id: bellIcon
-    nativeLineBox: true
-    paintPixelSize: Math.round(Commons.Style.font.icon * 12 / 13)
     optical: !root.bar || !root.bar.vertical
     anchors.centerIn: parent
     anchors.horizontalCenterOffset: root.iconHorizontalOffset
@@ -81,16 +79,18 @@ Item {
   Rectangle {
     id: notificationBadge
     visible: root.notificationCount > 0 || !root.countsKnown
-    width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
+    width: Math.floor(Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6))
     height: Commons.Style.space(12)
     radius: height / 2
     color: root.contentColor
     border.width: 0
     border.color: "transparent"
     z: 10
-    anchors.verticalCenter: bellIcon.verticalCenter
+    x: bellIcon.x + bellIcon.badgeLeft
+    y: bellIcon.badgeY(root, notificationBadge)
+    anchors.verticalCenter: !bellIcon.optical ? bellIcon.verticalCenter : undefined
     anchors.verticalCenterOffset: -6
-    anchors.horizontalCenter: bellIcon.horizontalCenter
+    anchors.horizontalCenter: !bellIcon.optical ? bellIcon.horizontalCenter : undefined
     anchors.horizontalCenterOffset: 7
 
     Text {

@@ -259,109 +259,17 @@ Ui.Panel {
       NumberAnimation { from: 0.35; to: 1; duration: 1100; easing.type: Easing.InOutSine }
     }
 
-    Item {
-      id: batteryVisual
-      anchors.centerIn: parent
-      width: Commons.Style.space(19)
-      height: Commons.Style.space(10)
+    Presentation.BarGlyph {
+      anchors.fill: parent
+      nativeText: batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
+      color: gauge.color
+    }
 
-      Rectangle {
-        id: batteryBody
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        width: Commons.Style.space(16)
-        height: Commons.Style.space(9)
-        radius: Commons.Style.space(2.5)
-        color: "transparent"
-        border.width: Commons.Style.space(1.2)
-        border.color: gauge.color
-
-        Rectangle {
-          visible: gauge.charging
-          anchors.fill: parent
-          anchors.margins: parent.border.width + 1
-          radius: Commons.Style.space(1.2)
-          color: Qt.rgba(gauge.color.r, gauge.color.g, gauge.color.b, 0.28)
-        }
-
-        Rectangle {
-          id: batteryFill
-          anchors.left: parent.left
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          anchors.margins: parent.border.width + 1
-          width: Math.max(gauge.ratio > 0 ? Commons.Style.space(1.5) : 0,
-            (parent.width - 2 * anchors.margins) * Math.max(0, Math.min(1, gauge.ratio)))
-          radius: Commons.Style.space(1.2)
-          clip: true
-          color: gauge.color
-          Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-
-          Rectangle {
-            visible: gauge.charging && !gauge.full
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: Commons.Style.space(6)
-            radius: parent.radius
-            color: gauge.shimmerColor
-            property real pos: 0
-            x: (parent.width + width) * pos - width
-
-            NumberAnimation on pos {
-              running: gauge.visible && gauge.charging && !gauge.full
-              from: 0
-              to: 1
-              duration: 1100
-              easing.type: Easing.InOutSine
-            }
-          }
-        }
-
-        Canvas {
-          id: chargingBolt
-          visible: gauge.charging || gauge.full
-          x: Math.round((parent.width - width) / 2)
-          y: 0
-          width: 7
-          height: Math.floor(parent.height)
-          antialiasing: false
-          smooth: false
-          readonly property color ink: root.bar ? root.bar.foreground : Commons.Color.foreground
-          readonly property color outline: root.bar ? root.bar.background : Commons.Color.background
-          onInkChanged: requestPaint()
-          onOutlineChanged: requestPaint()
-          onVisibleChanged: if (visible) requestPaint()
-
-          onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            // Five columns, six rows: a stepped bolt, not an antialiased polygon.
-            const rows = [8, 12, 30, 12, 4, 2], pixels = []
-            const inset = batteryBody.border.width, inside = height - 2 * inset
-            for (let y = 0; y < inside; y++)
-              for (let x = 0; x < 5; x++)
-                if (rows[Math.floor(y * rows.length / inside)] & (1 << x)) pixels.push([x + 1, y + inset])
-            ctx.fillStyle = Qt.rgba(chargingBolt.outline.r, chargingBolt.outline.g, chargingBolt.outline.b, 1)
-            for (const p of pixels)
-              for (let dy = -1; dy <= 1; dy++)
-                for (let dx = -1; dx <= 1; dx++) ctx.fillRect(p[0] + dx, p[1] + dy, 1, 1)
-            ctx.fillStyle = chargingBolt.ink
-            for (const p of pixels) ctx.fillRect(p[0], p[1], 1, 1)
-          }
-
-          Component.onCompleted: requestPaint()
-        }
-      }
-
-      Rectangle {
-        // Keep a whole unpainted pixel between body and terminal, even at 100%.
-        x: Math.ceil(batteryBody.width) + 1
-        anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(1, parent.width - x)
-        height: Commons.Style.space(3)
-        radius: 0
-        color: gauge.color
-      }
+    Presentation.BarGlyph {
+      anchors.fill: parent
+      visible: gauge.charging && !gauge.full
+      nativeText: "\uF0E7"
+      color: root.bar ? root.bar.foreground : Commons.Color.foreground
     }
   }
 }

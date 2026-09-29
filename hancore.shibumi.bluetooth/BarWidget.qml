@@ -188,7 +188,8 @@ Ui.Panel {
         width: root.iconSlotSize
         height: root.iconSlotSize
 
-        Presentation.IconText {
+        Presentation.BarGlyph {
+          optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           text: root.stateIcon
           color: root.widgetInk
@@ -225,7 +226,8 @@ Ui.Panel {
         width: root.iconSlotSize
         height: root.iconSlotSize
 
-        Presentation.IconText {
+        Presentation.BarGlyph {
+          optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           text: root.stateIcon
           color: root.widgetInk

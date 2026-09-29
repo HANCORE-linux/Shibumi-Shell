@@ -134,17 +134,17 @@ rg -Fq 'onClicked: function(mouse) { root.triggerPress(mouse.button) }' \
   || fail "G1 bypasses its shared host click path"
 [[ -f $control_dir/assets/shibumi-icon-hikiryo.svg ]] \
   || fail "stock Omarchy host icon is missing"
-rg -Fq 'source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")' \
+rg -Fq 'text: !root.stockOmarchyHost && root.launcherConfig.icon !== "shibumi"' \
   "$control_dir/BarWidget.qml" \
-  || fail "stock Omarchy host does not render the Hikiryō icon"
+  || fail "stock Omarchy host icon bypasses the native bar glyph"
 rg -Fq 'width: root.stockOmarchyHost ? 18 : 16' \
   "$control_dir/BarWidget.qml" \
   || fail "stock Omarchy host icon is not pixel-centered in its even slot"
 for hikiryo_tone_contract in \
-  'root.launcherConfig.icon === "shibumi" && !root.v1CustomFill' \
-  'id: v1TintedLauncherIcon' \
-  '&& root.v1CustomFill' \
-  'tint: root.widgetInk'; do
+  '&& !stockOmarchyHost && launcherConfig.icon === "shibumi" && v1CustomFill' \
+  'font.family: Commons.Style.font.family' \
+  'Presentation.BarGlyph {' \
+  'color: root.widgetInk'; do
   rg -Fq "$hikiryo_tone_contract" "$control_dir/BarWidget.qml" \
     || fail "Hikiryō V1 tone contract drifted: $hikiryo_tone_contract"
 done

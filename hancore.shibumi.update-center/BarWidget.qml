@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.Panel {
   id: root
@@ -157,8 +158,9 @@ Ui.Panel {
       width: Commons.Style.space(20)
       height: Commons.Style.space(20)
 
-      Text {
+      Presentation.BarGlyph {
         id: updateIcon
+        optical: !root.bar || !root.bar.vertical
         anchors.centerIn: parent
         text: root.hasMaterialSymbols ? "\uF569" : "\uf466"
         color: root.contentColor
@@ -174,12 +176,14 @@ Ui.Panel {
       Rectangle {
         id: updateBadge
         visible: root.updateCount > 0
-        anchors.verticalCenter: updateIcon.verticalCenter
+        x: updateIcon.x + updateIcon.badgeLeft
+        y: updateIcon.badgeY(root, updateBadge)
+        anchors.verticalCenter: !updateIcon.optical ? updateIcon.verticalCenter : undefined
         anchors.verticalCenterOffset: -Commons.Style.space(6)
-        anchors.horizontalCenter: updateIcon.horizontalCenter
+        anchors.horizontalCenter: !updateIcon.optical ? updateIcon.horizontalCenter : undefined
         anchors.horizontalCenterOffset: Commons.Style.space(7)
-        width: Math.max(Commons.Style.space(12),
-          badgeText.implicitWidth + Commons.Style.space(6))
+        width: Math.floor(Math.max(Commons.Style.space(12),
+          badgeText.implicitWidth + Commons.Style.space(6)))
         height: Commons.Style.space(12)
         radius: height / 2
         color: root.contentColor

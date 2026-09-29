@@ -45,6 +45,7 @@ EOF
   cp -a -- "$repo_root/hancore.shibumi.quick-access" \
     "$fixture_root/quickaccess"
   cp -a -- "$omarchy_path/shell/Commons" "$fixture_root/Commons"
+  cp -a -- "$omarchy_path/shell/Ui" "$fixture_root/Ui"
   install -m 0644 "$repo_root/hancore.shibumi.bar/core/WidgetSlot.qml" \
     "$fixture_root/barcore/WidgetSlot.qml"
   # The fixture exercises the production overlay body without creating a real

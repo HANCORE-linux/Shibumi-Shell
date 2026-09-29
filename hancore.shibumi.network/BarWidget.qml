@@ -390,6 +390,7 @@ Ui.Panel {
       spacing: 5
 
       Presentation.BarGlyph {
+        symbol: false
         centerInkY: false
         referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
@@ -503,7 +504,9 @@ Ui.Panel {
         }
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -512,6 +515,7 @@ Ui.Panel {
       }
 
       Presentation.BarGlyph {
+        symbol: false
         centerInkY: false
         referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
@@ -532,7 +536,9 @@ Ui.Panel {
     Row {
       spacing: 4
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -541,7 +547,9 @@ Ui.Panel {
         Behavior on color { ColorAnimation { duration: 160 } }
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode !== "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -679,7 +687,9 @@ Ui.Panel {
   Component {
     id: compactContent
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
+      optical: !root.bar || !root.bar.vertical
+      nativeText: connectionIcon(root.mode, root.signal)
       text: root.stateGlyph
       color: root.v2Presentation ? (root.mode === "none"
           ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
@@ -710,7 +720,8 @@ Ui.Panel {
   Component {
     id: verticalContent
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
+      nativeText: connectionIcon(root.mode, root.signal)
       text: root.stateGlyph
       color: root.widgetInk
       opacity: root.mode === "none" ? 0.58 : 1

@@ -752,7 +752,7 @@ rg -Fq 'readonly property int iconSlotSize: 14' \
 if rg -Fq 'text: "HDD "' hancore.shibumi.storage/BarWidget.qml; then
   fail "storage bar restored the obsolete HDD prefix"
 fi
-rg -Fq 'GpuCardIcon {' \
+rg -Fq 'Presentation.BarGlyph {' \
   hancore.shibumi.gpu/BarWidget.qml \
   || fail "GPU bar icon is not rendered by its native QML component"
 [[ -f hancore.shibumi.gpu/GpuCardIcon.qml ]] \

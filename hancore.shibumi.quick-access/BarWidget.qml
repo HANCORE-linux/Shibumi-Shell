@@ -189,7 +189,6 @@ Item {
     implicitHeight: root.tokens ? root.tokens.slotHeight : Commons.Style.space(28)
 
     Presentation.BarGlyph {
-      compactInk: true
       anchors.centerIn: parent
       visible: !action.nerdGlyph
       text: action.icon
@@ -202,7 +201,6 @@ Item {
     }
 
     Presentation.BarGlyph {
-      compactInk: true
       anchors.centerIn: parent
       visible: action.nerdGlyph
       optical: !root.bar || !root.bar.vertical

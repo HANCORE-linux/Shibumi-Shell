@@ -91,16 +91,14 @@ Item {
           if (root.bar) root.bar.unregisterClickTarget(trayDelegate)
         }
 
-        Image {
+        Presentation.BarGlyph {
           anchors.centerIn: parent
           anchors.horizontalCenterOffset: root.pinnedIconHorizontalOffset
-          source: String(trayDelegate.modelData.icon || "")
-          sourceSize.width: Commons.Style.space(14)
-          sourceSize.height: Commons.Style.space(14)
+          text: "󰀻"
+          font.family: Commons.Style.font.family
+          color: root.contentColor
           width: Commons.Style.space(14)
           height: Commons.Style.space(14)
-          fillMode: Image.PreserveAspectFit
-          smooth: true
         }
 
         MouseArea {
@@ -159,8 +157,9 @@ Item {
         if (root.bar && registered) root.bar.unregisterClickTarget(drawerToggle)
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         id: moreIcon
+        optical: !root.bar || !root.bar.vertical
         anchors.centerIn: parent
         text: "\uE5D3"
         font.pixelSize: 16
@@ -175,7 +174,7 @@ Item {
       Rectangle {
         id: drawerBadge
         visible: root.drawerCount > 0
-        width: Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6)
+        width: Math.floor(Math.max(Commons.Style.space(12), badgeText.implicitWidth + 6))
         height: Commons.Style.space(12)
         radius: height / 2
         color: root.customToneActive
@@ -184,9 +183,11 @@ Item {
         border.width: 0
         border.color: "transparent"
         z: 10
-        anchors.verticalCenter: moreIcon.verticalCenter
+        x: moreIcon.x + moreIcon.badgeLeft
+        y: moreIcon.badgeY(root, drawerBadge)
+        anchors.verticalCenter: !moreIcon.optical ? moreIcon.verticalCenter : undefined
         anchors.verticalCenterOffset: -6
-        anchors.horizontalCenter: moreIcon.horizontalCenter
+        anchors.horizontalCenter: !moreIcon.optical ? moreIcon.horizontalCenter : undefined
         anchors.horizontalCenterOffset: 7
 
         Text {
