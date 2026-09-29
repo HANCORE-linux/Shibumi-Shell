@@ -68,6 +68,10 @@ Item {
     return Symbols.batteryIcon(percent, charging, full)
   }
 
+  function verticalBatteryIcon(percent, charging, full) {
+    return Symbols.verticalBatteryIcon(percent, charging, full)
+  }
+
   function outputIcon(volume, muted, ready) {
     return Symbols.outputIcon(volume, muted, ready)
   }

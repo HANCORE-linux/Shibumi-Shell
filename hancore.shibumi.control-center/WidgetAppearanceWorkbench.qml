@@ -70,6 +70,7 @@ Column {
     String(selectedWidget ? selectedWidget.catalogGroup || "" : "")
   readonly property bool selectedLauncher: selectedCatalogGroup === "G1"
   readonly property bool selectedMedia: selectedCatalogGroup === "G9"
+  readonly property bool selectedBattery: selectedCatalogGroup === "G12"
   readonly property bool v1LayoutActive: controller.v2LayoutActive !== true
   readonly property bool selectedV1Appearance: v1LayoutActive
     && selectedSupported
@@ -97,6 +98,9 @@ Column {
     ? String(widgetSetting(selectedWidget.group, "color", "inherit")) : "inherit"
   readonly property string selectedContentTone: selectedSupported
     ? String(widgetSetting(selectedWidget.group, "tone", "auto")) : "auto"
+  readonly property string selectedBatteryOrientation: selectedBattery
+    && widgetSetting(selectedWidget.group, "batteryOrientation", "horizontal")
+      === "vertical" ? "vertical" : "horizontal"
   readonly property real selectedSurfaceOpacity: selectedSupported
     ? Number(widgetSetting(selectedWidget.group, "surfaceOpacity", 1)) : 1
   readonly property real selectedOutlineWidth: selectedSupported
@@ -151,6 +155,7 @@ Column {
     && profileModeChoices.ready
     && mediaContentToneChoices.ready
     && contentToneChoices.ready
+    && orientationChoices.ready
     && surfaceModeChoices.ready
     && outlineChoices.ready
     && fillColorPalette.ready
@@ -412,6 +417,9 @@ Column {
   function widgetAppearanceChanged(groupValue) {
     const group = String(groupValue || "")
     const catalogGroup = catalogGroupForSettingsGroup(group)
+    if (catalogGroup === "G12"
+        && widgetSetting(group, "batteryOrientation", "horizontal") === "vertical")
+      return true
     if (controller.v2LayoutActive !== true) {
       const fillChanged =
         String(widgetSetting(group, "color", "inherit")) !== "inherit"
@@ -1074,26 +1082,56 @@ Column {
           }
 
           Row {
+            id: presentationRow
             visible: root.selectedSupported && !root.selectedMedia
             width: parent.width
             spacing: Commons.Style.space(8)
 
-            Column {
+            Item {
               visible: !root.selectedLauncher
               width: root.v1LayoutActive
                 ? (parent.width - parent.spacing) * 2 / 3
                 : (parent.width - parent.spacing * 2) / 3 * 2
                   + parent.spacing
-              spacing: Commons.Style.space(4)
+              height: presentationChoices.implicitHeight
 
-              FieldLabel { text: "PRESENTATION" }
+              Column {
+                id: presentationChoices
+                width: parent.width
+                spacing: Commons.Style.space(4)
 
-              RadioChoiceList {
-                id: contentModeChoices
-                height: root.choiceListHeight
-                options: root.selectedModeOptions
-                currentValue: root.selectedDisplayMode
-                onChosen: value => root.setWidgetMode(value)
+                FieldLabel { text: "PRESENTATION" }
+
+                RadioChoiceList {
+                  id: contentModeChoices
+                  height: root.choiceListHeight
+                  options: root.selectedModeOptions
+                  currentValue: root.selectedDisplayMode
+                  onChosen: value => root.setWidgetMode(value)
+                }
+              }
+
+              Column {
+                visible: root.selectedBattery
+                x: (presentationRow.width - presentationRow.spacing * 2) / 3
+                  + presentationRow.spacing
+                width: parent.width - x
+                spacing: Commons.Style.space(4)
+
+                FieldLabel { text: "ORIENTATION" }
+
+                RadioChoiceList {
+                  id: orientationChoices
+                  height: contentModeChoices.height
+                    / contentModeChoices.options.length * options.length
+                  options: [
+                    { value: "horizontal", label: "Horizontal" },
+                    { value: "vertical", label: "Vertical" }
+                  ]
+                  currentValue: root.selectedBatteryOrientation
+                  onChosen: value => root.controller.setGroupSetting(
+                    root.selectedWidget.group, "batteryOrientation", value)
+                }
               }
             }
 

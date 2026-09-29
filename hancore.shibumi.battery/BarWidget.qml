@@ -39,6 +39,9 @@ Ui.Panel {
     : Qt.rgba(1, 1, 1, 0.18)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property string batteryOrientation:
+    setting("batteryOrientation", "horizontal") === "vertical"
+      ? "vertical" : "horizontal"
   readonly property bool compact: displayMode === "icon"
   readonly property bool compactValueVisible: !!bar && !bar.vertical
     && (displayMode !== "icon" || tokens.v2Shell !== true)
@@ -259,17 +262,42 @@ Ui.Panel {
       NumberAnimation { from: 0.35; to: 1; duration: 1100; easing.type: Easing.InOutSine }
     }
 
+    readonly property bool horizontalCharging:
+      root.batteryOrientation === "horizontal" && (charging || full)
+
     Presentation.BarGlyph {
+      id: batteryGlyph
       anchors.fill: parent
-      nativeText: batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
+      nativeText: root.batteryOrientation === "vertical"
+        ? verticalBatteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
+        : batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
       color: gauge.color
     }
 
-    Presentation.BarGlyph {
-      anchors.fill: parent
-      visible: gauge.charging && !gauge.full
-      nativeText: "\uF0E7"
-      color: root.bar ? root.bar.foreground : Commons.Color.foreground
+    Text {
+      id: chargingBolt
+      visible: gauge.horizontalCharging
+      // The FA outline body ends at 981 of 1038 font units; exclude its cap.
+      x: batteryGlyph.symbolInk.x + batteryGlyph.symbolInk.width * 981 / 2076
+        - boltInk.tightBoundingRect.x - boltInk.tightBoundingRect.width / 2
+      y: batteryGlyph.symbolInk.y + batteryGlyph.symbolInk.height / 2
+        - baselineOffset - boltInk.tightBoundingRect.y
+        - boltInk.tightBoundingRect.height / 2
+      text: "\u{F140B}"
+      textFormat: Text.PlainText
+      font.family: Commons.Style.font.family
+      // At iconFont 12, the upright bolt's ink matches this glyph at 9 px.
+      font.pixelSize: Math.max(1, Math.round(Commons.Style.bar.iconFont * 9 / 12))
+      color: root.bar ? root.bar.urgent : Commons.Color.bar.active
+      style: Text.Outline
+      styleColor: root.bar ? root.bar.background : Commons.Color.background
+      renderType: Text.NativeRendering
+    }
+
+    TextMetrics {
+      id: boltInk
+      text: chargingBolt.text
+      font: chargingBolt.font
     }
   }
 }

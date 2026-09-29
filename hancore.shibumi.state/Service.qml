@@ -131,7 +131,7 @@ Item {
     "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
     "widgetBorder", "widgetBorderWidth",
     "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
-    "widgetRadius", "surfaceOpacity"
+    "widgetRadius", "surfaceOpacity", "batteryOrientation"
   ]
   readonly property var v1ExtensionAppearanceGroupIds: [
     "G:hancore.shibumi.temperature",
@@ -152,7 +152,8 @@ Item {
       color: "inherit", colorMode: "fill", tone: "auto",
       widgetBorder: false, widgetBorderWidth: 1,
       widgetBorderColor: "inherit", widgetBorderUsesSurfaceColor: false,
-      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1
+      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1,
+      batteryOrientation: "horizontal"
     }
   }
 
@@ -331,6 +332,8 @@ Item {
       normalizedValue = value === true
     else if (name === "mediaStyle")
       normalizedValue = String(value || "") === "full" ? "full" : "default"
+    else if (name === "batteryOrientation")
+      normalizedValue = value === "vertical" ? "vertical" : "horizontal"
 
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
@@ -359,7 +362,7 @@ Item {
       "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth",
       "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
-      "widgetRadius", "surfaceOpacity"
+      "widgetRadius", "surfaceOpacity", "batteryOrientation"
     ]
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}

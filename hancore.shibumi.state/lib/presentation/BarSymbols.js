@@ -20,6 +20,16 @@ function batteryIcon(percent, charging, full) {
   return icons[index]
 }
 
+function verticalBatteryIcon(percent, charging, full) {
+  // Omarchy's ten-level glyph tables. The existing facade has no complete
+  // charge-threshold state, so that state is deliberately not synthesized.
+  var chargingIcons = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
+  var defaultIcons = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+  var index = Math.max(0, Math.min(9, Math.floor(percent / 100 * 10)))
+  if (full) return "󰂅"
+  return charging ? chargingIcons[index] : defaultIcons[index]
+}
+
 function outputIcon(volume, muted, ready) {
   if (!ready || muted || volume <= 0) return ""
   if (volume >= 0.67) return ""

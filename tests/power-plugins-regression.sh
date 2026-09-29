@@ -140,8 +140,9 @@ if rg -Fq 'rotation: -90' "$repo_root/hancore.shibumi.battery/BarWidget.qml"; th
   fail "battery bar gauge drifted from the horizontal V1 presentation"
 fi
 for charging_contract in \
-    'nativeText: batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)' \
-    'visible: gauge.charging && !gauge.full' \
+    ': batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)' \
+    'visible: gauge.horizontalCharging' \
+    'root.batteryOrientation === "horizontal" && (charging || full)' \
     'opacity: low ? pulse : 1' \
     'running: gauge.visible && gauge.low'; do
   rg -Fq "$charging_contract" "$repo_root/hancore.shibumi.battery/BarWidget.qml" \
