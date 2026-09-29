@@ -32,7 +32,7 @@ repo = Path(sys.argv[1])
 expected = {
     "hancore.shibumi.ai/AiUsagePanel.qml": "adb7e154226a79de1aea92070517c775d2f51144c3c6fef0a38f750c249a7284",
     "hancore.shibumi.audio/AudioPanel.qml": "fedbe78ccc91b1e86764eaa5234f64b1f2519555b47cc6043ded86e6127d7d4e",
-    "hancore.shibumi.battery/BatteryPanel.qml": "46f3fad436b76672cb1344822f40f6441a95d166aee66ba4ee1b8877d7daf6f9",
+    "hancore.shibumi.battery/BatteryPanel.qml": "206ca91629a5ffba449566fdf0c278287eaf6e7adaac9ddbc11dd91834594720",
     "hancore.shibumi.bluetooth/BluetoothPanel.qml": "44a5f3dd0346cf31ec470f783a46b97fd7dffbc4aa2e97cc6f8fabee533988fa",
     "hancore.shibumi.brightness/BrightnessPanel.qml": "44a5f3dd0346cf31ec470f783a46b97fd7dffbc4aa2e97cc6f8fabee533988fa",
     "hancore.shibumi.center/CalendarPanel.qml": "4c4b6cd37c2284166e5f06bd037d1173952a855c6a8be91e45b9c359c8cd18f2",
@@ -43,12 +43,12 @@ expected = {
     "hancore.shibumi.media/MediaPanel.qml": "11209c97c06d1dd0a7a9baf4a6b4d447fc038ec5525a2fe7f2c9460cc91a9f76",
     "hancore.shibumi.memory/MemoryPanel.qml": "c8bd3c667882561c857c55b7b7e98345219c33cf4437d7040e38c0ff8c9a8009",
     "hancore.shibumi.network/NetworkPanel.qml": "c678e7f266f8a3570e78f7ee268fd0f77ddec4594d829035449dda05dfcb059c",
-    "hancore.shibumi.power-profile/PowerProfilePanel.qml": "c350266a42d45effecafc8c2b00f131995afcb722103568893e0181eac2e65a9",
+    "hancore.shibumi.power-profile/PowerProfilePanel.qml": "d5eb22facbb2d5628ab70519e3c85abc800485795f83c1ac0e6e65862e8e6f77",
     "hancore.shibumi.status/NotificationPanel.qml": "7cf613c857a6d693627f04818cab0e531db0cf7d0b297dd164a5ed91328e5028",
     "hancore.shibumi.status/TrayAppMenuPanel.qml": "a598a319bb1f0026dc04818eb4d38efb4c707118e3cb57b4521b3a37547e0ca2",
     "hancore.shibumi.status/TrayDrawerPanel.qml": "cacc5af5542ffa68b1e7c4badb6c6eaa6bf107b5e712f7f70d5d478e5b515005",
     "hancore.shibumi.storage/StoragePanel.qml": "d2be53979ea4b18ccaeb4793d003dd5283912520e773abea3ac3fa4d320806ea",
-    "hancore.shibumi.temperature/TemperaturePanel.qml": "11209c97c06d1dd0a7a9baf4a6b4d447fc038ec5525a2fe7f2c9460cc91a9f76",
+    "hancore.shibumi.temperature/TemperaturePanel.qml": "ee26d2599a5f16fcbed31782866debc516aaae62e6f98b97383e037c8d4ef867",
     "hancore.shibumi.update-center/UpdateCenterPanel.qml": "5e0b6b0fd3acf36c0e8939a2690fc48604d9b1529a478398dd496a8528c06f2b",
     "hancore.shibumi.workspaces/WorkspacePanel.qml": "20e29863f8899f892940842544d98bad977d9fd8cbe0ba1482835ec3319f8db5",
 }
