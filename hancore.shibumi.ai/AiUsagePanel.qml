@@ -640,7 +640,7 @@ ShibumiPanel {
         width: parent.width * modelRow.percent / 100
         height: parent.height
         radius: height / 2
-        color: modelRow.daily ? panel.controlForeground : panel.controlActiveFillColor
+        color: modelRow.daily ? panel.controlForeground : panel.controlAccent
         Behavior on width { NumberAnimation { duration: 300 } }
       }
     }
