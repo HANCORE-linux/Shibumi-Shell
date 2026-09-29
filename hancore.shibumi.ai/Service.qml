@@ -498,8 +498,10 @@ Item {
     if (!provider) return "No AI usage providers detected"
     const heading = String(provider.providerName || provider.providerId || "AI")
       + " · " + providerStatusText(provider)
-    if (provider.ready === false) return heading
     const limit = bindingWindow(provider)
+    if (!limit && provider.usageStatusText)
+      return heading + "\n" + String(provider.usageStatusText)
+    if (provider.ready === false) return heading
     if (!limit) return heading + "\nLimits: Unavailable"
     const reset = resetText(provider, limit.resetsAt)
     return heading + "\n" + limit.title + ": " + Math.round(limit.percent) + "%"

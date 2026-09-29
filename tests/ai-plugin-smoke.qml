@@ -190,7 +190,7 @@ ShellRoot {
       if (agentsService.providerStatusText(provider) !== "partial"
           || emptyAgentsPanel.providerStatusLabel !== "partial"
           || !emptyAgentsPanel.limitsUnavailableVisible
-          || agentsService.tooltipText().indexOf("Codex · partial") < 0) {
+          || agentsService.tooltipText() !== "Codex · partial\nCodex limits unavailable") {
         fail("Codex partial status did not propagate")
         return false
       }
