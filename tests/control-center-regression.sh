@@ -38,6 +38,26 @@ mkdir -m 700 "$tmpdir/runtime"
 "$repo_root/tests/panel-window-geometry-regression.sh" \
   --stage-control-center "$tmpdir/control"
 
+/usr/bin/python3 -I - "$repo_root" "$tmpdir/v1-layout-noop.qml" <<'PY'
+import sys
+from pathlib import Path
+panel = (Path(sys.argv[1]) / "hancore.shibumi.control-center/ControlCenterPanel.qml").read_text()
+methods = panel[panel.index("  function setPluginEnabled("):panel.index("  function setPluginBarWidgetEnabled(")]
+methods += panel[panel.index("  function shibumiWidgetGroup("):panel.index("  function widgetInstalled(")]
+Path(sys.argv[2]).write_text('''import QtQuick
+import Quickshell
+QtObject { id: root
+  property bool nativeCatalogRequired: false; property bool v2LayoutActive: false; property string pluginActionError: ""
+  property var pluginRegistry: ({installedPlugins: {}, setEnabled: function() { return false }})
+  property var layout: []; property var groups: ({}); property int layoutWrites: 0
+  property var bar: ({layoutContains: function(id) { return root.layout.indexOf(id) >= 0 }})
+  function setPluginBarWidgetEnabled(id, on, section) { layoutWrites++; return false }
+  function groupEnabled(group) { return groups[group] === true }
+  function setGroupEnabled(group, on, coalesce) { groups[group] = on; return true }
+  Component.onCompleted: Qt.callLater(function() { for (const id of ["hancore.shibumi.temperature", "hancore.shibumi.gpu", "hancore.shibumi.storage"]) { pluginRegistry.installedPlugins[id] = {kinds:["bar-widget"]}; for (const on of [true, false, true, false]) { layout = on ? ["other", id] : ["other"]; const before = JSON.stringify(layout); groups["G:" + id] = !on; if (!setPluginEnabled(id, on, true) || groupEnabled("G:" + id) !== on || layoutWrites !== 0 || JSON.stringify(layout) !== before) { console.error("V1 configured/absent widget did not toggle its group without layout mutation", id, on, pluginActionError); Qt.exit(1); return } } } console.log("V1 configured/absent widget toggles passed"); Qt.quit() })
+''' + methods + '}\n')
+PY
+timeout 5 "$quickshell_bin" -p "$tmpdir/v1-layout-noop.qml"
 set +e
 output=$(timeout 8 env \
   HOME="$tmpdir/home" \

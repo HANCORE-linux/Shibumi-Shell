@@ -773,6 +773,13 @@ ShibumiPanel {
       if (group !== "") {
         if (!v2LayoutActive
             && ["G16", "G17", "G18"].indexOf(group) >= 0) {
+          if (bar && typeof bar.layoutContains === "function"
+              && bar.layoutContains(id) === (enabled === true)) {
+            const v1Group = "G:" + id
+            return groupEnabled(v1Group) === (enabled === true)
+              || setGroupEnabled(v1Group, enabled === true,
+                coalescePresentation === true)
+          }
           const section = manifest.barWidget
             && ["left", "center", "right"].indexOf(
               String(manifest.barWidget.defaultSection || "")) >= 0
