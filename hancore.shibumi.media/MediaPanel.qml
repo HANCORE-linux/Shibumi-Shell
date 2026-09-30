@@ -694,14 +694,14 @@ ShibumiPanel {
       visible: !button.transport
       anchors.fill: parent; text: button.icon
       color: button.checked ? panel.controlAccent : panel.controlForeground
-      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon)
+      fontFamily: "Material Symbols Rounded"; fontSize: Math.max(1, Math.round(Commons.Style.font.icon) - 2)
     }
     TextMetrics {
       id: transportMetrics
       text: button.icon
       font.family: "Material Symbols Rounded"
       // Native Material Symbols ink matches Shuffle/Repeat, without scaling a texture.
-      font.pixelSize: Math.round(Commons.Style.font.icon * (button.icon === "pause" ? 19 : 21) / 13)
+      font.pixelSize: Math.max(1, Math.round(Commons.Style.font.icon * (button.icon === "pause" ? 19 : 21) / 13) - 2)
     }
     Text {
       visible: button.transport
