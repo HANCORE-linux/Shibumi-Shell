@@ -8,7 +8,7 @@ function wifiIconFor(strength) {
 
 function connectionIcon(kind, signalStrength) {
   if (kind === "wifi") return wifiIconFor(signalStrength)
-  if (kind === "ethernet") return "󰈀"
+  if (kind === "ethernet") return "󰌗"
   return "󰤮"
 }
 
