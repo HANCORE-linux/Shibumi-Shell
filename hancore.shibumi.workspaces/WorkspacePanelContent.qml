@@ -45,7 +45,7 @@ Item {
         width: parent.width
         height: 24
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: "Workspaces"

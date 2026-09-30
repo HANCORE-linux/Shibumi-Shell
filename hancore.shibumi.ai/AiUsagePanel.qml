@@ -185,8 +185,10 @@ ShibumiPanel {
           width: parent.width
           height: Commons.Style.space(44)
 
-          Text {
+          Presentation.PanelHeading {
             id: heroName
+            layoutFont: Qt.font({family: font.family,
+              pixelSize: Commons.Style.font.subtitle, weight: Font.DemiBold})
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.topMargin: Commons.Style.space(6)
@@ -196,9 +198,6 @@ ShibumiPanel {
             text: panel.provider ? panel.providerHeading(panel.provider) : "AI USAGE"
             color: panel.controlForeground
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: Commons.Style.font.subtitle
-            font.weight: Font.DemiBold
-            renderType: Text.NativeRendering
           }
 
           Text {

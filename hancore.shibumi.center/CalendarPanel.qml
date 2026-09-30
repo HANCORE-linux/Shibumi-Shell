@@ -71,16 +71,15 @@ ShibumiPanel {
           onClicked: panel.previousMonth()
         }
 
-        Text {
+        Presentation.PanelHeading {
           anchors.centerIn: parent
+          reserveLayoutWidth: true
+          layoutFont: Qt.font({family: font.family, pixelSize: 12,
+            weight: Font.Medium, letterSpacing: 2})
           text: panel.monthName + "  " + panel.calendarYear
           color: monthMouse.containsMouse && panel.monthOffset !== 0
             ? panel.controlAccent : panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 12
-          font.letterSpacing: 2
-          font.weight: Font.Medium
-          renderType: Text.NativeRendering
 
           MouseArea {
             id: monthMouse

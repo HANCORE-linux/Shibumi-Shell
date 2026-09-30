@@ -217,16 +217,12 @@ ShibumiPanel {
         width: parent.width
         height: Commons.Style.space(24)
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: "NOW PLAYING"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.body
-          font.letterSpacing: 2
-          font.weight: Font.Medium
-          renderType: Text.NativeRendering
         }
 
         Row {

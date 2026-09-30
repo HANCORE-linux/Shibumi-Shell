@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -66,16 +67,16 @@ ShibumiPanel {
         width: parent.width
         spacing: Commons.Style.space(5)
 
-        Text {
+        Presentation.PanelHeading {
           id: headerTitle
+          layoutFont: Qt.font({family: font.family,
+            pixelSize: Commons.Style.font.title, weight: Font.Medium,
+            letterSpacing: 2})
           width: parent.width - close.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           text: "THERMALS"
           color: panel.bar.foreground
           font.family: panel.bar.fontFamily
-          font.pixelSize: Commons.Style.font.title
-          font.letterSpacing: 2
-          font.weight: Font.Medium
         }
 
         Text {

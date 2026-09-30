@@ -204,7 +204,7 @@ ShibumiPanel {
         width: parent.width
         height: 24
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: parent.left
           anchors.right: panel.shellStyle === "shibumi"
             ? closeText.left : closeAction.left

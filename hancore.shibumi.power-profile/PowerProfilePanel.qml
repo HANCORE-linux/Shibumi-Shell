@@ -110,15 +110,12 @@ ShibumiPanel {
       Row {
         width: parent.width
         spacing: Commons.Style.space(4)
-        Text {
+        Presentation.PanelHeading {
           width: parent.width - closeAction.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           text: "POWER PROFILE"
           color: panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.title
-          font.letterSpacing: 2
-          font.weight: Font.Medium
         }
         IconAction {
           id: closeAction

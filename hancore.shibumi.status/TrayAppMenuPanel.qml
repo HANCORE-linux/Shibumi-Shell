@@ -123,7 +123,7 @@ ShibumiPanel {
           smooth: true
         }
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: appIcon.right
           anchors.leftMargin: appIcon.visible ? Commons.Style.space(8) : 0
           anchors.right: panel.shellStyle === "shibumi"
@@ -134,10 +134,7 @@ ShibumiPanel {
           color: panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily
             : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.body
-          font.weight: Font.Medium
           elide: Text.ElideRight
-          renderType: Text.NativeRendering
         }
 
         Text {
