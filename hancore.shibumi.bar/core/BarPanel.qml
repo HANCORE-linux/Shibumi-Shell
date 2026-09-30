@@ -12,6 +12,11 @@ PanelWindow {
     && screen.name !== ""
     && screen.width > 0
     && screen.height > 0
+  // V1's top island ends at barSize; its 8px blur plus 1px offset must
+  // paint beyond that edge without enlarging layout, reservation or input.
+  readonly property int shadowPadding: !bar.vertical && bar.position === "top"
+    && bar.visualTokens && bar.visualTokens.shellStyle === "shibumi"
+    && bar.visualTokens.shadowEnabled === true ? 9 : 0
   readonly property var layoutSession: dragSession
   readonly property real surfaceWidth: barSurfaceLoader.item
     ? Number(barSurfaceLoader.item.width) || 0 : 0
@@ -27,7 +32,8 @@ PanelWindow {
   // Keep the anchor window edge-local in every presentation and while editing.
   // The reserved desktop area remains the independent exclusiveZone below.
   implicitWidth: bar.vertical && validScreen ? bar.barSize : 0
-  implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0
+  implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0
+  mask: Region { item: barSurfaceLoader }
   color: "transparent"
   surfaceFormat.opaque: false
 
@@ -111,7 +117,7 @@ PanelWindow {
   }
 
   Rectangle {
-    anchors.fill: parent
+    anchors.fill: barSurfaceLoader
     visible: dragSession.editing
     color: "#000000"
     opacity: 0.34
@@ -121,7 +127,8 @@ PanelWindow {
   Loader {
     id: barSurfaceLoader
 
-    anchors.fill: parent
+    width: parent.width
+    height: barWindow.bar.vertical ? parent.height : barWindow.bar.barSize
     active: barWindow.bar.hostReady && barWindow.bar.styleReady
       && barWindow.validScreen && barWindow.bar.visualTokens !== null
     sourceComponent: active ? barWindow.bar.activeStyle.barSurfaceComponent : null

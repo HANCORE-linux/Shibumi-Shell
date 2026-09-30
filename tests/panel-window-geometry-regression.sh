@@ -100,7 +100,7 @@ PY
 "$repo_root/scripts/sync-shared.sh" --check >/dev/null
 
 # Bind the focused gate to the real bar source as well as the synthetic anchors.
-rg -Fq 'implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0' \
+rg -Fq 'implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0' \
   "$repo_root/hancore.shibumi.bar/core/BarPanel.qml" \
   || fail 'BarPanel source is not bar-height'
 rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
