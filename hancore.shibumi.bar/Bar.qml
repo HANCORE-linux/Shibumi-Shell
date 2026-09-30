@@ -818,8 +818,9 @@ Item {
         const entry = entries[index]
         const id = entryId(entry)
         const hasBarWidget = hasBarWidgetEntryPoint(id)
-        const shibumiModule = Util.isPlainObject(entry)
-          && entry.shibumiModule === true && hasBarWidget
+        const shibumiModule = hasBarWidget && ((Util.isPlainObject(entry)
+          && entry.shibumiModule === true)
+          || (v2Value !== true && v1AdditionalWidgetPlaced(id)))
         const dynamicV2Provider = v2Value === true && hasBarWidget
         if (id === "" || excluded.indexOf(id) >= 0 || seen[id]
             || !Util.isPlainObject(entry)
@@ -922,6 +923,15 @@ Item {
       }
     }
     return false
+  }
+
+  // These native V2 widgets can already occupy a V1 extension slot without
+  // the third-party module marker. Membership alone must not invent a slot.
+  function v1AdditionalWidgetPlaced(widgetId) {
+    const id = String(widgetId || "")
+    return !layoutStateController.v2Mode && isV1AdditionalSuiteWidget(id)
+      && GroupRegistry.configuredEntry(layoutConfig, id) !== null
+      && layoutStateController.groupLocation("G:" + id) !== null
   }
 
   function hasBarWidgetEntryPoint(widgetId, selectionValue) {
@@ -1582,6 +1592,18 @@ Item {
     for (const group of affectedGroups)
       states[group] = {v1: owned.indexOf(group) < 0,
         v2: owned.indexOf(group) < 0}
+    if (!layoutStateController.v2Mode && isV1AdditionalSuiteWidget(id)) {
+      const group = "G:" + id
+      const service = layoutStateController.stateService
+      if (!service || typeof service.layoutFamilySnapshot !== "function")
+        return null
+      const scope = {familyStates: {}}
+      scope.familyStates[group] = {v1: null, v2: null}
+      const snapshot = service.layoutFamilySnapshot(scope)
+      if (!snapshot || !snapshot.familyStates) return null
+      states[group] = {v1: installed === true,
+        v2: snapshot.familyStates[group].v2}
+    }
     const patch = catalogLayoutPatch(next, states)
     return patch ? {patch: patch, intent: intent} : null
   }

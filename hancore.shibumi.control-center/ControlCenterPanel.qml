@@ -773,8 +773,11 @@ ShibumiPanel {
       if (group !== "") {
         if (!v2LayoutActive
             && ["G16", "G17", "G18"].indexOf(group) >= 0) {
-          if (bar && typeof bar.layoutContains === "function"
-              && bar.layoutContains(id) === (enabled === true)) {
+          if (bar && ((typeof bar.v1AdditionalWidgetPlaced === "function"
+                && bar.v1AdditionalWidgetPlaced(id))
+              || (enabled !== true
+                && typeof bar.layoutContains === "function"
+                && !bar.layoutContains(id)))) {
             const v1Group = "G:" + id
             return groupEnabled(v1Group) === (enabled === true)
               || setGroupEnabled(v1Group, enabled === true,
