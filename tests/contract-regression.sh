@@ -156,7 +156,7 @@ rg -q '^PanelWindow \{' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
 rg -Fxq '  implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0' \
   hancore.shibumi.bar/core/BarPanel.qml \
-  && rg -Uq '^  readonly property int shadowPadding: !bar\.vertical && bar\.position === "top"\n    && bar\.visualTokens && bar\.visualTokens\.shellStyle === "shibumi"\n    && bar\.visualTokens\.shadowEnabled === true \? 9 : 0$' hancore.shibumi.bar/core/BarPanel.qml \
+  && rg -Uq '^  readonly property int shadowPadding: !bar\.vertical && bar\.position === "top"\n    && bar\.visualTokens\n      \? bar\.visualTokens\.shellStyle === "shibumi"\n        \? bar\.visualTokens\.shadowEnabled === true \? 9 : 0\n        : \["full", "fit"\]\.indexOf\(bar\.visualTokens\.shellStyle\) >= 0 \? 11\n          : bar\.visualTokens\.shellStyle === "notch" \? 1 : 0\n      : 0$' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "horizontal host must remain bar-height during edit"
 rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
   hancore.shibumi.bar/core/BarPanel.qml \
