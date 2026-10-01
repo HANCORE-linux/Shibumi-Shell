@@ -17,6 +17,10 @@ Item {
   property string paintText: text
   property bool symbol: true
   property string nativeText: Symbols.glyph(paintText)
+  // LAN alone gets the smallest integer enlargement; all other B symbols
+  // retain the host size and baseline. The hidden reference still owns layout.
+  readonly property bool lanSymbol: nativeText === "\u{F0317}"
+  readonly property int nativePixelSize: Commons.Style.bar.iconFont + (lanSymbol ? 1 : 0)
   property real symbolRotation: 0
   property int paintWeight: font.family === "Material Symbols Rounded"
     ? Font.Medium : font.weight
@@ -98,7 +102,7 @@ Item {
     id: nativeInk
     text: root.nativeText
     font.family: Commons.Style.font.family
-    font.pixelSize: Commons.Style.bar.iconFont
+    font.pixelSize: root.nativePixelSize
   }
 
   // The host renderer owns font, size, baseline and horizontal ink correction.
@@ -107,7 +111,10 @@ Item {
     id: symbolCanvas
     visible: root.symbol
     x: (root.width - width) / 2
+      + (root.lanSymbol ? width / 2 - nativeGlyph.paintedCenterX : 0)
     y: (root.height - height) / 2
+      + (root.lanSymbol ? height / 2 - nativeGlyph.baselineY
+        - nativeInk.tightBoundingRect.y - nativeInk.tightBoundingRect.height / 2 : 0)
     width: Commons.Style.bar.iconCanvas
     height: Commons.Style.bar.iconCanvas
     rotation: root.symbolRotation
@@ -117,7 +124,7 @@ Item {
       anchors.fill: parent
       text: root.nativeText
       fontFamily: Commons.Style.font.family
-      fontSize: Commons.Style.bar.iconFont
+      fontSize: root.nativePixelSize
       color: root.color
     }
   }
