@@ -152,8 +152,10 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.providerIconSlotWidth
         height: root.providerIconSlotHeight
-        readonly property real inkLeft: (width - root.providerGlyphWidth) / 2
-        readonly property real inkRight: inkLeft + root.providerGlyphWidth
+        readonly property real inkLeft: providerGlyph.x + (root.providerId === "claude"
+          ? claudeGlyphBase.x + claudeGlyphBase.inkLeft : 0)
+        readonly property real inkRight: providerGlyph.x + (root.providerId === "claude"
+          ? claudeGlyphBase.x + claudeGlyphBase.inkRight : providerGlyph.width)
 
         Item {
           id: providerGlyph
@@ -208,8 +210,14 @@ Ui.Panel {
           }
 
           Item {
+            id: providerImage
             anchors.fill: parent
             visible: root.providerId === "codex" || root.providerId === "opencode"
+            Presentation.BarInk { id: imageInk; target: providerImage }
+            transform: Translate {
+              x: imageInk.enabled ? imageInk.snapX(0) : 0
+              y: imageInk.enabled ? imageInk.rectangleY(providerImage.height) : 0
+            }
 
             TintedImage {
               anchors.fill: parent
@@ -252,7 +260,8 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.usagePercent >= 0

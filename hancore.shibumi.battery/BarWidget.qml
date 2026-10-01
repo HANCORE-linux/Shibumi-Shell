@@ -165,9 +165,11 @@ Ui.Panel {
 
   Component {
     id: fullContent
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: root.tokens.contentGap
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "BAT"
@@ -189,7 +191,8 @@ Ui.Panel {
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
       }
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.percent + "%"
@@ -203,7 +206,8 @@ Ui.Panel {
 
   Component {
     id: compactContent
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: root.tokens.compactGap
       BatteryGauge {
         visible: root.displayMode !== "text"
@@ -216,7 +220,8 @@ Ui.Panel {
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
       }
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.compactValueVisible
         text: root.percent + "%"
@@ -231,7 +236,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.percent + "%"
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -242,6 +248,8 @@ Ui.Panel {
 
   component BatteryGauge: Item {
     id: gauge
+    readonly property real inkLeft: batteryGlyph.inkLeft
+    readonly property real inkRight: batteryGlyph.inkRight
     required property real ratio
     required property bool charging
     required property bool full

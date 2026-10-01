@@ -386,12 +386,13 @@ Ui.Panel {
   Component {
     id: v1FullContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: 5
 
       Presentation.BarGlyph {
         symbol: false
-        centerInkY: false
+        barText: true
         referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         text: "NET"
@@ -516,7 +517,7 @@ Ui.Panel {
 
       Presentation.BarGlyph {
         symbol: false
-        centerInkY: false
+        barText: true
         referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         visible: root.mode === "wifi"
@@ -533,7 +534,9 @@ Ui.Panel {
   Component {
     id: v2FullContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
+      boundLastAdvance: true
       spacing: 4
 
       Presentation.BarGlyph {
@@ -592,8 +595,9 @@ Ui.Panel {
     }
   }
 
-  component BoundedLabel: Text {
+  component BoundedLabel: Presentation.IconText {
     id: boundedLabel
+    barText: true
 
     required property real maximumWidth
 

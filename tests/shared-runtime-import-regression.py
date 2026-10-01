@@ -291,7 +291,7 @@ class PresentationImports(unittest.TestCase):
             if PRESENTATION_LINE.strip() in source.read_text(encoding="utf-8"):
                 actual.add(source.relative_to(ROOT).as_posix())
         self.assertEqual(actual, PRESENTATION_IMPORTERS)
-        self.assertEqual(len(actual), 64)
+        self.assertEqual(len(actual), 65)
 
         contract = json.loads(
             (ROOT / "contracts/plugin-suite-v1.json").read_text())
@@ -371,6 +371,7 @@ class PresentationImports(unittest.TestCase):
             (module / "qmldir").read_text(encoding="utf-8"),
             "module Shibumi.Presentation\n"
             "BarGlyph 1.0 BarGlyph.qml\n"
+            "BarInk 1.0 BarInk.qml\n"
             "ControlCenterIconText 1.0 ControlCenterIconText.qml\n"
             "HostTokens 1.0 HostTokens.qml\n"
             "IconText 1.0 IconText.qml\n"

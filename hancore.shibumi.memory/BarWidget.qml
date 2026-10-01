@@ -128,7 +128,8 @@ Ui.Panel {
       spacing: root.displayMode === "full" && root.tokens.v2Shell !== true
         ? root.tokens.contentGap : root.tokens.compactGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full" && root.tokens.v2Shell !== true
         anchors.verticalCenter: parent.verticalCenter
         text: "MEM"
@@ -141,6 +142,12 @@ Ui.Panel {
       }
 
       MemoryRing {
+        id: memoryGlyph
+        Presentation.BarInk { id: memoryInk; target: memoryGlyph }
+        transform: Translate {
+          x: memoryInk.enabled ? memoryInk.snapX(0) : 0
+          y: memoryInk.enabled ? memoryInk.rectangleY(memoryGlyph.height) : 0
+        }
         visible: root.displayMode !== "text"
         anchors.verticalCenter: parent.verticalCenter
         percent: root.percent
@@ -148,7 +155,8 @@ Ui.Panel {
         accent: root.widgetInk
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.horizontalValueVisible
         anchors.verticalCenter: parent.verticalCenter
         text: root.usedLabel

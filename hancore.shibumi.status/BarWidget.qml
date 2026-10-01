@@ -661,8 +661,9 @@ Item {
       Component.onDestruction: if (root.bar && registered)
         root.bar.unregisterClickTarget(textStatus)
 
-      Text {
+      Presentation.IconText {
         id: statusText
+        barText: true
         anchors.centerIn: parent
         text: root.textLabel
         color: root.widgetInk

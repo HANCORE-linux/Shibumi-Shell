@@ -170,7 +170,8 @@ Ui.Panel {
       opticalBias: root.contentHorizontalOffset
       spacing: root.tokens.contentGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "BT"
@@ -187,8 +188,11 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.iconSlotSize
         height: root.iconSlotSize
+        readonly property real inkLeft: bluetoothGlyph.x + bluetoothGlyph.inkLeft
+        readonly property real inkRight: bluetoothGlyph.x + bluetoothGlyph.inkRight
 
         Presentation.BarGlyph {
+          id: bluetoothGlyph
           optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           text: root.stateIcon
@@ -200,7 +204,8 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.showConnectedCount
         text: String(root.connectedCount)
@@ -225,8 +230,11 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.iconSlotSize
         height: root.iconSlotSize
+        readonly property real inkLeft: bluetoothGlyph.x + bluetoothGlyph.inkLeft
+        readonly property real inkRight: bluetoothGlyph.x + bluetoothGlyph.inkRight
 
         Presentation.BarGlyph {
+          id: bluetoothGlyph
           optical: !root.bar || !root.bar.vertical
           anchors.centerIn: parent
           text: root.stateIcon
@@ -238,7 +246,8 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.showConnectedCount
         text: String(root.connectedCount)
@@ -253,7 +262,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.connected ? String(root.connectedCount)
         : root.radioEnabled ? "On" : "Off"
       color: root.widgetInk

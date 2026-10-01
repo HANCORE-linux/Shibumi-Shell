@@ -282,6 +282,7 @@ Ui.Panel {
         anchors.centerIn: parent
         bar: root.bar
         text: root.dateText
+        labelVisible: root.bar && root.bar.vertical
         fontFamily: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         fontSize: root.tokens ? root.tokens.captionSize : 10
         foreground: Commons.Util.alpha(root.widgetInk, 0.5)
@@ -292,6 +293,28 @@ Ui.Panel {
         onPressed: function(button) {
           if (button === Qt.RightButton && root.bar) root.bar.run("omarchy-menu-timezone")
           else root.toggle()
+        }
+
+        // Keep the native button's reservation and input; only its bar label
+        // opts into the shared ink alignment. Vertical rendering stays native.
+        Presentation.IconText {
+          barText: true
+          visible: !dateButton.labelVisible
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: dateButton.text
+          color: dateButton.active && dateButton.useActiveColor
+            ? dateButton.activeColor : dateButton.foreground
+          font.family: dateButton.fontFamily
+          font.pixelSize: dateButton.fontSize
+          renderType: Text.NativeRendering
+          rotation: dateButton.textRotation
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          Behavior on color {
+            enabled: !root.bar || root.bar.foregroundAnimationEnabled
+            ColorAnimation { duration: 160 }
+          }
         }
       }
     }

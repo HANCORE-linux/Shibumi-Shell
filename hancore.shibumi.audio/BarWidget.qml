@@ -309,7 +309,8 @@ Ui.Panel {
     Row {
       spacing: root.tokens.contentGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "VOL"
@@ -366,7 +367,8 @@ Ui.Panel {
         fill: 1
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(30)
@@ -403,7 +405,8 @@ Ui.Panel {
         fill: 1
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.horizontalValueVisible
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(30)

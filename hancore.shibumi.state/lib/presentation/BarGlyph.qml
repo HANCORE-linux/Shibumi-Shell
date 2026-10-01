@@ -16,9 +16,10 @@ Item {
   property real fill: 0
   property string paintText: text
   property bool symbol: true
+  property bool barText: false
   property string nativeText: Symbols.glyph(paintText)
-  // LAN alone gets the smallest integer enlargement; all other B symbols
-  // retain the host size and baseline. The hidden reference still owns layout.
+  // LAN alone retains its approved enlargement. Ink alignment is paint-only;
+  // the hidden reference still owns the original layout and input geometry.
   readonly property bool lanSymbol: nativeText === "\u{F0317}"
   readonly property int nativePixelSize: Commons.Style.bar.iconFont + (lanSymbol ? 1 : 0)
   property real symbolRotation: 0
@@ -39,18 +40,28 @@ Item {
     void(symbolCanvas.y)
     void(symbolCanvas.rotation)
     return symbolCanvas.mapToItem(root, Qt.rect(
-      nativeGlyph.paintedCenterX - nativeGlyph.tightWidth / 2,
-      nativeGlyph.baselineY + nativeInk.tightBoundingRect.y,
-      nativeGlyph.tightWidth, nativeInk.tightBoundingRect.height))
+      root.inkAligned ? root.nativeLabelX + root.nativeBounds.x / placement.metricScale
+        : nativeGlyph.paintedCenterX - nativeGlyph.tightWidth / 2,
+      nativeGlyph.baselineY + (root.inkAligned
+        ? root.nativeBounds.y / placement.metricScale : nativeInk.tightBoundingRect.y),
+      root.inkAligned ? root.nativeBounds.width / placement.metricScale
+        : nativeGlyph.tightWidth, root.inkAligned
+        ? root.nativeBounds.height / placement.metricScale : nativeInk.tightBoundingRect.height))
   }
-  readonly property real inkLeft: symbol ? symbolInk.x
-    : glyph.x + ink.tightBoundingRect.x
-  readonly property real inkRight: symbol ? symbolInk.x + symbolInk.width
-    : inkLeft + ink.tightBoundingRect.width
+  // Row balancing consumes unsnapped bounds. Feeding the final pixel correction
+  // back into the parent's translation would make its own position recursive.
+  readonly property real inkLeft: symbol ? (root.inkAligned
+    ? (root.width - root.nativeBounds.width / placement.metricScale) / 2 : symbolInk.x)
+    : glyphX + ink.tightBoundingRect.x
+  readonly property real inkRight: symbol ? inkLeft + (root.inkAligned
+    ? root.nativeBounds.width / placement.metricScale : symbolInk.width) : inkLeft + ink.tightBoundingRect.width
   readonly property real inkTop: symbol ? symbolInk.y
     : glyph.y + glyph.baselineOffset + ink.tightBoundingRect.y
-  // Status badges share one height while retaining the ink-relative x overlap.
-  readonly property real badgeLeft: Math.ceil(inkRight) - Commons.Style.space(3)
+  // Keep the approved badge reservation independent of the new paint snap.
+  readonly property real badgeLeft: Math.ceil(symbol && inkAligned
+    ? width / 2 + nativeGlyph.tightWidth / 2
+      + (lanSymbol ? 0 : nativeGlyph.paintedCenterX - nativeGlyph.width / 2)
+    : inkRight) - Commons.Style.space(3)
 
   function badgeY(owner, badge) {
     for (let item = badge.parent; item && item !== owner; item = item.parent) {
@@ -99,22 +110,63 @@ Item {
 
   TextMetrics { id: ink; text: glyph.text; font: glyph.font }
   TextMetrics {
+    id: capitals
+    text: root.barText ? placement.caption(glyph.text) : ""
+    font: glyph.font
+  }
+  TextMetrics {
     id: nativeInk
     text: root.nativeText
     font.family: Commons.Style.font.family
     font.pixelSize: root.nativePixelSize
   }
 
-  // The host renderer owns font, size, baseline and horizontal ink correction.
-  // The old Text above reserves layout only; panels do not use this component.
+  FontMetrics { id: nativeFont; font: nativeInk.font }
+  BarInk { id: placement; target: root }
+  TextMetrics {
+    id: nativeOutline
+    text: root.symbol ? root.nativeText : glyph.text
+    font: Qt.font({ family: root.symbol ? Commons.Style.font.family : glyph.font.family,
+      pixelSize: (root.symbol ? root.nativePixelSize : glyph.font.pixelSize) * placement.metricScale,
+      weight: root.symbol ? Font.Normal : glyph.font.weight,
+      italic: !root.symbol && glyph.font.italic,
+      hintingPreference: Font.PreferNoHinting })
+  }
+  // PathText contributes metrics only. Unlike tightBoundingRect's baseline
+  // envelope, its height excludes blank space below a raised glyph (e.g. FA).
+  PathText { id: nativePath; text: nativeOutline.text; font: nativeOutline.font }
+  readonly property rect nativeBounds: {
+    const bounds = nativeOutline.tightBoundingRect
+    return bounds.y + bounds.height === 0
+      ? Qt.rect(bounds.x, bounds.y, bounds.width, nativePath.height) : bounds
+  }
+  readonly property bool inkAligned: root.optical && placement.enabled
+    && root.symbolRotation === 0
+  readonly property real nativeLabelX: nativeGlyph.paintedCenterX
+    - nativeInk.tightBoundingRect.x - nativeGlyph.tightWidth / 2
+  readonly property real glyphX: !optical ? 0
+    : (horizontalAlignment === Text.AlignLeft ? 0
+      : horizontalAlignment === Text.AlignRight ? width - ink.tightBoundingRect.width
+      : (width - ink.tightBoundingRect.width) / 2)
+      - ink.tightBoundingRect.x - anchors.horizontalCenterOffset
+
+  // Keep the host font and size. Center visible ink rather than its line box;
+  // snap the pen position/baseline in output pixels, not the reserved box.
   Item {
     id: symbolCanvas
     visible: root.symbol
-    x: (root.width - width) / 2
-      + (root.lanSymbol ? width / 2 - nativeGlyph.paintedCenterX : 0)
-    y: (root.height - height) / 2
-      + (root.lanSymbol ? height / 2 - nativeGlyph.baselineY
-        - nativeInk.tightBoundingRect.y - nativeInk.tightBoundingRect.height / 2 : 0)
+    x: root.inkAligned
+      ? placement.snapX(root.width / 2
+        - (root.nativeBounds.x + root.nativeBounds.width / 2) / placement.metricScale)
+        - root.nativeLabelX
+      : (root.width - width) / 2
+        + (root.lanSymbol ? width / 2 - nativeGlyph.paintedCenterX : 0)
+    y: root.inkAligned && root.centerInkY
+      ? placement.textTop(placement.baselineFor(root.nativeBounds), nativeFont.ascent)
+        - nativeGlyph.baselineY + nativeFont.ascent
+      : (root.height - height) / 2
+        + (root.lanSymbol ? height / 2 - nativeGlyph.baselineY
+          - nativeInk.tightBoundingRect.y - nativeInk.tightBoundingRect.height / 2 : 0)
     width: Commons.Style.bar.iconCanvas
     height: Commons.Style.bar.iconCanvas
     rotation: root.symbolRotation
@@ -138,16 +190,18 @@ Item {
       root.optical)
     renderType: root.optical ? Text.NativeRendering : root.renderType
     // Tight bounds correct only paint. No per-symbol offset or texture scale.
-    x: !root.optical ? 0 : (root.horizontalAlignment === Text.AlignLeft ? 0
-      : root.horizontalAlignment === Text.AlignRight ? root.width - ink.tightBoundingRect.width
-      : (root.width - ink.tightBoundingRect.width) / 2)
-      - ink.tightBoundingRect.x - root.anchors.horizontalCenterOffset
+    x: root.optical && placement.enabled
+      ? placement.snapX(root.glyphX) : root.glyphX
     // P8's native line-box centering for token-calibrated glyph sizes. Ligature
     // tight vertical bounds include blank baseline space and cannot center ink.
     y: !root.optical ? 0 : root.nativeLineBox
       ? Math.round(root.inkCenterY - implicitHeight / 2) : root.centerInkY
-      ? root.inkCenterY - glyph.baselineOffset
-        - ink.tightBoundingRect.y - ink.tightBoundingRect.height / 2
+      ? placement.enabled
+        ? placement.textTop(placement.baselineFor(
+          root.barText ? capitals.tightBoundingRect : root.nativeBounds,
+          root.barText ? 1 : placement.metricScale), glyph.baselineOffset)
+        : root.inkCenterY - glyph.baselineOffset
+          - ink.tightBoundingRect.y - ink.tightBoundingRect.height / 2
       : Math.floor((root.height - implicitHeight) / 2)
   }
 }

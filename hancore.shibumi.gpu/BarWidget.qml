@@ -128,8 +128,9 @@ Ui.Panel {
         (parent.height - root.tokens.pillHeight) / 2)
     }
 
-    Row {
+    Presentation.InkRow {
       id: content
+      optical: !root.bar || !root.bar.vertical
       anchors.centerIn: parent
       spacing: root.tokens.compactGap
 
@@ -138,8 +139,11 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: Commons.Style.space(20)
         height: Commons.Style.space(14)
+        readonly property real inkLeft: gpuGlyph.inkLeft
+        readonly property real inkRight: gpuGlyph.inkRight
 
         Presentation.BarGlyph {
+          id: gpuGlyph
           anchors.fill: parent
           text: "󰢮"
           font.family: Commons.Style.font.family
@@ -147,7 +151,8 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.telemetryAvailable

@@ -398,6 +398,12 @@ Ui.Panel {
           Behavior on scale { NumberAnimation { duration: 120 } }
 
           Rectangle {
+            id: defaultHalo
+            Presentation.BarInk { id: haloInk; target: defaultHalo }
+            transform: Translate {
+              x: haloInk.enabled ? haloInk.snapX(0) : 0
+              y: haloInk.enabled ? haloInk.rectangleY(defaultHalo.height) : 0
+            }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
             width: Commons.Style.space(cell.focused ? 34 : 16)
@@ -410,6 +416,12 @@ Ui.Panel {
           }
 
           Rectangle {
+            id: defaultMarker
+            Presentation.BarInk { id: markerInk; target: defaultMarker }
+            transform: Translate {
+              x: markerInk.enabled ? markerInk.snapX(0) : 0
+              y: markerInk.enabled ? markerInk.rectangleY(defaultMarker.height) : 0
+            }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
             width: Commons.Style.space(cell.focused ? 26 : 8)
@@ -422,6 +434,11 @@ Ui.Panel {
           }
 
           Rectangle {
+            id: numberMarker
+            Presentation.BarInk { id: numberInk; target: numberMarker }
+            readonly property real inkOffsetX: numberInk.enabled ? numberInk.snapX(0) : 0
+            readonly property real inkOffsetY: numberInk.enabled ? numberInk.rectangleY(height) : 0
+            transform: Translate { x: numberMarker.inkOffsetX; y: numberMarker.inkOffsetY }
             visible: root.renderStyle === "numbers"
             anchors.centerIn: parent
             width: cell.numberWidth
@@ -431,7 +448,8 @@ Ui.Panel {
               root.widgetInk.b,
               cell.focused ? 0.30 : cell.occupied ? 0.12 : 0.04)
 
-            Text {
+            Presentation.IconText {
+              barText: true
               anchors.centerIn: parent
               text: cell.modelData
               color: cell.focused
@@ -446,7 +464,9 @@ Ui.Panel {
             }
           }
 
-          Text {
+          Presentation.IconText {
+            barText: true
+            wholeInk: true
             visible: root.renderStyle === "magic"
             anchors.centerIn: parent
             anchors.verticalCenterOffset: cell.focused ? 0 : 1
@@ -460,7 +480,10 @@ Ui.Panel {
             Behavior on color { ColorAnimation { duration: 200 } }
           }
 
-          Text {
+          Presentation.IconText {
+            barText: true
+            wholeInk: true
+            hintedInk: true
             visible: root.renderStyle === "kanji"
             anchors.centerIn: parent
             text: cell.modelData >= 1 && cell.modelData <= 10
@@ -477,7 +500,8 @@ Ui.Panel {
             Behavior on color { ColorAnimation { duration: 200 } }
           }
 
-          Text {
+          Presentation.IconText {
+            barText: true
             visible: root.renderStyle === "rings"
             anchors.centerIn: parent
             text: cell.modelData
@@ -506,6 +530,12 @@ Ui.Panel {
             }
 
             Rectangle {
+              id: auroraMarker
+              Presentation.BarInk { id: auroraInk; target: auroraMarker }
+              transform: Translate {
+                x: auroraInk.enabled ? auroraInk.snapX(0) : 0
+                y: auroraInk.enabled ? auroraInk.rectangleY(auroraMarker.height) : 0
+              }
               anchors.centerIn: parent
               width: Commons.Style.space(
                 cell.focused ? 28 : cell.occupied ? 6 : 4)

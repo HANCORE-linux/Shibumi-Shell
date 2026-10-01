@@ -145,7 +145,8 @@ Ui.Panel {
     id: fullContent
     Row {
       spacing: root.tokens.contentGap
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "PWR"
@@ -156,7 +157,8 @@ Ui.Panel {
         font.letterSpacing: 0.5
         renderType: Text.NativeRendering
       }
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         text: root.shortName
         color: root.widgetInk
@@ -185,7 +187,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.shortName
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family

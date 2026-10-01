@@ -236,13 +236,6 @@ Ui.Panel {
         width: Commons.Style.space(88)
         height: mediaSurface.height
         anchors.verticalCenter: parent.verticalCenter
-        layer.enabled: true
-        layer.effect: MultiEffect {
-          maskEnabled: true
-          maskSource: marqueeMask
-          maskThresholdMin: 0.5
-          maskSpreadAtMin: 0.5
-        }
 
         function reset() {
           marqueeAnimation.stop()
@@ -254,16 +247,40 @@ Ui.Panel {
           })
         }
 
-        Text {
-          id: marqueeText
-          anchors.verticalCenter: parent.verticalCenter
-          text: root.trackLabel
-          color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-            root.widgetInk.b, root.playing ? 0.85 : 0.42)
-          font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: root.tokens ? root.tokens.labelSize : Commons.Style.font.body
-          renderType: Text.NativeRendering
-          onTextChanged: marqueeClip.reset()
+        // Keep the reservation above, but give the offscreen paint layer an
+        // integer physical extent and origin. A fractional layer would filter
+        // the already aligned native text a second time when composited.
+        Item {
+          id: marqueePaint
+          width: paintGrid.rasterExtent(marqueeClip.width)
+          height: paintGrid.rasterExtent(marqueeClip.height)
+          readonly property real inkOffsetX: paintGrid.snapX(0)
+          readonly property real inkOffsetY: paintGrid.snapY(0)
+          Presentation.BarInk { id: paintGrid; target: marqueePaint }
+          transform: Translate {
+            x: marqueePaint.inkOffsetX
+            y: marqueePaint.inkOffsetY
+          }
+          layer.enabled: true
+          layer.effect: MultiEffect {
+            maskEnabled: true
+            maskSource: marqueeMask
+            maskThresholdMin: 0.5
+            maskSpreadAtMin: 0.5
+          }
+
+          Presentation.IconText {
+            id: marqueeText
+            barText: true
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.trackLabel
+            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b, root.playing ? 0.85 : 0.42)
+            font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: root.tokens ? root.tokens.labelSize : Commons.Style.font.body
+            renderType: Text.NativeRendering
+            onTextChanged: marqueeClip.reset()
+          }
         }
 
         Connections {
@@ -332,8 +349,9 @@ Ui.Panel {
       fill: 1
     }
 
-    Text {
+    Presentation.IconText {
       id: activeText
+      barText: true
       visible: root.active && root.textMode
         && (!root.bar || !root.bar.vertical)
       anchors.centerIn: parent

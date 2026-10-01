@@ -1,5 +1,6 @@
 module Shibumi.Presentation
 BarGlyph 1.0 BarGlyph.qml
+BarInk 1.0 BarInk.qml
 ControlCenterIconText 1.0 ControlCenterIconText.qml
 HostTokens 1.0 HostTokens.qml
 IconText 1.0 IconText.qml

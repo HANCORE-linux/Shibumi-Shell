@@ -165,8 +165,9 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
         id: storageValue
+        barText: true
         visible: root.valueVisible
         width: visible ? implicitWidth : 0
         anchors.verticalCenter: parent.verticalCenter

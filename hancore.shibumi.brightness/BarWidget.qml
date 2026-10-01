@@ -207,7 +207,8 @@ Ui.Panel {
     Row {
       spacing: root.tokens.contentGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "BRI"
@@ -226,7 +227,8 @@ Ui.Panel {
         color: root.widgetInk
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.percent + "%"
@@ -251,7 +253,8 @@ Ui.Panel {
         color: root.widgetInk
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.compactValueVisible
         text: root.percent + "%"
@@ -266,7 +269,8 @@ Ui.Panel {
   Component {
     id: textBrightnessContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.percent + "%"
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -297,7 +301,8 @@ Ui.Panel {
         renderType: Text.NativeRendering
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.displayLabel

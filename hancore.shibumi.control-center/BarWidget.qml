@@ -391,7 +391,8 @@ Ui.Panel {
       }
     }
 
-    Text {
+    Presentation.IconText {
+      barText: true
       visible: root.shibumiWordmark
       anchors.centerIn: parent
       text: "SHIBUMI"

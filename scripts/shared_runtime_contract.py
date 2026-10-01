@@ -50,6 +50,7 @@ PRESENTATION_MODULE = Path("hancore.shibumi.state/lib/presentation")
 PRESENTATION_MODULE_FILES = frozenset({
     "qmldir",
     "BarGlyph.qml",
+    "BarInk.qml",
     "BarSymbols.js",
     "ControlCenterIconText.qml",
     "HostTokens.qml",
@@ -74,6 +75,7 @@ PRESENTATION_IMPORTERS = frozenset({
     "hancore.shibumi.brightness/BrightnessPanel.qml",
     "hancore.shibumi.center/BarWidget.qml",
     "hancore.shibumi.center/CalendarPanel.qml",
+    "hancore.shibumi.center/ClockWidget.qml",
     "hancore.shibumi.center/StatusIndicators.qml",
     "hancore.shibumi.center/SystemUpdateWidget.qml",
     "hancore.shibumi.center/WeatherPanel.qml",

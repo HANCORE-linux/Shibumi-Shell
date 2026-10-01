@@ -1343,7 +1343,7 @@ for dependency in python-dbus iputils glib2 systemd; do
 done
 [[ $(rg -c 'BoundedLabel \{' "$widget") -eq 2 ]] \
   || fail "V1/V2 bounded labels do not share the independent metrics path"
-rg -Fq 'component BoundedLabel: Text' "$widget" \
+rg -Fq 'component BoundedLabel: Presentation.IconText' "$widget" \
   || fail "bounded network labels lack a reusable text component"
 rg -Fq 'TextMetrics {' "$widget" \
   || fail "bounded network labels do not use independent text metrics"

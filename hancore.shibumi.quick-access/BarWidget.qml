@@ -237,8 +237,9 @@ Item {
     implicitHeight: root.tokens
       ? root.tokens.slotHeight : Commons.Style.space(28)
 
-    Text {
+    Presentation.IconText {
       id: actionLabel
+      barText: true
       anchors.centerIn: parent
       text: textAction.label
       color: textAction.active ? root.widgetInk
