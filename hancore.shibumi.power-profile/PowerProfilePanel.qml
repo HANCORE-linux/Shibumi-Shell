@@ -163,37 +163,20 @@ ShibumiPanel {
             active: panel.powerState.activeProfile === modelData
             hasCursor: panel.cursorActive && panel.selectedIndex === index
             enabled: !!panel.powerService && !panel.powerState.profileActionRunning
-            // Preserve native fill/border inputs independently from the label,
-            // including construction before the btop Binding takes ownership.
-            readonly property color fillForeground: active || hot
-              ? panel.bar ? panel.bar.background : Commons.Color.background
-              : panel.bar ? panel.bar.foreground : Commons.Color.foreground
-            color: hot ? Commons.Style.hoverFillFor(fillForeground, accent)
-              : active ? Commons.Style.selectedFillFor(fillForeground, accent)
-              : background
-            borderSpec: Commons.Border.controlSpec("normal", fillForeground, accent)
-            // Use Battery's Open btop colors for active and hover/cursor states.
-            Binding {
-              target: profileButton; property: "color"
-              when: profileButton.active || profileButton.hot
-              value: profileButton.hot && panel.bar ? Qt.lighter(panel.bar.urgent, 1.08)
-                : panel.bar ? panel.bar.urgent : Commons.Color.accent
-              restoreMode: Binding.RestoreBindingOrValue
-            }
-            states: State {
-              name: "btop-colors"
-              when: profileButton.active || profileButton.hot
-              PropertyChanges {
-                target: profileButton
-                borderSpec: Commons.Border.none()
-              }
-            }
+            // Active keeps the btop fill, even under the pointer. Ui.Button.hot
+            // is containsMouse or the keyboard-only hasCursor above.
+            color: active ? panel.bar ? panel.bar.urgent : Commons.Color.accent
+              : hot ? panel.controlHoverFillColor : background
+            borderSpec: active ? Commons.Border.none()
+              : hot ? Commons.Border.flat(panel.controlHoverBorderColor, panel.controlBorderWidth)
+              : Commons.Border.controlSpec("normal",
+                panel.bar ? panel.bar.foreground : Commons.Color.foreground, accent)
             onClicked: {
               if (panel.powerService && panel.powerService.setProfile(modelData))
                 panel.ownerWidget.close()
             }
             onHovered: function(h) {
-              if (h) { panel.cursorActive = true; panel.selectedIndex = index }
+              if (h) { panel.cursorActive = false; panel.selectedIndex = index }
             }
           }
         }
