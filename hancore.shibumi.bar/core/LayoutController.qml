@@ -204,12 +204,32 @@ Item {
       currentV1Splits(currentOrder), groupId) !== null
   }
 
+  function v1GroupDisabled(groupId) {
+    void(config)
+    return stateService && stateService.ready === true
+      && typeof stateService.groupEnabledForVariant === "function"
+      && stateService.groupEnabledForVariant(groupId, "v1") === false
+  }
+
+  function planV1PluginGroups(specs, stateValues) {
+    const order = currentV1Order()
+    const inactive = Array.isArray(specs) ? LayoutModel.GroupIds.concat(
+      specs.map(function(spec) {
+        return LayoutModel.dynamicGroupId(spec && spec.pluginId)
+      })).filter(function(group) {
+      const requested = stateValues && stateValues[group]
+      return group !== "" && (requested && typeof requested.v1 === "boolean"
+        ? requested.v1 === false : v1GroupDisabled(group))
+    }) : []
+    return LayoutModel.reconcilePluginGroups(
+      order, currentV1Splits(order), specs, inactive)
+  }
+
   function reconcileV1PluginGroups(specs, allowPartialValue) {
     if (mutationBusy) return false
     const currentOrder = currentV1Order()
     const currentSplits = currentV1Splits(currentOrder)
-    const next = LayoutModel.reconcilePluginGroups(
-      currentOrder, currentSplits, specs)
+    const next = planV1PluginGroups(specs)
     if (!next || (next.unplaced.length > 0 && allowPartialValue !== true)) return false
     if (LayoutModel.sameOrder(currentOrder, next.order)
         && LayoutModel.sameSplits(currentSplits, next.splits, next.order))

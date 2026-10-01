@@ -104,6 +104,15 @@ baseline.
   field, saved-layout migration or V2 removal change is introduced. The
   Control Center preflights installed V1 bar widgets before starting plugin
   uninstall; bar removal still revalidates the layout at its own mutation.
+- V1 activation allocates normally, then uses an empty base whose owner is
+  placed elsewhere, then reclaims a disabled extra occupant. Fixed and dynamic
+  occupants share requested-region / remaining left-center-right / lowest-index
+  priority. Disabled fixed bases and active occupants are never reclaimed.
+  Reclaimed fixed identities remain in optional `order.parked`, not in slots;
+  every G1-G15 identity must occur exactly once across slots and that bounded
+  list. Settings remain intact. Re-enabling requires atomic placement plus
+  V1 state through the same allocator, or refuses without writes. V2, capacity
+  limits, the optional-center rule and positional splits remain unchanged.
 - All split boundaries start disabled. Split markers, drag targets, invalid
   returns, persistence, and geometry must retain the V1 behavior.
 - V1 and V2 own independent optional layout-protection preferences. Both

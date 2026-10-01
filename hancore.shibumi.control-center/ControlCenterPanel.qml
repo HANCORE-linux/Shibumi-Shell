@@ -791,7 +791,10 @@ ShibumiPanel {
             id, enabled === true, section)
           if (!changed)
             pluginActionError = enabled === true
-              ? "The widget could not be added to the V1 layout."
+              ? bar && typeof bar.v1CatalogPlacementFull === "function"
+                  && bar.v1CatalogPlacementFull(id, section)
+                ? "No free place in the V1 bar. Turn off another additional widget first."
+                : "The widget could not be added to the V1 layout."
               : "The plugin could not be removed from the V1 layout."
           return changed
         }
@@ -824,7 +827,11 @@ ShibumiPanel {
       const changed = setPluginBarWidgetEnabled(id, enabled === true, section)
       if (!changed)
         pluginActionError = enabled === true
-          ? "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
+          ? !v2LayoutActive && bar
+              && typeof bar.v1CatalogPlacementFull === "function"
+              && bar.v1CatalogPlacementFull(id, section)
+            ? "No free place in the V1 bar. Turn off another additional widget first."
+            : "V1 has no free extension slot. Remove an active added plugin or free a V1 extension slot under Bars."
           : "The plugin could not be removed from the active bar."
       return changed
     }
@@ -1079,6 +1086,18 @@ ShibumiPanel {
   function setGroupEnabled(groupId, enabled, coalescePresentation) {
     const group = String(groupId || "")
     const variant = v2LayoutActive ? "v2" : "v1"
+    if (variant === "v1" && enabled === true && bar
+        && typeof bar.v1FixedGroupUnplaced === "function"
+        && bar.v1FixedGroupUnplaced(group)) {
+      const changed = runWithControlCenterRestore(function() {
+        return bar.requestWidgetGroupStateTransition(group, "v1", true)
+      }, true)
+      if (!changed)
+        pluginActionError = bar.v1FixedGroupPlacementFull(group)
+          ? "No free place in the V1 bar. Turn off another additional widget first."
+          : "The widget could not be added to the V1 layout."
+      return changed
+    }
     const coalesced = coalescePresentation === true
     const structuralIdle = !bar || (bar.layoutTransitionBusy !== true
       && bar.providerSnapshotTransitionBusy !== true

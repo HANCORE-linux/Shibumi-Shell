@@ -16,6 +16,7 @@ Item {
   property Component descriptionComponent: null
   property bool descriptionWrap: false
   property color foreground: Commons.Color.menu.text
+  property color descriptionColor: foreground
   property color accent: Commons.Color.menu.selectedText
   property real uiScale: 1
   property real preferredHeight: Commons.Style.space(80)
@@ -71,7 +72,7 @@ Item {
         visible: root.descriptionComponent === null
           && root.description !== ""
         text: root.description
-        color: root.foreground
+        color: root.descriptionColor
         opacity: 0.58
         wrapMode: root.descriptionWrap ? Text.WordWrap : Text.NoWrap
         maximumLineCount: root.descriptionWrap ? 2 : 1

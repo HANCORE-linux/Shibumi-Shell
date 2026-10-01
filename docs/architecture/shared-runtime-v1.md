@@ -193,6 +193,12 @@ separate gates. The runtime coordinator is not the persistence owner.
 one existing own-entry commit. It accepts a nonempty selection of `v1Layout`
 (`order` and `splits` together), `v2Layout`, `v2Boundaries`, `separators` (group to
 boolean/null), and `familyStates` (group to complete `v1`/`v2` boolean/null pair).
+The V1 order may additionally carry `parked`: a bounded, unique list of fixed
+G1-G15 identities displaced from disabled extra slots. Placed and parked sets
+are disjoint and together retain every fixed identity. It is not another slot
+region or swap provenance. State refuses writes leaving a parked identity
+V1-enabled; reactivation therefore includes placement in the same atomic patch.
+V2 never accepts this field; schema 1 and existing layouts remain unchanged.
 Null restores field absence, not explicit false. Unknown fields, invalid layouts,
 non-string slot IDs and incomplete pairs refuse the whole patch. The bounded
 widget normalizer must retain the complete affected projection; partial

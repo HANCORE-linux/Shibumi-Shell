@@ -800,7 +800,8 @@ Item {
       const id = entryId(entry)
       if (familyProviders.indexOf(id) >= 0 || removing.indexOf(id) >= 0) return false
       const groupId = GroupRegistry.dynamicGroupIdForModule(id)
-      return groupId === "" || !layoutStateController.groupLocation(groupId)
+      return groupId === "" || (!layoutStateController.groupLocation(groupId)
+        && !layoutStateController.v1GroupDisabled(groupId))
     }))
   }
 
@@ -1482,6 +1483,34 @@ Item {
     return setWidgetGroupVariantStates(states)
   }
 
+  function v1FixedGroupUnplaced(groupId) {
+    const order = layoutStateController.currentV1Order()
+    return LayoutModel.GroupIds.indexOf(groupId) >= 0
+      && (order.parked || []).indexOf(groupId) >= 0
+  }
+
+  function v1FixedGroupEnablePlan(groupId) {
+    const service = layoutStateController.stateService
+    if (layoutStateController.v2Mode || !mutationAdmissionReady
+        || layoutTransitionBusy || providerSnapshotTransitionBusy
+        || stateTransitionBusy || !service || service.ready !== true
+        || service.writePending !== false || !v1FixedGroupUnplaced(groupId))
+      return null
+    const scope = {familyStates: {}}
+    scope.familyStates[groupId] = {v1: null, v2: null}
+    const snapshot = service.layoutFamilySnapshot(scope)
+    if (!snapshot) return null
+    const states = snapshot.familyStates
+    states[groupId].v1 = true
+    const planned = v1CatalogPlan(currentLayoutSnapshot(), states)
+    return planned ? {layout: planned, states: states} : null
+  }
+
+  function v1FixedGroupPlacementFull(groupId) {
+    const planned = v1FixedGroupEnablePlan(groupId)
+    return !!planned && planned.layout.unplaced.indexOf(groupId) >= 0
+  }
+
   function requestWidgetGroupStateTransition(groupId, variantValue, enabled) {
     if (!mutationAdmissionReady) return false
     const group = String(groupId || "")
@@ -1491,6 +1520,15 @@ Item {
         || stateTransitionBusy || GroupRegistry.GroupIds.indexOf(group) < 0
         || ["v1", "v2"].indexOf(variant) < 0
         || typeof enabled !== "boolean") return false
+    if (variant === "v1" && enabled && v1FixedGroupUnplaced(group)) {
+      const planned = v1FixedGroupEnablePlan(group)
+      return !!planned && planned.layout.unplaced.length === 0
+        && stateTransition.request({v1Layout: {
+          order: planned.layout.order, splits: planned.layout.splits
+        }, familyStates: planned.states}, {
+          kind: "state-only", group: group, variant: variant, enabled: true
+        })
+    }
     const states = widgetGroupVariantStates([group])
     const stateService = layoutStateController.stateService
     if (!states || !stateService || stateService.ready !== true
@@ -1533,6 +1571,34 @@ Item {
     return groups.length === 0 || setWidgetGroupVariantStates(stateValues)
   }
 
+  function v1CatalogPlan(nextLayout, stateValues) {
+    const specs = v1PluginSpecsForLayout(nextLayout)
+    const bindings = WidgetFamilies.v1SlotBindings(specs,
+      layoutStateController.currentV1Order(), pluginRegistry,
+      catalogObservation, suiteHostShell.scoped)
+    const providers = Object.values(bindings)
+    return layoutStateController.planV1PluginGroups(specs.filter(function(spec) {
+      return spec && providers.indexOf(spec.pluginId) < 0
+    }), stateValues)
+  }
+
+  function v1CatalogPlacementFull(widgetId, region) {
+    const service = layoutStateController.stateService
+    if (layoutStateController.v2Mode || !mutationAdmissionReady
+        || layoutTransitionBusy || !service || service.ready !== true
+        || service.writePending !== false) return false
+    const id = String(widgetId || "")
+    const next = planNativeTransition(currentLayoutSnapshot(), {
+      kind: "catalog-layout", id: id, installed: true, region: region,
+      removeIds: conflictingLayoutProviderIds(id)
+    })
+    if (!next) return false
+    const states = ({})
+    states["G:" + id] = {v1: true}
+    const planned = v1CatalogPlan(next, states)
+    return !!planned && planned.unplaced.indexOf(id) >= 0
+  }
+
   function catalogLayoutPatch(nextLayout, stateValues) {
     if (!Util.isPlainObject(nextLayout)) return null
     const specs = activePluginSpecsForLayout(nextLayout)
@@ -1543,15 +1609,7 @@ Item {
       if (!planned || planned.unplaced.length > 0) return null
       patch.v2Layout = planned.layout
     } else {
-      const order = layoutStateController.currentV1Order()
-      const splits = layoutStateController.currentV1Splits(order)
-      const bindings = WidgetFamilies.v1SlotBindings(specs, order,
-        pluginRegistry, catalogObservation, suiteHostShell.scoped)
-      const providers = Object.values(bindings)
-      const planned = LayoutModel.reconcilePluginGroups(order, splits,
-        specs.filter(function(spec) {
-          return spec && providers.indexOf(spec.pluginId) < 0
-        }))
+      const planned = v1CatalogPlan(nextLayout, stateValues)
       if (!planned || planned.unplaced.length > 0) return null
       patch.v1Layout = {order: planned.order, splits: planned.splits}
     }
@@ -1636,7 +1694,7 @@ Item {
     return !!(row && row.id === id
       && (row.enabled === false || (row.enabled === true
         && !layoutStateController.v2Mode
-        && isV1AdditionalSuiteWidget(id) && !layoutContains(id)
+        && isV1AdditionalSuiteWidget(id) && !v1AdditionalWidgetPlaced(id)
         && registeredWidgetComponent(id) !== null))
       && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
   }

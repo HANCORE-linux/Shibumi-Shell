@@ -89,16 +89,41 @@ function validOrder(value) {
       if (GroupIds.indexOf(id) >= 0) fixedCount++
     }
   }
+  var parked = value.parked === undefined ? [] : value.parked
+  if (!Array.isArray(parked) || parked.length > GroupIds.length) return false
+  for (var p = 0; p < parked.length; p++) {
+    var group = parked[p]
+    if (typeof group !== "string" || GroupIds.indexOf(group) < 0 || seen[group])
+      return false
+    seen[group] = true
+    fixedCount++
+  }
   return fixedCount === GroupIds.length
 }
 
 function copyOrder(value) {
   if (!validOrder(value)) return null
-  return {
+  var result = {
     left: value.left.slice(),
     center: value.center.slice(),
     right: value.right.slice()
   }
+  if (value.parked && value.parked.length) result.parked = value.parked.slice()
+  return result
+}
+
+// Explicitly retain displaced fixed identities without allocating a slot or
+// recording swap provenance. Every fixed group remains placed XOR parked.
+function assignGroup(order, region, index, groupId) {
+  var previous = order[region][index]
+  var parked = (order.parked || []).filter(function(group) {
+    return group !== groupId
+  })
+  if (GroupIds.indexOf(previous) >= 0 && previous !== groupId)
+    parked.push(previous)
+  order[region][index] = groupId
+  if (parked.length) order.parked = parked
+  else delete order.parked
 }
 
 function slotRoles(value) {
@@ -302,18 +327,27 @@ function preferredOuterRegions(regionValue, orderValue) {
 }
 
 function addDynamicGroup(orderValue, splitsValue, pluginValue, regionValue) {
+  return addGroup(orderValue, splitsValue, dynamicGroupId(pluginValue), regionValue)
+}
+
+function addGroup(orderValue, splitsValue, groupId, regionValue) {
   var order = copyOrder(orderValue)
   var splits = copySplits(splitsValue, orderValue)
-  var groupId = dynamicGroupId(pluginValue)
-  if (!order || !splits || groupId === "") return null
+  if (!order || !splits || (GroupIds.indexOf(groupId) < 0
+      && !isDynamicGroupId(groupId))) return null
   if (locationFor(order, groupId)) return { order: order, splits: splits }
+  var home = locationFor(defaultOrder(), groupId)
+  if (home && order[home.region][home.index] === "") {
+    assignGroup(order, home.region, home.index, groupId)
+    return { order: order, splits: splits }
+  }
 
   // Center capacity is explicitly added by the user, never grown by plugin
   // reconciliation. Preserve legacy outer allocation unless a center-bound
   // provider can use that already existing empty destination.
   if (String(regionValue || "") === "center" && order.center.length === 2
       && order.center[1] === "") {
-    order.center[1] = groupId
+    assignGroup(order, "center", 1, groupId)
     return { order: order, splits: splits }
   }
   var candidates = preferredOuterRegions(regionValue, order)
@@ -321,13 +355,13 @@ function addDynamicGroup(orderValue, splitsValue, pluginValue, regionValue) {
     var region = candidates[c]
     for (var index = baseCount(region); index < order[region].length; index++) {
       if (order[region][index] !== "") continue
-      order[region][index] = groupId
+      assignGroup(order, region, index, groupId)
       return validOrder(order) ? { order: order, splits: splits } : null
     }
     var expanded = addSlot(order, region)
     if (!expanded) continue
     var expandedSplits = resizeSplits(splits, expanded)
-    expanded[region][expanded[region].length - 1] = groupId
+    assignGroup(expanded, region, expanded[region].length - 1, groupId)
     return validOrder(expanded) && validSplits(expandedSplits, expanded)
       ? { order: expanded, splits: expandedSplits } : null
   }
@@ -356,7 +390,8 @@ function normalizedPluginSpecs(value) {
   return result
 }
 
-function reconcilePluginGroups(orderValue, splitsValue, specsValue) {
+function reconcilePluginGroups(orderValue, splitsValue, specsValue,
+    inactiveValue) {
   var order = copyOrder(orderValue)
   var splits = copySplits(splitsValue, orderValue)
   var specs = normalizedPluginSpecs(specsValue)
@@ -380,12 +415,51 @@ function reconcilePluginGroups(orderValue, splitsValue, specsValue) {
     splits = removed.splits
   }
 
+  var inactive = Array.isArray(inactiveValue) ? inactiveValue : []
+  // Only an explicitly active request may restore a parked fixed group;
+  // the controller includes every confirmed disabled fixed identity below.
+  for (var f = 0; f < (order.parked || []).length; f++) {
+    var fixed = order.parked[f]
+    specs.push({pluginId: fixed, groupId: fixed,
+      region: locationFor(defaultOrder(), fixed).region})
+  }
   var unplaced = []
   for (var p = 0; p < specs.length; p++) {
-    var dynamicId = dynamicGroupId(specs[p].pluginId)
+    var dynamicId = specs[p].groupId || dynamicGroupId(specs[p].pluginId)
     if (locationFor(order, dynamicId)) continue
-    var added = addDynamicGroup(
-      order, splits, specs[p].pluginId, specs[p].region)
+    if (inactive.indexOf(dynamicId) >= 0) continue
+    var added = addGroup(order, splits, dynamicId, specs[p].region)
+    // After ordinary allocation: vacated base slots, then inactive extras.
+    // Each pass prefers the requested region, then left/center/right, with
+    // the lowest index first. Keep slot roles, split positions and settings.
+    var candidates = [specs[p].region].concat(Regions.filter(function(region) {
+      return region !== specs[p].region
+    }))
+    var owners = defaultOrder()
+    for (var b = 0; !added && b < candidates.length; b++) {
+      var baseRegion = candidates[b]
+      for (var baseSlot = 0; baseSlot < baseCount(baseRegion); baseSlot++) {
+        if (order[baseRegion][baseSlot] !== ""
+            || !locationFor(order, owners[baseRegion][baseSlot])) continue
+        var occupiedBase = copyOrder(order)
+        assignGroup(occupiedBase, baseRegion, baseSlot, dynamicId)
+        added = {order: occupiedBase, splits: splits}
+        break
+      }
+    }
+    // Fixed and dynamic disabled occupants share region/index priority.
+    // Disabled fixed base slots and active occupants are never reclaimed.
+    for (var c = 0; !added && c < candidates.length; c++) {
+      var region = candidates[c]
+      for (var slot = baseCount(region); slot < order[region].length; slot++) {
+        var occupant = order[region][slot]
+        if (!occupant || inactive.indexOf(occupant) < 0) continue
+        var replacement = copyOrder(order)
+        assignGroup(replacement, region, slot, dynamicId)
+        added = {order: replacement, splits: splits}
+        break
+      }
+    }
     if (!added) {
       unplaced.push(specs[p].pluginId)
       continue
@@ -429,7 +503,9 @@ function allSplits(enabledValue, orderValue) {
 }
 
 function sameOrder(left, right) {
-  if (!validOrder(left) || !validOrder(right)) return false
+  if (!validOrder(left) || !validOrder(right)
+      || JSON.stringify(left.parked || []) !== JSON.stringify(right.parked || []))
+    return false
   for (var r = 0; r < Regions.length; r++) {
     var region = Regions[r]
     if (left[region].length !== right[region].length) return false

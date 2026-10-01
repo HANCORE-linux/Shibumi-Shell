@@ -202,13 +202,24 @@ function normalizedOrder(value) {
     seen[id] = true
     if (V1GroupIds.indexOf(id) >= 0) fixedCount++
   }
+  var parked = value.parked === undefined ? [] : value.parked
+  if (!Array.isArray(parked) || parked.length > V1GroupIds.length) return null
+  for (var p = 0; p < parked.length; p++) {
+    var group = parked[p]
+    if (typeof group !== "string" || V1GroupIds.indexOf(group) < 0 || seen[group])
+      return null
+    seen[group] = true
+    fixedCount++
+  }
   if (fixedCount !== V1GroupIds.length) return null
 
-  return {
+  var result = {
     left: value.left.slice(),
     center: value.center.slice(),
     right: value.right.slice()
   }
+  if (parked.length) result.parked = parked.slice()
+  return result
 }
 
 function normalizedV1SlotRoles(value, orderValue) {

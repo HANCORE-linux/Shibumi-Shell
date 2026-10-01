@@ -50,6 +50,7 @@ Path(sys.argv[2]).write_text('''import QtQuick
 import Quickshell
 import qs.Commons
 import "BAR_CORE/GroupRegistry.js" as GroupRegistry
+import "BAR_CORE/LayoutModel.js" as LayoutModel
 QtObject { id: root
   property bool nativeCatalogRequired: false; property bool v2LayoutActive: false; property string pluginActionError: ""
   property var pluginRegistry: ({installedPlugins: {}, setEnabled: function() { return false }})
@@ -58,7 +59,20 @@ QtObject { id: root
   function setPluginBarWidgetEnabled(id, on, section) { layoutWrites++; return false }
   function groupEnabled(group) { return groups[group] === true }
   function setGroupEnabled(group, on, coalesce) { groups[group] = on; return true }
-  Component.onCompleted: Qt.callLater(function() { let failures = 0; for (const id of ["hancore.shibumi.temperature", "hancore.shibumi.gpu", "hancore.shibumi.storage"]) { pluginRegistry.installedPlugins[id] = {kinds:["bar-widget"]}; for (const on of [true, false, true, false]) { layout = [{id:"other"}, {id:"hancore.shibumi.gpu", shibumiModule:true}, {id:"hancore.shibumi.temperature"}, {id:"hancore.shibumi.storage"}]; const before = JSON.stringify(layout); groups["G:" + id] = !on; if (!setPluginEnabled(id, on, true) || groupEnabled("G:" + id) !== on || layoutWrites !== 0 || JSON.stringify(layout) !== before) { console.error("V1 configured widget did not toggle its group without layout mutation", id, on, pluginActionError); failures++ } } } if (failures) Qt.exit(1); else { console.log("V1 configured widget toggles passed with actual Bar membership"); Qt.quit() } })
+  Component.onCompleted: Qt.callLater(function() {
+    const order = {left:["G1","G2","G3","G4","G5","G6","G:37signals.hey","G:hancore.omaq","G:hancore.shibumi.gpu"],center:["G8","G7"],right:["G9","G10","G11","G14","G12","G13","","G15","G:37signals.basecamp"]}
+    const ids = ["hancore.omaq","37signals.basecamp","37signals.hey","hancore.shibumi.gpu","hancore.shibumi.temperature"]
+    const vacated = LayoutModel.reconcilePluginGroups(order, LayoutModel.resizeSplits(LayoutModel.defaultSplits(), order), ids.map(id => ({pluginId:id,region:"right"})), ["G:hancore.shibumi.gpu"])
+    const expectedBase = LayoutModel.copyOrder(order); expectedBase.right[6] = "G:hancore.shibumi.temperature"
+    if (!vacated || vacated.unplaced.length || JSON.stringify(vacated.order) !== JSON.stringify(expectedBase) || JSON.stringify(vacated.splits) !== JSON.stringify(LayoutModel.resizeSplits(LayoutModel.defaultSplits(), order))) { console.error("P14 vacated Bluetooth base must precede inactive extra reclamation"); Qt.exit(1); return }
+    order.right[6] = "G:hancore.shibumi.storage"; ids.push("hancore.shibumi.storage")
+    const fixed = LayoutModel.reconcilePluginGroups(vacated.order, vacated.splits, ids.map(id => ({pluginId:id,region:"right"})), ["G15","G:hancore.shibumi.gpu"])
+    if (!fixed || fixed.unplaced.length || fixed.order.right[7] !== "G:hancore.shibumi.storage" || fixed.order.left[8] !== "G:hancore.shibumi.gpu" || JSON.stringify(fixed.order.parked) !== '["G15"]' || !LayoutModel.validOrder(fixed.order) || LayoutModel.locationFor(fixed.order,"G15")) { console.error("P14 disabled fixed extra must yield before the later-region dynamic extra"); Qt.exit(1); return }
+    const returned = LayoutModel.reconcilePluginGroups(fixed.order, fixed.splits, ids.map(id => ({pluginId:id,region:"right"})), ["G:hancore.shibumi.gpu"])
+    if (!returned || returned.unplaced.length || returned.order.left[8] !== "G15" || returned.order.parked || returned.order.right[7] !== "G:hancore.shibumi.storage" || JSON.stringify(returned.splits) !== JSON.stringify(vacated.splits)) { console.error("P14 parked fixed return must use the same allocator without losing splits"); Qt.exit(1); return }
+    const next = LayoutModel.reconcilePluginGroups(order, LayoutModel.resizeSplits(LayoutModel.defaultSplits(), order), ids.map(id => ({pluginId:id,region:"right"})), ["G:hancore.shibumi.gpu"])
+    if (!next || next.unplaced.length || next.order.left[8] !== "G:hancore.shibumi.temperature" || JSON.stringify(next.order.right) !== JSON.stringify(order.right) || JSON.stringify(next.order.center) !== JSON.stringify(order.center) || JSON.stringify(next.order.left.slice(0,8)) !== JSON.stringify(order.left.slice(0,8))) { console.error("P14 disabled GPU did not release its exact additional slot"); Qt.exit(1); return }
+    let failures = 0; for (const id of ["hancore.shibumi.temperature", "hancore.shibumi.gpu", "hancore.shibumi.storage"]) { pluginRegistry.installedPlugins[id] = {kinds:["bar-widget"]}; for (const on of [true, false, true, false]) { layout = [{id:"other"}, {id:"hancore.shibumi.gpu", shibumiModule:true}, {id:"hancore.shibumi.temperature"}, {id:"hancore.shibumi.storage"}]; const before = JSON.stringify(layout); groups["G:" + id] = !on; if (!setPluginEnabled(id, on, true) || groupEnabled("G:" + id) !== on || layoutWrites !== 0 || JSON.stringify(layout) !== before) { console.error("V1 configured widget did not toggle its group without layout mutation", id, on, pluginActionError); failures++ } } } if (failures) Qt.exit(1); else { console.log("V1 configured widget toggles passed with actual Bar membership"); Qt.quit() } })
 ''' .replace('BAR_CORE', str(Path(sys.argv[1]) / 'hancore.shibumi.bar/core')) + methods + '}\n')
 PY
 timeout 5 "$quickshell_bin" -p "$tmpdir/v1-layout-noop.qml"
@@ -1619,7 +1633,7 @@ fi
 for suite_boundary in \
     'userToggleable: barWidget && (!suiteManaged || group !== "")' \
     'styleAvailable: true' \
-    'V1 has no free extension slot.' \
+    'No free place in the V1 bar. Turn off another additional widget first.' \
     'Control Center rejected suite-internal plugin toggle:' \
     '? String(manifest.barWidget.defaultSection) : "center"' \
     'setPluginBarWidgetEnabled(id, enabled === true, section)'; do

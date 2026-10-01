@@ -97,6 +97,9 @@ Item {
     const next = JSON.parse(JSON.stringify(current))
     if (mutator(next) === false || !StorageModel.finiteNumbers(next)) return false
     const normalized = ShibumiConfig.normalize(next)
+    // Enabling a displaced fixed group requires an atomic placement as well.
+    if ((normalized.order.parked || []).some(group =>
+        groupEnabledForVariantFrom(normalized, group, "v1"))) return false
     if (same(current, normalized)) return false
 
     // A queued request is not a completed save. Publication and settled status
@@ -682,7 +685,10 @@ Item {
 
   function transitionLayout(value, variant) {
     const regions = ["left", "center", "right"]
-    if (!exactKeys(value, regions) || !regions.every(region =>
+    const keys = variant === "v1" && value
+      && Object.prototype.hasOwnProperty.call(value, "parked")
+      ? regions.concat(["parked"]) : regions
+    if (!exactKeys(value, keys) || !keys.every(region =>
         Array.isArray(value[region]) && value[region].every(id => typeof id === "string"))) return null
     return variant === "v1" ? ShibumiConfig.normalizedOrder(value)
       : ShibumiConfig.normalizedV2Layout(value)
