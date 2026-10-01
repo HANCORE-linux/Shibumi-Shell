@@ -153,6 +153,8 @@ ShibumiPanel {
   property bool removalPluginWasInBar: false
   property var removalReplacementGroups: []
   property string pluginActionError: ""
+  readonly property string v1PlacementErrorMessage:
+    "The widget could not be added to the V1 layout."
   signal pluginRemovalFinished(
     string pluginId, bool success, string detail)
   signal pluginLayoutTransitionSettled(int serial, string result)
@@ -794,7 +796,7 @@ ShibumiPanel {
               ? bar && typeof bar.v1CatalogPlacementFull === "function"
                   && bar.v1CatalogPlacementFull(id, section)
                 ? "No free place in the V1 bar. Turn off another additional widget first."
-                : "The widget could not be added to the V1 layout."
+                : panel.v1PlacementErrorMessage
               : "The plugin could not be removed from the V1 layout."
           return changed
         }
@@ -1095,7 +1097,7 @@ ShibumiPanel {
       if (!changed)
         pluginActionError = bar.v1FixedGroupPlacementFull(group)
           ? "No free place in the V1 bar. Turn off another additional widget first."
-          : "The widget could not be added to the V1 layout."
+          : panel.v1PlacementErrorMessage
       return changed
     }
     const coalesced = coalescePresentation === true
