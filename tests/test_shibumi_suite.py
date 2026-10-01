@@ -119,7 +119,7 @@ INVALID_EMPTY_REGISTRY_OUTPUTS = (
 BUG049_REACTIVATION_GUARD = """    return !!(row && row.id === id
       && (row.enabled === false || (row.enabled === true
         && !layoutStateController.v2Mode
-        && isV1AdditionalSuiteWidget(id) && !layoutContains(id)
+        && isV1AdditionalSuiteWidget(id) && !v1AdditionalWidgetPlaced(id)
         && registeredWidgetComponent(id) !== null))
       && Array.isArray(row.kinds) && row.kinds.indexOf("bar-widget") >= 0)
 """
@@ -185,7 +185,7 @@ def validate_bug049_static_contract(
         "V1 has no free extension slot. Remove an active added plugin or free "
         "a V1 extension slot under Bars."
     )
-    if branch.count(neutral_error) != 1 or capacity_error in branch:
+    if branch.count(neutral_error) + branch.count("panel.v1PlacementErrorMessage") != 1 or capacity_error in branch:
         raise AssertionError("Bug 049 G16-G18 failure text is not neutral")
     if panel_source.count(neutral_error) != 1 or panel_source.count(capacity_error) != 1:
         raise AssertionError("Bug 049 changed failure text outside G16-G18")

@@ -145,6 +145,10 @@ ShellRoot {
         return null
       }
 
+      function v1GroupDisabled(groupId) {
+        return fakeStateService.ready === true && typeof fakeStateService.groupEnabledForVariant === "function"
+          && fakeStateService.groupEnabledForVariant(groupId, "v1") === false
+      }
       function splitEnabled(region, index) { return false }
       function baseV1SlotCount(region) {
         return region === "center" ? 1 : 7
