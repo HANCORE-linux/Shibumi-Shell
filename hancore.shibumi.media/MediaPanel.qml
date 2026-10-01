@@ -685,29 +685,31 @@ ShibumiPanel {
     width: Commons.Style.space(24); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
     color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
     border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
-    readonly property bool transport: action === "previous" || action === "playPause" || action === "next"
-    Ui.OpticalGlyph {
-      visible: !button.transport
-      anchors.fill: parent; text: button.icon
-      color: button.checked ? panel.controlAccent : panel.controlForeground
-      fontFamily: "Material Symbols Rounded"; fontSize: Math.max(1, Math.round(Commons.Style.font.icon) - 2)
-    }
+    // Same Material glyphs with integer sizes targeting Shuffle's ink.
+    // Unhinted native outlines share a vertical ink center at -0.5 em.
+    readonly property var glyphSpec: ({
+      shuffle: {text: "\ue043", size: 10},
+      repeat: {text: "\ue040", size: 10},
+      repeat_one: {text: "\ue041", size: 10},
+      skip_previous: {text: "\ue045", size: 13},
+      play_arrow: {text: "\ue037", size: 15},
+      pause: {text: "\ue034", size: 12},
+      skip_next: {text: "\ue044", size: 13}
+    })[icon] || {text: icon, size: 11}
     TextMetrics {
-      id: transportMetrics
-      text: button.icon
+      id: iconMetrics
+      text: button.glyphSpec.text
       font.family: "Material Symbols Rounded"
-      // Native Material Symbols ink matches Shuffle/Repeat, without scaling a texture.
-      font.pixelSize: Math.max(1, Math.round(Commons.Style.font.icon * (button.icon === "pause" ? 19 : 21) / 13) - 2)
+      font.pixelSize: Math.max(1, Math.round((Commons.Style.font.icon - 2) * button.glyphSpec.size / 11))
+      font.hintingPreference: Font.PreferNoHinting
+      renderType: Text.NativeRendering
     }
     Text {
-      visible: button.transport
-      text: button.icon; font: transportMetrics.font
-      color: button.accent ? panel.controlAccent : panel.controlForeground
+      text: iconMetrics.text; font: iconMetrics.font
+      color: button.accent || button.checked ? panel.controlAccent : panel.controlForeground
       renderType: Text.NativeRendering
-      // Tight horizontal bounds; the hinted native line box centers these raster sizes.
-      // TextMetrics' ligature vertical bounds include blank baseline space.
-      x: Math.round((parent.width - transportMetrics.tightBoundingRect.width) / 2 - transportMetrics.tightBoundingRect.x)
-      y: Math.round((parent.height - height) / 2)
+      x: (parent.width - iconMetrics.tightBoundingRect.width) / 2 - iconMetrics.tightBoundingRect.x
+      y: (parent.height + font.pixelSize) / 2 - baselineOffset
     }
     MouseArea {
       id: buttonMouse; anchors.fill: parent; enabled: button.enabled; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
