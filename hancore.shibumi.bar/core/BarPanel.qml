@@ -12,11 +12,16 @@ PanelWindow {
     && screen.name !== ""
     && screen.width > 0
     && screen.height > 0
-  // V1's top island ends at barSize; its 8px blur plus 1px offset must
-  // paint beyond that edge without enlarging layout, reservation or input.
+  // Let top shadows fade beyond barSize without enlarging layout or input:
+  // V1 uses 8px blur + 1px offset; Full/Fit use 9px + 2px independently
+  // of the V1 shadow toggle. Notch only needs its 1px antialiasing fringe.
   readonly property int shadowPadding: !bar.vertical && bar.position === "top"
-    && bar.visualTokens && bar.visualTokens.shellStyle === "shibumi"
-    && bar.visualTokens.shadowEnabled === true ? 9 : 0
+    && bar.visualTokens
+      ? bar.visualTokens.shellStyle === "shibumi"
+        ? bar.visualTokens.shadowEnabled === true ? 9 : 0
+        : ["full", "fit"].indexOf(bar.visualTokens.shellStyle) >= 0 ? 11
+          : bar.visualTokens.shellStyle === "notch" ? 1 : 0
+      : 0
   readonly property var layoutSession: dragSession
   readonly property real surfaceWidth: barSurfaceLoader.item
     ? Number(barSurfaceLoader.item.width) || 0 : 0
