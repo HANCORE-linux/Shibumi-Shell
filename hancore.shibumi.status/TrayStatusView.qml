@@ -207,9 +207,10 @@ Item {
         Rectangle {
           id: badgePaint
           readonly property real pixel: 1 / badgePlacement.dpr
-          readonly property real diameter: Math.max(1,
-            Math.round(Commons.Style.space(10) * badgePlacement.dpr)) * pixel
-          width: Math.floor(Math.max(diameter, badgeValue.implicitWidth + Commons.Style.space(6)) / pixel) * pixel
+          readonly property real diameter: (2 * Math.floor(
+            Math.round(Commons.Style.space(10) * badgePlacement.dpr) / 2) + 1) * pixel
+          width: badgeValue.text.length === 1 ? diameter
+            : Math.floor(Math.max(diameter, badgeValue.implicitWidth + Commons.Style.space(3)) / pixel) * pixel
           height: diameter
           radius: height / 2
           color: root.customToneActive
@@ -237,20 +238,24 @@ Item {
             id: valueInk
             text: badgeValue.text
             font: Qt.font({family: badgeValue.font.family,
-              pixelSize: badgeValue.font.pixelSize * valuePlacement.metricScale,
-              weight: badgeValue.font.weight, hintingPreference: Font.PreferNoHinting})
+              pixelSize: Math.round(badgeValue.font.pixelSize * valuePlacement.dpr),
+              weight: badgeValue.font.weight, hintingPreference: Font.PreferDefaultHinting})
+            renderType: Text.NativeRendering
           }
           Text {
             id: badgeValue
             text: root.drawerCount > 99 ? "99+" : String(root.drawerCount)
             x: valuePlacement.snapX(parent.width / 2
-              - (valueInk.tightBoundingRect.x + valueInk.tightBoundingRect.width / 2) / valuePlacement.metricScale)
-            y: valuePlacement.snapY(parent.height / 2
-              - (valueInk.tightBoundingRect.y + valueInk.tightBoundingRect.height / 2) / valuePlacement.metricScale) - baselineOffset
+              - (valueInk.tightBoundingRect.x + valueInk.tightBoundingRect.width / 2) / valuePlacement.dpr)
+            // Match the native raster font; on an odd/even tie use the upper pixel.
+            y: Math.floor((valuePlacement.origin.y + parent.height / 2) * valuePlacement.dpr
+              - valueInk.tightBoundingRect.y - valueInk.tightBoundingRect.height / 2) / valuePlacement.dpr
+              - valuePlacement.origin.y - Math.round(baselineOffset * valuePlacement.dpr) / valuePlacement.dpr
             color: badgeText.color
             font.family: badgeText.font.family
-            font.pixelSize: Commons.Style.space(7)
+            font.pixelSize: Commons.Style.space(8)
             font.bold: true
+            renderType: Text.NativeRendering
           }
         }
       }
