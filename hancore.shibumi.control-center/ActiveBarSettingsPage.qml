@@ -115,7 +115,7 @@ Column {
 
     Column {
       anchors.left: parent.left
-      anchors.right: activeState.left
+      anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       anchors.leftMargin: Commons.Style.space(12)
       anchors.rightMargin: Commons.Style.space(12)
@@ -140,18 +140,6 @@ Column {
       }
     }
 
-    Text {
-      id: activeState
-      anchors.right: parent.right
-      anchors.rightMargin: Commons.Style.space(12)
-      anchors.verticalCenter: parent.verticalCenter
-      text: "●  LIVE"
-      color: root.accent
-      font.family: root.controller.marketFont
-      font.pixelSize: Commons.Style.font.caption * root.uiScale
-      font.weight: Font.DemiBold
-      font.letterSpacing: 0.8
-    }
   }
 
   Row {
