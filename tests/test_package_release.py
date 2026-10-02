@@ -225,7 +225,7 @@ class PackageReleaseTests(unittest.TestCase):
                 "suiteVersion": "0.1.1-beta.16.1",
                 "sourceRevisions": ["package:0.1.1-beta.16.1"],
                 "settingsStorageVersion": 1,
-                "payloadDigest": "aad95737d0650873140a8de723f76a75294eecc82528902a70366019bc68fd79",
+                "payloadDigest": "25fe4252e981e57f1a550862d448e4f9d858e66efb34f915af32743480fa05d7",
             },
         }
         self.assertEqual(set(states), set(expected))
