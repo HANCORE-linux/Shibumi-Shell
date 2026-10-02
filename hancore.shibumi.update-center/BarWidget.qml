@@ -47,8 +47,8 @@ Ui.Panel {
   property bool customToneActive: false
   property color badgeContrastColor: bar
     ? bar.background : Commons.Color.background
-  readonly property color badgeFillColor: updateBadge.color
-  readonly property color badgeTextColor: badgeText.color
+  readonly property color badgeFillColor: badgePaint.color
+  readonly property color badgeTextColor: badgeValue.color
   readonly property real badgeLayer: updateBadge.z
   readonly property string fontFamily: bar
     ? String(bar.fontFamily || Commons.Style.font.family)
@@ -173,6 +173,8 @@ Ui.Panel {
           ? Text.QtRendering : Text.NativeRendering
       }
 
+      Presentation.BarInk { id: badgePlacement; target: updateBadge }
+
       Rectangle {
         id: updateBadge
         visible: root.updateCount > 0
@@ -186,13 +188,14 @@ Ui.Panel {
           badgeText.implicitWidth + Commons.Style.space(6)))
         height: Commons.Style.space(12)
         radius: height / 2
-        color: root.contentColor
+        color: "transparent"
         border.width: 0
         border.color: "transparent"
         z: 10
 
         Text {
           id: badgeText
+          visible: false
           anchors.centerIn: parent
           text: root.updateCount > 99 ? "99+" : String(root.updateCount)
           color: root.customToneActive
@@ -201,6 +204,55 @@ Ui.Panel {
           font.pixelSize: Math.max(Commons.Style.space(7),
             Commons.Style.font.caption - 3)
           font.bold: true
+        }
+
+        // Paint only; the original badge still reserves its layout and anchor.
+        Rectangle {
+          id: badgePaint
+          readonly property real pixel: 1 / badgePlacement.dpr
+          readonly property real diameter: Math.max(1,
+            Math.round(Commons.Style.space(10) * badgePlacement.dpr)) * pixel
+          width: Math.floor(Math.max(diameter, badgeValue.implicitWidth + Commons.Style.space(6)) / pixel) * pixel
+          height: diameter
+          radius: height / 2
+          color: root.contentColor
+          x: {
+            const origin = badgePlacement.origin
+            const slot = root.mapToItem(updateBadge, 0, 0)
+            const first = Math.ceil((origin.x + slot.x) / pixel) * pixel - origin.x
+            // Keep the single-digit circle anchored; extra width grows right.
+            const last = Math.floor((origin.x + slot.x + root.width) / pixel) * pixel - origin.x - diameter
+            return Math.max(first, Math.min(last, badgePlacement.snapX(0)))
+          }
+          y: {
+            const origin = badgePlacement.origin
+            const slot = root.mapToItem(updateBadge, 0, 0)
+            const first = Math.ceil((origin.y + slot.y) / pixel) * pixel - origin.y
+            const last = Math.floor((origin.y + slot.y + root.height) / pixel) * pixel - origin.y - height
+            return Math.max(first, Math.min(last,
+              badgePlacement.snapY((updateBadge.height - height) / 2)))
+          }
+
+          Presentation.BarInk { id: valuePlacement; target: badgePaint }
+          TextMetrics {
+            id: valueInk
+            text: badgeValue.text
+            font: Qt.font({family: badgeValue.font.family,
+              pixelSize: badgeValue.font.pixelSize * valuePlacement.metricScale,
+              weight: badgeValue.font.weight, hintingPreference: Font.PreferNoHinting})
+          }
+          Text {
+            id: badgeValue
+            text: root.updateCount > 99 ? "99+" : String(root.updateCount)
+            x: valuePlacement.snapX(parent.width / 2
+              - (valueInk.tightBoundingRect.x + valueInk.tightBoundingRect.width / 2) / valuePlacement.metricScale)
+            y: valuePlacement.snapY(parent.height / 2
+              - (valueInk.tightBoundingRect.y + valueInk.tightBoundingRect.height / 2) / valuePlacement.metricScale) - baselineOffset
+            color: badgeText.color
+            font.family: badgeText.font.family
+            font.pixelSize: Commons.Style.space(7)
+            font.bold: true
+          }
         }
       }
     }
