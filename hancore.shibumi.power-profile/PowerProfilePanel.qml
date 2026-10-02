@@ -11,13 +11,15 @@ ShibumiPanel {
   required property var ownerWidget
   required property var powerService
   property int selectedIndex: 0
+  property bool cursorActive: false
   readonly property var powerState: powerService || ({ profiles: [], activeProfile: "",
-    profileActionRunning: false, profileError: "", profileLabel: function() { return "" } })
+    profileActionRunning: false, profileError: "" })
 
   owner: ownerWidget
   open: ownerWidget.opened && !!powerService && powerService.profileAvailable
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Commons.Style.space(220))
+  padding: 12
+  contentWidth: fittedContentWidth(Commons.Style.space(380))
   contentHeight: fittedContentHeight(column.implicitHeight)
 
   function syncSelection() {
@@ -28,7 +30,7 @@ ShibumiPanel {
   function moveSelection(delta) {
     var count = powerState.profiles.length
     if (count <= 0) return
-    selectedIndex = (selectedIndex + delta + count) % count
+    selectedIndex = Math.max(0, Math.min(count - 1, selectedIndex + delta))
   }
 
   function activateSelected() {
@@ -37,10 +39,49 @@ ShibumiPanel {
       ownerWidget.close()
   }
 
+  // Ui.Button animates its fill for 120ms after hover/cursor leaves. Derive
+  // the label from that painted fill, not the already-cleared state flags.
+  function profileForegroundRole(fill) {
+    const surface = panel.renderedSurfaceColor
+    const background = Qt.rgba(fill.r * fill.a + surface.r * (1 - fill.a),
+      fill.g * fill.a + surface.g * (1 - fill.a),
+      fill.b * fill.a + surface.b * (1 - fill.a), 1)
+    function linear(value) {
+      return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4)
+    }
+    function luminance(color) {
+      return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b)
+    }
+    const light = luminance(background)
+    function contrast(ink) {
+      const painted = Qt.rgba(ink.r * ink.a + background.r * (1 - ink.a),
+        ink.g * ink.a + background.g * (1 - ink.a),
+        ink.b * ink.a + background.b * (1 - ink.a), 1)
+      const value = luminance(painted)
+      return (Math.max(light, value) + 0.05) / (Math.min(light, value) + 0.05)
+    }
+    const normal = panel.bar ? panel.bar.foreground : Commons.Color.foreground
+    const filled = panel.bar ? panel.bar.background : Commons.Color.background
+    const normalContrast = contrast(normal), filledContrast = contrast(filled)
+    if (Math.max(normalContrast, filledContrast) >= 4.5)
+      return normalContrast >= filledContrast ? 0 : 1
+    // A fading mid-tone can contrast poorly with both theme colors.
+    return light > 0.179 ? 2 : 3
+  }
+
+  // The profile-to-glyph mapping from Omarchy 4.0.4's power Model.js.
+  function profileIcon(name) {
+    if (name === "power-saver") return "󰌪"
+    if (name === "balanced") return "󰊚"
+    if (name === "performance") return "󰓅"
+    return "󰂄"
+  }
+
   onPowerServiceChanged: syncSelection()
   onOpenChanged: if (open) {
     powerService.refreshProfiles()
     syncSelection()
+    cursorActive = false
   }
 
   Ui.PanelKeyCatcher {
@@ -54,28 +95,27 @@ ShibumiPanel {
     }
 
     onMoveRequested: function(dx, dy) {
+      if (!panel.cursorActive) { panel.cursorActive = true; return }
       panel.moveSelection(dx !== 0 ? dx : dy)
     }
-    onActivateRequested: panel.activateSelected()
+    onActivateRequested: if (panel.cursorActive) panel.activateSelected()
     onCloseRequested: panel.ownerWidget.close()
     onTabRequested: function(direction) { panel.ownerWidget.switchPanel(direction) }
 
     Column {
       id: column
       width: parent.width
-      spacing: Commons.Style.space(5)
+      spacing: Commons.Style.space(8)
 
       Row {
         width: parent.width
         spacing: Commons.Style.space(4)
-        Text {
+        Presentation.PanelHeading {
           width: parent.width - closeAction.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
-          text: "Power Profile"
-          color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+          text: "POWER PROFILE"
+          color: panel.controlForeground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.heading
-          font.weight: Font.Medium
         }
         IconAction {
           id: closeAction
@@ -89,81 +129,64 @@ ShibumiPanel {
       Rectangle {
         width: parent.width
         height: 1
-        color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
-          panel.bar.foreground.b, 0.18) : Commons.Color.popups.border
+        color: panel.dividerColor
       }
 
-      Repeater {
-        model: panel.powerState.profiles
-        delegate: Item {
-          id: profileRow
-          required property string modelData
-          required property int index
-          readonly property bool active: panel.powerState.activeProfile === modelData
-          readonly property bool selected: panel.selectedIndex === index
-          width: column.width
-          height: Commons.Style.space(32)
+      Row {
+        id: profileRow
+        width: parent.width
+        spacing: Commons.Style.space(6)
+        readonly property real cellWidth: panel.powerState.profiles.length > 0
+          ? (width - spacing * (panel.powerState.profiles.length - 1)) / panel.powerState.profiles.length : 0
 
-          Rectangle {
-            anchors.fill: parent
+        Repeater {
+          model: panel.powerState.profiles
+          Ui.Button {
+            id: profileButton
+            required property var modelData
+            required property int index
+            width: profileRow.cellWidth
             radius: panel.controlRadius
-            color: profileMouse.containsMouse || profileRow.selected
-              ? panel.bar ? Qt.rgba(panel.bar.urgent.r, panel.bar.urgent.g,
-                panel.bar.urgent.b, 0.18) : Commons.Color.background
-              : panel.controlFillColor
-            border.width: panel.controlBorderWidth
-            border.color: profileRow.active && panel.bar
-              ? panel.bar.urgent : profileMouse.containsMouse || profileRow.selected
-                ? panel.controlHoverBorderColor : panel.controlBorderColor
-          }
-
-          Row {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.leftMargin: Commons.Style.space(8)
-            anchors.rightMargin: Commons.Style.space(8)
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Commons.Style.space(8)
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: profileRow.modelData === "power-saver" ? "\uF06C"
-                : profileRow.modelData === "performance" ? "\uF0E7" : "\uF24E"
-              color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-              font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: Commons.Style.font.heading
-              renderType: Text.QtRendering
-            }
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: panel.powerService ? panel.powerService.profileLabel(profileRow.modelData) : ""
-              color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-              font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: Commons.Style.font.body
-              font.weight: profileRow.active ? Font.DemiBold : Font.Normal
-            }
-          }
-
-          MouseArea {
-            id: profileMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
+            iconText: panel.profileIcon(String(modelData))
+            iconSize: Commons.Style.font.title
+            text: String(modelData).charAt(0).toUpperCase() + String(modelData).slice(1)
+            fontSize: Commons.Style.font.bodySmall
+            readonly property int labelRole: panel.profileForegroundRole(color)
+            foreground: labelRole === 0
+              ? panel.bar ? panel.bar.foreground : Commons.Color.foreground
+              : labelRole === 1
+                ? panel.bar ? panel.bar.background : Commons.Color.background
+                : labelRole === 2 ? "#000000" : "#ffffff"
+            fontFamily: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            horizontalPadding: Commons.Style.spacing.controlPaddingX
+            verticalPadding: Commons.Style.spacing.controlPaddingY + Commons.Style.space(2)
+            bordered: true
+            active: panel.powerState.activeProfile === modelData
+            hasCursor: panel.cursorActive && panel.selectedIndex === index
             enabled: !!panel.powerService && !panel.powerState.profileActionRunning
-            onEntered: panel.selectedIndex = profileRow.index
+            // Active keeps the btop fill, even under the pointer. Ui.Button.hot
+            // is containsMouse or the keyboard-only hasCursor above.
+            color: active ? panel.bar ? panel.bar.urgent : Commons.Color.accent
+              : hot ? panel.controlHoverFillColor : background
+            borderSpec: active ? Commons.Border.none()
+              : hot ? Commons.Border.flat(panel.controlHoverBorderColor, panel.controlBorderWidth)
+              : Commons.Border.controlSpec("normal",
+                panel.bar ? panel.bar.foreground : Commons.Color.foreground, accent)
             onClicked: {
-              if (panel.powerService && panel.powerService.setProfile(profileRow.modelData))
+              if (panel.powerService && panel.powerService.setProfile(modelData))
                 panel.ownerWidget.close()
+            }
+            onHovered: function(h) {
+              if (h) { panel.cursorActive = false; panel.selectedIndex = index }
             }
           }
         }
       }
 
       Text {
-        visible: panel.powerState.profileActionRunning
-          || panel.powerState.profileError !== ""
+        visible: panel.powerState.profileActionRunning || panel.powerState.profileError !== ""
         width: parent.width
-        text: panel.powerState.profileError !== ""
-          ? panel.powerState.profileError : "Applying profile…"
+        text: panel.powerState.profileError !== "" ? panel.powerState.profileError : "Applying profile…"
         color: panel.powerState.profileError !== "" && panel.bar
           ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
         font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
@@ -181,8 +204,8 @@ ShibumiPanel {
     implicitWidth: Commons.Style.space(28)
     implicitHeight: Commons.Style.space(28)
     radius: panel.controlRadius
-    foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-    accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+    foreground: panel.controlForeground
+    accent: panel.controlAccent
 
     Presentation.IconText {
       anchors.centerIn: parent
@@ -190,7 +213,6 @@ ShibumiPanel {
       color: action.foreground
       font.pixelSize: Commons.Style.font.body
     }
-
     MouseArea {
       id: actionMouse
       anchors.fill: parent
@@ -199,7 +221,6 @@ ShibumiPanel {
       onContainsMouseChanged: action.hasCursor = containsMouse
       onClicked: action.clicked()
     }
-
     Presentation.ShibumiPillToolTip {
       panel: panel
       visible: action.tooltip !== "" && actionMouse.containsMouse

@@ -217,16 +217,12 @@ ShibumiPanel {
         width: parent.width
         height: Commons.Style.space(24)
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: "NOW PLAYING"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.body
-          font.letterSpacing: 2
-          font.weight: Font.Medium
-          renderType: Text.NativeRendering
         }
 
         Row {
@@ -686,11 +682,35 @@ ShibumiPanel {
     property string tooltipText: ""
     signal clicked()
     readonly property bool hot: enabled && (buttonMouse.containsMouse || panel.focusSection === "controls" && panel.cursorIndex === controlIndex)
-    width: Commons.Style.space(36); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
+    width: Commons.Style.space(24); height: width; radius: panel.renderedSurfaceRadius; opacity: enabled ? 1 : 0.35
     color: hot ? panel.controlHoverFillColor : checked ? panel.controlActiveFillColor : "transparent"
     border.width: 1; border.color: checked || hot ? panel.controlAccent : panel.controlMutedHigh
-    Ui.OpticalGlyph { anchors.fill: parent; text: button.icon; color: button.checked || button.accent ? panel.controlAccent : panel.controlForeground
-      fontFamily: "Material Symbols Rounded"; fontSize: Math.round(Commons.Style.font.icon) }
+    // Same Material glyphs with integer sizes targeting Shuffle's ink.
+    // Unhinted native outlines share a vertical ink center at -0.5 em.
+    readonly property var glyphSpec: ({
+      shuffle: {text: "\ue043", size: 10},
+      repeat: {text: "\ue040", size: 10},
+      repeat_one: {text: "\ue041", size: 10},
+      skip_previous: {text: "\ue045", size: 13},
+      play_arrow: {text: "\ue037", size: 15},
+      pause: {text: "\ue034", size: 12},
+      skip_next: {text: "\ue044", size: 13}
+    })[icon] || {text: icon, size: 11}
+    TextMetrics {
+      id: iconMetrics
+      text: button.glyphSpec.text
+      font.family: "Material Symbols Rounded"
+      font.pixelSize: Math.max(1, Math.round((Commons.Style.font.icon - 2) * button.glyphSpec.size / 11))
+      font.hintingPreference: Font.PreferNoHinting
+      renderType: Text.NativeRendering
+    }
+    Text {
+      text: iconMetrics.text; font: iconMetrics.font
+      color: button.accent || button.checked ? panel.controlAccent : panel.controlForeground
+      renderType: Text.NativeRendering
+      x: (parent.width - iconMetrics.tightBoundingRect.width) / 2 - iconMetrics.tightBoundingRect.x
+      y: (parent.height + font.pixelSize) / 2 - baselineOffset
+    }
     MouseArea {
       id: buttonMouse; anchors.fill: parent; enabled: button.enabled; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
       onContainsMouseChanged: if (containsMouse) { panel.focusSection = "controls"; panel.cursorIndex = button.controlIndex }

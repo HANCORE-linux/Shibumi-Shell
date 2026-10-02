@@ -18,6 +18,10 @@ Ui.Panel {
 
   readonly property var powerService: powerServiceOverride !== null ? powerServiceOverride
     : suiteShell.serviceFor("hancore.shibumi.power-state")
+  readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
+  readonly property color chargingBoltColor: stateService
+    && typeof stateService.paletteColor === "function"
+    ? stateService.paletteColor("color01") : Commons.Color.urgent
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -39,6 +43,9 @@ Ui.Panel {
     : Qt.rgba(1, 1, 1, 0.18)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property string batteryOrientation:
+    setting("batteryOrientation", "horizontal") === "vertical"
+      ? "vertical" : "horizontal"
   readonly property bool compact: displayMode === "icon"
   readonly property bool compactValueVisible: !!bar && !bar.vertical
     && (displayMode !== "icon" || tokens.v2Shell !== true)
@@ -138,9 +145,9 @@ Ui.Panel {
       id: content
       anchors.centerIn: parent
       sourceComponent: !root.bar || !root.tokens ? null
+        : root.displayMode === "text" ? textContent
         : root.bar.vertical || root.displayMode === "icon" ? compactContent
-        : root.tokens.v2Shell === true && root.displayMode === "full" ? compactContent
-        : root.displayMode === "text" ? textContent : fullContent
+        : root.tokens.v2Shell === true && root.displayMode === "full" ? compactContent : fullContent
     }
 
     MouseArea {
@@ -162,9 +169,11 @@ Ui.Panel {
 
   Component {
     id: fullContent
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: root.tokens.contentGap
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "BAT"
@@ -185,8 +194,11 @@ Ui.Panel {
         color: root.widgetInk
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
+        valueLabel: fullValue
       }
-      Text {
+      Presentation.IconText {
+        id: fullValue
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.percent + "%"
@@ -200,7 +212,8 @@ Ui.Panel {
 
   Component {
     id: compactContent
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: root.tokens.compactGap
       BatteryGauge {
         visible: root.displayMode !== "text"
@@ -212,8 +225,11 @@ Ui.Panel {
         color: root.widgetInk
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
+        valueLabel: compactValue
       }
-      Text {
+      Presentation.IconText {
+        id: compactValue
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.compactValueVisible
         text: root.percent + "%"
@@ -228,7 +244,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.percent + "%"
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -239,6 +256,8 @@ Ui.Panel {
 
   component BatteryGauge: Item {
     id: gauge
+    readonly property real inkLeft: batteryGlyph.inkLeft
+    readonly property real inkRight: batteryGlyph.inkRight
     required property real ratio
     required property bool charging
     required property bool full
@@ -246,6 +265,7 @@ Ui.Panel {
     required property color color
     required property color detailColor
     required property color shimmerColor
+    property Item valueLabel: null
 
     width: Commons.Style.space(19)
     height: Commons.Style.space(10)
@@ -259,103 +279,57 @@ Ui.Panel {
       NumberAnimation { from: 0.35; to: 1; duration: 1100; easing.type: Easing.InOutSine }
     }
 
-    Item {
-      id: batteryVisual
-      anchors.centerIn: parent
-      width: Commons.Style.space(19)
-      height: Commons.Style.space(10)
+    readonly property bool horizontalCharging:
+      root.batteryOrientation === "horizontal" && (charging || full)
 
-      Rectangle {
-        id: batteryBody
-        anchors.left: parent.left
-        anchors.verticalCenter: parent.verticalCenter
-        width: Commons.Style.space(16)
-        height: Commons.Style.space(9)
-        radius: Commons.Style.space(2.5)
-        color: "transparent"
-        border.width: Commons.Style.space(1.2)
-        border.color: gauge.color
+    Presentation.BarGlyph {
+      id: batteryGlyph
+      anchors.fill: parent
+      // Keep V1's approved paint; the V2 flat icon/value row uses the shared baseline rule.
+      baselineTarget: root.tokens.v2Shell === true && root.batteryOrientation === "horizontal"
+        && root.bar && !root.bar.vertical ? gauge.valueLabel : null
+      nativeText: root.batteryOrientation === "vertical"
+        ? verticalBatteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
+        : batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
+      color: gauge.color
+    }
 
-        Rectangle {
-          visible: gauge.charging
-          anchors.fill: parent
-          anchors.margins: Commons.Style.space(1.8)
-          radius: Commons.Style.space(1.2)
-          color: Qt.rgba(gauge.color.r, gauge.color.g, gauge.color.b, 0.28)
-        }
+    Text {
+      id: chargingBolt
+      visible: gauge.horizontalCharging
+      // The FA outline body ends at 981 of 1038 font units; exclude its cap.
+      x: batteryGlyph.symbolInk.x + batteryGlyph.symbolInk.width * 981 / 2076
+        - boltInk.tightBoundingRect.x - boltInk.tightBoundingRect.width / 2
+      y: batteryGlyph.baselineTarget && batteryGlyph.baselineTarget.visible
+        ? boltPlacement.textTop(boltPlacement.snapY(batteryGlyph.symbolInk.y
+            + batteryGlyph.symbolInk.height / 2 - (boltOutline.tightBoundingRect.y
+              + boltOutline.tightBoundingRect.height / 2) / boltPlacement.metricScale), baselineOffset)
+        : batteryGlyph.symbolInk.y + batteryGlyph.symbolInk.height / 2
+          - baselineOffset - boltInk.tightBoundingRect.y
+          - boltInk.tightBoundingRect.height / 2
+      text: "\u{F140B}"
+      textFormat: Text.PlainText
+      font.family: Commons.Style.font.family
+      // At iconFont 12, the upright bolt's ink matches this glyph at 9 px.
+      font.pixelSize: Math.max(1, Math.round(Commons.Style.bar.iconFont * 9 / 12))
+      color: root.chargingBoltColor
+      style: Text.Outline
+      styleColor: root.bar ? root.bar.background : Commons.Color.background
+      renderType: Text.NativeRendering
+    }
 
-        Rectangle {
-          id: batteryFill
-          anchors.left: parent.left
-          anchors.top: parent.top
-          anchors.bottom: parent.bottom
-          anchors.margins: Commons.Style.space(1.8)
-          width: Math.max(gauge.ratio > 0 ? Commons.Style.space(1.5) : 0,
-            (parent.width - Commons.Style.space(3.6)) * Math.max(0, Math.min(1, gauge.ratio)))
-          radius: Commons.Style.space(1.2)
-          clip: true
-          color: gauge.color
-          Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-
-          Rectangle {
-            visible: gauge.charging && !gauge.full
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: Commons.Style.space(6)
-            radius: parent.radius
-            color: gauge.shimmerColor
-            property real pos: 0
-            x: (parent.width + width) * pos - width
-
-            NumberAnimation on pos {
-              running: gauge.visible && gauge.charging && !gauge.full
-              from: 0
-              to: 1
-              duration: 1100
-              easing.type: Easing.InOutSine
-            }
-          }
-        }
-
-        Canvas {
-          id: chargingBolt
-          visible: gauge.charging || gauge.full
-          anchors.centerIn: parent
-          width: Commons.Style.space(6)
-          height: Commons.Style.space(8)
-
-          onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
-            ctx.beginPath()
-            ctx.moveTo(width * 0.55, 0)
-            ctx.lineTo(width * 0.12, height * 0.55)
-            ctx.lineTo(width * 0.45, height * 0.55)
-            ctx.lineTo(width * 0.38, height)
-            ctx.lineTo(width * 0.88, height * 0.45)
-            ctx.lineTo(width * 0.55, height * 0.45)
-            ctx.closePath()
-            ctx.fillStyle = gauge.detailColor
-            ctx.fill()
-          }
-
-          Component.onCompleted: requestPaint()
-          Connections {
-            target: gauge
-            function onDetailColorChanged() { chargingBolt.requestPaint() }
-          }
-        }
-      }
-
-      Rectangle {
-        anchors.left: batteryBody.right
-        anchors.leftMargin: -Commons.Style.space(0.5)
-        anchors.verticalCenter: parent.verticalCenter
-        width: Commons.Style.space(2.5)
-        height: Commons.Style.space(5)
-        radius: Commons.Style.space(1.2)
-        color: gauge.color
-      }
+    Presentation.BarInk { id: boltPlacement; target: gauge }
+    TextMetrics {
+      id: boltOutline
+      text: chargingBolt.text
+      font: Qt.font({ family: chargingBolt.font.family,
+        pixelSize: chargingBolt.font.pixelSize * boltPlacement.metricScale,
+        hintingPreference: Font.PreferNoHinting })
+    }
+    TextMetrics {
+      id: boltInk
+      text: chargingBolt.text
+      font: chargingBolt.font
     }
   }
 }

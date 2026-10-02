@@ -35,8 +35,9 @@ Ui.Panel {
     ? powerService.activeProfileShortName : "---"
   readonly property string profileLabel: powerService
     ? powerService.activeProfileLabel : "Power profiles unavailable"
-  readonly property string profileIcon: profile === "power-saver" ? "\uF06C"
-    : profile === "performance" ? "\uF0E7" : "\uF24E"
+  readonly property string profileIcon: profile === "power-saver" ? "󰌪"
+    : profile === "balanced" ? "󰊚"
+    : profile === "performance" ? "󰓅" : "󰂄"
   readonly property var interactionTarget: interaction
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -144,7 +145,8 @@ Ui.Panel {
     id: fullContent
     Row {
       spacing: root.tokens.contentGap
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "PWR"
@@ -155,7 +157,8 @@ Ui.Panel {
         font.letterSpacing: 0.5
         renderType: Text.NativeRendering
       }
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         text: root.shortName
         color: root.widgetInk
@@ -168,8 +171,12 @@ Ui.Panel {
 
   Component {
     id: compactContent
-    Text {
-      text: root.profileIcon
+    Presentation.BarGlyph {
+      optical: !root.bar || !root.bar.vertical
+      // Reserve the original advance; only paint uses the native panel glyph.
+      text: root.profile === "power-saver" ? "\uF06C"
+        : root.profile === "performance" ? "\uF0E7" : "\uF24E"
+      paintText: root.profileIcon
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: root.profile === "balanced" ? 13 : 14
@@ -180,7 +187,8 @@ Ui.Panel {
   Component {
     id: textContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.shortName
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family

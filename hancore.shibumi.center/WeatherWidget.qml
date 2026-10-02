@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.BarWidget {
   id: root
@@ -95,9 +96,12 @@ Ui.BarWidget {
   onWeatherServiceChanged: if (panelOpen) syncPanelLoader()
   onBarChanged: if (panelOpen) syncPanelLoader()
 
-  Text {
+  Presentation.BarGlyph {
     id: weatherIcon
+    optical: !root.bar || !root.bar.vertical
     anchors.centerIn: parent
+    width: optical ? parent.width : implicitWidth
+    horizontalAlignment: Text.AlignLeft
     text: root.weatherService && root.weatherService.loaded
       ? root.weatherService.icon
       : root.weatherService && root.weatherService.unavailable ? "?" : "·"

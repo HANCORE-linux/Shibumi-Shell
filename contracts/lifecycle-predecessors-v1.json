@@ -687,9 +687,73 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
+        "6594b989c9f5edfe557669b0413a9bd3e50f8e81",
+        "67d87c5d7f61fca4b05e79a089238805e0e0737f",
+        "81f6bcd28cf0e0b5c435761150b2b73083f1e4fa",
         "package:0.1.1-beta.15.4"
       ],
       "suiteVersion": "0.1.1-beta.15.4"
+    },
+    {
+      "id": "public-beta.16",
+      "payloadDigest": "f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41",
+      "pluginDigests": {
+        "hancore.shibumi.bar": "1a0cc5770043268225fb47cc6b04963def12a5c372db9a9a809d841be4b5fed0",
+        "hancore.shibumi.state": "5459d8a88b0790f0b9b4aa283503b4430696593e2d398e6f5c249d9064966925",
+        "hancore.shibumi.control-center": "bba57ebd955ef0a989ca0cf2c1d6396ecb0a4d788a328d3bca862a49b6b7df7c",
+        "hancore.shibumi.reactor": "f6378345af29c5f17ae566760e73203263e9c84c4c02e724c75a10898401f55c",
+        "hancore.shibumi.telemetry": "00d89567f63fdd9966bdbabe55dfa6fc3ac5003ff12c29b494ebc6833a4ad12a",
+        "hancore.shibumi.power-state": "47a2cc1cf406856e00731eeccff9666aafcbf8b30954da83bcb967bfadbb7d57",
+        "hancore.shibumi.workspaces": "8924181d8068c7602870f762446aef8c988ce187f8bd196867ed98eb7a0d09c7",
+        "hancore.shibumi.update-center": "c238fc1cbe7fba67f6ed36e770032e1b3fbdf4d49c815a112808e99b32313d00",
+        "hancore.shibumi.status": "d8189cf123a277d4ee9dd95fcfa2e42028128e694f00ba238807a2026c0ca7b4",
+        "hancore.shibumi.memory": "deaf7ca3822c423fc77b8679567eedf6148b2d11e428fca1e43a55d3e9d06e22",
+        "hancore.shibumi.cpu": "4e37e8c5391b88470e066e9d85833259768f830883fcfce81fc50b9d609f5be0",
+        "hancore.shibumi.audio": "ceb9a7a7e6c82951e2ab58960d5de66df087b009fd2ffdf423b8128b455c064f",
+        "hancore.shibumi.ai": "18493331bb09e6c2c1aba56f5ab58e0c59e5a8b74b1614b3efe2be6c9fde94f6",
+        "hancore.shibumi.center": "67a420dfd0b1f62ee7b3c77e3f7c0403479b75ff8c2c29d94a9081dd45e93823",
+        "hancore.shibumi.media": "fb055a222e34e7f5d192274aeec63940a42a82b1e894f11432c7547947cf7572",
+        "hancore.shibumi.quick-access": "adf86b72872f4013140adace7c7fe8ece792c186df1ec4b642f7abb03fa10776",
+        "hancore.shibumi.network": "b31f113d7021d0366d3d8392296548c7e69af495dfa69816cf27738b17294f69",
+        "hancore.shibumi.battery": "87f219771d9dce3ed001d927e26d302e65215244e5945cf6276c5873473515bc",
+        "hancore.shibumi.brightness": "a7ad182bd83ecf66eb94a0147b7b4cd2d07bff7e55baaaf27bf7edb2490af195",
+        "hancore.shibumi.power-profile": "d253e860dc86057665f9d4cd382f23ae036f7be518485e4d2ec6c36864ff4576",
+        "hancore.shibumi.bluetooth": "6f4bdfed2472068485ddbd01e17f70bfc11e2e9015bf3415b031cbd2cd169ff5",
+        "hancore.shibumi.temperature": "838aa833e238e10fc68a53bb88403a4faef181e5ac671f99391cb23a083ae2d7",
+        "hancore.shibumi.gpu": "37ccffa45b9a05234b08dc4ed058713e055ad1913f7efda814b17dc5c6710071",
+        "hancore.shibumi.storage": "ac1757cdccfcfb2f283ac733b643ca2942fb8447c698048db8dd028ab50627f0"
+      },
+      "pluginIds": [
+        "hancore.shibumi.bar",
+        "hancore.shibumi.state",
+        "hancore.shibumi.control-center",
+        "hancore.shibumi.reactor",
+        "hancore.shibumi.telemetry",
+        "hancore.shibumi.power-state",
+        "hancore.shibumi.workspaces",
+        "hancore.shibumi.update-center",
+        "hancore.shibumi.status",
+        "hancore.shibumi.memory",
+        "hancore.shibumi.cpu",
+        "hancore.shibumi.audio",
+        "hancore.shibumi.ai",
+        "hancore.shibumi.center",
+        "hancore.shibumi.media",
+        "hancore.shibumi.quick-access",
+        "hancore.shibumi.network",
+        "hancore.shibumi.battery",
+        "hancore.shibumi.brightness",
+        "hancore.shibumi.power-profile",
+        "hancore.shibumi.bluetooth",
+        "hancore.shibumi.temperature",
+        "hancore.shibumi.gpu",
+        "hancore.shibumi.storage"
+      ],
+      "settingsStorageVersion": 1,
+      "sourceRevisions": [
+        "package:0.1.1-beta.16"
+      ],
+      "suiteVersion": "0.1.1-beta.16"
     }
   ]
 }

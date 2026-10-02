@@ -27,7 +27,9 @@ printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 cp -a -- "$repo_root/hancore.shibumi.temperature" "$tmpdir/temperature"
 cp -a -- "$repo_root/hancore.shibumi.storage" "$tmpdir/storage"
-for plugin in cpu memory gpu temperature storage; do
+cp -a -- "$repo_root/hancore.shibumi.battery" "$tmpdir/battery"
+install -Dm0644 "$repo_root/tests/fixtures/PowerTestService.qml" "$tmpdir/fixtures/PowerTestService.qml"
+for plugin in cpu memory gpu temperature storage battery; do
   install -m 0644 "$repo_root/tests/fixtures/ShibumiPanelTest.qml" \
     "$tmpdir/$plugin/ShibumiPanel.qml"
 done
@@ -115,7 +117,6 @@ install -m 0644 "$repo_root/tests/telemetry-runtime-smoke.qml" "$tmpdir/runtime-
 mkdir -m 700 "$tmpdir/slice-runtime"
 set +e
 slice_output=$(timeout 8 env \
-  SHIBUMI_TEST_MEMORY_PRESENT="$(grep -qE '^E:MEMORY_DEVICE_[0-9]+_TYPE=' /run/udev/data/+dmi:id 2>/dev/null && printf 1 || printf 0)" \
   QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY= XDG_RUNTIME_DIR="$tmpdir/slice-runtime" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
   QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \

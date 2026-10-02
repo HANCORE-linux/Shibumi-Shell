@@ -154,8 +154,9 @@ if ! {
 fi
 rg -q '^PanelWindow \{' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "output surface must be a PanelWindow"
-rg -Fq 'implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0' \
+rg -Fxq '  implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0' \
   hancore.shibumi.bar/core/BarPanel.qml \
+  && rg -Uq '^  readonly property int shadowPadding: !bar\.vertical && bar\.position === "top"\n    && bar\.visualTokens\n      \? bar\.visualTokens\.shellStyle === "shibumi"\n        \? bar\.visualTokens\.shadowEnabled === true \? 9 : 0\n        : \["full", "fit"\]\.indexOf\(bar\.visualTokens\.shellStyle\) >= 0 \? 11\n          : bar\.visualTokens\.shellStyle === "notch" \? 1 : 0\n      : 0$' hancore.shibumi.bar/core/BarPanel.qml \
   || fail "horizontal host must remain bar-height during edit"
 rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
   hancore.shibumi.bar/core/BarPanel.qml \
@@ -163,7 +164,7 @@ rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
 rg -Fq 'WlrLayershell.keyboardFocus: dragSession.editing' \
   hancore.shibumi.bar/core/BarPanel.qml \
   || fail "stable bar surface must own temporary edit focus"
-if rg -q '^  mask: Region \{|MouseArea \{' hancore.shibumi.bar/core/BarPanel.qml; then
+if [[ $(rg '^[[:space:]]*mask:' hancore.shibumi.bar/core/BarPanel.qml) != '  mask: Region { item: barSurfaceLoader }' ]] || rg -Uq '^  (width|height):|\bMouseArea[[:space:]]*\{' hancore.shibumi.bar/core/BarPanel.qml; then
   fail "bar-local window retained a fullscreen mask or outside-click area"
 fi
 for backdrop_contract in \
@@ -201,7 +202,8 @@ if rg -q 'barOrigin[XY]' hancore.shibumi.bar/core/DragGhostPanel.qml hancore.shi
   fail "drag ghost must not add an edge offset to full-window coordinates"
 fi
 awk '/^[[:space:]]*id: barSurfaceLoader$/,/^  }$/' hancore.shibumi.bar/core/BarPanel.qml \
-  | rg -q '^    anchors.fill: parent$' \
+  | awk '/^    width: parent[.]width$/ { width++ } /^    height: barWindow[.]bar[.]vertical [?] parent[.]height : barWindow[.]bar[.]barSize$/ { height++ }
+      /^[[:space:]]*((x|y|scale|rotation|transform)[[:space:]]*:|anchors[.:[:space:]{])/ { shifted=1 } END { exit !(width == 1 && height == 1 && !shifted) }' \
   || fail "bar surface must fill the edge-local bar window from local origin zero"
 if rg -q 'barSurfaceLoader[[:space:]]*\.|id: barSurfaceLoader' hancore.shibumi.bar/core/BarPanel.qml \
     && rg -q '^[[:space:]]+(x|y): .*barWindow\.bar\.position' hancore.shibumi.bar/core/BarPanel.qml; then
@@ -1142,7 +1144,6 @@ for pair in \
   'hancore.shibumi.brightness/BrightnessPanel.qml:panel.controlActiveFillColor' \
   'hancore.shibumi.brightness/BrightnessPanel.qml:panel.controlBorderColor' \
   'hancore.shibumi.network/NetworkPanel.qml:panel.controlBorderColor' \
-  'hancore.shibumi.power-profile/PowerProfilePanel.qml:panel.controlBorderColor' \
   'hancore.shibumi.workspaces/WorkspacePanelContent.qml:root.controller.controlFillColor'; do
   file=${pair%%:*}
   token=${pair#*:}

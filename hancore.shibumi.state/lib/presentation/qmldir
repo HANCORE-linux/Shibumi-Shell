@@ -1,8 +1,12 @@
 module Shibumi.Presentation
+BarGlyph 1.0 BarGlyph.qml
+BarInk 1.0 BarInk.qml
 ControlCenterIconText 1.0 ControlCenterIconText.qml
 HostTokens 1.0 HostTokens.qml
 IconText 1.0 IconText.qml
+InkRow 1.0 InkRow.qml
 PacmanWorkspaceMarker 1.0 PacmanWorkspaceMarker.qml
+PanelHeading 1.0 PanelHeading.qml
 PillSurface 1.0 PillSurface.qml
 ShibumiPanelToolTip 1.0 ShibumiPanelToolTip.qml
 ShibumiPillToolTip 1.0 ShibumiPillToolTip.qml

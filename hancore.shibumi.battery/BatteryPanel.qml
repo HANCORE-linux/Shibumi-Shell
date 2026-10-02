@@ -17,7 +17,8 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.opened && !!powerService && powerService.hasBattery
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Commons.Style.space(300))
+  padding: 12
+  contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(column.implicitHeight)
 
   Ui.PanelKeyCatcher {
@@ -34,14 +35,12 @@ ShibumiPanel {
       Row {
         width: parent.width
         spacing: Commons.Style.space(4)
-        Text {
+        Presentation.PanelHeading {
           width: parent.width - closeAction.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
-          text: "Battery"
+          text: "BATTERY"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: Commons.Style.font.heading
-          font.weight: Font.Medium
         }
         IconAction {
           id: closeAction
@@ -59,61 +58,49 @@ ShibumiPanel {
           panel.bar.foreground.b, 0.18) : Commons.Color.popups.border
       }
 
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: panel.powerState.percent + "%"
-        color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-        font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: Commons.Style.font.heading
-        font.weight: Font.Medium
-      }
-
-      Rectangle {
-        width: parent.width
-        height: Commons.Style.space(8)
-        radius: height / 2
-        color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
-          panel.bar.foreground.b, 0.12) : Commons.Color.background
-        Rectangle {
-          width: parent.width * panel.powerState.percent / 100
-          height: parent.height
-          radius: height / 2
-          color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-          Behavior on width { NumberAnimation { duration: 300 } }
+      Row {
+        width: parent.width; height: batteryRing.height; spacing: Commons.Style.space(16)
+        BatteryRing {
+          id: batteryRing
+          percent: panel.powerState.percent
+          foreground: panel.controlForeground; accent: panel.controlAccent
+          panelOpen: panel.open; waves: true; plasma: panel.powerState.charging
+        }
+        Grid {
+          id: primaryStats
+          width: parent.width - batteryRing.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter
+          columns: 2; columnSpacing: Commons.Style.space(8); rowSpacing: Commons.Style.space(8)
+          BatteryStat { label: "Charge"; value: panel.powerState.percent + "%"; valueColor: panel.controlAccent }
+          BatteryStat { label: "Status"; value: panel.powerState.batteryStatus }
+          BatteryStat { label: panel.powerState.charging ? "Time to full" : "Time left"; value: panel.powerState.timeText || "—" }
+          BatteryStat { label: panel.powerState.charging ? "Charge rate" : "Power draw"; value: panel.powerState.changeRate > 0 ? panel.powerState.changeRate.toFixed(1) + " W" : "—" }
         }
       }
 
-      Column {
-        width: parent.width
-        spacing: Commons.Style.space(5)
-        BatteryInfoRow { label: "Status"; value: panel.powerState.batteryStatus }
-        BatteryInfoRow {
-          visible: panel.powerState.timeText !== ""
-          label: panel.powerState.charging ? "Time to full" : "Time left"
-          value: panel.powerState.timeText
-        }
-        BatteryInfoRow {
+      Grid {
+        x: primaryStats.x
+        width: primaryStats.width
+        columns: 2
+        columnSpacing: Commons.Style.space(8)
+        rowSpacing: Commons.Style.space(8)
+        BatteryStat {
           visible: panel.powerState.batteryHealthText !== ""
           label: panel.powerState.batteryId !== ""
             ? "Health (" + panel.powerState.batteryId + ")" : "Health"
           value: panel.powerState.batteryHealthText
         }
-        BatteryInfoRow {
-          visible: panel.powerState.changeRate > 0
-          label: panel.powerState.charging ? "Charge rate" : "Power draw"
-          value: panel.powerState.changeRate.toFixed(1) + " W"
-        }
-        BatteryInfoRow {
+        BatteryStat {
           visible: panel.powerState.batteryInfo.size !== undefined
           label: "Battery size"
           value: String(panel.powerState.batteryInfo.size || "")
         }
-        BatteryInfoRow {
+        BatteryStat {
           visible: panel.powerState.batteryInfo.cycles !== undefined
           label: "Charge cycles"
           value: String(panel.powerState.batteryInfo.cycles || "")
         }
-        BatteryInfoRow {
+        BatteryStat {
           visible: panel.powerState.batteryInfo.threshold !== undefined
           label: "Charge threshold"
           value: String(panel.powerState.batteryInfo.threshold || "")
@@ -155,28 +142,21 @@ ShibumiPanel {
     }
   }
 
-  component BatteryInfoRow: Row {
+  component BatteryStat: Column {
     required property string label
     required property string value
-    width: parent ? parent.width : 0
-    height: Commons.Style.space(16)
-    spacing: Commons.Style.space(6)
+    property color valueColor: panel.controlForeground
+    width: (parent.width - Commons.Style.space(8)) / 2
+    spacing: Commons.Style.space(3)
     Text {
-      id: infoLabel
-      width: parent.width * 0.45
-      text: parent.label
-      color: panel.bar ? Qt.rgba(panel.bar.foreground.r, panel.bar.foreground.g,
-        panel.bar.foreground.b, 0.65) : Commons.Color.foreground
-      font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.body
+      width: parent.width; text: parent.value; elide: Text.ElideRight
+      color: parent.valueColor; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+      font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering
     }
     Text {
-      width: Math.max(0, parent.width - infoLabel.width - parent.spacing)
-      text: parent.value
-      color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
-      font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-      font.pixelSize: Commons.Style.font.body
-      elide: Text.ElideRight
+      width: parent.width; text: parent.label.toUpperCase(); elide: Text.ElideRight
+      color: panel.controlMutedHigh; font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+      font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering
     }
   }
 

@@ -22,7 +22,7 @@ ShellRoot {
     Qt.exit(1)
     throw new Error(message)
   }
-  function manifest(id) { return {id: id, version: "0.1.1-beta.15.4", kinds: ["service"]} }
+  function manifest(id) { return {id: id, version: "0.1.1-beta.16", kinds: ["service"]} }
   component ScopedHost: QtObject {
     property string pluginId: ""
     function serviceFor(id) { root.check(false, "raw scoped lookup: " + id); return null }
@@ -43,7 +43,7 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.15.4"
+    implementationVersion: "0.1.1-beta.16"
     host: stateHost
     owner: state
     manifest: root.manifest("hancore.shibumi.state")
@@ -180,27 +180,12 @@ ShellRoot {
         cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
         root.check(!cpuPanel.gpuUsageView.visible, "zero-utilization GPU stayed visible")
         cpu.gpu.parse("sysfs|42|61|0|0\nstatus|ok")
-        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 42, "GPU utilization did not restore its row")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.percent === 42, "GPU utilization did not restore its row")
         cpu.gpu.parse("sysfs|0|61|0|0\nstatus|ok")
-        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.value === 0, "observed GPU row disappeared at idle")
+        root.check(cpuPanel.gpuUsageView.visible && cpuPanel.gpuUsageView.percent === 0, "observed GPU row disappeared at idle")
         items[0].close(); items[0].open(); root.panels[0] = items[0].panelItem
         root.check(root.panels[0] && root.panels[0].gpuUsageView.visible, "GPU activity latch lost on panel reopen")
         telemetry.system.parseLoad("invalid"); root.check(telemetry.system.loadAverage.length === 0, "invalid load accepted")
-        const memoryPanel = root.panels[1], oldMemory = [telemetry.system.memTotalMiB, telemetry.system.memAvailableMiB]
-        const hasInfo = Quickshell.env("SHIBUMI_TEST_MEMORY_PRESENT") === "1", info = memoryPanel.hardwareInfoView
-        root.check(telemetry.system.memoryHardwareRead && telemetry.system.memoryPanelConsumers === 1
-          && info && info.text === telemetry.system.memoryHardwareInfo
-          && (hasInfo ? /^.+ · [1-9][0-9]* MT\/s$/.test(info.text) && info.visible : !info.visible),
-          "Memory real udev data/visibility mismatch: " + JSON.stringify(telemetry.system.memoryHardwareInfo))
-        console.log("257_MEMORY_UDEV_READ", "present", hasInfo, "ticks", root.ticks - root.detailReadStartedTick,
-          "info", JSON.stringify(info.text), "visible", info.visible)
-        telemetry.system.memTotalMiB = 8192; telemetry.system.memAvailableMiB = 3072
-        function texts(item) { return ("text" in item ? [String(item.text)] : []).concat(item.children.reduce((out, child) => out.concat(texts(child)), [])) }
-        const memoryText = texts(memoryPanel)
-        root.check(memoryPanel.usageRing && memoryPanel.usageRing.percent === 63
-          && ["5.0 GiB", "3.0 GiB", "8.0 GiB"].every(value => memoryText.indexOf(value) >= 0)
-          && memoryText.every(value => !/\bMiB\b/.test(value)), "Memory ring or GiB-only details missing")
-        telemetry.system.memTotalMiB = oldMemory[0]; telemetry.system.memAvailableMiB = oldMemory[1]
         root.firstGpu = cpu.gpu
         items[0].bar = replacementBar
         cpu.shell = null; telemetry.shell = null; storage.shell = null

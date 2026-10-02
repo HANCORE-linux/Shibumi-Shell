@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -35,7 +36,8 @@ ShibumiPanel {
   owner: ownerWidget
   open: ownerWidget.opened
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Commons.Style.space(320))
+  padding: 12
+  contentWidth: fittedContentWidth(320)
   contentHeight: fittedContentHeight(content.implicitHeight)
 
   Ui.PanelKeyCatcher {
@@ -65,34 +67,16 @@ ShibumiPanel {
         width: parent.width
         spacing: Commons.Style.space(5)
 
-        Text {
+        Presentation.PanelHeading {
           id: headerTitle
-          width: parent.width - unitChoices.width - close.width
-            - parent.spacing * 2
+          layoutFont: Qt.font({family: font.family,
+            pixelSize: Commons.Style.font.title, weight: Font.Medium,
+            letterSpacing: 2})
+          width: parent.width - close.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
           text: "THERMALS"
           color: panel.bar.foreground
           font.family: panel.bar.fontFamily
-          font.pixelSize: Commons.Style.font.heading
-          font.weight: Font.Medium
-        }
-
-        Row {
-          id: unitChoices
-          anchors.verticalCenter: parent.verticalCenter
-          spacing: Commons.Style.space(2)
-
-          UnitChoice {
-            label: "°C"
-            unit: "metric"
-            unitIndex: 0
-          }
-
-          UnitChoice {
-            label: "°F"
-            unit: "imperial"
-            unitIndex: 1
-          }
         }
 
         Text {
@@ -116,29 +100,36 @@ ShibumiPanel {
         color: panel.shibumiTokens.separator
       }
 
-      Item {
-        width: parent.width
-        height: Commons.Style.space(16)
-
-        Text {
-          anchors.left: parent.left
-          anchors.verticalCenter: parent.verticalCenter
-          text: "BAR SENSOR"
-          color: panel.bar.foreground
-          opacity: 0.62
-          font.family: panel.bar.fontFamily
-          font.pixelSize: Commons.Style.font.caption
-          font.letterSpacing: 1
+      Row {
+        width: parent.width; height: temperatureRing.height; spacing: Commons.Style.space(16)
+        WaterRing {
+          id: temperatureRing
+          // Celsius, not the selected display unit, defines the clamped 0–100 scale.
+          percent: panel.ownerWidget.temperatureC
+          foreground: panel.controlForeground; accent: panel.controlAccent
+          panelOpen: panel.open; bubbles: true
         }
-
-        Text {
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
-          text: panel.ownerWidget.sourceLabel
-          color: panel.bar.urgent
-          font.family: panel.bar.fontFamily
-          font.pixelSize: Commons.Style.font.caption
-          font.weight: Font.Medium
+        Row {
+          width: parent.width - temperatureRing.width - parent.spacing
+          anchors.verticalCenter: parent.verticalCenter; spacing: Commons.Style.space(8)
+          Repeater {
+            model: [[panel.ownerWidget.sourceLabel, "BAR SENSOR"],
+              [panel.ownerWidget.temperatureText(panel.ownerWidget.temperatureC), "TEMPERATURE"]]
+            delegate: Column {
+              required property var modelData
+              width: (parent.width - parent.spacing) / 2; spacing: Commons.Style.space(3)
+              Text {
+                width: parent.width; text: parent.modelData[0]; elide: Text.ElideRight
+                color: panel.controlForeground; font.family: panel.bar.fontFamily
+                font.pixelSize: Commons.Style.font.subtitle; renderType: Text.NativeRendering
+              }
+              Text {
+                width: parent.width; text: parent.modelData[1]; elide: Text.ElideRight
+                color: panel.controlMutedHigh; font.family: panel.bar.fontFamily
+                font.pixelSize: Commons.Style.font.caption; renderType: Text.NativeRendering
+              }
+            }
+          }
         }
       }
 
@@ -147,6 +138,8 @@ ShibumiPanel {
         height: Commons.Style.space(28)
         spacing: Commons.Style.space(4)
 
+        UnitChoice { label: "°C"; unit: "metric"; unitIndex: 0 }
+        UnitChoice { label: "°F"; unit: "imperial"; unitIndex: 1 }
         Repeater {
           model: panel.sourceOptions
 
@@ -158,7 +151,7 @@ ShibumiPanel {
             readonly property bool available: panel.telemetry
               && typeof panel.telemetry.sourceAvailable === "function"
               && panel.telemetry.sourceAvailable(modelData.id)
-            width: (parent.width - parent.spacing * 4) / 5
+            width: (parent.width - parent.spacing * 6) / 7
             height: parent.height
             radius: panel.controlRadius
             opacity: available ? 1 : 0.35
@@ -253,14 +246,13 @@ ShibumiPanel {
     readonly property bool highlighted: hovered || keyboardFocused
     signal triggered()
 
-    width: Commons.Style.space(27)
-    height: headerTitle.implicitHeight
+    width: (parent.width - parent.spacing * 6) / 7
+    height: parent.height
     radius: panel.controlRadius
     color: selected ? panel.controlActiveFillColor
-      : highlighted ? panel.controlHoverFillColor : "transparent"
-    border.width: keyboardFocused
-      ? Math.max(1, panel.controlBorderWidth) : 0
-    border.color: panel.controlAccent
+      : highlighted ? panel.controlHoverFillColor : panel.controlFillColor
+    border.width: 1
+    border.color: selected || keyboardFocused ? panel.controlAccent : panel.controlBorderColor
     Accessible.role: Accessible.RadioButton
     Accessible.name: label
     Accessible.description: unit === "metric"

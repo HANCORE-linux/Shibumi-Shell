@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import qs.Ui as Ui
+import qs.Commons as Commons
 import "HostIdentity.js" as HostIdentity
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -56,8 +57,8 @@ Ui.Panel {
   readonly property int barSize: bar ? Number(bar.barSize || 0) : 0
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
-  readonly property bool v1TintedLauncherIconVisible:
-    v1TintedLauncherIcon.visible
+  readonly property bool v1TintedLauncherIconVisible: iconMode
+    && !stockOmarchyHost && launcherConfig.icon === "shibumi" && v1CustomFill
   readonly property bool animationActive: pointer.containsMouse
   readonly property var launcherStateConfig: stateService
     && stateService.requestedConfig ? stateService.requestedConfig
@@ -354,7 +355,7 @@ Ui.Panel {
       visible: root.archWordmark
       anchors.fill: parent
 
-      Text {
+      Presentation.BarGlyph {
         id: archLogo
         anchors.left: parent.left
         anchors.leftMargin: root.archWordLeftPad
@@ -390,7 +391,8 @@ Ui.Panel {
       }
     }
 
-    Text {
+    Presentation.IconText {
+      barText: true
       visible: root.shibumiWordmark
       anchors.centerIn: parent
       text: "SHIBUMI"
@@ -416,43 +418,12 @@ Ui.Panel {
     width: root.stockOmarchyHost ? 18 : 16
     height: root.tokens ? root.tokens.pillHeight : 24
 
-    Text {
-      visible: !root.stockOmarchyHost
-        && root.launcherConfig.icon !== "shibumi"
-      anchors.centerIn: parent
-      anchors.horizontalCenterOffset: root.iconXOffset(root.launcherConfig.icon)
-      anchors.verticalCenterOffset: root.iconYOffset(root.launcherConfig.icon)
-      text: root.iconGlyph(root.launcherConfig.icon)
+    Presentation.BarGlyph {
+      anchors.fill: parent
+      text: !root.stockOmarchyHost && root.launcherConfig.icon !== "shibumi"
+        ? root.iconGlyph(root.launcherConfig.icon) : ""
       color: root.widgetInk
-      renderType: Text.QtRendering
-      font.family: root.iconFont(root.launcherConfig.icon)
-      font.pixelSize: root.iconSize(root.launcherConfig.icon)
-    }
-
-    Image {
-      visible: root.stockOmarchyHost
-        || (root.launcherConfig.icon === "shibumi" && !root.v1CustomFill)
-      anchors.centerIn: parent
-      width: 18
-      height: 18
-      source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")
-      fillMode: Image.PreserveAspectFit
-      sourceSize.width: 24
-      sourceSize.height: 24
-      smooth: true
-      mipmap: true
-    }
-
-    FlatTintedImage {
-      id: v1TintedLauncherIcon
-      visible: !root.stockOmarchyHost
-        && root.launcherConfig.icon === "shibumi"
-        && root.v1CustomFill
-      anchors.centerIn: parent
-      width: 18
-      height: 18
-      source: Qt.resolvedUrl("assets/shibumi-icon-hikiryo.svg")
-      tint: root.widgetInk
+      font.family: Commons.Style.font.family
     }
   }
 

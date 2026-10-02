@@ -386,17 +386,21 @@ Ui.Panel {
   Component {
     id: v1FullContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
       spacing: 5
 
-      Text {
+      Presentation.BarGlyph {
+        symbol: false
+        barText: true
+        referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         text: "NET"
         color: root.mode === "none"
           ? Qt.rgba(root.v1Seal.r, root.v1Seal.g, root.v1Seal.b, 0.7)
           : Qt.rgba(root.v1Ink.r, root.v1Ink.g, root.v1Ink.b, 0.6)
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: 12
+        font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 0.5
         renderType: Text.NativeRendering
       }
@@ -501,7 +505,9 @@ Ui.Panel {
         }
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -509,13 +515,16 @@ Ui.Panel {
         font.pixelSize: 14
       }
 
-      Text {
+      Presentation.BarGlyph {
+        symbol: false
+        barText: true
+        referencePixelSize: 12
         anchors.verticalCenter: parent.verticalCenter
         visible: root.mode === "wifi"
         text: root.label
         color: root.v1Seal
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-        font.pixelSize: 12
+        font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 1
         renderType: Text.NativeRendering
       }
@@ -525,10 +534,14 @@ Ui.Panel {
   Component {
     id: v2FullContent
 
-    Row {
+    Presentation.InkRow {
+      optical: !root.bar || !root.bar.vertical
+      boundLastAdvance: true
       spacing: 4
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -537,7 +550,9 @@ Ui.Panel {
         Behavior on color { ColorAnimation { duration: 160 } }
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
+        optical: !root.bar || !root.bar.vertical
+        nativeText: connectionIcon(root.mode, root.signal)
         visible: root.mode !== "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
@@ -580,8 +595,9 @@ Ui.Panel {
     }
   }
 
-  component BoundedLabel: Text {
+  component BoundedLabel: Presentation.IconText {
     id: boundedLabel
+    barText: true
 
     required property real maximumWidth
 
@@ -675,7 +691,9 @@ Ui.Panel {
   Component {
     id: compactContent
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
+      optical: !root.bar || !root.bar.vertical
+      nativeText: connectionIcon(root.mode, root.signal)
       text: root.stateGlyph
       color: root.v2Presentation ? (root.mode === "none"
           ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
@@ -706,7 +724,8 @@ Ui.Panel {
   Component {
     id: verticalContent
 
-    Presentation.IconText {
+    Presentation.BarGlyph {
+      nativeText: connectionIcon(root.mode, root.signal)
       text: root.stateGlyph
       color: root.widgetInk
       opacity: root.mode === "none" ? 0.58 : 1

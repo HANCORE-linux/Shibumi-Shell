@@ -148,11 +148,12 @@ Ui.Panel {
   Component {
     id: horizontalContent
 
-    Row {
+    Presentation.InkRow {
       spacing: root.displayMode === "full" && root.tokens.v2Shell !== true
         ? root.tokens.contentGap : root.tokens.compactGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full" && root.tokens.v2Shell !== true
         anchors.verticalCenter: parent.verticalCenter
         text: "CPU"
@@ -171,18 +172,20 @@ Ui.Panel {
         accent: root.widgetInk
       }
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         visible: root.displayMode === "icon"
           || (root.tokens.v2Shell === true && root.displayMode === "full")
         anchors.verticalCenter: parent.verticalCenter
         text: "planner_review"
+        optical: true
         color: root.widgetInk
         font.pixelSize: root.tokens.iconSize
         font.weight: Font.DemiBold
         fill: 1
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         // V1 Compact is the reference CPU glyph plus its live percentage,
         // not a generic icon-only mode. V2 retains its independent icon mode.
         visible: root.percentageVisible

@@ -138,8 +138,10 @@ Ui.Panel {
       }
     }
 
-    Row {
+    Presentation.InkRow {
       id: contentRow
+      boundLastAdvance: root.tokens.v2Shell === true
+      optical: !root.bar || !root.bar.vertical
       anchors.centerIn: parent
       anchors.horizontalCenterOffset: root.providerContentHorizontalOffset
       spacing: root.tokens ? root.tokens.compactGap : Commons.Style.space(5)
@@ -150,6 +152,10 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.providerIconSlotWidth
         height: root.providerIconSlotHeight
+        readonly property real inkLeft: providerGlyph.x + (root.providerId === "claude"
+          ? claudeGlyphBase.x + claudeGlyphBase.inkLeft : 0)
+        readonly property real inkRight: providerGlyph.x + (root.providerId === "claude"
+          ? claudeGlyphBase.x + claudeGlyphBase.inkRight : providerGlyph.width)
 
         Item {
           id: providerGlyph
@@ -163,8 +169,10 @@ Ui.Panel {
             anchors.fill: parent
             visible: root.providerId === "claude"
 
-            Text {
+            Presentation.BarGlyph {
               id: claudeGlyphBase
+              // Keep the original advance/line box for both aligned layers.
+              optical: !root.bar || !root.bar.vertical
               anchors.centerIn: parent
               text: "\udb85\ude7a"
               color: Qt.rgba(root.baseIconColor.r,
@@ -185,8 +193,9 @@ Ui.Panel {
               clip: true
               Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
 
-              Text {
+              Presentation.BarGlyph {
                 id: claudeUsageGlyph
+                optical: !root.bar || !root.bar.vertical
                 x: claudeGlyphBase.x
                 y: claudeGlyphBase.y - claudeUsageClip.y
                 width: claudeGlyphBase.width
@@ -201,8 +210,14 @@ Ui.Panel {
           }
 
           Item {
+            id: providerImage
             anchors.fill: parent
             visible: root.providerId === "codex" || root.providerId === "opencode"
+            Presentation.BarInk { id: imageInk; target: providerImage }
+            transform: Translate {
+              x: imageInk.enabled ? imageInk.snapX(0) : 0
+              y: imageInk.enabled ? imageInk.rectangleY(providerImage.height) : 0
+            }
 
             TintedImage {
               anchors.fill: parent
@@ -245,7 +260,8 @@ Ui.Panel {
         }
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.usagePercent >= 0

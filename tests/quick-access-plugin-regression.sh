@@ -45,6 +45,7 @@ EOF
   cp -a -- "$repo_root/hancore.shibumi.quick-access" \
     "$fixture_root/quickaccess"
   cp -a -- "$omarchy_path/shell/Commons" "$fixture_root/Commons"
+  cp -a -- "$omarchy_path/shell/Ui" "$fixture_root/Ui"
   install -m 0644 "$repo_root/hancore.shibumi.bar/core/WidgetSlot.qml" \
     "$fixture_root/barcore/WidgetSlot.qml"
   # The fixture exercises the production overlay body without creating a real
@@ -97,6 +98,13 @@ for index in range(100):
         path.write_bytes(image)
         path.chmod(0o644)
 PY
+  printf '%s\n' \
+    'accent = "#89b4fa"' 'selection = "#45475a"' 'muted = "#585b70"' \
+    'background = "#1e1e2e"' 'dark_background = "#161622"' 'darker_background = "#101019"' \
+    'foreground = "#cdd6f4"' 'cursor = "#f5e0dc"' \
+    'red = "#f38ba8"' 'green = "#a6e3a1"' 'yellow = "#f9e2af"' \
+    'blue = "#89b4fa"' 'magenta = "#f5c2e7"' 'cyan = "#94e2d5"' \
+    >"$fixture_root/images/colors.toml"
   install -m 0644 "$repo_root/tests/quick-access-plugin-smoke.qml" \
     "$fixture_root/shell.qml"
 }

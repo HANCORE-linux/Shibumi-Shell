@@ -75,15 +75,12 @@ ShibumiPanel {
         width: parent.width
         height: Commons.Style.space(28)
 
-        Text {
+        Presentation.PanelHeading {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
           text: "Updates"
           color: panel.controlForeground
           font.family: panel.fontFamily
-          font.pixelSize: Commons.Style.font.heading
-          font.weight: Font.Medium
-          font.letterSpacing: 2
         }
 
         Row {

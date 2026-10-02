@@ -12,6 +12,16 @@ PanelWindow {
     && screen.name !== ""
     && screen.width > 0
     && screen.height > 0
+  // Let top shadows fade beyond barSize without enlarging layout or input:
+  // V1 uses 8px blur + 1px offset; Full/Fit use 9px + 2px independently
+  // of the V1 shadow toggle. Notch only needs its 1px antialiasing fringe.
+  readonly property int shadowPadding: !bar.vertical && bar.position === "top"
+    && bar.visualTokens
+      ? bar.visualTokens.shellStyle === "shibumi"
+        ? bar.visualTokens.shadowEnabled === true ? 9 : 0
+        : ["full", "fit"].indexOf(bar.visualTokens.shellStyle) >= 0 ? 11
+          : bar.visualTokens.shellStyle === "notch" ? 1 : 0
+      : 0
   readonly property var layoutSession: dragSession
   readonly property real surfaceWidth: barSurfaceLoader.item
     ? Number(barSurfaceLoader.item.width) || 0 : 0
@@ -27,7 +37,8 @@ PanelWindow {
   // Keep the anchor window edge-local in every presentation and while editing.
   // The reserved desktop area remains the independent exclusiveZone below.
   implicitWidth: bar.vertical && validScreen ? bar.barSize : 0
-  implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0
+  implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0
+  mask: Region { item: barSurfaceLoader }
   color: "transparent"
   surfaceFormat.opaque: false
 
@@ -111,7 +122,7 @@ PanelWindow {
   }
 
   Rectangle {
-    anchors.fill: parent
+    anchors.fill: barSurfaceLoader
     visible: dragSession.editing
     color: "#000000"
     opacity: 0.34
@@ -121,7 +132,8 @@ PanelWindow {
   Loader {
     id: barSurfaceLoader
 
-    anchors.fill: parent
+    width: parent.width
+    height: barWindow.bar.vertical ? parent.height : barWindow.bar.barSize
     active: barWindow.bar.hostReady && barWindow.bar.styleReady
       && barWindow.validScreen && barWindow.bar.visualTokens !== null
     sourceComponent: active ? barWindow.bar.activeStyle.barSurfaceComponent : null

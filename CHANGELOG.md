@@ -1,6 +1,61 @@
 # Changelog
 
-## [0.1.1-beta.15.4] - Unreleased
+## [0.1.1-beta.16] - 2026-10-02
+
+### Added
+
+- Offer horizontal and vertical battery symbols in the bar.
+- Explain unavailable AI provider limits in the widget tooltip.
+- Admit the exact Beta.15.4 tag, release merge, and documentation merge
+  checkouts as update predecessors, retaining strict payload and lifecycle
+  checks.
+
+### Changed
+
+- Combine CPU and GPU load in one concentric water-ring display in the CPU
+  panel, with GPU information shown when available.
+- Refresh the Battery and Temperature panels with water-ring displays and
+  compact metrics; show a plasma effect while the battery is charging.
+- Arrange Power Profile choices as native buttons with distinct active and
+  hover states.
+- Use Omarchy's configured bar font and shared icon size for bar symbols,
+  with optically balanced LAN, palette, and power-profile symbols.
+- Align ordinary bar text on a shared font-reference baseline; the smaller
+  date follows the clock's baseline without changing its text size.
+- Use an outline notification bell with a theme color01 dot for a positive
+  count and a ring while the count is unknown or loading.
+- Make update and tray badges smaller, center single digits, and let longer
+  counts grow to the right.
+- Use the theme's color01 for the horizontal battery's charging bolt.
+- Align the horizontal V2 battery symbol to its displayed value's baseline.
+- Use a consistent uppercase heading style across feature panels, leaving
+  the Control Center heading unchanged.
+- Use the accent color for AI model-usage bars.
+- Remove the redundant LIVE marker from the Control Center's active-bar card.
+- Show the output name in the desktop Brightness widget; Compact and V2 Icon
+  modes show only the monitor symbol.
+
+### Fixed
+
+- Show the selected theme's actual colors in picker palette dots.
+- Keep bar symbols and text centered without changing their layout or input
+  reservations, and draw the battery tip, charge bolt, and vertical text cleanly.
+- Refresh glyph outline metrics after switching from V1 to V2 without a shell
+  restart, so the horizontal battery no longer sits too low.
+- Make the five media transport buttons compact, with equally sized,
+  centered symbols.
+- Let V1 and V2 shadows fade beyond the bar edge without expanding the input
+  region or reserved screen space; match the straight edge to the outline.
+- Keep Power Profile labels readable during hover transitions and clear the
+  hover when the pointer leaves. Profile buttons and the Brightness text-size
+  control now follow the panel radius.
+- Enable V1 widgets already present as ordinary layout entries. Reuse empty
+  base positions whose owner is elsewhere and slots held by switched-off
+  additional widgets before refusing placement. Preserve displaced fixed
+  widget identities and settings, never displace active widgets, and show a
+  clear capacity message when no place is free.
+
+## [0.1.1-beta.15.4] - 2026-09-28
 
 ### Added
 

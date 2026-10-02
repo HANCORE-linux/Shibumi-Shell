@@ -16,8 +16,10 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-The published `0.1.1-beta.15.4` prerelease was validated on a single-output
-Omarchy 4.0.4 host; see the release notes for scope and known limits.
+`0.1.1-beta.16` is published as a GitHub prerelease. AUR publication is
+deferred; use the source installation below. See the
+[release notes](.github/release-notes/v0.1.1-beta.16.md) for changes and the
+downgrade warning.
 The current pinned host contracts use Omarchy and Omarchy Settings `4.0.4-1`
 (source tag `v4.0.4`, revision `c668141e`) with Quickshell `0.3.1-1`; the
 4.0.3 and 4.0.2 manifests remain optional compatibility baselines.
@@ -61,10 +63,8 @@ for the latest validated host versions.
 ## Install
 
 > [!IMPORTANT]
-> `0.1.1-beta.15.4` is published as a GitHub prerelease, but AUR publication is
-> deferred and the package is not available from AUR yet. Until the AUR package
-> is published, use the source path below. Shibumi supports Omarchy Quattro
-> only.
+> AUR publication is deferred; use the source installation below.
+> Install from the release tag, not `main`. Shibumi supports Omarchy Quattro only.
 
 After AUR publication, the supported one-command installation is:
 
@@ -76,28 +76,30 @@ Pacman resolves the required runtime packages and skips dependencies already
 provided by the system. The explicit Shibumi command then stages and verifies
 the 24 user plugins without a root package hook touching the user's config.
 
-Until the AUR package is released, use this transitional source installation:
+Install from source using the release tag:
 
 ```bash
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.15.4
+git checkout v0.1.1-beta.16
 ./scripts/shibumi-suite install --yes
 ```
 
-Update the transitional source installation from an earlier tag (supported predecessors: tags v0.1.1-beta.11 through v0.1.1-beta.15.3):
+Update an admitted source installation, including Beta.15.4, to Beta.16.
+Exact predecessor identities, not a version range, govern admission; see the
+[update guide](docs/install.md#update).
 
 ```sh
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.15.4
+git checkout v0.1.1-beta.16
 ./scripts/shibumi-suite update --yes
 ```
 
 Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
-This transitional source command asks for root privileges only while Pacman
+The source installation asks for root privileges only while Pacman
 installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
 as the desktop user and writes only user-scoped plugin state.
 
@@ -111,7 +113,7 @@ Remove all managed Shibumi plugins and restore the stock Omarchy bar:
 shibumi-shell uninstall --yes && omarchy pkg drop shibumi-shell
 ```
 
-For the transitional source installation, run this from its checkout instead:
+For a source installation, run this from its checkout instead:
 
 ```bash
 ./scripts/shibumi-suite uninstall --yes

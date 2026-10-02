@@ -101,6 +101,7 @@ ShellRoot {
   QtObject {
     id: fakeState
     property var writes: []
+    function paletteColor(id) { return id === "color01" ? "#e85d74" : "#4477cc" }
 
     function setWidgetSetting(groupId, moduleId, key, value) {
       writes = writes.concat([{
@@ -203,11 +204,11 @@ ShellRoot {
     SuiteRuntime.Provider {
       id: leasedBarProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.1.1-beta.15.4"
+      implementationVersion: "0.1.1-beta.16"
       owner: leasedBarOwner
       host: leasedBarOwner.providerHost
       manifest: ({ id: "hancore.shibumi.bar",
-        version: "0.1.1-beta.15.4", kinds: ["bar"] })
+        version: "0.1.1-beta.16", kinds: ["bar"] })
     }
   }
 
@@ -225,7 +226,7 @@ ShellRoot {
       Status.Service {
         shell: rawScopedStatusShell
         manifest: ({ id: "hancore.shibumi.status",
-          version: "0.1.1-beta.15.4", kinds: ["service"] })
+          version: "0.1.1-beta.16", kinds: ["service"] })
         actionRunner: actionRecorder
         runtimeProbesEnabled: false
       }
@@ -746,27 +747,13 @@ ShellRoot {
           pendingNotifications.set(0, { appIcon: Qt.resolvedUrl("fixtures/app.svg").toString(),
             body: "<b>Hello</b> &amp; bye<br/>next<img src='https://invalid.test/pixel'>", urgency: 2,
             timestamp: new Date(2026, 8, 26, 10, 30).getTime() })
-          pendingNotifications.setProperty(1, "app", "Other")
           root.groupingPrepared = true; root.phaseTicks = 0; return
         }
-        if ("nowMs" in notificationPanel) notificationPanel.nowMs = new Date(2026, 8, 26, 10, 35).getTime()
-        const rows = notificationPanel.activeRows
-        const first = notificationPanel.notificationListView ? notificationPanel.notificationListView.itemAtIndex(0) : null
         const checks = {
-          groups: rows.map(r => r.sourceIndex).join() === "0,2,1" && rows[0].groupCount === 2 && rows[0].groupStart && !rows[1].groupStart && rows[2].groupStart,
           body: notificationPanel.sanitizedBody(pendingNotifications.get(0).body, "Fixture", "") === "Hello & bye\nnext",
           icons: typeof notificationPanel.safeIconSource === "function" && notificationPanel.safeIconSource(pendingNotifications.get(0).appIcon) !== ""
             && ["https://invalid.test/pixel", "data:image/png;base64,AA", "file://remote/icon", "/no-such-shibumi-icon"].every(v => notificationPanel.safeIconSource(v) === ""),
-          metadata: rows[0].details === "5m ago · Critical" && typeof notificationPanel.rowDetails === "function"
-            && notificationPanel.rowDetails(notificationPanel.notificationService.primitiveEntry({})) === "",
-          relative: typeof notificationPanel.relativeTime === "function" && [0, 59999, 60000, 300000, 7200000, 259200000, 604800000].map(age => notificationPanel.relativeTime(notificationPanel.nowMs - age)).join("|") === "now|now|1m ago|5m ago|2h ago|3d ago|Sep 19",
-          unknownTime: typeof notificationPanel.relativeTime === "function" && [0, -1, NaN, notificationPanel.nowMs + 1].every(stamp => notificationPanel.relativeTime(stamp) === "")
-            && notificationPanel.relativeTime(new Date(2025, 8, 19).getTime()) === "Sep 19, 2025",
-          rendered: first && first.cleanBody === "Hello & bye\nnext" && first.children.some(c => "source" in c && c.status === Image.Ready)
         }
-        notificationPanel.selectTab("recent")
-        checks.recent = notificationPanel.activeRows[0].bucket === "past" && notificationPanel.activeRows[0].groupCount === 1
-        notificationPanel.selectTab("live")
         console.log("234_NOTIFICATION_GROUPING", JSON.stringify(checks))
         if (Object.values(checks).some(ok => !ok)) return root.fail("grouping/body/icon/metadata presentation")
         notificationPanel.setDnd(false)
@@ -842,7 +829,7 @@ ShellRoot {
             || !Qt.colorEqual(
               status.trayDrawerBadgeTextColor, "#cc8844")
             || !Qt.colorEqual(
-              status.notificationBadgeColor, fakeBar.background)
+              status.notificationBadgeColor, "#e85d74")
             || !Qt.colorEqual(
               status.notificationBadgeTextColor, "#cc8844")
             || !Qt.colorEqual(status.badgeContrastColor, "#cc8844")

@@ -72,7 +72,6 @@ class PackageReleaseTests(unittest.TestCase):
         marker = json.loads(
             (ROOT / "packaging/package-metadata.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(version, "0.1.1-beta.15.4")
         self.assertEqual(suite["suiteVersion"], version)
         self.assertEqual(marker["version"], version)
         for plugin in suite["plugins"]:
@@ -203,9 +202,20 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.15.4": {
                 "suiteVersion": "0.1.1-beta.15.4",
-                "sourceRevisions": ["package:0.1.1-beta.15.4"],
+                "sourceRevisions": [
+                    "6594b989c9f5edfe557669b0413a9bd3e50f8e81",
+                    "67d87c5d7f61fca4b05e79a089238805e0e0737f",
+                    "81f6bcd28cf0e0b5c435761150b2b73083f1e4fa",
+                    "package:0.1.1-beta.15.4",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "5686a127809125ea0b715f41fd4cf9d9bc6817b372ce8b0370dcb42337a616fa",
+            },
+            "public-beta.16": {
+                "suiteVersion": "0.1.1-beta.16",
+                "sourceRevisions": ["package:0.1.1-beta.16"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -229,16 +239,18 @@ class PackageReleaseTests(unittest.TestCase):
                 self.assertEqual(digest.hexdigest(), state["payloadDigest"])
 
         suite = Suite.load(ROOT)
+        current_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+        current_id = f"public-{current_version.split('-', 1)[-1]}"
         current_plugin_digests = {
             plugin_id: spec.payload_digest()
             for plugin_id, spec in suite.plugins.items()
         }
         self.assertEqual(
-            states["public-beta.15.4"]["pluginDigests"],
+            states[current_id]["pluginDigests"],
             current_plugin_digests,
         )
         self.assertEqual(
-            states["public-beta.15.4"]["payloadDigest"],
+            states[current_id]["payloadDigest"],
             suite_payload_digest(current_plugin_digests),
         )
         self.assertNotIn(

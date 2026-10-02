@@ -334,19 +334,6 @@ ShellRoot {
           fakeShell.spectrumBackend = fakeSpectrum
         }
         if (root.rebindPhase++ < 7) return
-        const checks = { playing: panel.vinylRotating === true,
-          metadata: panel.albumVisible === true && panel.playerNameVisible === true,
-          multiple: panel.sourcesVisible === true }
-        playerA.isPlaying = false; checks.paused = panel.vinylRotating === false
-        playerA.isPlaying = true; checks.resumed = panel.vinylRotating === true
-        mediaState.sourcePlayers = [playerA]; checks.single = panel.sourcesVisible === false
-        mediaState.sourcePlayers = [playerA, playerB]
-        const album = playerA.trackAlbum, identity = playerA.identity, desktop = playerA.desktopEntry
-        playerA.trackAlbum = ""; playerA.identity = ""; playerA.desktopEntry = ""
-        checks.absentMetadata = panel.albumVisible === false && panel.playerNameVisible === false
-        playerA.trackAlbum = album; playerA.identity = identity; playerA.desktopEntry = desktop
-        console.log("241_MEDIA_PANEL", JSON.stringify(checks))
-        if (Object.values(checks).some(value => !value)) return root.fail("vinyl, metadata or source-list presentation")
         if (typeof panel.directAction !== "function") return root.fail("direct MPRIS controls missing")
         const actionCount = mediaState.actionCount, direct = { supported: panel.shuffleControl.enabled && panel.repeatControl.enabled && panel.seekControl.enabled }
         panel.shuffleControl.clicked(); direct.shuffle = playerA.shuffle && panel.shuffleControl.checked

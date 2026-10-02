@@ -141,7 +141,7 @@ tray_panel="$repo_root/hancore.shibumi.status/TrayDrawerPanel.qml"
 tray_menu="$repo_root/hancore.shibumi.status/TrayAppMenuPanel.qml"
 rg -q 'pinnedCount \* Commons\.Style\.space\(18\)' "$tray_view" \
   || fail "pinned tray cells do not match the V1 18px geometry"
-[[ $(rg -c 'Commons\.Style\.space\(14\)' "$tray_view") -ge 4 ]] \
+[[ $(rg -c 'Commons\.Style\.space\(14\)' "$tray_view") -eq 2 ]] \
   || fail "pinned tray icons do not match the V1 14px geometry"
 rg -q 'readonly property string drawerTooltipText: totalCount' "$tray_view" \
   || fail "tray drawer tooltip does not retain the current V1 count contract"

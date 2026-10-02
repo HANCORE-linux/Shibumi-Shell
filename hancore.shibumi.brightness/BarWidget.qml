@@ -44,6 +44,12 @@ Ui.Panel {
     && Array.isArray(monitorService.displays) ? monitorService.displays.length : 0
   readonly property string displayGlyph: Quickshell.screens.length > 1
     ? "󰍺" : "󰍹"
+  readonly property string displayLabel: {
+    const window = root.QsWindow ? root.QsWindow.window : null
+    const name = window && window.screen
+      ? String(window.screen.name || "").trim() : ""
+    return name || "DISP"
+  }
   readonly property string tooltipText: !monitorReady ? "Display unavailable"
     : brightnessAvailable ? "Brightness · " + percent + "%"
     : "Display controls"
@@ -176,7 +182,7 @@ Ui.Panel {
             ? compactBrightnessContent
           : root.displayMode === "text"
             ? textBrightnessContent : fullBrightnessContent)
-        : displayContent
+        : root.bar.vertical ? displayContent : horizontalDisplayContent
     }
 
     Ui.WidgetButton {
@@ -201,7 +207,8 @@ Ui.Panel {
     Row {
       spacing: root.tokens.contentGap
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode === "full"
         anchors.verticalCenter: parent.verticalCenter
         text: "BRI"
@@ -220,7 +227,8 @@ Ui.Panel {
         color: root.widgetInk
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.percent + "%"
@@ -245,7 +253,8 @@ Ui.Panel {
         color: root.widgetInk
       }
 
-      Text {
+      Presentation.IconText {
+        barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.compactValueVisible
         text: root.percent + "%"
@@ -260,12 +269,50 @@ Ui.Panel {
   Component {
     id: textBrightnessContent
 
-    Text {
+    Presentation.IconText {
+      barText: true
       text: root.percent + "%"
       color: root.widgetInk
       font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
       font.pixelSize: root.tokens.labelSize
       renderType: Text.NativeRendering
+    }
+  }
+
+  Component {
+    id: horizontalDisplayContent
+
+    Row {
+      spacing: root.tokens.v2Shell === true
+        ? root.tokens.compactGap : root.tokens.contentGap
+
+      Presentation.BarGlyph {
+        visible: root.displayMode !== "text"
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.displayGlyph
+        color: root.widgetInk
+        font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+        font.pixelSize: root.tokens.iconSize
+        // Keep the old advance/line box; resize and center only the painted ink.
+        symbol: false
+        nativeLineBox: false
+        paintPixelSize: Math.max(1, Commons.Style.bar.iconFont
+          - (root.displayGlyph === "󰍺" ? 2 : 1))
+        renderType: Text.NativeRendering
+      }
+
+      Presentation.IconText {
+        barText: true
+        visible: root.displayMode !== "icon"
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.displayLabel
+        color: root.tokens.v2Shell === true ? root.widgetInk
+          : Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.68)
+        font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+        font.pixelSize: root.tokens.labelSize
+        font.letterSpacing: root.tokens.v2Shell === true ? 0 : 0.5
+        renderType: Text.NativeRendering
+      }
     }
   }
 
@@ -290,32 +337,12 @@ Ui.Panel {
     width: Commons.Style.space(13)
     height: Commons.Style.space(13)
 
-    Rectangle {
-      anchors.centerIn: parent
-      width: Commons.Style.space(6.5)
-      height: width
-      radius: width / 2
+    Presentation.BarGlyph {
+      anchors.fill: parent
+      text: "󰖙"
+      font.family: Commons.Style.font.family
       color: sun.color
       Behavior on color { ColorAnimation { duration: 200 } }
-    }
-
-    Repeater {
-      model: 8
-      delegate: Item {
-        required property int index
-        anchors.fill: parent
-        rotation: index * 45
-
-        Rectangle {
-          anchors.horizontalCenter: parent.horizontalCenter
-          anchors.top: parent.top
-          width: Commons.Style.space(1.5)
-          height: Commons.Style.space(2 + 1.4 * sun.ratio)
-          radius: width / 2
-          color: sun.color
-          opacity: 0.35 + 0.65 * sun.ratio
-        }
-      }
     }
   }
 }

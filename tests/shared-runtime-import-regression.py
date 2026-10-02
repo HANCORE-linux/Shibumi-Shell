@@ -25,6 +25,7 @@ PRESENTATION_LINE = (
     'import "../hancore.shibumi.state/lib/presentation" as Presentation\n')
 CHECKER = Path(__file__).resolve().with_name("plugin-import-boundary.py")
 ROOT = Path(__file__).resolve().parents[1]
+CURRENT_VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 SCOPED_SERVICE_IDS = (
     "hancore.shibumi.ai",
     "hancore.shibumi.bluetooth",
@@ -111,7 +112,7 @@ class RuntimeImports(unittest.TestCase):
                 self.assertEqual(len(owned), 1)
                 for contract in ("owner: root", "host: root.shell",
                                  "manifest: root.manifest",
-                                 'implementationVersion: "0.1.1-beta.15.4"'):
+                                 f'implementationVersion: "{CURRENT_VERSION}"'):
                     self.assertIn(contract, owned[0])
 
     def test_near_neighbors_receive_no_exception(self):
@@ -290,7 +291,7 @@ class PresentationImports(unittest.TestCase):
             if PRESENTATION_LINE.strip() in source.read_text(encoding="utf-8"):
                 actual.add(source.relative_to(ROOT).as_posix())
         self.assertEqual(actual, PRESENTATION_IMPORTERS)
-        self.assertEqual(len(actual), 60)
+        self.assertEqual(len(actual), 65)
 
         contract = json.loads(
             (ROOT / "contracts/plugin-suite-v1.json").read_text())
@@ -369,10 +370,14 @@ class PresentationImports(unittest.TestCase):
         self.assertEqual(
             (module / "qmldir").read_text(encoding="utf-8"),
             "module Shibumi.Presentation\n"
+            "BarGlyph 1.0 BarGlyph.qml\n"
+            "BarInk 1.0 BarInk.qml\n"
             "ControlCenterIconText 1.0 ControlCenterIconText.qml\n"
             "HostTokens 1.0 HostTokens.qml\n"
             "IconText 1.0 IconText.qml\n"
+            "InkRow 1.0 InkRow.qml\n"
             "PacmanWorkspaceMarker 1.0 PacmanWorkspaceMarker.qml\n"
+            "PanelHeading 1.0 PanelHeading.qml\n"
             "PillSurface 1.0 PillSurface.qml\n"
             "ShibumiPanelToolTip 1.0 ShibumiPanelToolTip.qml\n"
             "ShibumiPillToolTip 1.0 ShibumiPillToolTip.qml\n")

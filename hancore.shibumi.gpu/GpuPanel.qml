@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 ShibumiPanel {
   id: panel
@@ -218,15 +219,15 @@ ShibumiPanel {
         width: sourceViewport.width
         spacing: Commons.Style.space(10)
 
-      Text {
+      Presentation.PanelHeading {
+        layoutFont: Qt.font({family: panel.bar.fontFamily,
+          pixelSize: Commons.Style.font.heading, weight: Font.Medium})
         text: panel.selectedGpu
           ? "GPU · " + String(panel.selectedGpu.driverName
             || panel.selectedGpu.backend).toUpperCase()
           : "GPU · UNAVAILABLE"
         color: panel.bar.foreground
         font.family: panel.bar.fontFamily
-        font.pixelSize: Commons.Style.font.heading
-        font.weight: Font.Medium
       }
 
       Rectangle {

@@ -299,7 +299,7 @@ for dynamic_v1_contract in \
     || fail "dynamic V1 plugins lost standard pill chrome: $dynamic_v1_contract"
 done
 for bar_window_contract in \
-  'implicitHeight: !bar.vertical && validScreen ? bar.barSize : 0' \
+  'implicitHeight: !bar.vertical && validScreen ? bar.barSize + shadowPadding : 0' \
   'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
   'exclusiveZone: bar.barExclusiveSize' \
   'WlrLayershell.keyboardFocus: dragSession.editing' \
@@ -309,10 +309,11 @@ for bar_window_contract in \
     || fail "bar-local edit surface drifted: $bar_window_contract"
 done
 awk '/^[[:space:]]*id: barSurfaceLoader$/,/^  }$/' hancore.shibumi.bar/core/BarPanel.qml \
-  | rg -q '^    anchors.fill: parent$' \
-  || fail "bar surface loader must fill the edge-local window"
-if rg -q '^  mask: Region \{|MouseArea \{' hancore.shibumi.bar/core/BarPanel.qml; then
-  fail "bar window retained fullscreen edit input ownership"
+  | rg -Uq '^    width: parent\.width\n    height: barWindow\.bar\.vertical \? parent\.height : barWindow\.bar\.barSize$' \
+  || fail "bar surface loader must retain its edge-local layout and input box"
+if rg -q 'MouseArea \{' hancore.shibumi.bar/core/BarPanel.qml \
+  || ! rg -Fxq '  mask: Region { item: barSurfaceLoader }' hancore.shibumi.bar/core/BarPanel.qml; then
+  fail "bar window lost its restricted edge-local input region"
 fi
 for backdrop_contract in \
   'id: editBackdropLoader' \
@@ -752,7 +753,7 @@ rg -Fq 'readonly property int iconSlotSize: 14' \
 if rg -Fq 'text: "HDD "' hancore.shibumi.storage/BarWidget.qml; then
   fail "storage bar restored the obsolete HDD prefix"
 fi
-rg -Fq 'GpuCardIcon {' \
+rg -Fq 'Presentation.BarGlyph {' \
   hancore.shibumi.gpu/BarWidget.qml \
   || fail "GPU bar icon is not rendered by its native QML component"
 [[ -f hancore.shibumi.gpu/GpuCardIcon.qml ]] \

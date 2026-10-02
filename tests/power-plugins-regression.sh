@@ -118,9 +118,10 @@ for plugin in battery power-profile; do
       "$repo_root/hancore.shibumi.$plugin" --glob '*.qml'; then
     fail "$plugin consumes transitional bar-owned feature state"
   fi
-  if rg -q 'Quickshell\.Services\.UPower|UPower\.|Process \{|Timer \{|FileView \{' \
+  if rg -q 'Quickshell\.Services\.UPower|UPower\.|Process \{|FileView \{' \
       "$repo_root/hancore.shibumi.$plugin" --glob '*.qml' \
-      --glob '!ShibumiPanel.qml'; then
+      --glob '!ShibumiPanel.qml' || \
+      rg -q 'Timer \{' "$repo_root/hancore.shibumi.$plugin" --glob '*.qml' --glob '!ShibumiPanel.qml' --glob '!WaterRing.qml' --glob '!BatteryRing.qml'; then
     fail "$plugin presentation owns hardware state or background work"
   fi
 done
@@ -128,10 +129,10 @@ done
 rg -q 'bar\.run\("omarchy-launch-or-focus-tui btop"\)' \
   "$repo_root/hancore.shibumi.battery/BarWidget.qml" \
   || fail "battery system-monitor action bypasses the host facade"
-rg -q 'panel\.powerService\.profileLabel\(profileRow\.modelData\)' \
+rg -Fq 'model: panel.powerState.profiles' \
   "$repo_root/hancore.shibumi.power-profile/PowerProfilePanel.qml" \
-  || fail "power-profile view duplicates the shared profile model"
-for glyph in '\uF06C' '\uF24E' '\uF0E7'; do
+  || fail "power-profile view does not consume the shared profile model"
+for glyph in '"󰌪"' '"󰊚"' '"󰓅"'; do
   rg -Fq "$glyph" "$repo_root/hancore.shibumi.power-profile/PowerProfilePanel.qml" \
     || fail "power-profile panel icon drifted from V1: $glyph"
 done
@@ -139,10 +140,11 @@ if rg -Fq 'rotation: -90' "$repo_root/hancore.shibumi.battery/BarWidget.qml"; th
   fail "battery bar gauge drifted from the horizontal V1 presentation"
 fi
 for charging_contract in \
-    'id: chargingBolt' \
-    'ctx.lineTo(width * 0.88, height * 0.45)' \
-    'visible: gauge.charging && !gauge.full' \
-    'clip: true'; do
+    ': batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)' \
+    'visible: gauge.horizontalCharging' \
+    'root.batteryOrientation === "horizontal" && (charging || full)' \
+    'opacity: low ? pulse : 1' \
+    'running: gauge.visible && gauge.low'; do
   rg -Fq "$charging_contract" "$repo_root/hancore.shibumi.battery/BarWidget.qml" \
     || fail "battery charging presentation drifted from V1: $charging_contract"
 done
@@ -171,7 +173,7 @@ rg -Fq "printf 'health\\\\t%s\\\\n'" \
 rg -q 'panel\.powerState\.batteryHealthText' \
   "$repo_root/hancore.shibumi.battery/BatteryPanel.qml" \
   || fail "battery panel does not render the shared health fallback"
-rg -q 'width: parent \? parent\.width : 0' \
+rg -q 'width: primaryStats\.width' \
   "$repo_root/hancore.shibumi.battery/BatteryPanel.qml" \
   || fail "battery information rows can collapse to zero width"
 

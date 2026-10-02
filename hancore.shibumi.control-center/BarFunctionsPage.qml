@@ -143,7 +143,14 @@ Column {
     pageKey: "appearance"
     eyebrow: "WIDGET VISUALS"
     title: "Icons"
-    description: "Style widget content and surfaces. Launcher identity stays under Logo."
+    description: root.controller.v2LayoutActive !== true
+      && appearanceWorkbench.toggleErrorMessage !== ""
+      ? appearanceWorkbench.toggleErrorMessage
+      : "Style widget content and surfaces. Launcher identity stays under Logo."
+    descriptionWrap: root.controller.v2LayoutActive !== true
+      && appearanceWorkbench.toggleErrorMessage !== ""
+    descriptionColor: descriptionWrap
+      ? root.controller.accentColor("color01") : root.foreground
     foreground: root.foreground
     accent: root.accent
     uiScale: root.uiScale

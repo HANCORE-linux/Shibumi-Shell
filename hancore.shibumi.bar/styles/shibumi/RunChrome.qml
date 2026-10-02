@@ -596,7 +596,27 @@ Item {
     }
   }
 
-  Rectangle {
+  // Use the same stroked path as the perimeter. A filled Rectangle rounds
+  // its logical height at fractional DPR, making this edge visibly heavier.
+  component EdgeStroke: Shape {
+    id: edge
+    height: 1
+    antialiasing: true
+    preferredRendererType: Shape.CurveRenderer
+    z: 6
+
+    ShapePath {
+      strokeColor: root.shellBorder
+      strokeWidth: root.bar.visualTokens.pillBorderWidth
+      fillColor: "transparent"
+      capStyle: ShapePath.FlatCap
+      startX: 0
+      startY: edge.height / 2
+      PathLine { x: edge.width; y: edge.height / 2 }
+    }
+  }
+
+  EdgeStroke {
     visible: root.shellStyle !== "shibumi"
       && root.shellStyle !== "notch"
       && root.bar.visualTokens.pillBorderWidth > 0
@@ -605,12 +625,9 @@ Item {
     width: root.connectedPanelActive
       ? Math.max(0, root.connectedCenterX - 12 - x)
       : Math.max(0, root.width - 2 * root.desktopEdgeInset)
-    height: 1
-    color: root.shellBorder
-    z: 6
   }
 
-  Rectangle {
+  EdgeStroke {
     visible: root.connectedPanelActive
       && root.shellStyle !== "notch"
       && root.bar.visualTokens.pillBorderWidth > 0
@@ -618,9 +635,6 @@ Item {
       root.connectedCenterX + 12)
     y: root.atTop ? root.height - 1 : 0
     width: Math.max(0, root.width - root.desktopEdgeInset - x)
-    height: 1
-    color: root.shellBorder
-    z: 6
   }
 
   // V2's connected popover contract: the fill itself owns the negative-space

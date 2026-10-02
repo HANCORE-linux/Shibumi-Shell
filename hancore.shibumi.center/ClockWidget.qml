@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "../hancore.shibumi.state/lib/presentation" as Presentation
 
 Ui.BarWidget {
   id: root
@@ -19,6 +20,7 @@ Ui.BarWidget {
   readonly property date displayDate: clock ? clock.date : new Date()
   readonly property bool clock12h: setting("clock12h", false) === true
   readonly property string timeText: formatTime(displayDate)
+  readonly property font textFont: label.font
   readonly property string tooltipText: Qt.formatDate(displayDate, "ddd, d MMMM yyyy")
 
   implicitWidth: bar && bar.vertical ? bar.barSize : label.implicitWidth
@@ -52,8 +54,9 @@ Ui.BarWidget {
     return true
   }
 
-  Text {
+  Presentation.IconText {
     id: label
+    barText: true
     anchors.centerIn: parent
     text: root.bar && root.bar.vertical
       ? Qt.formatTime(root.displayDate, "HH\nmm") : root.timeText

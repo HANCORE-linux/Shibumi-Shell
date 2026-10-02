@@ -100,8 +100,9 @@ Item {
       width: implicitWidth
       height: implicitHeight
 
-      Text {
+      Presentation.BarGlyph {
         id: idleIcon
+        nativeText: "󰅶"
         anchors.centerIn: parent
         text: "\udb86\uded6"
         color: root.contentColor
@@ -129,7 +130,7 @@ Item {
       width: implicitWidth
       height: implicitHeight
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         id: dndIcon
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: root.dndOpticalCenterOffset
@@ -181,8 +182,8 @@ Item {
           height: width
           text: "󰻂"
           color: root.recordingIconColor
-          fontFamily: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-          fontSize: 13
+          fontFamily: Commons.Style.font.family
+          fontSize: Commons.Style.bar.iconFont
 
           SequentialAnimation on opacity {
             running: recordingIndicator.visible
@@ -224,7 +225,7 @@ Item {
       width: implicitWidth
       height: implicitHeight
 
-      Presentation.IconText {
+      Presentation.BarGlyph {
         id: voxtypeIcon
         anchors.centerIn: parent
         text: root.statusService && root.statusService.voxtypeState === "recording"

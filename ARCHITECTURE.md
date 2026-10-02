@@ -104,6 +104,15 @@ baseline.
   field, saved-layout migration or V2 removal change is introduced. The
   Control Center preflights installed V1 bar widgets before starting plugin
   uninstall; bar removal still revalidates the layout at its own mutation.
+- V1 activation allocates normally, then uses an empty base whose owner is
+  placed elsewhere, then reclaims a disabled extra occupant. Fixed and dynamic
+  occupants share requested-region / remaining left-center-right / lowest-index
+  priority. Disabled fixed bases and active occupants are never reclaimed.
+  Reclaimed fixed identities remain in optional `order.parked`, not in slots;
+  every G1-G15 identity must occur exactly once across slots and that bounded
+  list. Settings remain intact. Re-enabling requires atomic placement plus
+  V1 state through the same allocator, or refuses without writes. V2, capacity
+  limits, the optional-center rule and positional splits remain unchanged.
 - All split boundaries start disabled. Split markers, drag targets, invalid
   returns, persistence, and geometry must retain the V1 behavior.
 - V1 and V2 own independent optional layout-protection preferences. Both
@@ -574,9 +583,9 @@ directly and State precedes them in suite order.
 The ownership, lifetime, version and publication rules are normative in
 [`docs/architecture/shared-runtime-v1.md`](docs/architecture/shared-runtime-v1.md).
 This is not a QML sandbox or an authorization to expose private host services.
-`ShibumiPanel.qml` retains three UI-lifecycle timers and therefore remains the
-only canonical source under `shared/presentation/`; its existing plugin and
-`widgets/` copies stay deterministically vendored and drift-checked. Bar-host
+`ShibumiPanel.qml` and the open-panel-only `WaterRing.qml` retain UI-lifecycle
+clocks and therefore stay canonical under `shared/presentation/`, outside the
+passive State library. Their copies are deterministically vendored and drift-checked. Bar-host
 and feature-owner sources are maintained directly in their
 `hancore.shibumi.*` plugin roots. Panels may consume services; services do not
 import panels.

@@ -9,23 +9,74 @@ tag must agree.
 
 ## Prepare
 
+Provisioning, runner registration, user-service/session setup, exact durable
+baselines, and repository security settings follow the
+[validation-host runbook](validation-host.md). It is a plan, not a bootstrap or
+permission to change a host; each operation needs separate maintainer approval.
+
 1. Confirm the target and remaining gates in
    [release readiness](../release-readiness.md).
 2. Update the suite version and every plugin manifest together.
-3. Move user-visible changelog entries into the target version.
+3. Move user-visible changelog entries into the target version. Set its agreed
+   release date before preparing the package checksum and final exact-commit
+   release evidence.
 4. Add concise, versioned notes under `.github/release-notes/`.
 5. Update user guides, architecture contracts, compatibility evidence, and
    screenshot placeholders or captures affected by the release.
 6. Confirm the repository visibility and remaining public-release blockers.
 7. Keep AUR publication behind the source, package, and clean-build gates in
    [packaging and AUR strategy](packaging.md).
-8. On host baseline change (`SHIBUMI_*_OMARCHY_PATH`, `quattro-compatibility.md` pins),
-   lift `predecessor_revision` in `tests/shibumi-suite-quattro-runtime.sh` to the last
-   tag validated on that baseline and run the gate locally before tagging.
+8. On host baseline change, rerun every retained update arm before tagging;
+   do not silently drop an arm or choose an older rolling predecessor.
+
+## Version pin categories
+
+- Current-candidate expectations in the package, suite-lifecycle, and shared
+  runtime-import Python tests read `VERSION`; package-origin strings follow it.
+  Current public identity lookups use `public-<prerelease>` (for example,
+  `public-beta.16`). This is a naming convention, not an admission shortcut.
+- Published predecessor versions, revisions, payload digests, and their exact
+  test tables remain explicit immutable pins, including the published release
+  whose version is still in `VERSION` while the next candidate is prepared.
+  Add the next candidate identity separately; never relabel an old payload.
+- Negative, downgrade, SemVer, and inert-fixture versions describe their own
+  scenarios. Do not globally replace version strings across tests.
+- Plugin manifests and code-bound QML `implementationVersion` literals remain
+  independent identities, updated together with release metadata. Do not load
+  a running provider's identity from a newly loaded manifest or add a runtime
+  version loader. Canonical and vendored copies must stay synchronized.
+- Reading candidate expectations from `VERSION` does not regenerate lifecycle
+  pins or validate payload bytes. Recompute the final candidate payload and
+  review exact admission identities during the authorized version/pin step;
+  modified product bytes with old pins must still fail identity checks.
+
+## Rolling predecessor selection and freeze
+
+Before candidate freeze, review the repository's actual GitHub releases and
+select the most recently published non-draft release by `published_at`, including
+prereleases. Do not use `/releases/latest`, tag order, or the highest admission ID;
+a tag without a published release is not eligible.
+Record version, tag, peeled commit, payload digest, release ID/URL, publication
+time, and prerelease status in `tests/fixtures/release-predecessor.json`. Verify
+the archived plugin bytes and admit that exact identity before freezing the file.
+Recheck publication and remote tag identity before release evidence; a changed
+selection requires review and another full runtime gate, not an in-run fetch.
+The runtime gate consumes only this offline reference and checks the local tag
+and admission pin. Its candidate is committed `HEAD`, never dirty plugin bytes.
+The rolling checkout arm replaces the former latest fixed arm; keep Beta 15 and
+15.2, the historical package arm, and the fresh arm: exactly 32 shell generations.
 
 ## Prepare the package checksum
 
 Finish every file included in the release payload before pinning its checksum.
+Update README install/update versions and all shipped `docs/` first. These files
+change the archive SHA-256 even when the plugin-only suite payload is unchanged;
+recompute plugin digests to check candidate pins, but do not confuse those pins
+with the archive checksum. Versioned notes under `.github/` are not archived.
+Replace the target `CHANGELOG.md` heading's `Unreleased` with the agreed release
+date before this first checksum build: the changelog is archived too. A later
+date change requires a new checksum and clean-commit rebuild, with release
+evidence bound to the resulting commit.
 Build the candidate twice and copy its reported SHA-256 into
 `packaging/aur/PKGBUILD`, then regenerate `.SRCINFO`:
 

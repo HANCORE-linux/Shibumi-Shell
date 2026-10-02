@@ -16,7 +16,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.15.4"
+    implementationVersion: "0.1.1-beta.16"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -97,6 +97,9 @@ Item {
     const next = JSON.parse(JSON.stringify(current))
     if (mutator(next) === false || !StorageModel.finiteNumbers(next)) return false
     const normalized = ShibumiConfig.normalize(next)
+    // Enabling a displaced fixed group requires an atomic placement as well.
+    if ((normalized.order.parked || []).some(group =>
+        groupEnabledForVariantFrom(normalized, group, "v1"))) return false
     if (same(current, normalized)) return false
 
     // A queued request is not a completed save. Publication and settled status
@@ -131,7 +134,7 @@ Item {
     "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
     "widgetBorder", "widgetBorderWidth",
     "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
-    "widgetRadius", "surfaceOpacity"
+    "widgetRadius", "surfaceOpacity", "batteryOrientation"
   ]
   readonly property var v1ExtensionAppearanceGroupIds: [
     "G:hancore.shibumi.temperature",
@@ -152,7 +155,8 @@ Item {
       color: "inherit", colorMode: "fill", tone: "auto",
       widgetBorder: false, widgetBorderWidth: 1,
       widgetBorderColor: "inherit", widgetBorderUsesSurfaceColor: false,
-      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1
+      widgetPadding: "auto", widgetRadius: "auto", surfaceOpacity: 1,
+      batteryOrientation: "horizontal"
     }
   }
 
@@ -331,6 +335,8 @@ Item {
       normalizedValue = value === true
     else if (name === "mediaStyle")
       normalizedValue = String(value || "") === "full" ? "full" : "default"
+    else if (name === "batteryOrientation")
+      normalizedValue = value === "vertical" ? "vertical" : "horizontal"
 
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
@@ -359,7 +365,7 @@ Item {
       "displayMode", "compact", "mediaStyle", "color", "colorMode", "tone",
       "widgetBorder", "widgetBorderWidth",
       "widgetBorderColor", "widgetBorderUsesSurfaceColor", "widgetPadding",
-      "widgetRadius", "surfaceOpacity"
+      "widgetRadius", "surfaceOpacity", "batteryOrientation"
     ]
     return commit(function(next) {
       if (!ShibumiConfig.isPlainObject(next.widgets)) next.widgets = {}
@@ -679,7 +685,10 @@ Item {
 
   function transitionLayout(value, variant) {
     const regions = ["left", "center", "right"]
-    if (!exactKeys(value, regions) || !regions.every(region =>
+    const keys = variant === "v1" && value
+      && Object.prototype.hasOwnProperty.call(value, "parked")
+      ? regions.concat(["parked"]) : regions
+    if (!exactKeys(value, keys) || !keys.every(region =>
         Array.isArray(value[region]) && value[region].every(id => typeof id === "string"))) return null
     return variant === "v1" ? ShibumiConfig.normalizedOrder(value)
       : ShibumiConfig.normalizedV2Layout(value)
