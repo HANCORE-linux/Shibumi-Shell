@@ -28,6 +28,8 @@ Item {
   property real paintFill: 0
   property bool optical: true
   property bool centerInkY: true
+  // Opt-in for a flat symbol paired with a value; never changes its reservation.
+  property Item baselineTarget: null
   property bool nativeLineBox: font.family === "Material Symbols Rounded"
   property real inkCenterY: height / 2
   property bool compactInk: false
@@ -161,12 +163,15 @@ Item {
         - root.nativeLabelX
       : (root.width - width) / 2
         + (root.lanSymbol ? width / 2 - nativeGlyph.paintedCenterX : 0)
-    y: root.inkAligned && root.centerInkY
+    readonly property real centeredY: root.inkAligned && root.centerInkY
       ? placement.textTop(placement.baselineFor(root.nativeBounds), nativeFont.ascent)
         - nativeGlyph.baselineY + nativeFont.ascent
       : (root.height - height) / 2
         + (root.lanSymbol ? height / 2 - nativeGlyph.baselineY
           - nativeInk.tightBoundingRect.y - nativeInk.tightBoundingRect.height / 2 : 0)
+    y: centeredY + (root.inkAligned && root.baselineTarget && root.baselineTarget.visible
+      ? placement.bottomShift(root.baselineTarget, centeredY + nativeGlyph.baselineY
+          + (root.nativeBounds.y + root.nativeBounds.height) / placement.metricScale) : 0)
     width: Commons.Style.bar.iconCanvas
     height: Commons.Style.bar.iconCanvas
     rotation: root.symbolRotation

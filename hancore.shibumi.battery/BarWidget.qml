@@ -190,8 +190,10 @@ Ui.Panel {
         color: root.widgetInk
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
+        valueLabel: fullValue
       }
       Presentation.IconText {
+        id: fullValue
         barText: true
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
@@ -219,8 +221,10 @@ Ui.Panel {
         color: root.widgetInk
         detailColor: root.chargingDetailColor
         shimmerColor: root.chargingShimmerColor
+        valueLabel: compactValue
       }
       Presentation.IconText {
+        id: compactValue
         barText: true
         anchors.verticalCenter: parent.verticalCenter
         visible: root.compactValueVisible
@@ -257,6 +261,7 @@ Ui.Panel {
     required property color color
     required property color detailColor
     required property color shimmerColor
+    property Item valueLabel: null
 
     width: Commons.Style.space(19)
     height: Commons.Style.space(10)
@@ -276,6 +281,9 @@ Ui.Panel {
     Presentation.BarGlyph {
       id: batteryGlyph
       anchors.fill: parent
+      // Keep V1's approved paint; the V2 flat icon/value row uses the shared baseline rule.
+      baselineTarget: root.tokens.v2Shell === true && root.batteryOrientation === "horizontal"
+        && root.bar && !root.bar.vertical ? gauge.valueLabel : null
       nativeText: root.batteryOrientation === "vertical"
         ? verticalBatteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
         : batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)
@@ -288,9 +296,13 @@ Ui.Panel {
       // The FA outline body ends at 981 of 1038 font units; exclude its cap.
       x: batteryGlyph.symbolInk.x + batteryGlyph.symbolInk.width * 981 / 2076
         - boltInk.tightBoundingRect.x - boltInk.tightBoundingRect.width / 2
-      y: batteryGlyph.symbolInk.y + batteryGlyph.symbolInk.height / 2
-        - baselineOffset - boltInk.tightBoundingRect.y
-        - boltInk.tightBoundingRect.height / 2
+      y: batteryGlyph.baselineTarget && batteryGlyph.baselineTarget.visible
+        ? boltPlacement.textTop(boltPlacement.snapY(batteryGlyph.symbolInk.y
+            + batteryGlyph.symbolInk.height / 2 - (boltOutline.tightBoundingRect.y
+              + boltOutline.tightBoundingRect.height / 2) / boltPlacement.metricScale), baselineOffset)
+        : batteryGlyph.symbolInk.y + batteryGlyph.symbolInk.height / 2
+          - baselineOffset - boltInk.tightBoundingRect.y
+          - boltInk.tightBoundingRect.height / 2
       text: "\u{F140B}"
       textFormat: Text.PlainText
       font.family: Commons.Style.font.family
@@ -302,6 +314,14 @@ Ui.Panel {
       renderType: Text.NativeRendering
     }
 
+    Presentation.BarInk { id: boltPlacement; target: gauge }
+    TextMetrics {
+      id: boltOutline
+      text: chargingBolt.text
+      font: Qt.font({ family: chargingBolt.font.family,
+        pixelSize: chargingBolt.font.pixelSize * boltPlacement.metricScale,
+        hintingPreference: Font.PreferNoHinting })
+    }
     TextMetrics {
       id: boltInk
       text: chargingBolt.text

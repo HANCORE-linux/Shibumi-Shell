@@ -80,6 +80,11 @@ QtObject {
     return baseline - Math.round(offset * dpr) / dpr
   }
 
+  function bottomShift(value, bottom) {
+    const baseline = value.parent.mapToItem(null, value.x, value.y + value.inkBaseline).y
+    return (Math.round(baseline * dpr) - Math.ceil((origin.y + bottom) * dpr)) / dpr
+  }
+
   function rasterExtent(value) {
     return Math.round(value * dpr) / dpr
   }
