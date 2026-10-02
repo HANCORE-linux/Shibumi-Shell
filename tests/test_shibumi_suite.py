@@ -845,6 +845,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             "omarchy",
             "omarchy-shell",
             "omarchy-bluetooth-device",
+            "omarchy-bluetooth-power",
             "omarchy-audio-output-set-default",
             "omarchy-plugin-validate",
         ):
@@ -1818,6 +1819,7 @@ class SuiteLifecycleTests(unittest.TestCase):
             "omarchy-shell",
             "omarchy-plugin-validate",
             "omarchy-bluetooth-device",
+            "omarchy-bluetooth-power",
             "omarchy-audio-output-set-default",
         ):
             (bin_dir / command).write_text("#!/bin/sh\n", encoding="utf-8")

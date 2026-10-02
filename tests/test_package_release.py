@@ -1796,7 +1796,7 @@ time.sleep(30)
             self.assertIn(f"\toptdepends = {package}: {purpose}", srcinfo)
         self.assertEqual(
             set(contract["requiredHostCommands"]),
-            {"omarchy-bluetooth-device", "omarchy-audio-output-set-default"},
+            {"omarchy-bluetooth-device", "omarchy-bluetooth-power", "omarchy-audio-output-set-default"},
         )
         runtime = (ROOT / "scripts/shibumi_suite/runtime.py").read_text(
             encoding="utf-8"

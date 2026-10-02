@@ -207,8 +207,8 @@ fi
 if rg -q 'Process \{|FileView \{' "$service" "$adapter"; then
   fail "Bluetooth owner uses an unbounded worker instead of native APIs"
 fi
-[[ $(rg -c '^  Timer \{' "$adapter") -eq 4 ]] \
-  || fail "Bluetooth adapter must keep exactly the four bounded lifecycle timers"
+[[ $(rg -c '^  Timer \{' "$adapter") -eq 5 ]] \
+  || fail "Bluetooth adapter must keep exactly the five bounded lifecycle timers"
 rg -q 'id: heroPowerToggle' "$panel" \
   || fail "Bluetooth radio toggle is not grouped with adapter status"
 if sed -n '/id: headerActions/,/^        }/p' "$panel" \

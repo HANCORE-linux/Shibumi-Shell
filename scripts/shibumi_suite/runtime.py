@@ -63,6 +63,7 @@ class RuntimePaths:
             "omarchy",
             "omarchy-shell",
             "omarchy-bluetooth-device",
+            "omarchy-bluetooth-power",
             "omarchy-audio-output-set-default",
         ):
             if not (self.omarchy_root / "bin" / command).is_file():

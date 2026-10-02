@@ -33,6 +33,8 @@ Item {
   property var retiredDiscoveryAdapter: null
   property bool discoveryDesired: false
   property var nativePendingActions: ({})
+  property var pendingPowerTarget: null
+  property var pendingPowerAdapter: null
   // Raw native entities remain private here. The registry assigns a monotonic
   // incarnation whenever a device or adapter QObject is replaced.
   property var nativeAdapterEntity: null
@@ -313,9 +315,27 @@ Item {
       backendOverride.toggleBluetooth()
       return true
     }
+    if (pendingPowerTarget !== null) return false
+    pendingPowerAdapter = adapter
+    pendingPowerTarget = !radioEnabled
+    powerRequestTimeout.restart()
     if (radioEnabled) stopDiscovery()
-    adapter.enabled = !adapter.enabled
+    try {
+      executeDeviceCommand([
+        "omarchy-bluetooth-power", pendingPowerTarget ? "on" : "off"
+      ])
+    } catch (error) {
+      clearPendingPower()
+      return false
+    }
+    // Detached dispatch is not success: only observed BlueZ state settles it.
     return true
+  }
+
+  function clearPendingPower() {
+    pendingPowerTarget = null
+    pendingPowerAdapter = null
+    powerRequestTimeout.stop()
   }
 
   function setNativePendingAction(address, action) {
@@ -711,8 +731,13 @@ Item {
     syncNativeAudioHandoffIntents()
   }
   onDiscoveryDesiredChanged: if (!discoveryDesired) stopDiscovery()
-  onRadioEnabledChanged: if (!radioEnabled) cancelAllAudioHandoffs()
+  onRadioEnabledChanged: {
+    if (pendingPowerAdapter === adapter && pendingPowerTarget === radioEnabled)
+      clearPendingPower()
+    if (!radioEnabled) cancelAllAudioHandoffs()
+  }
   onAdapterChanged: {
+    clearPendingPower()
     observeNativeAdapter()
     reconcileNativeEntities()
     // Ownership is tied to the adapter instance on which Shibumi started the
@@ -728,6 +753,17 @@ Item {
   }
   Component.onCompleted: reconcileNativeEntities()
   Component.onDestruction: destroyDiscovery()
+
+  // A deadline for the desired state, not a timeout/cancellation of the helper.
+  Timer {
+    id: powerRequestTimeout
+    interval: 20000
+    repeat: false
+    onTriggered: {
+      console.warn("Bluetooth power request did not reach its target")
+      root.clearPendingPower()
+    }
+  }
 
   Timer {
     id: pendingTimeout
