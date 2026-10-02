@@ -21,7 +21,7 @@ Item {
   // Approved LAN, palette and profile enlargements affect paint only;
   // the hidden reference still owns the original layout and input geometry.
   readonly property bool lanSymbol: nativeText === "\u{F0317}"
-  readonly property int nativePixelSize: Commons.Style.bar.iconFont + (lanSymbol ? 1 : 0) + (["\u{F03D8}", "\u{F032A}", "\u{F029A}", "\u{F04C5}"].indexOf(nativeText) >= 0 ? 1 : 0)
+  readonly property int nativePixelSize: Commons.Style.bar.iconFont + (lanSymbol ? 1 : 0) + (["\u{F03D8}", "\u{F032A}", "\u{F029A}", "\u{F04C5}"].indexOf(nativeText) >= 0 ? 1 : 0) + (nativeText === "\u{F03D8}" ? 1 : 0)
   property real symbolRotation: 0
   property int paintWeight: font.family === "Material Symbols Rounded"
     ? Font.Medium : font.weight
