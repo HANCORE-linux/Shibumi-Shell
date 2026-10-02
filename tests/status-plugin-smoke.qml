@@ -101,6 +101,7 @@ ShellRoot {
   QtObject {
     id: fakeState
     property var writes: []
+    function paletteColor(id) { return id === "color01" ? "#e85d74" : "#4477cc" }
 
     function setWidgetSetting(groupId, moduleId, key, value) {
       writes = writes.concat([{
@@ -828,7 +829,7 @@ ShellRoot {
             || !Qt.colorEqual(
               status.trayDrawerBadgeTextColor, "#cc8844")
             || !Qt.colorEqual(
-              status.notificationBadgeColor, fakeBar.background)
+              status.notificationBadgeColor, "#e85d74")
             || !Qt.colorEqual(
               status.notificationBadgeTextColor, "#cc8844")
             || !Qt.colorEqual(status.badgeContrastColor, "#cc8844")
