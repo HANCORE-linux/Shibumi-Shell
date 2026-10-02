@@ -346,6 +346,7 @@ ShibumiPanel {
 
           Ui.CursorSurface {
             id: textSizeRow
+            radius: panel.controlRadius
             width: parent.width
             height: textSizeSlider.implicitHeight
               + Commons.Style.spacing.controlGap

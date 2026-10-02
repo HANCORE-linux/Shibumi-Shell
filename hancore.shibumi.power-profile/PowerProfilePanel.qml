@@ -146,6 +146,7 @@ ShibumiPanel {
             required property var modelData
             required property int index
             width: profileRow.cellWidth
+            radius: panel.controlRadius
             iconText: panel.profileIcon(String(modelData))
             iconSize: Commons.Style.font.title
             text: String(modelData).charAt(0).toUpperCase() + String(modelData).slice(1)
