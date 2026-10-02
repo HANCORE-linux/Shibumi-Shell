@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.1-beta.16.1] - Unreleased
+
+### Fixed
+
+- Turn Bluetooth on after an rfkill soft block, and off again, through
+  Omarchy's power helper (#68). Ignore repeat clicks while a power request
+  is pending instead of dispatching a reverse action.
+- Raise the smaller date beside the clock again, as before Beta.16.
+- Center single-digit update and tray badges exactly at DPR 1 using circles
+  with odd physical-pixel diameters; retain whole-pixel placement at fractional
+  scales.
+
+### Changed
+
+- Admit the exact Beta.16 tag and merge checkouts as update predecessors,
+  retaining strict payload and lifecycle checks.
+
 ## [0.1.1-beta.16] - 2026-10-02
 
 ### Added

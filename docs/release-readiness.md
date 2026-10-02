@@ -1,45 +1,50 @@
-# Shibumi 0.1.1-beta.16 release readiness
+# Shibumi 0.1.1-beta.16.1 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## Release and published predecessor
+## Candidate and published predecessor
 
-`0.1.1-beta.16` is published as a GitHub prerelease. The validated product
-revision recorded here is `30746f56f61f08e7cf665e7d1fc894711b563fa2`, with
-24 plugins and suite payload digest
-`f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41`.
-This product record does not substitute for the exact release commit's archive,
-checksum, package, or complete release-evidence records.
+The Beta.16.1 product commit is
+`047bcba64f99cfa4962fa4c12d8ddd7791c8f436`, with 24 plugins and suite payload
+digest `25fe4252e981e57f1a550862d448e4f9d858e66efb34f915af32743480fa05d7`.
+The validation target is this product plus the documentation commit containing
+the Beta.16.1 release texts. Documentation outside plugin roots leaves the
+suite digest unchanged but changes release-archive bytes. Gates must bind the
+accepted combined revision, not a future commit or inherited predecessor pass.
 
-Beta.15.4 was published on 2026-09-28 as a GitHub prerelease from
-`6594b989c9f5edfe557669b0413a9bd3e50f8e81`. It is the frozen rolling
+Beta.16 was published on 2026-10-02 as a GitHub prerelease from
+`4840482ec0e06a2ebd478120833d4fae1f30889e`. It is the frozen rolling
 predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
-Exact tag, merge, and documentation-merge checkout identities are admitted by
-[`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json).
-A version string alone never authorizes recovery or replacement. AUR publication
-remains deferred.
+That exact tag checkout and release merge
+`05548c8d9ffdf0d37962d6e423e2a0dc21b8cd91` are admitted by
+[`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
+with the unchanged Beta.16 payload digest
+`f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41`.
+Older exact identities remain admitted; a version string alone never authorizes
+recovery or replacement. AUR publication remains deferred.
 
-## Evidence at the recorded product revision
+## Recorded evidence and outstanding gates
 
 | Gate | Evidence and boundary |
 | --- | --- |
-| Complete source contract | Passed on `30746f5`, exit 0; 638.65 seconds |
-| Isolated Quattro lifecycle | Passed on `30746f5`, exit 0; 32/32 shell generations; 109.68 seconds |
-| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm; fresh checkout; Beta.15, Beta.15.2, and rolling Beta.15.4 checkout updates |
-| Settings round trips | Isolated keep-settings/reinstall retained the complete State entry and host layout, including delayed follow-up |
-| Live installations | Reviewer reports `30746f5` installed on two maintainer machines by keep-settings round trip, identical settings and no Shibumi warnings in the new shell logs |
-| Scoped visual previews | Reviewed V1/V2 badge, text, bell, battery, and palette comparisons; software-rendered previews do not establish physical acceptance |
-| Scoped maintainer live check | Maintainer confirms the battery, charging bolt, and palette; this is not blanket acceptance of all visuals or hardware workflows |
+| Complete source contract | Failed on `047bcba`, exit 1 after 151.43 seconds: `test_release_workflow_uses_curated_notes` required the missing Beta.16.1 notes. A full rerun including the documentation commit is pending. |
+| Isolated Quattro lifecycle | Pending on the combined revision; not started after the contract failure. No Beta.16.1 32/32 result is recorded. |
+| Retained runtime paths | Required: historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling Beta.16 → current checkout (7): exactly 32 shell generations. |
+| Bluetooth preparation | Native-QML softblock-mock red/green regression and scoped Bluetooth, IPC, hotplug, and audio checks passed during fix preparation; these are not final-HEAD full gates or real rfkill acceptance. |
+| Scoped visual previews | Maintainer-approved raised-date and badge comparisons in V1/V2 fit at DPR 1/1.6; private software-rendered previews, not physical acceptance. |
+| Live installation and Bluetooth | Pending: reviewer installation and real softblock → on through Bar, panel, and IPC; rapid repeat clicks; on → off. No hardware or persistence result is recorded. |
+| Release/package verification | Release date, exact-commit archive/checksum, updated PKGBUILD/`.SRCINFO`, source/package rehearsal, 14-gate collector, and publication verification remain pending. |
 
-The contract/runtime passes above are not a full 14-gate collector result.
-The historical package arm is not a Beta.16 package-upgrade proof. Private
+The failed contract run passed the baseline and documentation checks and
+26 of 27 PackageReleaseTests; the missing release notes were the sole package
+test failure. No test was relaxed and no placeholder notes were added to bypass
+it. Focused documentation checks do not replace the full contract rerun.
+The historical package arm is not a Beta.16.1 package-upgrade proof. Private
 Wayland/software-rendered previews are not live GPU, layer-shell, hotplug, or
-physical multi-output acceptance. The recorded contract run retained six known
-PillSurface teardown TypeErrors. Its 590 warning/error lines in 154 normalized
-classes matched the preceding product run, as did the runtime warning/error
-multiset; these are not warning-free fixture logs.
+physical multi-output acceptance. Earlier release passes do not transfer to
+this candidate.
 
 ## Pinned host contracts
 
@@ -100,9 +105,16 @@ was performed. Each operation needs its own maintainer Go.
 - Local whole-ink, workspace/Pacman, meter, Calendar overhang, and charge-bolt
   raster limits are not declared solved by the ordinary-text baseline work.
 - The pinned host exposes Recent notification history, not Live popup access.
+- Bluetooth power affects all radios through the host helper and cannot clear
+  a hardware block. The 20-second pending deadline does not stop the detached
+  process or prevent later effects. Real rfkill and persistence acceptance is
+  separate from controlled native-QML feedback.
+- Single-digit badges are exactly centered at DPR 1 in the approved previews;
+  fractional-scale digit parity and antialiased circle edges can retain a
+  half-pixel bounding-box offset.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
-  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.md)
+  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.1.md)
   and [backup guide](install.md#backup-before-downgrade) identify the complete
   settings and recovery evidence to preserve. Restore the settings with a
   matching payload.
@@ -124,6 +136,9 @@ block updates and deletion. See [packaging](development/packaging.md).
 Beta.13's single-output Omarchy 4.0.3 acceptance remains historical in
 [Get started](getting-started.md#know-the-beta-boundary). The paused
 [Beta.14 validation record](development/beta14-validation.md) is not a current
-release checklist. Beta.15.4's published changes and limits are recorded in its
-[release notes](../.github/release-notes/v0.1.1-beta.15.4.md). Earlier readiness
-snapshots remain in Git history; none confers acceptance on Beta.16.
+release checklist. Beta.16's published changes and limits remain in its
+[release notes](../.github/release-notes/v0.1.1-beta.16.md). Its earlier product
+revision `30746f5` passed the complete contract and 32-generation runtime;
+those fixtures retained known teardown warnings and did not establish blanket
+hardware acceptance. Earlier readiness snapshots remain in Git history; none
+confers acceptance on Beta.16.1.

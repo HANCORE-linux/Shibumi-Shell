@@ -2,7 +2,7 @@
 
 Status: reference
 
-Shibumi `0.1.1-beta.16` contains 24 independently registered Omarchy plugins. The
+Shibumi `0.1.1-beta.16.1` contains 24 independently registered Omarchy plugins. The
 default suite profile installs all of them as one verified transaction.
 
 The authoritative inventory is
@@ -52,9 +52,19 @@ required device or service is unavailable.
 Shibumi uses native Quattro owners where they provide sufficient state and
 actions, including media, notifications, tray, background, monitor, weather,
 idle, and system-update services. Shibumi owns native Audio and Network state.
-Its Bluetooth adapter keeps BlueZ QObjects private, publishes detached
-identity-bound records, and retains one declared Omarchy helper mutation path
-per device action for Beta.14.
+Its Bluetooth adapter keeps BlueZ QObjects private and publishes detached
+identity-bound records. Device actions retain one `omarchy-bluetooth-device`
+helper path with exact device-identity checks. Global radio power instead uses
+one explicit `omarchy-bluetooth-power on|off` request for all Bluetooth radios;
+it follows the host's rfkill persistence policy and cannot clear a hardware
+block. BlueZ remains authoritative for the displayed radio state. Bar, panel,
+and IPC share the same adapter-bound pending target and ignore repeat clicks.
+
+The Bluetooth adapter owns five bounded lifecycle timers. Its separate
+one-shot 20-second power-state deadline clears pending state; it neither stops
+the detached helper nor prevents later effects. The service facade retains
+one discovery-reconciliation timer and the bounded native-adapter discovery
+teardown guard. See the [architecture contract](../../ARCHITECTURE.md).
 
 Shibumi owns its presentation and adds a narrow adapter only where the host
 contract cannot produce the approved behavior. It must not create a duplicate
