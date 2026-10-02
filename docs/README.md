@@ -29,6 +29,7 @@ For maintainers:
 7. [Packaging and AUR strategy](development/packaging.md)
 8. [Release workflow](development/release.md)
 9. [Current release readiness](release-readiness.md)
+10. [Validation host runbook](development/validation-host.md)
 
 For design and UI work:
 
@@ -72,6 +73,7 @@ For parity and release evidence:
 | [Packaging and AUR strategy](development/packaging.md) | Arch package boundary, dependencies, rehearsal, and AUR publication gates |
 | [Troubleshooting](development/troubleshooting.md) | Recovery paths for install, bar, panel, and runtime failures |
 | [Release workflow](development/release.md) | Beta preparation, immutable assets, and publication gates |
+| [Validation host](development/validation-host.md) | Approved runner, session, durable baselines, and Actions security setup |
 | [Release readiness](release-readiness.md) | Current acceptance evidence and public-release blockers |
 | [Changelog](../CHANGELOG.md) | User-visible changes by version |
 

@@ -9,10 +9,17 @@ tag must agree.
 
 ## Prepare
 
+Provisioning, runner registration, user-service/session setup, exact durable
+baselines, and repository security settings follow the
+[validation-host runbook](validation-host.md). It is a plan, not a bootstrap or
+permission to change a host; each operation needs separate maintainer approval.
+
 1. Confirm the target and remaining gates in
    [release readiness](../release-readiness.md).
 2. Update the suite version and every plugin manifest together.
-3. Move user-visible changelog entries into the target version.
+3. Move user-visible changelog entries into the target version. Set its agreed
+   release date before preparing the package checksum and final exact-commit
+   release evidence.
 4. Add concise, versioned notes under `.github/release-notes/`.
 5. Update user guides, architecture contracts, compatibility evidence, and
    screenshot placeholders or captures affected by the release.
@@ -62,6 +69,14 @@ The rolling checkout arm replaces the former latest fixed arm; keep Beta 15 and
 ## Prepare the package checksum
 
 Finish every file included in the release payload before pinning its checksum.
+Update README install/update versions and all shipped `docs/` first. These files
+change the archive SHA-256 even when the plugin-only suite payload is unchanged;
+recompute plugin digests to check candidate pins, but do not confuse those pins
+with the archive checksum. Versioned notes under `.github/` are not archived.
+Replace the target `CHANGELOG.md` heading's `Unreleased` with the agreed release
+date before this first checksum build: the changelog is archived too. A later
+date change requires a new checksum and clean-commit rebuild, with release
+evidence bound to the resulting commit.
 Build the candidate twice and copy its reported SHA-256 into
 `packaging/aur/PKGBUILD`, then regenerate `.SRCINFO`:
 
