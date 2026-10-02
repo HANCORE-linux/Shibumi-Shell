@@ -20,6 +20,7 @@ Ui.BarWidget {
   readonly property date displayDate: clock ? clock.date : new Date()
   readonly property bool clock12h: setting("clock12h", false) === true
   readonly property string timeText: formatTime(displayDate)
+  readonly property font textFont: label.font
   readonly property string tooltipText: Qt.formatDate(displayDate, "ddd, d MMMM yyyy")
 
   implicitWidth: bar && bar.vertical ? bar.barSize : label.implicitWidth

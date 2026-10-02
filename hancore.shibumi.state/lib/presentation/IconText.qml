@@ -8,6 +8,9 @@ Text {
   property bool barText: false
   property bool wholeInk: false
   property bool hintedInk: false
+  // A smaller inline label can follow its larger sibling without changing
+  // its own font, advance or input reservation.
+  property font baselineFont: root.font
   property alias inkAxisItem: placement.axisItem
   renderType: Text.QtRendering
   font.family: "Material Symbols Rounded"
@@ -21,13 +24,13 @@ Text {
   }
   // Raised pictograms and unhinted distance-field text need outline metrics,
   // not the small-size integer envelope that can include empty baseline space.
-  readonly property bool outlineInk: wholeInk || renderType === Text.QtRendering
+  readonly property bool outlineInk: barText || wholeInk || renderType === Text.QtRendering
   TextMetrics {
     id: outline
     text: root.barText && root.outlineInk ? capitals.text : ""
-    font: Qt.font({ family: root.font.family,
-      pixelSize: root.font.pixelSize * placement.metricScale,
-      weight: root.font.weight, italic: root.font.italic,
+    font: Qt.font({ family: root.baselineFont.family,
+      pixelSize: root.baselineFont.pixelSize * placement.metricScale,
+      weight: root.baselineFont.weight, italic: root.baselineFont.italic,
       hintingPreference: Font.PreferNoHinting })
   }
   PathText { id: outlinePath; text: outline.text; font: outline.font }

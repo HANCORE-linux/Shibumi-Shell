@@ -299,6 +299,7 @@ Ui.Panel {
         // opts into the shared ink alignment. Vertical rendering stays native.
         Presentation.IconText {
           barText: true
+          baselineFont: clockWidget.textFont
           visible: !dateButton.labelVisible
           anchors.centerIn: parent
           textFormat: Text.PlainText

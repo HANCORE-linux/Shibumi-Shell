@@ -110,11 +110,6 @@ Item {
 
   TextMetrics { id: ink; text: glyph.text; font: glyph.font }
   TextMetrics {
-    id: capitals
-    text: root.barText ? placement.caption(glyph.text) : ""
-    font: glyph.font
-  }
-  TextMetrics {
     id: nativeInk
     text: root.nativeText
     font.family: Commons.Style.font.family
@@ -125,7 +120,8 @@ Item {
   BarInk { id: placement; target: root }
   TextMetrics {
     id: nativeOutline
-    text: root.symbol ? root.nativeText : glyph.text
+    text: root.symbol ? root.nativeText
+      : root.barText ? placement.caption() : glyph.text
     font: Qt.font({ family: root.symbol ? Commons.Style.font.family : glyph.font.family,
       pixelSize: (root.symbol ? root.nativePixelSize : glyph.font.pixelSize) * placement.metricScale,
       weight: root.symbol ? Font.Normal : glyph.font.weight,
@@ -197,9 +193,7 @@ Item {
     y: !root.optical ? 0 : root.nativeLineBox
       ? Math.round(root.inkCenterY - implicitHeight / 2) : root.centerInkY
       ? placement.enabled
-        ? placement.textTop(placement.baselineFor(
-          root.barText ? capitals.tightBoundingRect : root.nativeBounds,
-          root.barText ? 1 : placement.metricScale), glyph.baselineOffset)
+        ? placement.textTop(placement.baselineFor(root.nativeBounds), glyph.baselineOffset)
         : root.inkCenterY - glyph.baselineOffset
           - ink.tightBoundingRect.y - ink.tightBoundingRect.height / 2
       : Math.floor((root.height - implicitHeight) / 2)

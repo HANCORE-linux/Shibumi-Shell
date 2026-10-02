@@ -49,9 +49,10 @@ QtObject {
     return target.parent.mapFromItem(null, 0, (first + end) / (2 * dpr)).y - target.y
   }
 
-  function caption(text) {
-    const capitals = String(text || "").match(/[A-Z0-9]/g)
-    return capitals ? capitals.join("") : "H0"
+  function caption() {
+    // A font reference, not the current value: flat and round digits must
+    // share one baseline instead of independently snapping their ink centres.
+    return "0123456789HIMOS"
   }
 
   function baselineFor(bounds, scale) {
