@@ -295,11 +295,15 @@ Ui.Panel {
           else root.toggle()
         }
 
-        // Keep the native button's reservation and input; only its bar label
-        // opts into the shared ink alignment. Vertical rendering stays native.
-        Presentation.IconText {
-          barText: true
-          baselineFont: clockWidget.textFont
+        // Keep the native line-box centring: the smaller date sits raised
+        // beside the clock. Only paint is snapped; reservation/input stay native.
+        Presentation.BarInk { id: datePlacement; target: dateLabel }
+        Text {
+          id: dateLabel
+          transform: Translate {
+            x: datePlacement.snapX(0)
+            y: datePlacement.snapY(0)
+          }
           visible: !dateButton.labelVisible
           anchors.centerIn: parent
           textFormat: Text.PlainText
