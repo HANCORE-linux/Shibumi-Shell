@@ -9,6 +9,21 @@ QtObject {
   // Metrics only, never a painted font/texture scale. Small-size integer font
   // bounds can include a blank row; retain outline precision before snapping.
   readonly property int metricScale: 64
+  // PathText notifies height before invalidating its cached path. Sample after
+  // that notification stack, with both font and text settled, not in a binding
+  // to height that can retain a previous (even unscaled) outline indefinitely.
+  property string outlineText: ""
+  property font outlineFont
+  property real outlineHeight: 0
+  readonly property PathText outlinePath: PathText {
+    text: root.outlineText
+    font: root.outlineFont
+    onChanged: Qt.callLater(root.refreshOutlineHeight)
+  }
+  function refreshOutlineHeight() {
+    outlineHeight = outlineText !== "" ? outlinePath.height : 0
+  }
+  Component.onCompleted: Qt.callLater(refreshOutlineHeight)
   property Item axisItem: {
     // Embedded native widgets can retain a taller line box than their host.
     // Prefer the owning module slot's axis over that nested line box.

@@ -232,6 +232,12 @@ ShellRoot {
             || Math.abs(batA.chargingShimmerColor.r - 1) > 0.001
             || Math.abs(batA.chargingShimmerColor.a - 0.18) > 0.001)
           return root.fail("V1 battery tone leaked into V2")
+        const descendants = item => [item].concat(...Array.from(item.children || []).map(descendants))
+        const glyph = descendants(batA).find(item => item.symbolInk !== undefined)
+        const outline = Qt.createQmlObject("import QtQuick; PathText {}", root)
+        outline.text = glyph.nativeText; outline.font = Qt.font({family: descendants(glyph).find(item => item.fontFamily !== undefined).fontFamily, pixelSize: glyph.nativePixelSize * 64, hintingPreference: Font.PreferNoHinting})
+        if (Math.abs(glyph.nativeBounds.height - outline.height) > 0.000001) return root.fail("V1 to V2 battery outline retained a stale path height")
+        outline.destroy()
         pwrA.activate(Qt.LeftButton)
         root.phase++
         root.ticks = 0

@@ -16,7 +16,12 @@ Text {
   font.family: "Material Symbols Rounded"
   font.variableAxes: root.barText ? ({}) : ({ "FILL": root.fill })
 
-  BarInk { id: placement; target: root }
+  BarInk {
+    id: placement
+    target: root
+    outlineText: outline.text
+    outlineFont: outline.font
+  }
   TextMetrics {
     id: capitals
     text: root.barText ? (root.wholeInk ? root.text : placement.caption(root.text)) : ""
@@ -33,7 +38,6 @@ Text {
       weight: root.baselineFont.weight, italic: root.baselineFont.italic,
       hintingPreference: Font.PreferNoHinting })
   }
-  PathText { id: outlinePath; text: outline.text; font: outline.font }
   readonly property bool rasterInk: wholeInk && hintedInk && renderType === Text.NativeRendering
     && outline.tightBoundingRect.y + outline.tightBoundingRect.height !== 0
   TextMetrics {
@@ -50,7 +54,7 @@ Text {
     if (!outlineInk) return capitals.tightBoundingRect
     const bounds = outline.tightBoundingRect
     return bounds.y + bounds.height === 0
-      ? Qt.rect(bounds.x, bounds.y, bounds.width, outlinePath.height) : bounds
+      ? Qt.rect(bounds.x, bounds.y, bounds.width, placement.outlineHeight) : bounds
   }
   readonly property real inkBaseline: placement.baselineFor(inkBounds,
     rasterInk ? placement.dpr : outlineInk ? placement.metricScale : 1)

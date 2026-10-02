@@ -117,7 +117,12 @@ Item {
   }
 
   FontMetrics { id: nativeFont; font: nativeInk.font }
-  BarInk { id: placement; target: root }
+  BarInk {
+    id: placement
+    target: root
+    outlineText: nativeOutline.text
+    outlineFont: nativeOutline.font
+  }
   TextMetrics {
     id: nativeOutline
     text: root.symbol ? root.nativeText
@@ -130,11 +135,10 @@ Item {
   }
   // PathText contributes metrics only. Unlike tightBoundingRect's baseline
   // envelope, its height excludes blank space below a raised glyph (e.g. FA).
-  PathText { id: nativePath; text: nativeOutline.text; font: nativeOutline.font }
   readonly property rect nativeBounds: {
     const bounds = nativeOutline.tightBoundingRect
     return bounds.y + bounds.height === 0
-      ? Qt.rect(bounds.x, bounds.y, bounds.width, nativePath.height) : bounds
+      ? Qt.rect(bounds.x, bounds.y, bounds.width, placement.outlineHeight) : bounds
   }
   readonly property bool inkAligned: root.optical && placement.enabled
     && root.symbolRotation === 0
