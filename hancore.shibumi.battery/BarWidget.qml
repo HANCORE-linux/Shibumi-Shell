@@ -18,6 +18,10 @@ Ui.Panel {
 
   readonly property var powerService: powerServiceOverride !== null ? powerServiceOverride
     : suiteShell.serviceFor("hancore.shibumi.power-state")
+  readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
+  readonly property color chargingBoltColor: stateService
+    && typeof stateService.paletteColor === "function"
+    ? stateService.paletteColor("color01") : Commons.Color.urgent
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens
@@ -308,7 +312,7 @@ Ui.Panel {
       font.family: Commons.Style.font.family
       // At iconFont 12, the upright bolt's ink matches this glyph at 9 px.
       font.pixelSize: Math.max(1, Math.round(Commons.Style.bar.iconFont * 9 / 12))
-      color: root.bar ? root.bar.urgent : Commons.Color.bar.active
+      color: root.chargingBoltColor
       style: Text.Outline
       styleColor: root.bar ? root.bar.background : Commons.Color.background
       renderType: Text.NativeRendering
