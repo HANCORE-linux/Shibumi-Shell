@@ -1,7 +1,7 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.15.4` is published as a GitHub prerelease; AUR publication
-remains deferred.
+Status: `0.1.1-beta.16` is published as a GitHub prerelease; AUR publication
+is deferred.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
@@ -73,6 +73,11 @@ Beta.11 or an earlier package after Beta.12: Pacman replaces the current payload
 and lifecycle code before the user-level update runs, so Beta.12's storage guard
 cannot reject that package afterward. There is no reverse migration to legacy
 storage.
+
+The additional [Beta.16 downgrade warning and backup requirements](../install.md#backup-before-downgrade)
+apply even to readers using canonical State storage: Beta.15.4 and older
+cannot preserve a V1 layout containing `order.parked`. `--keep-settings` does
+not prevent this. Restore the settings with a matching payload.
 
 For a future older release that explicitly retains the same storage contract,
 rollback remains two-step and opt-in:

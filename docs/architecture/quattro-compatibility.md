@@ -1,23 +1,22 @@
 # Shibumi host compatibility record
 
-Status: beta-candidate reference (updated 2026-09-12)
+Status: revision-bound host compatibility reference
 
-Shibumi Shell is built exclusively for Omarchy Quattro. This record ties each
-Shibumi candidate to a measured host baseline. Versions not listed here have
-not yet passed Shibumi's release gates.
+Shibumi Shell is built exclusively for Omarchy Quattro. This record ties
+Shibumi's host contracts to exact baselines. Unlisted versions are not covered
+by this evidence.
 
-## Current tested host
+## Current pinned host
 
-The Beta.15.4 maintenance worktree targets the exact official Omarchy 4.0.4
-baseline for validation. This is not physical release acceptance. The published
-Beta.13 remains the latest release with recorded physical host acceptance on
-Omarchy 4.0.3:
+Beta.16 targets the exact official Omarchy 4.0.4 baseline. These pins are not
+physical release acceptance. The historical Beta.13 physical host acceptance
+below applies to its recorded single-output Omarchy 4.0.3 setup:
 
 | Component | Observed value |
 | --- | --- |
-| Candidate Omarchy package reference | `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` |
-| Candidate official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
-| Candidate source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
+| Pinned Omarchy package reference | `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` |
+| Pinned official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
+| Pinned source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
 | Immutable forward-compatibility revision | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
 | Quickshell package | `quickshell 0.3.1-1` |
@@ -105,9 +104,9 @@ A complete aggregate run ends with `Shibumi complete contract regression
 passed` and names the accepted baseline and full source revision. Absence of
 that marker is not complete-contract evidence.
 
-## Omarchy 4.0.3: candidate implemented, acceptance pending
+## Historical Omarchy 4.0.3 source evidence
 
-The Beta.13 candidate targets the exact `v4.0.3` host at commit
+The Beta.13 candidate targeted the exact `v4.0.3` host at commit
 `0534987009061cbe2dacdde4ad564092ab698d12`. Isolated tests cover own-file marker
 validation, permission-scoped State writes and readback under stock and suite
 bars, Control Center restoration through file-backed settlement, and the
@@ -122,15 +121,15 @@ patching Omarchy. The all-suite test withholds platform owners and creates no
 output surfaces.
 
 These source and fixture results establish the exact 4.0.3 contract but do not
-complete Beta.15 release acceptance. The public widget snapshot is not a global
+transfer physical acceptance to later Shibumi releases. The public widget snapshot is not a global
 manifest or service registry; denied or missing capabilities must not be
 replaced by private host traversal, a guessed original provider, undeclared
-sibling imports, duplicate backends, or authentication access. Final acceptance
-still requires the package-bound lifecycle and recovery run, a coredump-free
+sibling imports, duplicate backends, or authentication access. Physical
+acceptance is separate: package-bound lifecycle and recovery, a coredump-free
 production restart, complete notification and idle/lock behavior, output
-lifetime, hardware-adjacent actions, and physical Top/Bottom checks on unchanged
-4.0.3. Multi-output remains explicitly skipped while only one output is active;
-4.0.2 compatibility evidence cannot replace any 4.0.3 release gate.
+lifetime, hardware-adjacent actions, and Top/Bottom checks must be recorded for
+the exact host. The historical setup had only one output, so it provides no
+multi-output acceptance; 4.0.2 compatibility evidence cannot replace a 4.0.3 gate.
 
 ## Recovery boundary
 
