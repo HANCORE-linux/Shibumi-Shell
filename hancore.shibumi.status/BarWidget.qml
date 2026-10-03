@@ -90,13 +90,13 @@ Item {
     || textMode && notificationService !== null
   readonly property real childGap: Commons.Style.space(4)
   Presentation.BarInk { id: statusPlacement; target: root }
-  // Quick Access: 22px slots + 4px spacing - 12px glyphs = 14px ink gap. Keep
-  // the outer reservation and translate whole slots by physical pixels only.
+  // Quick Access: 22px slots + 4px spacing - 12px glyphs = 14px ink gap.
+  // Return the interior savings to the owner rather than to its outer gaps.
   readonly property real iconGapPixels: Math.round(Commons.Style.space(14) * statusPlacement.dpr)
   readonly property rect updateInk: updateWidget && updateWidget.iconInk !== undefined
     ? updateWidget.mapToItem(updateSlot, updateWidget.iconInk) : Qt.rect(0, 0, 0, 0)
   function inkEdge(slot, ink, end) {
-    const edge = (statusPlacement.origin.x + statusRow.x + slot.x
+    const edge = (statusPlacement.origin.x + horizontalInset + slot.x
       + ink.x + (end ? ink.width : 0)) * statusPlacement.dpr
     return end ? Math.ceil(edge - 1e-7) : Math.floor(edge + 1e-7)
   }
@@ -118,6 +118,17 @@ Item {
           - inkEdge(trayView, trayView.drawerInk, true) - iconGapPixels))
       : Math.round(Commons.Style.space(3) * statusPlacement.dpr)
       : Math.floor(directContraction / 2)) / statusPlacement.dpr
+  property real spacingSavings: 0
+  property bool spacingActive: false
+  // Settle after layout: binding width directly to snapped ink feeds the
+  // parent's new position back into its own reservation.
+  function syncSpacingSavings() {
+    if (!root || !spacingActive) return
+    const saved = Math.max(0, updateShift - bellShift)
+    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
+  }
+  onUpdateShiftChanged: Qt.callLater(syncSpacingSavings)
+  onBellShiftChanged: Qt.callLater(syncSpacingSavings)
   readonly property int presentedCount: fullMode
     ? (updatePresented ? 1 : 0) + (trayPresented ? 1 : 0)
       + (notificationPresented ? 1 : 0)
@@ -125,7 +136,7 @@ Item {
   readonly property real contentWidth:
     fullMode
       ? updateSlotWidth + traySlotWidth + notificationSlotWidth
-        + Math.max(0, presentedCount - 1) * childGap
+        + Math.max(0, presentedCount - 1) * childGap - spacingSavings
       : textMode ? textStatus.implicitWidth : notificationView.implicitWidth
   readonly property real updateSlotWidth: updatePresented
     ? updateSlot.implicitWidth : 0
@@ -485,10 +496,13 @@ Item {
   onBadgeContrastColorChanged: syncUpdateInk()
 
   Component.onCompleted: {
+    spacingActive = true
+    Qt.callLater(syncSpacingSavings)
     lifecycleBar = bar
     scheduleChildSync()
   }
   Component.onDestruction: {
+    spacingActive = false
     close()
     const dyingBar = bar || lifecycleBar
     if (dyingBar && "tearingDown" in dyingBar
@@ -589,8 +603,6 @@ Item {
     settings: root.settings
     v1AppearanceEnabled: true
     anchors.fill: parent
-    anchors.leftMargin: root.updateShift
-    anchors.rightMargin: -root.bellShift
     anchors.topMargin: root.tokens
       ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
     anchors.bottomMargin: root.tokens
@@ -600,7 +612,9 @@ Item {
 
   Row {
     id: statusRow
-    anchors.centerIn: parent
+    anchors.verticalCenter: parent.verticalCenter
+    x: root.horizontalInset
+    transform: Translate { x: -root.updateShift }
     spacing: root.childGap
     z: 2
 

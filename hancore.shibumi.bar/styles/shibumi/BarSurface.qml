@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import qs.Commons as Commons
 import "../../core" as Core
 import "../../core/RunGeometry.js" as RunGeometry
@@ -104,8 +105,19 @@ Item {
       // Stage against the output capacity; shellWidth remains presentation.
       readonly property real responsiveCapacity: compactShell
         ? Math.max(0, width - 2 * frameInset) : shellWidth
-      readonly property real shellX: shibumiShell ? frameInset
-        : Math.round((width - shellWidth) / 2)
+      readonly property real spacingRecovery: leftGroups.spacingRecovery
+        + centerGroups.spacingRecovery + rightGroups.spacingRecovery
+      readonly property real pixelRatio: root.Window.window
+        ? root.Window.window.devicePixelRatio : 1
+      readonly property real expandedShellWidth: compactShell
+        ? Math.min(width - 2 * frameInset, shellWidth + spacingRecovery) : shellWidth
+      readonly property real expandedShellX: shibumiShell ? frameInset
+        : Math.round((width - expandedShellWidth) / 2)
+      // Preserve the old raster phase; recover real width, not outer padding.
+      readonly property real shellX: compactShell && spacingRecovery > 0
+        ? expandedShellX + Math.round((expandedShellWidth - shellWidth)
+            * pixelRatio / 2) / pixelRatio
+        : shibumiShell ? frameInset : Math.round((width - shellWidth) / 2)
       readonly property real shellContentInset: contentInset
         + (shellStyle === "notch"
           ? root.bar.visualTokens.shellWingWidth : 0)
@@ -144,13 +156,27 @@ Item {
       readonly property real idealCenterX: Math.round((width - centerRegion.width) / 2)
       readonly property real minCenterX: Math.round(leftRegion.x + leftRegion.width + centerGap)
       readonly property real maxCenterX: Math.round(rightRegion.x - centerGap - centerRegion.width)
-      readonly property real centerTargetX: maxCenterX < minCenterX
+      readonly property real logicalCenterTargetX: maxCenterX < minCenterX
         // At an exact fit, pixel rounding can make the two legal limits cross
         // by one pixel. Falling back to the screen center then overlaps the
         // asymmetric right run (notably G8 with G9/MPRIS). Split the tiny
         // deficit between both sides instead and preserve the visible gaps.
         ? Math.round((minCenterX + maxCenterX) / 2)
         : Math.max(minCenterX, Math.min(idealCenterX, maxCenterX))
+      readonly property real expandedCenterTargetX: {
+        const centerWidth = centerRegion.width + centerGroups.spacingRecovery
+        const ideal = Math.round((width - centerWidth) / 2)
+        const minimum = Math.round(expandedShellX + shellContentInset
+          + leftRegion.width + leftGroups.spacingRecovery + centerGap)
+        const maximum = Math.round(width - expandedShellX - shellContentInset
+          - rightRegion.width - rightGroups.spacingRecovery - centerGap - centerWidth)
+        return maximum < minimum ? Math.round((minimum + maximum) / 2)
+          : Math.max(minimum, Math.min(ideal, maximum))
+      }
+      readonly property real centerTargetX: compactShell && spacingRecovery > 0
+        ? expandedCenterTargetX + Math.round((logicalCenterTargetX
+            - expandedCenterTargetX) * pixelRatio) / pixelRatio
+        : logicalCenterTargetX
       readonly property var runs: {
         void(leftGroups.groupGeometry)
         void(centerGroups.groupGeometry)
