@@ -759,9 +759,9 @@
     },
     {
       "id": "public-beta.16.1",
-      "payloadDigest": "76cd94d0b1991f1628c2f7ffdc9ebf64198a888f3677dd5bb7815b85875ade30",
+      "payloadDigest": "148dcbb1e36ac21df24f05089abdd45fe0c5eb140d057b1e1de60250da6c8962",
       "pluginDigests": {
-        "hancore.shibumi.bar": "f1eda2d05892d3756319e3cb4474565505f9e6ca2bbb30c4a8983d7103525b9a",
+        "hancore.shibumi.bar": "8a436d4878c2ee80f49ce52fb541a1d455ca3f745ef0a62429bac184c31754d1",
         "hancore.shibumi.state": "3aed3c7a3cb92afb66d5f12d7d5c773f1988d5f11c933da187f8b31c68179da8",
         "hancore.shibumi.control-center": "730ab1517cf0fe52ec5409203bdeb03661f8440c50a6b8ba8baf6563a4f23ec8",
         "hancore.shibumi.reactor": "347d5997e664581da56104a636af44d4675f37d311bb058b9624d8c9f6121322",
@@ -769,7 +769,7 @@
         "hancore.shibumi.power-state": "f2f664b00436695dbd47edf9b8d7da46d0f4f7fbe740045023479ed707872a50",
         "hancore.shibumi.workspaces": "de2a198c2a1fcbada535f046b91f37e5f5ca517ef4a0e3c6f570baf7930699c5",
         "hancore.shibumi.update-center": "4f028d0c82cbe0d85c74799a77c12e7e26acc9bd4dcda6f7c14fc40a5f991a86",
-        "hancore.shibumi.status": "270037acf2fc5d0edad827c5300c308b9adc2abb80509e499dd7f6702871ef63",
+        "hancore.shibumi.status": "1f16174c157c70e6b05a7ff7c00339090a1d4c2d051a4bd389cde1de6e296fe0",
         "hancore.shibumi.memory": "f6fbd0838180fac0740fd27d22f9fe1812528f45210e51fa9984f479f42da8f9",
         "hancore.shibumi.cpu": "bb0d1df3404525a45c55fffaa2091a8340ae3d9536f7edab6e6bd56759f7999e",
         "hancore.shibumi.audio": "20a3f204e0c55b6c9aff18d12e9627b91f3710596e3d1c2e00b08aaa0f3e3e4c",
