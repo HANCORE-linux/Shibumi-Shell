@@ -954,7 +954,7 @@ for bluetooth_adapter in "$bluetooth_adapter"; do
     fail "$bluetooth_adapter still owns IPC or loads a foreign UI component"
   fi
 done
-rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.radioEnabled && !root\.discovering' \
+rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.adapterEnabled && !root\.discovering' \
   "$bluetooth_service" \
   || fail "Bluetooth service does not bound discovery retries to an open session"
 if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|panelComponent|Loader \{' \
