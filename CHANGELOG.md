@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.1-beta.16.1] - Unreleased
+## [0.1.1-beta.16.1] - 2026-10-04
 
 ### Fixed
 
