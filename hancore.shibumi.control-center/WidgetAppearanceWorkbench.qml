@@ -31,7 +31,8 @@ Column {
   ]
   readonly property var mediaStyleOptions: [
     { value: "default", label: "Default" },
-    { value: "full", label: "Compact" }
+    { value: "full", label: "Compact" },
+    { value: "icon", label: "Icon" }
   ]
   readonly property var v1CompactGroupIds: [
     "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15", "G18"
@@ -484,8 +485,9 @@ Column {
     const catalogGroup = String(catalogGroupValue
       || catalogGroupForSettingsGroup(group) || "")
     if (catalogGroup === "G9")
-      return String(widgetSetting(group, "mediaStyle", "default")) === "full"
-        ? "full" : "default"
+      return ["full", "icon"].indexOf(
+        String(widgetSetting(group, "mediaStyle", "default"))) >= 0
+        ? String(widgetSetting(group, "mediaStyle", "default")) : "default"
     const stored = String(widgetSetting(group, "displayMode", ""))
     const mode = stored !== "" ? stored
       : widgetSetting(group, "compact", false) === true ? "icon" : "full"

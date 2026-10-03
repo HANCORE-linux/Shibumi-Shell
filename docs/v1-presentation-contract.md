@@ -140,7 +140,11 @@ remain open acceptance gates.
 G9 must preserve V1's idle note, previous/play/next controls, fixed-width
 marquee, playing pulse, tooltip, cover/progress panel, and selectable
 FULL/muse outcome: 24-band real Cava, vinyl mark, transport state, click
-play/pause, and wheel previous/next. State, player selection, source selection,
+play/pause, and wheel previous/next. An optional Icon presentation keeps the
+default row's play/pause control and playing pulse but drops the skip controls
+and title marquee, so a playing track adds little width on narrow outputs and
+does not push the bar into a responsive stage that hides G9; the lazy panel
+keeps the full controls. State, player selection, source selection,
 and every transport action come from the single official `omarchy.media`
 service. One lazy process-wide Shibumi spectrum service may own the bounded
 Cava process and degraded state; no per-output, per-panel, or per-view process

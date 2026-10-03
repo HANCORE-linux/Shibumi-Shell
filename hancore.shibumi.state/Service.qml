@@ -176,6 +176,12 @@ Item {
       ? appearance[variant] : ({})
   }
 
+  // G9 Now Playing presentations: Default, Full (muse) and Icon.
+  function normalizedMediaStyle(value) {
+    const style = String(value || "default")
+    return style === "full" || style === "icon" ? style : "default"
+  }
+
   function normalizedDisplayMode(groupId, variantValue, value) {
     const group = String(groupId || "")
     const variant = normalizedVariant(variantValue)
@@ -215,7 +221,7 @@ Item {
           && !Object.prototype.hasOwnProperty.call(settings, name)
           && settings.compact === true)
         value = "full"
-      value = String(value || "default") === "full" ? "full" : "default"
+      value = normalizedMediaStyle(value)
     }
     return value
   }
@@ -334,7 +340,7 @@ Item {
     else if (name === "compact")
       normalizedValue = value === true
     else if (name === "mediaStyle")
-      normalizedValue = String(value || "") === "full" ? "full" : "default"
+      normalizedValue = normalizedMediaStyle(value)
     else if (name === "batteryOrientation")
       normalizedValue = value === "vertical" ? "vertical" : "horizontal"
 
