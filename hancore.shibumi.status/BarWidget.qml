@@ -107,9 +107,6 @@ Item {
   readonly property real trayPinnedIconOffset:
     trayView.pinnedIconHorizontalOffset
   readonly property color trayDrawerIconColor: trayView.drawerIconColor
-  readonly property color trayDrawerBadgeColor: trayView.drawerBadgeColor
-  readonly property color trayDrawerBadgeTextColor:
-    trayView.drawerBadgeTextColor
   readonly property color notificationBadgeColor:
     notificationView.badgeFillColor
   readonly property color notificationBadgeTextColor:
@@ -119,9 +116,6 @@ Item {
   readonly property real updateSlotLayer: updateSlot.z
   readonly property real traySlotLayer: trayView.z
   readonly property real notificationSlotLayer: notificationView.z
-  readonly property real updateBadgeLayer: updateWidget
-    && "badgeLayer" in updateWidget ? Number(updateWidget.badgeLayer) : 0
-  readonly property real trayBadgeLayer: trayView.badgeLayer
   readonly property real notificationBadgeLayer: notificationView.badgeLayer
 
   visible: ready && hasVisibleChild
@@ -190,20 +184,12 @@ Item {
     if ("settings" in item)
       item.settings = childSettings("hancore.shibumi.update-center")
     if ("contentColor" in item) item.contentColor = root.widgetInk
-    if ("customToneActive" in item)
-      item.customToneActive = root.v1CustomToneActive
-    if ("badgeContrastColor" in item)
-      item.badgeContrastColor = root.badgeContrastColor
   }
 
   function syncUpdateInk() {
     if (!updateWidget) return
     if ("contentColor" in updateWidget)
       updateWidget.contentColor = root.widgetInk
-    if ("customToneActive" in updateWidget)
-      updateWidget.customToneActive = root.v1CustomToneActive
-    if ("badgeContrastColor" in updateWidget)
-      updateWidget.badgeContrastColor = root.badgeContrastColor
   }
 
   function injectChildren() {
@@ -591,7 +577,9 @@ Item {
       id: updateSlot
       anchors.verticalCenter: parent.verticalCenter
       visible: root.fullMode && updateLoader.item !== null
-      implicitWidth: visible ? root.statusActionSlot : 0
+      implicitWidth: visible ? root.statusActionSlot
+        + (root.updateWidget && "leadingWidth" in root.updateWidget
+          ? Number(root.updateWidget.leadingWidth) : 0) : 0
       implicitHeight: updateLoader.implicitHeight
       width: implicitWidth
       height: implicitHeight
@@ -609,10 +597,8 @@ Item {
       visible: root.fullMode && presented
       bar: root.bar
       trayBackend: root.trayWidget
-      customToneActive: root.v1CustomToneActive
       contentColor: root.v1CustomToneActive
         ? root.widgetInk : root.bar ? root.bar.foreground : root.widgetInk
-      badgeContrastColor: root.badgeContrastColor
       z: 2
       onDrawerRequested: root.toggleTrayDrawer()
     }
