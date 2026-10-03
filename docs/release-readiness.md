@@ -6,13 +6,16 @@
 
 ## Candidate and published predecessor
 
-The Beta.16.1 product commit is
-`047bcba64f99cfa4962fa4c12d8ddd7791c8f436`, with 24 plugins and suite payload
-digest `25fe4252e981e57f1a550862d448e4f9d858e66efb34f915af32743480fa05d7`.
-The validation target is this product plus the documentation commit containing
-the Beta.16.1 release texts. Documentation outside plugin roots leaves the
-suite digest unchanged but changes release-archive bytes. Gates must bind the
-accepted combined revision, not a future commit or inherited predecessor pass.
+The Beta.16.1 product, expectation, and payload-pin revision is
+`9f1fc90c4f9414286969cb039445bb91301701b6` (tree
+`0660d7e2cb97c2f8286423d356550c880ef7c6f9`), with 24 plugins and suite payload
+digest `46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974`.
+The complete source contract and isolated Quattro gate below bind exactly that
+revision. This is a pre-checksum readiness snapshot, not final release evidence.
+Subsequent readiness, changelog-date, and AUR checksum commits do not change the
+plugin-only suite payload, but shipped documentation changes the release archive.
+Source review, the complete 14-gate collector, and a byte-identical clean-commit
+rebuild must bind the final combined release revision before publication.
 
 Beta.16 was published on 2026-10-02 as a GitHub prerelease from
 `4840482ec0e06a2ebd478120833d4fae1f30889e`. It is the frozen rolling
@@ -29,22 +32,23 @@ recovery or replacement. AUR publication remains deferred.
 
 | Gate | Evidence and boundary |
 | --- | --- |
-| Complete source contract | Failed on `047bcba`, exit 1 after 151.43 seconds: `test_release_workflow_uses_curated_notes` required the missing Beta.16.1 notes. A full rerun including the documentation commit is pending. |
-| Isolated Quattro lifecycle | Pending on the combined revision; not started after the contract failure. No Beta.16.1 32/32 result is recorded. |
-| Retained runtime paths | Required: historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling Beta.16 → current checkout (7): exactly 32 shell generations. |
-| Bluetooth preparation | Native-QML softblock-mock red/green regression and scoped Bluetooth, IPC, hotplug, and audio checks passed during fix preparation; these are not final-HEAD full gates or real rfkill acceptance. |
-| Scoped visual previews | Private V1/V2 fit comparisons at DPR 1/1.6 cover the update count, badge-free tray, custom tone and count transitions; these revision-bound previews are not physical acceptance. |
-| Live installation and Bluetooth | Pending: reviewer installation and real softblock → on through Bar, panel, and IPC; rapid repeat clicks; on → off. No hardware or persistence result is recorded. |
-| Release/package verification | Release date, exact-commit archive/checksum, updated PKGBUILD/`.SRCINFO`, source/package rehearsal, 14-gate collector, and publication verification remain pending. |
+| Complete source contract | Passed on `9f1fc90`, exit 0 in 637.634 seconds, complete marker, no retry or timeout. Fresh exact-HEAD source; private staged validation passed separately. |
+| Isolated Quattro lifecycle | Passed on the same exact HEAD, exit 0, 32/32 generations in 108.747 seconds; no retry or timeout. |
+| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16 → candidate (7). Payload, layout, keep-settings, reinstall, and delayed readbacks passed; owned fixtures were cleaned. |
+| Status spacing | Private same-render V1/V2 fit × DPR 1/1.6 × update 13/0 × drawer absent/present: all 16 outer-gap cases match `69ea4da`; inner gaps and count spacing retain `deeca9b`. Neighbors move by whole physical pixels. Bell glyph and point RGBA are exactly translated in all 42 main and supplementary comparisons, including G3 in the V1 center at DPR 1.6. |
+| Bluetooth and Update input | `deeca9b`'s any-controller power/display/completion fix and whole-widget Update button are byte-identical. Their controlled QML checks are not physical multi-controller, rfkill, or desktop input acceptance. |
+| Diagnostics | Retained fixture diagnostics match the accepted reference, including the known VisualTokens color-assignment warning and six PillSurface teardown TypeErrors; not warning-free. No new diagnostic class or native type/reference/binding error was accepted. |
+| Live installation and hardware | Separate reviewer live status-spacing measurement remains outside these private fixtures. Multi-controller/rfkill, persistence, real focus/menu/input, physical multi-output and 1366px acceptance are not supplied here. |
+| Release/package verification | At this pre-checksum snapshot, dated changelog, two reproducible archive builds, AUR metadata/checksum commit, clean-HEAD source review and rehearsal, final 14-gate collector, matching rebuild, and publication verification remain pending. Final external evidence must identify their exact combined commit. |
 
-The failed contract run passed the baseline and documentation checks and
-26 of 27 PackageReleaseTests; the missing release notes were the sole package
-test failure. No test was relaxed and no placeholder notes were added to bypass
-it. Focused documentation checks do not replace the full contract rerun.
-The historical package arm is not a Beta.16.1 package-upgrade proof. Private
-Wayland/software-rendered previews are not live GPU, layer-shell, hotplug, or
-physical multi-output acceptance. Earlier release passes do not transfer to
-this candidate.
+The historical package arm is not a Beta.16.1 installed-package upgrade proof.
+Private Wayland/Mesa captures are not live GPU, layer-shell, hotplug, or physical
+multi-output acceptance. The private V2/DPR1 separator reference is 24/19 free
+columns, not the reviewer's 24/20 live reference; equality is claimed only within
+the same controlled render, including the notification point and halo in the
+last painted pixel. V1 island backgrounds change as their outer margins
+are restored: exact bell paint does not mean exact complete slot backgrounds or
+whole-bar RGBA. Earlier release passes do not transfer to this candidate.
 
 ## Pinned host contracts
 
@@ -110,10 +114,12 @@ was performed. Each operation needs its own maintainer Go.
   process or prevent later effects. Real rfkill and persistence acceptance is
   separate from controlled native-QML feedback.
 - The horizontal update count shares the bar-value baseline and CPU ink spacing.
-  Its leading reservation grows on an output-scale grid so the unchanged bell
-  retains its raster phase, including centered Fit. The private captures still
-  contain isolated one-level RGB differences in other widgets after translation;
-  exact whole-bar pixel identity and physical acceptance are not claimed.
+  Its leading reservation grows on an output-scale grid. Status inner-spacing
+  savings are returned to the group width; centered Fit preserves whole-physical-
+  pixel movements relative to the previous raster phase. Complete other-widget
+  rectangles are not all RGBA-identical after translation, and the restored V1
+  island edges change slot backgrounds. Exact whole-bar pixel identity and
+  physical acceptance are not claimed.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
   `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.1.md)
