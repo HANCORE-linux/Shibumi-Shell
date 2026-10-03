@@ -56,9 +56,9 @@ Ui.Panel {
   readonly property int providerIconSlotWidth: 20
   readonly property int providerIconSlotHeight: 16
   readonly property int claudeGlyphPixelSize: 15
-  readonly property int providerGlyphWidth: providerId === "opencode" ? 20
+  readonly property int providerGlyphWidth: providerId === "opencode" ? 15
     : providerId === "codex" ? 14 : 15
-  readonly property int providerGlyphHeight: providerId === "opencode" ? 12
+  readonly property int providerGlyphHeight: providerId === "opencode" ? 10
     : providerId === "codex" ? 14 : 15
   readonly property int providerGlyphHorizontalOffset: 0
   readonly property int providerContentHorizontalOffset:
@@ -209,10 +209,20 @@ Ui.Panel {
             }
           }
 
+          OpenCodeUsageIcon {
+            anchors.fill: parent
+            visible: root.providerId === "opencode"
+            baseColor: root.baseIconColor
+            fillColor: root.usageIconColor
+            baseOpacity: root.baseIconOpacity
+            usageFraction: root.steppedPercent > 0
+              ? Math.min(1, Math.max(root.steppedPercent / 100, 0.22)) : 0
+          }
+
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId === "codex" || root.providerId === "opencode"
+            visible: root.providerId === "codex"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0
