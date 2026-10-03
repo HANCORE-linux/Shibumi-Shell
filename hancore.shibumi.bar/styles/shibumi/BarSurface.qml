@@ -173,7 +173,7 @@ Item {
         return maximum < minimum ? Math.round((minimum + maximum) / 2)
           : Math.max(minimum, Math.min(ideal, maximum))
       }
-      readonly property real centerTargetX: compactShell && spacingRecovery > 0
+      readonly property real centerTargetX: (shibumiShell || compactShell) && spacingRecovery > 0
         ? expandedCenterTargetX + Math.round((logicalCenterTargetX
             - expandedCenterTargetX) * pixelRatio) / pixelRatio
         : logicalCenterTargetX
