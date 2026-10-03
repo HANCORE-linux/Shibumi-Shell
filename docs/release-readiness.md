@@ -33,7 +33,7 @@ recovery or replacement. AUR publication remains deferred.
 | Isolated Quattro lifecycle | Pending on the combined revision; not started after the contract failure. No Beta.16.1 32/32 result is recorded. |
 | Retained runtime paths | Required: historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling Beta.16 → current checkout (7): exactly 32 shell generations. |
 | Bluetooth preparation | Native-QML softblock-mock red/green regression and scoped Bluetooth, IPC, hotplug, and audio checks passed during fix preparation; these are not final-HEAD full gates or real rfkill acceptance. |
-| Scoped visual previews | Maintainer-approved raised-date and badge comparisons in V1/V2 fit at DPR 1/1.6; private software-rendered previews, not physical acceptance. |
+| Scoped visual previews | Private V1/V2 fit comparisons at DPR 1/1.6 cover the update count, badge-free tray, custom tone and count transitions; these revision-bound previews are not physical acceptance. |
 | Live installation and Bluetooth | Pending: reviewer installation and real softblock → on through Bar, panel, and IPC; rapid repeat clicks; on → off. No hardware or persistence result is recorded. |
 | Release/package verification | Release date, exact-commit archive/checksum, updated PKGBUILD/`.SRCINFO`, source/package rehearsal, 14-gate collector, and publication verification remain pending. |
 
@@ -109,9 +109,11 @@ was performed. Each operation needs its own maintainer Go.
   a hardware block. The 20-second pending deadline does not stop the detached
   process or prevent later effects. Real rfkill and persistence acceptance is
   separate from controlled native-QML feedback.
-- Single-digit badges are exactly centered at DPR 1 in the approved previews;
-  fractional-scale digit parity and antialiased circle edges can retain a
-  half-pixel bounding-box offset.
+- The horizontal update count shares the bar-value baseline and CPU ink spacing.
+  Its leading reservation grows on an output-scale grid so the unchanged bell
+  retains its raster phase, including centered Fit. The private captures still
+  contain isolated one-level RGB differences in other widgets after translation;
+  exact whole-bar pixel identity and physical acceptance are not claimed.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
   `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.1.md)

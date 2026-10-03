@@ -8,9 +8,9 @@
   Omarchy's power helper (#68). Ignore repeat clicks while a power request
   is pending instead of dispatching a reverse action.
 - Raise the smaller date beside the clock again, as before Beta.16.
-- Center single-digit update and tray badges exactly at DPR 1 using circles
-  with odd physical-pixel diameters; retain whole-pixel placement at fractional
-  scales.
+- Show the update count beside the update icon instead of in a badge, and remove
+  the tray count badge. Both counts remain in the tooltips; vertical bars show
+  the update count only there.
 - Restore application icons for pinned tray apps, with a fallback when no icon is available.
 - Restore the selected launcher logo, including Omarchy, Shibumi, and Dragon, without symbol remapping.
 - Render the OpenCode usage mark crisply at the size of the other provider icons, so its usage fill reads clearly.
