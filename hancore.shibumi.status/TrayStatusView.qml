@@ -91,14 +91,35 @@ Item {
           if (root.bar) root.bar.unregisterClickTarget(trayDelegate)
         }
 
-        Presentation.BarGlyph {
+        Item {
+          id: trayIconSlot
           anchors.centerIn: parent
           anchors.horizontalCenterOffset: root.pinnedIconHorizontalOffset
-          text: "󰀻"
-          font.family: Commons.Style.font.family
-          color: root.contentColor
           width: Commons.Style.space(14)
           height: Commons.Style.space(14)
+
+          Presentation.BarInk { id: iconPlacement; target: trayIconSlot }
+          Image {
+            id: trayIcon
+            source: String(trayDelegate.modelData.icon || "")
+            sourceSize: Qt.size(Math.round(parent.width * iconPlacement.dpr),
+              Math.round(parent.height * iconPlacement.dpr))
+            width: sourceSize.width / iconPlacement.dpr
+            height: sourceSize.height / iconPlacement.dpr
+            x: iconPlacement.snapX((parent.width - width) / 2)
+            y: iconPlacement.rectangleY(height)
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+          }
+
+          Presentation.BarGlyph {
+            visible: trayIcon.status !== Image.Ready
+            anchors.fill: parent
+            text: "󰀻"
+            font.family: Commons.Style.font.family
+            color: root.contentColor
+          }
         }
 
         MouseArea {
