@@ -190,9 +190,18 @@ rg -q 'target: "shibumi-media-spectrum"' \
 rg -Fq 'readonly property string mediaStyle:' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
   || fail "G9 does not normalize its two-presentation style"
-rg -Fq 'String(setting("mediaStyle", "default")) === "full"' \
+rg -Fq 'return style === "full" || style === "icon" ? style : "default"' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
-  || fail "G9 does not expose Default and Full presentations"
+  || fail "G9 does not expose Default, Full and Icon presentations"
+rg -Fq 'visible: !root.iconStyle' \
+  "$repo_root/hancore.shibumi.media/BarWidget.qml" \
+  || fail "G9 Icon does not drop the skip controls and marquee"
+rg -Fq '{ value: "icon", label: "Icon" }' \
+  "$repo_root/hancore.shibumi.control-center/WidgetAppearanceWorkbench.qml" \
+  || fail "Control Center does not offer the G9 Icon presentation"
+rg -Fq 'return style === "full" || style === "icon" ? style : "default"' \
+  "$repo_root/hancore.shibumi.state/Service.qml" \
+  || fail "State does not preserve the G9 Icon presentation"
 rg -q 'readonly property bool museMode: fullMode' \
   "$repo_root/hancore.shibumi.media/BarWidget.qml" \
   || fail "G9 does not share FULL/muse across V1 and V2"

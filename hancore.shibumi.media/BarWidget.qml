@@ -34,13 +34,18 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  // Now Playing follows the two-presentation contract shared by the original
+  // Now Playing follows the presentation contract shared by the original
   // V1 and V2 shells. It is deliberately not part of the generic
   // icon/text/full content-mode family used by the other V2 widgets.
-  readonly property string mediaStyle:
-    String(setting("mediaStyle", "default")) === "full"
-      ? "full" : "default"
-  readonly property bool defaultMode: mediaStyle === "default"
+  // "icon" is Default without the skip controls and the title marquee, so
+  // a playing track adds little width and narrow outputs do not drop into a
+  // responsive stage that hides this group; the panel keeps the full controls.
+  readonly property string mediaStyle: {
+    const style = String(setting("mediaStyle", "default"))
+    return style === "full" || style === "icon" ? style : "default"
+  }
+  readonly property bool iconStyle: mediaStyle === "icon"
+  readonly property bool defaultMode: mediaStyle === "default" || iconStyle
   readonly property bool fullMode: mediaStyle === "full"
   readonly property bool iconMode: false
   readonly property bool textMode: false
@@ -64,6 +69,7 @@ Ui.Panel {
   readonly property bool textVisible: activeText.visible
   readonly property bool iconVisible: activeIcon.visible
   readonly property bool v1FullVisible: activeRow.visible
+  readonly property bool marqueeVisible: marqueeClip.visible
 
   visible: mediaService !== null
   implicitWidth: visible ? (bar && bar.vertical
@@ -194,6 +200,7 @@ Ui.Panel {
       spacing: root.tokens ? root.tokens.compactGap : Commons.Style.space(4)
 
       MediaControl {
+        visible: !root.iconStyle
         icon: "skip_previous"
         enabled: root.activePlayer && root.activePlayer.canGoPrevious === true
         action: "previous"
@@ -208,6 +215,7 @@ Ui.Panel {
       }
 
       MediaControl {
+        visible: !root.iconStyle
         icon: "skip_next"
         enabled: root.activePlayer && root.activePlayer.canGoNext === true
         action: "next"
@@ -234,6 +242,7 @@ Ui.Panel {
       Item {
         id: marqueeClip
         width: Commons.Style.space(88)
+        visible: !root.iconStyle
         height: mediaSurface.height
         anchors.verticalCenter: parent.verticalCenter
 
@@ -241,7 +250,7 @@ Ui.Panel {
           marqueeAnimation.stop()
           marqueeText.x = 0
           Qt.callLater(function() {
-            if (root.visible && root.playing && !root.opened
+            if (root.visible && !root.iconStyle && root.playing && !root.opened
                 && marqueeText.implicitWidth > marqueeClip.width)
               marqueeAnimation.start()
           })
@@ -288,6 +297,7 @@ Ui.Panel {
           function onPlayingChanged() { marqueeClip.reset() }
           function onOpenedChanged() { marqueeClip.reset() }
           function onVisibleChanged() { marqueeClip.reset() }
+          function onIconStyleChanged() { marqueeClip.reset() }
         }
 
         SequentialAnimation {

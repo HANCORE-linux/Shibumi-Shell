@@ -282,14 +282,34 @@ ShellRoot {
         if (!media.fullMode || !media.museMode || !media.museVisible
             || media.v1Presentation || fakeSpectrum.clientCount !== 1)
           return root.fail("V2 FULL muse presentation/lease")
-        root.mediaSettings = ({ spectrum: false, mediaStyle: "default" })
+        root.mediaSettings = ({ spectrum: false, mediaStyle: "icon" })
       } else if (root.phase === 3) {
+        // Icon keeps the default row's play/pause and pulse but drops the
+        // skip controls and title, so a playing track stays narrow.
+        if (!media.iconStyle || !media.defaultMode || media.fullMode
+            || !media.v1FullVisible || media.museVisible
+            || fakeSpectrum.clientCount !== 0)
+          return root.fail("icon presentation")
+        // Width follows the row after a polish, which this headless window
+        // does not run; the real-bar width drop is covered by the hidden
+        // marquee and the static check on the skip controls.
+        if (media.marqueeVisible)
+          return root.fail("icon presentation still shows the marquee")
+        media.interactionTarget.triggerPress(Qt.LeftButton)
+        if (mediaState.lastAction !== "playPause" || playerA.isPlaying)
+          return root.fail("icon play/pause action forwarding")
+        media.interactionTarget.triggerPress(Qt.LeftButton)
+        if (!playerA.isPlaying)
+          return root.fail("icon play/pause did not resume")
+        root.mediaSettings = ({ spectrum: false, mediaStyle: "default" })
+      } else if (root.phase === 4) {
         if (media.fullMode || !media.defaultMode || !media.v1FullVisible
+            || media.iconStyle || !media.marqueeVisible
             || media.museVisible || fakeSpectrum.clientCount !== 0)
           return root.fail("shared default presentation")
         fakeShell.spectrumBackend = null
         media.interactionTarget.triggerPress(Qt.RightButton)
-      } else if (root.phase === 4) {
+      } else if (root.phase === 5) {
         if (!media.opened || !media.panelLoaded || !media.panelItem) {
           if (++root.waits > 45) return root.fail("real media panel did not load")
           return
@@ -362,15 +382,15 @@ ShellRoot {
             || mediaState.activePlayer !== playerB)
           return root.fail("source selection forwarding")
         media.close()
-      } else if (root.phase === 5) {
+      } else if (root.phase === 6) {
         if (media.opened || media.panelLoaded || media.activePlayer !== playerB)
           return root.fail("lazy panel close")
         mediaState.activePlayer = null
-      } else if (root.phase === 6) {
+      } else if (root.phase === 7) {
         if (media.active || media.implicitWidth >= root.activeWidth)
           return root.fail("idle V1 presentation")
         media.interactionTarget.triggerPress(Qt.LeftButton)
-      } else if (root.phase === 7) {
+      } else if (root.phase === 8) {
         if (!media.opened || !media.panelLoaded) return
         media.close()
         mediaLoader.active = false

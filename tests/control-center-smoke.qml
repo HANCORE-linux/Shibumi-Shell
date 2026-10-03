@@ -837,16 +837,23 @@ ShellRoot {
         appearance.showWidgetOverview()
         if (!appearance.openWidgetDetails("G9", "")
             || appearance.selectedWidgetMode !== "default"
-            || appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions.length !== 3
             || appearance.selectedWidgetModeOptions[0].value !== "default"
             || appearance.selectedWidgetModeOptions[0].label !== "Default"
             || appearance.selectedWidgetModeOptions[1].value !== "full"
             || appearance.selectedWidgetModeOptions[1].label !== "Compact"
+            || appearance.selectedWidgetModeOptions[2].value !== "icon"
+            || appearance.selectedWidgetModeOptions[2].label !== "Icon"
             || !appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "full"
             || stateService.groupAppearanceSettingForVariant(
               "G9", "v2", "mediaStyle", "") !== "default")
-          return root.fail("V1 Now Playing Default/Compact contract drifted")
+          return root.fail("V1 Now Playing Default/Compact/Icon contract drifted")
+        if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "icon"
+            || stateService.groupAppearanceSettingForVariant(
+              "G9", "v1", "mediaStyle", "") !== "icon")
+          return root.fail("V1 Now Playing Icon style did not persist")
         if (!appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "default")
           return root.fail("V1 Now Playing style did not restore")
@@ -876,16 +883,18 @@ ShellRoot {
         panel.v2LayoutActive = true
         if (!appearance.openWidgetDetails("G9", "")
             || appearance.selectedWidgetMode !== "default"
-            || appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions.length !== 3
             || appearance.selectedWidgetModeOptions[0].value !== "default"
             || appearance.selectedWidgetModeOptions[0].label !== "Default"
             || appearance.selectedWidgetModeOptions[1].value !== "full"
             || appearance.selectedWidgetModeOptions[1].label !== "Compact"
+            || appearance.selectedWidgetModeOptions[2].value !== "icon"
+            || appearance.selectedWidgetModeOptions[2].label !== "Icon"
             || !appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "full"
             || stateService.groupAppearanceSettingForVariant(
               "G9", "v1", "mediaStyle", "") !== "default")
-          return root.fail("V2 Now Playing Default/Compact contract drifted")
+          return root.fail("V2 Now Playing Default/Compact/Icon contract drifted")
         if (!appearance.openWidgetDetails("G4", "")
             || appearance.selectedWidgetMode !== "full")
           return root.fail("V2 appearance did not remain independent")
