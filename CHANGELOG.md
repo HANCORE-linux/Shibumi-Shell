@@ -11,6 +11,9 @@
 - Center single-digit update and tray badges exactly at DPR 1 using circles
   with odd physical-pixel diameters; retain whole-pixel placement at fractional
   scales.
+- Restore application icons for pinned tray apps, with a fallback when no icon is available.
+- Restore the selected launcher logo, including Omarchy, Shibumi, and Dragon, without symbol remapping.
+- Render the OpenCode usage mark crisply at the size of the other provider icons, so its usage fill reads clearly.
 
 ### Changed
 
