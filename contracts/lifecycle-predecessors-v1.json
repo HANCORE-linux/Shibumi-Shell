@@ -759,7 +759,7 @@
     },
     {
       "id": "public-beta.16.1",
-      "payloadDigest": "836ff9b08fa2b8845aace116191f42b9d728e1a830471f305c39f4cd74d15679",
+      "payloadDigest": "76cd94d0b1991f1628c2f7ffdc9ebf64198a888f3677dd5bb7815b85875ade30",
       "pluginDigests": {
         "hancore.shibumi.bar": "f1eda2d05892d3756319e3cb4474565505f9e6ca2bbb30c4a8983d7103525b9a",
         "hancore.shibumi.state": "3aed3c7a3cb92afb66d5f12d7d5c773f1988d5f11c933da187f8b31c68179da8",
@@ -768,8 +768,8 @@
         "hancore.shibumi.telemetry": "f52aff2aa784a11eab6edb12b5c3610986a01284f98844293e5cc8e1bb2963b0",
         "hancore.shibumi.power-state": "f2f664b00436695dbd47edf9b8d7da46d0f4f7fbe740045023479ed707872a50",
         "hancore.shibumi.workspaces": "de2a198c2a1fcbada535f046b91f37e5f5ca517ef4a0e3c6f570baf7930699c5",
-        "hancore.shibumi.update-center": "3b448c4493526933b79282ae9d8dfce91dc2b2a48475ae052afc4dca3edfbe0a",
-        "hancore.shibumi.status": "d7d03e7a65307c63c402ad7637770824776e88b6e852d16341c9dd457a27b790",
+        "hancore.shibumi.update-center": "4f028d0c82cbe0d85c74799a77c12e7e26acc9bd4dcda6f7c14fc40a5f991a86",
+        "hancore.shibumi.status": "270037acf2fc5d0edad827c5300c308b9adc2abb80509e499dd7f6702871ef63",
         "hancore.shibumi.memory": "f6fbd0838180fac0740fd27d22f9fe1812528f45210e51fa9984f479f42da8f9",
         "hancore.shibumi.cpu": "bb0d1df3404525a45c55fffaa2091a8340ae3d9536f7edab6e6bd56759f7999e",
         "hancore.shibumi.audio": "20a3f204e0c55b6c9aff18d12e9627b91f3710596e3d1c2e00b08aaa0f3e3e4c",
@@ -781,7 +781,7 @@
         "hancore.shibumi.battery": "59f67a3358c5e419bb98e474a867b53630cf1ee0bcd61c44d59c5775d8c6933f",
         "hancore.shibumi.brightness": "80ba42a406f9a24b675ed2daf83555e7f1da6e0442246ae093bb7800be1a8b91",
         "hancore.shibumi.power-profile": "6d71528dc88132dfc2c33b22437427c9210df74cdc123dfcdd574b4a3a07113e",
-        "hancore.shibumi.bluetooth": "4d77a458e857a53d68f079abab395f3807b614096b8a90741603fb9c091c6b9d",
+        "hancore.shibumi.bluetooth": "f61a18cd1a47be8c820b731ddb9156c6311c02dcafe46533e798f5adba147fbb",
         "hancore.shibumi.temperature": "72ac530bd97cf092349351a6c63e2ef78a9446053e7add71cfe72282704a76b4",
         "hancore.shibumi.gpu": "a460b94a8f0142ce6da9318493a6343f7bdefcbd1999db3fe73c46d5ff59fa9e",
         "hancore.shibumi.storage": "eb97c939b77fc88a17066bfa72ea4a1f9a0c7279d164afbc15b176f767837299"
