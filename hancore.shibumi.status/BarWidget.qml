@@ -89,6 +89,35 @@ Item {
     || iconMode && notificationPresented
     || textMode && notificationService !== null
   readonly property real childGap: Commons.Style.space(4)
+  Presentation.BarInk { id: statusPlacement; target: root }
+  // Quick Access: 22px slots + 4px spacing - 12px glyphs = 14px ink gap. Keep
+  // the outer reservation and translate whole slots by physical pixels only.
+  readonly property real iconGapPixels: Math.round(Commons.Style.space(14) * statusPlacement.dpr)
+  readonly property rect updateInk: updateWidget && updateWidget.iconInk !== undefined
+    ? updateWidget.mapToItem(updateSlot, updateWidget.iconInk) : Qt.rect(0, 0, 0, 0)
+  function inkEdge(slot, ink, end) {
+    const edge = (statusPlacement.origin.x + statusRow.x + slot.x
+      + ink.x + (end ? ink.width : 0)) * statusPlacement.dpr
+    return end ? Math.ceil(edge - 1e-7) : Math.floor(edge + 1e-7)
+  }
+  readonly property real directContraction: fullMode && updatePresented
+    && notificationPresented && !trayPresented && updateInk.width > 0
+    ? Math.max(0, inkEdge(notificationView, notificationView.iconInk, false)
+      - inkEdge(updateSlot, updateInk, true) - iconGapPixels) : 0
+  readonly property real updateShift: !fullMode || !updatePresented || updateInk.width <= 0 ? 0
+    : (trayPresented ? trayView.pinnedCount > 0
+      ? Math.round(Commons.Style.space(3) * statusPlacement.dpr)
+      : Math.min(Math.floor(childGap * statusPlacement.dpr),
+        Math.max(0, inkEdge(trayView, trayView.drawerInk, false)
+          - inkEdge(updateSlot, updateInk, true) - iconGapPixels))
+      : Math.ceil(directContraction / 2)) / statusPlacement.dpr
+  readonly property real bellShift: !fullMode || !notificationPresented ? 0
+    : -(trayPresented ? trayView.drawerCount > 0
+      ? Math.min(Math.floor(childGap * statusPlacement.dpr),
+        Math.max(0, inkEdge(notificationView, notificationView.iconInk, false)
+          - inkEdge(trayView, trayView.drawerInk, true) - iconGapPixels))
+      : Math.round(Commons.Style.space(3) * statusPlacement.dpr)
+      : Math.floor(directContraction / 2)) / statusPlacement.dpr
   readonly property int presentedCount: fullMode
     ? (updatePresented ? 1 : 0) + (trayPresented ? 1 : 0)
       + (notificationPresented ? 1 : 0)
@@ -560,6 +589,8 @@ Item {
     settings: root.settings
     v1AppearanceEnabled: true
     anchors.fill: parent
+    anchors.leftMargin: root.updateShift
+    anchors.rightMargin: -root.bellShift
     anchors.topMargin: root.tokens
       ? Math.round((parent.height - root.tokens.pillHeight) / 2) : 0
     anchors.bottomMargin: root.tokens
@@ -575,6 +606,7 @@ Item {
 
     Item {
       id: updateSlot
+      transform: Translate { x: root.updateShift }
       anchors.verticalCenter: parent.verticalCenter
       visible: root.fullMode && updateLoader.item !== null
       implicitWidth: visible ? root.statusActionSlot
@@ -605,6 +637,7 @@ Item {
 
     NotificationStatusView {
       id: notificationView
+      transform: Translate { x: root.bellShift }
       visible: (root.fullMode || root.iconMode) && presented
       bar: root.bar
       contentColor: root.widgetInk

@@ -12,6 +12,7 @@ Item {
   property color contentColor: bar
     ? bar.foreground : Commons.Color.foreground
   readonly property color drawerIconColor: moreIcon.color
+  readonly property rect drawerInk: moreIcon.mapToItem(root, moreIcon.symbolInk)
   readonly property var pinnedItems: trayBackend
     && Array.isArray(trayBackend.pinnedItems) ? trayBackend.pinnedItems : []
   readonly property int drawerCount: trayBackend

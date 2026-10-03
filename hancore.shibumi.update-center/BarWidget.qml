@@ -50,6 +50,12 @@ Ui.Panel {
   readonly property bool hasMaterialSymbols:
     Qt.fontFamilies().indexOf("Material Symbols Rounded") !== -1
   readonly property bool panelLoaded: panelLoader.item !== null
+  readonly property rect iconInk: {
+    for (let item = updateIcon; item && item !== root; item = item.parent) {
+      void(item.x); void(item.width)
+    }
+    return updateIcon.mapToItem(root, updateIcon.symbolInk)
+  }
 
   Presentation.HostTokens { id: hostTokens; bar: root.bar }
   readonly property var tokens: bar && "visualTokens" in bar
