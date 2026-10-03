@@ -18,6 +18,7 @@ Item {
   // Lets the component smoke test drive native device property transitions
   // without touching the host's real Bluetooth devices.
   property var nativeDevicesOverride: null
+  property var nativeAdaptersOverride: null
   property var pipewireNodesOverride: null
   property var commandRunnerOverride: null
   property var audioOutputOverride: null
@@ -51,9 +52,17 @@ Item {
   readonly property var adapter: backendOverride !== null
     ? ("adapter" in backendOverride ? backendOverride.adapter : null)
     : (adapterOverride !== null ? adapterOverride : Bluetooth.defaultAdapter)
-  readonly property var nativeAdapters: backendOverride === null
-    && adapterOverride === null && Bluetooth.adapters
-    ? Model.toArray(Bluetooth.adapters.values) : (adapter ? [adapter] : [])
+  readonly property var nativeAdapters: nativeAdaptersOverride !== null
+    ? nativeAdaptersOverride : backendOverride === null
+      && adapterOverride === null && Bluetooth.adapters
+      ? Model.toArray(Bluetooth.adapters.values) : (adapter ? [adapter] : [])
+  // The host power helper acts globally; discovery/device actions remain local.
+  readonly property bool powerEnabled: {
+    for (let i = 0; i < nativeAdapters.length; i++) {
+      if (nativeAdapters[i] && nativeAdapters[i].enabled === true) return true
+    }
+    return false
+  }
   readonly property bool adapterAvailable: adapter !== null
   readonly property bool radioEnabled: adapterAvailable
     && adapter.enabled !== undefined && adapter.enabled === true
@@ -317,7 +326,7 @@ Item {
     }
     if (pendingPowerTarget !== null) return false
     pendingPowerAdapter = adapter
-    pendingPowerTarget = !radioEnabled
+    pendingPowerTarget = !powerEnabled
     powerRequestTimeout.restart()
     if (radioEnabled) stopDiscovery()
     try {
@@ -731,11 +740,11 @@ Item {
     syncNativeAudioHandoffIntents()
   }
   onDiscoveryDesiredChanged: if (!discoveryDesired) stopDiscovery()
-  onRadioEnabledChanged: {
-    if (pendingPowerAdapter === adapter && pendingPowerTarget === radioEnabled)
+  onPowerEnabledChanged: {
+    if (pendingPowerAdapter === adapter && pendingPowerTarget === powerEnabled)
       clearPendingPower()
-    if (!radioEnabled) cancelAllAudioHandoffs()
   }
+  onRadioEnabledChanged: if (!radioEnabled) cancelAllAudioHandoffs()
   onAdapterChanged: {
     clearPendingPower()
     observeNativeAdapter()
