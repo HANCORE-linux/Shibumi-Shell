@@ -136,7 +136,7 @@ Ui.Panel {
     panelLoader.source = ""
     if (!opened || !updateService) return
     panelLoader.setSource(panelSource, {
-      anchorItem: button,
+      anchorItem: panelAnchor,
       bar: root.bar,
       open: true,
       ownerWidget: root,
@@ -172,7 +172,7 @@ Ui.Panel {
     visible: root.countVisible
     barText: true
     x: {
-      const iconLeft = updateIcon.mapToItem(root, updateIcon.symbolInk.x, 0).x
+      const iconLeft = root.iconInk.x
       const first = Math.floor((countPlacement.origin.x + iconLeft)
         * countPlacement.dpr + 1e-7)
       const end = Math.ceil((countInk.tightBoundingRect.x
@@ -189,12 +189,18 @@ Ui.Panel {
     renderType: Text.NativeRendering
   }
 
-  Ui.WidgetButton {
-    id: button
+  // Keep the panel/caret on the original icon slot while input spans the count.
+  Item {
+    id: panelAnchor
     anchors.right: parent.right
     anchors.verticalCenter: parent.verticalCenter
-    width: implicitWidth
+    width: button.implicitWidth
     height: parent.height
+  }
+
+  Ui.WidgetButton {
+    id: button
+    anchors.fill: parent
     bar: root.bar
     text: ""
     labelVisible: false
@@ -209,7 +215,10 @@ Ui.Panel {
     onPressed: function(mouseButton) { root.triggerPress(mouseButton) }
 
     Item {
-      anchors.centerIn: parent
+      anchors.right: parent.right
+      anchors.rightMargin: button.implicitWidth - width
+        - Math.round((button.implicitWidth - width) / 2)
+      anchors.verticalCenter: parent.verticalCenter
       width: Commons.Style.space(20)
       height: Commons.Style.space(20)
 
