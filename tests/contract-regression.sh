@@ -947,14 +947,14 @@ for bluetooth_adapter in "$bluetooth_adapter"; do
   rg -U -q 'function validatePendingAudioOutput\(\)[^}]*resolveNativeDevice\([^}]*!device\.connected[^}]*!deviceUsesCurrentAdapter' \
     "$bluetooth_adapter" \
     || fail "$bluetooth_adapter does not revalidate audio handoff identity/state"
-  [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 4 ]] \
-    || fail "$bluetooth_adapter must have exactly four bounded lifecycle timers"
+  [[ $(rg -c '^  Timer \{' "$bluetooth_adapter") -eq 5 ]] \
+    || fail "$bluetooth_adapter must have exactly five bounded lifecycle timers"
   if rg -q 'IpcHandler \{|Loader \{|panelSource|panelComponent|registeredWidget' \
       "$bluetooth_adapter"; then
     fail "$bluetooth_adapter still owns IPC or loads a foreign UI component"
   fi
 done
-rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.radioEnabled && !root\.discovering' \
+rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.adapterEnabled && !root\.discovering' \
   "$bluetooth_service" \
   || fail "Bluetooth service does not bound discovery retries to an open session"
 if rg -q 'registeredWidget|registeredSource|registeredComponent|panelSource|panelComponent|Loader \{' \

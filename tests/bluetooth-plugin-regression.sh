@@ -189,7 +189,7 @@ rg -q 'property var sessionOwners: \[\]' "$service" \
   || fail "Bluetooth panel sessions are not centrally tracked"
 rg -q 'adapter\.stopDiscovery\(\)' "$service" \
   || fail "Bluetooth discovery lacks final-close cleanup"
-rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.radioEnabled && !root\.discovering' \
+rg -U -q 'id: discoveryRetry[^}]*repeat: true[^}]*running: root\.sessionCount > 0 && root\.adapterAvailable[^}]*root\.adapterEnabled && !root\.discovering' \
   "$service" \
   || fail "Bluetooth discovery retry is not bounded to an open, powered idle session"
 rg -U -q 'function confirmRequestedDiscovery\(\) \{(.|\n)*?requested\.discovering(.|\n)*?discoveryOwned = true(.|\n)*?\n  \}' \
@@ -207,8 +207,8 @@ fi
 if rg -q 'Process \{|FileView \{' "$service" "$adapter"; then
   fail "Bluetooth owner uses an unbounded worker instead of native APIs"
 fi
-[[ $(rg -c '^  Timer \{' "$adapter") -eq 4 ]] \
-  || fail "Bluetooth adapter must keep exactly the four bounded lifecycle timers"
+[[ $(rg -c '^  Timer \{' "$adapter") -eq 5 ]] \
+  || fail "Bluetooth adapter must keep exactly the five bounded lifecycle timers"
 rg -q 'id: heroPowerToggle' "$panel" \
   || fail "Bluetooth radio toggle is not grouped with adapter status"
 if sed -n '/id: headerActions/,/^        }/p' "$panel" \

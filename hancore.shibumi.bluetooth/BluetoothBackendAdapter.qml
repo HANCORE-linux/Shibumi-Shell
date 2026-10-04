@@ -18,6 +18,7 @@ Item {
   // Lets the component smoke test drive native device property transitions
   // without touching the host's real Bluetooth devices.
   property var nativeDevicesOverride: null
+  property var nativeAdaptersOverride: null
   property var pipewireNodesOverride: null
   property var commandRunnerOverride: null
   property var audioOutputOverride: null
@@ -33,6 +34,8 @@ Item {
   property var retiredDiscoveryAdapter: null
   property bool discoveryDesired: false
   property var nativePendingActions: ({})
+  property var pendingPowerTarget: null
+  property var pendingPowerAdapter: null
   // Raw native entities remain private here. The registry assigns a monotonic
   // incarnation whenever a device or adapter QObject is replaced.
   property var nativeAdapterEntity: null
@@ -49,9 +52,17 @@ Item {
   readonly property var adapter: backendOverride !== null
     ? ("adapter" in backendOverride ? backendOverride.adapter : null)
     : (adapterOverride !== null ? adapterOverride : Bluetooth.defaultAdapter)
-  readonly property var nativeAdapters: backendOverride === null
-    && adapterOverride === null && Bluetooth.adapters
-    ? Model.toArray(Bluetooth.adapters.values) : (adapter ? [adapter] : [])
+  readonly property var nativeAdapters: nativeAdaptersOverride !== null
+    ? nativeAdaptersOverride : backendOverride === null
+      && adapterOverride === null && Bluetooth.adapters
+      ? Model.toArray(Bluetooth.adapters.values) : (adapter ? [adapter] : [])
+  // The host power helper acts globally; discovery/device actions remain local.
+  readonly property bool powerEnabled: {
+    for (let i = 0; i < nativeAdapters.length; i++) {
+      if (nativeAdapters[i] && nativeAdapters[i].enabled === true) return true
+    }
+    return false
+  }
   readonly property bool adapterAvailable: adapter !== null
   readonly property bool radioEnabled: adapterAvailable
     && adapter.enabled !== undefined && adapter.enabled === true
@@ -313,9 +324,27 @@ Item {
       backendOverride.toggleBluetooth()
       return true
     }
+    if (pendingPowerTarget !== null) return false
+    pendingPowerAdapter = adapter
+    pendingPowerTarget = !powerEnabled
+    powerRequestTimeout.restart()
     if (radioEnabled) stopDiscovery()
-    adapter.enabled = !adapter.enabled
+    try {
+      executeDeviceCommand([
+        "omarchy-bluetooth-power", pendingPowerTarget ? "on" : "off"
+      ])
+    } catch (error) {
+      clearPendingPower()
+      return false
+    }
+    // Detached dispatch is not success: only observed BlueZ state settles it.
     return true
+  }
+
+  function clearPendingPower() {
+    pendingPowerTarget = null
+    pendingPowerAdapter = null
+    powerRequestTimeout.stop()
   }
 
   function setNativePendingAction(address, action) {
@@ -711,8 +740,13 @@ Item {
     syncNativeAudioHandoffIntents()
   }
   onDiscoveryDesiredChanged: if (!discoveryDesired) stopDiscovery()
+  onPowerEnabledChanged: {
+    if (pendingPowerAdapter === adapter && pendingPowerTarget === powerEnabled)
+      clearPendingPower()
+  }
   onRadioEnabledChanged: if (!radioEnabled) cancelAllAudioHandoffs()
   onAdapterChanged: {
+    clearPendingPower()
     observeNativeAdapter()
     reconcileNativeEntities()
     // Ownership is tied to the adapter instance on which Shibumi started the
@@ -728,6 +762,17 @@ Item {
   }
   Component.onCompleted: reconcileNativeEntities()
   Component.onDestruction: destroyDiscovery()
+
+  // A deadline for the desired state, not a timeout/cancellation of the helper.
+  Timer {
+    id: powerRequestTimeout
+    interval: 20000
+    repeat: false
+    onTriggered: {
+      console.warn("Bluetooth power request did not reach its target")
+      root.clearPendingPower()
+    }
+  }
 
   Timer {
     id: pendingTimeout

@@ -213,9 +213,19 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.16": {
                 "suiteVersion": "0.1.1-beta.16",
-                "sourceRevisions": ["package:0.1.1-beta.16"],
+                "sourceRevisions": [
+                    "4840482ec0e06a2ebd478120833d4fae1f30889e",
+                    "05548c8d9ffdf0d37962d6e423e2a0dc21b8cd91",
+                    "package:0.1.1-beta.16",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41",
+            },
+            "public-beta.16.1": {
+                "suiteVersion": "0.1.1-beta.16.1",
+                "sourceRevisions": ["package:0.1.1-beta.16.1"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -1786,7 +1796,7 @@ time.sleep(30)
             self.assertIn(f"\toptdepends = {package}: {purpose}", srcinfo)
         self.assertEqual(
             set(contract["requiredHostCommands"]),
-            {"omarchy-bluetooth-device", "omarchy-audio-output-set-default"},
+            {"omarchy-bluetooth-device", "omarchy-bluetooth-power", "omarchy-audio-output-set-default"},
         )
         runtime = (ROOT / "scripts/shibumi_suite/runtime.py").read_text(
             encoding="utf-8"

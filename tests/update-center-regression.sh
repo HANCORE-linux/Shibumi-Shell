@@ -47,7 +47,7 @@ for preference in packageBadge themeBadge; do
 done
 rg -q 'panelSource: Qt\.resolvedUrl\("UpdateCenterPanel\.qml"\)' "$widget" \
   || fail 'update widget does not lazy-load its panel'
-rg -q 'anchorItem: button' "$widget" \
+rg -q 'anchorItem: panelAnchor' "$widget" \
   || fail 'update panel is not anchored to its own bar button'
 if rg -Fq 'open: ownerWidget.opened' "$panel"; then
   fail 'update panel binds its lifecycle back to the owner widget'

@@ -62,6 +62,8 @@ Item {
   readonly property var stateConfig: stateService && stateService.config
     ? stateService.config : ({})
   readonly property var contentItem: content.item
+  readonly property real spacingRecovery: contentItem && "spacingRecovery" in contentItem
+    ? contentItem.spacingRecovery : 0
   readonly property var groupGeometry: contentItem && contentItem.groupGeometry
     ? contentItem.groupGeometry : []
   readonly property var separatorGeometry: contentItem
@@ -393,6 +395,16 @@ Item {
         return Math.max(1, root.availableWidth - siblings)
       }
 
+      readonly property real spacingRecovery: {
+        if (!root) return 0
+        void(root.groups)
+        let total = 0
+        for (let i = 0; i < horizontalRepeater.count; i++) {
+          const cell = horizontalRepeater.itemAt(i)
+          if (cell && cell.contentShown) total += cell.spacingRecovery
+        }
+        return total
+      }
       readonly property var groupGeometry: {
         if (!root) return []
         void(root.groups)
@@ -534,6 +546,7 @@ Item {
           readonly property real minimumGroupWidth: placeholderSlot
             ? emptySlotTarget.width : groupHasContent
               ? groupSlot.minimumResponsiveWidth : measuredMinimumGroupWidth
+          readonly property real spacingRecovery: groupSlot.spacingRecovery
           readonly property real contentLeft: targetVisual.x
           readonly property real contentRight: targetVisual.x + targetVisual.width
           readonly property real visualRightEdge: groupSlot.x + groupSlot.width

@@ -22,7 +22,7 @@ ShellRoot {
     Qt.exit(1)
     throw new Error(message)
   }
-  function manifest(id) { return {id: id, version: "0.1.1-beta.16", kinds: ["service"]} }
+  function manifest(id) { return {id: id, version: "0.1.1-beta.16.1", kinds: ["service"]} }
   component ScopedHost: QtObject {
     property string pluginId: ""
     function serviceFor(id) { root.check(false, "raw scoped lookup: " + id); return null }
@@ -43,7 +43,7 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.16"
+    implementationVersion: "0.1.1-beta.16.1"
     host: stateHost
     owner: state
     manifest: root.manifest("hancore.shibumi.state")

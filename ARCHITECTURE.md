@@ -947,22 +947,33 @@ Current Phase 2 foundation:
   `BluetoothBackendAdapter`. The adapter keeps native BlueZ device QObjects
   private and publishes detached primitive records carrying the device path,
   address, adapter identity, and monotonic device/adapter incarnations. Every
-  mutation resolves exactly one current entity immediately before dispatch;
-  stale, malformed, ambiguous, unavailable, or state-conflicting requests
-  return typed failures and dispatch nothing. Beta.13 deliberately retains one
-  `omarchy-bluetooth-device` helper path per device action and never invokes a
-  native device method in parallel. Because the 4.0.2 helper accepts only an
-  action/address pair, production fails closed with more than one adapter; the
-  residual replacement race after dispatch remains explicit Step-4B helper
-  debt. Callers inspect `.ok` explicitly. The
-  adapter also owns pending state and Bluetooth-audio handoff; no complete
-  Omarchy Bluetooth UI component is instantiated as a backend;
+  device mutation resolves exactly one current entity immediately before dispatch;
+  stale, malformed, ambiguous, unavailable, or state-conflicting device requests
+  return typed failures and dispatch nothing. Device actions retain one
+  `omarchy-bluetooth-device` helper path and never invoke a native device method
+  in parallel. Because the helper accepts only an action/address pair, device
+  actions fail closed with more than one production adapter; the residual
+  replacement race after dispatch remains explicit Step-4B helper debt.
+  Device callers inspect `.ok` explicitly. The adapter also owns pending state
+  and Bluetooth-audio handoff; no complete Omarchy Bluetooth UI component is
+  instantiated as a backend. Global radio power is a separate host action:
+  one argv-only detached `omarchy-bluetooth-power on|off` request applies
+  Omarchy's rfkill persistence policy to all Bluetooth radios. It can clear a
+  soft block, not a hardware block. Bar, panel, and IPC share this power path;
+  no direct `adapter.enabled` write or helper `toggle` is used. BlueZ's observed
+  `adapter.enabled` remains authoritative for the displayed state, not dispatch
+  success. Repeat clicks are ignored while the adapter-bound target is pending;
+  observing that target, adapter loss/replacement, a dispatch exception, or the
+  deadline clears it. Power-off stops owned discovery;
 - each output owns only its V1 Bluetooth presentation and lazy Shibumi device
   panel. The process-wide service leases discovery across open panels and owns one
   symmetric six-method `omarchy.bluetooth` IPC target. Presentation has no
   Bluetooth/PipeWire import, process, timer, or file watcher; the service facade
-  owns one bounded discovery-reconciliation timer and the adapter owns four
-  bounded lifecycle timers. While a requested Discovery start is still pending
+  owns one bounded discovery-reconciliation timer and the adapter owns five
+  bounded lifecycle timers, including a separate one-shot 20-second power-state
+  deadline. This clears pending state, not the detached helper process; late
+  helper effects remain possible. It is not a process timeout or cancellation.
+  While a requested Discovery start is still pending
   during teardown, at most one temporary 30-second retry/expiry timer per
   native adapter survives the facade. Top mapping, adapter/radio
   reactivity, discovery ownership/teardown, both backend load orders, and IPC

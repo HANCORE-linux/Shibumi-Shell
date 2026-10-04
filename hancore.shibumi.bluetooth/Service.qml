@@ -15,7 +15,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.bluetooth"
-    implementationVersion: "0.1.1-beta.16"
+    implementationVersion: "0.1.1-beta.16.1"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -36,7 +36,8 @@ Item {
 
   readonly property bool ready: adapter.ready
   readonly property bool adapterAvailable: adapter.adapterAvailable
-  readonly property bool radioEnabled: adapter.radioEnabled
+  readonly property bool radioEnabled: adapter.powerEnabled
+  readonly property bool adapterEnabled: adapter.radioEnabled
   readonly property bool discovering: adapter.discovering
   readonly property var connectedDevices: adapter.connectedDevices
   readonly property var knownDevices: adapter.knownDevices
@@ -53,7 +54,7 @@ Item {
     if (!owner) return false
     if (sessionOwners.indexOf(owner) < 0)
       sessionOwners = sessionOwners.concat([owner])
-    if (sessionOwners.length === 1 && radioEnabled) adapter.startDiscovery()
+    if (sessionOwners.length === 1 && adapterEnabled) adapter.startDiscovery()
     return true
   }
 
@@ -94,8 +95,8 @@ Item {
   function pendingAction(address) { return adapter.pendingAction(address) }
   function deviceLabel(device) { return adapter.deviceLabel(device) }
 
-  onRadioEnabledChanged: {
-    if (!radioEnabled) adapter.stopDiscovery()
+  onAdapterEnabledChanged: {
+    if (!adapterEnabled) adapter.stopDiscovery()
   }
 
   Component.onDestruction: adapter.stopDiscovery()
@@ -135,7 +136,7 @@ Item {
     repeat: true
     triggeredOnStart: true
     running: root.sessionCount > 0 && root.adapterAvailable
-      && root.radioEnabled && !root.discovering
+      && root.adapterEnabled && !root.discovering
     onTriggered: adapter.startDiscovery()
   }
 }

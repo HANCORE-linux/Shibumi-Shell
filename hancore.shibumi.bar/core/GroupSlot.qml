@@ -108,6 +108,8 @@ Item {
   // that same selection and can oscillate for width-reactive providers.
   readonly property bool hasLoadedWidgets: contentItem
     ? contentItem.hasLoadedWidgets === true : false
+  readonly property real spacingRecovery: contentItem && "spacingRecovery" in contentItem
+    ? contentItem.spacingRecovery : 0
   readonly property bool hasContent: implicitWidth > 0.5 && implicitHeight > 0.5
   readonly property real minimumResponsiveWidth: contentItem
     && "minimumResponsiveWidth" in contentItem
@@ -226,6 +228,16 @@ Item {
       readonly property bool hasLoadedWidgets: root
         ? root.anyLoadedWidget(moduleRepeater) : false
 
+      readonly property real spacingRecovery: {
+        void(moduleRow.implicitWidth)
+        let total = 0
+        for (let i = 0; i < moduleRepeater.count; i++) {
+          const slot = moduleRepeater.itemAt(i)
+          const item = slot && slot.activeItemVisible ? slot.activeItem : null
+          if (item && "spacingSavings" in item) total += item.spacingSavings
+        }
+        return total
+      }
       readonly property real minimumResponsiveWidth: {
         void(moduleRow.implicitWidth)
         var total = 0

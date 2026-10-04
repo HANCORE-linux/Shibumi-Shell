@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.1-beta.16.1] - 2026-10-04
+
+### Fixed
+
+- Turn Bluetooth on after an rfkill soft block, and off again, through
+  Omarchy's power helper (#68). Ignore repeat clicks while a power request
+  is pending instead of dispatching a reverse action.
+- Raise the smaller date beside the clock again, as before Beta.16.
+- Show the update count beside the update icon instead of in a badge, and remove
+  the tray count badge. Both counts remain in the tooltips; vertical bars show
+  the update count only there.
+- Restore application icons for pinned tray apps, with a fallback when no icon is available.
+- Restore the selected launcher logo, including Omarchy, Shibumi, and Dragon, without symbol remapping.
+- Render the OpenCode usage mark crisply at the size of the other provider icons, so its usage fill reads clearly.
+
+### Changed
+
+- Admit the exact Beta.16 tag and merge checkouts as update predecessors,
+  retaining strict payload and lifecycle checks.
+
 ## [0.1.1-beta.16] - 2026-10-02
 
 ### Added
