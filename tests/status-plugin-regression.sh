@@ -137,6 +137,8 @@ fi
 rg -q 'notificationPanelSource: Qt\.resolvedUrl\("NotificationPanel\.qml"\)' \
   "$status_widget" || fail "status view does not own the V1 notification panel"
 tray_view="$repo_root/hancore.shibumi.status/TrayStatusView.qml"
+rg -Fq 'source: String(trayDelegate.modelData.icon || "")' "$tray_view" \
+  || fail "pinned tray items must render their application icon"
 tray_panel="$repo_root/hancore.shibumi.status/TrayDrawerPanel.qml"
 tray_menu="$repo_root/hancore.shibumi.status/TrayAppMenuPanel.qml"
 rg -q 'pinnedCount \* Commons\.Style\.space\(18\)' "$tray_view" \

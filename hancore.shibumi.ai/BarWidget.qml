@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -56,9 +57,9 @@ Ui.Panel {
   readonly property int providerIconSlotWidth: 20
   readonly property int providerIconSlotHeight: 16
   readonly property int claudeGlyphPixelSize: 15
-  readonly property int providerGlyphWidth: providerId === "opencode" ? 20
+  readonly property int providerGlyphWidth: providerId === "opencode" ? 15
     : providerId === "codex" ? 14 : 15
-  readonly property int providerGlyphHeight: providerId === "opencode" ? 12
+  readonly property int providerGlyphHeight: providerId === "opencode" ? 10
     : providerId === "codex" ? 14 : 15
   readonly property int providerGlyphHorizontalOffset: 0
   readonly property int providerContentHorizontalOffset:
@@ -209,10 +210,20 @@ Ui.Panel {
             }
           }
 
+          OpenCodeUsageIcon {
+            anchors.fill: parent
+            visible: root.providerId === "opencode"
+            baseColor: root.baseIconColor
+            fillColor: root.usageIconColor
+            baseOpacity: root.baseIconOpacity
+            usageFraction: root.steppedPercent > 0
+              ? Math.min(1, Math.max(root.steppedPercent / 100, 0.22)) : 0
+          }
+
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId === "codex" || root.providerId === "opencode"
+            visible: root.providerId === "codex"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0
@@ -270,6 +281,60 @@ Ui.Panel {
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
         renderType: Text.NativeRendering
+      }
+    }
+  }
+
+  // The original pixel mark, rasterized at its native grid before nearest sampling.
+  component OpenCodeUsageIcon: Item {
+    id: iconRoot
+    required property color baseColor
+    required property color fillColor
+    required property real baseOpacity
+    required property real usageFraction
+
+    Presentation.BarInk { id: placement; target: iconRoot }
+    Item {
+      id: paint
+      width: Math.round(iconRoot.width * placement.dpr) / placement.dpr
+      height: Math.round(width * placement.dpr * 14 / 22) / placement.dpr
+      x: placement.snapX((iconRoot.width - width) / 2)
+      y: placement.rectangleY(height)
+
+      Image {
+        id: mark
+        anchors.fill: parent
+        visible: false
+        source: Qt.resolvedUrl("assets/opencode-mark.svg")
+        // Qt scales SVG requests by DPR before rasterizing them.
+        sourceSize: Qt.size(Math.max(1, Math.round(22 / placement.dpr)),
+          Math.max(1, Math.round(14 / placement.dpr)))
+        fillMode: Image.Stretch
+        smooth: false
+        mipmap: false
+      }
+      MultiEffect {
+        anchors.fill: parent
+        source: mark
+        colorization: 1
+        colorizationColor: Qt.rgba(iconRoot.baseColor.r, iconRoot.baseColor.g, iconRoot.baseColor.b, 1)
+        opacity: iconRoot.baseColor.a * iconRoot.baseOpacity
+      }
+      Item {
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: Math.round(parent.height * iconRoot.usageFraction * placement.dpr) / placement.dpr
+        clip: true
+        Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+        MultiEffect {
+          anchors.bottom: parent.bottom
+          width: paint.width
+          height: paint.height
+          source: mark
+          colorization: 1
+          colorizationColor: Qt.rgba(iconRoot.fillColor.r, iconRoot.fillColor.g, iconRoot.fillColor.b, 1)
+          opacity: iconRoot.fillColor.a
+        }
       }
     }
   }

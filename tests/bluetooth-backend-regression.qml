@@ -42,6 +42,8 @@ ShellRoot {
     property string adapterId: "hci-test"
     property string dbusPath: "/org/bluez/hci_test"
     property bool enabled: true
+    property bool softBlocked: false
+    onEnabledChanged: if (enabled && softBlocked) enabled = false
     property bool discovering: false
   }
 
@@ -217,6 +219,17 @@ ShellRoot {
       if (root.phase === 0) {
         if (root.ticks < 3) return
 
+        nativeAdapter.enabled = false
+        nativeAdapter.softBlocked = true
+        audioBackend.toggleBluetooth()
+        audioBackend.toggleBluetooth()
+        if (commandRunner.count !== 1
+            || JSON.stringify(commandRunner.lastCommand) !== '["omarchy-bluetooth-power","on"]'
+            || nativeAdapter.enabled)
+          return root.fail("rfkill power-on dispatch and pending coalescing")
+        nativeAdapter.softBlocked = false
+        nativeAdapter.enabled = true
+        commandRunner.count = 0
         discoveryFixture.rejectedDiscoveryStarts = 1
         discoveryService.beginSession(root)
 

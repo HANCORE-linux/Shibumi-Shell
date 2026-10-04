@@ -15,6 +15,7 @@ Item {
     ? bar.background : Commons.Color.background
   property real slotWidth: Commons.Style.space(26)
   readonly property real iconHorizontalOffset: Commons.Style.space(1)
+  readonly property rect iconInk: bellIcon.mapToItem(root, bellIcon.symbolInk)
   property var notificationService: null
   readonly property int pendingCount: notificationService
     && notificationService.liveAvailable === true && notificationService.pendingModel

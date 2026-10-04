@@ -267,6 +267,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
             "public-beta.15.2",
             "public-beta.15.3",
             "public-beta.15.4",
+            "public-beta.16",
         ):
             identity = next(
                 item for item in self.identities if item["id"] == identity_id
@@ -321,6 +322,11 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 "67d87c5d7f61fca4b05e79a089238805e0e0737f",
                 "81f6bcd28cf0e0b5c435761150b2b73083f1e4fa",
                 "package:0.1.1-beta.15.4",
+            ),
+            "public-beta.16": (
+                "4840482ec0e06a2ebd478120833d4fae1f30889e",
+                "05548c8d9ffdf0d37962d6e423e2a0dc21b8cd91",
+                "package:0.1.1-beta.16",
             ),
         }
         for identity_id, revisions in published.items():

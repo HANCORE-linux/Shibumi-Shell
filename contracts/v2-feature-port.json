@@ -40,7 +40,7 @@
     {"id":"tray.drawer","decision":"port","owner":"hancore.shibumi.status","strategy":"official-tray-owner-presentation","phase":4},
     {"id":"tray.item-menu","decision":"port","owner":"hancore.shibumi.status","strategy":"official-tray-owner-presentation","phase":4},
     {"id":"launcher.logo-variants","decision":"port","owner":"hancore.shibumi.control-center","strategy":"presentation","phase":5},
-    {"id":"updates.badge-controls","decision":"port","owner":"hancore.shibumi.update-center","strategy":"official-update-actions","phase":4},
+    {"id":"updates.badge-controls","decision":"port","owner":"hancore.shibumi.update-center","strategy":"bar-count-controls","phase":4},
     {"id":"updates.shell-lifecycle","decision":"port","owner":"shibumi-suite","strategy":"transactional-source-update","phase":4},
     {"id":"control-center.v2-capabilities","decision":"port","owner":"hancore.shibumi.control-center","strategy":"user-directed-redesign","phase":5},
     {"id":"output.lifecycle-recovery","decision":"port","owner":"hancore.shibumi.bar","strategy":"native-quattro-lifecycle","phase":6},

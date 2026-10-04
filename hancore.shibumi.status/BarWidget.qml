@@ -89,6 +89,46 @@ Item {
     || iconMode && notificationPresented
     || textMode && notificationService !== null
   readonly property real childGap: Commons.Style.space(4)
+  Presentation.BarInk { id: statusPlacement; target: root }
+  // Quick Access: 22px slots + 4px spacing - 12px glyphs = 14px ink gap.
+  // Return the interior savings to the owner rather than to its outer gaps.
+  readonly property real iconGapPixels: Math.round(Commons.Style.space(14) * statusPlacement.dpr)
+  readonly property rect updateInk: updateWidget && updateWidget.iconInk !== undefined
+    ? updateWidget.mapToItem(updateSlot, updateWidget.iconInk) : Qt.rect(0, 0, 0, 0)
+  function inkEdge(slot, ink, end) {
+    const edge = (statusPlacement.origin.x + horizontalInset + slot.x
+      + ink.x + (end ? ink.width : 0)) * statusPlacement.dpr
+    return end ? Math.ceil(edge - 1e-7) : Math.floor(edge + 1e-7)
+  }
+  readonly property real directContraction: fullMode && updatePresented
+    && notificationPresented && !trayPresented && updateInk.width > 0
+    ? Math.max(0, inkEdge(notificationView, notificationView.iconInk, false)
+      - inkEdge(updateSlot, updateInk, true) - iconGapPixels) : 0
+  readonly property real updateShift: !fullMode || !updatePresented || updateInk.width <= 0 ? 0
+    : (trayPresented ? trayView.pinnedCount > 0
+      ? Math.round(Commons.Style.space(3) * statusPlacement.dpr)
+      : Math.min(Math.floor(childGap * statusPlacement.dpr),
+        Math.max(0, inkEdge(trayView, trayView.drawerInk, false)
+          - inkEdge(updateSlot, updateInk, true) - iconGapPixels))
+      : Math.ceil(directContraction / 2)) / statusPlacement.dpr
+  readonly property real bellShift: !fullMode || !notificationPresented ? 0
+    : -(trayPresented ? trayView.drawerCount > 0
+      ? Math.min(Math.floor(childGap * statusPlacement.dpr),
+        Math.max(0, inkEdge(notificationView, notificationView.iconInk, false)
+          - inkEdge(trayView, trayView.drawerInk, true) - iconGapPixels))
+      : Math.round(Commons.Style.space(3) * statusPlacement.dpr)
+      : Math.floor(directContraction / 2)) / statusPlacement.dpr
+  property real spacingSavings: 0
+  property bool spacingActive: false
+  // Settle after layout: binding width directly to snapped ink feeds the
+  // parent's new position back into its own reservation.
+  function syncSpacingSavings() {
+    if (!root || !spacingActive) return
+    const saved = Math.max(0, updateShift - bellShift)
+    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
+  }
+  onUpdateShiftChanged: Qt.callLater(syncSpacingSavings)
+  onBellShiftChanged: Qt.callLater(syncSpacingSavings)
   readonly property int presentedCount: fullMode
     ? (updatePresented ? 1 : 0) + (trayPresented ? 1 : 0)
       + (notificationPresented ? 1 : 0)
@@ -96,7 +136,7 @@ Item {
   readonly property real contentWidth:
     fullMode
       ? updateSlotWidth + traySlotWidth + notificationSlotWidth
-        + Math.max(0, presentedCount - 1) * childGap
+        + Math.max(0, presentedCount - 1) * childGap - spacingSavings
       : textMode ? textStatus.implicitWidth : notificationView.implicitWidth
   readonly property real updateSlotWidth: updatePresented
     ? updateSlot.implicitWidth : 0
@@ -107,9 +147,6 @@ Item {
   readonly property real trayPinnedIconOffset:
     trayView.pinnedIconHorizontalOffset
   readonly property color trayDrawerIconColor: trayView.drawerIconColor
-  readonly property color trayDrawerBadgeColor: trayView.drawerBadgeColor
-  readonly property color trayDrawerBadgeTextColor:
-    trayView.drawerBadgeTextColor
   readonly property color notificationBadgeColor:
     notificationView.badgeFillColor
   readonly property color notificationBadgeTextColor:
@@ -119,9 +156,6 @@ Item {
   readonly property real updateSlotLayer: updateSlot.z
   readonly property real traySlotLayer: trayView.z
   readonly property real notificationSlotLayer: notificationView.z
-  readonly property real updateBadgeLayer: updateWidget
-    && "badgeLayer" in updateWidget ? Number(updateWidget.badgeLayer) : 0
-  readonly property real trayBadgeLayer: trayView.badgeLayer
   readonly property real notificationBadgeLayer: notificationView.badgeLayer
 
   visible: ready && hasVisibleChild
@@ -190,20 +224,12 @@ Item {
     if ("settings" in item)
       item.settings = childSettings("hancore.shibumi.update-center")
     if ("contentColor" in item) item.contentColor = root.widgetInk
-    if ("customToneActive" in item)
-      item.customToneActive = root.v1CustomToneActive
-    if ("badgeContrastColor" in item)
-      item.badgeContrastColor = root.badgeContrastColor
   }
 
   function syncUpdateInk() {
     if (!updateWidget) return
     if ("contentColor" in updateWidget)
       updateWidget.contentColor = root.widgetInk
-    if ("customToneActive" in updateWidget)
-      updateWidget.customToneActive = root.v1CustomToneActive
-    if ("badgeContrastColor" in updateWidget)
-      updateWidget.badgeContrastColor = root.badgeContrastColor
   }
 
   function injectChildren() {
@@ -470,10 +496,13 @@ Item {
   onBadgeContrastColorChanged: syncUpdateInk()
 
   Component.onCompleted: {
+    spacingActive = true
+    Qt.callLater(syncSpacingSavings)
     lifecycleBar = bar
     scheduleChildSync()
   }
   Component.onDestruction: {
+    spacingActive = false
     close()
     const dyingBar = bar || lifecycleBar
     if (dyingBar && "tearingDown" in dyingBar
@@ -583,15 +612,20 @@ Item {
 
   Row {
     id: statusRow
-    anchors.centerIn: parent
+    anchors.verticalCenter: parent.verticalCenter
+    x: root.horizontalInset
+    transform: Translate { x: -root.updateShift }
     spacing: root.childGap
     z: 2
 
     Item {
       id: updateSlot
+      transform: Translate { x: root.updateShift }
       anchors.verticalCenter: parent.verticalCenter
       visible: root.fullMode && updateLoader.item !== null
-      implicitWidth: visible ? root.statusActionSlot : 0
+      implicitWidth: visible ? root.statusActionSlot
+        + (root.updateWidget && "leadingWidth" in root.updateWidget
+          ? Number(root.updateWidget.leadingWidth) : 0) : 0
       implicitHeight: updateLoader.implicitHeight
       width: implicitWidth
       height: implicitHeight
@@ -609,16 +643,15 @@ Item {
       visible: root.fullMode && presented
       bar: root.bar
       trayBackend: root.trayWidget
-      customToneActive: root.v1CustomToneActive
       contentColor: root.v1CustomToneActive
         ? root.widgetInk : root.bar ? root.bar.foreground : root.widgetInk
-      badgeContrastColor: root.badgeContrastColor
       z: 2
       onDrawerRequested: root.toggleTrayDrawer()
     }
 
     NotificationStatusView {
       id: notificationView
+      transform: Translate { x: root.bellShift }
       visible: (root.fullMode || root.iconMode) && presented
       bar: root.bar
       contentColor: root.widgetInk

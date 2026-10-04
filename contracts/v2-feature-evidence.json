@@ -34,7 +34,7 @@
     {"id":"tray.drawer","implementation":["hancore.shibumi.status/TrayDrawerPanel.qml"],"tests":["tests/status-plugin-smoke.qml","tests/status-plugin-regression.sh"]},
     {"id":"tray.item-menu","implementation":["hancore.shibumi.status/TrayAppMenuPanel.qml"],"tests":["tests/tray-app-menu-smoke.qml","tests/status-plugin-regression.sh"]},
     {"id":"launcher.logo-variants","implementation":["hancore.shibumi.state/ShibumiConfig.js","hancore.shibumi.control-center/BarWidget.qml"],"tests":["tests/shibumi-config-regression.qml","tests/control-center-smoke.qml"]},
-    {"id":"updates.badge-controls","implementation":["hancore.shibumi.update-center/UpdateCenterPanel.qml"],"tests":["tests/update-center-ui-smoke.qml","tests/update-center-regression.sh"]},
+    {"id":"updates.badge-controls","implementation":["hancore.shibumi.update-center/UpdateCenterPanel.qml","hancore.shibumi.update-center/BarWidget.qml"],"tests":["tests/update-center-ui-smoke.qml","tests/update-center-regression.sh"]},
     {"id":"updates.shell-lifecycle","implementation":["scripts/shibumi_suite/runtime.py"],"tests":["tests/shibumi-suite-quattro-runtime.sh","tests/test_shibumi_suite.py"]},
     {"id":"control-center.v2-capabilities","implementation":["hancore.shibumi.control-center/ControlSettings.qml","hancore.shibumi.control-center/BarFunctionsPage.qml"],"tests":["tests/control-center-smoke.qml","tests/control-center-regression.sh"]},
     {"id":"output.lifecycle-recovery","implementation":["hancore.shibumi.bar/core/WindowRecovery.qml","hancore.shibumi.bar/core/BarPanel.qml"],"tests":["tests/bar-host-registry-smoke.qml","tests/contract-regression.sh"]},
