@@ -14,6 +14,10 @@ Ui.Panel {
   manageIpc: false
   Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
+  // Preserve the eager renderer's initial logical width while WidgetSlot
+  // injects its host. Paint creation must not choose another width history.
+  property string initialRenderStyle: renderStyle
+  property bool paintReady: false
   property url panelSource: Qt.resolvedUrl("WorkspacePanel.qml")
   property var workspaceService: suiteShell.serviceFor("hancore.shibumi.workspaces")
   readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
@@ -258,7 +262,11 @@ Ui.Panel {
   onOpenedChanged: syncPanelLoader()
   onFocusedWorkspaceIdChanged: observePacmanFocus()
   onRenderStyleChanged: resetPacmanTravel()
-  Component.onCompleted: pacmanLastFocusedWorkspaceId = focusedWorkspaceId
+  Component.onCompleted: {
+    initialRenderStyle = renderStyle
+    pacmanLastFocusedWorkspaceId = focusedWorkspaceId
+    Qt.callLater(function() { root.paintReady = true })
+  }
 
   Item {
     id: workspaceSurface
@@ -294,8 +302,10 @@ Ui.Panel {
       id: frameMotion
       z: 0
       visible: root.renderStyle === "rings" && root.frameTarget !== null
+      // Use resident animated cell geometry and the logical frame size.
       x: workspaceRow.x + (root.frameTarget ? root.frameTarget.x : 0)
-        + (root.frameTarget ? (root.frameTarget.width - width) / 2 : 0)
+        + (root.frameTarget ? (root.frameTarget.implicitWidth
+          - Commons.Style.space(18)) / 2 : 0)
       anchors.verticalCenter: parent.verticalCenter
       width: Commons.Style.space(18)
       height: width
@@ -304,7 +314,10 @@ Ui.Panel {
         NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
       }
 
-      Shape {
+      Loader {
+        anchors.fill: parent
+        active: root.renderStyle === "rings"
+        sourceComponent: Component { Shape {
         id: frameShape
         anchors.fill: parent
         antialiasing: true
@@ -357,6 +370,8 @@ Ui.Panel {
             controlY: 0.5
           }
         }
+        }
+      }
       }
     }
 
@@ -380,14 +395,45 @@ Ui.Panel {
           readonly property bool empty: !focused && !occupied
           readonly property int numberWidth: Commons.Style.space(20)
 
-          implicitWidth: root.renderStyle === "numbers" ? Commons.Style.space(22)
-            : root.renderStyle === "kanji" ? Commons.Style.space(22)
-            : root.renderStyle === "magic"
+          // Paint is disposable; focus/hover animation history belongs to the cell.
+          property real defaultHaloWidth: Commons.Style.space(focused ? 34 : 16)
+          property real defaultMarkerWidth: Commons.Style.space(focused ? 26 : 8)
+          property alias magicColor: colorState.magicColor
+          property alias kanjiColor: colorState.kanjiColor
+          property real ringOpacity: cellPointer.containsMouse ? 1
+            : focused ? 1 : occupied ? 0.64 : 0.24
+          property real auroraWidth: Commons.Style.space(focused ? 32 : 10)
+          property real auroraMarkerWidth: Commons.Style.space(focused ? 28 : occupied ? 6 : 4)
+          property real auroraMarkerHeight: Commons.Style.space(focused ? 3 : occupied ? 6 : 4)
+          property real auroraOpacity: cellPointer.containsMouse ? 1
+            : focused ? 0.92 : occupied ? 0.62 : 0.18
+          Behavior on defaultHaloWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+          Behavior on defaultMarkerWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+          Item {
+            id: colorState
+            property color magicColor: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            property color kanjiColor: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            Behavior on magicColor { ColorAnimation { duration: 200 } }
+            Behavior on kanjiColor { ColorAnimation { duration: 200 } }
+          }
+          Behavior on ringOpacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+          Behavior on auroraWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+          Behavior on auroraMarkerWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+          Behavior on auroraMarkerHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+          Behavior on auroraOpacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
+          readonly property string geometryStyle: root.paintReady
+            ? root.renderStyle : root.initialRenderStyle
+          implicitWidth: geometryStyle === "numbers" ? Commons.Style.space(22)
+            : geometryStyle === "kanji" ? Commons.Style.space(22)
+            : geometryStyle === "magic"
               ? Commons.Style.space(focused ? 20 : 18)
-            : root.renderStyle === "rings" ? Commons.Style.space(20)
-            : root.renderStyle === "aurora"
+            : geometryStyle === "rings" ? Commons.Style.space(20)
+            : geometryStyle === "aurora"
               ? Commons.Style.space(focused ? 34 : 12)
-            : root.renderStyle === "pacman"
+            : geometryStyle === "pacman"
               ? Commons.Style.space(22)
             : Commons.Style.space(focused ? 32 : 16)
           implicitHeight: workspaceSurface.height
@@ -397,6 +443,12 @@ Ui.Panel {
           }
           Behavior on scale { NumberAnimation { duration: 120 } }
 
+          // Keep the cell and pointer resident; load only the selected paint.
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "default"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Rectangle {
             id: defaultHalo
             Presentation.BarInk { id: haloInk; target: defaultHalo }
@@ -406,13 +458,12 @@ Ui.Panel {
             }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
-            width: Commons.Style.space(cell.focused ? 34 : 16)
+            width: cell.defaultHaloWidth
             height: Commons.Style.space(16)
             radius: height / 2
             color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
               root.widgetInk.b,
               cell.focused ? 0.20 : cell.occupied ? 0.18 : 0.06)
-            Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
           }
 
           Rectangle {
@@ -424,21 +475,32 @@ Ui.Panel {
             }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
-            width: Commons.Style.space(cell.focused ? 26 : 8)
+            width: cell.defaultMarkerWidth
             height: Commons.Style.space(8)
             radius: height / 2
             color: cell.focused || cell.occupied
               ? root.widgetInk : Qt.rgba(root.widgetInk.r,
                 root.widgetInk.g, root.widgetInk.b, 0.25)
-            Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "numbers"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Rectangle {
             id: numberMarker
             Presentation.BarInk { id: numberInk; target: numberMarker }
-            readonly property real inkOffsetX: numberInk.enabled ? numberInk.snapX(0) : 0
+            property alias inkOffsetX: numberTranslation.x
             readonly property real inkOffsetY: numberInk.enabled ? numberInk.rectangleY(height) : 0
-            transform: Translate { x: numberMarker.inkOffsetX; y: numberMarker.inkOffsetY }
+            transform: Translate {
+              id: numberTranslation
+              x: numberInk.enabled ? numberInk.snapX(0) : 0
+              y: numberMarker.inkOffsetY
+            }
             visible: root.renderStyle === "numbers"
             anchors.centerIn: parent
             width: cell.numberWidth
@@ -464,6 +526,14 @@ Ui.Panel {
             }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "magic"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Presentation.IconText {
             barText: true
             wholeInk: true
@@ -471,15 +541,20 @@ Ui.Panel {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: cell.focused ? 0 : 1
             text: cell.focused ? "✦" : cell.occupied ? "✧" : "·"
-            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            color: cell.magicColor
             font.family: "Adwaita Mono"
             font.pixelSize: Commons.Style.space(cell.focused ? 22 : 18)
             renderType: Text.NativeRendering
-
-            Behavior on color { ColorAnimation { duration: 200 } }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "kanji"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Presentation.IconText {
             barText: true
             wholeInk: true
@@ -490,44 +565,48 @@ Ui.Panel {
               ? ["一", "二", "三", "四", "五",
                  "六", "七", "八", "九", "十"][cell.modelData - 1]
               : String(cell.modelData)
-            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-              root.widgetInk.b, cell.focused ? 1 : cell.occupied ? 0.7 : 0.3)
+            color: cell.kanjiColor
             font.family: "Noto Sans CJK JP"
             font.pixelSize: Commons.Style.space(cell.focused ? 15 : 13)
             font.weight: Font.Normal
             renderType: Text.NativeRendering
-
-            Behavior on color { ColorAnimation { duration: 200 } }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "rings"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Presentation.IconText {
             barText: true
             visible: root.renderStyle === "rings"
             anchors.centerIn: parent
             text: cell.modelData
             color: root.widgetInk
-            opacity: cellPointer.containsMouse ? 1
-              : cell.focused ? 1 : cell.occupied ? 0.64 : 0.24
+            opacity: cell.ringOpacity
             font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.space(12)
             font.weight: Font.Normal
             font.hintingPreference: Font.PreferNoHinting
             renderType: Text.QtRendering
-
-            Behavior on opacity {
-              NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-            }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "aurora"
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Item {
             visible: root.renderStyle === "aurora"
             anchors.centerIn: parent
-            width: Commons.Style.space(cell.focused ? 32 : 10)
+            width: cell.auroraWidth
             height: Commons.Style.space(16)
-
-            Behavior on width {
-              NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-            }
 
             Rectangle {
               id: auroraMarker
@@ -537,28 +616,23 @@ Ui.Panel {
                 y: auroraInk.enabled ? auroraInk.rectangleY(auroraMarker.height) : 0
               }
               anchors.centerIn: parent
-              width: Commons.Style.space(
-                cell.focused ? 28 : cell.occupied ? 6 : 4)
-              height: Commons.Style.space(
-                cell.focused ? 3 : cell.occupied ? 6 : 4)
+              width: cell.auroraMarkerWidth
+              height: cell.auroraMarkerHeight
               radius: height / 2
               color: root.widgetInk
-              opacity: cellPointer.containsMouse ? 1
-                : cell.focused ? 0.92 : cell.occupied ? 0.62 : 0.18
+              opacity: cell.auroraOpacity
               antialiasing: true
-
-              Behavior on width {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-              }
-              Behavior on height {
-                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-              }
-              Behavior on opacity {
-                NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
-              }
             }
           }
 
+            } }
+          }
+
+          Loader {
+            anchors.fill: parent
+            active: root.renderStyle === "pacman" && root.paintReady
+            sourceComponent: Component { Item {
+              anchors.fill: parent
           Presentation.PacmanWorkspaceMarker {
             visible: root.renderStyle === "pacman"
             anchors.centerIn: parent
@@ -574,6 +648,9 @@ Ui.Panel {
             occupiedColor: root.pacmanOccupiedColor
             emptyColor: root.pacmanEmptyColor
             hoverColor: root.pacmanHoverColor
+          }
+
+            } }
           }
 
           MouseArea {
@@ -612,7 +689,10 @@ Ui.Panel {
       width: Commons.Style.space(22)
       height: Commons.Style.space(18)
 
-      Item {
+      Loader {
+        anchors.fill: parent
+        active: root.renderStyle === "pacman"
+        sourceComponent: Component { Item {
         id: pacmanRunnerVisual
         anchors.fill: parent
         transform: Scale {
@@ -661,6 +741,8 @@ Ui.Panel {
             context.fill()
           }
         }
+        }
+      }
       }
     }
   }

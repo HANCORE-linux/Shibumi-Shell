@@ -6,6 +6,14 @@ import "status" as Status
 ShellRoot {
   id: root
 
+  property bool finished: false
+  function finish(code) {
+    if (finished) return
+    finished = true
+    poller.stop()
+    Qt.exit(code)
+  }
+
   property int ticks: 0
   readonly property int expectedHistoryCount: Number(
     Quickshell.env("SHIBUMI_EXPECTED_HISTORY_COUNT") || 0)
@@ -21,8 +29,9 @@ ShellRoot {
 
   function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
+    if (finished) return
     console.error("notification-adapter-smoke:", message)
-    Qt.exit(1)
+    finish(1)
   }
 
   ListModel {
@@ -124,10 +133,12 @@ ShellRoot {
   }
 
   Timer {
+    id: poller
     interval: 20
     repeat: true
     running: true
     onTriggered: {
+      if (root.finished) return
       root.ticks++
       if (root.proxyCase) {
         if (root.ticks > 100) return root.fail("proxy badge/focus deadline")
@@ -155,7 +166,7 @@ ShellRoot {
         proxyReceipt.reload()
         if (!proxyReceipt.text().length) return
         console.log("notification proxy badge/focus passed")
-        Qt.exit(0)
+        root.finish(0)
         return
       }
       if (root.ticks === 2) {
@@ -211,20 +222,20 @@ ShellRoot {
           return root.fail("stale history crossed " + root.historyRace)
         console.log("notification history " + root.historyRace
           + " race passed")
-        Qt.exit(0)
+        root.finish(0)
         return
       }
       if (root.mutationPhase === 1) {
         if (dndOnlyAdapter.pastModel.count !== root.expectedHistoryCount
             || dndOnlyAdapter.pastModel.get(0).summary !== "History 11") return
         console.log("notification history dismiss passed")
-        Qt.exit(0)
+        root.finish(0)
         return
       }
       if (root.mutationPhase === 2) {
         if (dndOnlyAdapter.recentCount !== 0 || dndOnlyAdapter.historyState !== "ready") return
         console.log("notification history clear passed")
-        Qt.exit(0)
+        root.finish(0)
         return
       }
       if (root.mutationPhase === 3) {
@@ -234,7 +245,7 @@ ShellRoot {
             || dndOnlyAdapter.pendingCount !== 1)
           return root.fail("stale mutation callback crossed host replacement")
         console.log("notification history mutation replace race passed")
-        Qt.exit(0)
+        root.finish(0)
         return
       }
       if (dndOnlyAdapter.pastModel.count !== root.expectedHistoryCount
@@ -318,7 +329,7 @@ ShellRoot {
           || adapter.recentCount !== 0)
         return root.fail("host replacement did not clear primitive rows")
       console.log("notification adapter smoke passed")
-      Qt.exit(0)
+      root.finish(0)
     }
   }
 }

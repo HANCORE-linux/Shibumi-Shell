@@ -1,4 +1,4 @@
-# Shibumi 0.1.1-beta.16.1 release readiness
+# Shibumi 0.1.1-beta.16.2 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
@@ -6,49 +6,49 @@
 
 ## Candidate and published predecessor
 
-The Beta.16.1 product, expectation, and payload-pin revision is
-`9f1fc90c4f9414286969cb039445bb91301701b6` (tree
-`0660d7e2cb97c2f8286423d356550c880ef7c6f9`), with 24 plugins and suite payload
-digest `46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974`.
-The complete source contract and isolated Quattro gate below bind exactly that
-revision. This is a pre-checksum readiness snapshot, not final release evidence.
-Subsequent readiness, changelog-date, and AUR checksum commits do not change the
-plugin-only suite payload, but shipped documentation changes the release archive.
-Source review, the complete 14-gate collector, and a byte-identical clean-commit
-rebuild must bind the final combined release revision before publication.
+The Beta.16.2 candidate contains the accepted Core18c delivery, Health cache
+exclusion, AI timeout, and separate minimal palette and bar-marker patches.
+Its 24-plugin suite payload digest is
+`79c61d5e048c669c9eb27ebaad21987327892089daea501d0cf4185150a26f9e`.
+This is the preparation snapshot included in the release-identity commit, not
+final clean-commit evidence. Source review, the complete contract, isolated
+Quattro lifecycle, package rehearsal, full 14-gate collector, and reproducible
+archive verification must record their exact final commit externally; no
+predecessor gate result transfers to this candidate.
 
-Beta.16 was published on 2026-10-02 as a GitHub prerelease from
-`4840482ec0e06a2ebd478120833d4fae1f30889e`. It is the frozen rolling
+Beta.16.1 was published on 2026-10-04 as a GitHub prerelease from
+`3b35049af69aba57784376e916f50146d61eb411`. It is the frozen rolling
 predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
 That exact tag checkout and release merge
-`05548c8d9ffdf0d37962d6e423e2a0dc21b8cd91` are admitted by
+`65c8d8bf72a674a35c5bb8ae85d0fff21b4e5cb6` are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
-with the unchanged Beta.16 payload digest
-`f08b4ec613f248fda62d7dec9865ea46a846fa2e91b2723a186adc0ab0bffc41`.
-Older exact identities remain admitted; a version string alone never authorizes
-recovery or replacement. AUR publication remains deferred.
+with the unchanged Beta.16.1 payload digest
+`46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974`.
+The downloaded published archive matches all 24 pinned plugin digests; merge
+and tag have the same Git tree. Older exact identities remain admitted; a
+version string alone never authorizes recovery or replacement. AUR publication
+remains deferred.
 
 ## Recorded evidence and outstanding gates
 
 | Gate | Evidence and boundary |
 | --- | --- |
-| Complete source contract | Passed on `9f1fc90`, exit 0 in 637.634 seconds, complete marker, no retry or timeout. Fresh exact-HEAD source; private staged validation passed separately. |
-| Isolated Quattro lifecycle | Passed on the same exact HEAD, exit 0, 32/32 generations in 108.747 seconds; no retry or timeout. |
-| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16 → candidate (7). Payload, layout, keep-settings, reinstall, and delayed readbacks passed; owned fixtures were cleaned. |
-| Status spacing | Private same-render V1/V2 fit × DPR 1/1.6 × update 13/0 × drawer absent/present: all 16 outer-gap cases match `69ea4da`; inner gaps and count spacing retain `deeca9b`. Neighbors move by whole physical pixels. Bell glyph and point RGBA are exactly translated in all 42 main and supplementary comparisons, including G3 in the V1 center at DPR 1.6. |
-| Bluetooth and Update input | `deeca9b`'s any-controller power/display/completion fix and whole-widget Update button are byte-identical. Their controlled QML checks are not physical multi-controller, rfkill, or desktop input acceptance. |
-| Diagnostics | Retained fixture diagnostics match the accepted reference, including the known VisualTokens color-assignment warning and six PillSurface teardown TypeErrors; not warning-free. No new diagnostic class or native type/reference/binding error was accepted. |
-| Live installation and hardware | Separate reviewer live status-spacing measurement remains outside these private fixtures. Multi-controller/rfkill, persistence, real focus/menu/input, physical multi-output and 1366px acceptance are not supplied here. |
-| Release/package verification | At this pre-checksum snapshot, dated changelog, two reproducible archive builds, AUR metadata/checksum commit, clean-HEAD source review and rehearsal, final 14-gate collector, matching rebuild, and publication verification remain pending. Final external evidence must identify their exact combined commit. |
+| Complete source contract | Pending exact release-commit evidence at this preparation snapshot. |
+| Isolated Quattro lifecycle | Pending exact release-commit evidence, retaining all 32 generations. |
+| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.1 → candidate (7). No arm may be dropped. |
+| Core18c image acceptance | Completed in relay round 373: 10,308 first-activation points, plus matrix, edge, raster-phase and named N10 programs; 13 individual first-activation exceptions were expressly accepted. Qualified text-raster differences reach 4/255; this is not a global tolerance or blanket pixel equality. |
+| Core18c performance | 440 sessions, 1,200 events, cold/warm N5. All 56 style-switch medians and eight bar-cycle medians improve. Six higher individual bar medians (0.33–7.13 ms, overlapping sample ranges) were accepted. Focus has 11–15 changed buffers over the full event, but 9–13 within 200 ms; the accepted target is the full event. No scanout claim. |
+| Separate compatibility patches | Minimal palette and marker patches passed private smokes with Qt 6.11.2. They were not part of the unchanged Core18c image/performance inputs; no Qt 6.12 runtime acceptance. |
+| Live installation and hardware | Keep-settings installation and reviewer live acceptance must be recorded separately. Fixtures do not establish physical multi-output, hardware, credential or real desktop input acceptance. |
+| Release/package verification | Reproducible archive, checksum agreement, clean-commit gates and rehearsal, independent review, full collector and remote verification remain separate publication requirements. |
 
-The historical package arm is not a Beta.16.1 installed-package upgrade proof.
+The historical package arm is not a Beta.16.2 installed-package upgrade proof.
 Private Wayland/Mesa captures are not live GPU, layer-shell, hotplug, or physical
-multi-output acceptance. The private V2/DPR1 separator reference is 24/19 free
-columns, not the reviewer's 24/20 live reference; equality is claimed only within
-the same controlled render, including the notification point and halo in the
-last painted pixel. V1 island backgrounds change as their outer margins
-are restored: exact bell paint does not mean exact complete slot backgrounds or
-whole-bar RGBA. Earlier release passes do not transfer to this candidate.
+multi-output acceptance. Earlier release passes do not transfer to this candidate.
+The release notes document the accepted Rings early step (raw DPR-1 reload N10:
+full 1/10, standard 5/10 sessions, not natural-frequency estimates) and the
+existing DPR-1.6 Notch/Numbers/Kanji centre oscillation. Both remain on the
+0.2.0 redesign list; the Rings animation-ordering cause is unproved.
 
 ## Pinned host contracts
 
@@ -122,7 +122,7 @@ was performed. Each operation needs its own maintainer Go.
   physical acceptance are not claimed.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
-  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.1.md)
+  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.2.md)
   and [backup guide](install.md#backup-before-downgrade) identify the complete
   settings and recovery evidence to preserve. Restore the settings with a
   matching payload.
@@ -149,4 +149,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta.16.1.
+confers acceptance on Beta.16.2.

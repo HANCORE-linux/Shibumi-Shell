@@ -8,7 +8,7 @@ by this evidence.
 
 ## Current pinned host
 
-Beta.16.1 retains Beta.16's exact official Omarchy 4.0.4 baseline. These pins are not
+Beta.16.2 retains Beta.16's exact official Omarchy 4.0.4 baseline. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 

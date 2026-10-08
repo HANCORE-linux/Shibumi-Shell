@@ -16,9 +16,9 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.1.1-beta.16.1` is published as a GitHub prerelease. AUR publication is
+`0.1.1-beta.16.2` is the target GitHub prerelease. AUR publication is
 deferred; use the source installation below. See the
-[release notes](.github/release-notes/v0.1.1-beta.16.1.md) for changes and the
+[release notes](.github/release-notes/v0.1.1-beta.16.2.md) for changes and the
 downgrade warning.
 The current pinned host contracts use Omarchy and Omarchy Settings `4.0.4-1`
 (source tag `v4.0.4`, revision `c668141e`) with Quickshell `0.3.1-1`; the
@@ -82,18 +82,18 @@ Install from source using the release tag:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.1
+git checkout v0.1.1-beta.16.2
 ./scripts/shibumi-suite install --yes
 ```
 
-Update an admitted Beta.16 source installation to Beta.16.1.
+Update an admitted Beta.16.1 source installation to Beta.16.2.
 Exact predecessor identities, not a version range, govern admission; see the
 [update guide](docs/install.md#update).
 
 ```sh
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.16.1
+git checkout v0.1.1-beta.16.2
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status

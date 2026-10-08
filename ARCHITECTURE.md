@@ -432,7 +432,7 @@ checks pass.
 - The shared runtime owns one process-singleton `omarchy.bar`
   visibility-nudge handler, enabled only for the one fully admitted active
   Shibumi bar. It exposes only `syncHidden`, which asks that owner to re-read
-  Omarchy's host-owned `bar-off` marker after `omarchy-toggle-bar` changes it;
+  Omarchy's host-owned `bar-off` or `bar-hidden` marker after `omarchy-toggle-bar` changes it;
   the directory watcher remains the ordinary update path. Incoming ownership
   arms only after the bounded host-handler handoff window; changing the
   host-injected bar identity revokes outgoing ownership synchronously.

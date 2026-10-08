@@ -15,6 +15,8 @@ Ui.Panel {
   Presentation.HostTokens { id: hostTokens; bar: root.bar }
   property url calendarSource: Qt.resolvedUrl("CalendarPanel.qml")
   property real availableWidth: 0
+  property var responsiveWidthProvider: null
+  property bool layoutBusy: false
   // Start conservatively when the widget is recreated after a provider
   // switch. Starting at the widest stage can make the outer bar hide G9/G10
   // before this widget receives its real center budget, creating a coupled
@@ -157,6 +159,14 @@ Ui.Panel {
   }
 
   function updateStage() {
+    // Defer while reservations or pending savings make layout provisional;
+    // never replace the legacy decision value or its animation history.
+    if ((typeof responsiveWidthProvider === "function"
+        && responsiveWidthProvider() < availableWidth - 0.000001)
+        || layoutBusy) {
+      restageTimer.restart()
+      return
+    }
     stage = CenterLayout.nextStage(stage, availableWidth,
       needNormal, needCompact, centered)
   }
