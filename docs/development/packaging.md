@@ -1,6 +1,6 @@
 # Arch packaging and AUR publication
 
-Status: `0.1.1-beta.16.1` is published as a GitHub prerelease; AUR publication
+Status: `0.1.1-beta.16.2` is the target GitHub prerelease; AUR publication
 is deferred.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
@@ -74,7 +74,7 @@ and lifecycle code before the user-level update runs, so Beta.12's storage guard
 cannot reject that package afterward. There is no reverse migration to legacy
 storage.
 
-The additional [Beta.16.1 downgrade warning and backup requirements](../install.md#backup-before-downgrade)
+The additional [Beta.16.2 downgrade warning and backup requirements](../install.md#backup-before-downgrade)
 apply even to readers using canonical State storage: Beta.15.4 and older
 cannot preserve a V1 layout containing `order.parked`. `--keep-settings` does
 not prevent this. Restore the settings with a matching payload.

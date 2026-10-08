@@ -223,9 +223,19 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.16.1": {
                 "suiteVersion": "0.1.1-beta.16.1",
-                "sourceRevisions": ["package:0.1.1-beta.16.1"],
+                "sourceRevisions": [
+                    "3b35049af69aba57784376e916f50146d61eb411",
+                    "65c8d8bf72a674a35c5bb8ae85d0fff21b4e5cb6",
+                    "package:0.1.1-beta.16.1",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974",
+            },
+            "public-beta.16.2": {
+                "suiteVersion": "0.1.1-beta.16.2",
+                "sourceRevisions": ["package:0.1.1-beta.16.2"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "79c61d5e048c669c9eb27ebaad21987327892089daea501d0cf4185150a26f9e",
             },
         }
         self.assertEqual(set(states), set(expected))

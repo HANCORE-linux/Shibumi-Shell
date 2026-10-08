@@ -16,7 +16,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.status"
-    implementationVersion: "0.1.1-beta.16.1"
+    implementationVersion: "0.1.1-beta.16.2"
     owner: root
     host: root.shell
     manifest: root.manifest

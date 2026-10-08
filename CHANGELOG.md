@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.1-beta.16.2] - 2026-10-08
+
+### Fixed
+
+- Workspaces: the workspace animation stutters since Beta 16 (#73). Paint subtrees are now created only for the active workspace style; the focus animation renders 11–13 real frames per switch again (4–6 in 16.1), style switch cycles are 29–41 % faster and bar switch cycles 11–14 % faster on our fixture. The rest images of all styles stay identical to 16.1 at DPR 1; at DPR 1.6 only glyph rasterisation differs by at most 4/255 on text pixels, and the numbers style now sits at its geometrically correct position (up to 1 physical pixel).
+- Centre group: the responsive stage (clock / clock+weather / clock+date+weather) could be decided with a stale host budget right after a bar reveal or a rebuild, briefly showing the date or hiding the weather. The decision is now deferred while the status group's spacing savings are still pending or the host budget is stale.
+- Status group: the 1–2-frame undershoot of the status icons right after a bar rebuild (spacing savings applied one frame late) no longer triggers a wrong centre stage.
+- Health: `shibumi-health` no longer reports plugins as "modified" because of `__pycache__`/`.pyc` files in the plugin directory (#74). The payload digest now ignores them, like the installer does.
+- AI: the agents usage updater waits up to 300 s instead of 120 s for the Omarchy collectors. Large Codex session histories (tens of GB) made the Codex collector exceed 120 s, so the Codex card vanished from the AI panel after 24 h.
+- Tests: the notification adapter smoke test no longer races its timer (the test that made one release job red in 16.1).
+- Bar: the bar's fallback colours now reference the palette as `Commons.Color`, as Omarchy requires for Qt 6.12, where an unqualified `Color` resolves to the new QtQuick type (basecamp/omarchy #14553).
+- Bar: the hidden-bar probe accepts Omarchy's upcoming `bar-hidden` toggle marker next to the current `bar-off` (basecamp/omarchy #14395).
+
+### Known issues
+
+- Rings style: right after a bar rebuild (reload, V1/V2 switch, workspace count change) the focus ring can be drawn about 6 px off for a single frame (16 ms); on our fixture this happened in up to every second rebuild in the standard layout and in 1 of 10 in the full layout. It is a build-time animation ordering effect and will be fixed with the host layout redesign in 0.2.0.
+- Notch bar at DPR 1.6 with the numbers or kanji style: the centre group can oscillate between two layouts for a while after a layout change. This exists since 16.1 (status spacing feedback) and is also addressed by the 0.2.0 redesign.
+
 ## [0.1.1-beta.16.1] - 2026-10-04
 
 ### Fixed
