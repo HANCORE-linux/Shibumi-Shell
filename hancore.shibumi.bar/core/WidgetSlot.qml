@@ -12,6 +12,7 @@ Item {
   property string region: ""
   property string screenName: ""
   property real availableWidth: 0
+  property bool layoutBusy: false
   // The original V1 composes 28px widget roots inside a 32px slot row.
   // Keep this opt-in so direct/V2/vertical hosts retain provider geometry.
   property real horizontalHostHeight: 0
@@ -223,6 +224,7 @@ Item {
   }
   onSlotCompleteChanged: requestLoaderSourceSync()
   onAvailableWidthChanged: injectProperties()
+  onLayoutBusyChanged: injectLayoutBusy()
   onActiveItemChanged: {
     // A binding notification for the resident item can arrive after onLoaded.
     // Replacement/teardown revokes it, but a successor submission completed by
@@ -613,12 +615,34 @@ Item {
     if (_barConnectionRevoked) return
     _barConnectionRevoked = true
     const target = activeItem
+    if (target && "responsiveWidthProvider" in target) target.responsiveWidthProvider = null
+    if (target && "layoutBusy" in target) target.layoutBusy = false
     if (target && "bar" in target) target.bar = null
   }
 
   function resumeBarConnection() {
     _barConnectionRevoked = false
     injectProperties()
+  }
+
+  function currentResponsiveWidth() {
+    if (_barConnectionRevoked) return availableWidth
+    let siblings = 0
+    for (let owner = parent; owner; owner = owner.parent) {
+      if (typeof owner.siblingWidth === "function" && "index" in root)
+        siblings = owner.siblingWidth(root.index)
+      if (typeof owner.currentAvailableWidthForGroup === "function") {
+        const budget = owner.currentAvailableWidthForGroup(region)
+        return budget > 0 ? Math.max(1, budget - siblings) : 0
+      }
+    }
+    return availableWidth
+  }
+
+  function injectLayoutBusy() {
+    const target = activeItem
+    if (target && !_barConnectionRevoked && "layoutBusy" in target)
+      target.layoutBusy = layoutBusy
   }
 
   function injectProperties() {
@@ -629,6 +653,9 @@ Item {
     if ("hostGroupId" in target) target.hostGroupId = region
     if ("settings" in target) target.settings = moduleSettings
     if ("availableWidth" in target) target.availableWidth = availableWidth
+    if ("responsiveWidthProvider" in target)
+      target.responsiveWidthProvider = currentResponsiveWidth
+    injectLayoutBusy()
   }
 
   TransformWatcher {

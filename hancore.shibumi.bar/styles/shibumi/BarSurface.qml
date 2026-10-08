@@ -127,6 +127,14 @@ Item {
         ResponsiveLayout.centerAvailableWidth(compactShell, width,
           frameInset, shellContentInset, leftRegion.width, rightRegion.width,
           centerGap, measuredCenterSpan, centerExtras.width)
+      // Read by responsive decisions without advancing positioned geometry
+      // or the legacy budget's notification/animation path.
+      readonly property real currentCenterAvailableWidth: compactShell
+        ? centerAvailableWidth : Math.max(0,
+          responsiveCapacity - 2 * shellContentInset
+          - leftGroups.width - leftExtras.width
+          - rightExtras.width - rightGroups.width - 2 * centerGap
+          - centerExtras.width)
       property int narrowStage: 0
       readonly property real sideMargin: shellX + shellContentInset
       readonly property real responsiveSideInset: shellContentInset
@@ -429,6 +437,9 @@ Item {
           visibilityStage: horizontalSurface.narrowStage
           // The widget API uses zero for an unconstrained width.
           availableWidth: Math.max(1, horizontalSurface.centerAvailableWidth)
+          restageAvailableWidth: Math.max(1, horizontalSurface.currentCenterAvailableWidth)
+          layoutBusy: leftGroups.savingsPending || centerGroups.savingsPending
+            || rightGroups.savingsPending
         }
 
         Core.BarSection {

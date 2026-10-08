@@ -119,6 +119,7 @@ Item {
       : Math.round(Commons.Style.space(3) * statusPlacement.dpr)
       : Math.floor(directContraction / 2)) / statusPlacement.dpr
   property real spacingSavings: 0
+  property bool savingsPending: false
   property bool spacingActive: false
   // Settle after layout: binding width directly to snapped ink feeds the
   // parent's new position back into its own reservation.
@@ -126,9 +127,14 @@ Item {
     if (!root || !spacingActive) return
     const saved = Math.max(0, updateShift - bellShift)
     if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
+    savingsPending = false
   }
-  onUpdateShiftChanged: Qt.callLater(syncSpacingSavings)
-  onBellShiftChanged: Qt.callLater(syncSpacingSavings)
+  function scheduleSpacingSavings() {
+    savingsPending = true
+    Qt.callLater(syncSpacingSavings)
+  }
+  onUpdateShiftChanged: scheduleSpacingSavings()
+  onBellShiftChanged: scheduleSpacingSavings()
   readonly property int presentedCount: fullMode
     ? (updatePresented ? 1 : 0) + (trayPresented ? 1 : 0)
       + (notificationPresented ? 1 : 0)
@@ -497,12 +503,13 @@ Item {
 
   Component.onCompleted: {
     spacingActive = true
-    Qt.callLater(syncSpacingSavings)
+    scheduleSpacingSavings()
     lifecycleBar = bar
     scheduleChildSync()
   }
   Component.onDestruction: {
     spacingActive = false
+    savingsPending = false
     close()
     const dyingBar = bar || lifecycleBar
     if (dyingBar && "tearingDown" in dyingBar
