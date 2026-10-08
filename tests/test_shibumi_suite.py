@@ -1144,6 +1144,10 @@ class SuiteLifecycleTests(unittest.TestCase):
         ))["payload_digest"]
         for mode in (0o755, 0o700):
             for plugin_id, spec in published.plugins.items():
+                for relative in ("nested/__pycache__/cache", "loose.pyc", "nested/loose.pyo"):
+                    cache = spec.source / relative
+                    cache.parent.mkdir(parents=True, exist_ok=True)
+                    cache.write_bytes(b"cache")
                 for path in spec.source.rglob("*"):
                     if path.is_file() and path.stat().st_mode & 0o100:
                         path.chmod(mode)
@@ -1163,6 +1167,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(
             preflight_lifecycle_state(self.paths, self.suite), "public-beta.15.2"
         )
+        (spec.source / "manifest.json").write_bytes((spec.source / "manifest.json").read_bytes() + b"\n")
+        self.assertNotEqual(health_digest(spec.source), digests[-1])
 
     def test_exact_beta141_package_identity_is_admitted(self) -> None:
         packaged_suite = self.packaged_suite(

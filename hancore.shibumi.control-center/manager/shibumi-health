@@ -212,7 +212,9 @@ def payload_digest(directory: Path) -> str:
         directory.rglob("*"), key=lambda item: item.relative_to(directory).as_posix()
     ):
         relative = path.relative_to(directory).as_posix()
-        if relative == MANAGED_MARKER:
+        if (relative == MANAGED_MARKER
+                or "__pycache__" in Path(relative).parts
+                or path.suffix in {".pyc", ".pyo"}):
             continue
         metadata = path.lstat()
         if path.is_symlink():
