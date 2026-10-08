@@ -3617,7 +3617,7 @@ Item {
   Process {
     id: barHiddenProbe
     running: root.hostReady
-    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]
+    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]] && echo yes || echo no"]
     stdout: SplitParser {
       onRead: line => {
         root.barToggledOff = String(line).trim() === "yes"

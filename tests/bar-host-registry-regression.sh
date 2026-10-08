@@ -409,9 +409,9 @@ watch = '''  FileView {
     onFileChanged: root.requestBarHiddenProbe()
   }'''
 quiet_watch = "  Item {} // fixture: ordinary bar-off directory watcher disabled"
-command = '    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off ]] && echo yes || echo no"]'
+command = '    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]] && echo yes || echo no"]'
 delayed = ('    command: ["bash", "-lc", "rm -f \\\"$HOME/probe-sampled\\\"; '
-           'if [[ -f $HOME/.local/state/omarchy/toggles/bar-off ]]; then result=yes; '
+           'if [[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]]; then result=yes; '
            'else result=no; fi; : > \\\"$HOME/probe-sampled\\\"; sleep 0.15; echo \\\"$result\\\""]')
 if source.count(watch) != 1 or source.count(command) != 1:
     raise SystemExit("visibility fixture calibration anchor drifted")
@@ -444,7 +444,7 @@ wait_visibility_state() {
 }
 
 wait_visibility_state handoff-gap 'the bounded incoming-handler gap'
-touch "$toggle_dir/bar-off"
+touch "$toggle_dir/bar-hidden"
 handoff_gap_response=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
   /usr/bin/quickshell ipc --pid "$ipc_pid" call \
     omarchy.bar syncHidden 2>/dev/null || true)
@@ -453,7 +453,7 @@ handoff_gap_response=$(env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
 wait_visibility_state idle-hidden \
   'the arm-time resample of a marker changed during handoff'
 
-rm -f "$toggle_dir/bar-off"
+rm -f "$toggle_dir/bar-hidden"
 env XDG_RUNTIME_DIR="$tmpdir/runtime" WAYLAND_DISPLAY= \
   /usr/bin/quickshell ipc --pid "$ipc_pid" call \
     omarchy.bar syncHidden >/dev/null \
