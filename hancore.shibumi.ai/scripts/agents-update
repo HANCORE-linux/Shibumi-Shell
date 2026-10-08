@@ -4,7 +4,7 @@ set -euo pipefail
 
 omarchy_path=${1:-}
 shift || true
-timeout_seconds=${SHIBUMI_AI_UPDATE_TIMEOUT:-120}
+timeout_seconds=${SHIBUMI_AI_UPDATE_TIMEOUT:-300}
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 compat_bin="$script_dir/compat-bin"
 child_pid=""
