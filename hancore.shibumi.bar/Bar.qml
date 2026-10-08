@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import "core" as Core
 import "core/GroupRegistry.js" as GroupRegistry
 import "core/PanelRouting.js" as PanelRouting
@@ -178,10 +179,10 @@ Item {
   }
   readonly property string styleId: styleRegistry.resolvedId
   readonly property var availableStyleIds: styleRegistry.availableIds
-  property color foreground: styleReady ? activeStyle.foreground : Color.bar.text
-  property color barForeground: styleReady ? activeStyle.barForeground : Color.bar.text
-  property color background: styleReady ? activeStyle.background : Color.bar.background
-  property color urgent: styleReady ? activeStyle.urgent : Color.bar.active
+  property color foreground: styleReady ? activeStyle.foreground : Commons.Color.bar.text
+  property color barForeground: styleReady ? activeStyle.barForeground : Commons.Color.bar.text
+  property color background: styleReady ? activeStyle.background : Commons.Color.bar.background
+  property color urgent: styleReady ? activeStyle.urgent : Commons.Color.bar.active
   property string fontFamily: styleReady ? activeStyle.fontFamily : Style.font.family
   readonly property bool injectionComplete: omarchyPath !== ""
     && shell !== null

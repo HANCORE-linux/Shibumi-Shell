@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import qs.Commons
+import qs.Commons as Commons
 import "core" as Core
 import "core/V2LayoutModel.js" as Layout
 import "core/GroupRegistry.js" as GroupRegistry
