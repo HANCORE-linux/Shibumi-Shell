@@ -392,6 +392,9 @@ ShellRoot {
           return root.fail("V1 default presentation geometry: " + widget.implicitWidth)
         }
         stop()
+        const lazy = Qt.createComponent("workspace-lazy-paint.qml").createObject(root, {workspace: widget})
+        if (!lazy || !lazy.check()) return root.fail("lazy paint helper")
+        lazy.destroy()
         console.log("workspaces plugin smoke passed")
         Qt.quit()
       }

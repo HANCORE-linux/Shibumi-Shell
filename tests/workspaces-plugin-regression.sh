@@ -37,6 +37,7 @@ printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/workspaces-plugin-smoke.qml" "$tmpdir/shell.qml"
+install -m 0644 "$repo_root/tests/workspace-lazy-paint.qml" "$tmpdir/"
 install -m 0644 "$repo_root/tests/fixtures/WorkspaceTestPanel.qml" \
   "$tmpdir/WorkspaceTestPanel.qml"
 

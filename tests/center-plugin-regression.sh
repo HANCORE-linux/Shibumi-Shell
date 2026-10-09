@@ -56,6 +56,7 @@ cp -a -- "$repo_root/hancore.shibumi.center" "$tmpdir/center"
 cp -a -- "$omarchy_path/shell/Commons" "$tmpdir/Commons"
 cp -a -- "$omarchy_path/shell/Ui" "$tmpdir/Ui"
 install -m 0644 "$repo_root/tests/center-plugin-smoke.qml" "$tmpdir/shell.qml"
+install -m 0644 "$repo_root/tests/center-reveal-budget.qml" "$tmpdir/"
 install -m 0644 "$repo_root/tests/fixtures/CenterTestCalendar.qml" \
   "$tmpdir/CenterTestCalendar.qml"
 install -m 0644 "$repo_root/tests/fixtures/WeatherPanelTestView.qml" \

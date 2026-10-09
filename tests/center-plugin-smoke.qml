@@ -466,6 +466,14 @@ ShellRoot {
             + " shellPill=" + (surface
               ? surface.shellPillVisible : true))
         stop()
+        const reservation = Qt.createQmlObject('import QtQuick; QtObject { property bool visible: true }', root)
+        center.availableWidth = 80
+        center.responsiveWidthProvider = () => reservation.visible ? 80 : 500
+        center.updateStage()
+        const reveal = Qt.createComponent("center-reveal-budget.qml").createObject(root, {workspace: reservation, center: center})
+        if (!reveal) return root.fail("reveal helper load")
+        reveal.hide(); center.availableWidth = 500
+        if (!reveal.checkReveal()) return root.fail("reveal helper")
         console.log("center plugin smoke passed")
         Qt.quit()
       }
