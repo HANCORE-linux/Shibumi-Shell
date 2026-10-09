@@ -126,8 +126,8 @@ Item {
   function syncSpacingSavings() {
     if (!root || !spacingActive) return
     const saved = Math.max(0, updateShift - bellShift)
-    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
     savingsPending = false
+    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
   }
   function scheduleSpacingSavings() {
     savingsPending = true
