@@ -117,8 +117,12 @@ thumb_for() {
 
 emit_row() {
   local mode=$1 source=$2 label=${3:-} directory=${4:-} thumb ready=0
-  [[ -f $source ]] || return 0
   path_supported "$source" && path_supported "$label" && path_supported "$directory" || return 0
+  if [[ $mode == theme && -d $source ]]; then
+    printf '%s\t\t%s\t%s\t0\n' "$source" "$label" "$directory"
+    return 0
+  fi
+  [[ -f $source ]] || return 0
   thumb=$(thumb_for "$mode" "$source") || return 0
   [[ -s $thumb ]] && ready=1
   printf '%s\t%s\t%s\t%s\t%s\n' "$source" "$thumb" "$label" "$directory" "$ready"
@@ -148,16 +152,13 @@ scan_themes() {
     while IFS= read -r -d '' theme_dir; do
       name=${theme_dir##*/}
       [[ $name =~ ^[A-Za-z0-9._-]+$ && -z ${seen[$name]:-} ]] || continue
-      # A valid Omarchy theme may intentionally ship without a preview or
-      # backgrounds. That theme is not displayable in an image picker, but it
-      # must not abort discovery of every later theme under `set -e`.
+      # Missing artwork uses the existing picker placeholder, not a missing theme.
       preview=$(first_preview "$theme_dir" || true)
       if [[ -z $preview && $root == "$HOME/.config/omarchy/themes" ]]; then
         preview=$(first_preview "$omarchy_path/themes/$name" || true)
       fi
-      [[ -n $preview && -f $preview ]] || continue
       seen["$name"]=1
-      emit_row theme "$preview" "$name" "$theme_dir"
+      emit_row theme "${preview:-$theme_dir}" "$name" "$theme_dir"
     done < <(find -L "$root" -mindepth 1 -maxdepth 1 \
       \( -type d -o -type l \) -print0 2>/dev/null | sort -z)
   done
@@ -231,7 +232,11 @@ scan_mode() {
     wallpaper) scan_wallpapers ;;
     screenshots|videos) scan_media "$mode" ;;
   esac >"$raw"
-  awk -F '\t' '!seen[$1]++' "$raw" >"$tmp"
+  if [[ $mode == theme ]]; then
+    LC_ALL=C sort -f -t $'\t' -k3,3 "$raw" >"$tmp"
+  else
+    awk -F '\t' '!seen[$1]++' "$raw" >"$tmp"
+  fi
   rm -f "$raw"
   save_hashes
   mv -f "$tmp" "$target"
@@ -241,10 +246,16 @@ scan_mode() {
 }
 
 cached_mode() {
-  local mode=$1 source thumb label directory _ready ready
+  local mode=$1 source thumb label directory _ready ready row
   valid_mode "$mode" || die "unsupported mode: $mode"
   [[ -f $(cache_file_for "$mode") ]] || return 0
-  while IFS=$'\t' read -r source thumb label directory _ready; do
+  while IFS= read -r row; do
+    source=${row%%$'\t'*}
+    if [[ $mode == theme && -d $source ]]; then
+      printf '%s\n' "$row"
+      continue
+    fi
+    IFS=$'\t' read -r source thumb label directory _ready <<<"$row"
     [[ -f $source && -n $thumb ]] || continue
     ready=0
     [[ -s $thumb ]] && ready=1

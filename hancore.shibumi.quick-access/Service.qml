@@ -441,7 +441,7 @@ Item {
           : [selectedIndex - distance, selectedIndex + distance]
         for (let j = 0; j < indexes.length; j++) {
           const entry = filteredEntries[indexes[j]]
-          if (!entry || !entry.sourcePath || isThumbnailReady(entry)
+          if (!entry || !entry.sourcePath || !entry.thumbnailPath || isThumbnailReady(entry)
               || seen[entry.sourcePath]) continue
           seen[entry.sourcePath] = true
           result.push(entry.sourcePath)
@@ -451,7 +451,7 @@ Item {
     }
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]
-      if (!entry || !entry.sourcePath || isThumbnailReady(entry)
+      if (!entry || !entry.sourcePath || !entry.thumbnailPath || isThumbnailReady(entry)
           || seen[entry.sourcePath]) continue
       seen[entry.sourcePath] = true
       result.push(entry.sourcePath)
