@@ -25,19 +25,6 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property bool v1CustomToneActive: !!(tokens
-    && tokens.v2Shell !== true
-    && typeof tokens.widgetHasFill === "function"
-    && tokens.widgetHasFill(settings))
-  readonly property color v1Ink: v1CustomToneActive ? widgetInk
-    : tokens && "ink" in tokens ? tokens.ink : widgetInk
-  readonly property color v1Seal: v1CustomToneActive ? widgetInk
-    : tokens && "seal" in tokens ? tokens.seal : widgetInk
-  readonly property color v1Indigo: v1CustomToneActive ? widgetInk
-    : tokens && tokens.stateService
-      && typeof tokens.stateService.paletteColor === "function"
-      ? tokens.stateService.paletteColor("color04")
-      : Qt.rgba(v1Ink.r, v1Ink.g, v1Ink.b, 0.58)
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -397,8 +384,8 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         text: "NET"
         color: root.mode === "none"
-          ? Qt.rgba(root.v1Seal.r, root.v1Seal.g, root.v1Seal.b, 0.7)
-          : Qt.rgba(root.v1Ink.r, root.v1Ink.g, root.v1Ink.b, 0.6)
+          ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.7)
+          : Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.6)
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 0.5
@@ -459,17 +446,16 @@ Ui.Panel {
             maximum = Math.max(maximum, Number(root.uploadHistory[index]) || 0)
           maximum *= 1.15
           paintSeries(context, root.downloadHistory,
-            root.v1Seal, maximum, 0.12, 1.5)
+            root.widgetInk, maximum, 0.12, 1.5)
           paintSeries(context, root.uploadHistory,
-            root.v1Indigo, maximum, 0.10, 1.0)
+            root.widgetInk, maximum, 0.10, 1.0)
         }
 
         Connections {
           target: root
           function onDownloadHistoryChanged() { v1TrafficChart.requestPaint() }
           function onUploadHistoryChanged() { v1TrafficChart.requestPaint() }
-          function onV1SealChanged() { v1TrafficChart.requestPaint() }
-          function onV1IndigoChanged() { v1TrafficChart.requestPaint() }
+          function onWidgetInkChanged() { v1TrafficChart.requestPaint() }
         }
 
         Component.onCompleted: requestPaint()
@@ -484,7 +470,7 @@ Ui.Panel {
           width: 54
           height: 11
           text: "↓" + root.v1Rate(root.downloadRate)
-          color: root.v1Seal
+          color: root.widgetInk
           font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 10
           horizontalAlignment: Text.AlignRight
@@ -496,7 +482,7 @@ Ui.Panel {
           width: 54
           height: 11
           text: "↑" + root.v1Rate(root.uploadRate)
-          color: root.v1Indigo
+          color: root.widgetInk
           font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 10
           horizontalAlignment: Text.AlignRight
@@ -511,7 +497,7 @@ Ui.Panel {
         visible: root.mode === "wifi"
         anchors.verticalCenter: parent.verticalCenter
         text: root.stateGlyph
-        color: root.v1Ink
+        color: root.widgetInk
         font.pixelSize: 14
       }
 
@@ -522,7 +508,7 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         visible: root.mode === "wifi"
         text: root.label
-        color: root.v1Seal
+        color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize
         font.letterSpacing: 1
@@ -695,12 +681,9 @@ Ui.Panel {
       optical: !root.bar || !root.bar.vertical
       nativeText: connectionIcon(root.mode, root.signal)
       text: root.stateGlyph
-      color: root.v2Presentation ? (root.mode === "none"
-          ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
-          : root.widgetInk)
-        : root.mode === "none"
-          ? Qt.rgba(root.v1Seal.r, root.v1Seal.g, root.v1Seal.b, 0.65)
-          : root.v1Seal
+      color: root.mode === "none"
+        ? Qt.rgba(root.widgetInk.r, root.widgetInk.g, root.widgetInk.b, 0.65)
+        : root.widgetInk
       font.pixelSize: root.mode === "none" ? 15 : 14
     }
   }
