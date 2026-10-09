@@ -463,10 +463,43 @@ ShellRoot {
           const statusFeedback = root.visibleText(presentationProbe, "Copied")
           if (!filterFeedback || !statusFeedback
               || String(filterFeedback.color)
-                !== String(quickAccessService.pickerPresentation.urgent)
+                !== String(Commons.Color.menu.text)
               || String(statusFeedback.color)
                 !== String(quickAccessService.pickerPresentation.urgent))
             return root.fail("typed filter or status feedback is not visible")
+          const savedConfig = fakeState.config
+          const savedMode = quickAccessService.mode
+          const savedLoading = quickAccessService.loading
+          quickAccessService.loading = false
+          for (const style of ["tanzaku", "hearthstone", "carousel"]) {
+            fakeState.config = ({ picker: {
+              imageStyle: style === "carousel" ? "tanzaku" : style,
+              mediaStyle: style
+            } })
+            quickAccessService.mode = style === "carousel" ? "screenshots" : "wallpaper"
+            quickAccessService.updateFilter("sam")
+            const feedback = root.visibleText(presentationProbe, "sam")
+            if (!feedback || feedback.font.pixelSize !== Commons.Style.font.body
+                || String(feedback.color) !== String(Commons.Color.menu.text))
+              return root.fail("picker filter typography or color drifted: " + style)
+            const field = feedback.parent
+            const background = Commons.Color.menu.background
+            if (String(field.color) !== String(Qt.rgba(background.r, background.g,
+                  background.b, 1)))
+              return root.fail("picker filter surface drifted: " + style)
+            quickAccessService.updateFilter("zzq")
+            if (quickAccessService.selectedEntry !== null || !feedback.visible
+                || feedback.text !== "zzq"
+                || !root.visibleText(presentationProbe, quickAccessService.emptyText))
+              return root.fail("picker filter disappeared with no matches: " + style)
+            quickAccessService.updateFilter("")
+            if (feedback.visible || field.visible)
+              return root.fail("empty picker filter did not hide: " + style)
+          }
+          fakeState.config = savedConfig
+          quickAccessService.mode = savedMode
+          quickAccessService.loading = savedLoading
+          quickAccessService.updateFilter("sam")
           quickAccessService.screenListOverride = [replacementFirstScreen, secondScreen]
           root.screenLifecycleStep = 1
           root.ticks = 0
