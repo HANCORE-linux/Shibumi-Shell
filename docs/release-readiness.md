@@ -63,7 +63,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Installed package profile | `installed-package-v4.0.4` |
 | Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
+| Forward reference | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility

@@ -51,7 +51,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-ed7bae4a \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-50d687a1 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

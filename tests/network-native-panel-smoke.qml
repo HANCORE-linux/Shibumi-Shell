@@ -229,7 +229,7 @@ ShellRoot {
         const qrCanvas = root.findNamed(panel, "shibumiNetworkQrCanvas")
         if (!qr || !keyCatcher || !qrCanvas)
           return root.fail("secured QR click fixture was not presented")
-        keyCatcher.textKey("q")
+        keyCatcher.textKey("q", Qt.NoModifier)
         panel.showQrForConnected()
         if (service.qrGestureCalls !== 0 || service.qrSecretCalls !== 0
             || qrCanvas.visible)
@@ -270,7 +270,7 @@ ShellRoot {
         if (!qr.activeFocusOnTab || !keyCatcher
             || !panel.focusQrAction(1))
           return root.fail("QR Code action lost keyboard reachability")
-        keyCatcher.textKey("q")
+        keyCatcher.textKey("q", Qt.NoModifier)
         const qrCanvas = root.findNamed(panel, "shibumiNetworkQrCanvas")
         if (!qrCanvas || qrCanvas.visible || service.qrSecretCalls !== 0)
           return root.fail("QR shortcut read a secret without button activation")

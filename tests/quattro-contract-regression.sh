@@ -104,7 +104,7 @@ for needle in \
 done
 
 case $SHIBUMI_OMARCHY_SOURCE_REVISION in
-  0534987009061cbe2dacdde4ad564092ab698d12|c668141e9c42b13c80c9ca4ea108e11708c5e8a5)
+  0534987009061cbe2dacdde4ad564092ab698d12|c668141e9c42b13c80c9ca4ea108e11708c5e8a5|50d687a1f27063513cf42e6f33c3a4fcb17c24ed)
     for needle in \
       'target.shell = shell.pluginShellFor(manifest)' \
       'target.manifest = shell.publicPluginManifest(manifest)' \

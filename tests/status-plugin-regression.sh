@@ -76,7 +76,8 @@ grep -F 'status plugin smoke passed' <<<"$output" >/dev/null \
 unexpected_diagnostics=$(grep -E \
   'WARN|ERROR|CRITICAL|TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error' \
   <<<"$output" | grep -Fv \
-  'Module path contains invalid characters for a module name:  "/hancore.shibumi.bar/services"' \
+  -e 'Module path contains invalid characters for a module name:  "/hancore.shibumi.bar/services"' \
+  -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' \
   || true)
 [[ -z $unexpected_diagnostics ]] \
   || fail "component smoke emitted an unexpected runtime diagnostic"

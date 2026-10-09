@@ -132,7 +132,10 @@ run_smoke() {
   set -e
   RUN_PLAIN_OUTPUT=$(sed $'s/\033\\[[0-9;]*m//g' <<<"$RUN_OUTPUT")
   RUN_WARNINGS=$(sed -n -E \
-    's/^[[:space:]]*WARN([^:]*)?:[[:space:]]*//p' <<<"$RUN_PLAIN_OUTPUT")
+    's/^[[:space:]]*WARN([^:]*)?:[[:space:]]*//p' <<<"$RUN_PLAIN_OUTPUT" \
+    | grep -Fvx \
+      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' \
+      -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' || true)
 }
 
 validate_common_completion() {
