@@ -1,4 +1,4 @@
-# Shibumi 0.1.1-beta.16.2 release readiness
+# Shibumi 0.1.1-beta.16.3 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
@@ -6,26 +6,28 @@
 
 ## Candidate and published predecessor
 
-The Beta.16.2 candidate contains the accepted Core18c delivery, Health cache
-exclusion, AI timeout, and separate minimal palette and bar-marker patches.
-Its 24-plugin suite payload digest is
-`79c61d5e048c669c9eb27ebaad21987327892089daea501d0cf4185150a26f9e`.
+The Beta.16.3 candidate contains V1 network bar ink, the status pending-flag
+ordering fix, six-style hover colour, picker search/list fixes, inline helper
+execution in the plugin smokes, and the forward-baseline generator and repin. Pacman retains
+its exact 16.2 presentation and hover behaviour; compact and linked-theme
+Update Center changes are excluded. Its 24-plugin suite payload digest is
+`9d8cca435b465c52b0ff21d7a6780f90251a805dc1d1e72b78473ca2a8338a88`.
 This is the preparation snapshot included in the release-identity commit, not
 final clean-commit evidence. Source review, the complete contract, isolated
 Quattro lifecycle, package rehearsal, full 14-gate collector, and reproducible
 archive verification must record their exact final commit externally; no
 predecessor gate result transfers to this candidate.
 
-Beta.16.1 was published on 2026-10-04 as a GitHub prerelease from
-`3b35049af69aba57784376e916f50146d61eb411`. It is the frozen rolling
+Beta.16.2 was published on 2026-10-08 as a GitHub prerelease from
+`bd1224ba92fbf279666abe362ff5cf7a165da096`. It is the frozen rolling
 predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
 That exact tag checkout and release merge
-`65c8d8bf72a674a35c5bb8ae85d0fff21b4e5cb6` are admitted by
+`e07853b54f018ab694572c7502297e0f17752220` are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
-with the unchanged Beta.16.1 payload digest
-`46f72fd02b00dbe34326dbbdf6e95556e7e35641a4d597c5281bc2beed94a974`.
-The downloaded published archive matches all 24 pinned plugin digests; merge
-and tag have the same Git tree. Older exact identities remain admitted; a
+with the unchanged Beta.16.2 payload digest
+`79c61d5e048c669c9eb27ebaad21987327892089daea501d0cf4185150a26f9e`.
+The exact local tag payload matches all 24 pinned plugin digests; the published
+release merge and tag have the same Git tree. Older exact identities remain admitted; a
 version string alone never authorizes recovery or replacement. AUR publication
 remains deferred.
 
@@ -35,14 +37,14 @@ remains deferred.
 | --- | --- |
 | Complete source contract | Pending exact release-commit evidence at this preparation snapshot. |
 | Isolated Quattro lifecycle | Pending exact release-commit evidence, retaining all 32 generations. |
-| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.1 → candidate (7). No arm may be dropped. |
-| Core18c image acceptance | Completed in relay round 373: 10,308 first-activation points, plus matrix, edge, raster-phase and named N10 programs; 13 individual first-activation exceptions were expressly accepted. Qualified text-raster differences reach 4/255; this is not a global tolerance or blanket pixel equality. |
-| Core18c performance | 440 sessions, 1,200 events, cold/warm N5. All 56 style-switch medians and eight bar-cycle medians improve. Six higher individual bar medians (0.33–7.13 ms, overlapping sample ranges) were accepted. Focus has 11–15 changed buffers over the full event, but 9–13 within 200 ms; the accepted target is the full event. No scanout claim. |
-| Separate compatibility patches | Minimal palette and marker patches passed private smokes with Qt 6.11.2. They were not part of the unchanged Core18c image/performance inputs; no Qt 6.12 runtime acceptance. |
+| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.2 → candidate (7). No arm may be dropped. |
+| Stage-1 visual evidence | Round 379 records DPR 1/1.6 rest and shared-code captures, seven-theme picker search, previewless themes, sorting, and an unchanged Update Center. Round 380 separately rechecks Pacman against 16.2 and the six retained hover styles against 379. No physical-output claim. |
+| Stage-1 performance | Round 379: 670 sessions, 1,880 events, cold/warm N5; focus, style, bar and hover only, not media-scroll or Control Center events. Accepted by the maintainer, including the warm Kanji CPU group as variation. Focus R/B/changed-buffer counts are not identical in every group; 13/140 hover input-to-last-pixel measurements exceed 136.667 ms by at most 2.29 ms. No blanket speedup or scanout claim. Pacman has since been restored to 16.2; no new performance series is claimed. |
+| Compatibility preparation | The unchanged validator accepts forward manifest `50d687a1`; the old manifest remains. Stage-1 complete profiles stopped at the expected old-version payload pin, so all final complete gates must run again after release identities are aligned. |
 | Live installation and hardware | Keep-settings installation and reviewer live acceptance must be recorded separately. Fixtures do not establish physical multi-output, hardware, credential or real desktop input acceptance. |
 | Release/package verification | Reproducible archive, checksum agreement, clean-commit gates and rehearsal, independent review, full collector and remote verification remain separate publication requirements. |
 
-The historical package arm is not a Beta.16.2 installed-package upgrade proof.
+The historical package arm is not a Beta.16.3 installed-package upgrade proof.
 Private Wayland/Mesa captures are not live GPU, layer-shell, hotplug, or physical
 multi-output acceptance. Earlier release passes do not transfer to this candidate.
 The release notes document the accepted Rings early step (raw DPR-1 reload N10:
@@ -122,7 +124,7 @@ was performed. Each operation needs its own maintainer Go.
   physical acceptance are not claimed.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
-  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.2.md)
+  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.3.md)
   and [backup guide](install.md#backup-before-downgrade) identify the complete
   settings and recovery evidence to preserve. Restore the settings with a
   matching payload.
@@ -149,4 +151,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta.16.2.
+confers acceptance on Beta.16.3.
