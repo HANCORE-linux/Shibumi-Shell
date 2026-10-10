@@ -15,12 +15,14 @@ fail() {
 [[ -x /usr/bin/python3 ]] || fail '/usr/bin/python3 is required'
 keyboard_panel="$OMARCHY_PATH/shell/Ui/KeyboardPanel.qml"
 [[ -f $keyboard_panel ]] || fail 'pinned KeyboardPanel.qml is missing'
-[[ $(sha256sum "$keyboard_panel" | awk '{print $1}') == \
-  96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d ]] \
-  || fail 'KeyboardPanel.qml does not match pinned Omarchy v4.0.3 source'
+keyboard_panel_sha=96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d
+if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 50d687a1f27063513cf42e6f33c3a4fcb17c24ed ]]; then
+  keyboard_panel_sha=e509278a51a7e9b45fa3a6fa630bedcd671a0f34202bfb7413a5b6a2f88d7e22
+fi
+[[ $(sha256sum "$keyboard_panel" | awk '{print $1}') == "$keyboard_panel_sha" ]] \
+  || fail 'KeyboardPanel.qml does not match pinned Omarchy source'
 printf 'PINNED_KEYBOARD_PANEL source=%s sha256=%s\n' \
-  "$SHIBUMI_OMARCHY_SOURCE_REVISION" \
-  '96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d'
+  "$SHIBUMI_OMARCHY_SOURCE_REVISION" "$keyboard_panel_sha"
 
 /usr/bin/python3 -I - "$repo_root" <<'PY'
 import hashlib

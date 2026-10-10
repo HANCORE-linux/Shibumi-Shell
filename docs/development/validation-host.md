@@ -115,7 +115,7 @@ reviewed Shibumi checkout, match these manifest `sourceRevision` values exactly:
 | --- | --- | --- |
 | `omarchy-installed-source-parity-v4.0.4.json` | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
 | `omarchy-agents-v4.0.0.json` | `f0020448ca87329199de7cb12f2015ebc4a3e5e7` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
-| `omarchy-forward-compat-ed7bae4a.json` | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
+| `omarchy-forward-compat-50d687a1.json` | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
 
 After provisioning approval, clone `https://github.com/basecamp/omarchy` separately
 for each profile and `git checkout --detach <full-revision>`. Check `HEAD^{commit}`,

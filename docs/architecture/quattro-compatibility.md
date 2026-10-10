@@ -8,7 +8,7 @@ by this evidence.
 
 ## Current pinned host
 
-Beta.16.2 retains Beta.16's exact official Omarchy 4.0.4 baseline. These pins are not
+Beta.16.3 retains Beta.16's exact official Omarchy 4.0.4 baseline. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
@@ -18,7 +18,7 @@ below applies to its recorded single-output Omarchy 4.0.3 setup:
 | Pinned official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
 | Pinned source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
-| Immutable forward-compatibility revision | `ed7bae4ac5a570e9df307486e0202fdafcc6ee24` |
+| Immutable forward-compatibility revision | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` |
 | Quickshell package | `quickshell 0.3.1-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
@@ -27,7 +27,7 @@ source-parity checkout is pinned to the official `v4.0.4` tag. The 4.0.3 and
 4.0.2 package and source manifests remain immutable optional compatibility
 references. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
-`ed7bae4a` snapshot proves bounded forward compatibility without following a
+`50d687a1` snapshot proves bounded forward compatibility without following a
 moving branch.
 
 The package-managed baseline records these authoritative production anchors:
@@ -51,7 +51,7 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
   records the full Git checkout of the official `v4.0.4` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
   acceptance baseline without claiming that acceptance for 4.0.4;
-- [`omarchy-forward-compat-ed7bae4a.json`](../../contracts/baselines/omarchy-forward-compat-ed7bae4a.json)
+- [`omarchy-forward-compat-50d687a1.json`](../../contracts/baselines/omarchy-forward-compat-50d687a1.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -91,7 +91,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-ed7bae4a \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-50d687a1 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

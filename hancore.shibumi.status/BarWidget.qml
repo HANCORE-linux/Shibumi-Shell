@@ -13,9 +13,9 @@ Item {
   readonly property url updateSource: registeredSource(
     "hancore.shibumi.update-center")
   readonly property url traySource: registeredSource("omarchy.tray")
-  property Component updateComponent: String(updateSource) ? null
+  property var updateComponent: String(updateSource) ? null
     : registeredComponent("hancore.shibumi.update-center")
-  property Component trayComponent: String(traySource) ? null
+  property var trayComponent: String(traySource) ? null
     : registeredComponent("omarchy.tray")
   property url trayDrawerSource: Qt.resolvedUrl("TrayDrawerPanel.qml")
   property url trayAppMenuSource: Qt.resolvedUrl("TrayAppMenuPanel.qml")
@@ -126,8 +126,8 @@ Item {
   function syncSpacingSavings() {
     if (!root || !spacingActive) return
     const saved = Math.max(0, updateShift - bellShift)
-    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
     savingsPending = false
+    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
   }
   function scheduleSpacingSavings() {
     savingsPending = true

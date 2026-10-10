@@ -80,8 +80,10 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'ai plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
-if grep -Eq ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' \
-    <<<"$output"; then
+if grep -E ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' <<<"$output" \
+    | grep -Fv \
+      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' \
+      -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' >/dev/null; then
   fail "component smoke emitted a QML/runtime warning or error"
 fi
 

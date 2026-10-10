@@ -142,7 +142,7 @@ PanelWindow {
         parent.width * 0.48)
       readonly property real focusedHeight: focusedWidth * 9 / 16
 
-      visible: root.tanzakuActive && root.controller.selectedEntry !== null
+      visible: root.tanzakuActive
       anchors.horizontalCenter: parent.horizontalCenter
       y: parent.height / 2 - Commons.Style.space(10) + focusedHeight / 2
         + Commons.Style.space(16)
@@ -152,6 +152,7 @@ PanelWindow {
 
       Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
+        visible: root.controller.selectedEntry !== null
         width: tanzakuFooter.focusedWidth * 0.42
         height: Commons.Style.space(3)
         radius: height / 2
@@ -168,6 +169,7 @@ PanelWindow {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         text: root.selectedHeadline()
+        visible: root.controller.selectedEntry !== null
         color: root.bar.foreground
         font.family: root.bar.fontFamily
         font.pixelSize: Commons.Style.space(22)
@@ -179,7 +181,8 @@ PanelWindow {
 
       Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.controller.mode === "theme"
+        visible: root.controller.selectedEntry !== null
+          && root.controller.mode === "theme"
           && root.controller.selectedThemePalette.length > 0
         spacing: Commons.Style.space(6)
 
@@ -200,9 +203,10 @@ PanelWindow {
 
       Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.selectedIsCurrent
-          || (root.controller.mode === "theme"
-            && root.controller.selectedThemeAuthor !== "")
+        visible: root.controller.selectedEntry !== null
+          && (root.selectedIsCurrent
+            || (root.controller.mode === "theme"
+              && root.controller.selectedThemeAuthor !== ""))
         spacing: Commons.Style.space(12)
 
         Text {
@@ -243,7 +247,7 @@ PanelWindow {
 
       Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.controller.mediaMode
+        visible: root.controller.mediaMode && root.controller.selectedEntry !== null
         spacing: Commons.Style.space(7)
 
         OverlayAction {
@@ -264,15 +268,8 @@ PanelWindow {
         }
       }
 
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.controller.filterText !== ""
-        text: root.controller.filterText
-        color: root.bar.urgent
-        font.family: root.bar.fontFamily
-        font.pixelSize: Commons.Style.font.body
-        renderType: Text.NativeRendering
-      }
+      FilterField { anchors.horizontalCenter: parent.horizontalCenter }
+      DeleteHint { anchors.horizontalCenter: parent.horizontalCenter }
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -397,20 +394,8 @@ PanelWindow {
         renderType: Text.NativeRendering
       }
 
-      Text {
-        anchors.horizontalCenter: parent.horizontalCenter
-        visible: root.controller.filterText !== ""
-          || root.controller.confirmDelete
-        text: root.controller.filterText !== ""
-          ? "Filter: " + root.controller.filterText
-          : "Press Delete again to move this file to Trash"
-        color: root.controller.confirmDelete ? root.bar.urgent
-          : Qt.rgba(root.bar.foreground.r, root.bar.foreground.g,
-            root.bar.foreground.b, 0.62)
-        font.family: root.bar.fontFamily
-        font.pixelSize: Commons.Style.font.caption
-        renderType: Text.NativeRendering
-      }
+      FilterField { anchors.horizontalCenter: parent.horizontalCenter }
+      DeleteHint { anchors.horizontalCenter: parent.horizontalCenter }
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -421,6 +406,44 @@ PanelWindow {
         font.pixelSize: Commons.Style.font.caption
         renderType: Text.NativeRendering
       }
+    }
+  }
+
+  component DeleteHint: Text {
+    visible: root.controller.confirmDelete
+    text: "Press Delete again to move this file to Trash"
+    color: root.bar.urgent
+    font.family: root.bar.fontFamily
+    font.pixelSize: Commons.Style.font.caption
+    renderType: Text.NativeRendering
+  }
+
+  component FilterField: Rectangle {
+    visible: root.controller.filterText !== ""
+    width: Math.min(parent.width, Commons.Style.space(420),
+      Math.max(Commons.Style.space(48), filterLabel.implicitWidth + Commons.Style.space(16)))
+    height: filterLabel.implicitHeight + Commons.Style.space(6)
+    radius: Commons.Style.cornerRadius
+    color: Qt.rgba(Commons.Color.menu.background.r, Commons.Color.menu.background.g,
+      Commons.Color.menu.background.b, 1)
+    border.width: 0
+    MouseArea { anchors.fill: parent }
+
+    Text {
+      id: filterLabel
+      anchors.fill: parent
+      anchors.leftMargin: Commons.Style.space(8)
+      anchors.rightMargin: Commons.Style.space(8)
+      anchors.topMargin: Commons.Style.space(3)
+      anchors.bottomMargin: Commons.Style.space(3)
+      text: root.controller.filterText
+      color: Commons.Color.menu.text
+      font.family: root.bar.fontFamily
+      font.pixelSize: Commons.Style.font.body
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
+      elide: Text.ElideRight
+      renderType: Text.NativeRendering
     }
   }
 

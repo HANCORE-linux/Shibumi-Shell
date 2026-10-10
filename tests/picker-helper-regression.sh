@@ -71,11 +71,15 @@ fail() {
 }
 
 theme_rows=$($helper scan theme "$omarchy_path")
-[[ $(printf '%s\n' "$theme_rows" | wc -l) -eq 3 ]] \
+[[ $(printf '%s\n' "$theme_rows" | wc -l) -eq 4 ]] \
   || fail "theme scan did not de-duplicate user override"
-if printf '%s\n' "$theme_rows" | grep -Fq 'no-preview'; then
-  fail "theme without displayable preview leaked into rows"
-fi
+placeholder=$(printf '%s\n' "$theme_rows" | awk -F '\t' '$3 == "no-preview"')
+[[ $placeholder == "$HOME/.config/omarchy/themes/no-preview"$'\t\tno-preview\t'"$HOME/.config/omarchy/themes/no-preview"$'\t0' ]] \
+  || fail "theme without artwork has no placeholder row"
+[[ $($helper cached theme | awk -F '\t' '$3 == "no-preview"') == "$placeholder" ]] \
+  || fail "cached theme lost its placeholder"
+[[ $(printf '%s\n' "$theme_rows" | cut -f3) == $'no-preview\nofficial\nshared\nuser-only' ]] \
+  || fail "theme order is not globally alphabetical"
 printf '%s\n' "$theme_rows" | grep -Fq "$HOME/.config/omarchy/themes/shared/preview.png" \
   || fail "user theme did not override official theme"
 if printf '%s\n' "$theme_rows" | grep -Fq "$omarchy_path/themes/shared/preview.png"; then

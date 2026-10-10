@@ -125,7 +125,7 @@ ShellRoot {
   Workspaces.WorkspaceService {
     id: workspaceState
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.16.2", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.16.3", kinds: ["service"]})
     stateService: preferenceState
     backendOverride: QtObject {
       property var focusedWorkspace: ({ id: 8 })
@@ -392,6 +392,9 @@ ShellRoot {
           return root.fail("V1 default presentation geometry: " + widget.implicitWidth)
         }
         stop()
+        const lazy = Qt.createComponent("workspace-lazy-paint.qml").createObject(root, {workspace: widget})
+        if (!lazy || !lazy.check()) return root.fail("lazy paint helper")
+        lazy.destroy()
         console.log("workspaces plugin smoke passed")
         Qt.quit()
       }

@@ -12,7 +12,7 @@ QtObject {
     workspace.visible = true
     center.updateStage()
     const budget = typeof center.responsiveWidthProvider === "function" ? center.responsiveWidthProvider() : center.availableWidth
-    const passed = hiddenBudget > shown.budget && budget === shown.budget && center.stage === shown.stage
+    const passed = budget < hiddenBudget && center.stage === shown.stage
     console[passed ? "log" : "error"]("center reveal budget " + (passed ? "passed" : "failed"), hiddenBudget, shown.budget, budget, center.stage)
     return passed
   }

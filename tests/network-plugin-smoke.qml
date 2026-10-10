@@ -19,6 +19,14 @@ ShellRoot {
     Qt.exit(1)
   }
 
+  function contentGlyph(item, text) {
+    if (item.text === text && item.color !== undefined) return item
+    for (const child of item.children || []) {
+      const match = contentGlyph(child, text); if (match) return match
+    }
+    return null
+  }
+
   function appearanceSettings(mode) {
     return ({
       displayMode: String(mode), color: "color05", colorMode: "border",
@@ -179,13 +187,17 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!first.networkReady || !second.networkReady || root.ticks < 3) return
+        const firstGlyph = root.contentGlyph(first, first.stateGlyph)
+        const secondGlyph = root.contentGlyph(second, second.stateGlyph)
+        if (!firstGlyph || !secondGlyph
+            || !Qt.colorEqual(firstGlyph.color, fakeBar.background)
+            || !Qt.colorEqual(secondGlyph.color, fakeBar.urgent))
+          return root.fail("V1 glyph ink: " + (firstGlyph && firstGlyph.color)
+            + "/" + (secondGlyph && secondGlyph.color))
         if (first.networkService !== second.networkService
             || first.networkService !== sharedNetworkService
             || first.mode !== "wifi" || first.label !== "Test Network"
             || first.signal !== 73 || first.implicitHeight !== 35
-            || !first.v1CustomToneActive || second.v1CustomToneActive
-            || !Qt.colorEqual(first.v1Ink, fakeBar.background)
-            || !Qt.colorEqual(first.v1Seal, fakeBar.background)
             || unavailableNetwork.visible
             || first.childPanelWidget("omarchy.network") !== first
             || first.childPanelWidget("hancore.shibumi.network") !== first

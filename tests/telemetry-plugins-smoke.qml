@@ -27,7 +27,7 @@ ShellRoot {
   Telemetry.Service {
     id: telemetryService
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.16.2", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.telemetry", version: "0.1.1-beta.16.3", kinds: ["service"]})
     // Keep this fixture isolated from machine-specific hwmon inventory.
     thermalProbeEnabled: false
   }
@@ -35,7 +35,7 @@ ShellRoot {
   Cpu.Service {
     id: cpuService
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.16.2", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.cpu", version: "0.1.1-beta.16.3", kinds: ["service"]})
     gpuProbeEnabled: false
   }
 

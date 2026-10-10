@@ -28,7 +28,9 @@ for scale in 1 1.5; do
       exit 1
     }
   grep -q 'drag ghost render regression passed' "$fixture/runtime.log"
-  if grep -Eq 'Binding loop|TypeError|ReferenceError|WARN|ERROR' "$fixture/runtime.log"; then
+  if grep -E 'Binding loop|TypeError|ReferenceError|WARN|ERROR' "$fixture/runtime.log" \
+      | grep -Fv \
+        -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' >/dev/null; then
     tail -60 "$fixture/runtime.log" >&2
     exit 1
   fi

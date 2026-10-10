@@ -88,6 +88,11 @@ Ui.Panel {
       ? tokens.seal : widgetInk)
   readonly property color pacmanOccupiedColor: widgetInk
   readonly property color pacmanEmptyColor: widgetInk
+  readonly property color workspaceHoverColor: ((tokens
+    && typeof tokens.widgetHasFill === "function" && tokens.widgetHasFill(settings))
+    || Qt.colorEqual(paletteColor("color03", widgetInk), widgetInk))
+      ? Qt.rgba(widgetInk.r, widgetInk.g, widgetInk.b, 0.72)
+      : paletteColor("color03", widgetInk)
   readonly property color pacmanHoverColor: widgetInk
   property int pacmanLastFocusedWorkspaceId: -1
   property int pacmanTargetWorkspaceId: -1
@@ -400,13 +405,22 @@ Ui.Panel {
           property real defaultMarkerWidth: Commons.Style.space(focused ? 26 : 8)
           property alias magicColor: colorState.magicColor
           property alias kanjiColor: colorState.kanjiColor
-          property real ringOpacity: cellPointer.containsMouse ? 1
-            : focused ? 1 : occupied ? 0.64 : 0.24
+          property real hoverPhase: root.renderStyle !== "pacman" && cellPointer.containsMouse ? 1 : 0
+          Behavior on hoverPhase { NumberAnimation { duration: 120 } }
+          function tintColor(base) {
+            const amount = hoverPhase
+            if (amount === 0) return base
+            const tint = root.workspaceHoverColor
+            return Qt.rgba(base.r * (1 - amount) + tint.r * amount,
+              base.g * (1 - amount) + tint.g * amount,
+              base.b * (1 - amount) + tint.b * amount,
+              base.a * (1 - amount) + tint.a * amount)
+          }
+          property real ringOpacity: focused ? 1 : occupied ? 0.64 : 0.24
           property real auroraWidth: Commons.Style.space(focused ? 32 : 10)
           property real auroraMarkerWidth: Commons.Style.space(focused ? 28 : occupied ? 6 : 4)
           property real auroraMarkerHeight: Commons.Style.space(focused ? 3 : occupied ? 6 : 4)
-          property real auroraOpacity: cellPointer.containsMouse ? 1
-            : focused ? 0.92 : occupied ? 0.62 : 0.18
+          property real auroraOpacity: focused ? 0.92 : occupied ? 0.62 : 0.18
           Behavior on defaultHaloWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
           Behavior on defaultMarkerWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
           Item {
@@ -441,7 +455,6 @@ Ui.Panel {
           Behavior on implicitWidth {
             NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
           }
-          Behavior on scale { NumberAnimation { duration: 120 } }
 
           // Keep the cell and pointer resident; load only the selected paint.
           Loader {
@@ -478,9 +491,9 @@ Ui.Panel {
             width: cell.defaultMarkerWidth
             height: Commons.Style.space(8)
             radius: height / 2
-            color: cell.focused || cell.occupied
+            color: cell.tintColor(cell.focused || cell.occupied
               ? root.widgetInk : Qt.rgba(root.widgetInk.r,
-                root.widgetInk.g, root.widgetInk.b, 0.25)
+                root.widgetInk.g, root.widgetInk.b, 0.25))
           }
 
             } }
@@ -514,10 +527,9 @@ Ui.Panel {
               barText: true
               anchors.centerIn: parent
               text: cell.modelData
-              color: cell.focused
-                ? root.widgetInk
+              color: cell.tintColor(cell.focused ? root.widgetInk
                 : Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-                  root.widgetInk.b, cell.occupied ? 0.5 : 0.28)
+                  root.widgetInk.b, cell.occupied ? 0.5 : 0.28))
               font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
               font.pixelSize: cell.focused
                 ? Commons.Style.font.subtitle : root.tokens.labelSize
@@ -541,7 +553,7 @@ Ui.Panel {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: cell.focused ? 0 : 1
             text: cell.focused ? "✦" : cell.occupied ? "✧" : "·"
-            color: cell.magicColor
+            color: cell.tintColor(cell.magicColor)
             font.family: "Adwaita Mono"
             font.pixelSize: Commons.Style.space(cell.focused ? 22 : 18)
             renderType: Text.NativeRendering
@@ -565,7 +577,7 @@ Ui.Panel {
               ? ["一", "二", "三", "四", "五",
                  "六", "七", "八", "九", "十"][cell.modelData - 1]
               : String(cell.modelData)
-            color: cell.kanjiColor
+            color: cell.tintColor(cell.kanjiColor)
             font.family: "Noto Sans CJK JP"
             font.pixelSize: Commons.Style.space(cell.focused ? 15 : 13)
             font.weight: Font.Normal
@@ -585,8 +597,8 @@ Ui.Panel {
             visible: root.renderStyle === "rings"
             anchors.centerIn: parent
             text: cell.modelData
-            color: root.widgetInk
-            opacity: cell.ringOpacity
+            color: cell.tintColor(root.widgetInk)
+            opacity: cell.ringOpacity + (1 - cell.ringOpacity) * cell.hoverPhase
             font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.space(12)
             font.weight: Font.Normal
@@ -619,8 +631,8 @@ Ui.Panel {
               width: cell.auroraMarkerWidth
               height: cell.auroraMarkerHeight
               radius: height / 2
-              color: root.widgetInk
-              opacity: cell.auroraOpacity
+              color: cell.tintColor(root.widgetInk)
+              opacity: cell.auroraOpacity + (1 - cell.auroraOpacity) * cell.hoverPhase
               antialiasing: true
             }
           }
@@ -660,14 +672,10 @@ Ui.Panel {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onEntered: {
-              cell.scale = root.renderStyle === "rings" ? 1
-                : root.renderStyle === "pacman" ? 1
-                : root.renderStyle === "aurora" ? 1.04 : 1.15
               if (root.bar) root.bar.showTooltip(
                 workspaceSurface, root.workspaceTooltip(cell.modelData))
             }
             onExited: {
-              cell.scale = 1
               if (root.bar) root.bar.hideTooltip(workspaceSurface)
             }
             onClicked: function(mouse) {

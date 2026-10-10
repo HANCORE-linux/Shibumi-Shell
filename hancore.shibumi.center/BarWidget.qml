@@ -79,7 +79,7 @@ Ui.Panel {
   readonly property var clockSettings: childSettings("omarchy.clock")
   readonly property var updateSettings: childSettings("omarchy.system-update")
   readonly property url updateSource: registeredSource("omarchy.system-update")
-  property Component updateComponent: String(updateSource) ? null
+  property var updateComponent: String(updateSource) ? null
     : registeredComponent("omarchy.system-update")
 
   implicitWidth: bar && bar.vertical ? bar.barSize

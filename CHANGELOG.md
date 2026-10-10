@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.1-beta.16.3] - 2026-10-09
+
+### Fixed
+
+- Workspaces: hovering a workspace no longer enlarges it. The hovered workspace now changes colour instead (the theme's `color03`; if the bar colour itself is `color03`, a lighter bar ink is used), with one uniform 120 ms transition in the default, numbers, magic, kanji, rings and aurora styles. The pacman style keeps its 16.2 behaviour.
+- Network widget: in V1 the network icon now follows the bar colour like every other widget instead of fixed tones.
+- Picker: the search field of the theme, wallpaper and media pickers is readable in every theme (12 px text in a visible input field; contrast 7:1 to 21:1 across the shipped themes, previously down to 1:1 on light themes).
+- Picker: themes without a preview image are listed again (with a placeholder), and the list is sorted alphabetically across all theme roots like `omarchy-theme-list`.
+- Status group: a pending spacing update can no longer be cleared early by a synchronous re-schedule.
+- Status and centre groups: embedded widgets (update centre, tray, centre) no longer disappear after switching to the stock Omarchy bar and back (needed a reload before).
+- Tests: the two reveal-budget and lazy-paint regressions from 16.2 now run in the repository test suite.
+- Compatibility: the forward-compatibility baseline is pinned to Omarchy `50d687a1` (2026-10-08) with a reproducible generator script; the 4.0.4 installation pins are unchanged.
+
+### Known issues
+
+- Rings style: right after a bar rebuild (reload, V1/V2 switch, workspace count change) the focus ring can be drawn about 6 px off for a single frame (16 ms). It is a build-time animation ordering effect and will be fixed with the host layout redesign in 0.2.0.
+- Notch bar at DPR 1.6 with the numbers or kanji style: the centre group can oscillate between two layouts for a while after a layout change. This exists since 16.1 (status spacing feedback) and is also addressed by the 0.2.0 redesign.
+
 ## [0.1.1-beta.16.2] - 2026-10-08
 
 ### Fixed
