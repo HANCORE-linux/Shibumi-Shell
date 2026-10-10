@@ -6,49 +6,26 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.1.1-beta.16.3` is the target GitHub prerelease. AUR publication is
-deferred; install from the release tag using the source workflow below.
+`0.1.1-beta.16.3` is the target GitHub prerelease. Install from the release
+tag using the source workflow below.
 Do not install or update from `main`.
 
 ## Requirements
 
 - Omarchy Quattro; other Omarchy generations are not supported
-- The package workflow installs required commands and fonts through Pacman and
+- The source workflow installs required commands and fonts through Pacman and
   skips dependencies that are already installed or provided
-- The source workflow additionally needs Git, HTTPS access to the repository,
+- The source workflow also needs Git, HTTPS access to the repository,
   and a trusted local checkout
 
 The exact accepted Omarchy and Quickshell packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
-
-## Install from the Arch package
-
-> [!NOTE]
-> AUR publication is deferred. Use this package workflow once the package
-> is available from AUR; use the source workflow below in the meantime.
-
-```bash
-omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
-```
-
-The package manager installs immutable files under `/usr/share/shibumi-shell`
-and the stable `/usr/bin/shibumi-shell` command. It does not run an install
-hook, select a desktop user, edit `shell.json`, or copy plugins into a home
-directory. The unprivileged `shibumi-shell install` transaction performs those
-user-scoped operations explicitly and verifies the resulting Quattro runtime.
-
-Preview the same setup without changing user state:
-
-```bash
-shibumi-shell install --dry-run
-```
 
 ## Install from source
 
 For an intentional non-interactive installation:
 
 ```bash
-sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3
@@ -436,5 +413,4 @@ committing a transaction.
 
 Shibumi does not fetch its own source updates. For a source installation,
 update only from a trusted checkout. Package update checks are read-only and package
-installation remains owned by Omarchy/Pacman. The AUR boundary is documented in
-[packaging and AUR strategy](development/packaging.md).
+installation remains owned by Omarchy/Pacman.

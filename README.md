@@ -16,8 +16,7 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.1.1-beta.16.3` is the target GitHub prerelease. AUR publication is
-deferred; use the source installation below. See the
+`0.1.1-beta.16.3` is the target GitHub prerelease. See the
 [release notes](.github/release-notes/v0.1.1-beta.16.3.md) for changes and the
 downgrade warning.
 The current pinned host contracts use Omarchy and Omarchy Settings `4.0.4-1`
@@ -63,28 +62,18 @@ for the latest validated host versions.
 ## Install
 
 > [!IMPORTANT]
-> AUR publication is deferred; use the source installation below.
 > Install from the release tag, not `main`. Shibumi supports Omarchy Quattro only.
 
-After AUR publication, the supported one-command installation is:
-
 ```bash
-omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
-```
-
-Pacman resolves the required runtime packages and skips dependencies already
-provided by the system. The explicit Shibumi command then stages and verifies
-the 24 user plugins without a root package hook touching the user's config.
-
-Install from source using the release tag:
-
-```bash
-sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3
 ./scripts/shibumi-suite install --yes
 ```
+
+The installer asks for root privileges only while Pacman installs missing
+runtime commands and fonts; the Shibumi lifecycle itself runs as the desktop
+user and writes only user-scoped plugin state.
 
 Update an admitted Beta.16.2 source installation to Beta.16.3.
 Exact predecessor identities, not a version range, govern admission; see the
@@ -100,10 +89,6 @@ git checkout v0.1.1-beta.16.3
 ```
 
 Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
-
-The source installation asks for root privileges only while Pacman
-installs missing runtime commands and fonts. The Shibumi lifecycle itself runs
-as the desktop user and writes only user-scoped plugin state.
 
 [Installation, updates, recovery, and removal](docs/install.md)
 
