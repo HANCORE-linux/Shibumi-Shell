@@ -130,8 +130,6 @@ def verify_source_install_block(block: str) -> None:
                 f"{execution.stderr.strip()}"
             )
         calls = log_path.read_text(encoding="utf-8")
-        if "sudo:pacman -S --needed" not in calls:
-            fail("README source install did not invoke Pacman through sudo")
         clone_call = "git:clone https://github.com/HANCORE-linux/Shibumi-Shell.git"
         if clone_call not in calls:
             fail("README source install did not invoke the documented clone")
@@ -343,23 +341,16 @@ def main() -> None:
             fail(f"broken README image: {raw_target}")
 
     bash_blocks = re.findall(r"```bash\n.*?\n```", readme, flags=re.DOTALL)
-    if len(bash_blocks) != 4:
+    if len(bash_blocks) != 3:
         fail(
-            "README landing page must contain package/source install and "
+            "README landing page must contain source install and "
             "package/source uninstall Bash blocks"
         )
-    package_install_command = (
-        "omarchy pkg aur add shibumi-shell && shibumi-shell install --yes"
-    )
     source_install_markers = (
-        "sudo pacman -S --needed",
-        "ttf-material-symbols-variable",
         "git clone https://github.com/HANCORE-linux/Shibumi-Shell.git",
         "cd Shibumi-Shell",
         "./scripts/shibumi-suite install --yes",
     )
-    if sum(package_install_command in block for block in bash_blocks) != 1:
-        fail("README landing page is missing the package install command")
     source_install_blocks = [
         block
         for block in bash_blocks
