@@ -1,7 +1,7 @@
-# Arch packaging and AUR publication
+# Source installation and planned OPR packaging
 
-Status: `0.1.1-beta.16.3` is the target GitHub prerelease; AUR publication
-is deferred.
+Status: install `0.1.1-beta.16.3` from source. OPR (omarchy-pkgs) packaging
+is planned; AUR publication is no longer the target.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
@@ -49,13 +49,8 @@ NVIDIA telemetry; their absence does not prevent the core suite from starting.
 
 ## User lifecycle
 
-After AUR publication, the normal installation is one copyable command:
-
-```bash
-omarchy pkg aur add shibumi-shell && shibumi-shell install --yes
-```
-
-Package upgrades require an explicit staging step:
+Install from source using the [installation guide](../install.md).
+The planned package lifecycle requires an explicit staging step for upgrades:
 
 ```bash
 omarchy update
@@ -144,7 +139,7 @@ A clean-chroot build must perform normal dependency resolution before publicatio
 
 ## Publication gates
 
-The AUR entry remains blocked until all of these are true:
+OPR publication remains blocked until all of these are true:
 
 1. The exact candidate commit passes the source, package, and Health tests.
 2. the validation system passes package install, source-to-package migration, update,
@@ -155,10 +150,11 @@ The AUR entry remains blocked until all of these are true:
    package.
 5. The immutable GitHub release asset exists and its SHA-256 equals PKGBUILD
    and `.SRCINFO`.
-6. `scripts/check-aur-package --publish-check` passes against the remote tag
-   and asset.
-7. The AUR package name can be registered and the one-command install is
-   repeated from a clean supported Omarchy Quattro account.
+6. OPR's package checks pass against the pinned release archive. The local
+   `scripts/check-aur-package --publish-check` validates the remote tag and
+   asset; it is not an OPR submission gate or an AUR publication target.
+7. The OPR package is accepted and installation is repeated from a clean
+   supported Omarchy Quattro account.
 
-AUR unavailability blocks only gates 6–7. It does not block local package
-construction or the validation system lifecycle acceptance.
+OPR publication remains separate from local package construction and the
+validation system lifecycle acceptance.

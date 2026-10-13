@@ -24,8 +24,8 @@ permission to change a host; each operation needs separate maintainer approval.
 5. Update user guides, architecture contracts, compatibility evidence, and
    screenshot placeholders or captures affected by the release.
 6. Confirm the repository visibility and remaining public-release blockers.
-7. Keep AUR publication behind the source, package, and clean-build gates in
-   [packaging and AUR strategy](packaging.md).
+7. Keep planned OPR publication separate from source installation and behind
+   the source, package, and clean-build gates in [packaging](packaging.md).
 8. On host baseline change, rerun every retained update arm before tagging;
    do not silently drop an arm or choose an older rolling predecessor.
 9. Re-pin forward compatibility to current `quattro` with `scripts/generate-forward-baseline.py`; update pins in `tests/lib/baselines.sh`, `tests/baseline-contract-regression.sh`, `tests/quattro-contract-regression.sh`, `tests/panel-window-geometry-regression.sh`, `scripts/collect-release-evidence`, `tests/documentation-regression.py`, `AGENTS.md`, `docs/release-readiness.md`, `docs/architecture/quattro-compatibility.md`, `docs/development/testing.md`, `docs/development/validation-host.md`, and `docs/development/release.md`, provision the clean runner checkout `~/.local/share/shibumi/validation-baselines/omarchy-forward-compat-<sha>`, and have the maintainer update Actions variable `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH`.
