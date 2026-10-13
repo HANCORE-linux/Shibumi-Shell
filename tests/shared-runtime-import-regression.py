@@ -74,9 +74,9 @@ class RuntimeImports(unittest.TestCase):
             "control-center/BarWidget.qml", "control-center/PluginUpdateService.qml",
             "cpu/BarWidget.qml", "cpu/Service.qml", "gpu/BarWidget.qml",
             "media/BarWidget.qml", "media/Service.qml", "memory/BarWidget.qml",
-            "network/Service.qml", "power-profile/BarWidget.qml",
+            "network/Service.qml", "network/NetworkPanelBridge.qml", "power-profile/BarWidget.qml",
             "power-state/Service.qml", "quick-access/Service.qml",
-            "reactor/Service.qml", "status/Service.qml", "storage/BarWidget.qml",
+            "reactor/Service.qml", "reactor/BoundedTextSource.qml", "status/Service.qml", "storage/BarWidget.qml",
             "storage/Service.qml", "telemetry/Service.qml",
             "temperature/BarWidget.qml", "update-center/Service.qml",
             "workspaces/BarWidget.qml", "workspaces/WorkspaceService.qml")}

@@ -246,7 +246,7 @@ Item {
 
   IpcHandler {
     enabled: root.backendAdmitted
-    target: "omarchy.audio"
+    target: SuiteRuntime.HostContract.ipcTargets.audio
 
     function open(): void { root.openPanel() }
     function close(): void { root.closePanel() }

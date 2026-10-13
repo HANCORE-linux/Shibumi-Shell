@@ -13,7 +13,7 @@ import re
 from scripts.qml_import_lexer import ImportLexError, tokens
 
 MODULE = Path("hancore.shibumi.state/runtime")
-MODULE_FILES = frozenset({"qmldir", "Runtime.qml", "Provider.qml", "HostShell.qml"})
+MODULE_FILES = frozenset({"qmldir", "Runtime.qml", "Provider.qml", "HostShell.qml", "HostContract.qml"})
 IMPORTERS = frozenset({
     "hancore.shibumi.ai/Service.qml",
     "hancore.shibumi.audio/BarWidget.qml",
@@ -32,10 +32,12 @@ IMPORTERS = frozenset({
     "hancore.shibumi.media/Service.qml",
     "hancore.shibumi.memory/BarWidget.qml",
     "hancore.shibumi.network/Service.qml",
+    "hancore.shibumi.network/NetworkPanelBridge.qml",
     "hancore.shibumi.power-profile/BarWidget.qml",
     "hancore.shibumi.power-state/Service.qml",
     "hancore.shibumi.quick-access/Service.qml",
     "hancore.shibumi.reactor/Service.qml",
+    "hancore.shibumi.reactor/BoundedTextSource.qml",
     "hancore.shibumi.status/Service.qml",
     "hancore.shibumi.storage/BarWidget.qml",
     "hancore.shibumi.storage/Service.qml",

@@ -270,7 +270,7 @@ for command in omarchy-theme-switcher omarchy-theme-bg-switcher; do
   rg -Fq "\"$command\"" "$service" \
     || fail "official Omarchy image picker adapter is missing: $command"
 done
-rg -Fq '["omarchy-shell", "image-selector", "cancel"]' "$service" \
+rg -Fq '[SuiteRuntime.HostContract.shellCommand, "image-selector", "cancel"]' "$service" \
   || fail "official Omarchy image picker cannot be cancelled"
 rg -q 'usingOfficialPicker' "$service" \
   || fail "official image picker is not isolated from the Shibumi overlay"

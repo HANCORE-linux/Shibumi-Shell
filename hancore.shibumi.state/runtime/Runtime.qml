@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "." as Local
 
 // Cooperative suite wiring, not a QML security boundary. Native backends and
 // their workers stay in their existing service owners. No host discovery here.
@@ -94,7 +95,7 @@ QtObject {
   property IpcHandler visibilityIpc: IpcHandler {
     enabled: runtime.visibilityIpcArmed
       && runtime.visibilityBarOwner !== null
-    target: "omarchy.bar"
+    target: Local.HostContract.ipcTargets.bar
 
     function syncHidden(): void {
       const owner = runtime.visibilityBarOwner
@@ -470,7 +471,7 @@ QtObject {
 
   function firstPartyServiceFor(id) {
     const key = String(id || "")
-    if (["omarchy.idle", "omarchy.media", "omarchy.notifications"].indexOf(key) < 0) return null
+    if (!Local.HostContract.isFirstPartyService(key)) return null
     const lease = _selected("hancore.shibumi.bar")
     return lease && typeof lease.host.firstPartyServiceFor === "function"
       ? lease.host.firstPartyServiceFor(key) : null

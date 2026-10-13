@@ -153,6 +153,32 @@ for needle in \
     || fail "KeyboardPanel compatibility surface drift: $needle"
 done
 
+# Bind one constant-only compatibility layer to the already pinned host tree.
+python3 - "$repo_root" "$omarchy_path" <<'PY'
+import json, re, sys
+from pathlib import Path
+suite, native = map(Path, sys.argv[1:])
+contract = (suite / "hancore.shibumi.state/runtime/HostContract.qml").read_text()
+values = {}
+for key, expression in re.findall(r'readonly property string (\w+): ([^\n]+)', contract):
+    parts = [part.strip() for part in expression.split("+")]
+    values[key] = "".join(json.loads(p) if p.startswith('"') else values[p] for p in parts)
+services = json.loads(re.search(r'firstPartyServices:\s*(\[[^\]]+\])', contract)[1])
+targets = re.findall(r'"([^"]+)"', re.search(r'ipcTargets:\s*\(\{(.*?)\}\)', contract, re.S)[1])
+assert len(services) == 3 and len(targets) == 4, "incomplete HostContract identities"
+ids = {json.loads(p.read_text()).get("id") for p in (native / "shell/plugins").rglob("*manifest.json")}
+assert set(services) <= ids, f"host first-party IDs missing: {set(services) - ids}"
+qml = "\n".join(p.read_text() for p in sorted((native / "shell").rglob("*.qml")))
+for target in targets:
+    route = r'\b(?:target|ipcTarget)\s*:\s*"' + re.escape(target) + '"'
+    assert re.search(route, qml), f"host IPC identity missing: {target}"
+commands = "\n".join(p.read_text(errors="replace") for p in sorted((native / "bin").glob("omarchy-*")) if p.is_file())
+for key in ("stateRoot", "togglesDir", "themeDir", "themeColorsFile", "themeNameFile", "barOffMarker"):
+    assert re.search(r'(?:\$HOME/|~/|"/)' + re.escape(values[key]) + r'(?=["\s]|$)', commands + qml), f"host path missing: {key}={values[key]}"
+# barHiddenMarker is a suite-side legacy alias, not a claimed host path.
+print("HostContract source binding passed: first-party IDs, IPC routes, host marker/theme paths")
+PY
+
 omarchy_version=unknown
 for package_name in omarchy omarchy-dev; do
   if package_version=$(pacman -Q "$package_name" 2>/dev/null | awk '{print $2}'); then

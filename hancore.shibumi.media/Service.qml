@@ -54,8 +54,8 @@ Item {
   readonly property bool probeRunning: cavaProbe.running
   readonly property string cavaThemePath: Quickshell.env("HOME")
     + "/.local/state/omarchy/current/theme/cava_theme"
-  readonly property string themeNamePath: Quickshell.env("HOME")
-    + "/.local/state/omarchy/current/theme.name"
+  readonly property string themeNamePath:
+    SuiteRuntime.HostContract.path(Quickshell.env("HOME"), "themeNameFile")
 
   visible: false
   width: 0

@@ -68,6 +68,8 @@ manifest.
 
 ## What Shibumi validates
 
+The Quattro source contract binds `SuiteRuntime.HostContract` as one layer for its first-party IDs, IPC targets and host marker/theme paths; it adds no host authority or runtime version discovery.
+
 Before mutating user state, the Shibumi lifecycle verifies the Quattro APIs
 used by its own 24-plugin suite: plugin validation and discovery, bar selection
 and configuration, plugin-registry injection, and the shared keyboard-panel

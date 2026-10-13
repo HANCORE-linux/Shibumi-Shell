@@ -22,7 +22,7 @@ for endpoint in 'function prepareShutdown(): string' \
   rg -Fq "$endpoint" "$repo_root/hancore.shibumi.bar/Bar.qml" \
     || fail "missing Shibumi Control Center IPC endpoint: $endpoint"
 done
-[[ $(rg -Fc 'target: "omarchy.bar"' \
+[[ $(rg -Fc 'target: Local.HostContract.ipcTargets.bar' \
   "$repo_root/hancore.shibumi.state/runtime/Runtime.qml") -eq 1 ]] \
   || fail 'shared runtime does not uniquely own the Omarchy visibility nudge'
 rg -Fq 'enabled: runtime.visibilityIpcArmed' \
@@ -172,7 +172,7 @@ if source.count(old) != 1:
 path.write_text(source.replace(old, new))
 PY
 mkdir -p "$lifecycle_root/hancore.shibumi.state"
-cp -a "$repo_root/hancore.shibumi.state/lib" \
+cp -a "$repo_root/hancore.shibumi.state/lib" "$repo_root/hancore.shibumi.state/runtime" \
   "$lifecycle_root/hancore.shibumi.state/"
 install -m 0644 "$widget_slot_source" \
   "$lifecycle_root/staged/barcore/WidgetSlot.qml"
@@ -403,16 +403,16 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 watch = '''  FileView {
-    path: root.hostReady ? root.home + "/.local/state/omarchy/toggles" : ""
+    path: root.hostReady ? SuiteRuntime.HostContract.path(root.home, "togglesDir") : ""
     watchChanges: true
     printErrors: false
     onFileChanged: root.requestBarHiddenProbe()
   }'''
 quiet_watch = "  Item {} // fixture: ordinary bar-off directory watcher disabled"
-command = '    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]] && echo yes || echo no"]'
-delayed = ('    command: ["bash", "-lc", "rm -f \\\"$HOME/probe-sampled\\\"; '
-           'if [[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]]; then result=yes; '
-           'else result=no; fi; : > \\\"$HOME/probe-sampled\\\"; sleep 0.15; echo \\\"$result\\\""]')
+command = '    command: ["bash", "-lc", "[[ -f " + SuiteRuntime.HostContract.path("$HOME", "barOffMarker") + " || -f " + SuiteRuntime.HostContract.path("$HOME", "barHiddenMarker") + " ]] && echo yes || echo no"]'
+delayed = command.replace('"[[ -f ', '"rm -f \\\"$HOME/probe-sampled\\\"; if [[ -f ').replace(
+    ' ]] && echo yes || echo no"]',
+    ' ]]; then result=yes; else result=no; fi; : > \\\"$HOME/probe-sampled\\\"; sleep 0.15; echo \\\"$result\\\""]')
 if source.count(watch) != 1 or source.count(command) != 1:
     raise SystemExit("visibility fixture calibration anchor drifted")
 path.write_text(source.replace(watch, quiet_watch).replace(command, delayed))

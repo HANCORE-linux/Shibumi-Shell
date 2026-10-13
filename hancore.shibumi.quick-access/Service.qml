@@ -100,7 +100,7 @@ Item {
   readonly property string emptyText: loading ? "Loading " + title.toLowerCase() + "..."
     : "No " + title.toLowerCase() + " found"
   readonly property string currentThemeNamePath:
-    home + "/.local/state/omarchy/current/theme.name"
+    SuiteRuntime.HostContract.path(home, "themeNameFile")
   readonly property bool overlayLoaded: overlayLoader.item !== null
   readonly property bool overlayActive: overlayLoader.active
   readonly property bool pickerWorkersRunning: currentProc.running
@@ -279,7 +279,7 @@ Item {
     if (!opened) return
     requestSerial++
     if (officialPickerProc.running)
-      Quickshell.execDetached(["omarchy-shell", "image-selector", "cancel"])
+      Quickshell.execDetached([SuiteRuntime.HostContract.shellCommand, "image-selector", "cancel"])
     opened = false
     activeScreen = null
     confirmDelete = false
@@ -775,7 +775,7 @@ Item {
         "key=$1; gsub(/[[:space:]=]/, \"\", key); colors[key]=$2",
         "} END { split(\"red green yellow blue magenta cyan\", names, \" \");",
         "for (i=1; i<=6; i++) { color=colors[\"color\" i]; if (color == \"\") color=colors[names[i]];",
-        "if (color != \"\") { printf \"%s%s\", sep, color; sep=\",\" } } print \"\" }' \"$d/colors.toml\" 2>/dev/null);",
+        "if (color != \"\") { printf \"%s%s\", sep, color; sep=\",\" } } print \"\" }' \"$d/" + SuiteRuntime.HostContract.fileName("themeColorsFile") + "\" 2>/dev/null);",
         "printf '%s\\t%s\\t%s\\n' \"$author\" \"$repo\" \"$palette\""
       ].join(" "), "shibumi-theme-meta", directory]
       themeMetaProc.running = true

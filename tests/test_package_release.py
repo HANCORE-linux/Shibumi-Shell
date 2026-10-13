@@ -925,7 +925,7 @@ puts JSON.generate(workflow.fetch("jobs"))
         module = importlib.util.module_from_spec(spec)
         loader.exec_module(module)
 
-        for name, command, prefix in module.HOST_PROBES:
+        for name, command, prefix in module.host_probe_expectations()[0]:
             with self.subTest(probe=name, failure="missing"):
                 with patch.object(
                     module.subprocess, "run", side_effect=FileNotFoundError("missing")

@@ -24,6 +24,8 @@ mkdir -p "$tmpdir/home" "$tmpdir/runtime" "$tmpdir/network"
 chmod 700 "$tmpdir/runtime"
 cp "$repo_root/tests/network-ipc-routing-smoke.qml" "$tmpdir/shell.qml"
 cp "$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml" "$tmpdir/network/"
+mkdir -p "$tmpdir/hancore.shibumi.state"
+cp -a "$repo_root/hancore.shibumi.state/runtime" "$tmpdir/hancore.shibumi.state/"
 
 QT_QPA_PLATFORM=offscreen WAYLAND_DISPLAY='' \
 HOME="$tmpdir/home" XDG_RUNTIME_DIR="$tmpdir/runtime" \

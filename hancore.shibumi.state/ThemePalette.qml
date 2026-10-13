@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons as Commons
 import "ThemePaletteModel.js" as ThemePaletteModel
+import "runtime" as SuiteRuntime
 
 // Quattro owns the foundational background/foreground roles. Read the seven
 // terminal swatches that its public Commons palette does not expose so the
@@ -16,9 +17,9 @@ Item {
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string colorsPath:
-    home + "/.local/state/omarchy/current/theme/colors.toml"
+    SuiteRuntime.HostContract.path(home, "themeColorsFile")
   readonly property string themeNamePath:
-    home + "/.local/state/omarchy/current/theme.name"
+    SuiteRuntime.HostContract.path(home, "themeNameFile")
   readonly property string selectedId: ThemePaletteModel.selection(
     config && config.presentation ? config.presentation.accent : "color01")
   property color color01: Commons.Color.urgent

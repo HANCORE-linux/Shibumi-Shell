@@ -900,7 +900,7 @@ rg -q 'serviceFor\("hancore\.shibumi\.bluetooth"\)' "$bluetooth_widget" \
   || fail "Bluetooth view does not resolve the shipped service"
 rg -q 'property var sessionOwners: \[\]' "$bluetooth_service" \
   || fail "Bluetooth service lacks multi-output session accounting"
-rg -q 'target: "omarchy\.bluetooth"' "$bluetooth_service" \
+rg -q 'target: SuiteRuntime\.HostContract\.ipcTargets\.bluetooth\b' "$bluetooth_service" \
   || fail "Bluetooth service does not own the single legacy IPC target"
 rg -q 'bar\.hideBarWidget\("omarchy\.bluetooth"\)' "$bluetooth_service" \
   || fail "Bluetooth legacy close/hide is not routed to the local panel"
