@@ -266,7 +266,8 @@ Ui.Panel {
   }
   onOpenedChanged: syncPanelLoader()
   onFocusedWorkspaceIdChanged: observePacmanFocus()
-  onRenderStyleChanged: resetPacmanTravel()
+  onRenderStyleChanged: { frameMotion.placed = false; resetPacmanTravel() }
+  onFrameTargetChanged: if (!frameTarget) frameMotion.placed = false
   Component.onCompleted: {
     initialRenderStyle = renderStyle
     pacmanLastFocusedWorkspaceId = focusedWorkspaceId
@@ -305,6 +306,7 @@ Ui.Panel {
 
     Item {
       id: frameMotion
+      property bool placed: false
       z: 0
       visible: root.renderStyle === "rings" && root.frameTarget !== null
       // Use resident animated cell geometry and the logical frame size.
@@ -314,8 +316,20 @@ Ui.Panel {
       anchors.verticalCenter: parent.verticalCenter
       width: Commons.Style.space(18)
       height: width
+      onXChanged: {
+        if (placed || root.renderStyle !== "rings" || !root.frameTarget) return
+        const cells = Array.from(workspaceRow.children)
+          .filter(item => item.visible && item.implicitWidth > 0)
+        if (cells.length === root.displayedWorkspaceIds.length
+            && cells.every((item, index) =>
+              Math.abs(item.implicitWidth - Commons.Style.space(20)) < 1e-7
+              && Math.abs(item.width - item.implicitWidth) < 1e-7
+              && Math.abs(item.x - index * (item.width + workspaceRow.spacing)) < 1e-7))
+          placed = true
+      }
 
       Behavior on x {
+        enabled: frameMotion.placed
         NumberAnimation { duration: 190; easing.type: Easing.OutCubic }
       }
 
@@ -386,6 +400,12 @@ Ui.Panel {
       anchors.centerIn: parent
       spacing: root.workspaceGap
       width: root.workspaceContentWidth
+      onPositioningComplete: {
+        if (root.renderStyle === "rings" && root.frameTarget
+            && Array.from(children).filter(item => item.visible && item.implicitWidth > 0)
+              .every(item => Math.abs(item.implicitWidth - Commons.Style.space(20)) < 1e-7))
+          frameMotion.placed = true
+      }
 
       Repeater {
         id: workspaceRepeater
