@@ -1466,7 +1466,7 @@ ShellRoot {
           if (!panel || !panel.settingsPageReady
               || panel.settingsPage !== "bars"
               || !panel.settingsPageItem
-              || panel.settingsPageItem.surfaceEffectOptionCount !== 2
+              || panel.settingsPageItem.surfaceEffectOptionCount !== 3
               || panel.settingsPageItem.surfaceEffectPreviewCount !== 0
               || panel.settingsPageItem.splitActionPreviewCount !== 0
               || panel.settingsPageItem.surfaceRadiusOptionCount !== 0

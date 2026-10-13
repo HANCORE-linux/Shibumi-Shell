@@ -65,7 +65,7 @@ Item {
   readonly property bool panelBorderEnabled: v2Shell
     ? presentation.panelBorder !== false : borderEnabled
   readonly property bool shadowEnabled: presentation.shadow === true
-  readonly property bool frostEnabled: !v2Shell && presentation.frost === true
+  readonly property bool frostEnabled: presentation.frost === true
   readonly property color paper: Commons.Color.background
   readonly property color ink: Commons.Color.foreground
   readonly property color sumi: Commons.Color.muted

@@ -26,7 +26,8 @@ Column {
           label: "Panel + tooltip",
           detail: "Outline connected panels and tooltips",
           fallback: true
-        }
+        },
+        { key: "frost", label: "Frost", detail: "Translucent V2 shell", fallback: false }
       ]
     : [
         {
