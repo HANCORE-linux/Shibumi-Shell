@@ -170,8 +170,8 @@ ShellRoot {
         panelB.activateSelected()
       } else if (root.phase === 6) {
         if (p.profileActionRunning || p.activeProfile !== "performance" || p.busyWorkers) return
-        root.check(!v.pwrB.opened && !v.pwrB.panelItem && v.batA.panelItem === panelA
-          && profileFile.text().trim() === "performance", "panel action or selective close")
+        root.check(v.pwrB.opened && v.pwrB.panelItem === panelB && v.batA.panelItem === panelA
+          && profileFile.text().trim() === "performance", "panel action must keep local panels open")
         root.cachedSet = p.setProfile; root.cachedRefresh = p.refreshProfiles
         barrier.setText("")
         root.check(p.setProfile("power-saver"), "held fake action refused")

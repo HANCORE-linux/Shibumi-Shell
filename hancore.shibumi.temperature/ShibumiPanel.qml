@@ -145,7 +145,7 @@ PanelWindow {
     focusPrimed = false
     beginFocusPrime()
     Qt.callLater(function() {
-      if (root.open && target) target.forceActiveFocus()
+      if (root !== null && root.open && target) target.forceActiveFocus()
     })
   }
 

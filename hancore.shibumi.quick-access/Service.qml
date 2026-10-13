@@ -516,7 +516,7 @@ Item {
     actionProc.actionKind = String(kind || "")
     actionProc.actionLabel = String(label || "")
     actionProc.errorText = ""
-    actionProc.command = command
+    actionProc.command = ["bash", "-c", 'exec "$@" </dev/null', "shibumi-picker-action"].concat(command)
     actionProc.running = true
     return true
   }

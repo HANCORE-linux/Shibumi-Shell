@@ -708,7 +708,7 @@ ShellRoot {
             || first.displayMode !== "icon")
           return root.fail("quick-access display modes")
         if (!quickAccessService.startSelectionAction("wallpaper", "broken.jpg",
-            ["bash", "-c", "printf 'denied by fixture\\n' >&2; exit 7"]))
+            ["bash", "-c", "cat >/dev/null; printf 'denied by fixture\\n' >&2; exit 7"]))
           return root.fail("failed wallpaper action did not start")
         root.phase++
         root.ticks = 0
@@ -719,7 +719,7 @@ ShellRoot {
               !== "Could not apply broken.jpg. denied by fixture")
             return root.fail("failed wallpaper action was not reported")
           if (!quickAccessService.startSelectionAction("theme", "broken-theme",
-              ["bash", "-c", "printf 'theme denied by fixture\\n' >&2; exit 8"]))
+              ["bash", "-c", "cat >/dev/null; printf 'theme denied by fixture\\n' >&2; exit 8"]))
             return root.fail("failed theme action did not start")
           root.phase++
           root.ticks = 0
