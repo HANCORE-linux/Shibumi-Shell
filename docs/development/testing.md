@@ -71,7 +71,7 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-50d687a1 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
@@ -99,8 +99,8 @@ non-overlapping claims; the Agents job selects its separate narrower manifest:
   remain immutable optional compatibility references alongside 4.0.2; choose
   a historical manifest with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3` or
   `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
-- `contracts/baselines/omarchy-forward-compat-50d687a1.json` proves forward
-  compatibility with the recorded upstream snapshot.
+- `contracts/baselines/omarchy-forward-compat-4c1b4cb3.json` records the
+  upstream snapshot pinned for the separate forward-compatibility gate.
 
 All three manifests bind the complete consumed `shell`, `bin`, and `config`
 subtrees by entry count, path inventory, entry type, executable state, symlink

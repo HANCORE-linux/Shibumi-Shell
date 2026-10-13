@@ -28,6 +28,7 @@ permission to change a host; each operation needs separate maintainer approval.
    [packaging and AUR strategy](packaging.md).
 8. On host baseline change, rerun every retained update arm before tagging;
    do not silently drop an arm or choose an older rolling predecessor.
+9. Re-pin forward compatibility to current `quattro` with `scripts/generate-forward-baseline.py`; update pins in `tests/lib/baselines.sh`, `tests/baseline-contract-regression.sh`, `tests/quattro-contract-regression.sh`, `tests/panel-window-geometry-regression.sh`, `scripts/collect-release-evidence`, `tests/documentation-regression.py`, `AGENTS.md`, `docs/release-readiness.md`, `docs/architecture/quattro-compatibility.md`, `docs/development/testing.md`, `docs/development/validation-host.md`, and `docs/development/release.md`, provision the clean runner checkout `~/.local/share/shibumi/validation-baselines/omarchy-forward-compat-<sha>`, and have the maintainer update Actions variable `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH`.
 
 ## Version pin categories
 
@@ -125,7 +126,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-50d687a1 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

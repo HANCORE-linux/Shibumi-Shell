@@ -40,7 +40,7 @@ remains deferred.
 | Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.2 → candidate (7). No arm may be dropped. |
 | Stage-1 visual evidence | Round 379 records DPR 1/1.6 rest and shared-code captures, seven-theme picker search, previewless themes, sorting, and an unchanged Update Center. Round 380 separately rechecks Pacman against 16.2 and the six retained hover styles against 379. No physical-output claim. |
 | Stage-1 performance | Round 379: 670 sessions, 1,880 events, cold/warm N5; focus, style, bar and hover only, not media-scroll or Control Center events. Accepted by the maintainer, including the warm Kanji CPU group as variation. Focus R/B/changed-buffer counts are not identical in every group; 13/140 hover input-to-last-pixel measurements exceed 136.667 ms by at most 2.29 ms. No blanket speedup or scanout claim. Pacman has since been restored to 16.2; no new performance series is claimed. |
-| Compatibility preparation | The unchanged validator accepts forward manifest `50d687a1`; the old manifest remains. Stage-1 complete profiles stopped at the expected old-version payload pin, so all final complete gates must run again after release identities are aligned. |
+| Compatibility preparation | Forward manifest `4c1b4cb3` supersedes `e71a816e`; older manifests remain. Manifest, panel geometry and focused Quattro/style checks pass. Complete forward evidence after release-identity alignment remains required; the pin is not a complete compatibility pass. |
 | Live installation and hardware | Keep-settings installation and reviewer live acceptance must be recorded separately. Fixtures do not establish physical multi-output, hardware, credential or real desktop input acceptance. |
 | Release/package verification | Reproducible archive, checksum agreement, clean-commit gates and rehearsal, independent review, full collector and remote verification remain separate publication requirements. |
 
@@ -65,7 +65,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Installed package profile | `installed-package-v4.0.4` |
 | Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` |
+| Forward reference | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility
