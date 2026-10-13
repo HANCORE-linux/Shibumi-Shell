@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 bar_root="$repo_root/hancore.shibumi.bar"
 omarchy_path=$OMARCHY_PATH
@@ -326,7 +327,7 @@ printf '%s\n' "$nested_output"
 [[ $nested_rc -eq 0 ]] || fail "nested hosted-panel smoke exited $nested_rc"
 grep -q 'hosted panel loader smoke passed' <<<"$nested_output" \
   || fail 'nested hosted-panel smoke did not reach its success marker'
-if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' \
+if grep -Eq "$HOST_DIAGNOSTICS_COMPOSITION" \
     <<<"$nested_output"; then
   fail 'nested hosted-panel runtime log contains a composition error'
 fi

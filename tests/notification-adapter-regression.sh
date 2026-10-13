@@ -4,26 +4,13 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/qs-runner.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
 tmpdir=$(mktemp -d /tmp/shibumi-notification-adapter.XXXXXX)
-fixture_pid=
-
-stop_fixture() {
-  [[ -z ${fixture_pid:-} ]] && return 0
-  if kill -0 -- "-$fixture_pid" 2>/dev/null; then
-    kill -TERM -- "-$fixture_pid" 2>/dev/null || true
-    for _ in {1..20}; do
-      kill -0 -- "-$fixture_pid" 2>/dev/null || break
-      sleep 0.05
-    done
-    kill -KILL -- "-$fixture_pid" 2>/dev/null || true
-  fi
-  wait "$fixture_pid" 2>/dev/null || true
-  fixture_pid=
-}
-trap 'stop_fixture; rm -rf -- "$tmpdir"' EXIT
+trap 'rm -rf -- "$tmpdir"' EXIT
 
 fail() {
   printf 'notification adapter regression failed: %s\n' "$*" >&2
@@ -33,7 +20,6 @@ fail() {
 [[ -d $omarchy_path/shell/Commons ]] || fail "Omarchy Commons not found"
 [[ -d $omarchy_path/shell/Ui ]] || fail "Omarchy Ui not found"
 [[ -x $quickshell_bin ]] || fail "Quickshell not found"
-command -v setsid >/dev/null 2>&1 || fail "setsid not found"
 
 mkdir -p "$tmpdir/status"
 cp -a -- "$repo_root/hancore.shibumi.status/." "$tmpdir/status/"
@@ -108,7 +94,7 @@ EOF
     printf '%s\0' "$root/omarchy fixture/bin/omarchy-hyprland-focus-app" "$proxy_app" >"$root/expected.argv"
   fi
 
-  setsid env -i \
+  local -a qs_fixture_env=(-i
     HOME="$root/home" \
     XDG_CONFIG_HOME="$root/config" \
     XDG_CACHE_HOME="$root/cache" \
@@ -135,27 +121,16 @@ EOF
     SHIBUMI_PROXY_APP="$proxy_app" \
     QML_IMPORT_PATH="$omarchy_path/shell" \
     QML2_IMPORT_PATH="$omarchy_path/shell" \
-    "$quickshell_bin" -p "$tmpdir" --no-color >"$output" 2>&1 &
-  fixture_pid=$!
-  local ticks=0
-  while kill -0 "$fixture_pid" 2>/dev/null && (( ticks < 160 )); do
-    sleep 0.05
-    ((ticks += 1))
-  done
-  if kill -0 "$fixture_pid" 2>/dev/null; then
-    stop_fixture
-    cat "$output"
-    fail "$name timed out"
-  fi
+  )
+  local -a qs_fixture_args=(--no-color)
   set +e
-  wait "$fixture_pid"
+  qs_run_fixture "$tmpdir/shell.qml" "$root" 8 >"$output" 2>&1
   local rc=$?
   set -e
-  fixture_pid=
   cat "$output"
   [[ $rc -eq 0 ]] || fail "$name smoke exited $rc"
   grep -Fq "$marker" "$output" || fail "$name success marker missing"
-  if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' "$output"; then
+  if grep -Eq "$HOST_DIAGNOSTICS_COMPOSITION" "$output"; then
     fail "$name runtime log contains a composition error"
   fi
   if [[ $history_mode == proxy ]]; then

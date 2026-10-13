@@ -1,0 +1,3 @@
+STARTUP_UNSET	$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.
+BINDING	TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign
+COMPOSITION	Binding loop|TypeError|ReferenceError|is not a type|failed to load

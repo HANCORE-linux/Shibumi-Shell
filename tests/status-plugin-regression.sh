@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -75,9 +76,8 @@ grep -F 'status plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 unexpected_diagnostics=$(grep -E \
   'WARN|ERROR|CRITICAL|TypeError|ReferenceError|Binding loop|Unable to assign|Cannot assign|Internal error' \
-  <<<"$output" | grep -Fv \
+  <<<"$output" | host_filter_startup_diagnostics \
   -e 'Module path contains invalid characters for a module name:  "/hancore.shibumi.bar/services"' \
-  -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' \
   || true)
 [[ -z $unexpected_diagnostics ]] \
   || fail "component smoke emitted an unexpected runtime diagnostic"

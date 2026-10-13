@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -45,7 +46,7 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'reactor plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$output"; then
   fail "QML runtime error"
 fi
 
@@ -62,7 +63,7 @@ set -e
 printf '%s\n' "$scoped_output"
 [[ $scoped_rc -eq 0 ]] || fail "scoped smoke exited $scoped_rc"
 grep -Fq 'reactor runtime smoke passed' <<<"$scoped_output" || fail "scoped marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$scoped_output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$scoped_output"; then
   fail "scoped QML runtime error"
 fi
 

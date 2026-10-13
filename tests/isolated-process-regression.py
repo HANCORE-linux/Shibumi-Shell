@@ -20,7 +20,7 @@ class BoundedProcess(unittest.TestCase):
         for length in (0, 63, 64):
             result = self.run_python(f'import os; os.write(1, b"x"*{length})', maximum=64)
             self.assertEqual((result.returncode, len(result.stdout)), (0, length))
-        with self.assertRaisesRegex(RuntimeError, "output limit"):
+        with self.assertRaisesRegex(RuntimeError, "output limit") as failure:
             self.run_python('import os; os.write(1,b"x"*65)', maximum=64)
         with self.assertRaisesRegex(RuntimeError, "output limit"):
             self.run_python('import os; os.write(1,b"x"*32); os.write(2,b"x"*33)', maximum=64)
@@ -36,8 +36,8 @@ class BoundedProcess(unittest.TestCase):
                 self.run_python('raise RuntimeError("must not execute")', maximum=value)
 
     def test_closed_pipes_do_not_bypass_deadline(self):
-        with self.assertRaisesRegex(RuntimeError, "deadline"):
-            self.run_python('import os,time; os.close(1); os.close(2); time.sleep(20)', timeout=.15)
+        with self.assertRaisesRegex(RuntimeError, "deadline") as failure:
+            self.run_python('import os,time; os.write(1,b"partial"); os.close(1); os.close(2); time.sleep(20)', timeout=.15)
 
     def test_exited_parent_does_not_leave_group_worker(self):
         self.check_group_worker(False)
@@ -75,7 +75,9 @@ class BoundedProcess(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, 'already reaped'):
                             finish_owned_group(process)
                     elif closed_pipes:
-                        self.assertEqual(self.run_python(code, timeout=.3).returncode, 0)
+                        result = self.run_python(code, timeout=.3)
+                        self.assertEqual(result.returncode, 0)
+                        self.assertEqual(result.survivorsBeforeKill, 1)
                     else:
                         with self.assertRaisesRegex(RuntimeError, "deadline"):
                             self.run_python(code, timeout=.3)

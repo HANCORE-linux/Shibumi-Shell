@@ -3,6 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$repo_root/tests/lib/host-diagnostics.sh"
 
 fail() {
   printf 'core services regression failed: %s\n' "$*" >&2
@@ -43,7 +44,7 @@ grep -q 'Configuration Loaded' <<<"$output" \
   || fail "configuration did not load"
 grep -q 'core services smoke passed' <<<"$output" \
   || fail "runtime assertions did not complete"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$output"; then
   fail "QML runtime error"
 fi
 

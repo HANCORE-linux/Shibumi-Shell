@@ -238,6 +238,30 @@ without deriving owner readiness from its own allocated width.
 It uses no desktop screenshot or physical layer surface; real Top/Bottom ghost
 and mixed-scale acceptance remain separate.
 
+## Shared shell fixture helpers
+
+`tests/lib/host-diagnostics.txt` holds only the common missing-Hyprland-signature
+startup line and two byte-identical full Deny expressions. Shell callers source
+`host-diagnostics.sh`; substring versus whole-line matching, case sensitivity,
+additional diagnostics and exceptions remain local. Socket and module-path
+warnings are not universally accepted. Quick Access's intentional action and
+negative-control binding warnings never enter the common allowance.
+
+`qs_run_fixture <fixture.qml> <workdir> [timeout]` in `tests/lib/qs-runner.sh`
+stages missing pinned Commons/Ui trees without replacing existing fixture stubs.
+Callers supply the whole fixture environment through the required `qs_fixture_env`
+array (`-i` clears the inherited one); the runner adds nothing.
+`qs_fixture_args` preserves CLI arguments. The synchronous helper
+uses `isolated_process.py` for bounded capture, deadline and owned-group cleanup;
+it preserves captured bytes in `qs-runner.log`, including timeout/error exits, and
+writes runner diagnostics to `qs-runner-error.log`. `qs-runner-survivors` records
+live descendants before the cleanup kill; Panel Geometry requires zero, and the
+shared cleanup verifies no live members remain before reaping its reserved leader.
+The combined output limit is 4 MiB; exceeding it exits 125 with the bounded prefix.
+A descendant holding stdout open keeps capture waiting until the deadline.
+The caller removes its workdir.
+QML, qmltestrunner, Python and nested-Wayland runners keep their existing policies.
+
 ## Asynchronous Control Center restoration
 
 `tests/bar-host-registry-regression.sh` exercises the actual Bar restoration

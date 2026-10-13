@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -127,7 +128,7 @@ printf '%s\n' "$slice_output"
 [[ $slice_rc -eq 0 ]] || fail "scoped telemetry smoke exited $slice_rc"
 grep -F 'telemetry runtime smoke passed' <<<"$slice_output" >/dev/null \
   || fail "scoped telemetry success marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$slice_output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$slice_output"; then
   fail "scoped telemetry QML runtime error detected"
 fi
 

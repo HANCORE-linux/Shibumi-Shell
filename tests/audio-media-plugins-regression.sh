@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/qs-runner.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -48,15 +49,16 @@ run_smoke() {
     cp "$repo_root/tests/fixtures/ShibumiPanelTest.qml" "$smoke_root/media/ShibumiPanel.qml"
   fi
 
-  set +e
-  local output rc
-  output=$(timeout 8 env \
+  local -a qs_fixture_env=(
     QT_QPA_PLATFORM=offscreen \
     WAYLAND_DISPLAY= \
     XDG_RUNTIME_DIR="$smoke_root/runtime" \
     QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
     QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
-    "$quickshell_bin" -p "$smoke_root" 2>&1)
+  )
+  set +e
+  local output rc
+  output=$(qs_run_fixture "$smoke_root/shell.qml" "$smoke_root" 8 2>&1)
   rc=$?
   set -e
 
@@ -92,9 +94,7 @@ run_spectrum_smoke() {
       "$smoke_root/bin/cava"
   fi
 
-  set +e
-  local output rc
-  output=$(timeout 12 env \
+  local -a qs_fixture_env=(
     PATH="$smoke_root/bin:/usr/bin:/bin" \
     SHIBUMI_CAVA_TEST_MODE="$mode" \
     QT_QPA_PLATFORM=offscreen \
@@ -102,7 +102,10 @@ run_spectrum_smoke() {
     XDG_RUNTIME_DIR="$smoke_root/runtime" \
     QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
     QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
-    "$quickshell_bin" -p "$smoke_root" 2>&1)
+  )
+  set +e
+  local output rc
+  output=$(qs_run_fixture "$smoke_root/shell.qml" "$smoke_root" 12 2>&1)
   rc=$?
   set -e
 

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+source "$repo_root/tests/lib/host-diagnostics.sh"
 tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/shibumi-host-registry-prime.XXXXXX")
 cleanup() { rm -rf -- "$tmpdir"; }
 trap cleanup EXIT
@@ -136,7 +137,7 @@ PY
   if grep -q 'registry-prime-private-path-user-data' <<<"$output"; then
     fail "$mode leaked private diagnostic data"
   fi
-  if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' \
+  if grep -Eq "$HOST_DIAGNOSTICS_COMPOSITION" \
       <<<"$output"; then
     fail "$mode runtime log contains a composition error"
   fi
