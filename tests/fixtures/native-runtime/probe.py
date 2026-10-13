@@ -419,9 +419,8 @@ with (BASE / "native.log").open("xb") as log:
                     and value["panelCatalog"]["byId"]["fixture.native-widget"]["enabled"] is False,
                     timeout=7)
 
-        # Native B(b): fill all five V1 extension slots with fixed groups,
-        # add the real catalog widget in V2, observe the full V1 background
-        # reconcile, then free one slot and retry through V2 -> V1.
+        # Native B(b): reuse a base, swap to an extra, then verify V2 -> V1 persistence.
+        # Exhausted capacity: tests/layout-controller-regression.qml (mixedSpecs).
         b_started = time.monotonic()
         print("NATIVE_TIMING " + json.dumps({"endpoint": "b-start", "monotonic": b_started,
               "probeElapsed": b_started - PROBE_STARTED}), flush=True)
@@ -491,26 +490,23 @@ with (BASE / "native.log").open("xb") as log:
               and native_added_entries[0].get("shibumiModule") is True,
               "B(b) native file readback lost the exact marker")
 
+        full_order["left"][0] = "G:fixture.native-widget"
         check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
               "B(b) full V1 switch refused")
         full_observation = wait_status("native-runtime-probe", lambda value:
             not value["stateWritePending"] and not value["layoutBusy"]
             and not value["v2Mode"] and value["config"]["order"] == full_order
-            and all("G:fixture.native-widget" not in value["config"]["order"][region]
-                    for region in ("left", "center", "right"))
             and any(isinstance(entry, dict)
                     and entry.get("id") == "fixture.native-widget"
                     and entry.get("shibumiModule") is True
                     for entry in value["injectedBar"]["layout"]["left"])
             and ((not value["unplacedPluginIdsPropertyExists"]
                   and not value["capacityMessagePropertyExists"])
-                 or (value["unplacedPluginIds"] == ["fixture.native-widget"]
-                     and value["capacityMessage"] != "")))
+                 or (value["unplacedPluginIds"] == []
+                     and value["capacityMessage"] == "")))
         persisted(lambda value:
                   state_settings(value)["presentation"]["shellStyle"] == "shibumi"
                   and state_settings(value)["order"] == full_order
-                  and all("G:fixture.native-widget" not in state_settings(value)["order"][region]
-                          for region in ("left", "center", "right"))
                   and any(isinstance(entry, dict)
                           and entry.get("id") == "fixture.native-widget"
                           and entry.get("shibumiModule") is True
@@ -531,23 +527,12 @@ with (BASE / "native.log").open("xb") as log:
             "pageFeedbackDetail": full_observation["pageFeedbackDetail"],
         }
         check(capacity_evidence["markerIsDict"]
-              and not capacity_evidence["hasV1Position"],
-              "B(b) full V1 observation did not retain the marker without a position")
+              and capacity_evidence["hasV1Position"],
+              "B(b) base-slot reuse did not retain the marker and position")
         print("NATIVE_BB_FULL_V1_EVIDENCE "
               + json.dumps(capacity_evidence, sort_keys=True), flush=True)
-        bb_capacity_warning = (
-            capacity_evidence["unplacedPluginIds"] == ["fixture.native-widget"]
-            and capacity_evidence["capacityMessage"] != "")
         check(ipc("native-runtime-probe", "expirePageFeedback") == (0, "true"),
               "explicit page feedback expiry failed")
-        if bb_capacity_warning:
-            warning_after_feedback = wait_status("native-runtime-probe", lambda value:
-                not value["pageFeedbackVisible"]
-                and value["unplacedPluginIds"] == ["fixture.native-widget"]
-                and value["capacityMessage"] != "")
-            check(warning_after_feedback["capacityMessage"]
-                  == capacity_evidence["capacityMessage"],
-                  "capacity warning disappeared when action feedback expired")
 
         check(ipc("native-runtime-probe", "freeFullV1Slot") == (0, "queued"),
               "B(b) fixed-group move-back refused")
@@ -560,19 +545,9 @@ with (BASE / "native.log").open("xb") as log:
                        for group in freed["config"]["order"][region]
                        if group in fixed_ids]
         check(sorted(freed_fixed) == sorted(fixed_ids) and len(freed_fixed) == 15
-              and freed["config"]["order"]["left"][7] == "",
+              and freed["config"]["order"]["left"][7] == "G:fixture.native-widget",
               "B(b) slot release did not preserve all fixed groups")
         persisted(lambda value: state_settings(value)["order"] == freed_order)
-        if bb_capacity_warning:
-            check(freed["unplacedPluginIds"] == ["fixture.native-widget"]
-                  and not freed["pageFeedbackVisible"]
-                  and freed["capacityMessage"] == "Some widgets currently have no bar slot.",
-                  "free V1 slot with pending placement must show a cause-neutral page status")
-            print("NATIVE_BB_FREE_SLOT_STATUS " + json.dumps({
-                "slotEmpty": freed["config"]["order"]["left"][7] == "",
-                "unplacedPluginIds": freed["unplacedPluginIds"],
-                "capacityMessage": freed["capacityMessage"],
-            }, sort_keys=True), flush=True)
 
         check(ipc("native-runtime-probe", "setShellStyle", "full") == (0, "queued"),
               "B(b) retry V2 switch refused")
@@ -994,8 +969,6 @@ with (BASE / "native.log").open("xb") as log:
         print("NATIVE_TIMING " + json.dumps({"endpoint": "probe-end", "monotonic": probe_ended, "probeElapsed": probe_ended - PROBE_STARTED, "endRemaining": probe_remaining}), flush=True)
         check(probe_remaining >= 8,
               "native B(b) probe exceeded the authorized 77 s action budget")
-        check(bb_capacity_warning,
-              "full V1 background reconcile did not publish the unplaced widget capacity warning")
     finally:
         finish_owned_group(process)
         log.flush()

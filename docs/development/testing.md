@@ -732,6 +732,10 @@ start. Fixed Shibumi groups use the State-only channel. A catalog-only Audio
 provider covers serialized V1/V2 replacement, return to Shibumi, exact undo and
 stale-postimage refusal without relying on a preloaded component. These are
 isolated native-host flows, not rendered desktop or physical-output evidence.
+The B(b) fixture fills the five extras but leaves reusable base slots: following
+`ARCHITECTURE.md`'s allocation contract, it expects the native widget in `left[0]`,
+then swaps it to the extra when G1 returns. This is base-slot reuse and persistence
+coverage, not exhausted-capacity warning coverage.
 
 `tests/state-storage-regression.py` isolates the actual controller with an explicit
 own-entry writer and private configuration files. It exercises debounce, in-flight
