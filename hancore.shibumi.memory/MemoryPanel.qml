@@ -11,6 +11,14 @@ ShibumiPanel {
   required property var telemetry
   readonly property var usageRing: memoryRing
   readonly property var hardwareInfoView: hardwareInfo
+  property QtObject sweepSource: null
+  property bool cacheSelected: true
+  property bool compactSelected: true
+  readonly property bool sweepAvailable: !!telemetry && typeof telemetry.startMemorySweep === "function"
+  readonly property bool sweepVisible: sweepAvailable && sweepSource === telemetry
+  readonly property bool sweepRunning: sweepAvailable && telemetry.memorySweepRunning === true
+  readonly property string sweepError: sweepAvailable ? String(telemetry.memorySweepError || "") : ""
+  function gib(value) { return typeof value === "number" && value >= 0 ? (value / 1024).toFixed(1) + " GiB" : "—" }
 
   owner: ownerWidget
   open: ownerWidget.opened
@@ -28,7 +36,7 @@ ShibumiPanel {
     if (next) next.acquire("memoryPanel")
   }
   onTelemetryChanged: syncHardwareLease()
-  onOpenChanged: syncHardwareLease()
+  onOpenChanged: { syncHardwareLease(); if (!open) sweepSource = null }
   Component.onCompleted: syncHardwareLease()
   Component.onDestruction: if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
 
@@ -50,7 +58,7 @@ ShibumiPanel {
         Text {
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
-          text: "MEMORY"
+          text: panel.sweepVisible ? "MEMORY / SWEEP" : "MEMORY"
           color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
           font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
           font.pixelSize: 13
@@ -100,6 +108,7 @@ ShibumiPanel {
       }
 
       Row {
+        visible: !panel.sweepVisible
         width: parent.width
         height: memoryRing.height
         spacing: Commons.Style.space(16)
@@ -143,42 +152,109 @@ ShibumiPanel {
       }
 
       Rectangle {
+        visible: !panel.sweepVisible
         width: parent.width
         height: 1
         color: panel.dividerColor
       }
 
-      Rectangle {
+      Column {
+        visible: panel.sweepVisible
         width: parent.width
-        height: 28
-        radius: panel.renderedSurfaceRadius
-        color: monitorMouse.containsMouse
-          ? panel.controlPrimaryHoverColor
-          : panel.bar ? panel.bar.urgent : Commons.Color.accent
-
-        Behavior on color { ColorAnimation { duration: 120 } }
-
-        Text {
-          anchors.centerIn: parent
-          text: "Open btop"
-          color: panel.bar ? panel.bar.background : Commons.Color.background
-          font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
-          font.pixelSize: 11
-          renderType: Text.NativeRendering
+        height: 50
+        SweepChoice {
+          label: "Page cache"; value: panel.gib(panel.telemetry ? panel.telemetry.memCachedMiB + panel.telemetry.memBuffersMiB : -1)
+          detail: "no guaranteed gain"; checked: panel.cacheSelected
+          onToggled: panel.cacheSelected = !panel.cacheSelected
         }
-
-        MouseArea {
-          id: monitorMouse
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            panel.ownerWidget.close()
-            panel.ownerWidget.openSystemMonitor()
+        SweepChoice {
+          label: "Compact memory"; value: "—"; detail: "no size estimate"
+          checked: panel.compactSelected
+          onToggled: panel.compactSelected = !panel.compactSelected
+        }
+      }
+      SweepLabel {
+        visible: panel.sweepVisible
+        width: parent.width; height: 13; font.pixelSize: 10
+        text: "Available: " + panel.gib(panel.sweepAvailable && panel.telemetry.memorySweepBeforeMiB >= 0
+          ? panel.telemetry.memorySweepBeforeMiB : panel.telemetry ? panel.telemetry.memAvailableMiB : -1)
+          + " → " + panel.gib(panel.sweepAvailable ? panel.telemetry.memorySweepAfterMiB : -1)
+      }
+      SweepLabel {
+        visible: panel.sweepVisible
+        width: parent.width; height: 10; font.pixelSize: 9
+        text: panel.sweepError || (panel.sweepRunning ? "Authorizing / sweeping…" : "One authorization in the Omarchy dialog · no terminal")
+        color: panel.sweepError ? panel.controlAccent : panel.controlMutedHigh
+        elide: Text.ElideRight
+      }
+      Row {
+        width: parent.width; height: 28; spacing: 8
+        MemoryAction {
+          label: panel.sweepVisible ? "Back" : "Open btop"
+          onTriggered: {
+            if (panel.sweepVisible) panel.sweepSource = null
+            else { panel.ownerWidget.close(); panel.ownerWidget.openSystemMonitor() }
+          }
+        }
+        MemoryAction {
+          label: "Sweep"
+          enabled: panel.sweepAvailable && (!panel.sweepVisible || (!panel.sweepRunning
+            && (panel.cacheSelected || panel.compactSelected)))
+          onTriggered: {
+            if (!panel.sweepAvailable) return
+            if (!panel.sweepVisible) {
+              panel.telemetry.clearMemorySweepResult()
+              panel.cacheSelected = true; panel.compactSelected = true
+              panel.sweepSource = panel.telemetry
+            } else panel.telemetry.startMemorySweep(panel.cacheSelected, panel.compactSelected)
           }
         }
       }
     }
+  }
+
+  component SweepLabel: Text {
+    color: panel.controlForeground
+    font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+    font.pixelSize: 11
+    renderType: Text.NativeRendering
+    textFormat: Text.PlainText
+  }
+
+  component SweepChoice: Item {
+    id: choice
+    required property string label
+    required property string value
+    required property string detail
+    required property bool checked
+    signal toggled()
+    width: parent.width; height: 25
+    enabled: !panel.sweepRunning
+    Rectangle {
+      y: 2; width: 12; height: 12
+      radius: Math.min(height / 2, panel.controlRadius)
+      color: choice.checked ? panel.controlAccent : panel.controlFillColor
+      border.width: 1; border.color: choice.checked ? panel.controlAccent : panel.controlBorderColor
+      SweepLabel { anchors.centerIn: parent; text: choice.checked ? "✓" : ""; font.pixelSize: 10; color: panel.bar ? panel.bar.background : Commons.Color.background }
+    }
+    SweepLabel { x: 20; width: parent.width - 88; text: choice.label; elide: Text.ElideRight }
+    SweepLabel { anchors.right: parent.right; text: choice.value }
+    SweepLabel { x: 20; y: 13; width: parent.width - 20; text: choice.detail; font.pixelSize: 9; color: panel.controlMutedHigh; elide: Text.ElideRight }
+    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: choice.toggled() }
+  }
+
+  component MemoryAction: Rectangle {
+    id: action
+    required property string label
+    signal triggered()
+    width: (parent.width - 8) / 2; height: 28
+    radius: panel.renderedSurfaceRadius
+    opacity: enabled ? 1 : 0.45
+    color: actionMouse.containsMouse ? panel.controlPrimaryHoverColor
+      : panel.bar ? panel.bar.urgent : Commons.Color.accent
+    Behavior on color { ColorAnimation { duration: 120 } }
+    SweepLabel { anchors.centerIn: parent; text: action.label; color: panel.bar ? panel.bar.background : Commons.Color.background }
+    MouseArea { id: actionMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: action.triggered() }
   }
 
   component MemoryStatRow: Item {

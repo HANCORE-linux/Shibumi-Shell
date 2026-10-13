@@ -983,9 +983,8 @@ rg -Fq 'result.ok === true' "$bluetooth_panel" \
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
-if rg -q 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml; then
-  fail "system telemetry must read procfs without child processes"
-fi
+[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml) -eq 1 ]] \
+  || fail "system telemetry must have one process-wide Memory Sweep worker"
 rg -q '"service": "WorkspaceService.qml"' hancore.shibumi.workspaces/manifest.json \
   || fail "workspace state must have exactly one shipped owner"
 workspace_service=hancore.shibumi.workspaces/WorkspaceService.qml
