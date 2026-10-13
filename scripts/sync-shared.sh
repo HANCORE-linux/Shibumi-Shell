@@ -16,7 +16,12 @@ esac
 # ShibumiPanel retains three lifecycle timers, so it cannot enter the passive
 # State presentation library. Keep its existing copies drift-checked until its
 # scheduling contract can be separated without changing panel behavior.
+# HostWidgetEmbed shares checked host-embedding code without a cross-plugin import.
 mappings=(
+  "shared/runtime/HostWidgetEmbed.qml:hancore.shibumi.center/HostWidgetEmbed.qml"
+  "shared/runtime/HostWidgetEmbed.qml:hancore.shibumi.status/HostWidgetEmbed.qml"
+  "shared/runtime/HostWidgetEmbed.qml:hancore.shibumi.audio/HostWidgetEmbed.qml"
+  "shared/runtime/HostWidgetEmbed.qml:hancore.shibumi.brightness/HostWidgetEmbed.qml"
   "shared/presentation/WaterRing.qml:hancore.shibumi.cpu/WaterRing.qml"
   "shared/presentation/WaterRing.qml:hancore.shibumi.battery/WaterRing.qml"
   "shared/presentation/WaterRing.qml:hancore.shibumi.temperature/WaterRing.qml"

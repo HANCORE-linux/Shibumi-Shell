@@ -41,7 +41,7 @@ def finish_owned_group(process):
 
 def run_bounded(command, *, env=None, cwd=None, timeout=4, maximum=65536, pass_fds=()):
     if (type(timeout) not in (int, float) or not math.isfinite(timeout)
-            or not 0 < timeout <= 120 or type(maximum) is not int
+            or not 0 < timeout <= 180 or type(maximum) is not int
             or not 0 <= maximum <= 4 * 1024 * 1024):
         raise ValueError("invalid owned-process bounds")
     process = subprocess.Popen(command, env=env, cwd=cwd, stdout=subprocess.PIPE,

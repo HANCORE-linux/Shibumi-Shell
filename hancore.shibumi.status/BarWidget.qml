@@ -10,13 +10,14 @@ Item {
   property var bar: null
   property string moduleName: "hancore.shibumi.status"
   property var settings: ({})
-  readonly property url updateSource: registeredSource(
+  HostWidgetEmbed { id: embed; bar: root.bar }
+  readonly property url updateSource: embed.resolveSource(
     "hancore.shibumi.update-center")
-  readonly property url traySource: registeredSource("omarchy.tray")
+  readonly property url traySource: embed.resolveSource("omarchy.tray")
   property var updateComponent: String(updateSource) ? null
-    : registeredComponent("hancore.shibumi.update-center")
+    : embed.resolveComponent("hancore.shibumi.status", "hancore.shibumi.update-center")
   property var trayComponent: String(traySource) ? null
-    : registeredComponent("omarchy.tray")
+    : embed.resolveComponent("hancore.shibumi.status", "omarchy.tray")
   property url trayDrawerSource: Qt.resolvedUrl("TrayDrawerPanel.qml")
   property url trayAppMenuSource: Qt.resolvedUrl("TrayAppMenuPanel.qml")
   property url notificationPanelSource: Qt.resolvedUrl("NotificationPanel.qml")
@@ -168,31 +169,6 @@ Item {
   implicitWidth: visible ? contentWidth + 2 * horizontalInset : 0
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
-  function registeredComponent(id) {
-    if (bar
-        && typeof bar.registeredEmbeddedWidgetComponent === "function")
-      return bar.registeredEmbeddedWidgetComponent(
-        "hancore.shibumi.status", id)
-    if (bar && typeof bar.registeredWidgetComponent === "function")
-      return bar.registeredWidgetComponent(id)
-    const registry = bar ? bar.barWidgetRegistry : null
-    if (registry) void(registry.revision)
-    const widgets = registry && registry.widgets ? registry.widgets : ({})
-    const entry = widgets[id]
-    return entry ? entry.component : null
-  }
-
-  function registeredSource(id) {
-    if (bar && typeof bar.registeredWidgetSource === "function")
-      return bar.registeredWidgetSource(id)
-    const registry = bar && bar.shell
-      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
-    const pluginManifest = registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
-  }
-
   function childSettings(id) {
     return bar && typeof bar.widgetSettings === "function"
       ? bar.widgetSettings("G3", id) : ({})
@@ -243,36 +219,15 @@ Item {
     injectChild(trayWidget, "omarchy.tray")
   }
 
-  function syncLoader(loader, component, source, id) {
-    loader.sourceComponent = null
-    loader.source = ""
-    if (component !== null) {
-      loader.sourceComponent = component
-    } else if (String(source)) {
-      loader.setSource(source, {
-        bar: hostProxy,
-        moduleName: id,
-        settings: childSettings(id)
-      })
-    }
-  }
-
-  function syncTrayLoader() {
-    syncLoader(trayLoader, trayComponent, traySource, "omarchy.tray")
-  }
-
-  function syncUpdateLoader() {
-    updateLoader.sourceComponent = null
-    updateLoader.source = ""
-    if (updateComponent !== null) {
-      updateLoader.sourceComponent = updateComponent
-    } else if (String(updateSource)) {
-      updateLoader.setSource(updateSource, {
-        bar: root.bar,
-        moduleName: "hancore.shibumi.update-center",
-        settings: childSettings("hancore.shibumi.update-center")
-      })
-    }
+  function syncChildren() {
+    embed.syncLoader(updateLoader, updateComponent, updateSource, {
+      bar: root.bar, moduleName: "hancore.shibumi.update-center",
+      settings: childSettings("hancore.shibumi.update-center")
+    }, root.bar)
+    const trayId = "omarchy.tray"
+    embed.syncLoader(trayLoader, trayComponent, traySource, {
+      bar: hostProxy, moduleName: trayId, settings: childSettings(trayId)
+    }, root.bar)
   }
 
   function syncTrayDrawerLoader() {
@@ -458,7 +413,7 @@ Item {
   }
 
   function scheduleChildSync() {
-    childSyncTimer.restart()
+    if (root && !embed.shuttingDown) childSyncTimer.restart()
   }
 
   onBarChanged: {
@@ -518,6 +473,8 @@ Item {
       updateWidget.registeredBar = null
     if (updateWidget && "bar" in updateWidget) updateWidget.bar = null
     if (trayWidget && "bar" in trayWidget) trayWidget.bar = null
+    childSyncTimer.stop()
+    embed.shutdown()
   }
 
   QtObject {
@@ -599,8 +556,7 @@ Item {
     id: childSyncTimer
     interval: 0
     onTriggered: {
-      root.syncUpdateLoader()
-      root.syncTrayLoader()
+      root.syncChildren()
       root.injectChildren()
     }
   }

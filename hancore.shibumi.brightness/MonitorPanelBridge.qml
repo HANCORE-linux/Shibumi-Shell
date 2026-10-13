@@ -11,7 +11,8 @@ Item {
   required property var bar
   required property var ownerShell
   required property Item ownerWidget
-  property Component panelComponent: null
+  property var panelComponent: null
+  HostWidgetEmbed { id: embed }
   property url panelSource: ""
   property var panelSettings: ({})
   property bool shuttingDown: false
@@ -141,18 +142,9 @@ Item {
 
   function syncPanelSource() {
     if (shuttingDown) return
-    panelLoader.sourceComponent = null
-    panelLoader.source = ""
-    if (panelComponent !== null) {
-      panelLoader.sourceComponent = panelComponent
-    } else if (String(panelSource)) {
-      panelLoader.setSource(panelSource, {
-        bar: hostProxy,
-        moduleName: "omarchy.monitor",
-        manageIpc: false,
-        settings: panelSettings
-      })
-    }
+    embed.syncLoader(panelLoader, panelComponent, panelSource, {
+      bar: hostProxy, moduleName: "omarchy.monitor", manageIpc: false, settings: panelSettings
+    }, ownerShell || ownerWidget)
   }
 
   function schedulePanelSync() {
@@ -167,13 +159,13 @@ Item {
     hiddenClose.stop()
     if (panel && panel.opened === true && typeof panel.close === "function")
       panel.close()
+    embed.shutdown()
     panelLoader.active = false
-    panelLoader.sourceComponent = null
-    panelLoader.source = ""
   }
 
   onPanelSettingsChanged: injectPanel()
   onBarChanged: injectPanel()
+  onOwnerShellChanged: { embed.revoke(); schedulePanelSync() }
   onPanelComponentChanged: schedulePanelSync()
   onPanelSourceChanged: schedulePanelSync()
   Component.onCompleted: schedulePanelSync()

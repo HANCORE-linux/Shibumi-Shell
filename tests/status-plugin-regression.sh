@@ -115,12 +115,12 @@ if rg -q 'SystemTray\.items|NotificationServer|makoctl|pgrep -x hypridle' \
     "$repo_root/hancore.shibumi.status"; then
   fail "status plugin duplicates an official tray, notification, idle, or DND owner"
 fi
-rg -q 'registered(Source|Component)\("omarchy\.tray"\)' "$status_widget" \
+rg -Fq 'embed.resolveComponent("hancore.shibumi.status", "omarchy.tray")' "$status_widget" \
   || fail "status view does not resolve the official tray component"
-rg -q 'registered(Source|Component)\("hancore\.shibumi\.update-center"\)' \
+rg -Fq 'embed.resolveComponent("hancore.shibumi.status", "hancore.shibumi.update-center")' \
   "$status_widget" \
   || fail "status view does not resolve the Shibumi update center"
-rg -Fq 'registeredEmbeddedWidgetComponent(' "$status_widget" \
+rg -Fq 'registeredEmbeddedWidgetComponent(owner, id)' "$repo_root/hancore.shibumi.status/HostWidgetEmbed.qml" \
   || fail "status view bypasses owner-scoped embedded Component admission"
 for embedded_widget in hancore.shibumi.update-center omarchy.tray; do
   rg -Fq "\"$embedded_widget\": true" \

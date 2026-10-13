@@ -253,7 +253,7 @@ if rg -q 'registered(Component|Source)|registeredWidget(Component|Source)' \
     hancore.shibumi.network/Service.qml; then
   fail "native Network owner still resolves a host feature component"
 fi
-rg -q 'registeredComponent\("omarchy\.monitor"\)' hancore.shibumi.brightness/Service.qml \
+rg -Fq 'embed.resolveComponent("", "omarchy.monitor")' hancore.shibumi.brightness/Service.qml \
   || fail "shipped monitor owner bypasses the stable widget resolver"
 if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' \
     hancore.shibumi.bluetooth/Service.qml; then
@@ -576,7 +576,7 @@ rg -q 'onTabRequested' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar is missing sibling-panel keyboard routing"
 rg -q 'Presentation\.ShibumiPillToolTip \{' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar navigation bypasses the Shibumi tooltip"
-if rg -q 'registeredSource\("omarchy\.indicators"\)' hancore.shibumi.center/BarWidget.qml; then
+if rg -q 'embed\.resolveSource\("omarchy\.indicators"\)' hancore.shibumi.center/BarWidget.qml; then
   fail "G8 must not instantiate Quattro's stock indicator presentation"
 fi
 rg -q '"service": "Service.qml"' hancore.shibumi.status/manifest.json \

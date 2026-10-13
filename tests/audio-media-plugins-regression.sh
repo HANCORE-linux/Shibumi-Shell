@@ -140,11 +140,11 @@ grep -Fq 'horizontalAlignment: Text.AlignLeft' <<<"$compact_content" \
 if grep -Fq 'horizontalAlignment: Text.AlignRight' <<<"$compact_content"; then
   fail "compact audio value still shifts inside its fixed-width field"
 fi
-rg -q 'registeredWidgetSource' "$audio_widget" \
+rg -q 'registeredWidgetSource' "$repo_root/hancore.shibumi.audio/HostWidgetEmbed.qml" \
   || fail "audio bridge does not resolve the official Omarchy source"
-rg -q 'registeredWidgetComponent' "$audio_widget" \
+rg -q 'registeredWidgetComponent' "$repo_root/hancore.shibumi.audio/HostWidgetEmbed.qml" \
   || fail "audio bridge does not resolve the official Omarchy component"
-rg -q 'registered(Source|Component)\("omarchy\.audio"\)' "$audio_widget" \
+rg -q 'embed\.resolveSource\("omarchy\.audio"\)' "$audio_widget" \
   || fail "audio bridge does not select the official Omarchy audio plugin"
 rg -q 'readonly property color background: realBar && realBar\.background !== undefined' \
   "$audio_bridge" \

@@ -263,7 +263,7 @@ for location_contract in \
   rg -Fq "$location_contract" "$weather_panel" \
     || fail "weather location contract missing: $location_contract"
 done
-rg -q 'registered(Source|Component)\("omarchy\.system-update"\)' "$center_widget" \
+rg -Fq 'embed.resolveComponent("hancore.shibumi.center", "omarchy.system-update")' "$center_widget" \
   || fail "center does not retain the official update action owner"
 if rg -U -q 'onLoaded: \{[^}]*root\.scheduleOfficialSync' "$center_widget"; then
   fail "loaded center children recursively reschedule their own loaders"

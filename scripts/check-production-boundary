@@ -40,6 +40,7 @@ WORKER_POLICIES = {
 }
 RULE_KINDS = {"token", "provider", "firstPartyService", "helper"}
 TOKEN_NAMES = {
+    "embed.resolveComponent", "embed.resolveSource", "embed.syncLoader",
     "entryPointUrl",
     "firstPartyService",
     "firstPartyServiceFor",
@@ -84,8 +85,9 @@ PRIVATE_PATHS = (
     re.compile(r"\.config/omarchy/plugins/omarchy\."),
 )
 PROVIDER_CALL = re.compile(
-    r"\b(?:registeredSource|registeredComponent|registeredWidgetSource|"
-    r"registeredWidgetComponent|standardWidgetSource)\s*\(\s*"
+    r"\b(?:(?:registeredSource|registeredComponent|registeredWidgetSource|"
+    r"registeredWidgetComponent|standardWidgetSource|resolveSource)\s*\(\s*|"
+    r"resolveComponent\s*\(\s*[\"'][^\"']*[\"']\s*,\s*)"
     r"[\"'](omarchy\.[A-Za-z0-9_.-]+)[\"']"
 )
 FIRST_PARTY_CALL = re.compile(
@@ -577,6 +579,8 @@ def check_tree(root: Path, manifest_path: Path) -> list[str]:
             if pattern.search(text):
                 add(findings, relative, "private component path", pattern.pattern)
 
+        # Dotted embed.* tokens are raw substring tripwires, not argument checks:
+        # comments/strings/xembed also count; aliases and bracket access can bypass them.
         token_rules = rules_for(manifest, relative, "token")
         protected_observed: Counter[str] = Counter()
         for token in TOKEN_NAMES:
