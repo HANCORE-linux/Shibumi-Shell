@@ -65,6 +65,7 @@ for the latest validated host versions.
 > Install from the release tag, not `main`. Shibumi supports Omarchy Quattro only.
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3
