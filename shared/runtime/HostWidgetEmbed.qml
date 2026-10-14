@@ -46,7 +46,6 @@ QtObject {
   }
 
   function clearLoader(loader) {
-    if (loader.item && "bar" in loader.item) loader.item.bar = null
     loader.sourceComponent = null
     loader.source = ""
   }
