@@ -246,9 +246,11 @@ if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|Wea
 fi
 rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' hancore.shibumi.bar/services/HostWidgetResolver.qml \
   || fail "host widget resolver does not load official manifest entry points"
-[[ $(rg -l 'bar\.registeredWidgetComponent' \
+[[ $(rg -l 'embed\.resolveComponent\(' \
   hancore.shibumi.{audio,status,center}/BarWidget.qml | wc -l) -eq 3 ]] \
   || fail "host-backed composites bypass the stable widget resolver"
+rg -Fq 'bar.registeredWidgetComponent(id)' shared/runtime/HostWidgetEmbed.qml \
+  || fail "shared embed helper bypasses the stable widget resolver"
 if rg -q 'registered(Component|Source)|registeredWidget(Component|Source)' \
     hancore.shibumi.network/Service.qml; then
   fail "native Network owner still resolves a host feature component"
