@@ -13,8 +13,9 @@ Do not install or update from `main`.
 ## Requirements
 
 - Omarchy Quattro; other Omarchy generations are not supported
-- The source workflow installs required commands and fonts through Pacman and
-  skips dependencies that are already installed or provided
+- Run the Pacman line below first; it installs the required commands and fonts
+  (Material Symbols icons come from `ttf-material-symbols-variable`) and skips
+  what is already installed. The suite itself never calls Pacman.
 - The source workflow also needs Git, HTTPS access to the repository,
   and a trusted local checkout
 
@@ -26,6 +27,7 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 For an intentional non-interactive installation:
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3
@@ -34,13 +36,14 @@ git checkout v0.1.1-beta.16.3
 
 Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
-The source workflow installs the package-managed runtime dependencies
-first. `sudo` applies only to Pacman; the suite transaction still runs as the
-desktop user and never lets a package hook modify the home directory.
+The Pacman line installs the package-managed runtime dependencies first and
+is the only step that needs `sudo`; the suite transaction runs as the desktop
+user and never lets a package hook modify the home directory.
 
 To inspect the transaction before installing:
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3

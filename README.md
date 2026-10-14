@@ -65,15 +65,16 @@ for the latest validated host versions.
 > Install from the release tag, not `main`. Shibumi supports Omarchy Quattro only.
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
 git checkout v0.1.1-beta.16.3
 ./scripts/shibumi-suite install --yes
 ```
 
-The installer asks for root privileges only while Pacman installs missing
-runtime commands and fonts; the Shibumi lifecycle itself runs as the desktop
-user and writes only user-scoped plugin state.
+Run the Pacman line yourself; it installs the runtime commands and fonts and
+is the only step that needs `sudo`. The Shibumi suite never calls Pacman: it
+runs as the desktop user and writes only user-scoped plugin state.
 
 Update an admitted Beta.16.2 source installation to Beta.16.3.
 Exact predecessor identities, not a version range, govern admission; see the
