@@ -1213,7 +1213,7 @@ for return_contract in \
 done
 
 for label in Status Battery \
-    'Bar border' 'Panel + tooltip' Border Frost Shadow \
+    'Bar border' 'Panels' Border Frost Shadow \
     'Radius 12' 'Radius 6'; do
   rg -Fq "label: \"$label\"" "$control_dir" \
     --glob '*.qml' --glob '*.js' \

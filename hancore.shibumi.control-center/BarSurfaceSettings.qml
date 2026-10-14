@@ -23,12 +23,13 @@ Column {
         },
         {
           key: "panelBorder",
-          label: "Panel + tooltip",
+          label: "Panels",
           detail: "Outline connected panels and tooltips",
           fallback: true
-        },
-        { key: "frost", label: "Frost", detail: "Translucent V2 shell", fallback: false }
-      ]
+        }
+      ].concat(String(controller.barPresentation.shellStyle || "") === "notch"
+        ? [{ key: "frost", label: "Frost", detail: "Translucent V2 shell", fallback: false }]
+        : [])
     : [
         {
           key: "border",

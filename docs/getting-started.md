@@ -41,9 +41,9 @@ The Control Center exposes the supported product settings:
 - switch between the V1 and V2-derived shell styles;
 - place the bar at the top or bottom and select its shell shape;
 - choose a semantic accent from the active Omarchy theme;
-- configure V1 border, shadow, and Radius 12/6 or the V2 bar and
-  panel/tooltip borders;
-- enable Frost transparency in V1 and V2;
+- configure V1 border, shadow, and Radius 12/6 or the V2 Bar border and
+  Panels (including tooltip borders);
+- enable Frost transparency in V1 and V2 Notch;
 - choose workspace presentation and picker style;
 - set per-widget presentation and enabled state; and
 - rearrange widgets and control split or separator boundaries.

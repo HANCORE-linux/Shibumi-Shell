@@ -24,8 +24,8 @@ unavailable rather than silently falling back. The settings include:
 - per-widget enabled state and appearance;
 - bar style and semantic accent;
 - V1 border, shadow, and Radius 12/6 settings;
-- V2 bar-border and panel/tooltip-border settings;
-- Frost transparency for both V1 and V2;
+- V2 Bar border and Panels settings (Panels includes tooltip borders);
+- Frost transparency for V1 and V2 Notch;
 - workspace mode and presentation;
 - G1 launcher identity;
 - image and media picker styles;
@@ -41,9 +41,11 @@ including nested settings, survive ordinary settings writes.
 
 ### Frost and optional compositor blur
 
-**Bars → Frost** makes the V1 or V2 shell translucent (alpha 0.68). It does
-not enable compositor blur. Full, Fit, and Dock retain their existing fixed
-shell shadows; Notch remains shadowless. Panel surfaces remain unchanged.
+**Bars → Frost** makes the V1 shell or V2 Notch translucent (alpha 0.68).
+It does not enable compositor blur. Full, Fit, and Dock retain their fixed
+shell shadows, which would mask the transparency, so they do not offer a
+Frost option. Notch remains shadowless. Saved Frost settings and panel
+surfaces remain unchanged.
 
 For optional background blur on Hyprland 0.56, add the following to your own
 Lua configuration after the defaults. This enables global blur and applies a
