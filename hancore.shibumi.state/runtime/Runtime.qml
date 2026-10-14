@@ -11,7 +11,7 @@ QtObject {
   id: runtime
 
   readonly property int contractVersion: 1
-  readonly property string suiteVersion: "0.1.1-beta.16.3"
+  readonly property string suiteVersion: "0.1.1-beta.16.4"
   readonly property var providerIds: [
     "hancore.shibumi.state", "hancore.shibumi.control-center",
     "hancore.shibumi.reactor", "hancore.shibumi.telemetry",

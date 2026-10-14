@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.1-beta.16.4] - 2026-10-14
+
+### Highlights
+
+- **Memory Sweep in the Memory panel.** Choose Page cache, Compact memory, or both, with one Polkit authorization. Available memory before and after the operation, cancellation, and errors appear in the panel. No swap operations or process killing; clearing caches does not guarantee a memory gain.
+- **Frost for the V2 Notch shell.** Notch gains the translucent Frost surface; Full, Fit, and Dock keep their fixed shell shadow. Frost controls transparency, not compositor blur; an optional Hyprland recipe is documented without changing your compositor settings. Connected panels keep their own opacity.
+- **Charging plasma from 10%.** A confined plasma core and five short sparks replace the battery ring's previous charging effect. The water animation is unchanged.
+- **Reliable Rings placement.** Rings starts on the correct workspace after activation or reload, including when the target arrives after layout. Other workspace styles no longer animate an invisible Rings frame.
+- **Power-profile selection stays open.** Mouse and keyboard selection update the active profile without closing or shifting the panel. Inactive labels remain readable with V2 and Catppuccin Latte.
+- **Small reliability fixes.** Unavailable AI usage displays an em dash, picker actions receive closed stdin, and deferred focus callbacks safely handle a destroyed panel. The audio bar follows the default sink again if the volume-sink resolver stalls after suspend/resume (#78). During recovery, DSP chains may temporarily fall back to the default sink.
+- **Smoother host-widget handoff.** Shared embedding keeps Status children loaded through bar handoff and preserves the official Audio panel instance. Existing Omarchy paths and IPC identifiers now share one contract layer, without adding backend owners or polling.
+
+The forward compatibility reference is updated to Omarchy `4c1b4cb3`. Source installation remains the supported route; OPR packaging is planned, not AUR publication.
+
+### Validation
+
+In 600 private-renderer sessions against Beta 16.3, the median per-group CPU change was **−29.7% for focus**, **−11.3% for style changes**, and **+0.14% for bar changes**. Rings style changes reached stable pixels earlier in all eight measured contexts, with median reductions of 40–217 ms. Bar switching was broadly at Beta 16.3's level. These measurements describe the tested renderer scenarios, not a blanket desktop speedup.
+
+### Known points
+
+- Notch can still oscillate at DPR 1.6.
+- Notification focus remains limited when the sender does not provide a supported application identity.
+- If Memory Sweep loses its service owner, the authorization dialog may disappear without a result. An already authorized command can continue, and a replacement owner may permit another run; avoid restarting Sweep during an owner change.
+
 ## [0.1.1-beta.16.3] - 2026-10-09
 
 ### Fixed

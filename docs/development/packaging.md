@@ -1,6 +1,6 @@
 # Source installation and planned OPR packaging
 
-Status: install `0.1.1-beta.16.3` from source. OPR (omarchy-pkgs) packaging
+Status: install `0.1.1-beta.16.4` from source. OPR (omarchy-pkgs) packaging
 is planned; AUR publication is no longer the target.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
@@ -69,7 +69,7 @@ and lifecycle code before the user-level update runs, so Beta.12's storage guard
 cannot reject that package afterward. There is no reverse migration to legacy
 storage.
 
-The additional [Beta.16.3 downgrade warning and backup requirements](../install.md#backup-before-downgrade)
+The additional [Beta.16.4 downgrade warning and backup requirements](../install.md#backup-before-downgrade)
 apply even to readers using canonical State storage: Beta.15.4 and older
 cannot preserve a V1 layout containing `order.parked`. `--keep-settings` does
 not prevent this. Restore the settings with a matching payload.
