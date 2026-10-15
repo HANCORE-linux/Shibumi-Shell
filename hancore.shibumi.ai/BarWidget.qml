@@ -276,7 +276,7 @@ Ui.Panel {
         visible: root.displayMode !== "icon"
         anchors.verticalCenter: parent.verticalCenter
         text: root.usagePercent >= 0
-          ? String(root.usagePercent).padStart(2, "0") + "%" : "··"
+          ? String(root.usagePercent).padStart(2, "0") + "%" : "—"
         color: root.widgetInk
         font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
         font.pixelSize: root.tokens.labelSize

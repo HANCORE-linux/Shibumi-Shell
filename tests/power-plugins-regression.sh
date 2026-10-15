@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 python3 "$repo_root/tests/power-deferred-regression.py"
@@ -52,7 +53,7 @@ printf '%s\n' "$output"
 [[ $rc -eq 0 ]] || fail "component smoke exited $rc"
 grep -F 'power plugins smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$output"; then
   fail "component QML runtime error"
 fi
 
@@ -78,7 +79,7 @@ printf '%s\n' "$service_output"
 [[ $service_rc -eq 0 ]] || fail "power-state service smoke exited $service_rc"
 grep -F 'power service runtime smoke passed' <<<"$service_output" >/dev/null \
   || fail "power-state service success marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$service_output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$service_output"; then
   fail "service QML runtime error"
 fi
 [[ $(<"$tmpdir/power-state") == performance ]] \
@@ -105,7 +106,7 @@ for smoke in power-command power-runtime; do
   printf '%s\n' "$smoke_output"
   [[ $smoke_rc -eq 0 ]] || fail "$smoke exited $smoke_rc"
   grep -F "${smoke//-/ } smoke passed" <<<"$smoke_output" >/dev/null || fail "$smoke marker missing"
-  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$smoke_output"; then
+  if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$smoke_output"; then
     fail "$smoke QML runtime error"
   fi
 done

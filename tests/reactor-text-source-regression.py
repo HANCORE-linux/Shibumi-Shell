@@ -11,7 +11,7 @@ sys.dont_write_bytecode = True
 from lib.isolated_files import read_regular
 from lib.isolated_process import run_bounded
 from lib.owned_cgroup import OwnedCgroup
-from lib.source_snapshot import materialize
+from lib.source_snapshot import materialize, snapshot
 
 REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / 'hancore.shibumi.reactor'
@@ -161,6 +161,8 @@ def controller_check(scenario, mutation=None):
         'reactor/scripts/read-reactor-text.py': (helper.encode(), False),
         'shell.qml': (read_regular(REPO / 'tests/reactor-text-source-smoke.qml'), False),
     }
+    files.update({'hancore.shibumi.state/runtime/' + name: value
+                  for name, value in snapshot(REPO / 'hancore.shibumi.state/runtime').items()})
     with tempfile.TemporaryDirectory(prefix='reactor-source-') as temp:
         root = Path(temp)
         materialize(files, root)

@@ -28,7 +28,7 @@ Item {
   SuiteRuntime.Provider {
     id: barRuntimeProvider
     pluginId: "hancore.shibumi.bar"
-    implementationVersion: "0.1.1-beta.16.3"
+    implementationVersion: "0.1.1-beta.16.4"
     owner: root
     host: suiteHostShell.host
     manifest: root.manifest
@@ -3617,7 +3617,7 @@ Item {
   Process {
     id: barHiddenProbe
     running: root.hostReady
-    command: ["bash", "-lc", "[[ -f $HOME/.local/state/omarchy/toggles/bar-off || -f $HOME/.local/state/omarchy/toggles/bar-hidden ]] && echo yes || echo no"]
+    command: ["bash", "-lc", "[[ -f " + SuiteRuntime.HostContract.path("$HOME", "barOffMarker") + " || -f " + SuiteRuntime.HostContract.path("$HOME", "barHiddenMarker") + " ]] && echo yes || echo no"]
     stdout: SplitParser {
       onRead: line => {
         root.barToggledOff = String(line).trim() === "yes"
@@ -3632,7 +3632,7 @@ Item {
   }
 
   FileView {
-    path: root.hostReady ? root.home + "/.local/state/omarchy/toggles" : ""
+    path: root.hostReady ? SuiteRuntime.HostContract.path(root.home, "togglesDir") : ""
     watchChanges: true
     printErrors: false
     onFileChanged: root.requestBarHiddenProbe()

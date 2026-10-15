@@ -26,6 +26,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+targets=$(rg -o '\b(bar|audio|bluetooth|network): "[^"]+"' \
+  "$repo_root/hancore.shibumi.state/runtime/HostContract.qml" | cut -d '"' -f2 | sort)
+reserved=$(jq -r '.dynamicResources[] | select(.kind == "ipc") | .resource' \
+  "$repo_root/contracts/plugin-integration-resources.json" | sort)
+[[ $targets == "$reserved" ]] || fail 'HostContract IPC reservations drifted'
+
 [[ -x $validator ]] || fail 'authoritative Omarchy plugin validator is missing'
 [[ -x $gate ]] || fail 'Shibumi integration gate is missing'
 for fixture in conforming duplicate-ipc duplicate-service duplicate-network \

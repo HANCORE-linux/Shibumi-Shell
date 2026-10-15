@@ -71,7 +71,7 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-50d687a1 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
@@ -99,8 +99,8 @@ non-overlapping claims; the Agents job selects its separate narrower manifest:
   remain immutable optional compatibility references alongside 4.0.2; choose
   a historical manifest with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3` or
   `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
-- `contracts/baselines/omarchy-forward-compat-50d687a1.json` proves forward
-  compatibility with the recorded upstream snapshot.
+- `contracts/baselines/omarchy-forward-compat-4c1b4cb3.json` records the
+  upstream snapshot pinned for the separate forward-compatibility gate.
 
 All three manifests bind the complete consumed `shell`, `bin`, and `config`
 subtrees by entry count, path inventory, entry type, executable state, symlink
@@ -237,6 +237,30 @@ sibling on two simulated outputs, edit placeholders and loading recovery,
 without deriving owner readiness from its own allocated width.
 It uses no desktop screenshot or physical layer surface; real Top/Bottom ghost
 and mixed-scale acceptance remain separate.
+
+## Shared shell fixture helpers
+
+`tests/lib/host-diagnostics.txt` holds only the common missing-Hyprland-signature
+startup line and two byte-identical full Deny expressions. Shell callers source
+`host-diagnostics.sh`; substring versus whole-line matching, case sensitivity,
+additional diagnostics and exceptions remain local. Socket and module-path
+warnings are not universally accepted. Quick Access's intentional action and
+negative-control binding warnings never enter the common allowance.
+
+`qs_run_fixture <fixture.qml> <workdir> [timeout]` in `tests/lib/qs-runner.sh`
+stages missing pinned Commons/Ui trees without replacing existing fixture stubs.
+Callers supply the whole fixture environment through the required `qs_fixture_env`
+array (`-i` clears the inherited one); the runner adds nothing.
+`qs_fixture_args` preserves CLI arguments. The synchronous helper
+uses `isolated_process.py` for bounded capture, deadline and owned-group cleanup;
+it preserves captured bytes in `qs-runner.log`, including timeout/error exits, and
+writes runner diagnostics to `qs-runner-error.log`. `qs-runner-survivors` records
+live descendants before the cleanup kill; Panel Geometry requires zero, and the
+shared cleanup verifies no live members remain before reaping its reserved leader.
+The combined output limit is 4 MiB; exceeding it exits 125 with the bounded prefix.
+A descendant holding stdout open keeps capture waiting until the deadline.
+The caller removes its workdir.
+QML, qmltestrunner, Python and nested-Wayland runners keep their existing policies.
 
 ## Asynchronous Control Center restoration
 
@@ -708,6 +732,10 @@ start. Fixed Shibumi groups use the State-only channel. A catalog-only Audio
 provider covers serialized V1/V2 replacement, return to Shibumi, exact undo and
 stale-postimage refusal without relying on a preloaded component. These are
 isolated native-host flows, not rendered desktop or physical-output evidence.
+The B(b) fixture fills the five extras but leaves reusable base slots: following
+`ARCHITECTURE.md`'s allocation contract, it expects the native widget in `left[0]`,
+then swaps it to the extra when G1 returns. This is base-slot reuse and persistence
+coverage, not exhausted-capacity warning coverage.
 
 `tests/state-storage-regression.py` isolates the actual controller with an explicit
 own-entry writer and private configuration files. It exercises debounce, in-flight

@@ -1,4 +1,4 @@
-# Shibumi 0.1.1-beta.16.3 release readiness
+# Shibumi 0.1.1-beta.16.4 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
@@ -6,30 +6,29 @@
 
 ## Candidate and published predecessor
 
-The Beta.16.3 candidate contains V1 network bar ink, the status pending-flag
-ordering fix, six-style hover colour, picker search/list fixes, inline helper
-execution in the plugin smokes, and the forward-baseline generator and repin. Pacman retains
-its exact 16.2 presentation and hover behaviour; compact and linked-theme
-Update Center changes are excluded. Its 24-plugin suite payload digest is
-`9d8cca435b465c52b0ff21d7a6780f90251a805dc1d1e72b78473ca2a8338a88`.
-This is the preparation snapshot included in the release-identity commit, not
-final clean-commit evidence. Source review, the complete contract, isolated
-Quattro lifecycle, package rehearsal, full 14-gate collector, and reproducible
-archive verification must record their exact final commit externally; no
-predecessor gate result transfers to this candidate.
+The Beta.16.4 candidate adds Memory Sweep, Frost for V2 Notch, bounded charging
+plasma, Rings placement fixes, persistent power-profile selection, shared
+host-widget embedding and host identifiers, and Audio resolver recovery.
+Its 24-plugin suite payload digest is
+`bc60b476803f72d5604e592647db7f50c1f00723b986ae87e7730cba79779d34`.
+This is a release-preparation snapshot, not final clean-commit evidence. The
+complete contract, isolated Quattro lifecycle, package rehearsal, full 14-gate
+collector, and reproducible archive verification must record their exact final
+commit externally. No predecessor gate result transfers to this candidate.
 
-Beta.16.2 was published on 2026-10-08 as a GitHub prerelease from
-`bd1224ba92fbf279666abe362ff5cf7a165da096`. It is the frozen rolling
+Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
+`1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It is the frozen rolling
 predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
-That exact tag checkout and release merge
-`e07853b54f018ab694572c7502297e0f17752220` are admitted by
+That exact tag checkout and the source-installation integration merge
+`494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
-with the unchanged Beta.16.2 payload digest
-`79c61d5e048c669c9eb27ebaad21987327892089daea501d0cf4185150a26f9e`.
-The exact local tag payload matches all 24 pinned plugin digests; the published
-release merge and tag have the same Git tree. Older exact identities remain admitted; a
-version string alone never authorizes recovery or replacement. AUR publication
-remains deferred.
+with the unchanged Beta.16.3 payload digest
+`9d8cca435b465c52b0ff21d7a6780f90251a805dc1d1e72b78473ca2a8338a88`.
+All 24 archived plugin digests match the published pins. The integration merge
+changes documentation and its regression, not plugin payloads; its complete Git
+tree is not identical to the release tag. Older exact identities remain admitted;
+a version string alone never authorizes recovery or replacement. Installation
+remains source-based; OPR packaging is planned, not AUR publication.
 
 ## Recorded evidence and outstanding gates
 
@@ -37,20 +36,21 @@ remains deferred.
 | --- | --- |
 | Complete source contract | Pending exact release-commit evidence at this preparation snapshot. |
 | Isolated Quattro lifecycle | Pending exact release-commit evidence, retaining all 32 generations. |
-| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.2 → candidate (7). No arm may be dropped. |
-| Stage-1 visual evidence | Round 379 records DPR 1/1.6 rest and shared-code captures, seven-theme picker search, previewless themes, sorting, and an unchanged Update Center. Round 380 separately rechecks Pacman against 16.2 and the six retained hover styles against 379. No physical-output claim. |
-| Stage-1 performance | Round 379: 670 sessions, 1,880 events, cold/warm N5; focus, style, bar and hover only, not media-scroll or Control Center events. Accepted by the maintainer, including the warm Kanji CPU group as variation. Focus R/B/changed-buffer counts are not identical in every group; 13/140 hover input-to-last-pixel measurements exceed 136.667 ms by at most 2.29 ms. No blanket speedup or scanout claim. Pacman has since been restored to 16.2; no new performance series is claimed. |
-| Compatibility preparation | The unchanged validator accepts forward manifest `50d687a1`; the old manifest remains. Stage-1 complete profiles stopped at the expected old-version payload pin, so all final complete gates must run again after release identities are aligned. |
+| Retained runtime paths | Historical Beta.13 → Beta.14.1 package arm (5), fresh checkout (6), Beta.15 (7), Beta.15.2 (7), and rolling frozen Beta.16.3 → candidate (7). No arm may be dropped. |
+| Private renderer and lifetime evidence | All 37 bar-switch steps and 140 rest cases match the installed Beta.16.4 candidate `5732887`. Private Process evidence covers discarded and stalled Audio resolver recovery; existing fixtures cover embedded-child continuity and Audio panel identity. No physical-output or physical suspend/resume claim. |
+| Private renderer performance | 600 sessions against Beta.16.3, 1,600 events, 160 groups. Median per-group CPU change: focus −29.7%, style −11.3%, bar +0.14%. Rings style changes stabilize earlier in all eight contexts. Individual slower measurements remain; no blanket latency or desktop speedup claim. Accepted for release preparation. |
+| Compatibility preparation | Forward manifest `4c1b4cb3` supersedes `e71a816e`; older manifests remain. Manifest, panel geometry and focused Quattro/style checks pass. Complete forward evidence after release-identity alignment remains required; the pin is not a complete compatibility pass. |
 | Live installation and hardware | Keep-settings installation and reviewer live acceptance must be recorded separately. Fixtures do not establish physical multi-output, hardware, credential or real desktop input acceptance. |
 | Release/package verification | Reproducible archive, checksum agreement, clean-commit gates and rehearsal, independent review, full collector and remote verification remain separate publication requirements. |
 
-The historical package arm is not a Beta.16.3 installed-package upgrade proof.
+The historical package arm is not a Beta.16.4 installed-package upgrade proof.
 Private Wayland/Mesa captures are not live GPU, layer-shell, hotplug, or physical
 multi-output acceptance. Earlier release passes do not transfer to this candidate.
-The release notes document the accepted Rings early step (raw DPR-1 reload N10:
-full 1/10, standard 5/10 sessions, not natural-frequency estimates) and the
-existing DPR-1.6 Notch/Numbers/Kanji centre oscillation. Both remain on the
-0.2.0 redesign list; the Rings animation-ordering cause is unproved.
+Rings placement is covered by private fixtures; release live acceptance remains
+separate. Notch can still oscillate at DPR 1.6. Notification focus depends on a
+supported sender identity. Memory Sweep can lose its service owner: a dialog may
+disappear, or an authorized command may continue while a replacement owner can
+permit another run. Real Polkit/root and owner-loss acceptance remain separate.
 
 ## Pinned host contracts
 
@@ -65,7 +65,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Installed package profile | `installed-package-v4.0.4` |
 | Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` |
+| Forward reference | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility
@@ -128,7 +128,7 @@ was performed. Each operation needs its own maintainer Go.
   and [backup guide](install.md#backup-before-downgrade) identify the complete
   settings and recovery evidence to preserve. Restore the settings with a
   matching payload.
-- AUR and omarchy-pkgs publication are separate work, not authorized here.
+- OPR packaging is separate work, not authorized here; AUR publication is not the target.
 
 ## Immutable asset and publication gate
 
@@ -151,4 +151,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta.16.3.
+confers acceptance on Beta.16.4.

@@ -31,7 +31,7 @@ QtObject {
 
   function firstPartyServiceFor(id) {
     const key = String(id || "")
-    if (["omarchy.idle", "omarchy.media", "omarchy.notifications"].indexOf(key) < 0) return null
+    if (!Local.HostContract.isFirstPartyService(key)) return null
     if (scoped) return Local.Runtime.firstPartyServiceFor(key)
     return host && typeof host.firstPartyServiceFor === "function"
       ? host.firstPartyServiceFor(key) : null

@@ -409,7 +409,7 @@ def stop_first_helper():
             custodian_row = None
             # The child waits for the launcher's start ACK. Step the launcher in
             # short pidfd-controlled slices and hold both sides of the handshake.
-            for _ in range(500):
+            while time.monotonic() < end:
                 continue_pidfd(launcher_fd)
                 time.sleep(.0002)
                 stop_pidfd(launcher_fd, pid, starttime)

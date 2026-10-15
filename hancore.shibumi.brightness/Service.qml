@@ -13,7 +13,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.brightness"
-    implementationVersion: "0.1.1-beta.16.3"
+    implementationVersion: "0.1.1-beta.16.4"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -33,10 +33,16 @@ Item {
     return selected
   }
   readonly property bool scopedHost: Qt.isQtObject(shell) && "pluginId" in shell
-  readonly property url panelSource: scopedHost ? ""
-    : registeredSource("omarchy.monitor")
-  property Component panelComponent: String(panelSource) ? null
-    : registeredComponent("omarchy.monitor")
+  HostWidgetEmbed {
+    id: embed
+    bar: root.scopedHost ? null : root.bar
+    shell: root.shell
+    registry: root.barWidgetRegistry
+    registryOnly: root.scopedHost
+  }
+  readonly property url panelSource: embed.resolveSource("omarchy.monitor")
+  property var panelComponent: String(panelSource) ? null
+    : embed.resolveComponent("", "omarchy.monitor")
 
   readonly property var backend: bridge.panel
   readonly property bool ready: bridge.ready
@@ -98,36 +104,6 @@ Item {
     _visualBarLeases = _visualBarLeases.filter(function(value) {
       return value !== record
     })
-  }
-
-  function registeredSource(id) {
-    if (bar && typeof bar.registeredWidgetSource === "function")
-      return bar.registeredWidgetSource(id)
-    const registry = Qt.isQtObject(shell) && "pluginRegistry" in shell
-      ? shell.pluginRegistry : null
-    const pluginManifest = registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
-  }
-
-  function registeredComponent(id) {
-    // Scoped 4.0.3 services receive the accepted public component snapshot
-    // directly; the scalar shell.bar object is intentionally not a visual Item.
-    const injected = barWidgetRegistry
-    if (injected) void(injected.revision)
-    const injectedWidgets = injected && injected.widgets ? injected.widgets : ({})
-    const injectedEntry = injectedWidgets[String(id || "")]
-    if (injectedEntry && injectedEntry.component) return injectedEntry.component
-    if (scopedHost) return null
-    if (bar && typeof bar.registeredWidgetComponent === "function")
-      return bar.registeredWidgetComponent(id)
-    const registry = bar && "barWidgetRegistry" in bar
-      ? bar.barWidgetRegistry : null
-    if (registry) void(registry.revision)
-    const widgets = registry && registry.widgets ? registry.widgets : ({})
-    const entry = widgets[String(id || "")]
-    return entry && entry.component ? entry.component : null
   }
 
   visible: false

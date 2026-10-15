@@ -204,11 +204,11 @@ ShellRoot {
     SuiteRuntime.Provider {
       id: leasedBarProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.1.1-beta.16.3"
+      implementationVersion: "0.1.1-beta.16.4"
       owner: leasedBarOwner
       host: leasedBarOwner.providerHost
       manifest: ({ id: "hancore.shibumi.bar",
-        version: "0.1.1-beta.16.3", kinds: ["bar"] })
+        version: "0.1.1-beta.16.4", kinds: ["bar"] })
     }
   }
 
@@ -226,7 +226,7 @@ ShellRoot {
       Status.Service {
         shell: rawScopedStatusShell
         manifest: ({ id: "hancore.shibumi.status",
-          version: "0.1.1-beta.16.3", kinds: ["service"] })
+          version: "0.1.1-beta.16.4", kinds: ["service"] })
         actionRunner: actionRecorder
         runtimeProbesEnabled: false
       }
@@ -592,6 +592,12 @@ ShellRoot {
             || status.updateWidget.settings.marker !== "hancore.shibumi.update-center"
             || status.trayWidget.settings.marker !== "omarchy.tray")
           return root.fail("child identity/settings injection")
+        const keptUpdate = status.updateWidget, keptTray = status.trayWidget
+        status.bar = null
+        const retained = !!status.updateWidget && !!status.trayWidget
+          && status.updateWidget === keptUpdate && status.trayWidget === keptTray
+        status.bar = fakeBar
+        if (!retained) return root.fail("bar handoff unloaded embedded children before sync")
         if (String(status.updateWidget.contentColor).toLowerCase()
             !== "#88bbee")
           return root.fail("initial embedded updater color")

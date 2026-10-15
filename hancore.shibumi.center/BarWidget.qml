@@ -13,6 +13,7 @@ Ui.Panel {
   moduleName: "hancore.shibumi.center"
   manageIpc: false
   Presentation.HostTokens { id: hostTokens; bar: root.bar }
+  HostWidgetEmbed { id: embed; bar: root.bar }
   property url calendarSource: Qt.resolvedUrl("CalendarPanel.qml")
   property real availableWidth: 0
   property var responsiveWidthProvider: null
@@ -78,9 +79,9 @@ Ui.Panel {
   readonly property var weatherSettings: childSettings("omarchy.weather")
   readonly property var clockSettings: childSettings("omarchy.clock")
   readonly property var updateSettings: childSettings("omarchy.system-update")
-  readonly property url updateSource: registeredSource("omarchy.system-update")
+  readonly property url updateSource: embed.resolveSource("omarchy.system-update")
   property var updateComponent: String(updateSource) ? null
-    : registeredComponent("omarchy.system-update")
+    : embed.resolveComponent("hancore.shibumi.center", "omarchy.system-update")
 
   implicitWidth: bar && bar.vertical ? bar.barSize
     : Math.round(centerRow.implicitWidth) + 2 * centerPadding
@@ -93,47 +94,10 @@ Ui.Panel {
       ? settings[id] : ({})
   }
 
-  function registeredComponent(id) {
-    if (bar && typeof bar.registeredEmbeddedWidgetComponent === "function")
-      return bar.registeredEmbeddedWidgetComponent(
-        "hancore.shibumi.center", id)
-    if (bar && typeof bar.registeredWidgetComponent === "function")
-      return bar.registeredWidgetComponent(id)
-    const registry = bar ? bar.barWidgetRegistry : null
-    if (registry) void(registry.revision)
-    const widgets = registry && registry.widgets ? registry.widgets : ({})
-    const entry = widgets[id]
-    return entry ? entry.component : null
-  }
-
-  function registeredSource(id) {
-    if (bar && typeof bar.registeredWidgetSource === "function")
-      return bar.registeredWidgetSource(id)
-    const registry = bar && bar.shell
-      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
-    const pluginManifest = registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
-  }
-
-  function syncOfficialLoader(loader, component, source, id, childSettingsValue) {
-    loader.sourceComponent = null
-    loader.source = ""
-    if (component !== null) {
-      loader.sourceComponent = component
-    } else if (String(source)) {
-      loader.setSource(source, {
-        bar: root.bar,
-        moduleName: id,
-        settings: childSettingsValue
-      })
-    }
-  }
-
   function syncUpdateLoader() {
-    syncOfficialLoader(updateLoader, updateComponent, updateSource,
-      "omarchy.system-update", updateSettings)
+    embed.syncLoader(updateLoader, updateComponent, updateSource, {
+      bar: root.bar, moduleName: "omarchy.system-update", settings: updateSettings
+    }, root.bar)
   }
 
   function injectChild(item, id, childSettingsValue) {
@@ -148,7 +112,7 @@ Ui.Panel {
   }
 
   function scheduleOfficialSync() {
-    officialSyncTimer.restart()
+    if (root && !embed.shuttingDown) officialSyncTimer.restart()
   }
 
   function childPanelWidget(pluginId) {
@@ -195,6 +159,10 @@ Ui.Panel {
   Component.onCompleted: {
     restageTimer.restart()
     scheduleOfficialSync()
+  }
+  Component.onDestruction: {
+    officialSyncTimer.stop()
+    embed.shutdown()
   }
 
   Timer {

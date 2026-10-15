@@ -23,8 +23,9 @@ unavailable rather than silently falling back. The settings include:
   boundaries;
 - per-widget enabled state and appearance;
 - bar style and semantic accent;
-- V1 border, frost, shadow, and Radius 12/6 settings;
-- V2 bar-border and panel/tooltip-border settings;
+- V1 border, shadow, and Radius 12/6 settings;
+- V2 Bar border and Panels settings (Panels includes tooltip borders);
+- Frost transparency for V1 and V2 Notch;
 - workspace mode and presentation;
 - G1 launcher identity;
 - image and media picker styles;
@@ -37,6 +38,35 @@ Use the Control Center for normal changes. Manual JSON edits can be rejected or
 normalized when they violate the schema. Setters accept queued changes; only
 matching file readback confirms persistence. Unknown fields in the State entry,
 including nested settings, survive ordinary settings writes.
+
+### Frost and optional compositor blur
+
+**Bars → Frost** makes the V1 shell or V2 Notch translucent (alpha 0.68).
+It does not enable compositor blur. Full, Fit, and Dock retain their fixed
+shell shadows, which would mask the transparency, so they do not offer a
+Frost option. Notch remains shadowless. Saved Frost settings and panel
+surfaces remain unchanged.
+
+For optional background blur on Hyprland 0.56, add the following to your own
+Lua configuration after the defaults. This enables global blur and applies a
+layer rule only to the `shibumi-bar` namespace. Enabling global blur affects
+every transparent window, not just layers with other blur rules. The alpha
+threshold below excludes the transparent area outside the shell from layer
+blur. Shibumi does not install or change compositor rules.
+
+```lua
+hl.config({ decoration = { blur = { enabled = true } } })
+hl.layer_rule({
+    name = "shibumi-bar-blur",
+    match = { namespace = "^shibumi-bar$" },
+    blur = true,
+    ignore_alpha = 0.1,
+})
+```
+
+The fields are defined in the [Hyprland 0.56 Lua rule parser](https://github.com/hyprwm/Hyprland/blob/36b2e0cfe0c6094dbc47bd42a437431315bb3087/src/config/lua/bindings/LuaBindingsConfigRules.cpp)
+and its [configuration example](https://github.com/hyprwm/Hyprland/blob/36b2e0cfe0c6094dbc47bd42a437431315bb3087/example/hyprland.lua).
+This optional compositor effect is separate from Frost's transparency.
 
 ### Appearance IPC
 

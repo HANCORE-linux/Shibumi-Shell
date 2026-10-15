@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -76,7 +77,7 @@ printf '%s\n' "$runtime_output"
 [[ $runtime_rc -eq 0 ]] || fail "scoped workspace smoke exited $runtime_rc"
 grep -F 'workspaces runtime smoke passed' <<<"$runtime_output" >/dev/null \
   || fail "scoped workspace marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$runtime_output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$runtime_output"; then
   fail "scoped workspace QML error"
 fi
 
@@ -100,7 +101,7 @@ printf '%s\n' "$geometry_output"
 [[ $geometry_rc -eq 0 ]] || fail "workspace geometry exited $geometry_rc"
 grep -F 'workspaces geometry regression passed' <<<"$geometry_output" >/dev/null \
   || fail "workspace geometry marker missing"
-if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign|Internal error|Cannot assign' <<<"$geometry_output"; then
+if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$geometry_output"; then
   fail "workspace geometry QML error"
 fi
 

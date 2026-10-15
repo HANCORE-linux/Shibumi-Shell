@@ -18,7 +18,7 @@ below applies to its recorded single-output Omarchy 4.0.3 setup:
 | Pinned official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
 | Pinned source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
-| Immutable forward-compatibility revision | `50d687a1f27063513cf42e6f33c3a4fcb17c24ed` |
+| Immutable forward-compatibility revision | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
 | Quickshell package | `quickshell 0.3.1-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
@@ -27,8 +27,9 @@ source-parity checkout is pinned to the official `v4.0.4` tag. The 4.0.3 and
 4.0.2 package and source manifests remain immutable optional compatibility
 references. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
-`50d687a1` snapshot proves bounded forward compatibility without following a
-moving branch.
+`4c1b4cb3` snapshot supersedes `e71a816e` as the bounded forward reference.
+Manifest, panel geometry and focused Quattro/style checks pass; this is not a
+complete candidate forward-gate pass and does not follow a moving branch.
 
 The package-managed baseline records these authoritative production anchors:
 
@@ -51,7 +52,7 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
   records the full Git checkout of the official `v4.0.4` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
   acceptance baseline without claiming that acceptance for 4.0.4;
-- [`omarchy-forward-compat-50d687a1.json`](../../contracts/baselines/omarchy-forward-compat-50d687a1.json)
+- [`omarchy-forward-compat-4c1b4cb3.json`](../../contracts/baselines/omarchy-forward-compat-4c1b4cb3.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -66,6 +67,8 @@ installed-source-parity, or forward-compat job; callers cannot supply their own
 manifest.
 
 ## What Shibumi validates
+
+The Quattro source contract binds `SuiteRuntime.HostContract` as one layer for its first-party IDs, IPC targets and host marker/theme paths; it adds no host authority or runtime version discovery.
 
 Before mutating user state, the Shibumi lifecycle verifies the Quattro APIs
 used by its own 24-plugin suite: plugin validation and discovery, bar selection
@@ -91,7 +94,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-50d687a1 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

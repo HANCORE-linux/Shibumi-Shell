@@ -24,7 +24,7 @@ ShellRoot {
   readonly property var power: serviceLoader.item
   readonly property string fixturePath: Quickshell.env("SHIBUMI_POWER_SCOPE_DIR")
   readonly property string helper: decodeURIComponent(String(Qt.resolvedUrl("fixtures/power-runtime-helper.py")).substring(7))
-  readonly property var validManifest: ({ id: "hancore.shibumi.power-state", version: "0.1.1-beta.16.3", kinds: ["service"], entryPoints: { service: "Service.qml" } })
+  readonly property var validManifest: ({ id: "hancore.shibumi.power-state", version: "0.1.1-beta.16.4", kinds: ["service"], entryPoints: { service: "Service.qml" } })
   readonly property var fakeCommands: ({
     profiles: ["/usr/bin/python3", "-I", helper, fixturePath, "profiles"],
     activeProfile: ["/usr/bin/python3", "-I", helper, fixturePath, "activeProfile"],
@@ -55,10 +55,10 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.16.3"
+    implementationVersion: "0.1.1-beta.16.4"
     owner: state
     host: root.stateEnabled ? stateHost : null
-    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.16.3", kinds: ["service"] })
+    manifest: ({ id: "hancore.shibumi.state", version: "0.1.1-beta.16.4", kinds: ["service"] })
   }
   QtObject {
     id: battery
@@ -170,8 +170,8 @@ ShellRoot {
         panelB.activateSelected()
       } else if (root.phase === 6) {
         if (p.profileActionRunning || p.activeProfile !== "performance" || p.busyWorkers) return
-        root.check(!v.pwrB.opened && !v.pwrB.panelItem && v.batA.panelItem === panelA
-          && profileFile.text().trim() === "performance", "panel action or selective close")
+        root.check(v.pwrB.opened && v.pwrB.panelItem === panelB && v.batA.panelItem === panelA
+          && profileFile.text().trim() === "performance", "panel action must keep local panels open")
         root.cachedSet = p.setProfile; root.cachedRefresh = p.refreshProfiles
         barrier.setText("")
         root.check(p.setProfile("power-saver"), "held fake action refused")

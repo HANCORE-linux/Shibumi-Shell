@@ -11,6 +11,7 @@ ShellRoot {
   property real fullWidth: 0
   property int wheelCallsBefore: 0
   property var clickTargets: []
+  property var officialInstance: null
 
   function fail(message) {
     console.error("audio-plugin-smoke:", message)
@@ -83,7 +84,7 @@ ShellRoot {
 
   Component {
     id: audioPanelComponent
-    Fixtures.AudioTestPanel {}
+    Fixtures.AudioTestPanel { id: officialPanel; Component.onCompleted: root.officialInstance = officialPanel }
   }
 
   Audio.BarWidget {
@@ -126,6 +127,11 @@ ShellRoot {
             || openedOfficial.backendKeyboardPanelVisible)
           return root.fail("hidden official KeyboardPanel became visible")
         audio.closeOfficialPanel()
+        const keptPanel = root.officialInstance
+        audio.bar = null
+        audio.bar = fakeBar
+        if (!keptPanel || root.officialInstance !== keptPanel)
+          return root.fail("bar handoff replaced the official audio panel")
 
         root.fullWidth = audio.implicitWidth
         audio.settings = ({ compact: true })

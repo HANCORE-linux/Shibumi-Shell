@@ -403,6 +403,13 @@ Shibumi controls the bar window.
 
 ## Verified Host Contract
 
+`SuiteRuntime.HostContract` is the suite's single constant-only QML compatibility
+layer for first-party service admission, host marker/theme paths and IPC target
+names. Existing services retain handler ownership, file readers and the bounded
+visibility handoff; palette APIs and command routing are unchanged. Host versions
+remain in baseline manifests, which also supply the release collector's package
+probe expectations. The pinned Quattro contract binds this layer to host sources.
+
 The installed loader and installation contracts were rechecked against
 the validation system's Omarchy Quattro package `4.0.0.r1458.gfa6b5fc-1` on 2026-07-30.
 The plugin registry, validator, installer, bar selector, bar loader, and

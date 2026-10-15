@@ -32,6 +32,10 @@ Item {
   property int volumeSinkProcessGeneration: 0
   property bool volumeSinkProcessStarted: false
   property bool volumeSinkProcessDiscarded: false
+  property int volumeSinkStallTicks: 0
+  readonly property bool volumeSinkShouldRun: root.active
+    && root.backendOverride === null && implementation.backendReady()
+    && !root.volumeSinkResolved
   // Keep the last primitive value while the asynchronous volume-sink
   // resolver is refreshing. Opening the panel acquires peak monitoring,
   // which can transiently invalidate link-derived sink state.
@@ -700,22 +704,34 @@ Item {
     running: root.active && root.backendOverride === null
     onTriggered: {
       if (!implementation.backendReady()) return
+      root.volumeSinkStallTicks = volumeSinkProcess.running
+        ? root.volumeSinkStallTicks + 1 : 0
+      if (root.volumeSinkStallTicks >= 2) {
+        // Recover the display even if termination never delivers onExited.
+        root.volumeSinkName = ""
+        root.volumeSinkResolutionFailed = true
+        root.volumeSinkStallTicks = 0
+        volumeSinkProcess.running = false
+        volumeSinkProcess.running = Qt.binding(function() { return root.volumeSinkShouldRun })
+      }
       if (!sinkAvailabilityProcess.running)
         root.invalidateSinkAvailability()
       if (!volumeSinkProcess.running
           && (!root.volumeSinkResolved
             || root.volumeSinkResolutionFailed
-            || !implementation.volumeSinkNameMapped()))
+            || !implementation.volumeSinkNameMapped())) {
         root.invalidateVolumeSink()
+        volumeSinkProcess.running = Qt.binding(function() { return root.volumeSinkShouldRun })
+      }
     }
   }
 
   Process {
     id: volumeSinkProcess
     command: ["omarchy-audio-output-sink"]
-    running: root.active && root.backendOverride === null
-      && implementation.backendReady() && !root.volumeSinkResolved
+    running: root.volumeSinkShouldRun
     onStarted: {
+      root.volumeSinkStallTicks = 0
       root.volumeSinkProcessStarted = true
       root.volumeSinkProcessGeneration = root.volumeSinkRequestGeneration
     }

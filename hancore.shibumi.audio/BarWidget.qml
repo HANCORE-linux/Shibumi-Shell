@@ -13,10 +13,11 @@ Ui.Panel {
   manageIpc: false
   Presentation.HostTokens { id: hostTokens; bar: root.bar; serviceShell: suiteShell }
   property url popupSource: Qt.resolvedUrl("AudioPanel.qml")
-  readonly property url backendPanelSource: registeredSource("omarchy.audio")
-  property Component panelComponent: !audioServiceResolved
+  HostWidgetEmbed { id: embed; bar: root.bar }
+  readonly property url backendPanelSource: embed.resolveSource("omarchy.audio")
+  property var panelComponent: !audioServiceResolved
     || nativeBackendAccessEnabled ? null
-    : String(backendPanelSource) ? null : registeredComponent("omarchy.audio")
+    : String(backendPanelSource) ? null : embed.resolveComponent("", "omarchy.audio")
   property var backendReadyOverride: null
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   property var leasedReportService: null
@@ -69,27 +70,6 @@ Ui.Panel {
   function setting(name, fallback) {
     const value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
-  }
-
-  function registeredComponent(id) {
-    if (bar && typeof bar.registeredWidgetComponent === "function")
-      return bar.registeredWidgetComponent(id)
-    const registry = bar ? bar.barWidgetRegistry : null
-    if (registry) void(registry.revision)
-    const widgets = registry && registry.widgets ? registry.widgets : ({})
-    const entry = widgets[id]
-    return entry ? entry.component : null
-  }
-
-  function registeredSource(id) {
-    if (bar && typeof bar.registeredWidgetSource === "function")
-      return bar.registeredWidgetSource(id)
-    const registry = bar && bar.shell
-      && "pluginRegistry" in bar.shell ? bar.shell.pluginRegistry : null
-    const pluginManifest = registry && registry.installedPlugins
-      ? registry.installedPlugins[String(id || "")] : null
-    return registry && typeof registry.entryPointUrl === "function"
-      ? registry.entryPointUrl(pluginManifest, "barWidget") : ""
   }
 
   function officialSettings() {
@@ -229,6 +209,7 @@ Ui.Panel {
   Connections {
     target: audioBridge
     function onOutputVolumeChanged() {
+      if (!root) return
       if (!root.wheelAdjustmentPending || !root.wheelCommitInFlight
           || root.wheelInFlightSerial !== root.wheelCommitSerial)
         return

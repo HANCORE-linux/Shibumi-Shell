@@ -123,7 +123,7 @@ def run_case(base, mode, api, state_source, probe, runtime_fixture=False, runtim
     (directory / "host/PluginShellApi.qml").write_bytes(api)
     (directory / "plugin/Service.qml").write_bytes(state_source)
     (directory / "plugin/runtime").mkdir()
-    for name in ("qmldir", "Runtime.qml", "Provider.qml", "HostShell.qml"):
+    for name in ("qmldir", "Runtime.qml", "Provider.qml", "HostShell.qml", "HostContract.qml"):
         data = runtime_source if name == "Runtime.qml" and runtime_source is not None else bounded_read(
             ROOT / "hancore.shibumi.state/runtime" / name)
         (directory / "plugin/runtime" / name).write_bytes(data)

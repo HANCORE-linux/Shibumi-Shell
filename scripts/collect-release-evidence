@@ -19,16 +19,21 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST_PROBES: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    ("omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy 4.0.4-"),
-    (
-        "omarchySettingsPackage",
-        ("pacman", "-Q", "omarchy-settings"),
-        "omarchy-settings 4.0.4-",
-    ),
-    ("quickshellPackage", ("pacman", "-Q", "quickshell"), "quickshell 0.3.1-"),
-    ("quickshellVersion", ("quickshell", "--version"), "Quickshell 0.3.1"),
-)
+HOST_PROBE_MANIFEST = Path("contracts/baselines/omarchy-installed-package-v4.0.4.json")
+
+
+def host_probe_expectations() -> tuple[tuple, dict[str, str]]:
+    raw = (ROOT / HOST_PROBE_MANIFEST).read_bytes()
+    manifest = json.loads(raw)
+    versions = {p["name"]: p["version"].rsplit("-", 1)[0]
+                for p in [*manifest["provenance"]["packages"], manifest["quickshellPackage"]]}
+    probes = (
+        ("omarchyPackage", ("pacman", "-Q", "omarchy"), f"omarchy {versions['omarchy']}-"),
+        ("omarchySettingsPackage", ("pacman", "-Q", "omarchy-settings"), f"omarchy-settings {versions['omarchy-settings']}-"),
+        ("quickshellPackage", ("pacman", "-Q", "quickshell"), f"quickshell {versions['quickshell']}-"),
+        ("quickshellVersion", ("quickshell", "--version"), f"Quickshell {versions['quickshell']}"),
+    )
+    return probes, {"path": str(HOST_PROBE_MANIFEST), "sha256": hashlib.sha256(raw).hexdigest()}
 
 GATE_TIMEOUT_SECONDS = 1800
 GATE_TERMINATION_GRACE_SECONDS = 10
@@ -59,7 +64,7 @@ EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     ),
     (
         "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-forward-compat-50d687a1.json",
+        ROOT / "contracts/baselines/omarchy-forward-compat-4c1b4cb3.json",
     ),
 )
 
@@ -919,6 +924,13 @@ def main() -> int:
         print("--expected-commit must be a full lowercase commit id", file=sys.stderr)
         return 2
     try:
+        probe_expectations, probe_source = host_probe_expectations()
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        print(json.dumps({"error": "invalid-host-probe-manifest",
+                          "path": str(ROOT / HOST_PROBE_MANIFEST),
+                          "reason": type(error).__name__}), file=sys.stderr)
+        return 2
+    try:
         candidate_preflight = capture_git_checkout_identity(ROOT)
     except (OSError, ValueError):
         print("release candidate identity preflight failed", file=sys.stderr)
@@ -976,7 +988,7 @@ def main() -> int:
     host_probes = [probe_omarchy_package()]
     host_probes.extend(
         probe_host_identity(name, command, prefix)
-        for name, command, prefix in HOST_PROBES
+        for name, command, prefix in probe_expectations
         if name != "omarchyPackage"
     )
     all_passed = release_host_probes_pass(host_probes)
@@ -1056,6 +1068,7 @@ def main() -> int:
         },
         "environment": {
             "hostProbes": host_probes,
+            "hostProbeExpectationsSource": probe_source,
         },
         "baselines": manifests,
         "baselinePreflights": baseline_preflight_evidence,

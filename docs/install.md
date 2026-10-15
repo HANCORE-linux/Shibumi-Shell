@@ -6,15 +6,16 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.1.1-beta.16.3` is the target GitHub prerelease. Install from the release
+`0.1.1-beta.16.4` is the target GitHub prerelease. Install from the release
 tag using the source workflow below.
 Do not install or update from `main`.
 
 ## Requirements
 
 - Omarchy Quattro; other Omarchy generations are not supported
-- The source workflow installs required commands and fonts through Pacman and
-  skips dependencies that are already installed or provided
+- Run the Pacman line below first; it installs the required commands and fonts
+  (Material Symbols icons come from `ttf-material-symbols-variable`) and skips
+  what is already installed. The suite itself never calls Pacman.
 - The source workflow also needs Git, HTTPS access to the repository,
   and a trusted local checkout
 
@@ -26,24 +27,26 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 For an intentional non-interactive installation:
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.3
+git checkout v0.1.1-beta.16.4
 ./scripts/shibumi-suite install --yes
 ```
 
 Do not install or update from `main`. If you previously installed from `main`, run `./scripts/shibumi-suite uninstall --keep-settings --yes` from that exact checkout before switching to a tag.
 
-The source workflow installs the package-managed runtime dependencies
-first. `sudo` applies only to Pacman; the suite transaction still runs as the
-desktop user and never lets a package hook modify the home directory.
+The Pacman line installs the package-managed runtime dependencies first and
+is the only step that needs `sudo`; the suite transaction runs as the desktop
+user and never lets a package hook modify the home directory.
 
 To inspect the transaction before installing:
 
 ```bash
+sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.3
+git checkout v0.1.1-beta.16.4
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -123,14 +126,14 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-To update an admitted Beta.16.2 source installation to Beta.16.3, use its
-trusted checkout. The exact published Beta.16.2 tag and release merge are
-admitted predecessors:
+To update an admitted Beta.16.3 source installation to Beta.16.4, use its
+trusted checkout. The exact published Beta.16.3 tag and the documented
+source-installation integration merge are admitted predecessors:
 
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.16.3
+git checkout v0.1.1-beta.16.4
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
@@ -183,7 +186,7 @@ authoritative origin. The old checkout is not deleted or modified.
 ### Roll back a package version
 
 > [!WARNING]
-> **Beta.16.3 downgrade warning.**
+> **Beta.16.4 downgrade warning.**
 > Beta.15.4 and older cannot read V1 layouts containing
 > `order.parked`. They reset V1 order, roles, and splits to defaults; other
 > settings and V2 remain. `uninstall --keep-settings` does not prevent this.
@@ -383,7 +386,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.1.1-beta.16.3
+git checkout v0.1.1-beta.16.4
 ./scripts/shibumi-suite install --yes
 ```
 

@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // Process-wide compatibility route for the documented Omarchy Network IPC
 // target. It owns no host panel/backend and forwards presentation requests to
@@ -55,7 +56,7 @@ Item {
   }
 
   IpcHandler {
-    target: "omarchy.network"
+    target: SuiteRuntime.HostContract.ipcTargets.network
 
     function open(): void { root.summonNetworkPresentation("panel") }
     function show(): void { root.summonNetworkPresentation("panel") }

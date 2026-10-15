@@ -4,6 +4,8 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/qs-runner.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 
 fail() {
@@ -16,8 +18,11 @@ fail() {
 keyboard_panel="$OMARCHY_PATH/shell/Ui/KeyboardPanel.qml"
 [[ -f $keyboard_panel ]] || fail 'pinned KeyboardPanel.qml is missing'
 keyboard_panel_sha=96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d
-if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 50d687a1f27063513cf42e6f33c3a4fcb17c24ed ]]; then
+if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 50d687a1f27063513cf42e6f33c3a4fcb17c24ed \
+   || $SHIBUMI_OMARCHY_SOURCE_REVISION == e71a816e9032f040225e086c7256f73e8080ae45 ]]; then
   keyboard_panel_sha=e509278a51a7e9b45fa3a6fa630bedcd671a0f34202bfb7413a5b6a2f88d7e22
+elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7 ]]; then
+  keyboard_panel_sha=b7243c0397608a0a2a2dc2a3202a88c1e4b4b35d8da37895a1db8993422ce36f
 fi
 [[ $(sha256sum "$keyboard_panel" | awk '{print $1}') == "$keyboard_panel_sha" ]] \
   || fail 'KeyboardPanel.qml does not match pinned Omarchy source'
@@ -110,25 +115,10 @@ rg -Fq 'implicitWidth: bar.vertical && validScreen ? bar.barSize : 0' \
   || fail 'BarPanel source is not bar-width'
 
 tmpdir=$(mktemp -d /tmp/shibumi-panel-geometry.XXXXXX)
-active_pid=
-cleanup_group() {
-  local pid=${1:-}
-  [[ -n $pid ]] || return 0
-  if kill -0 "$pid" 2>/dev/null; then
-    kill -TERM -- "-$pid" 2>/dev/null || true
-    for _ in $(seq 1 20); do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep 0.05
-    done
-    kill -KILL -- "-$pid" 2>/dev/null || true
-  fi
-  wait "$pid" 2>/dev/null || true
-}
-cleanup() {
-  cleanup_group "$active_pid"
-  rm -rf -- "$tmpdir"
-}
-trap cleanup EXIT HUP INT TERM
+trap 'rm -rf -- "$tmpdir"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 base="$tmpdir/base"
 mkdir -p "$base/fixtures" "$base/shared" "$base/hancore.shibumi.bar/core"
@@ -253,8 +243,8 @@ path.write_text(text.replace(anchor, mutant + anchor), encoding="utf-8")
 PY
   fi
 
-  local log="$root/output.log" rc=124
-  setsid /usr/bin/env -i \
+  local log="$root/output.log" rc
+  local -a qs_fixture_env=(-i
     HOME="$root/home" LANG=C.UTF-8 LC_ALL=C.UTF-8 \
     XDG_CONFIG_HOME="$root/home/.config" \
     XDG_STATE_HOME="$root/home/.local/state" \
@@ -268,34 +258,16 @@ PY
     QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
     QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 \
     QML_DISABLE_DISK_CACHE=1 \
-    /usr/bin/quickshell -p "$root" >"$log" 2>&1 &
-  active_pid=$!
-  for _ in $(seq 1 240); do
-    if ! kill -0 "$active_pid" 2>/dev/null; then
-      set +e
-      wait "$active_pid"
-      rc=$?
-      set -e
-      break
-    fi
-    sleep 0.05
-  done
-  if kill -0 "$active_pid" 2>/dev/null; then
-    printf 'fixture deadline\n' >>"$log"
-    cleanup_group "$active_pid"
-    rc=124
-  fi
-  local pgid=$active_pid
-  active_pid=
-  local survivors
-  survivors=$(ps -eo pgid=,pid= | awk -v pg="$pgid" '$1 == pg { print $2 }')
-  if [[ -n $survivors ]]; then
-    kill -KILL -- "-$pgid" 2>/dev/null || true
-    fail "$name left owned process-group members: $survivors"
-  fi
+  )
+  set +e
+  qs_run_fixture "$root/shell.qml" "$root" 12 >"$log" 2>&1
+  rc=$?
+  set -e
 
-  printf '%s\n' "--- $name rc=$rc cleanup=owned-pgid-empty ---"
   cat "$log"
+  [[ -f $root/qs-runner-survivors && $(<"$root/qs-runner-survivors") == 0 ]] \
+    || fail "$name left owned process-group members (or missing cleanup evidence)"
+  printf '%s\n' "--- $name rc=$rc cleanup=owned-pgid-empty ---"
   if [[ $expected == pass ]]; then
     [[ $rc -eq 0 ]] || fail "$name exited $rc"
     grep -Fq "$diagnostic" "$log" || fail "$name missed success marker"
@@ -304,7 +276,7 @@ PY
     if grep -q 'NATIVE_' "$log"; then
       fail "$name incorrectly labels component evidence as native"
     fi
-    if grep -Eq 'Binding loop|TypeError|ReferenceError|is not a type|failed to load' "$log"; then
+    if grep -Eq "$HOST_DIAGNOSTICS_COMPOSITION" "$log"; then
       fail "$name emitted a composition error"
     fi
   else

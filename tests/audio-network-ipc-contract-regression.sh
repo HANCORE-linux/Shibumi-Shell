@@ -18,10 +18,10 @@ network_service="$repo_root/hancore.shibumi.network/Service.qml"
 network_widget="$repo_root/hancore.shibumi.network/BarWidget.qml"
 network_bridge="$repo_root/hancore.shibumi.network/NetworkPanelBridge.qml"
 
-[[ $(rg -l 'target: "omarchy\.audio"' \
+[[ $(rg -l 'target: ("omarchy\.audio"|SuiteRuntime\.HostContract\.ipcTargets\.audio)' \
   "$audio_service" "$audio_widget" "$audio_bridge" | wc -l) -eq 1 ]] \
   || fail 'Audio does not expose exactly one process-wide compatibility target'
-rg -Fq 'target: "omarchy.audio"' "$audio_service" \
+rg -Fq 'target: SuiteRuntime.HostContract.ipcTargets.audio' "$audio_service" \
   || fail 'Audio compatibility target is not owned by the process-wide service'
 for method in open close show hide toggle; do
   rg -q "function ${method}\\(\\)" "$audio_service" \
@@ -42,10 +42,10 @@ rg -Fq 'candidate.open = false' "$audio_bridge" \
 rg -Fq 'candidate.visible = false' "$audio_bridge" \
   || fail 'hidden Audio KeyboardPanel can flash before redirect'
 
-[[ $(rg -l 'target: "omarchy\.network"' \
+[[ $(rg -l 'target: ("omarchy\.network"|SuiteRuntime\.HostContract\.ipcTargets\.network)' \
   "$network_service" "$network_widget" "$network_bridge" | wc -l) -eq 1 ]] \
   || fail 'Network does not expose exactly one compatibility target'
-rg -Fq 'target: "omarchy.network"' "$network_bridge" \
+rg -Fq 'target: SuiteRuntime.HostContract.ipcTargets.network' "$network_bridge" \
   || fail 'native Network bridge does not own the compatibility target'
 if rg -q 'IpcHandler[[:space:]]*\{' \
     "$network_service" "$network_widget"; then

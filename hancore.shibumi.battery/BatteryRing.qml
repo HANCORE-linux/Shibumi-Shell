@@ -28,10 +28,9 @@ Item {
     anchors.fill: parent
     percent: root.percent; foreground: root.foreground; accent: root.accent
     panelOpen: root.panelOpen; waves: root.waves
-    onWaveFrameChanged: root.repaint()
   }
 
-  function repaint() { if (panelOpen && plasma && bolts) bolts.requestPaint() }
+  function repaint() { if (panelOpen && plasma && percent >= 10 && bolts) bolts.requestPaint() }
   onForegroundChanged: repaint()
   onAccentChanged: repaint()
 
@@ -54,13 +53,13 @@ Item {
   Timer {
     id: arcClock
     interval: 160; repeat: true
-    running: root.panelOpen && root.plasma
+    running: root.panelOpen && root.plasma && root.percent >= 10
     onTriggered: {
       const next = []
       for (let i = 0; i < 5; i++) {
-        const angle = -Math.PI / 2 + (Math.random() - 0.5) * 2.2
-        const x = Math.cos(angle) * 1.2
-        next.push({ points: root.jag([0, 0.45], [x, bolts.surface(x)]), flicker: 0.7 + Math.random() * 0.3 })
+        const angle = Math.random() * Math.PI * 2
+        const x = Math.cos(angle) * 1.6
+        next.push({ points: root.jag([0, 0.45], [x, 0.45 + Math.sin(angle) * 1.6]), flicker: 0.7 + Math.random() * 0.3 })
       }
       root.arcs = next
       root.arcFrame = (root.arcFrame + 1) % 45
@@ -73,29 +72,16 @@ Item {
   Canvas {
     id: bolts
     anchors.fill: parent
-    visible: root.panelOpen && root.plasma
+    visible: root.panelOpen && root.plasma && root.percent >= 10
     readonly property real radius: width / 2 - 4.5
-    readonly property real ratio: Math.max(0, Math.min(1, liquid.displayedPercent / 100))
 
-    // Match the shared WaterRing surface so every effect stays underwater.
-    function surface(x) {
-      const amplitude = root.waves ? Math.min(Commons.Style.space(3), 2 * radius * ratio, 2 * radius * (1 - ratio)) * 0.3 / radius : 0
-      return 1 - 2 * ratio + amplitude * Math.sin((x + 1) * Math.PI * 2 - liquid.waveFrame / 72 * Math.PI * 2)
-    }
     onVisibleChanged: if (visible) requestPaint()
     onPaint: {
-      if (!root.panelOpen || !root.plasma) return
+      if (!root.panelOpen || !root.plasma || root.percent < 10) return
       const ctx = getContext("2d"), center = width / 2, r = radius
       ctx.clearRect(0, 0, width, height)
-      if (ratio <= 0) return
       ctx.save()
       ctx.beginPath(); ctx.arc(center, center, r, 0, Math.PI * 2); ctx.clip()
-      ctx.beginPath(); ctx.moveTo(center - r, center + r)
-      for (let i = 0; i <= 40; i++) {
-        const x = -1 + i / 20
-        ctx.lineTo(center + x * r, center + surface(x) * r)
-      }
-      ctx.lineTo(center + r, center + r); ctx.closePath(); ctx.clip()
       ctx.lineJoin = "round"; ctx.lineCap = "round"
       const glow = root.lightAccent, ink = root.brightInk
       for (const arc of root.arcs) {

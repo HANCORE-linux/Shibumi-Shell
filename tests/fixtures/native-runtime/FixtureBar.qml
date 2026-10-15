@@ -587,7 +587,7 @@ Bar {
       const order = state ? V1Layout.copyOrder(state.config.order) : null
       if (!state || state.writePending || probe.layoutTransitionBusy
           || probe.layoutController.v2Mode || !order
-          || order.left[0] !== "" || order.left[7] !== "G1")
+          || order.left[0] !== "G:fixture.native-widget" || order.left[7] !== "G1")
         return "not-ready"
       return probe.layoutController.moveGroupToSlot("G1", "left", 0)
         ? "queued" : "refused"

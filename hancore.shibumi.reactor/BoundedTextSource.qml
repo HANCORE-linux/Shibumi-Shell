@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // Watch metadata without FileView content reads. One bounded, short-lived
 // reader per input; changes coalesce and stale/cancelled reads never publish.
@@ -10,7 +11,7 @@ Item {
   required property string kind
   property bool active: false
   readonly property string home: Quickshell.env("HOME")
-  readonly property string relativePath: kind === "theme" ? ".local/state/omarchy/current/theme.name"
+  readonly property string relativePath: kind === "theme" ? SuiteRuntime.HostContract.themeNameFile
     : kind === "event" ? ".cache/qs-reactor-event"
     : kind === "quotes" ? ".config/shibumi/quotes.txt" : ""
   readonly property int maximum: kind === "quotes" ? 65536 : kind === "event" ? 4096 : 512

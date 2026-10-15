@@ -59,15 +59,15 @@ if rg -q 'bar\.monitorService' "$repo_root/hancore.shibumi.brightness"; then
 fi
 rg -Fq 'property var bar: Qt.isQtObject(shell) && "bar" in shell ? shell.bar : null' "$service" \
   || fail "monitor service does not guard the versioned active bar facade"
-rg -q 'registeredComponent\("omarchy\.monitor"\)' "$service" \
+rg -Fq 'embed.resolveComponent("", "omarchy.monitor")' "$service" \
   || fail "monitor service does not retain the official Omarchy owner"
 rg -Fq 'property var barWidgetRegistry: null' "$service" \
   || fail "scoped monitor service cannot receive the accepted widget snapshot"
-rg -Fq 'if (injectedEntry && injectedEntry.component) return injectedEntry.component' "$service" \
+rg -Fq 'registry: root.barWidgetRegistry' "$service" \
   || fail "scoped monitor service does not use the accepted native component"
-rg -Fq 'if (scopedHost) return null' "$service" \
+rg -Fxq '    registryOnly: root.scopedHost' "$service" \
   || fail "scoped monitor service falls through to wider registry access"
-rg -Fq '"barWidgetRegistry" in bar' "$service" \
+rg -Fq '"barWidgetRegistry" in bar' "$repo_root/hancore.shibumi.brightness/HostWidgetEmbed.qml" \
   || fail "monitor service cannot resolve the official owner on stock Quattro"
 [[ $(rg -c '^  MonitorPanelBridge \{' "$service") -eq 1 ]] \
   || fail "monitor service does not own exactly one official bridge"

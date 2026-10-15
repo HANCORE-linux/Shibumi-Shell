@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -81,9 +82,8 @@ printf '%s\n' "$output"
 grep -F 'ai plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 if grep -E ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' <<<"$output" \
-    | grep -Fv \
-      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' \
-      -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' >/dev/null; then
+    | host_filter_startup_diagnostics \
+      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' >/dev/null; then
   fail "component smoke emitted a QML/runtime warning or error"
 fi
 

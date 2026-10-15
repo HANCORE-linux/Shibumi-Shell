@@ -29,6 +29,12 @@ Scope {
   property int memFreeMiB: 0
   property int memBuffersMiB: 0
   property int memCachedMiB: 0
+  property bool memorySampleReady: false
+  property bool memorySweepRunning: false
+  property bool memorySweepStarted: false
+  property string memorySweepError: ""
+  property real memorySweepBeforeMiB: -1
+  property real memorySweepAfterMiB: -1
   readonly property int memUsedMiB: Math.max(0, memTotalMiB - memAvailableMiB)
   readonly property int memPercent: memTotalMiB > 0
     ? Math.max(0, Math.min(100, Math.round(memUsedMiB / memTotalMiB * 100)))
@@ -97,7 +103,7 @@ Scope {
 
   function parseMemory(text) {
     let total = 0
-    let available = 0
+    let available = -1
     let free = 0
     let buffers = 0
     let cached = 0
@@ -113,13 +119,69 @@ Scope {
       else if (parts[0] === "Buffers:") buffers = value
       else if (parts[0] === "Cached:") cached = value
     }
-    if (total <= 0) return
+    if (total > 0) {
+      memTotalMiB = Math.round(total / 1024)
+      memAvailableMiB = Math.round(Math.max(0, available) / 1024)
+      memFreeMiB = Math.round(free / 1024)
+      memBuffersMiB = Math.round(buffers / 1024)
+      memCachedMiB = Math.round(cached / 1024)
+    }
+    memorySampleReady = total > 0 && available >= 0 && available <= total
+  }
 
-    memTotalMiB = Math.round(total / 1024)
-    memAvailableMiB = Math.round(available / 1024)
-    memFreeMiB = Math.round(free / 1024)
-    memBuffersMiB = Math.round(buffers / 1024)
-    memCachedMiB = Math.round(cached / 1024)
+  function readMemoryNow() {
+    // Drain an older read before requesting the action's fresh snapshot.
+    memoryFile.waitForJob()
+    memorySampleReady = false
+    memoryFile.reload()
+    memoryFile.waitForJob()
+    return memorySampleReady
+  }
+
+  function clearMemorySweepResult() {
+    if (memorySweepRunning) return
+    memorySweepError = ""
+    memorySweepBeforeMiB = -1
+    memorySweepAfterMiB = -1
+  }
+
+  function startMemorySweep(pageCache, compact) {
+    if (memorySweepRunning || typeof pageCache !== "boolean"
+        || typeof compact !== "boolean" || !(pageCache || compact)) return false
+    clearMemorySweepResult()
+    memorySweepRunning = true
+    memorySweepStarted = false
+    if (!readMemoryNow()) {
+      memorySweepError = "Could not read fresh memory data"
+      memorySweepRunning = false
+      return false
+    }
+    memorySweepBeforeMiB = memAvailableMiB
+    const steps = ["status=0"]
+    if (pageCache) steps.push("sync && echo 3 > /proc/sys/vm/drop_caches || status=1")
+    if (compact) steps.push("echo 1 > /proc/sys/vm/compact_memory || status=1")
+    steps.push("exit \"$status\"")
+    memorySweepProcess.command = ["pkexec", "/bin/sh", "-c", steps.join("; ")]
+    memorySweepProcess.running = true
+    return true
+  }
+
+  function finishMemorySweep(exitCode, exitStatus) {
+    if (!memorySweepRunning) return
+    memorySweepError = exitStatus === 0 && exitCode === 126 ? "cancelled"
+      : exitStatus !== 0 || exitCode !== 0
+        ? "Sweep failed (exit " + exitCode + ")" : ""
+    if (readMemoryNow()) memorySweepAfterMiB = memAvailableMiB
+    else if (!memorySweepError) memorySweepError = "Could not read fresh memory data"
+    memorySweepRunning = false
+  }
+
+  Process {
+    id: memorySweepProcess
+    onStarted: root.memorySweepStarted = true
+    onRunningChanged: if (!running && root.memorySweepRunning && !root.memorySweepStarted)
+      root.finishMemorySweep(-1, 1)
+    onExited: function(exitCode, exitStatus) { root.finishMemorySweep(exitCode, exitStatus) }
   }
 
   function parseMemoryHardware(text) {
@@ -184,6 +246,7 @@ Scope {
     path: "/proc/meminfo"
     printErrors: false
     onLoaded: root.parseMemory(text())
+    onLoadFailed: root.memorySampleReady = false
   }
 
   FileView {

@@ -1,4 +1,9 @@
 {
   "schemaVersion": 1,
-  "dynamicResources": []
+  "dynamicResources": [
+    {"kind": "ipc", "resource": "omarchy.audio", "owner": "hancore.shibumi.audio/Service.qml", "sourceExpression": "SuiteRuntime.HostContract.ipcTargets.audio"},
+    {"kind": "ipc", "resource": "omarchy.bluetooth", "owner": "hancore.shibumi.bluetooth/Service.qml", "sourceExpression": "SuiteRuntime.HostContract.ipcTargets.bluetooth"},
+    {"kind": "ipc", "resource": "omarchy.network", "owner": "hancore.shibumi.network/NetworkPanelBridge.qml", "sourceExpression": "SuiteRuntime.HostContract.ipcTargets.network"},
+    {"kind": "ipc", "resource": "omarchy.bar", "owner": "hancore.shibumi.state/runtime/Runtime.qml", "sourceExpression": "Local.HostContract.ipcTargets.bar"}
+  ]
 }

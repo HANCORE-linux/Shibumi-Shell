@@ -13,7 +13,8 @@ Item {
 
   required property var bar
   required property Item ownerWidget
-  property Component panelComponent: null
+  property var panelComponent: null
+  HostWidgetEmbed { id: embed }
   property url panelSource: ""
   property var panelSettings: ({})
   property var backendReadyOverride: null
@@ -568,25 +569,17 @@ Item {
   }
 
   function injectPanel() {
-    if (!panel.item) return
+    if (!root || embed.shuttingDown || !panel.item) return
     // The official button and popup remain instantiated for their backend
     // state, but Shibumi owns the only visible presentation and click target.
     panel.inject(hostProxy, panelSettings)
   }
 
   function syncPanelSource() {
-    panelLoader.sourceComponent = null
-    panelLoader.source = ""
-    if (panelComponent !== null) {
-      panelLoader.sourceComponent = panelComponent
-    } else if (String(panelSource)) {
-      panelLoader.setSource(panelSource, {
-        bar: hostProxy,
-        moduleName: "omarchy.audio",
-        manageIpc: false,
-        settings: panelSettings
-      })
-    }
+    if (!root || embed.shuttingDown) return
+    embed.syncLoader(panelLoader, panelComponent, panelSource, {
+      bar: hostProxy, moduleName: "omarchy.audio", manageIpc: false, settings: panelSettings
+    }, ownerWidget)
   }
 
   onPanelSettingsChanged: injectPanel()
@@ -599,6 +592,7 @@ Item {
     clearPeakLease()
     panel.close()
     // Destroy the official panel while its host facade is still valid.
+    embed.shutdown()
     panelLoader.active = false
   }
 

@@ -27,7 +27,7 @@ def main():
         sources["state/" + name] = (read_regular(ROOT / "hancore.shibumi.state" / name, 65536), False)
     if args.service:
         for name in ("Service.qml", "ThemePalette.qml", "ThemePaletteModel.js", "runtime/qmldir",
-                     "runtime/Runtime.qml", "runtime/Provider.qml", "runtime/HostShell.qml"):
+                     "runtime/Runtime.qml", "runtime/Provider.qml", "runtime/HostShell.qml", "runtime/HostContract.qml"):
             sources["state/" + name] = (read_regular(ROOT / "hancore.shibumi.state" / name, 65536), False)
         sources["state/.shibumi-managed.json"] = (json.dumps({
             "suiteId": "hancore.shibumi", "suitePayloadDigest": "a" * 64}).encode(), False)

@@ -4,6 +4,8 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/qs-runner.sh"
+source "$repo_root/tests/lib/host-diagnostics.sh"
 shibumi_load_omarchy_baseline
 omarchy_path=$OMARCHY_PATH
 quickshell_bin=${QUICKSHELL_BIN:-/usr/bin/quickshell}
@@ -112,8 +114,7 @@ PY
 run_smoke() {
   local fixture_root=$1
   : >"$fixture_root/notify.log"
-  set +e
-  RUN_OUTPUT=$(timeout 8 env \
+  local -a qs_fixture_env=(
     HOME="$fixture_root/home" \
     XDG_CONFIG_HOME="$fixture_root/config" \
     XDG_STATE_HOME="$fixture_root/state" \
@@ -127,15 +128,16 @@ run_smoke() {
     XDG_RUNTIME_DIR="$fixture_root/runtime" \
     QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
     QML2_IMPORT_PATH="$omarchy_path/shell${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" \
-    "$quickshell_bin" -p "$fixture_root" 2>&1)
+  )
+  set +e
+  RUN_OUTPUT=$(qs_run_fixture "$fixture_root/shell.qml" "$fixture_root" 8 2>&1)
   RUN_RC=$?
   set -e
   RUN_PLAIN_OUTPUT=$(sed $'s/\033\\[[0-9;]*m//g' <<<"$RUN_OUTPUT")
   RUN_WARNINGS=$(sed -n -E \
     's/^[[:space:]]*WARN([^:]*)?:[[:space:]]*//p' <<<"$RUN_PLAIN_OUTPUT" \
-    | grep -Fvx \
-      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' \
-      -e '$HYPRLAND_INSTANCE_SIGNATURE is unset. Cannot connect to hyprland.' || true)
+    | host_filter_startup_diagnostics -x \
+      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' || true)
 }
 
 validate_common_completion() {
@@ -270,7 +272,7 @@ for command in omarchy-theme-switcher omarchy-theme-bg-switcher; do
   rg -Fq "\"$command\"" "$service" \
     || fail "official Omarchy image picker adapter is missing: $command"
 done
-rg -Fq '["omarchy-shell", "image-selector", "cancel"]' "$service" \
+rg -Fq '[SuiteRuntime.HostContract.shellCommand, "image-selector", "cancel"]' "$service" \
   || fail "official Omarchy image picker cannot be cancelled"
 rg -q 'usingOfficialPicker' "$service" \
   || fail "official image picker is not isolated from the Shibumi overlay"

@@ -35,14 +35,16 @@ ShibumiPanel {
 
   function activateSelected() {
     if (!powerService || selectedIndex < 0 || selectedIndex >= powerState.profiles.length) return
-    if (powerService.setProfile(powerService.profiles[selectedIndex]))
-      ownerWidget.close()
+    powerService.setProfile(powerService.profiles[selectedIndex])
   }
 
   // Ui.Button animates its fill for 120ms after hover/cursor leaves. Derive
   // the label from that painted fill, not the already-cleared state flags.
   function profileForegroundRole(fill) {
-    const surface = panel.renderedSurfaceColor
+    const surface = panel.renderedSurfaceColor.a < 1
+      ? panel.surfaceOverrideEnabled ? panel.surfaceColorOverride
+        : panel.shibumiTokens ? panel.shibumiTokens.panelBackground : Commons.Color.popups.background
+      : panel.renderedSurfaceColor
     const background = Qt.rgba(fill.r * fill.a + surface.r * (1 - fill.a),
       fill.g * fill.a + surface.g * (1 - fill.a),
       fill.b * fill.a + surface.b * (1 - fill.a), 1)
@@ -173,8 +175,7 @@ ShibumiPanel {
               : Commons.Border.controlSpec("normal",
                 panel.bar ? panel.bar.foreground : Commons.Color.foreground, accent)
             onClicked: {
-              if (panel.powerService && panel.powerService.setProfile(modelData))
-                panel.ownerWidget.close()
+              if (panel.powerService) panel.powerService.setProfile(modelData)
             }
             onHovered: function(h) {
               if (h) { panel.cursorActive = false; panel.selectedIndex = index }
@@ -184,9 +185,12 @@ ShibumiPanel {
       }
 
       Text {
-        visible: panel.powerState.profileActionRunning || panel.powerState.profileError !== ""
+        id: actionStatus
         width: parent.width
-        text: panel.powerState.profileError !== "" ? panel.powerState.profileError : "Applying profile…"
+        height: actionMetrics.height
+        FontMetrics { id: actionMetrics; font: actionStatus.font }
+        text: panel.powerState.profileError !== "" ? panel.powerState.profileError
+          : panel.powerState.profileActionRunning ? "Applying profile…" : ""
         color: panel.powerState.profileError !== "" && panel.bar
           ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
         font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family

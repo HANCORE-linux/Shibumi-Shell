@@ -402,9 +402,10 @@ not secondary sections inside Icons:
   shared Pickers route uses a content-matched compact panel height instead of
   inheriting the taller generic Configure surface.
 - **Bars** owns the active bar's supported surface and accent settings. V1
-  exposes border, frost, shadow, and Radius 12/6. V2 exposes Bar Border and
-  Panel + Tooltip; its fixed V2 radii and unsupported V1 effects are not
-  presented as editable settings. Both generations expose the eight palette
+  exposes border, frost, shadow, and Radius 12/6. V2 exposes Bar border and
+  Panels (including tooltip borders); only Notch also offers Frost. Full,
+  Fit, and Dock retain their fixed shell shadows, which would mask Frost
+  transparency. Fixed radii and shell shadows are not editable settings. Both generations expose the eight palette
   roles supported by the accepted references: `color01` through `color07` and
   foreground. The same tokens are consumed by both the V1 and V2 renderers.
 - **Logo** owns launcher wordmark/icon format and visual choices. Its selection

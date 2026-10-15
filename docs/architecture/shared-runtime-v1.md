@@ -17,11 +17,17 @@ components: no service, Process, Timer, poller, worker, backend, persistence,
 singleton, or mutable runtime authority. Every presentation consumer declares
 a direct State dependency, and State precedes those consumers in suite order.
 
-`ShibumiPanel.qml` is not passive because it retains three focus/popout
-lifecycle timers. It therefore remains the sole canonical source under
-`shared/presentation/`; `scripts/sync-shared.sh` continues to drift-check its
-existing plugin and `widgets/` copies. Bar-host and feature-owner sources
-otherwise live directly in their plugin roots.
+`ShibumiPanel.qml` retains its three focus/popout lifecycle timers and checked
+copies from `shared/presentation/`. `scripts/sync-shared.sh` also mirrors
+`shared/runtime/HostWidgetEmbed.qml` into Center, Status, Audio and Brightness.
+This local helper type-checks host handles without typed intermediate storage,
+preserves resolver refusals and resident children for the same owner/handle/URL;
+a real owner change revokes and reloads. Shutdown destroys children while their
+injected facade is still valid, then clears the loader records. Submission retries are bounded to ten
+existing consumer wakeups; it adds no timer or deferred feedback path. The
+proxies remain local, and Monitor's visual lease does not replace its backend
+owner. These separately registered plugins still require the complete admitted
+suite; this is checked vendoring, not another cross-plugin import exception.
 Installation, update, repair and removal continue to operate on the complete
 admitted suite. This dependency does not grant permission to weaken admission,
 load a partial mixed-version set, or import arbitrary sibling/repository paths.

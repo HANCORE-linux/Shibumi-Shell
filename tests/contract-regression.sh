@@ -246,14 +246,16 @@ if rg -q 'Services\.(SystemTelemetry|GpuTelemetry|PowerService|StatusService|Wea
 fi
 rg -q 'Qt\.createComponent\(url, Component\.PreferSynchronous\)' hancore.shibumi.bar/services/HostWidgetResolver.qml \
   || fail "host widget resolver does not load official manifest entry points"
-[[ $(rg -l 'bar\.registeredWidgetComponent' \
+[[ $(rg -l 'embed\.resolveComponent\(' \
   hancore.shibumi.{audio,status,center}/BarWidget.qml | wc -l) -eq 3 ]] \
   || fail "host-backed composites bypass the stable widget resolver"
+rg -Fq 'bar.registeredWidgetComponent(id)' shared/runtime/HostWidgetEmbed.qml \
+  || fail "shared embed helper bypasses the stable widget resolver"
 if rg -q 'registered(Component|Source)|registeredWidget(Component|Source)' \
     hancore.shibumi.network/Service.qml; then
   fail "native Network owner still resolves a host feature component"
 fi
-rg -q 'registeredComponent\("omarchy\.monitor"\)' hancore.shibumi.brightness/Service.qml \
+rg -Fq 'embed.resolveComponent("", "omarchy.monitor")' hancore.shibumi.brightness/Service.qml \
   || fail "shipped monitor owner bypasses the stable widget resolver"
 if rg -q 'registeredWidgetComponent\("omarchy\.bluetooth"\)' \
     hancore.shibumi.bluetooth/Service.qml; then
@@ -576,7 +578,7 @@ rg -q 'onTabRequested' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar is missing sibling-panel keyboard routing"
 rg -q 'Presentation\.ShibumiPillToolTip \{' hancore.shibumi.center/CalendarPanel.qml \
   || fail "G8 calendar navigation bypasses the Shibumi tooltip"
-if rg -q 'registeredSource\("omarchy\.indicators"\)' hancore.shibumi.center/BarWidget.qml; then
+if rg -q 'embed\.resolveSource\("omarchy\.indicators"\)' hancore.shibumi.center/BarWidget.qml; then
   fail "G8 must not instantiate Quattro's stock indicator presentation"
 fi
 rg -q '"service": "Service.qml"' hancore.shibumi.status/manifest.json \
@@ -900,7 +902,7 @@ rg -q 'serviceFor\("hancore\.shibumi\.bluetooth"\)' "$bluetooth_widget" \
   || fail "Bluetooth view does not resolve the shipped service"
 rg -q 'property var sessionOwners: \[\]' "$bluetooth_service" \
   || fail "Bluetooth service lacks multi-output session accounting"
-rg -q 'target: "omarchy\.bluetooth"' "$bluetooth_service" \
+rg -q 'target: SuiteRuntime\.HostContract\.ipcTargets\.bluetooth\b' "$bluetooth_service" \
   || fail "Bluetooth service does not own the single legacy IPC target"
 rg -q 'bar\.hideBarWidget\("omarchy\.bluetooth"\)' "$bluetooth_service" \
   || fail "Bluetooth legacy close/hide is not routed to the local panel"
@@ -983,9 +985,8 @@ rg -Fq 'result.ok === true' "$bluetooth_panel" \
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
-if rg -q 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml; then
-  fail "system telemetry must read procfs without child processes"
-fi
+[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml) -eq 1 ]] \
+  || fail "system telemetry must have one process-wide Memory Sweep worker"
 rg -q '"service": "WorkspaceService.qml"' hancore.shibumi.workspaces/manifest.json \
   || fail "workspace state must have exactly one shipped owner"
 workspace_service=hancore.shibumi.workspaces/WorkspaceService.qml

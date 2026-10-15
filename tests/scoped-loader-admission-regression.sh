@@ -4,6 +4,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$repo_root/tests/lib/baselines.sh"
+source "$repo_root/tests/lib/qs-runner.sh"
 shibumi_load_omarchy_baseline
 
 fail() {
@@ -11,47 +12,13 @@ fail() {
   exit 1
 }
 
-[[ -x /usr/bin/quickshell ]] || fail 'quickshell is required'
-command -v setsid >/dev/null 2>&1 || fail 'setsid is required'
-command -v timeout >/dev/null 2>&1 || fail 'timeout is required'
+[[ -x ${QUICKSHELL_BIN:-/usr/bin/quickshell} ]] || fail 'quickshell is required'
 command -v python3 >/dev/null 2>&1 || fail 'python3 is required'
 [[ -n ${OMARCHY_PATH:-} && -d $OMARCHY_PATH/shell/Commons ]] \
   || fail 'OMARCHY_PATH must reference an admitted Quattro tree'
 
 tmpdir=$(mktemp -d /tmp/shibumi-scoped-loader.XXXXXX)
-fixture_pid=
-fixture_pgid=
-
-process_group_alive() {
-  [[ -n $fixture_pgid ]] && kill -0 -- "-$fixture_pgid" 2>/dev/null
-}
-
-terminate_fixture_group() {
-  local attempt
-  if process_group_alive; then
-    kill -TERM -- "-$fixture_pgid" 2>/dev/null || true
-    for ((attempt = 0; attempt < 20; attempt++)); do
-      process_group_alive || break
-      sleep 0.05
-    done
-  fi
-  if process_group_alive; then
-    kill -KILL -- "-$fixture_pgid" 2>/dev/null || true
-    for ((attempt = 0; attempt < 20; attempt++)); do
-      process_group_alive || break
-      sleep 0.05
-    done
-  fi
-  ! process_group_alive
-}
-
-cleanup() {
-  trap - EXIT HUP INT TERM
-  terminate_fixture_group || true
-  [[ -z $fixture_pid ]] || wait "$fixture_pid" 2>/dev/null || true
-  rm -rf -- "$tmpdir"
-}
-trap cleanup EXIT
+trap 'rm -rf -- "$tmpdir"' EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -114,8 +81,7 @@ run_fixture() {
       "$fixture_dir/hancore.shibumi.bar/core/WidgetSlot.qml"
   fi
 
-  set +e
-  setsid timeout --foreground --kill-after=1 12 env \
+  local -a qs_fixture_env=(
     HOME="$fixture_dir/home" \
     XDG_CONFIG_HOME="$fixture_dir/home/.config" \
     XDG_STATE_HOME="$fixture_dir/home/.local/state" \
@@ -129,16 +95,12 @@ run_fixture() {
     QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= \
     QT_QUICK_BACKEND=software QT_FORCE_STDERR_LOGGING=1 \
     QML_DISABLE_DISK_CACHE=1 \
-    /usr/bin/quickshell -p "$fixture_dir" --no-color \
-    >"$fixture_dir/output.log" 2>&1 &
-  fixture_pid=$!
-  fixture_pgid=$fixture_pid
-  wait "$fixture_pid"
+  )
+  local -a qs_fixture_args=(--no-color)
+  set +e
+  qs_run_fixture "$fixture_dir/shell.qml" "$fixture_dir" 12 >"$fixture_dir/output.log" 2>&1
   rc=$?
   set -e
-  terminate_fixture_group || fail "$variant process group did not terminate"
-  fixture_pid=
-  fixture_pgid=
   output=$(<"$fixture_dir/output.log")
   printf '%s\n' "$output"
 

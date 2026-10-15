@@ -1253,7 +1253,7 @@ if rg -q 'InlineSpeedTestRunner|omarchy-network-|\bnmcli\b' \
     "$repo_root/hancore.shibumi.network"; then
   fail "Network cutover retained a legacy Omarchy/nmcli backend"
 fi
-[[ $(rg -c 'target: "omarchy\.network"' "$bridge") -eq 1 ]] \
+[[ $(rg -c 'target: SuiteRuntime\.HostContract\.ipcTargets\.network\b' "$bridge") -eq 1 ]] \
   || fail "Network compatibility IPC does not have exactly one owner"
 if rg -q 'Loader|panelSource|panelComponent|omarchy\.wifiqr|omarchy\.speedtest' \
     "$bridge"; then
