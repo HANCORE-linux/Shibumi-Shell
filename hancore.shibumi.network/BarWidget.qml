@@ -50,6 +50,9 @@ Ui.Panel {
     && displayMode === "full" && !v2Presentation
   readonly property bool v2TrafficPresentation: mode === "ethernet"
     && displayMode === "full" && v2Presentation
+  // Match content's horizontal full-content branch, including its fallback.
+  readonly property bool trafficPresentationVisible: visible && !!bar && !!tokens
+    && !bar.vertical && displayMode !== "icon" && displayMode !== "text"
   property var downloadHistory: []
   property var uploadHistory: []
   readonly property int trafficHistoryLimit: 30
@@ -134,8 +137,9 @@ Ui.Panel {
   function syncTrafficConsumer() {
     const service = networkService
     const nativeDemand = !!service && networkReady && "wiredConnected" in service
-    const desired = networkReady && (nativeDemand ? service.wiredConnected
-      : mode === "ethernet") ? service : null
+    const desired = trafficPresentationVisible && networkReady
+      && (nativeDemand ? service.wiredConnected : mode === "ethernet")
+      ? service : null
     if (trafficService === desired) {
       trafficRetry.stop()
       return
@@ -224,6 +228,7 @@ Ui.Panel {
   }
 
   onOpenedChanged: syncPanelLoader()
+  onTrafficPresentationVisibleChanged: syncTrafficConsumer()
   onNetworkReadyChanged: {
     syncPanelLoader()
     syncTrafficConsumer()
@@ -301,6 +306,7 @@ Ui.Panel {
     interval: 2000
     repeat: true
     running: root.mode === "ethernet" && !root.v2Presentation
+      && root.trafficPresentationVisible
     onTriggered: root.appendTrafficSample()
   }
 

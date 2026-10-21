@@ -68,6 +68,7 @@ source "$helper"
 for manifest in \
   "$installed_package_baseline" \
   "$installed_source_baseline" \
+  "$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" \
   "$previous_package_baseline" \
   "$previous_source_baseline" \
   "$compat_package_baseline" \

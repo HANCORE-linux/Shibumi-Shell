@@ -13,6 +13,42 @@ ShellRoot {
   property var dynamicNetworkService: null
   property int caseBLastTrafficOwners: -1
   property int caseBLastTrafficEnds: -1
+  property int demandCase: 0
+  readonly property var demandCases: [
+    { name: "full-v1", traffic: 1, clock: true },
+    { name: "icon", mode: "icon" },
+    { name: "text", mode: "text" },
+    { name: "vertical", vertical: true },
+    { name: "hidden-parent", hidden: true },
+    { name: "full-v2", v2: true, traffic: 1 },
+    { name: "restored-v1", traffic: 1, clock: true },
+    { name: "unknown-full-fallback", mode: "future-mode", traffic: 1, clock: true },
+    { name: "icon-panel", mode: "icon", panel: true },
+    { name: "native-full", native: true, traffic: 1, clock: true },
+    { name: "native-icon", native: true, mode: "icon" },
+    { name: "native-text", native: true, mode: "text" },
+    { name: "native-vertical", native: true, vertical: true },
+    { name: "native-hidden", native: true, hidden: true },
+    { name: "native-no-wire", native: true, wired: false, clock: true },
+    { name: "native-restored", native: true, traffic: 1, clock: true },
+    { name: "native-icon-panel", native: true, mode: "icon", panel: true }
+  ]
+
+  function configureDemandCase(widget) {
+    const row = demandCases[demandCase]
+    widget.close()
+    demandNativeService.wiredConnected = row.wired !== false
+    widget.networkServiceOverride = row.native
+      ? demandNativeService : sharedNetworkService
+    fakeBar.vertical = row.vertical === true
+    firstLoader.visible = row.hidden !== true
+    fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {
+      v2Shell: row.v2 === true
+    })
+    widget.settings = appearanceSettings(row.mode || "full")
+    if (row.panel) widget.open()
+    ticks = 0
+  }
 
   function fail(message) {
     console.error("network-widget-smoke:", message)
@@ -38,6 +74,11 @@ ShellRoot {
   Fixtures.NetworkTestService { id: replacementNetworkService }
   Fixtures.NetworkTestService { id: unavailableService; ready: false }
   Fixtures.NetworkTestService { id: vanishedCaseAService; kind: "ethernet" }
+  Fixtures.NetworkTestService {
+    id: demandNativeService
+    kind: "ethernet"
+    property bool wiredConnected: true
+  }
 
   Component {
     id: dynamicNetworkServiceComponent
@@ -107,8 +148,13 @@ ShellRoot {
     function targetBelongsToWindow(_target, _window) { return true }
   }
 
+  // A parentless, windowless QQuickItem cannot regain effective visibility
+  // after hiding. Keep a visible fixture parent for the hide/show controls.
+  Item { id: presentationParent }
+
   Loader {
     id: firstLoader
+    parent: presentationParent
     active: true
     sourceComponent: Component {
       Network.BarWidget {
@@ -323,6 +369,8 @@ ShellRoot {
             || sharedNetworkService.refreshCount !== 1)
           return root.fail("right-click scanner request")
         sharedNetworkService.trafficFailuresRemaining = 1
+        // Both original lease/cleanup controls use actual traffic presentations.
+        first.settings = root.appearanceSettings("full")
         sharedNetworkService.kind = "ethernet"
         sharedNetworkService.label = "enp1s0"
         sharedNetworkService.downloadRate = 1536
@@ -463,6 +511,51 @@ ShellRoot {
           return root.fail("destroyed failed-acquire service was not cleared")
         console.log("network failed-acquire destruction regression passed")
         vanishedCaseBLoader.active = false
+        sharedNetworkService.kind = "ethernet"
+        firstLoader.active = true
+        root.phase = 80
+        root.ticks = 0
+        return
+      }
+
+      if (root.phase === 80) {
+        if (!first || !first.networkReady) return
+        root.configureDemandCase(first)
+        root.phase = 81
+        return
+      }
+
+      if (root.phase === 81) {
+        if (root.ticks < 3) return
+        const row = root.demandCases[root.demandCase]
+        const historyTimers = []
+        for (const resource of first.resources) {
+          if (resource.interval === 2000 && resource.repeat === true)
+            historyTimers.push(resource)
+        }
+        const observed = [
+          sharedNetworkService.trafficConsumerCount + demandNativeService.trafficConsumerCount,
+          first.trafficService === first.networkService,
+          historyTimers.length === 1 && historyTimers[0].running,
+          sharedNetworkService.sessionCount + demandNativeService.sessionCount,
+          first.panelLoaded
+        ]
+        const expected = [row.traffic || 0, !!row.traffic,
+          row.clock === true, row.panel ? 1 : 0, row.panel === true]
+        console.log("NETWORK_TRAFFIC_DEMAND", row.name,
+          JSON.stringify({ observed: observed, expected: expected,
+            visible: first.visible, parentVisible: firstLoader.visible,
+            ready: first.networkReady, vertical: fakeBar.vertical,
+            displayMode: first.displayMode, demand: first.trafficPresentationVisible }))
+        if (JSON.stringify(observed) !== JSON.stringify(expected))
+          return root.fail("traffic demand/history/session mismatch: " + row.name)
+        root.demandCase++
+        if (root.demandCase < root.demandCases.length) {
+          root.configureDemandCase(first)
+          return
+        }
+        first.close()
+        firstLoader.active = false
         console.log("network plugin smoke passed")
         Qt.quit()
         stop()

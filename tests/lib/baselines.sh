@@ -172,6 +172,7 @@ shibumi_validate_omarchy_baseline_schema() {
   jq -e '
     if .id == "installed-package-v4.0.4"
         or .id == "installed-source-parity-v4.0.4"
+        or .id == "installed-source-parity-v4.0.5"
         or .id == "installed-package-v4.0.3"
         or .id == "installed-source-parity-v4.0.3"
         or .id == "installed-package-v4.0.2"
@@ -732,6 +733,8 @@ shibumi_load_omarchy_baseline() {
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
       case $baseline_version in
+        4.0.5)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" ;;
         4.0.4)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.4.json" ;;
         4.0.3)
