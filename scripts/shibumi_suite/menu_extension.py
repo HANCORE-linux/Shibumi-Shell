@@ -188,7 +188,22 @@ def remove_picker_routing(raw: str) -> str:
     return result
 
 
-def install_picker_routing(raw: str | None) -> str:
+def install_picker_routing(raw: str | None, stock_menu: str | None = None) -> str:
+    # Default actions are the stable host contract. The lifecycle supplies the
+    # actual host menu so forward hosts retain their native theme-picker route.
+    stock_actions = {
+        "style.theme": 'theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"',
+        "style.background": 'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"',
+    }
+    if stock_menu is not None:
+        stock = _decoded(stock_menu)
+        stock = stock.get("items", stock)
+        for key in stock_actions:
+            entry = stock.get(key) if isinstance(stock, dict) else None
+            action = entry.get("action") if isinstance(entry, dict) else None
+            if not isinstance(action, str) or not action.strip():
+                raise MenuExtensionError(f"Omarchy stock menu has no action for {key}")
+            stock_actions[key] = action
     base = raw if raw and raw.strip() else EMPTY_EXTENSION
     base = remove_picker_routing(base)
     decoded = _decoded(base)
@@ -219,13 +234,13 @@ def install_picker_routing(raw: str | None) -> str:
             "icon": "󰸌",
             "label": "Theme",
             "aliases": ["theme", "themes"],
-            "action": f"{ROUTER} theme",
+            "action": f'if [[ -x {ROUTER} ]]; then {ROUTER} theme; else {stock_actions["style.theme"]}; fi',
         },
         "style.background": {
             "icon": "",
             "label": "Background",
             "aliases": ["background", "wallpaper"],
-            "action": f"{ROUTER} wallpaper",
+            "action": f'if [[ -x {ROUTER} ]]; then {ROUTER} wallpaper; else {stock_actions["style.background"]}; fi',
         },
     }
     block = (

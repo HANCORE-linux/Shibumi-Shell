@@ -43,6 +43,8 @@ from .model import (
     suite_payload_digest,
 )
 from .menu_extension import (
+    END_MARKER,
+    START_MARKER,
     generated_extension_is_empty,
     install_picker_routing,
     read_extension,
@@ -53,6 +55,7 @@ from .transaction import (
     PluginTransaction,
     SuiteLock,
     TransactionError,
+    _read_bounded_regular_path,
     is_managed_target,
     preflight_legacy_removals,
     preflight_removals,
@@ -346,7 +349,10 @@ def install_picker_menu_extension(
     previous_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw = read_extension(transaction.paths.menu_extension_file)
-    payload = install_picker_routing(raw).encode("utf-8")
+    stock_menu = read_extension(
+        transaction.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+    )
+    payload = install_picker_routing(raw, stock_menu).encode("utf-8")
     transaction.write_menu_extension(payload)
     runtime.refresh_menu()
     previous = (
@@ -1267,10 +1273,49 @@ def command_uninstall(
         runtime.verify_uninstall(set(plugin_ids))
         transaction.finish(None, archive_previous=False)
 
-    if paths.state_dir.is_dir():
-        shutil.rmtree(paths.state_dir)
-    if paths.cache_dir.is_dir():
-        shutil.rmtree(paths.cache_dir)
+    leftovers: dict[Path, str] = {}
+    for directory in (paths.state_dir, paths.cache_dir):
+        try:
+            if directory.is_dir():
+                shutil.rmtree(directory)
+        except OSError as error:
+            leftovers[directory] = f"cleanup failed: {error}"
+        try:
+            directory.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            leftovers[directory] = f"cannot verify removal: {error}"
+        else:
+            leftovers.setdefault(directory, "directory remains")
+    menu = paths.menu_extension_file
+    try:
+        menu.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        leftovers[menu] = f"cannot verify routing removal: {error}"
+    else:
+        try:
+            payload = _read_bounded_regular_path(menu, "Omarchy menu extension")
+            if START_MARKER.encode() in payload or END_MARKER.encode() in payload:
+                leftovers[menu] = "Shibumi picker routing markers remain"
+        except (OSError, TransactionError) as error:
+            leftovers[menu] = f"cannot verify routing removal: {error}"
+    for path, reason in leftovers.items():
+        remedy = (
+            "remove only the Shibumi picker routing start/end block from this file"
+            if path == menu else
+            "remove this Shibumi-owned directory after confirming the stock bar is active"
+        )
+        print(
+            f"shibumi-suite: uninstall incomplete: {path}: {reason}; "
+            "re-run uninstall --yes from the same checkout if install.json remains, "
+            f"or manually {remedy}.",
+            file=sys.stderr,
+        )
+    if leftovers:
+        return 1
     print("Uninstalled Shibumi and restored the stock Omarchy bar.")
     return 0
 

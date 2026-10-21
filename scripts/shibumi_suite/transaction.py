@@ -1728,6 +1728,17 @@ def _archive_transaction_backups_open(
     if paths.plugin_dir.is_dir():
         _fsync_directory(paths.plugin_dir)
 
+    # A first install has replacement records but no preceding payloads.
+    # Retire its empty slot before it can displace a real retained backup.
+    if not any(destination.iterdir()):
+        slot = backup_root / logical_destination.name
+        opened = destination.stat()
+        current = slot.lstat()
+        if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+            raise TransactionError("empty transaction archive directory was replaced")
+        slot.rmdir()
+        _fsync_directory(backup_root)
+
     if backup_root.is_dir():
         retained = sorted(
             (path for path in backup_root.iterdir() if path.is_dir()),

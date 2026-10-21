@@ -15,7 +15,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -48,6 +48,7 @@ from shibumi_suite.cli import (  # noqa: E402
     command_activate,
     command_deactivate,
     command_install,
+    install_picker_menu_extension,
     command_migrate,
     command_repair,
     command_status,
@@ -76,6 +77,7 @@ from shibumi_suite.model import (  # noqa: E402
 from shibumi_suite.menu_extension import (  # noqa: E402
     END_MARKER,
     START_MARKER,
+    _decoded,
     install_picker_routing,
     remove_picker_routing,
 )
@@ -2019,6 +2021,53 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(install_picker_routing(installed), installed)
         self.assertEqual(remove_picker_routing(installed), original)
 
+    def test_picker_routes_fall_back_only_when_router_is_not_executable(self) -> None:
+        home = self.root / "home with spaces"
+        router = home / ".config/omarchy/plugins/hancore.shibumi.quick-access/scripts/shibumi-picker-route"
+        router.parent.mkdir(parents=True)
+        commands = self.root / "commands"
+        commands.mkdir()
+        log = self.root / "route.log"
+        scripts = {
+            "omarchy-theme-switcher": 'printf "theme-switcher\\n" >>"$ROUTE_LOG"; printf "Theme With Spaces"',
+            "omarchy-theme-set": 'printf "theme-set:<%s>\\n" "$1" >>"$ROUTE_LOG"',
+            "omarchy-theme-bg-switcher": 'printf "background-switcher\\n" >>"$ROUTE_LOG"; printf "Background With Spaces"',
+            "omarchy-theme-bg-set": 'printf "background-set:<%s>\\n" "$1" >>"$ROUTE_LOG"',
+            "omarchy-shell": 'printf "native:" >>"$ROUTE_LOG"; printf "<%s>" "$@" >>"$ROUTE_LOG"; printf "\\n" >>"$ROUTE_LOG"',
+        }
+        for name, body in scripts.items():
+            target = commands / name
+            target.write_text("#!/bin/bash\n" + body + "\n")
+            target.chmod(0o700)
+        background = 'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"'
+        stock_menu = self.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+        stock_menu.parent.mkdir(parents=True)
+        for theme, theme_calls in (
+            ('theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"', "theme-switcher\ntheme-set:<Theme With Spaces>\n"),
+            ('omarchy-shell shell summon omarchy.image-picker \'{"source":"themes"}\'', 'native:<shell><summon><omarchy.image-picker><{"source":"themes"}>\n'),
+        ):
+            stock_menu.write_text(json.dumps({"style.theme": {"action": theme}, "style.background": {"action": background}}))
+            legacy_actions = {"style.theme": "theme", "style.background": "wallpaper"}
+            legacy = "{\n" + START_MARKER + "\n" + ",\n".join(json.dumps(key) + ": " + json.dumps({"action": '\"$HOME/.config/omarchy/plugins/hancore.shibumi.quick-access/scripts/shibumi-picker-route\" ' + value}) for key, value in legacy_actions.items()) + "\n" + END_MARKER + "\n}\n"
+            self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
+            self.paths.menu_extension_file.write_text(legacy)
+            payloads = []
+            transaction = SimpleNamespace(paths=self.paths, menu_extension_existed=True, write_menu_extension=payloads.append)
+            install_picker_menu_extension(transaction, self.runtime)
+            rendered = payloads[-1].decode()
+            self.assertEqual((rendered.count(START_MARKER), rendered.count(END_MARKER), remove_picker_routing(rendered)), (1, 1, "{\n}\n"))
+            for mode in ("missing", "non-executable", "present", "failing"):
+                router.unlink(missing_ok=True)
+                if mode != "missing":
+                    router.write_text('#!/bin/bash\nprintf "router:<%s>\\n" "$1" >>"$ROUTE_LOG"\nexit ' + ("17" if mode == "failing" else "0") + "\n")
+                    router.chmod(0o600 if mode == "non-executable" else 0o700)
+                for key, argument in legacy_actions.items():
+                    with self.subTest(theme=theme, mode=mode, route=key):
+                        log.write_text("")
+                        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", _decoded(rendered)[key]["action"]], env={"HOME": str(home), "PATH": str(commands), "ROUTE_LOG": str(log)}, capture_output=True, text=True, timeout=3)
+                        expected = (theme_calls if key == "style.theme" else "background-switcher\nbackground-set:<Background With Spaces>\n") if mode in ("missing", "non-executable") else "router:<" + argument + ">\n"
+                        self.assertEqual((result.returncode, log.read_text()), (17 if mode == "failing" else 0, expected), result.stderr)
+
     def test_menu_extension_supports_items_wrapper(self) -> None:
         original = (
             "{\n"
@@ -2498,6 +2547,37 @@ class SuiteLifecycleTests(unittest.TestCase):
         ), 0)
         self.assertEqual(self.runtime.restarts, restarts_before + 1)
         self.assertFalse(extension.exists())
+
+    def test_uninstall_reports_postcommit_leftovers(self) -> None:
+        self.install()
+        marked = self.paths.menu_extension_file.read_text()
+        finish = PluginTransaction.finish
+        rmtree = shutil.rmtree
+        def finish_with_leftovers(transaction, *args, **kwargs):
+            finish(transaction, *args, **kwargs)
+            # Explicit post-commit external-writer / cleanup-failure control,
+            # not attribution of the reporter's unknown live sequence.
+            self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
+            self.paths.menu_extension_file.write_text(marked)
+            self.paths.state_dir.mkdir(parents=True, exist_ok=True)
+            (self.paths.state_dir / "leftover").write_text("fixture\n")
+        def denied_state_cleanup(path, *args, **kwargs):
+            if Path(path) == self.paths.state_dir:
+                raise PermissionError("injected state cleanup refusal")
+            return rmtree(path, *args, **kwargs)
+        output = io.StringIO()
+        with patch.object(PluginTransaction, "finish", finish_with_leftovers), patch("shibumi_suite.cli.shutil.rmtree", side_effect=denied_state_cleanup), redirect_stdout(output), redirect_stderr(output):
+            try:
+                code = command_uninstall(self.args(), self.suite, self.paths, self.runtime)
+            except OSError:
+                code = -1
+        lines = output.getvalue().splitlines()
+        reports = [line for line in lines if str(self.paths.menu_extension_file) in line or str(self.paths.state_dir) in line]
+        self.assertEqual((code, len(reports), all("same checkout" in line for line in reports), "Uninstalled Shibumi and restored the stock Omarchy bar." in lines), (1, 2, True, False), output.getvalue())
+
+    def test_first_install_does_not_retain_empty_backup_slots(self) -> None:
+        self.install()
+        self.assertEqual([path.name for path in (self.paths.state_dir / "backups").glob("*") if path.is_dir() and not any(path.iterdir())], [])
 
     def test_uninstall_uses_full_restart_instead_of_hot_reload(self) -> None:
         self.install()
