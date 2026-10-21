@@ -394,34 +394,10 @@ def snapshot_layout(
     legacy: bool,
     trusted_layout: dict[str, list[Any]] | None = None,
 ) -> dict[str, list[Any]]:
-    layout = copy_layout(config["bar"]["layout"])
-    if shell_id != "shibumi":
-        return layout
-
-    trusted_omarchy: dict[str, int] = {}
-    if not legacy and trusted_layout is not None:
-        for region in native_sections(trusted_layout):
-            for entry in trusted_layout.get(region, []):
-                plugin_id = entry_id(entry)
-                if plugin_id.startswith("omarchy."):
-                    trusted_omarchy[plugin_id] = (
-                        trusted_omarchy.get(plugin_id, 0) + 1
-                    )
-
-    # Pre-profile continuity builds and the suite CLI could merge the complete
-    # stock layout into Shibumi as "extras". Keep user/third-party widgets and
-    # only those Omarchy widgets already recorded in the trusted Shibumi profile.
-    snapshot: dict[str, list[Any]] = {region: [] for region in native_sections(layout)}
-    for region in native_sections(layout):
-        for entry in layout.get(region, []):
-            plugin_id = entry_id(entry)
-            if region in REGIONS and plugin_id.startswith("omarchy."):
-                remaining = trusted_omarchy.get(plugin_id, 0)
-                if remaining <= 0:
-                    continue
-                trusted_omarchy[plugin_id] = remaining - 1
-            snapshot[region].append(entry)
-    return snapshot
+    # Current configured placements are authoritative. A native namespace or
+    # absence from an older profile cannot distinguish a user placement from
+    # historical stock imports; filtering either silently loses user widgets.
+    return copy_layout(config["bar"]["layout"])
 
 
 def validate_state(
@@ -929,6 +905,7 @@ def plugin_snapshot(runtime_paths: dict[str, Path]) -> dict[str, dict[str, Any]]
 def prune_uninstalled_layout_plugins(
     layout: dict[str, list[Any]], plugins: dict[str, dict[str, Any]],
     managed: set[str], source_layout: dict[str, list[Any]],
+    *, append_source: bool = True,
 ) -> list[str]:
     # Managed-row presence is necessary, not proof of completeness; pruning
     # relies on the pinned host's authoritative-snapshot contract.
@@ -959,7 +936,8 @@ def prune_uninstalled_layout_plugins(
     )
     added = [(region if region not in REGIONS else "right", copy.deepcopy(entry))
              for (region, entry), plugin_id in zip(source_coordinates, source_ids)
-             if plugin_id not in present and plugin_id not in managed and plugin_id in plugins
+             if append_source and plugin_id not in present
+             and plugin_id not in managed and plugin_id in plugins
              and plugins[plugin_id]["enabled"] and not plugins[plugin_id]["firstParty"]
              and "bar-widget" in plugins[plugin_id]["kinds"]]
     for region in native_sections(layout):
@@ -1131,8 +1109,11 @@ def perform(target: str) -> int:
             installed_plugins = plugin_snapshot(runtime_paths)
         except ManagerError:
             installed_plugins = {}
+        # A stock-side selection is not a Shibumi placement request. Restore
+        # the saved Shibumi profile without importing the stock-only providers.
         pruned_ids = prune_uninstalled_layout_plugins(
-            target_layout, installed_plugins, set(state["plugins"]), layouts[current_shell]
+            target_layout, installed_plugins, set(state["plugins"]), layouts[current_shell],
+            append_source=runtime_target != "shibumi",
         )
         layouts[runtime_target] = copy_layout(target_layout)
         target_center_anchor = center_anchors.get(runtime_target)

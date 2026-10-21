@@ -1011,11 +1011,11 @@
     },
     {
       "id": "public-beta.16.5",
-      "payloadDigest": "16f543efad1060d6070120975256e6e8f2dfa0c3e95f84bed9492acfbf0208b1",
+      "payloadDigest": "6af821dcaab11d85577174859e28cffc6bda146b76509eb6abe97fccae0fcf15",
       "pluginDigests": {
         "hancore.shibumi.bar": "4fbf8b05f754888ca694181835f7b5f7f4ec0ca6e0ef87e24075f00b8dfb2c93",
         "hancore.shibumi.state": "eb06588ec365763f2eb207e133b8614e9fcd5f2d2d14598700df9ff91d03a272",
-        "hancore.shibumi.control-center": "464dbea68de8dca158dfce4b3f6442ff37ba8636ee370d4411e4cd3b26222879",
+        "hancore.shibumi.control-center": "4d4389dadce6110a3570c78d54361c7c028b6ffef9a8496062426d27bd3a62b8",
         "hancore.shibumi.reactor": "034024058bfc164b43689ce868ab55a501b9b27fec1e1a7377d15c607f8a8a4e",
         "hancore.shibumi.telemetry": "dbb2fc5cad623e27c25bc54998a0e3fab1eef7c0fd9e5fe957ae84cf6656cbbf",
         "hancore.shibumi.power-state": "eec80b1275ad4cef63660ea8487d93fcdafcbc4f90dc0f53b4f6a8ce68a795ae",
