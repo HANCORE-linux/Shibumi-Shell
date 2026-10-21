@@ -3,6 +3,7 @@
 // Public listPlugins DTOs, NOT manifests, settings, components or native revision.
 var MaximumText = 262144
 var MaximumEntries = 512
+var NativeSections = ["left", "centerBegin", "center", "centerEnd", "right", "tray"]
 var Fields = ["id", "name", "kinds", "enabled", "active", "canDisable", "firstParty", "clonedFrom",
   "description", "author", "version", "tags", "barWidget"]
 var BarWidgetFields = ["displayName", "description", "category", "semanticCapabilities",
@@ -63,7 +64,7 @@ function normalize(value) {
         || !text(row.barWidget.displayName, 512, true)
         || !text(row.barWidget.description, 4096, true)
         || !text(row.barWidget.category, 128, true)
-        || ["left", "center", "right"].indexOf(row.barWidget.defaultSection) < 0
+        || NativeSections.indexOf(row.barWidget.defaultSection) < 0
         || typeof row.barWidget.allowMultiple !== "boolean") return null
     var kinds = []
     for (var k = 0; k < row.kinds.length; k++) {
@@ -79,6 +80,8 @@ function normalize(value) {
     var barWidget = Object.freeze({ displayName: row.barWidget.displayName,
       description: row.barWidget.description, category: row.barWidget.category,
       semanticCapabilities: capabilities, defaultSection: row.barWidget.defaultSection,
+      presentationRegion: row.barWidget.defaultSection === "tray" ? ""
+        : row.barWidget.defaultSection.indexOf("center") === 0 ? "center" : row.barWidget.defaultSection,
       allowMultiple: row.barWidget.allowMultiple })
     var entry = Object.freeze({ id: row.id, name: row.name, kinds: Object.freeze(kinds),
       enabled: row.enabled, active: row.active, canDisable: row.canDisable,

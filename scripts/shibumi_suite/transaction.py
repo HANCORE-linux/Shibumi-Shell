@@ -21,7 +21,7 @@ from .admission import (
     supported_install_identities,
     verify_transaction_artifact_bindings,
 )
-from .config import atomic_write, parse_config_bytes, read_config
+from .config import atomic_write, native_sections, parse_config_bytes, read_config
 from .model import (
     ContractError,
     PluginSpec,
@@ -712,10 +712,8 @@ def _config_payload_enables_plugin(payload: bytes | None, plugin_id: str) -> boo
         return False
     return any(
         entry_id(entry) == plugin_id
-        for section in ("left", "center", "right")
-        for entry in (
-            layout.get(section) if isinstance(layout.get(section), list) else []
-        )
+        for section in native_sections(layout)
+        for entry in layout.get(section, [])
     )
 
 

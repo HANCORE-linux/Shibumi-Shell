@@ -383,7 +383,9 @@ def presentation(manifest):
     if not isinstance(bar, dict):
         raise Refused("manifest-metadata")
     section = str(bar.get("defaultSection", "center"))
-    if section not in ("left", "center", "right"):
+    # Keep the manifest's native declaration, not a three-region UI mapping.
+    # HostContract resolves missing/center placement at the active Bar boundary.
+    if section not in ("left", "centerBegin", "center", "centerEnd", "right", "tray"):
         raise Refused("manifest-metadata")
     values = {
         "description": manifest.get("description", ""),

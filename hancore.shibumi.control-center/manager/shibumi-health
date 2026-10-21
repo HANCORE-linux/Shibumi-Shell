@@ -17,6 +17,7 @@ from typing import Any
 
 
 SUITE_ID = "hancore.shibumi"
+NATIVE_SECTIONS = ("left", "centerBegin", "center", "centerEnd", "right", "tray")
 MANAGED_MARKER = ".shibumi-managed.json"
 STATUS_ORDER = {"error": 0, "warning": 1, "ok": 2, "info": 3}
 ERROR_PATTERNS = re.compile(
@@ -540,6 +541,18 @@ class Probe:
         """Read the form from canonical State, with pre-migration compatibility."""
         bar = self.config.get("bar")
         bar = bar if isinstance(bar, dict) else {}
+        layout = bar.get("layout", {})
+        if not isinstance(layout, dict) or any(
+            not isinstance(layout[section], list)
+            for section in NATIVE_SECTIONS if section in layout
+        ):
+            raise ValueError("native bar layout section is malformed")
+        if any(
+            self.config_entry_id(layout_entry) == STATE_PLUGIN_ID
+            for region in NATIVE_SECTIONS
+            for layout_entry in layout.get(region, [])
+        ):
+            raise ValueError("State service must not be a bar layout entry")
         entries = self.config.get("plugins")
         canonical_expected = self.state.get("settingsStorageVersion") == 1
 
@@ -578,12 +591,6 @@ class Probe:
                 )
             ):
                 raise ValueError("canonical State shell envelope is invalid")
-            if any(
-                self.config_entry_id(layout_entry) == STATE_PLUGIN_ID
-                for region in ("left", "center", "right")
-                for layout_entry in layout[region]
-            ):
-                raise ValueError("State service must not be a bar layout entry")
             if (
                 not isinstance(entry, dict)
                 or type(entry.get(STATE_STORAGE_SCHEMA)) not in (int, float)
@@ -660,6 +667,15 @@ class Probe:
                 f"Shell form read from {self.shell_style_source} configuration.",
                 source,
             )
+            bar = self.config["bar"]
+            layout = bar.get("layout", {})
+            if (bar.get("id") == "hancore.shibumi.bar" and isinstance(layout, dict)
+                    and isinstance(layout.get("tray"), list) and layout["tray"]):
+                self.add("tray-drawer", "Runtime", "Tray-drawer bar widgets", "warning",
+                         "Deferred by Shibumi",
+                         "Tray-drawer bar widgets are preserved but not shown by Shibumi.",
+                         source, "Open Control Center > Bars and switch to Omarchy (stock bar) to use them.",
+                         owner=OWNER_SHIBUMI)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.add(
                 "configuration",

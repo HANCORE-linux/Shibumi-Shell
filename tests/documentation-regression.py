@@ -257,7 +257,7 @@ def main() -> None:
         "contracts/baselines/omarchy-installed-package-v4.0.3.json",
         "contracts/baselines/omarchy-installed-source-parity-v4.0.3.json",
         "SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2",
-        "contracts/baselines/omarchy-forward-compat-4c1b4cb3.json",
+        "contracts/baselines/omarchy-forward-compat-246f33a2.json",
         "./tests/omarchy-installed-package-contract-regression.sh",
         "./tests/omarchy-installed-source-parity-contract-regression.sh",
         "./tests/omarchy-forward-compat-contract-regression.sh",

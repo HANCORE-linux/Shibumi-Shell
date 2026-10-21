@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.1-beta.16.5] - Unreleased
+
+<!-- Release text pending maintainer review. -->
+
 ## [0.1.1-beta.16.4] - 2026-10-14
 
 ### Highlights

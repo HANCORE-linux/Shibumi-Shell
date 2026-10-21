@@ -1,10 +1,32 @@
-# Shibumi 0.1.1-beta.16.4 release readiness
+# Shibumi 0.1.1-beta.16.5 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## Candidate and published predecessor
+## Private Beta.16.5 forward-alignment boundary
+
+The private patch starts from released Beta.16.4 (`64b9369559b0de2ffdc1faf1c563326c8173035c`).
+It selects forward revision `246f33a2fef66411c990860d88e0823ae83987fc` without
+changing the stable/Agents manifests. The private package identity is now
+`0.1.1-beta.16.5`, with 24-plugin payload digest
+`16f543efad1060d6070120975256e6e8f2dfa0c3e95f84bed9492acfbf0208b1`.
+This is preparation only: changelog and release notes remain placeholders,
+the archive checksum is `SKIP`, and no release or clean-commit acceptance is claimed.
+The frozen rolling predecessor is published Beta.16.4, tag commit
+`64b9369559b0de2ffdc1faf1c563326c8173035c`; its main integration merge
+`aec6c0a3266d71f6a5f9cfa17562d8bec0ce9b17` has the identical complete tree.
+Both are admitted with the unchanged Beta.16.4 plugin and suite payload pins.
+Published-release and peeled-tag checks precede the fixture update; future release
+evidence must recheck them. Source-install instructions still name published 16.4
+until final release preparation.
+The Beta.16.4 evidence below remains historical: full candidate gates,
+37-step switching, 140 renderer-rest cases and N3 performance versus Beta.16.4
+must be recorded for the new patch. Tray-drawer widgets remain preserved but
+unrendered in Shibumi; the stock Omarchy bar is the actionable fallback.
+Private fixture results on Quickshell `0.3.1-1` are not edge `0.3.2-6` acceptance.
+
+## Historical Beta.16.4 candidate and published predecessor
 
 The Beta.16.4 candidate adds Memory Sweep, Frost for V2 Notch, bounded charging
 plasma, Rings placement fixes, persistent power-profile selection, shared
@@ -17,8 +39,9 @@ collector, and reproducible archive verification must record their exact final
 commit externally. No predecessor gate result transfers to this candidate.
 
 Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
-`1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It is the frozen rolling
-predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
+`1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It was the frozen rolling
+predecessor for Beta.16.4; [`release-predecessor.json`](../tests/fixtures/release-predecessor.json)
+now records Beta.16.4 for the private Beta.16.5 preparation.
 That exact tag checkout and the source-installation integration merge
 `494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
@@ -30,7 +53,7 @@ tree is not identical to the release tag. Older exact identities remain admitted
 a version string alone never authorizes recovery or replacement. Installation
 remains source-based; OPR packaging is planned, not AUR publication.
 
-## Recorded evidence and outstanding gates
+## Historical Beta.16.4 evidence and outstanding gates at that snapshot
 
 | Gate | Evidence and boundary |
 | --- | --- |
@@ -65,7 +88,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Installed package profile | `installed-package-v4.0.4` |
 | Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
+| Forward reference | `246f33a2fef66411c990860d88e0823ae83987fc` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility

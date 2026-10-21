@@ -3219,14 +3219,19 @@ class SuiteLifecycleTests(unittest.TestCase):
         entry["shibumi"]["picker"] = {"imageStyle": "tanzaku", "mediaStyle": "hearthstone"}
         entry["shibumi"]["widgets"] = {"G8": {"omarchy.clock": {"format": "HH:mm", "deep": [3, 2, 1]}}}
         retained = copy.deepcopy(entry)
+        for section in ("centerBegin", "centerEnd", "tray"):
+            config["bar"]["layout"][section] = [{"id": "omarchy.clock", "opaque": [section, False, "Malmö"]}]
         atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
         kept = json.loads(self.paths.config_file.read_text())
         self.assertEqual(state_entry(kept), {**retained, "shibumiRetainedLayout": {
             "schemaVersion": 1, "layout": config["bar"]["layout"]}})
         self.assertFalse((self.paths.plugin_dir / "hancore.shibumi.state").exists())
+        for section in ("centerBegin", "centerEnd", "tray"):
+            self.assertEqual(kept["bar"]["layout"][section], config["bar"]["layout"][section])
         self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
         self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text())), retained)
+        self.assertEqual(json.loads(self.paths.config_file.read_text())["bar"]["layout"], config["bar"]["layout"])
 
     def test_state_migration_refuses_corruption_and_does_not_resurrect_legacy(self) -> None:
         config = {"version": 1, "bar": {"id": "omarchy.bar", "shibumi": {"version": 1, "legacy": True}},
@@ -3234,6 +3239,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         migrated = migrate_state_settings(config)
         self.assertEqual(state_entry(migrated)["foreign"], {"value": 7})
         self.assertEqual(migrate_state_settings(migrated), migrated)
+        shadow = copy.deepcopy(migrated)
+        shadow["bar"]["layout"]["centerEnd"] = ["hancore.shibumi.state"]
+        with self.assertRaises(ConfigError): state_entry(shadow)
         corrupt = copy.deepcopy(migrated)
         state_entry(corrupt)["shibumiStateSchemaVersion"] = 2
         with self.assertRaises(ConfigError):

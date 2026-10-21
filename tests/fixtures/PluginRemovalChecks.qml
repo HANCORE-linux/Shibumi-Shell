@@ -1,10 +1,13 @@
 import QtQuick
+import qs.Commons as Commons
+import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // The runner injects exact ControlCenterPanel methods here. Only process and
 // catalog dependencies are controlled; no command can execute in this helper.
 Item {
   id: checks
   required property var bar
+  readonly property var ownerWidget: checks
   property var pluginEntries: []
   readonly property bool stockOmarchyHost: false
   readonly property bool v2LayoutActive: bar.layoutController.v2Mode

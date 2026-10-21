@@ -25,6 +25,7 @@ from .config import (
     entry_id,
     migrate_legacy_config,
     migrate_state_settings,
+    native_sections,
     validate_state_settings,
     parse_config_bytes,
     read_config,
@@ -397,8 +398,8 @@ def activation_drift(
     layout = bar.get("layout") if isinstance(bar.get("layout"), dict) else {}
     layout_ids = {
         entry_id(entry)
-        for region in ("left", "center", "right")
-        for entry in (layout.get(region) if isinstance(layout.get(region), list) else [])
+        for region in native_sections(layout)
+        for entry in layout.get(region, [])
     }
     service_ids = {entry_id(entry) for entry in config.get("plugins", [])}
     drift: list[str] = []
@@ -474,10 +475,8 @@ def external_runtime_enabled_plugin_ids(
     layout = bar.get("layout") if isinstance(bar.get("layout"), dict) else {}
     enabled = {
         entry_id(entry)
-        for region in ("left", "center", "right")
-        for entry in (
-            layout.get(region) if isinstance(layout.get(region), list) else []
-        )
+        for region in native_sections(layout)
+        for entry in layout.get(region, [])
     }
     enabled.update(
         plugin_id

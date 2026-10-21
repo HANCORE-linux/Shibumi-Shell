@@ -115,7 +115,12 @@ reviewed Shibumi checkout, match these manifest `sourceRevision` values exactly:
 | --- | --- | --- |
 | `omarchy-installed-source-parity-v4.0.4.json` | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
 | `omarchy-agents-v4.0.0.json` | `f0020448ca87329199de7cb12f2015ebc4a3e5e7` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
-| `omarchy-forward-compat-4c1b4cb3.json` | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
+| `omarchy-forward-compat-246f33a2.json` | `246f33a2fef66411c990860d88e0823ae83987fc` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
+
+The private Beta.16.5 alignment round uses an isolated reference checkout and
+Arch Quickshell `0.3.1-1` (package ownership/integrity independently checked).
+It does not reprovision the runner or change its Actions variable. Reported edge
+Quickshell `0.3.2-6` is a separate validation variable, not covered by that manifest.
 
 After provisioning approval, clone `https://github.com/basecamp/omarchy` separately
 for each profile and `git checkout --detach <full-revision>`. Check `HEAD^{commit}`,

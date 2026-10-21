@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import qs.Commons as Commons
+import "GroupRegistry.js" as GroupRegistry
 
 Item {
   id: root
@@ -10,6 +11,15 @@ Item {
   required property var bar
   required property var entry
   property string region: ""
+  readonly property string hostFixedEdge: {
+    const controller = bar && "layoutController" in bar ? bar.layoutController : null
+    const location = controller && typeof controller.groupLocation === "function"
+      ? controller.groupLocation(region) : null
+    // Group slots follow the suite order, extras their actual anchored row.
+    // Native centerBegin/centerEnd metadata is not an anchoring instruction.
+    const actualRegion = location ? location.region : region.replace(/-extra$/, "")
+    return actualRegion === "left" ? "start" : actualRegion === "right" ? "end" : "center"
+  }
   property string screenName: ""
   property real availableWidth: 0
   property bool layoutBusy: false
@@ -42,10 +52,9 @@ Item {
   function configuredInStructuralLayout(widgetId) {
     const id = String(widgetId || "")
     const layout = structuralLayout
-    if (id === "" || !layout) return false
-    for (const section of ["left", "center", "right"]) {
-      const entries = layout[section]
-      if (!Array.isArray(entries)) return false
+    if (id === "" || !GroupRegistry.validNativeLayout(layout)) return false
+    for (const section of GroupRegistry.NativeSections) {
+      const entries = layout[section] || []
       for (let index = 0; index < entries.length; index++) {
         const candidate = bar.entryId(entries[index])
         if (candidate === id) return true
@@ -53,6 +62,12 @@ Item {
     }
     return false
   }
+  readonly property var nativeCoordinate:
+    GroupRegistry.nativeLocation(structuralLayout, hostEntry, moduleName)
+  readonly property string nativeSection:
+    nativeCoordinate ? nativeCoordinate.section : ""
+  readonly property int nativeIndex:
+    nativeCoordinate ? nativeCoordinate.index : -1
   readonly property bool scopedConfigured:
     scopedHost && configuredInStructuralLayout(moduleName)
   // Omarchy 4.0.3 republishes a detached widgets object for every registration.
@@ -224,6 +239,7 @@ Item {
   }
   onSlotCompleteChanged: requestLoaderSourceSync()
   onAvailableWidthChanged: injectProperties()
+  onHostFixedEdgeChanged: injectProperties()
   onLayoutBusyChanged: injectLayoutBusy()
   onActiveItemChanged: {
     // A binding notification for the resident item can arrive after onLoaded.
@@ -648,6 +664,7 @@ Item {
   function injectProperties() {
     const target = activeItem
     if (!target || _barConnectionRevoked) return
+    if ("fixedEdge" in target) target.fixedEdge = hostFixedEdge
     if ("bar" in target) target.bar = bar
     if ("moduleName" in target) target.moduleName = moduleName
     if ("hostGroupId" in target) target.hostGroupId = region

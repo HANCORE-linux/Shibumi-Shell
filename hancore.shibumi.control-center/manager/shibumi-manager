@@ -19,6 +19,7 @@ from typing import Any
 
 
 REGIONS = ("left", "center", "right")
+NATIVE_SECTIONS = ("left", "centerBegin", "center", "centerEnd", "right", "tray")
 SUITE_ID = "hancore.shibumi"
 
 
@@ -273,6 +274,19 @@ def entry_id(value: Any) -> str:
     return ""
 
 
+def native_sections(layout: dict[str, Any]) -> tuple[str, ...]:
+    if any(not isinstance(layout[section], list)
+           for section in NATIVE_SECTIONS if section in layout):
+        raise ManagerError("invalid bar layout region")
+    return tuple(section for section in NATIVE_SECTIONS
+                 if section in REGIONS or section in layout)
+
+
+def legacy_center_anchor(bar: dict[str, Any]) -> bool:
+    layout = bar.get("layout", {})
+    return "centerAnchor" in bar and not any(section in layout for section in ("centerBegin", "centerEnd"))
+
+
 def normalize(config: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(config)
     result["version"] = 1
@@ -281,8 +295,8 @@ def normalize(config: dict[str, Any]) -> dict[str, Any]:
     bar = result["bar"]
     if not isinstance(bar.get("layout"), dict):
         bar["layout"] = {}
-    for region in REGIONS:
-        if not isinstance(bar["layout"].get(region), list):
+    for region in native_sections(bar["layout"]):
+        if region not in bar["layout"]:
             bar["layout"][region] = []
     if not isinstance(result.get("plugins"), list):
         result["plugins"] = []
@@ -295,8 +309,14 @@ def copy_layout(layout: Any) -> dict[str, list[Any]]:
         region: copy.deepcopy(source.get(region))
         if isinstance(source.get(region), list)
         else []
-        for region in REGIONS
+        for region in native_sections(source)
     }
+
+
+def preserve_native_extensions(target: dict[str, list[Any]], source: dict[str, Any]) -> None:
+    for section in native_sections(source):
+        if section not in REGIONS and (section == "tray" or section not in target):
+            target[section] = copy.deepcopy(source[section])
 
 
 def profile_path(runtime_paths: dict[str, Path]) -> Path:
@@ -380,8 +400,8 @@ def snapshot_layout(
 
     trusted_omarchy: dict[str, int] = {}
     if not legacy and trusted_layout is not None:
-        for region in REGIONS:
-            for entry in trusted_layout[region]:
+        for region in native_sections(trusted_layout):
+            for entry in trusted_layout.get(region, []):
                 plugin_id = entry_id(entry)
                 if plugin_id.startswith("omarchy."):
                     trusted_omarchy[plugin_id] = (
@@ -391,11 +411,11 @@ def snapshot_layout(
     # Pre-profile continuity builds and the suite CLI could merge the complete
     # stock layout into Shibumi as "extras". Keep user/third-party widgets and
     # only those Omarchy widgets already recorded in the trusted Shibumi profile.
-    snapshot: dict[str, list[Any]] = {region: [] for region in REGIONS}
-    for region in REGIONS:
-        for entry in layout[region]:
+    snapshot: dict[str, list[Any]] = {region: [] for region in native_sections(layout)}
+    for region in native_sections(layout):
+        for entry in layout.get(region, []):
             plugin_id = entry_id(entry)
-            if plugin_id.startswith("omarchy."):
+            if region in REGIONS and plugin_id.startswith("omarchy."):
                 remaining = trusted_omarchy.get(plugin_id, 0)
                 if remaining <= 0:
                     continue
@@ -418,7 +438,7 @@ def validate_state(
         raise ManagerError(
             f"{label} predates or violates the continuity contract"
         )
-    for region in REGIONS:
+    for region in native_sections(activation["layout"]):
         if not isinstance(activation["layout"].get(region), list):
             raise ManagerError(f"{label} activation layout is malformed")
     return state
@@ -452,7 +472,7 @@ def state_settings(config: dict[str, Any]) -> dict[str, Any]:
             or any(not isinstance(layout.get(region), list) for region in REGIONS)):
         raise ManagerError("invalid State container; run suite update/repair")
     if any(entry_id(entry) == "hancore.shibumi.state"
-           for region in REGIONS for entry in layout.get(region, [])):
+           for region in native_sections(layout) for entry in layout.get(region, [])):
         raise ManagerError("State service must not be a bar layout entry")
     matches = [entry for entry in entries if entry_id(entry) == "hancore.shibumi.state"]
     if len(matches) != 1 or not isinstance(matches[0], dict):
@@ -481,6 +501,7 @@ def activate_config(
         for region in REGIONS
     }
     result["bar"]["layout"] = copy_layout(selected_layout)
+    preserve_native_extensions(result["bar"]["layout"], config["bar"]["layout"])
 
     service_ids = list(activation["enableServices"])
     existing_services = {
@@ -498,7 +519,8 @@ def activate_config(
         for plugin_id in service_ids
     ]
     result["bar"]["id"] = str(activation["activeBar"])
-    result["bar"]["centerAnchor"] = "hancore.shibumi.center"
+    if legacy_center_anchor(result["bar"]):
+        result["bar"]["centerAnchor"] = "hancore.shibumi.center"
     result["bar"]["style"] = "shibumi"
     return result
 
@@ -519,11 +541,14 @@ def deactivate_config(
         if target_layout is not None
         else defaults.get("bar", {}).get("layout", {})
     )
+    preserve_native_extensions(result["bar"]["layout"], config["bar"]["layout"])
     # In the stock Omarchy bar the continuity entry is a quiet return anchor,
     # not Shibumi's primary left-side wordmark. Keep exactly one instance at
     # the far right; BarWidget renders its dedicated mark on the stock host.
     continuity_widget = "hancore.shibumi.control-center"
-    for region in REGIONS:
+    for region in native_sections(result["bar"]["layout"]):
+        if region == "tray":
+            continue
         result["bar"]["layout"][region] = [
             entry
             for entry in result["bar"]["layout"][region]
@@ -531,8 +556,8 @@ def deactivate_config(
         ]
     if not any(
         entry_id(entry) == continuity_widget
-        for region in REGIONS
-        for entry in result["bar"]["layout"][region]
+        for region in native_sections(result["bar"]["layout"])
+        for entry in result["bar"]["layout"].get(region, [])
     ):
         result["bar"]["layout"]["right"].append({"id": continuity_widget})
     existing_services = {
@@ -550,7 +575,7 @@ def deactivate_config(
     ]
     if result["bar"].get("id") == activation["activeBar"]:
         result["bar"].pop("id", None)
-    if result["bar"].get("centerAnchor") == "hancore.shibumi.center":
+    if legacy_center_anchor(result["bar"]) and result["bar"].get("centerAnchor") == "hancore.shibumi.center":
         default_bar = defaults.get("bar")
         anchor = (
             target_center_anchor
@@ -914,7 +939,9 @@ def prune_uninstalled_layout_plugins(
                    or any(not isinstance(row.get(field), bool) for field in ("firstParty", "enabled"))
                    for row in plugins.values())):
         return []
-    source_entries = [entry for region in REGIONS for entry in source_layout[region]]
+    source_coordinates = [(region, entry) for region in native_sections(source_layout)
+                          if region != "tray" for entry in source_layout.get(region, [])]
+    source_entries = [entry for region, entry in source_coordinates]
     source_ids = [
         entry if isinstance(entry, str)
         else entry.get("id") if isinstance(entry, dict) else None
@@ -923,19 +950,24 @@ def prune_uninstalled_layout_plugins(
     if (any(not isinstance(plugin_id, str) or not plugin_id for plugin_id in source_ids)
             or len(source_ids) != len(set(source_ids))):
         return []
-    present = {entry_id(entry) for region in REGIONS for entry in layout[region]}
+    present = {entry_id(entry) for region in native_sections(layout)
+               for entry in layout.get(region, [])}
     missing = present - plugins.keys() - managed
     pruned = sorted(
         plugin_id for plugin_id in missing
         if plugin_id and not plugin_id.startswith("omarchy.")
     )
-    added = [copy.deepcopy(entry) for entry, plugin_id in zip(source_entries, source_ids)
+    added = [(region if region not in REGIONS else "right", copy.deepcopy(entry))
+             for (region, entry), plugin_id in zip(source_coordinates, source_ids)
              if plugin_id not in present and plugin_id not in managed and plugin_id in plugins
              and plugins[plugin_id]["enabled"] and not plugins[plugin_id]["firstParty"]
              and "bar-widget" in plugins[plugin_id]["kinds"]]
-    for region in REGIONS:
-        layout[region] = [entry for entry in layout[region] if entry_id(entry) not in pruned]
-    layout["right"].extend(added)
+    for region in native_sections(layout):
+        if region != "tray":
+            layout[region] = [entry for entry in layout.get(region, [])
+                              if entry_id(entry) not in pruned]
+    for region, entry in added:
+        layout.setdefault(region, []).append(entry)
     return pruned
 
 
@@ -948,11 +980,17 @@ def activation_verification(
     activation = state["activation"]
     layout_ids = {
         entry_id(entry)
-        for region in REGIONS
-        for entry in config["bar"]["layout"][region]
+        for region in native_sections(config["bar"]["layout"])
+        for entry in config["bar"]["layout"].get(region, [])
     }
     active_bar = str(activation["activeBar"])
-    registry_enabled = layout_ids | {active_bar}
+    # Deferred drawer-only entries are identities, not required live widgets.
+    layout = config["bar"]["layout"]
+    tray_only = {entry_id(entry) for entry in layout.get("tray", [])} - {
+        entry_id(entry) for section in native_sections(layout)
+        if section != "tray" for entry in layout.get(section, [])
+    }
+    registry_enabled = (layout_ids - tray_only) | {active_bar}
     service_ids = set(activation["enableServices"])
     configured_services = {
         entry_id(entry) for entry in config["plugins"]
@@ -995,10 +1033,11 @@ def verify(
                     state,
                 )
             else:
+                layout = current_config(runtime_paths)["bar"]["layout"]
                 layout_ids = {
                     entry_id(entry)
-                    for region in REGIONS
-                    for entry in current_config(runtime_paths)["bar"]["layout"][region]
+                    for region in native_sections(layout)
+                    for entry in layout.get(region, [])
                 }
                 allowed = set(activation["enableServices"]) | layout_ids
                 enabled = {
@@ -1087,6 +1126,7 @@ def perform(target: str) -> int:
         target_layout = layouts.get(runtime_target)
         if target_layout is None:
             target_layout = initial_layout(runtime_target, defaults, state)
+        preserve_native_extensions(target_layout, current["bar"]["layout"])
         try:
             installed_plugins = plugin_snapshot(runtime_paths)
         except ManagerError:

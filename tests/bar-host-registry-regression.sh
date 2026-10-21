@@ -177,6 +177,7 @@ cp -a "$repo_root/hancore.shibumi.state/lib" "$repo_root/hancore.shibumi.state/r
   "$lifecycle_root/hancore.shibumi.state/"
 install -m 0644 "$widget_slot_source" \
   "$lifecycle_root/staged/barcore/WidgetSlot.qml"
+cp "$bar_root/core/GroupRegistry.js" "$lifecycle_root/staged/barcore/"
 install -m 0644 "$repo_root/tests/fixtures/BarContextLifecycleHost.qml" \
   "$lifecycle_root/shell.qml"
 install -m 0644 "$repo_root/tests/fixtures/NetworkTestView.qml" \
@@ -291,6 +292,10 @@ import sys
 from pathlib import Path
 repo, target = map(Path, sys.argv[1:])
 panel = (repo / 'hancore.shibumi.control-center/ControlCenterPanel.qml').read_text()
+owner = (repo / 'hancore.shibumi.control-center/BarWidget.qml').read_text()
+owner_methods = owner[owner.index('  readonly property var nativeSections:'):owner.index('  readonly property var tokens:')]
+placement_start = panel.index('  function nativeWidgetSection(')
+placement_end = panel.index('  function setPluginBarWidgetEnabled(', placement_start)
 removal_start = panel.index('  function removePlugin(pluginId) {')
 removal_end = panel.index('  function rescanPlugins() {', removal_start)
 catalog_start = panel.index('  function pluginGlyph(pluginId, kinds) {')
@@ -304,7 +309,8 @@ for marker in ('  // INJECT_REMOVE_PLUGIN', '  // INJECT_BUILD_PLUGIN_ENTRIES'):
 fixture = fixture.replace(
     '  // INJECT_REMOVE_PLUGIN', panel[removal_start:removal_end])
 fixture = fixture.replace('  // INJECT_BUILD_PLUGIN_ENTRIES',
-    panel[catalog_start:catalog_end] + panel[group_states_start:group_states_end])
+    owner_methods + panel[placement_start:placement_end]
+    + panel[catalog_start:catalog_end] + panel[group_states_start:group_states_end])
 (target / 'fixtures/PluginRemovalChecks.qml').write_text(fixture)
 PY
 cp "$repo_root/tests/fixtures/DirectPreferredHostedPanelWidget.qml" "$tmpdir/fixtures/"

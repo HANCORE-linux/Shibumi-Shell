@@ -50,6 +50,8 @@ mkdir -p "$tmpdir/runtime"
 chmod 700 "$tmpdir/runtime"
 shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 mkdir -p "$tmpdir/hancore.shibumi.bar"
+install -Dm0644 "$repo_root/hancore.shibumi.bar/core/GroupRegistry.js" \
+  "$tmpdir/hancore.shibumi.bar/core/GroupRegistry.js"
 cp -a -- "$repo_root/hancore.shibumi.bar/services" \
   "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.center" "$tmpdir/center"

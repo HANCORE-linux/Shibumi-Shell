@@ -18,7 +18,7 @@ below applies to its recorded single-output Omarchy 4.0.3 setup:
 | Pinned official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
 | Pinned source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
-| Immutable forward-compatibility revision | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
+| Immutable forward-compatibility revision | `246f33a2fef66411c990860d88e0823ae83987fc` |
 | Quickshell package | `quickshell 0.3.1-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
@@ -27,7 +27,8 @@ source-parity checkout is pinned to the official `v4.0.4` tag. The 4.0.3 and
 4.0.2 package and source manifests remain immutable optional compatibility
 references. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
-`4c1b4cb3` snapshot supersedes `e71a816e` as the bounded forward reference.
+`246f33a2` snapshot supersedes `4c1b4cb3` as the bounded forward reference;
+all earlier manifests remain unchanged.
 Manifest, panel geometry and focused Quattro/style checks pass; this is not a
 complete candidate forward-gate pass and does not follow a moving branch.
 
@@ -52,7 +53,7 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
   records the full Git checkout of the official `v4.0.4` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
   acceptance baseline without claiming that acceptance for 4.0.4;
-- [`omarchy-forward-compat-4c1b4cb3.json`](../../contracts/baselines/omarchy-forward-compat-4c1b4cb3.json)
+- [`omarchy-forward-compat-246f33a2.json`](../../contracts/baselines/omarchy-forward-compat-246f33a2.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -65,6 +66,69 @@ package-managed `bin` subtree binds every absolute link target. A relocated
 tree is accepted only through its matching installed-package,
 installed-source-parity, or forward-compat job; callers cannot supply their own
 manifest.
+
+## Six native sections, three presentation regions
+
+At `246f33a2fef66411c990860d88e0823ae83987fc`, native layout coordinates are
+`left`, `centerBegin`, `center`, `centerEnd`, `right`, and `tray`. Identity,
+conflicts, snapshots, State shadow checks, lifecycle persistence and native
+inline deltas cover all six. Missing extension arrays are valid legacy input;
+present malformed arrays are refused. Suite normalization preserves extensions
+on 4.0.4 instead of relying on its three-section `Util.normalizeLayout()`.
+V1/V2 group orders, capacities and presentation regions remain left/center/right.
+
+The visible center is a projection of `centerBegin + center + centerEnd`.
+Complete native entries, their order, section/index and duplicate instances stay
+in native storage; there is no flattened-layout write-back. A native section
+move takes the structural reconciliation path even if the projected order is
+unchanged. Shape-stable unique-provider inline changes use native coordinates;
+ambiguous duplicate-ID changes use structural reconciliation, never an ID-only
+in-place patch. Group-slot settings remain separate from native provider entries.
+
+The three-region V2 editor preserves a center entry's native section when it
+stays in the center. Reordering within one native section is reversible; a swap
+across the invisible native center-section boundaries is refused atomically.
+An explicit move between outer and center presentation regions uses the host's
+native default target. V1 group order remains presentation-only. To deliberately
+change centerBegin/center/centerEnd membership, edit the native layout explicitly;
+Shibumi does not infer such a move from flattened drag order. Legacy centerAnchor
+handling requires an already-present anchor and no split-center keys; no new
+anchor field is introduced.
+
+Catalog transport retains the six-name native manifest declaration, separately
+from the consumer's presentation-region mapping; unknown names are refused.
+`HostContract.nativeDefaultSection` resolves placement using the host's public
+`Util.barSections` contract: missing/default `center` becomes `centerEnd` on the
+six-section host, and remains `center` on 4.0.4. This is not inferred from the
+user's layout. Standalone hosted widgets receive optional `fixedEdge` before
+`bar`, reactively from their actual suite anchoring. The hidden Status tray
+backend and shared embedding allowlist are unchanged.
+
+### Deferred tray-drawer widgets
+
+`bar.layout.tray` entries remain intact across switching, keep-settings,
+uninstall and reinstall, and participate in identity/conflict checks. They are
+not group providers or visible extras, are not relocated by catalog or automatic
+family reconciliation, and are not instantiated in a custom Shibumi drawer.
+The hidden native tray backend does not acquire a native drawer section host.
+The Control Center health warning and one admitted-Bar journal notice explain:
+
+> Tray-drawer bar widgets are preserved but not shown by Shibumi. Open Control
+> Center > Bars and switch to Omarchy (stock bar) to use them.
+
+This limitation does not change Shibumi's existing application-tray views. The
+forward geometry fixture did not reproduce a clipping-forwarding failure; the
+shared panel click-forwarding implementation remains unchanged.
+
+### Quickshell provenance and evidence limits
+
+The forward manifest records the independently verified Arch `quickshell 0.3.1-1`
+validation package (package ownership and all 123 installed files checked).
+The upstream install list names unversioned `quickshell`; migration `1787399318`
+records the return to 0.3.1's synchronous termination. A reported edge host uses
+Omarchy-repository `0.3.2-6`; no result here establishes that package's live
+acceptance. Source contracts and isolated component fixtures do not establish
+real stock-bar switching, physical output behavior or desktop acceptance on it.
 
 ## What Shibumi validates
 
@@ -94,7 +158,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

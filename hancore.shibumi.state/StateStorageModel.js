@@ -2,6 +2,7 @@
 
 var pluginId = "hancore.shibumi.state"
 var schemaKey = "shibumiStateSchemaVersion"
+var nativeSections = ["left", "centerBegin", "center", "centerEnd", "right", "tray"]
 
 function plain(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -64,8 +65,11 @@ function parse(raw) {
     found = item
   }
   // The host gives layout entries priority over plugins[]. Never write there.
-  for (var r = 0; r < 3; r++) {
-    var entries = config.bar.layout[["left", "center", "right"][r]]
+  for (var r = 0; r < nativeSections.length; r++) {
+    var section = nativeSections[r]
+    if (!["left", "center", "right"].includes(section)
+        && !Object.prototype.hasOwnProperty.call(config.bar.layout, section)) continue
+    var entries = config.bar.layout[section]
     if (!Array.isArray(entries)) return null
     for (var j = 0; j < entries.length; j++)
       if (entries[j] === pluginId || (plain(entries[j]) && entries[j].id === pluginId)) return null

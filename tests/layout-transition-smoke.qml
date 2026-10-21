@@ -3,6 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Commons as Commons
 import "core" as Core
+import "runtime" as SuiteRuntime
 import "core/V2LayoutModel.js" as Layout
 import "core/GroupRegistry.js" as GroupRegistry
 import "StateStorageModel.js" as Model

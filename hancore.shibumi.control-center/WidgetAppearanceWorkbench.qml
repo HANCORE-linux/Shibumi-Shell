@@ -394,6 +394,9 @@ Column {
         const settingsGroup = String(groups[groupIndex] || "")
         const catalogGroup = catalogGroupForActiveGroup(settingsGroup)
         const source = catalogOptionForGroup(catalogGroup)
+        const activeBar = controller && "bar" in controller ? controller.bar : null
+        if (activeBar && typeof activeBar.isTrayOnlyWidget === "function"
+            && activeBar.isTrayOnlyWidget(pluginIdForGroup(settingsGroup))) continue
         const supportedGroup = activeGroupIds.indexOf(catalogGroup) >= 0
           || settingsGroup.indexOf("G:") === 0
         if (!source || !supportedGroup || seen[catalogGroup] === true

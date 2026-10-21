@@ -23,6 +23,8 @@ if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 50d687a1f27063513cf42e6f33c3a4fcb17c24
   keyboard_panel_sha=e509278a51a7e9b45fa3a6fa630bedcd671a0f34202bfb7413a5b6a2f88d7e22
 elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7 ]]; then
   keyboard_panel_sha=b7243c0397608a0a2a2dc2a3202a88c1e4b4b35d8da37895a1db8993422ce36f
+elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 246f33a2fef66411c990860d88e0823ae83987fc ]]; then
+  keyboard_panel_sha=7a5dc2284b1990b2bf53a806221458c6a64ea538cb92b4787dca846c7cc33a54
 fi
 [[ $(sha256sum "$keyboard_panel" | awk '{print $1}') == "$keyboard_panel_sha" ]] \
   || fail 'KeyboardPanel.qml does not match pinned Omarchy source'
@@ -124,7 +126,7 @@ base="$tmpdir/base"
 mkdir -p "$base/fixtures" "$base/shared" "$base/hancore.shibumi.bar/core"
 cp -a -- "$OMARCHY_PATH/shell/Commons" "$base/"
 cp -a -- "$OMARCHY_PATH/shell/Ui" "$base/"
-cp -- "$repo_root/hancore.shibumi.bar/core/WidgetSlot.qml" \
+cp -- "$repo_root/hancore.shibumi.bar/core/"{WidgetSlot.qml,GroupRegistry.js} \
   "$base/hancore.shibumi.bar/core/"
 cp -- "$repo_root/tests/fixtures/FixturePanelWindow.qml" \
   "$repo_root/tests/fixtures/ProviderBoundHostedPanelWidget.qml" "$base/fixtures/"

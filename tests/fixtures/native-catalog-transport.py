@@ -35,6 +35,8 @@ def must_refuse(code, diagnostic):
 
 require(helper.MAX_OUTPUT == 262144 and helper.MAX_ERROR == 8192 and helper.DEADLINE == 3,
     'production acquisition bounds changed')
+for section in ("centerBegin", "centerEnd", "tray"):
+    require(helper.presentation({"barWidget": {"defaultSection": section}})["barWidget"]["defaultSection"] == section, "native section metadata refused")
 for size in (0, 262143, 262144):
     require(len(helper.collect(command(f'import sys;sys.stdout.buffer.write(b"x"*{size})'))) == size,
         'stdout boundary refused')

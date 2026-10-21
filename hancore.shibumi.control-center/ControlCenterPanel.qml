@@ -562,10 +562,7 @@ ShibumiPanel {
         const tag = String(declaredTags[tagIndex] || "").trim()
         if (tag !== "" && searchTags.indexOf(tag) < 0) searchTags.push(tag)
       }
-      const placement = manifest.barWidget
-        && ["left", "center", "right"].indexOf(
-          String(manifest.barWidget.defaultSection || "")) >= 0
-        ? String(manifest.barWidget.defaultSection) : "center"
+      const placement = nativeWidgetSection(manifest)
       // A full bar is a mutually exclusive shell host, not a widget/plugin
       // toggle. It must only be changed through a dedicated bar selector.
       if (kinds.indexOf("bar") >= 0) continue
@@ -592,10 +589,12 @@ ShibumiPanel {
           ? widgetInstalled(id)
           : nativeCatalogRequired ? enabled
             : barWidget ? widgetInstalled(id) : enabled,
-        styleAvailable: true,
+        styleAvailable: placement !== "",
         suiteManaged: suiteManaged,
-        userToggleable: barWidget && (!suiteManaged || group !== ""),
+        userToggleable: barWidget && placement !== "" && (!suiteManaged || group !== ""),
         defaultSection: placement,
+        presentationRegion: placement === "tray" ? ""
+          : placement.indexOf("center") === 0 ? "center" : placement,
         compatibility: pluginCompatibility(manifest),
         firstParty: manifest.__isFirstParty === true,
         removable: manifest.__isFirstParty !== true && !suiteManaged,
@@ -771,6 +770,14 @@ ShibumiPanel {
       ? suiteManagedPlugin(id)
       : String(shibumi.suiteId || "") === "hancore.shibumi"
     if (kinds.indexOf("bar-widget") >= 0) {
+      const candidates = bar && typeof bar.conflictingLayoutProviderIds === "function"
+        ? bar.conflictingLayoutProviderIds(id) : [id]
+      if (nativeWidgetSection(manifest) === "tray" || (bar
+          && typeof bar.isDeferredTrayWidget === "function"
+          && candidates.some(candidate => bar.isDeferredTrayWidget(candidate)))) {
+        pluginActionError = ownerWidget.trayDrawerDiagnostic
+        return false
+      }
       const group = shibumiWidgetGroup(id)
       if (group !== "") {
         if (!v2LayoutActive
@@ -785,10 +792,7 @@ ShibumiPanel {
               || setGroupEnabled(v1Group, enabled === true,
                 coalescePresentation === true)
           }
-          const section = manifest.barWidget
-            && ["left", "center", "right"].indexOf(
-              String(manifest.barWidget.defaultSection || "")) >= 0
-            ? String(manifest.barWidget.defaultSection) : "right"
+          const section = nativeWidgetSection(manifest)
           const changed = setPluginBarWidgetEnabled(
             id, enabled === true, section)
           if (!changed)
@@ -822,10 +826,7 @@ ShibumiPanel {
         pluginActionError = "This suite service cannot be placed in the bar."
         return false
       }
-      const section = manifest.barWidget
-        && ["left", "center", "right"].indexOf(
-          String(manifest.barWidget.defaultSection || "")) >= 0
-        ? String(manifest.barWidget.defaultSection) : "center"
+      const section = nativeWidgetSection(manifest)
       const changed = setPluginBarWidgetEnabled(id, enabled === true, section)
       if (!changed)
         pluginActionError = enabled === true
@@ -847,7 +848,19 @@ ShibumiPanel {
       && pluginRegistry.setEnabled(id, enabled === true)
   }
 
+  function nativeWidgetSection(manifest) {
+    const metadata = manifest ? manifest.barWidget : null
+    if (metadata && !Commons.Util.isPlainObject(metadata)) return ""
+    return ownerWidget && typeof ownerWidget.nativeDefaultSection === "function"
+      ? ownerWidget.nativeDefaultSection(metadata ? metadata.defaultSection : undefined) : ""
+  }
+
   function setPluginBarWidgetEnabled(pluginId, enabled, section) {
+    if (!ownerWidget || !Array.isArray(ownerWidget.nativeSections)
+        || ownerWidget.nativeSections.indexOf(section) < 0) {
+      pluginActionError = "The native widget section is unsupported."
+      return false
+    }
     const observation = pluginCatalogObservation
     return runWithControlCenterRestore(function() {
       return bar && typeof bar.setBarWidgetInstalled === "function"
