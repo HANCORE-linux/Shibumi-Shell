@@ -10,7 +10,7 @@ The private patch starts from released Beta.16.4 (`64b9369559b0de2ffdc1faf1c5633
 It selects forward revision `246f33a2fef66411c990860d88e0823ae83987fc` without
 changing the stable/Agents manifests. The private package identity is now
 `0.1.1-beta.16.5`, with 24-plugin payload digest
-`89682a68a8816c96ffba131f165258e3c0536ac0a0bbaafdb40a044271bae246`.
+`a090b82858c554f02d44030755f779b2827ae51e55bca750b7163d5b330472dd`.
 This is preparation only: changelog and release notes remain placeholders,
 the archive checksum is `SKIP`, and no release or clean-commit acceptance is claimed.
 The frozen rolling predecessor is published Beta.16.4, tag commit

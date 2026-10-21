@@ -112,7 +112,9 @@ Item {
       "[smoothing]",
       "monstercat = 0",
       "waves = 0",
-      "noise_reduction = 20",
+      // cava 1.0.0 changed smoothing (upstream #752); 35 on 1.0.0 restores
+      // 0.10.7-at-20 dynamics (Hermes measurement 2026-10-21).
+      "noise_reduction = 35",
       ""
     ].join("\n")
   }
