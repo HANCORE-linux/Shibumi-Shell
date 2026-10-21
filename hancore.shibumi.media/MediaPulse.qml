@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "MediaMotion.js" as Motion
 
 Item {
   id: root
@@ -14,43 +15,48 @@ Item {
   implicitWidth: 16
   implicitHeight: 14
 
-  function reset() { restAnimation.restart() }
+  property real elapsed: 0
+  property bool admitted: true
+  property bool settling: false
+  property real restElapsed: 0
+  property var restStart: [0.08, 0.08, 0.08]
+  property var pulseStart: [0.08, 0.08, 0.08]
 
-  onPlayingChanged: if (!playing) reset()
-
-  SequentialAnimation {
-    running: root.visible && root.playing
-    loops: Animation.Infinite
-    NumberAnimation { target: root; property: "barH1"; to: 0.85; duration: 220; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH1"; to: 0.18; duration: 300; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH1"; to: 0.70; duration: 260; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH1"; to: 0.10; duration: 280; easing.type: Easing.InOutSine }
+  function advance(milliseconds) {
+    if (playing) {
+      elapsed += milliseconds
+      barH1 = Motion.pulse(elapsed, 0, pulseStart[0])
+      barH2 = Motion.pulse(elapsed, 1, pulseStart[1])
+      barH3 = Motion.pulse(elapsed, 2, pulseStart[2])
+    } else if (settling) {
+      restElapsed = Math.min(480, restElapsed + milliseconds)
+      barH1 = Motion.pulseRest(restElapsed, 0, restStart[0])
+      barH2 = Motion.pulseRest(restElapsed, 1, restStart[1])
+      barH3 = Motion.pulseRest(restElapsed, 2, restStart[2])
+      settling = barH1 !== 0.08 || barH2 !== 0.08 || barH3 !== 0.08
+    }
   }
 
-  SequentialAnimation {
-    running: root.visible && root.playing
-    loops: Animation.Infinite
-    NumberAnimation { target: root; property: "barH2"; to: 0.45; duration: 310; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH2"; to: 0.92; duration: 280; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH2"; to: 0.28; duration: 340; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH2"; to: 0.65; duration: 290; easing.type: Easing.InOutSine }
+  function cancelRest() {
+    settling = false
+    if (!playing) { barH1 = 0.08; barH2 = 0.08; barH3 = 0.08 }
   }
 
-  SequentialAnimation {
-    running: root.visible && root.playing
-    loops: Animation.Infinite
-    NumberAnimation { target: root; property: "barH3"; to: 0.60; duration: 380; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH3"; to: 0.12; duration: 320; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH3"; to: 0.95; duration: 350; easing.type: Easing.InOutSine }
-    NumberAnimation { target: root; property: "barH3"; to: 0.32; duration: 400; easing.type: Easing.InOutSine }
+  // The parent's existing cadence may finish this bounded OutCubic tail, but
+  // hiding/revoking the surface cancels it immediately. No primitive clock.
+  onPlayingChanged: {
+    elapsed = 0
+    if (playing) {
+      settling = false
+      pulseStart = [barH1, barH2, barH3]
+    } else if (visible && admitted) {
+      restElapsed = 0
+      restStart = [barH1, barH2, barH3]
+      settling = barH1 !== 0.08 || barH2 !== 0.08 || barH3 !== 0.08
+    } else cancelRest()
   }
-
-  ParallelAnimation {
-    id: restAnimation
-    NumberAnimation { target: root; property: "barH1"; to: 0.08; duration: 380; easing.type: Easing.OutCubic }
-    NumberAnimation { target: root; property: "barH2"; to: 0.08; duration: 430; easing.type: Easing.OutCubic }
-    NumberAnimation { target: root; property: "barH3"; to: 0.08; duration: 480; easing.type: Easing.OutCubic }
-  }
+  onVisibleChanged: if (!visible) cancelRest()
+  onAdmittedChanged: if (!admitted) cancelRest()
 
   Row {
     anchors.fill: parent

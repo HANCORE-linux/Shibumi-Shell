@@ -688,9 +688,17 @@ if rg -q 'Quickshell\.Services\.(Mpris|Pipewire)|Mpris\.|Pipewire\.' \
   }' hancore.shibumi.media/MediaPanel.qml; then
   fail "Shibumi media presentation must not create a second media owner"
 fi
-if rg -q 'Process \{|Timer \{|FileView \{' hancore.shibumi.media/BarWidget.qml \
-  hancore.shibumi.media/MediaPulse.qml hancore.shibumi.media/MediaSpectrum.qml hancore.shibumi.media/MediaMuse.qml; then
-  fail "closed media bar presentation must remain worker-free"
+# Approved media exception: one visible/panel-revoked 25 Hz clock for playing
+# or the <=480 ms pause tail. Primitives cannot own clocks or backend workers.
+if rg -q 'Process \{|FileView \{|Animation.*\{|Qt\.callLater' hancore.shibumi.media/BarWidget.qml \
+  || rg -q 'Process \{|Timer \{|FileView \{|Animation.*\{|Qt\.callLater' \
+    hancore.shibumi.media/MediaPulse.qml hancore.shibumi.media/MediaSpectrum.qml hancore.shibumi.media/MediaMuse.qml \
+  || [[ $(rg -c 'Timer \{' hancore.shibumi.media/BarWidget.qml) -ne 1 ]] \
+  || ! rg -q 'interval: 40' hancore.shibumi.media/BarWidget.qml \
+  || ! rg -q 'running: root.motionRunning' hancore.shibumi.media/BarWidget.qml \
+  || ! rg -Fq 'readonly property bool motionRunning: visible && !opened && (playing || pulseSettling)' hancore.shibumi.media/BarWidget.qml \
+  || ! rg -Fq 'restElapsed = Math.min(480, restElapsed + milliseconds)' hancore.shibumi.media/MediaPulse.qml; then
+  fail "media surface must own exactly one bounded cadence and no backend workers"
 fi
 rg -q 'serviceFor\("hancore\.shibumi\.media"\)' hancore.shibumi.media/BarWidget.qml \
   || fail "media presentation does not resolve the process-wide spectrum service"

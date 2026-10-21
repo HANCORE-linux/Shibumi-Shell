@@ -13,6 +13,213 @@ ShellRoot {
   property string mediaShellStyle: "shibumi"
   property var mediaSettings: ({ spectrum: false, mediaStyle: "default" })
 
+  readonly property bool quiescenceCheck: Quickshell.env("SHIBUMI_MEDIA_QUIESCENCE") === "1"
+  property int quietCase: 0
+  property int quietTicks: 0
+  property var quietObservers: []
+  property var quietMeasurements: []
+  property real quietStarted: 0
+  property int positionReads: 0
+  property int initialPositionReads: 0
+  property var quietFailures: []
+  property var quietPulse: null
+  property var quietPulseStart: []
+  property bool quietTailValid: true
+  property real quietTransitionAt: 0
+  readonly property var quietCases: [
+    ["shibumi", "default", false, false], ["full", "default", false, false],
+    ["shibumi", "full", false, false], ["full", "full", false, false],
+    ["shibumi", "default", true, false], ["full", "default", true, false],
+    ["shibumi", "default", false, true], ["full", "default", false, true],
+    ["shibumi", "default", false, false, "paused"], ["full", "full", false, false, "paused"],
+    ["shibumi", "default", false, false, "hidden"], ["full", "full", false, false, "hidden"],
+    ["full", "full", false, true, "paused"], ["full", "full", false, true, "no-length"],
+    ["full", "full", false, true, "hidden"]
+  ]
+
+  // Count synchronous geometry-change batches, not samples from the fixture
+  // timer: all properties of a surface must change inside its one cadence step.
+  // Hidden descendants are observed too, catching the old hidden marquee.
+  function observeSurface(surface, excluded) {
+    const measured = { batches: {}, events: 0, outside: 0, positions: [], fractional: false }
+    function connect(signal, callback) {
+      signal.connect(callback)
+      quietObservers.push([signal, callback])
+    }
+    function changed() {
+      measured.events++
+      if (surface.motionStepping !== true) measured.outside++
+      measured.batches[String(surface.motionStep)] = true
+    }
+    function visit(node) {
+      if (node === excluded) return
+      for (const key of ["x", "y", "width", "height", "rotation", "opacity", "text"]) {
+        if (node[key + "Changed"]) connect(node[key + "Changed"], changed)
+      }
+      const children = node.children || []
+      for (let i = 0; i < children.length; i++) visit(children[i])
+    }
+    visit(surface)
+    if (surface.currentPositionChanged) connect(surface.currentPositionChanged, function() {
+      measured.positions.push(Date.now())
+      measured.fractional = measured.fractional || surface.currentPosition !== Math.floor(surface.currentPosition)
+    })
+    return measured
+  }
+
+  function checkDiscretePosition(media) {
+    media.close()
+    media.visible = true
+    playerA.isPlaying = false
+    playerA.length = 245
+    playerA.position = 10.75
+    media.toggle()
+    const panel = media.panelItem
+    if (!panel) return false
+    let valid = panel.currentPosition === 10
+    playerA.position = 20.75
+    valid = valid && panel.currentPosition === 20
+    playerA.length = 15.5
+    valid = valid && panel.currentPosition === 15
+    playerA.length = 245
+    let reads = 0
+    playerA.position = { valueOf: function() { reads++; return 30.9 } }
+    const before = reads
+    playerA.uniqueId++
+    valid = valid && reads === before + 1 && panel.currentPosition === 30
+    playerA.isPlaying = true
+    valid = valid && reads === before + 2
+    media.close()
+    const closedReads = reads
+    playerA.uniqueId++
+    playerA.isPlaying = false
+    valid = valid && reads === closedReads
+    console.log("MEDIA_DISCRETE_POSITION", JSON.stringify({ valid: valid, reads: reads }))
+    return valid
+  }
+
+  function visiblePulse(node) {
+    if ("barH1" in node && node.visible) return node
+    const children = node.children || []
+    for (let i = 0; i < children.length; i++) {
+      const found = visiblePulse(children[i])
+      if (found) return found
+    }
+    return null
+  }
+
+  function checkPulseRevocation(media) {
+    let valid = true
+    for (const vertical of [false, true]) {
+      fakeBar.vertical = vertical
+      for (const panel of [false, true]) {
+        playerA.isPlaying = true
+        const pulse = visiblePulse(media)
+        if (!pulse) return false
+        pulse.elapsed = 0
+        pulse.advance(200)
+        playerA.isPlaying = false
+        valid = valid && pulse.settling === true && media.motionRunning
+        if (panel) media.toggle()
+        else media.visible = false
+        valid = valid && pulse.settling === false && !media.motionRunning
+        if (panel) media.close()
+        else media.visible = true
+        valid = valid && pulse.settling === false && !media.motionRunning
+      }
+    }
+    fakeBar.vertical = false
+    console.log("MEDIA_PAUSE_REVOCATION", JSON.stringify({ valid: valid }))
+    return valid
+  }
+
+  function checkQuiescence(media) {
+    if (!media) return
+    const scenario = quietCases[quietCase]
+    if (quietTicks === 0) {
+      media.close()
+      media.visible = true
+      mediaShellStyle = scenario[0]
+      mediaSettings = ({ spectrum: false, mediaStyle: scenario[1] })
+      fakeBar.vertical = scenario[2]
+      playerA.length = scenario[4] === "no-length" ? 0 : 245
+      quietPulse = null
+      quietTailValid = true
+      if (quietCase === 8) {
+        playerA.isPlaying = true
+        quietPulse = visiblePulse(media)
+        if (quietPulse) {
+          quietPulse.elapsed = 0
+          quietPulse.advance(200)
+          quietPulseStart = [quietPulse.barH1, quietPulse.barH2, quietPulse.barH3]
+        }
+      }
+      playerA.isPlaying = scenario[4] !== "paused"
+      quietTransitionAt = Date.now()
+      if (quietCase === 8) quietTailValid = !!quietPulse
+        && [quietPulse.barH1, quietPulse.barH2, quietPulse.barH3].every((value, i) => value === quietPulseStart[i] && value > 0.08)
+      const epoch = Date.now()
+      // Like the native computed getter: advances without position notifications.
+      playerA.position = { valueOf: function() {
+        root.positionReads++
+        return 61 + (Date.now() - epoch) / 1000
+      } }
+      if (scenario[3]) media.toggle()
+      if (scenario[4] === "hidden") media.visible = false
+    }
+    quietTicks++
+    if (quietTicks === 3 && quietPulse) {
+      const values = [quietPulse.barH1, quietPulse.barH2, quietPulse.barH3]
+      quietTailValid = quietTailValid && values.every((value, i) => value > 0.08 && value < quietPulseStart[i]
+        && Math.abs(value - (0.08 + (quietPulseStart[i] - 0.08) * Math.pow(1 - Math.min(1, quietPulse.restElapsed / [380, 430, 480][i]), 3))) < 1e-12)
+      console.log("MEDIA_PAUSE_EASE", JSON.stringify({ values: values, from: quietPulseStart,
+        elapsed: quietPulse.restElapsed, valid: quietTailValid }))
+    }
+    if (quietTicks === 9 && scenario[3] && scenario[4] === "hidden" && media.panelItem)
+      media.panelItem.visible = false
+    if (quietTicks === 10) {
+      if (quietPulse) quietTailValid = quietTailValid && Date.now() - quietTransitionAt >= 500
+        && !media.motionRunning && [quietPulse.barH1, quietPulse.barH2, quietPulse.barH3].every(value => value === 0.08)
+        && checkPulseRevocation(media)
+      quietMeasurements = [observeSurface(media, media.panelItem)]
+      if (media.panelItem) quietMeasurements.push(observeSurface(media.panelItem))
+      quietStarted = Date.now()
+      initialPositionReads = positionReads
+    }
+    if (quietTicks > 10 && quietTicks < 40 && playerA.isPlaying && scenario[4] !== "hidden") {
+      // Two event-fed frames between ticks: only the latest can be displayed.
+      fakeSpectrum.levels = Array(24).fill(0.1)
+      fakeSpectrum.levels = Array(24).fill(quietTicks % 2 ? 0.8 : 0.4)
+    }
+    if (quietTicks < 40) return
+    for (const observer of quietObservers) observer[0].disconnect(observer[1])
+    quietObservers = []
+    const seconds = (Date.now() - quietStarted) / 1000
+    const stopped = scenario[4] === "paused" || scenario[4] === "hidden"
+    const rows = quietMeasurements.map(function(m, index) {
+      const count = Object.keys(m.batches).length
+      const shouldMove = !stopped && (index === 1 || !scenario[3])
+      const gaps = m.positions.slice(1).map((time, i) => time - m.positions[i])
+      return { batches: count, events: m.events, outside: m.outside,
+        positions: m.positions, fractional: m.fractional,
+        valid: m.outside === 0 && count <= Math.ceil(27.5 * seconds)
+          && (shouldMove ? count > 0 : m.events === 0)
+          && !m.fractional && gaps.every(gap => gap >= 1000)
+          && m.positions.length <= Math.ceil(seconds) }
+    })
+    const reads = positionReads - initialPositionReads
+    const expectReads = scenario[3] && !stopped && scenario[4] !== "no-length"
+    const valid = quietTailValid && rows.every(row => row.valid) && (!scenario[3] || rows.length === 2)
+      && (expectReads ? reads > 0 && reads <= Math.ceil(seconds) : reads === 0)
+    if (!valid) quietFailures = quietFailures.concat([quietCase])
+    console.log("MEDIA_CADENCE", JSON.stringify({ scenario: scenario, seconds: seconds,
+      surfaces: rows, positionReads: reads, valid: valid }))
+    if (++quietCase < quietCases.length) { quietTicks = 0; return }
+    if (quietFailures.length !== 0 || !checkDiscretePosition(media)) return fail("media cadence/stop/position contract: " + JSON.stringify(quietFailures))
+    console.log("media quiescence smoke passed")
+    Qt.quit()
+  }
+
   function fail(message) {
     console.error("media-plugin-smoke:", message)
     Qt.exit(1)
@@ -38,7 +245,7 @@ ShellRoot {
     property bool shuffleSupported: true; property bool loopSupported: true
     property bool canSeek: true; property bool positionSupported: true; property bool lengthSupported: true
     property bool shuffle: false; property int loopState: 0; property int uniqueId: 1
-    property real position: 61
+    property var position: 61
     property real length: 245
   }
 
@@ -247,6 +454,7 @@ ShellRoot {
     running: true
     onTriggered: {
       const media = mediaLoader.item
+      if (root.quiescenceCheck) { root.checkQuiescence(media); return }
       if (root.phase === 0) {
         if (!media || !media.mediaService || !media.active || !media.playing
             || media.trackLabel.indexOf("Artist A") < 0 || media.panelLoaded

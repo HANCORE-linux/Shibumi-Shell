@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "MediaMotion.js" as Motion
 import Quickshell.Services.Mpris
 import qs.Commons as Commons
 import qs.Ui as Ui
@@ -16,8 +17,15 @@ ShibumiPanel {
   property string focusSection: "controls"
   property int cursorIndex: 1
   property real currentPosition: 0
-  property real currentLength: 0
-  property real lastReportedPosition: -1
+  readonly property real currentLength: player && player.lengthSupported === true
+    ? Math.max(0, Number(player.length) || 0) : 0
+  property real lastPositionRead: 0
+  property bool motionStepping: false
+  property int motionStep: 0
+  readonly property bool motionRunning: open && visible && playing
+  readonly property bool progressShown: open && active && !!player
+    && player.positionSupported === true && player.lengthSupported === true
+    && isFinite(currentLength) && currentLength > 0
   property var leasedSpectrumService: null
 
   readonly property var player: mediaService ? mediaService.activePlayer : null
@@ -25,9 +33,10 @@ ShibumiPanel {
     ? mediaService.sourcePlayers : []
   readonly property bool active: !!(player && (player.trackTitle || player.trackArtist))
   readonly property bool playing: active && player.isPlaying === true
-  readonly property bool spectrumRequested: open && active && spectrumEnabled
-  readonly property var levels: spectrumService && spectrumService.levels
+  readonly property bool spectrumRequested: open && active && spectrumEnabled && visible
+  readonly property var pendingLevels: spectrumService && spectrumService.levels
     ? spectrumService.levels : flatLevels(active ? 0.04 : 0.02)
+  property var levels: flatLevels(0.04)
   readonly property var spectrumThemeColors: spectrumService
     && spectrumService.themeColors ? spectrumService.themeColors : []
   readonly property int renderedSourceCount: sourceRepeater.count
@@ -128,22 +137,33 @@ ShibumiPanel {
   }
 
   function syncPosition() {
-    if (!player) return
-    const reported = Number(player.position || 0)
-    currentLength = Math.max(0, Number(player.length || 0))
-    if (Math.abs(reported - lastReportedPosition) > 0.05) {
-      currentPosition = reported
-      lastReportedPosition = reported
-    } else if (playing) {
-      const cap = currentLength > 0 ? currentLength : reported + 1e9
-      currentPosition = Math.min(cap, currentPosition + 0.5)
-    }
+    // Revocation can notify before dependent QML bindings have reevaluated.
+    const target = player
+    if (!progressShown || !target) return
+    const reported = Number(target.position)
+    currentPosition = Math.floor(Math.max(0, Math.min(currentLength,
+      isFinite(reported) ? reported : 0)))
+    lastPositionRead = Date.now()
   }
 
+  // Discrete native changes refresh immediately, including pause/seek. Only
+  // periodic reads are restricted to playing; a closed panel never samples.
   function resetPosition() {
-    currentPosition = player ? Number(player.position || 0) : 0
-    currentLength = player ? Math.max(0, Number(player.length || 0)) : 0
-    lastReportedPosition = -1
+    if (!open) return
+    if (progressShown) syncPosition()
+    else currentPosition = 0
+  }
+
+  function advanceMotion() {
+    if (!motionRunning) return
+    const now = Date.now()
+    const delta = 40
+    motionStepping = true
+    motionStep++
+    vinylArtwork.advance(delta)
+    if (!Motion.sameLevels(levels, pendingLevels)) levels = pendingLevels
+    if (progressShown && now - lastPositionRead >= 1000) syncPosition()
+    motionStepping = false
   }
 
   function formatTime(seconds) {
@@ -173,8 +193,23 @@ ShibumiPanel {
   }
 
   onPlayerChanged: resetPosition()
-  onPlayingChanged: {
-    lastReportedPosition = -1
+  onPlayingChanged: resetPosition()
+  onOpenChanged: if (open) resetPosition()
+  onPendingLevelsChanged: {
+    if (open && visible && !playing && !Motion.sameLevels(levels, pendingLevels))
+      levels = pendingLevels
+  }
+
+  property Connections positionSignals: Connections {
+    target: panel.open ? panel.player : null
+    ignoreUnknownSignals: true
+    function onPositionChanged() { panel.resetPosition() }
+    function onLengthChanged() { panel.resetPosition() }
+    function onPositionSupportedChanged() { panel.resetPosition() }
+    function onLengthSupportedChanged() { panel.resetPosition() }
+    function onUniqueIdChanged() { panel.resetPosition() }
+    function onTrackTitleChanged() { panel.resetPosition() }
+    function onTrackArtistChanged() { panel.resetPosition() }
   }
   onSpectrumRequestedChanged: syncSpectrumLease()
   onSpectrumServiceChanged: syncSpectrumLease()
@@ -192,12 +227,13 @@ ShibumiPanel {
   }
   Component.onDestruction: releaseSpectrumLease()
 
+  // The existing panel clock also steps the vinyl/bands. Only every elapsed
+  // second can sample position; no other animation or progress timer is needed.
   property Timer positionTimer: Timer {
-    interval: 500
+    interval: 40
     repeat: true
-    running: panel.open && panel.active
-    triggeredOnStart: true
-    onTriggered: panel.syncPosition()
+    running: panel.motionRunning
+    onTriggered: panel.advanceMotion()
   }
 
   Ui.PanelKeyCatcher {
@@ -327,7 +363,7 @@ ShibumiPanel {
       Item {
         width: parent.width
         height: Commons.Style.space(18)
-        visible: panel.active && panel.currentLength > 0
+        visible: panel.progressShown
 
         MouseArea {
           id: seekMouse
@@ -361,7 +397,6 @@ ShibumiPanel {
               panel.currentPosition / Math.max(1, panel.currentLength))
             radius: height / 2
             color: panel.bar ? panel.bar.urgent : Commons.Color.accent
-            Behavior on width { NumberAnimation { duration: 450 } }
           }
         }
 
@@ -571,14 +606,20 @@ ShibumiPanel {
     }
   }
 
-  // Panel-local Muse-style mark: no bar geometry, band or animation defaults change.
+  // Panel-local Muse-style mark, sampled by the panel's shared clock.
   component PanelVinyl: Item {
     id: vinyl
     required property color tint
     required property string artSource
     required property bool spinning
     property int revolutionMs: 6000
-    readonly property bool rotating: spin.running
+    readonly property bool rotating: visible && spinning && panel.motionRunning
+
+    function advance(milliseconds) {
+      if (rotating) rotation = (rotation + milliseconds * 360 / revolutionMs) % 360
+    }
+
+    onSpinningChanged: if (spinning) rotation = 0
 
     Canvas {
       anchors.fill: parent
@@ -628,13 +669,6 @@ ShibumiPanel {
         radius: width / 2
         color: panel.bar ? panel.bar.background : Commons.Color.background
       }
-    }
-    NumberAnimation on rotation {
-      id: spin
-      from: 0; to: 360
-      duration: vinyl.revolutionMs
-      loops: Animation.Infinite
-      running: vinyl.visible && vinyl.spinning
     }
   }
 
