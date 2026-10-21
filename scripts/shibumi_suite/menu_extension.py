@@ -8,6 +8,10 @@ class MenuExtensionError(RuntimeError):
     pass
 
 
+class StockMenuError(MenuExtensionError):
+    """The host defaults, not the user's extension, failed validation."""
+
+
 START_MARKER = "// shibumi-picker-routing-start"
 END_MARKER = "// shibumi-picker-routing-end"
 EMPTY_EXTENSION = "{\n}\n"
@@ -184,7 +188,17 @@ def remove_picker_routing(raw: str) -> str:
     line_end = raw.find("\n", end + len(END_MARKER))
     line_end = len(raw) if line_end < 0 else line_end + 1
     result = raw[:line_start] + raw[line_end:]
-    _decoded(result)
+    try:
+        _decoded(result)
+    except MenuExtensionError as error:
+        decoder = error.__cause__
+        if isinstance(decoder, json.JSONDecodeError):
+            # Diagnostics name the on-disk file, not the shorter intermediate
+            # string after removing our generated block. Acceptance is unchanged.
+            position = decoder.pos + (line_end - line_start if decoder.pos >= line_start else 0)
+            original = json.JSONDecodeError(decoder.msg, raw, position)
+            raise MenuExtensionError(f"invalid Omarchy menu extension JSONC: {original}") from original
+        raise
     return result
 
 
@@ -196,14 +210,17 @@ def install_picker_routing(raw: str | None, stock_menu: str | None = None) -> st
         "style.background": 'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"',
     }
     if stock_menu is not None:
-        stock = _decoded(stock_menu)
-        stock = stock.get("items", stock)
-        for key in stock_actions:
-            entry = stock.get(key) if isinstance(stock, dict) else None
-            action = entry.get("action") if isinstance(entry, dict) else None
-            if not isinstance(action, str) or not action.strip():
-                raise MenuExtensionError(f"Omarchy stock menu has no action for {key}")
-            stock_actions[key] = action
+        try:
+            stock = _decoded(stock_menu)
+            stock = stock.get("items", stock)
+            for key in stock_actions:
+                entry = stock.get(key) if isinstance(stock, dict) else None
+                action = entry.get("action") if isinstance(entry, dict) else None
+                if not isinstance(action, str) or not action.strip():
+                    raise MenuExtensionError(f"Omarchy stock menu has no action for {key}")
+                stock_actions[key] = action
+        except MenuExtensionError as error:
+            raise StockMenuError(str(error)) from error
     base = raw if raw and raw.strip() else EMPTY_EXTENSION
     base = remove_picker_routing(base)
     decoded = _decoded(base)

@@ -45,6 +45,8 @@ from .model import (
 from .menu_extension import (
     END_MARKER,
     START_MARKER,
+    MenuExtensionError,
+    StockMenuError,
     generated_extension_is_empty,
     install_picker_routing,
     read_extension,
@@ -348,11 +350,24 @@ def install_picker_menu_extension(
     runtime: OmarchyRuntime,
     previous_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    raw = read_extension(transaction.paths.menu_extension_file)
-    stock_menu = read_extension(
-        transaction.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
-    )
-    payload = install_picker_routing(raw, stock_menu).encode("utf-8")
+    menu_path = transaction.paths.menu_extension_file
+    stock_path = transaction.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+    source_path = menu_path
+    try:
+        raw = read_extension(source_path)
+        source_path = stock_path
+        stock_menu = read_extension(source_path)
+        source_path = menu_path
+        payload = install_picker_routing(raw, stock_menu).encode("utf-8")
+    except MenuExtensionError as error:
+        if isinstance(error, StockMenuError):
+            source_path = stock_path
+        remedy = (
+            "restore the Omarchy stock menu, then retry the same command"
+            if source_path == stock_path else
+            "fix the JSONC syntax or routing markers in this regular file, then retry the same command"
+        )
+        raise CliError(f"cannot update Omarchy menu {source_path}: {error}; {remedy}") from error
     transaction.write_menu_extension(payload)
     runtime.refresh_menu()
     previous = (
@@ -1341,13 +1356,36 @@ def command_status_with_admission(suite: Suite, paths: RuntimePaths) -> int:
             file=sys.stderr,
         )
         return 1
-    except AdmissionError:
+    except AdmissionError as error:
         print(
             "shibumi-suite: status admission refused; malformed, unsafe, "
             "ambiguous, or unsupported state was not inspected further; "
             "no recovery or mutation was attempted",
             file=sys.stderr,
         )
+        reason = str(error)
+        # Only format the existing preflight result: never inspect refused
+        # state again. Keep authority paths redacted, as in other status errors.
+        rendered = reason
+        for root, label in ((paths.state_dir, "<state>"),
+                            (paths.plugin_dir, "<plugins>"),
+                            (suite.root, "<suite>")):
+            rendered = rendered.replace(str(root), label)
+        print(f"shibumi-suite: refusal reason: {rendered}", file=sys.stderr)
+        plugin_ids = sorted(set(re.findall(
+            re.escape(str(paths.plugin_dir) + "/")
+            + r"([A-Za-z0-9][A-Za-z0-9._-]{0,199})(?=/|$)", reason,
+        )))
+        if plugin_ids:
+            # The existing combined check does not distinguish these causes.
+            # Do not invent a diagnosis or rescan to disambiguate it.
+            combined = reason.startswith("live plugin marker or payload")
+            labels = ("Locally modified", "Ownership mismatch") if combined else (
+                "Locally modified" if "payload" in reason else "Ownership mismatch",
+            )
+            qualifier = " (possible; preflight reports marker or payload mismatch)" if combined else ""
+            for label in labels:
+                print(f"{label}: {', '.join(plugin_ids)}{qualifier}", file=sys.stderr)
         return 1
     return command_status(suite, paths)
 

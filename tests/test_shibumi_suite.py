@@ -8,6 +8,8 @@ import io
 import os
 import re
 import runpy
+import select
+import signal
 import shutil
 import stat
 import subprocess
@@ -512,6 +514,86 @@ class RuntimeProcessTests(unittest.TestCase):
         self.assertNotIn([str(
             self.omarchy_root / "bin/omarchy-shell"
         ), "shell", "ping"], calls)
+
+    def test_default_restart_covers_the_host_shutdown_dying_and_ready_phases(self):
+        from test_inc013_drain_contract import SyntheticClock
+        clock = SyntheticClock()
+        config = self.omarchy_root / "shell/shell.qml"
+
+        def run(command, *, timeout=20, **_kwargs):
+            duration = 119.5 if command[0].endswith("omarchy-restart-shell") else 0.05
+            clock.advance_command(min(duration, timeout))
+            if duration > timeout:
+                try:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                except subprocess.TimeoutExpired as error:
+                    raise RuntimeFailure("host restart phase timed out") from error
+            return self.result(self.instance_json(config))
+
+        self.runtime.run = Mock(side_effect=run)
+        timing = OmarchyRuntime.restart_shell.__globals__["time"]
+        with patch.object(timing, "monotonic", side_effect=clock.monotonic), \
+                patch.object(timing, "sleep", side_effect=clock.sleep):
+            self.runtime.restart_shell()
+        self.assertTrue(119.5 <= clock.now <= 180)
+
+    def test_shutdown_timeout_escalates_only_through_a_verified_pidfd(self):
+        from test_inc013_drain_contract import DrainScenario, SyntheticClock
+        # Refusal before TERM or after its grace must never permit KILL.
+        for stubborn, refused in ((False, 0), (True, 0), (True, 1), (True, 2)):
+            with self.subTest(stubborn=stubborn, refused=refused):
+                clock = SyntheticClock()
+                scenario = DrainScenario(self.omarchy_root, 1, clock=clock)
+                foreign = tuple(scenario.foreign)
+                sent = []
+                output = io.StringIO()
+                failure = None
+
+                def run(command, **kwargs):
+                    if command[:2] == ["quickshell", "kill"]:
+                        clock.advance_command(kwargs["timeout"])
+                        try:
+                            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                        except subprocess.TimeoutExpired as error:
+                            raise RuntimeFailure("shutdown IPC timed out") from error
+                    return scenario.run(command, **kwargs)
+
+                def send(_descriptor, value, *_args):
+                    sent.append(value)
+                    if value == signal.SIGKILL or not stubborn:
+                        scenario.matching.clear()
+
+                def ready(readers, _writers, _errors, timeout):
+                    if not scenario.matching:
+                        return readers, [], []
+                    clock.sleep(timeout)
+                    return [], [], []
+
+                self.runtime.run = Mock(side_effect=run)
+                timing = OmarchyRuntime.stop_shell.__globals__["time"]
+                with patch.object(timing, "monotonic", side_effect=clock.monotonic), \
+                        patch.object(timing, "sleep", side_effect=clock.sleep), \
+                        patch.object(os, "pidfd_open", return_value=42), \
+                        patch.object(os, "close") as close, \
+                        patch.object(select, "select", side_effect=ready), \
+                        patch.object(signal, "pidfd_send_signal", side_effect=send), \
+                        patch.object(self.runtime, "_shell_process_identity", create=True,
+                            return_value=123,
+                            side_effect=(RuntimeFailure("foreign shell process") if refused == 1
+                                else [123, RuntimeFailure("changed shell identity")] if refused == 2
+                                else None)), \
+                        redirect_stderr(output):
+                    try:
+                        self.runtime.stop_shell()
+                    except RuntimeFailure as error:
+                        failure = error
+                expected = [] if refused == 1 else [signal.SIGTERM] + ([signal.SIGKILL] if stubborn and not refused else [])
+                self.assertEqual((sent, failure is None, bool(scenario.matching), tuple(scenario.foreign)), (expected, not refused, bool(refused), foreign))
+                close.assert_called_once_with(42)
+                self.assertLessEqual(clock.now, 50.15)
+                if refused != 1:
+                    self.assertIn("sending TERM", output.getvalue())
+                    self.assertEqual("sending KILL" in output.getvalue(), stubborn and not refused)
 
     def test_session_lock_preflight_accepts_only_explicitly_unlocked_status(
         self,
@@ -1996,6 +2078,38 @@ class SuiteLifecycleTests(unittest.TestCase):
             "menuRefreshes": self.runtime.menu_refreshes,
             "shellRunning": self.runtime.shell_running,
         }
+
+    def test_menu_parse_diagnostic_names_source_location_and_remedy(self) -> None:
+        menu = self.paths.menu_extension_file
+        stock = self.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+        menu.parent.mkdir(parents=True, exist_ok=True)
+        stock.parent.mkdir(parents=True, exist_ok=True)
+        malformed = '{\n  // retained comment\n  "one": {}\n  "two": {}\n}\n'
+        marked = malformed.replace("// retained comment", START_MARKER + "\n  // generated block\n  " + END_MARKER)
+        for raw, host_raw, source in ((malformed, None, menu), (marked, None, menu), ("{}\n", malformed, stock)):
+            with self.subTest(source=source, markers=START_MARKER in raw):
+                menu.write_text(raw)
+                if host_raw is None:
+                    stock.unlink(missing_ok=True)
+                else:
+                    stock.write_text(host_raw)
+                writes = []
+                transaction = SimpleNamespace(paths=self.paths, menu_extension_existed=True, write_menu_extension=writes.append)
+                failure = None
+                try:
+                    install_picker_menu_extension(transaction, self.runtime)
+                except Exception as error:
+                    failure = error
+                invalid = host_raw if source == stock else raw
+                position = invalid.index('"two"')
+                line = invalid[:position].count("\n") + 1
+                remedy = ("restore the Omarchy stock menu, then retry the same command" if source == stock
+                    else "fix the JSONC syntax or routing markers in this regular file, then retry the same command")
+                expected = f"cannot update Omarchy menu {source}: invalid Omarchy menu extension JSONC: Expecting ',' delimiter: line {line} column 3 (char {position}); {remedy}"
+                self.assertEqual(
+                    (type(failure), str(failure), writes, self.runtime.menu_refreshes, menu.read_text(), stock.read_text() if stock.exists() else None),
+                    (CliError, expected, [], 0, raw, host_raw),
+                )
 
     def test_menu_extension_merge_is_idempotent_and_reversible(self) -> None:
         original = (
