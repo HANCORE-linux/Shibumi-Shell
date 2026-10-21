@@ -4,8 +4,10 @@
 var MaximumText = 262144
 var MaximumEntries = 512
 var NativeSections = ["left", "centerBegin", "center", "centerEnd", "right", "tray"]
-var Fields = ["id", "name", "kinds", "enabled", "active", "canDisable", "firstParty", "clonedFrom",
-  "description", "author", "version", "tags", "barWidget"]
+var NativeFields = ["id", "name", "kinds", "enabled", "active", "canDisable", "firstParty", "clonedFrom"]
+var Fields = NativeFields.concat(["description", "author", "version", "tags", "barWidget"])
+var MetadataIssues = ["metadata-missing", "metadata-ambiguous", "metadata-stale",
+  "manifest-shape", "manifest-race", "manifest-root", "manifest-metadata", "invalid-json", "duplicate-key"]
 var BarWidgetFields = ["displayName", "description", "category", "semanticCapabilities",
   "defaultSection", "allowMultiple"]
 
@@ -47,6 +49,17 @@ function normalize(value) {
   var byId = Object.create(null)
   for (var i = 0; i < value.length; i++) {
     var row = value[i]
+    var issue = plain(row) && Object.prototype.hasOwnProperty.call(row, "catalogIssue")
+      ? row.catalogIssue : ""
+    if (issue !== "") {
+      if (MetadataIssues.indexOf(issue) < 0 || Object.keys(row).length !== NativeFields.length + 1
+          || !NativeFields.every(function(key) { return Object.prototype.hasOwnProperty.call(row, key) })) return null
+      // Empty presentation defaults are local UI shape, not manifest metadata.
+      row = Object.assign({}, row, { description: "", author: "", version: "", tags: [],
+        barWidget: { displayName: "", description: "", category: "", semanticCapabilities: [],
+          defaultSection: "center", allowMultiple: false } })
+      delete row.catalogIssue
+    }
     if (!plain(row) || Object.keys(row).length !== Fields.length
         || !Fields.every(function(key) { return Object.prototype.hasOwnProperty.call(row, key) })
         || !id(row.id) || Object.prototype.hasOwnProperty.call(byId, row.id)
@@ -83,11 +96,13 @@ function normalize(value) {
       presentationRegion: row.barWidget.defaultSection === "tray" ? ""
         : row.barWidget.defaultSection.indexOf("center") === 0 ? "center" : row.barWidget.defaultSection,
       allowMultiple: row.barWidget.allowMultiple })
-    var entry = Object.freeze({ id: row.id, name: row.name, kinds: Object.freeze(kinds),
+    var entry = { id: row.id, name: row.name, kinds: Object.freeze(kinds),
       enabled: row.enabled, active: row.active, canDisable: row.canDisable,
       firstParty: row.firstParty, clonedFrom: row.clonedFrom,
       description: row.description, author: row.author, version: row.version,
-      tags: tags, barWidget: barWidget })
+      tags: tags, barWidget: barWidget }
+    if (issue) entry.catalogIssue = issue
+    Object.freeze(entry)
     byId[entry.id] = entry
     entries.push(entry)
   }

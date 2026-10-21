@@ -168,6 +168,11 @@ ShibumiPanel {
       ? bar.shell.serviceFor("hancore.shibumi.control-center") : null)
   readonly property bool nativeCatalogRequired: effectivePluginUpdateService
     && effectivePluginUpdateService.scopedHost === true
+  readonly property string pluginCatalogErrorCode: nativeCatalogRequired
+    && effectivePluginUpdateService.catalogReady !== true
+    && typeof effectivePluginUpdateService.catalogErrorCode === "string"
+    && effectivePluginUpdateService.catalogErrorCode !== "unavailable"
+      ? effectivePluginUpdateService.catalogErrorCode : ""
   readonly property int pluginLayoutTransitionSerial: bar
     && "layoutTransitionSerial" in bar
     ? Number(bar.layoutTransitionSerial || 0) : 0
@@ -745,7 +750,8 @@ ShibumiPanel {
     const id = String(pluginId || "")
     const observation = nativeCatalogRequired ? pluginCatalogObservation : null
     if (nativeCatalogRequired && !observation) {
-      pluginActionError = "The plugin catalog is not ready."
+      pluginActionError = "The plugin catalog is not ready"
+        + (pluginCatalogErrorCode ? " (" + pluginCatalogErrorCode + ")" : "") + "."
       return false
     }
     const manifest = nativeCatalogRequired && observation.snapshot.byId

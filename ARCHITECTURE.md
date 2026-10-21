@@ -525,6 +525,14 @@ the saved preference.
   Normal uninstall removes canonical and legacy settings. `--keep-settings`
   retains the complete canonical State entry, including unknown fields and deep
   settings, dormant while its plugin payload is absent. Reinstall reuses it.
+  Managed CLI deactivation also retains the Shibumi layout in that entry's
+  `shibumiRetainedLayout` sibling, shared with `uninstall --keep-settings`.
+  Activation consumes it before shell start, preserving placement/order/entry
+  settings except foreign widgets no longer placed in the freshly read native
+  layout. Suite widgets intentionally removed by deactivation are restored;
+  deferred tray data and `--keep-layout` policy are unchanged. The continuity
+  manager's two-owner layout/center-anchor profiles remain a separate journaled
+  mechanism; this fix does not migrate or merge those profile stores.
 
 ## Design Rules
 

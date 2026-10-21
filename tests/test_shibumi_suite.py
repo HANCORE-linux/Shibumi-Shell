@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -92,6 +93,8 @@ from shibumi_suite.transaction import (  # noqa: E402
     recover_transactions,
 )
 
+
+drain_contract = import_module((__package__ + "." if __package__ else "") + "test_inc013_drain_contract")
 
 QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
 SESSION_LOCK_FIELDS = (
@@ -516,8 +519,7 @@ class RuntimeProcessTests(unittest.TestCase):
         ), "shell", "ping"], calls)
 
     def test_default_restart_covers_the_host_shutdown_dying_and_ready_phases(self):
-        from test_inc013_drain_contract import SyntheticClock
-        clock = SyntheticClock()
+        clock = drain_contract.SyntheticClock()
         config = self.omarchy_root / "shell/shell.qml"
 
         def run(command, *, timeout=20, **_kwargs):
@@ -538,12 +540,11 @@ class RuntimeProcessTests(unittest.TestCase):
         self.assertTrue(119.5 <= clock.now <= 180)
 
     def test_shutdown_timeout_escalates_only_through_a_verified_pidfd(self):
-        from test_inc013_drain_contract import DrainScenario, SyntheticClock
         # Refusal before TERM or after its grace must never permit KILL.
         for stubborn, refused in ((False, 0), (True, 0), (True, 1), (True, 2)):
             with self.subTest(stubborn=stubborn, refused=refused):
-                clock = SyntheticClock()
-                scenario = DrainScenario(self.omarchy_root, 1, clock=clock)
+                clock = drain_contract.SyntheticClock()
+                scenario = drain_contract.DrainScenario(self.omarchy_root, 1, clock=clock)
                 foreign = tuple(scenario.foreign)
                 sent = []
                 output = io.StringIO()
@@ -3037,6 +3038,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertIn("omarchy.absent-official", restored_ids)
 
         restored["bar"]["layout"]["right"].append({"id": "foreign.unreadable"})
+        # Exercise legacy/profile import, not the exact retained-layout branch
+        # now created by managed deactivate (which must not import stock extras).
+        state_entry(restored).pop("shibumiRetainedLayout", None)
         atomic_write(self.paths.config_file, encode_config(restored))
         real_scandir = os.scandir
         failed_reads = 0
@@ -4838,6 +4842,9 @@ class SuiteLifecycleTests(unittest.TestCase):
             {"id": "user.weather", "custom": {"city": "Berlin"}}
         )
         (self.paths.plugin_dir / "user.weather").mkdir()
+        config["bar"]["layout"]["right"].append({"id": "omarchy.elsewhen",
+            "displayMode": "full", "opaque": [False, {"city": "Malmö"}]})
+        placed_layout = copy.deepcopy(config["bar"]["layout"])
         config["plugins"].append({"id": "user.service", "interval": 17})
         state_entry(config)["shibumi"]["testSetting"] = "retained"
         atomic_write(self.paths.config_file, encode_config(config))
@@ -4892,6 +4899,23 @@ class SuiteLifecycleTests(unittest.TestCase):
             if entry_id(entry) == "user.service"
         )
         self.assertEqual(user_service["interval"], 17)
+        for enabled in (True, False):
+            expected_layout = copy.deepcopy(placed_layout)
+            codes = (0, 0)
+            if not enabled:
+                deactivated = command_deactivate(self.args(), self.suite, self.paths, self.runtime)
+                stock = json.loads(self.paths.config_file.read_text())
+                # Native widget disable removes its placement, not its package.
+                for region in stock["bar"]["layout"]:
+                    stock["bar"]["layout"][region] = [entry for entry in stock["bar"]["layout"][region]
+                        if entry_id(entry) != "omarchy.elsewhen"]
+                    expected_layout[region] = [entry for entry in expected_layout[region]
+                        if entry_id(entry) != "omarchy.elsewhen"]
+                atomic_write(self.paths.config_file, encode_config(stock))
+                codes = (deactivated, command_activate(self.args(), self.suite, self.paths, self.runtime))
+                active = json.loads(self.paths.config_file.read_text())
+            self.assertEqual((codes, active["bar"]["layout"], state_entry(active).get("shibumiRetainedLayout")),
+                ((0, 0), expected_layout, None), "native placement must survive unless disabled while inactive")
 
     def test_failed_deactivation_restores_config_and_install_state(self) -> None:
         self.install()

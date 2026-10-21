@@ -27,6 +27,16 @@ class Refused(Exception):
     pass
 
 
+def refusal_code(error):
+    # Only fixed protocol codes, never exception paths or native stderr.
+    code = str(error) if isinstance(error, Refused) else "ipc-failed"
+    return code if re.fullmatch(r"[a-z][a-z-]{0,63}", code) else "ipc-failed"
+
+
+def report_refusal(error):
+    os.write(2, (refusal_code(error) + "\n").encode("ascii"))
+
+
 def collect(command, *, group_owner=False):
     # Production runs in the custodian's reserved group. Direct inert unit tests
     # retain the standalone owned-child-group seam.
@@ -146,8 +156,8 @@ def guarded(job):
             try:
                 job()
                 status = 0
-            except BaseException:
-                pass  # Only the fixed status byte crosses the private channel.
+            except BaseException as error:
+                report_refusal(error)  # One sanitized token, not native stderr.
             child_socket.sendall(bytes([status]))
             # Never exit before launcher cleanup; otherwise launcher death after
             # our exit could orphan descendants without a parent-death receiver.
@@ -174,14 +184,15 @@ def guarded(job):
         signal.pthread_sigmask(signal.SIG_SETMASK, mask - signals)
         parent_socket.settimeout(5)
         if parent_socket.recv(1) != b"G" or os.getpgid(pid) != pid:
-            return 1
+            raise Refused("process-identity")
         group_ready = True
         if cancelled:
             return 1
         parent_socket.sendall(b"S")
         status = parent_socket.recv(1)
         return 0 if status == b"\0" and not cancelled else 1
-    except (OSError, Refused):
+    except (OSError, Refused) as error:
+        report_refusal(Refused("deadline") if isinstance(error, TimeoutError) else error)
         return 1
     finally:
         signal.pthread_sigmask(signal.SIG_BLOCK, signals)
@@ -232,13 +243,14 @@ def file_identity(metadata):
 
 
 def read_regular(path, maximum=MAX_MANIFEST, *, directory=None):
-    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK,
                          dir_fd=directory)
     try:
         before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 \
-                or before.st_size < 0 or before.st_size > maximum:
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size < 0:
             raise Refused("manifest-shape")
+        if before.st_size > maximum:
+            raise Refused("manifest-limit")
         chunks = []
         total = 0
         while True:
@@ -293,17 +305,25 @@ def manifest_sources(shell_directory):
     probes = [0]
     aggregate = [0]
 
-    def append_manifest(directory, name, first_party):
+    def append_manifest(directory, name, first_party, hint=""):
         if len(sources) >= MAX_MANIFESTS:
             raise Refused("manifest-count")
+        issue = ""
+        raw = b""
         try:
             raw = read_regular(name, directory=directory)
         except FileNotFoundError:
-            return
+            issue = "metadata-missing"
+        except OSError:
+            issue = "manifest-shape"
+        except Refused as error:
+            if str(error) == "manifest-limit":
+                raise
+            issue = refusal_code(error)
         aggregate[0] += len(raw)
         if aggregate[0] > MAX_MANIFEST_TOTAL:
             raise Refused("manifest-limit")
-        sources.append((raw, first_party))
+        sources.append((raw, first_party, hint, issue))
 
     first_root = None
     try:
@@ -314,7 +334,10 @@ def manifest_sources(shell_directory):
             except OSError:
                 continue
             try:
-                first_entries = bounded_names(first, probes)
+                try:
+                    first_entries = bounded_names(first, probes)
+                except OSError:
+                    continue
                 for name in first_entries:
                     if name == "manifest.json" or name.endswith(".manifest.json"):
                         append_manifest(first, name, True)
@@ -324,15 +347,22 @@ def manifest_sources(shell_directory):
                     except OSError:
                         continue
                     try:
-                        for name in bounded_names(second, probes):
+                        try:
+                            second_entries = bounded_names(second, probes)
+                        except OSError:
+                            continue
+                        for name in second_entries:
                             if name == "manifest.json" or name.endswith(".manifest.json"):
                                 append_manifest(second, name, True)
                     finally:
                         os.close(second)
             finally:
                 os.close(first)
-    except FileNotFoundError:
-        pass
+    except OSError:
+        pass  # Missing/unreadable metadata never revokes native rows.
+    except Refused as error:
+        if str(error) != "manifest-root":
+            raise
     finally:
         if first_root is not None:
             os.close(first_root)
@@ -345,15 +375,21 @@ def manifest_sources(shell_directory):
             if name.startswith("."):
                 continue
             try:
-                plugin = child_directory(local_root, name)
+                # The registry follows development-checkout directory links. Resolve
+                # that directory only; walk the result without links and keep the
+                # held directory FD and final-manifest O_NOFOLLOW checks.
+                plugin = open_directory(os.path.realpath(os.path.join(local, name), strict=True))
             except OSError:
                 continue
             try:
-                append_manifest(plugin, "manifest.json", False)
+                append_manifest(plugin, "manifest.json", False, name)
             finally:
                 os.close(plugin)
-    except FileNotFoundError:
+    except OSError:
         pass
+    except Refused as error:
+        if str(error) != "manifest-root":
+            raise
     finally:
         if local_root is not None:
             os.close(local_root)
@@ -363,7 +399,8 @@ def manifest_sources(shell_directory):
 def valid_text(value, maximum, empty=True):
     return (isinstance(value, str) and len(value) <= maximum
             and (empty or bool(value))
-            and not any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value))
+            and not any(ord(char) < 32 or 127 <= ord(char) <= 159
+                        or 0xD800 <= ord(char) <= 0xDFFF for char in value))
 
 
 def string_list(value, maximum_items=64, maximum_text=128):
@@ -437,47 +474,71 @@ def enrich_catalog(rows, shell_directory):
                 "active", "canDisable", "firstParty", "clonedFrom"}
                 or not valid_text(row.get("id"), 160, False)
                 or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", row["id"]) is None
-                or ".." in row["id"] or row["id"] in native):
+                or ".." in row["id"] or row["id"] in native
+                or not valid_text(row.get("name"), 512, False)
+                or not isinstance(row.get("kinds"), list) or not 1 <= len(row["kinds"]) <= 8
+                or any(not valid_text(kind, 64, False) for kind in row["kinds"])
+                or len(set(row["kinds"])) != len(row["kinds"])
+                or any(type(row.get(key)) is not bool for key in ("enabled", "active", "canDisable", "firstParty"))
+                or not valid_text(row.get("clonedFrom"), 160)
+                or (row["clonedFrom"] and (re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", row["clonedFrom"]) is None
+                    or ".." in row["clonedFrom"]))):
+            raise Refused("catalog-shape")
+        bar = "bar" in row["kinds"]
+        if row["canDisable"] != (not bar) or (row["enabled"] != row["active"] if bar else row["active"]):
             raise Refused("catalog-shape")
         native[row["id"]] = row
     first_party_manifests = {}
     third_party_manifests = {}
     total = 0
-    for raw, first_party in manifest_sources(shell_directory):
+    for raw, first_party, hint, issue in manifest_sources(shell_directory):
         total += len(raw)
         if total > MAX_MANIFEST_TOTAL:
             raise Refused("manifest-limit")
-        try:
-            manifest = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=unique,
-                                  parse_constant=reject, parse_float=finite_float)
-        except (UnicodeError, ValueError, RecursionError):
-            continue
-        if not isinstance(manifest, dict) or not valid_manifest(manifest):
-            continue
-        plugin_id = manifest["id"]
+        manifest = None
+        if not issue:
+            try:
+                manifest = json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=unique,
+                                      parse_constant=reject, parse_float=finite_float)
+            except Refused as error:
+                issue = refusal_code(error)
+            except (UnicodeError, ValueError, RecursionError):
+                issue = "invalid-json"
+        plugin_id = manifest.get("id", hint) if isinstance(manifest, dict) else hint
+        if (not valid_text(plugin_id, 160, False)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", plugin_id) is None
+                or ".." in plugin_id):
+            continue  # No trustworthy association; unmatched rows get metadata-missing.
+        if not issue and (not isinstance(manifest, dict) or not valid_manifest(manifest)):
+            issue = "manifest-shape"
         target = first_party_manifests if first_party else third_party_manifests
         if plugin_id in target:
-            raise Refused("metadata-ambiguous")
-        target[plugin_id] = (manifest, first_party)
+            target[plugin_id] = (None, first_party, "metadata-ambiguous")
+        else:
+            target[plugin_id] = (manifest, first_party, issue)
     manifests = dict(first_party_manifests)
     for plugin_id, candidate in third_party_manifests.items():
         if plugin_id not in first_party_manifests and not plugin_id.startswith("omarchy."):
             manifests[plugin_id] = candidate
     enriched = []
     for row in rows:
-        candidate = manifests.get(row["id"])
-        if not candidate:
-            raise Refused("metadata-missing")
-        manifest, first_party = candidate
-        cloned = manifest.get("omarchy", {})
-        cloned_from = str(cloned.get("clonedFrom", "")) if isinstance(cloned, dict) else ""
-        if (first_party is not row.get("firstParty")
-                or manifest.get("name") != row.get("name")
-                or manifest.get("kinds") != row.get("kinds")
-                or cloned_from != row.get("clonedFrom")):
-            raise Refused("metadata-stale")
         value = dict(row)
-        value.update(presentation(manifest))
+        manifest, first_party, issue = manifests.get(row["id"], (None, False, "metadata-missing"))
+        if not issue:
+            cloned = manifest.get("omarchy", {})
+            cloned_from = str(cloned.get("clonedFrom", "")) if isinstance(cloned, dict) else ""
+            if (first_party is not row.get("firstParty")
+                    or manifest.get("name") != row.get("name")
+                    or manifest.get("kinds") != row.get("kinds")
+                    or cloned_from != row.get("clonedFrom")):
+                issue = "metadata-stale"
+            else:
+                try:
+                    value.update(presentation(manifest))
+                except Refused as error:
+                    issue = refusal_code(error)
+        if issue:
+            value["catalogIssue"] = issue
         enriched.append(value)
     encoded = json.dumps(enriched, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()
     if len(encoded) > MAX_OUTPUT:
@@ -572,9 +633,12 @@ def main(*, group_owner=False):
     command = ["/usr/bin/quickshell", "ipc", "--pid", raw_pid,
         "call", "--", "shell", "listPlugins"]
     raw = collect(command, group_owner=group_owner)
-    text = raw.decode("utf-8", errors="strict")
-    value = json.loads(text, object_pairs_hook=unique, parse_constant=reject,
-        parse_float=finite_float)
+    try:
+        text = raw.decode("utf-8", errors="strict")
+        value = json.loads(text, object_pairs_hook=unique, parse_constant=reject,
+            parse_float=finite_float)
+    except (UnicodeError, ValueError, RecursionError):
+        raise Refused("catalog-shape") from None
     encoded = enrich_catalog(value, directory)
     # Bind display/search metadata to one unchanged native identity snapshot.
     # It grants no mutation right; the scoped Bar revalidates host component
@@ -590,6 +654,6 @@ def main(*, group_owner=False):
 if __name__ == "__main__":
     try:
         raise SystemExit(guarded(lambda: main(group_owner=True)))
-    except (Refused, OSError, ValueError, RecursionError, subprocess.SubprocessError):
-        # Never log native stderr, metadata, paths or arbitrary exception text.
+    except (Refused, OSError, ValueError, RecursionError, subprocess.SubprocessError) as error:
+        report_refusal(error)
         raise SystemExit(1)

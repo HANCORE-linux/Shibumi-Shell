@@ -1154,6 +1154,7 @@ def command_deactivate(
                     True,
                     CONTINUITY_PLUGIN_IDS,
                     previous_bar_for_state(state, defaults),
+                    retain_layout=not external_activation(state, config),
                 )
             ), suite.retired_plugins),
             state,
@@ -1390,6 +1391,31 @@ def command_status_with_admission(suite: Suite, paths: RuntimePaths) -> int:
     return command_status(suite, paths)
 
 
+def catalog_status_warning(suite: Suite, paths: RuntimePaths) -> str:
+    """One PID-bound, read-only helper read; no separate listPlugins scan."""
+    runtime = OmarchyRuntime(paths.omarchy_root)
+    try:
+        instances = runtime.shell_instances()
+        if len(instances) != 1 or type(instances[0].get("pid")) is not int or instances[0]["pid"] <= 1:
+            return "process-identity"
+        helper = suite.root / "hancore.shibumi.control-center/manager/shibumi-native-catalog"
+        result = runtime.run([sys.executable, "-I", "-S", str(helper),
+            "--shell", str(paths.omarchy_root / "shell"), "--pid", str(instances[0]["pid"])],
+            timeout=8, check=False)
+        if result.returncode:
+            code = result.stderr.strip()
+            return code if re.fullmatch(r"[a-z][a-z-]{0,63}", code) else "read-failed"
+        rows = json.loads(result.stdout)
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            return "catalog-shape"
+        codes = {row["catalogIssue"] for row in rows if "catalogIssue" in row}
+        if any(not isinstance(code, str) or not re.fullmatch(r"[a-z][a-z-]{0,63}", code) for code in codes):
+            return "catalog-shape"
+        return ", ".join(sorted(codes))
+    except (RuntimeFailure, ValueError, TypeError):
+        return "ipc-failed"
+
+
 def command_status(suite: Suite, paths: RuntimePaths) -> int:
     state_path = install_state_file(paths)
     state: dict[str, Any] | None = None
@@ -1486,6 +1512,9 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         print(f"Config: invalid ({error})")
         print("Repair with: shibumi-suite repair")
         return 1
+    catalog_issue = catalog_status_warning(suite, paths)
+    if catalog_issue:
+        print(f"Warning: plugin-catalog ({catalog_issue})")
     unhealthy = bool(
         missing or unmanaged or modified or pending_retirement or drift
     )

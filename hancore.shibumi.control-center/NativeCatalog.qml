@@ -175,7 +175,8 @@ Item {
     } else {
       _ready = false
       if (current(op)) _publication = null
-      if (current(op)) errorCode = "read-failed"
+      if (current(op)) errorCode = op.event && !op.event.ok
+        && /^[a-z][a-z-]{0,63}$/.test(op.event.output) ? op.event.output : "read-failed"
     }
     var result = current(op) ? (value ? "confirmed" : "failed") : "revoked"
     if (_operation !== op) return

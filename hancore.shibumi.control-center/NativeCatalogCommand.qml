@@ -37,8 +37,8 @@ Item {
     if (!Number.isInteger(processId) || processId <= 1) return false
     var op = { serial: serial, owner: sourceToken, directory: shellDirectory,
       shellProcessId: processId,
-      started: false, exited: false, collected: false, cancelled: false,
-      hardCancel: false, output: "", ok: false }
+      started: false, exited: false, collected: false, errorCollected: false, cancelled: false,
+      hardCancel: false, output: "", errorCode: "", ok: false }
     operation = op
     _busy = true
     if (!current(op)) { cancel(); return false }
@@ -76,7 +76,7 @@ Item {
 
   function finish() {
     var op = operation
-    if (!op || worker.running || (op.started && (!op.exited || !op.collected))) return
+    if (!op || worker.running || (op.started && (!op.exited || !op.collected || !op.errorCollected))) return
     var publish = current(op)
     deadline.stop()
     cancellationDeadline.stop()
@@ -84,7 +84,7 @@ Item {
     _busy = false
     // Busy notifications can replace the owner or request before completion.
     if (publish && admitted && op.owner === sourceToken && op.directory === shellDirectory)
-      completed(op.serial, op.output, op.started && op.ok)
+      completed(op.serial, op.ok ? op.output : op.errorCode, op.started && op.ok)
     drained(op.serial)
   }
 
@@ -108,6 +108,16 @@ Item {
       root.operation.exited = true
       root.operation.ok = exitCode === 0 && exitStatus === 0
       Qt.callLater(root.finish)
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        if (!root.operation) return
+        // The trusted helper emits only one path-free protocol token.
+        root.operation.errorCode = /^[a-z][a-z-]{0,63}\n?$/.test(text) ? text.trim() : ""
+        root.operation.errorCollected = true
+        root.finish()
+      }
     }
     stdout: StdioCollector {
       waitForEnd: true

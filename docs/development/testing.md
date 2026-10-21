@@ -582,7 +582,10 @@ An active malformed `busy` value cannot override an exact accepted-operation dra
 throwing cancellation remains revoked and cannot strand pre-start bookkeeping.
 
 The transport leaf has inert output/error/exit/timeout/descendant controls at all
-byte limits. A separate two-instance regression starts older and newer isolated
+byte limits. Its manifest cases cover registry-compatible development-directory
+symlinks and per-row metadata degradation, while native identity/IPC/limit
+refusals remain fail-closed. The Control Center fixture distinguishes a refused
+catalog from an empty filter using the existing text surface. A separate two-instance regression starts older and newer isolated
 shells at one path: path-only IPC demonstrates the ambiguity, while the production
 helper must return the DTO owned by each exact PID. A separate QML fixture executes actual NativeCatalog, QProcess and
 helper/custodian code, replacing **only** the IPC leaf with an inert process tree.

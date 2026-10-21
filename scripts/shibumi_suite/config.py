@@ -333,6 +333,17 @@ def apply_profile(
     if saved_layout is not None and result["bar"].get("id") == profile.active_bar:
         # An older release may have left the record behind; the active bar wins.
         saved_layout = copy.deepcopy(result["bar"]["layout"])
+    if saved_layout is not None:
+        # Native listPlugins.enabled for a widget means placement (inBar), not
+        # first-party component availability. Use the freshly read host layout,
+        # including the post-drain reread, without requiring another live IPC.
+        enabled_widgets = {entry_id(entry) for region in native_sections(result["bar"]["layout"])
+                           for entry in result["bar"]["layout"][region]}
+        for region in native_sections(saved_layout):
+            if region == "tray":
+                continue  # Deferred drawer data is not our visible presentation.
+            saved_layout[region] = [entry for entry in saved_layout[region]
+                if entry_id(entry) in plugins or entry_id(entry) in enabled_widgets]
     existing_entries: dict[str, Any] = {}
     for region in native_sections(result["bar"]["layout"]):
         for entry in result["bar"]["layout"][region]:
@@ -383,9 +394,9 @@ def apply_profile(
     if result["bar"].get("position") not in ("top", "bottom"):
         result["bar"]["position"] = "top"
     if saved_layout is not None:
-        # Reinstall restores the exact previous Shibumi layout, not the profile
-        # plus stock extras. Consume only our sibling field before publication
-        # and shell start, restoring the complete pre-uninstall State entry.
+        # Reinstall/reactivation restores the prior layout except explicitly
+        # disabled foreign widgets, never the profile plus stock extras. Consume
+        # only our sibling field before publication and shell start.
         result["bar"]["layout"] = saved_layout
         state_entry(result).pop(RETAINED_LAYOUT)
     else:

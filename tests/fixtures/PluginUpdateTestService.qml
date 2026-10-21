@@ -25,6 +25,7 @@ QtObject {
   property var catalogToken: null
   property var catalogHolder: null
   property var currentCatalogObservation: null
+  property string catalogErrorCode: ""
   readonly property bool catalogReady: currentCatalogObservation !== null
   readonly property int catalogReadSerial: catalogReady
     ? Number(currentCatalogObservation.serial || 0) : 0

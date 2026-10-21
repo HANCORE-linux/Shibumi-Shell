@@ -127,30 +127,52 @@ require(enriched["description"] == "Search metadata"
     and enriched["barWidget"]["defaultSection"] == "left",
     'package metadata/defaultSection was not retained')
 
-manifest_path = fixture_shell / 'plugins/widget/manifest.json'
-duplicate_directory = fixture_shell / 'plugins/duplicate'
-duplicate_directory.mkdir()
-(duplicate_directory / 'manifest.json').write_text(json.dumps(manifest))
+# The native registry follows development-checkout directory links.
+local = Path(os.environ['HOME']) / '.config/omarchy/plugins'
+local.mkdir(parents=True)
+checkout = Path('development-checkout').absolute()
+checkout.mkdir()
+(checkout / 'manifest.json').write_text(json.dumps(dict(manifest, id='fixture.link')))
+(local / 'fixture.link').symlink_to(checkout, target_is_directory=True)
+linked_row = dict(native_row[0], id='fixture.link', firstParty=False)
 try:
-    invoke(native_payload)
-except helper.Refused:
-    pass
-else:
-    raise AssertionError('duplicate manifest identity accepted')
-(duplicate_directory / 'manifest.json').unlink()
-duplicate_directory.rmdir()
+    linked = json.loads(invoke(json.dumps(native_row + [linked_row]).encode()))
+except (helper.Refused, OSError) as error:
+    linked = str(error)
+require(isinstance(linked, list) and len(linked) == 2
+    and linked[1] == dict(enriched, **linked_row), 'symlinked plugin directory lost the catalog')
+(local / 'fixture.link').unlink()
 
+# Metadata failures revoke presentation only, never native row identity.
+manifest_path = fixture_shell / 'plugins/widget/manifest.json'
 manifest_backup = manifest_path.with_suffix('.backup')
-manifest_path.rename(manifest_backup)
-manifest_path.symlink_to(manifest_backup.name)
-try:
-    invoke(native_payload)
-except (helper.Refused, OSError):
-    pass
-else:
-    raise AssertionError('symlinked manifest metadata accepted')
-manifest_path.unlink()
-manifest_backup.rename(manifest_path)
+duplicate_directory = fixture_shell / 'plugins/duplicate'
+for case, issue in (('invalid', 'manifest-metadata'), ('duplicate', 'metadata-ambiguous'),
+                    ('symlink', 'metadata-missing'), ('hardlink', 'metadata-missing')):
+    manifest_path.rename(manifest_backup)
+    try:
+        if case == 'duplicate':
+            manifest_path.write_bytes(manifest_backup.read_bytes())
+            duplicate_directory.mkdir()
+            (duplicate_directory / 'manifest.json').write_bytes(manifest_backup.read_bytes())
+        elif case == 'symlink':
+            manifest_path.symlink_to(manifest_backup.name)
+        elif case == 'hardlink':
+            os.link(manifest_backup, manifest_path)
+        else:
+            manifest_path.write_text(json.dumps(dict(manifest, author={'invalid': True})))
+        try:
+            degraded = json.loads(invoke(native_payload))
+        except (helper.Refused, OSError) as error:
+            degraded = str(error)
+        require(degraded == [dict(native_row[0], catalogIssue=issue)],
+                'metadata failure discarded native row: ' + case)
+    finally:
+        manifest_path.unlink()
+        if duplicate_directory.exists():
+            (duplicate_directory / 'manifest.json').unlink()
+            duplicate_directory.rmdir()
+        manifest_backup.rename(manifest_path)
 
 saved_probe_limit = helper.MAX_MANIFEST_PROBES
 helper.MAX_MANIFEST_PROBES = 0

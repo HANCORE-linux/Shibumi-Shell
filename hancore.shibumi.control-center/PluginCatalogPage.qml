@@ -99,6 +99,12 @@ Column {
     } catch (error) { return null }
   }
 
+  readonly property string catalogRefusalCode: catalogServiceCandidate
+    && catalogServiceCandidate.catalogReady !== true
+    && typeof catalogServiceCandidate.catalogErrorCode === "string"
+    && catalogServiceCandidate.catalogErrorCode !== "unavailable"
+      ? catalogServiceCandidate.catalogErrorCode : ""
+
   readonly property var allEntries: (controller.pluginEntries || [])
     .filter(function(entry) {
       return entry.userToggleable === true
@@ -1149,8 +1155,9 @@ Column {
   Text {
     visible: root.filteredEntries.length === 0
     width: parent.width
-    text: root.controller.pluginsScanning
-      ? "Scanning plugins …"
+    text: root.catalogRefusalCode !== ""
+      ? "Plugin catalog unavailable (" + root.catalogRefusalCode + ")"
+      : root.controller.pluginsScanning ? "Scanning plugins …"
       : root.favoritesOnly && root.favoriteCount === 0
         ? "No favorites yet. Star any plugin to keep it here."
         : "No matching bar plugins."
