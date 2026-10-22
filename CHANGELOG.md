@@ -1,8 +1,28 @@
 # Changelog
 
-## [0.1.1-beta.16.5] - Unreleased
+## [0.1.1-beta.16.5] - 2026-10-22
 
-<!-- Release text pending maintainer review. -->
+### Highlights
+
+- **Native Omarchy bar sections preserved.** All six sections, native center placement, and explicit widget moves survive bar/profile and CLI round trips; the host's fixed-edge contract is supplied. Tray-drawer entries are retained and disclosed; use the stock Omarchy bar for their drawer presentation.
+- **Resilient plugin catalog.** Malformed third-party manifests no longer disable the whole catalog or all widget actions. Affected rows retain native information, failures carry diagnostics, development-directory symlinks resolve canonically, and retained layouts survive CLI round trips.
+- **Lower-cost Media animation.** One bounded 40 ms step clock per surface drives marquee, Muse rotation, and pulse while preserving pause easing.
+- **Cava 1.0 smoothing restored.** Widget and panel share `noise_reduction = 35`, compared on real music against the previous cava 0.10.7 setting.
+- **Lifecycle and CLI diagnostics.** Picker routing recovers, uninstall reports leftovers, admission and menu-parse errors are named, shell handoffs are bounded with an owned-process fallback, and network traffic is requested only while visible.
+
+Omarchy 4.0.5 is admitted as the stable reference; the forward compatibility reference moves to `246f33a2`. Source installation remains the supported route; OPR packaging is planned, not AUR publication.
+
+### Validation
+
+In 480 private renderer sessions against Beta 16.4, playing-state process CPU fell by about **19% for Default** and **51% for Full** (median of paired five-second windows, lower in every pair). The figures come from a software-rendered fixture with a synthetic spectrum, not GPU smoothness or real-cava CPU. Paused and focus behaviour are unchanged within measurement resolution. Live validation ran on Omarchy 4.0.4 / Quickshell 0.3.1 and Omarchy 4.0.6 / Quickshell 0.3.2, including the real-music smoothing comparison; the third host covered an earlier candidate only.
+
+### Known points
+
+- The Default-style marquee commits two frames per scroll step while text scrolls (about 250 commits for 125 steps in five seconds). There is no visible effect and the cost stays well below Beta 16.4; a layer-free marquee is planned for 0.2.0.
+- Notch can still oscillate at DPR 1.6.
+- Notification focus remains limited when the sender does not provide a supported application identity.
+- If Memory Sweep loses its service owner, the authorization dialog may disappear without a result; avoid restarting Sweep during an owner change.
+- Beta 15.4 and older cannot read V1 `order.parked` and reset V1 order, roles, and splits even with `--keep-settings`. Keep complete settings and recovery backups before downgrading.
 
 ## [0.1.1-beta.16.4] - 2026-10-14
 
