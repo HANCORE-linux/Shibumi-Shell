@@ -1100,6 +1100,21 @@ ShellRoot {
               || !plugins.catalogConsumerActive
               || plugins.catalogObservation === null)
             return root.fail("scoped Plugins page did not acquire the catalog observation")
+          const savedObservation = pluginUpdateService.currentCatalogObservation
+          const savedEntries = panel.pluginEntries
+          pluginUpdateService.currentCatalogObservation = null
+          pluginUpdateService.catalogErrorCode = "process-identity"
+          panel.pluginEntries = []
+          const emptyText = plugins.children.filter(function(child) {
+            return "text" in child && (child.text.indexOf("No matching bar plugins.") >= 0
+              || child.text.indexOf("Plugin catalog unavailable") >= 0)
+          })
+          if (emptyText.length !== 1 || !emptyText[0].visible
+              || emptyText[0].text !== "Plugin catalog unavailable (process-identity)")
+            return root.fail("catalog refusal still looks like an empty filter")
+          pluginUpdateService.currentCatalogObservation = savedObservation
+          pluginUpdateService.catalogErrorCode = ""
+          panel.pluginEntries = savedEntries
           root.selectedUpdateService = null
           root.updateRebindPhase++
           return

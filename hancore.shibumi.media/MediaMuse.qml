@@ -16,6 +16,12 @@ Item {
   width: implicitWidth
   height: implicitHeight
 
+  function advance(milliseconds) {
+    vinylMark.rotation = (vinylMark.rotation + milliseconds * 360 / 3200) % 360
+  }
+
+  onPlayingChanged: if (playing) vinylMark.rotation = 0
+
   Row {
     anchors.centerIn: parent
     spacing: 7
@@ -55,14 +61,6 @@ Item {
           ctx.fill()
         }
         Component.onCompleted: requestPaint()
-      }
-
-      NumberAnimation on rotation {
-        from: 0
-        to: 360
-        duration: 3200
-        loops: Animation.Infinite
-        running: root.visible && root.playing
       }
     }
 

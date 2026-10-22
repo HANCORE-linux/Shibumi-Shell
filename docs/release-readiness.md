@@ -1,10 +1,80 @@
-# Shibumi 0.1.1-beta.16.4 release readiness
+# Shibumi 0.1.1-beta.16.5 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## Candidate and published predecessor
+## Accepted Beta.16.5 product series and validation boundary
+
+The accepted local C1–C8 series is based on
+`aec6c0a3266d71f6a5f9cfa17562d8bec0ce9b17`, the main integration merge of
+published Beta.16.4. Its complete tree equals the frozen predecessor tag
+`64b9369559b0de2ffdc1faf1c563326c8173035c`. Both predecessor revisions remain
+admitted with unchanged Beta.16.4 plugin and suite payload pins.
+
+| Commit | Accepted revision |
+| --- | --- |
+| C1 | `077bdd52fb636ebcfcbfd98b3d04f8e22837a658` |
+| C2 | `2d4e2b10ecc1d8956ee57321b0457a81a60dbfd2` |
+| C3 | `0c15f588383b5c4ebb42d9196a332b6df36487d6` |
+| C4 | `bc488cf3aae9f3a341c3b31bcc47886303ecf18f` |
+| C5 | `e744f50e6972de5d37b23ea234e2d33f92184fda` |
+| C6 | `784beb417c8e1005fa5eaed546c382ee2768041b` |
+| C7 | `56192010503c7437909f8152db3570e4136947dc` |
+| C8 | `201c4130dc9e7cae6bcd7a6c770f08a01817e83a` |
+
+Independent patch-to-commit fidelity review passed for all eight commits.
+C8 reproduces the accepted R9 source bytes and modes; this audit is not a
+substitute for final release gates. R9 payload identities remain:
+
+- Suite (24 plugins): `a090b82858c554f02d44030755f779b2827ae51e55bca750b7163d5b330472dd`.
+- Media: `e2e5a12b492443a836ce2e5b6c352e68be0d7779f8bc462d89ea30d792aaf928`.
+- Control Center: `078c0cc95304da956b2487953dd6703425517875178fd890cbb2a384b662e521`.
+
+Omarchy 4.0.5 is admitted as the stable reference; the forward reference is
+`246f33a2fef66411c990860d88e0823ae83987fc`. The installed-package/source-parity
+4.0.4 and Agents pins below remain separate proof axes.
+
+**Candidate gates:** R8 (patches 01–32, snapshot 14; suite
+`89682a68a8816c96ffba131f165258e3c0536ac0a0bbaafdb40a044271bae246`)
+passed the complete stable 4.0.4, forward `246f33a2` and additional 4.0.5
+aggregates; audio/media on all three references; suite 180/180 in each of the
+stable script, stable module and forward script runs; package 27/27 and
+admission 40/40; and renderer-rest 140/140 exact comparisons against Beta.16.4.
+Lifecycle passed eight members on each primary reference (stable/forward),
+with the ninth, dirty-source dry-run, correctly refused. R9 (R8 + patches
+33–34; four paths for Media's `noise_reduction` change and repin) passed
+audio/media on all three references, suite 180/180 in the same three invocation
+forms, package 27/27, admission 40/40 and lifecycle 8/9 on each primary
+reference, again with the dirty-source dry-run correctly refused. Complete
+aggregates and renderer-rest were intentionally not repeated for R9. The
+standalone 37-step bar-switch fixture passed 37/37 on an earlier round-402
+16.5 payload; it is not part of those aggregates and was not rerun for R8/R9.
+Host round trips (Shibumi → stock bar → back, including retained layouts)
+were checked live on main, .140 and machine2 (R4 only) instead; these are not
+new 37-step fixture results. Exact-final-commit gates remain pending against
+`FINAL_SHA`.
+
+**N3 window 02 (R9 versus Beta.16.4):** accepted analysis of 480 private
+renderer sessions found playing-state process CPU about 19% lower for Default
+and 51% lower for Full (median of paired five-second windows, lower in every
+pair). These figures come from a software-rendered fixture with a synthetic
+spectrum; they describe the tested renderer scenarios, not GPU smoothness or
+real-cava CPU. They do not establish a blanket desktop speedup.
+
+**Live validation:** main ran Omarchy 4.0.4 / Quickshell 0.3.1; .140 ran
+Omarchy 4.0.6 / Quickshell 0.3.2, including the real-music cava smoothing
+comparison. Machine2 evidence covers R4 only, not the final R9 Media/catalog
+candidate. Fixture results and these revision-scoped live results are distinct.
+
+**Final release boundary:** the approved release date is 2026-10-22. The
+exact-final-commit gates, reproducible archive verification and independent
+release review are pending and will be recorded against `FINAL_SHA`. C8 is
+not the final release commit or tag target. Published-predecessor and peeled-tag
+identity must be rechecked for final evidence. Historical Beta.16.4 results
+below do not transfer to this release.
+
+## Historical Beta.16.4 candidate and published predecessor
 
 The Beta.16.4 candidate adds Memory Sweep, Frost for V2 Notch, bounded charging
 plasma, Rings placement fixes, persistent power-profile selection, shared
@@ -17,8 +87,9 @@ collector, and reproducible archive verification must record their exact final
 commit externally. No predecessor gate result transfers to this candidate.
 
 Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
-`1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It is the frozen rolling
-predecessor in [`release-predecessor.json`](../tests/fixtures/release-predecessor.json).
+`1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It was the frozen rolling
+predecessor for Beta.16.4; [`release-predecessor.json`](../tests/fixtures/release-predecessor.json)
+now records Beta.16.4 for the private Beta.16.5 preparation.
 That exact tag checkout and the source-installation integration merge
 `494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
@@ -30,7 +101,7 @@ tree is not identical to the release tag. Older exact identities remain admitted
 a version string alone never authorizes recovery or replacement. Installation
 remains source-based; OPR packaging is planned, not AUR publication.
 
-## Recorded evidence and outstanding gates
+## Historical Beta.16.4 evidence and outstanding gates at that snapshot
 
 | Gate | Evidence and boundary |
 | --- | --- |
@@ -65,7 +136,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Installed package profile | `installed-package-v4.0.4` |
 | Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7` |
+| Forward reference | `246f33a2fef66411c990860d88e0823ae83987fc` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility
@@ -102,6 +173,16 @@ was performed. Each operation needs its own maintainer Go.
 
 ## Known limits and downgrade warning
 
+- The Default-style marquee commits two frames per scroll step while text
+  scrolls (about 250 commits for 125 steps in five seconds). There is no visible
+  effect and the cost stays well below Beta 16.4; a layer-free marquee is planned
+  for 0.2.0.
+- Tray-drawer entries are retained and disclosed but not rendered in Shibumi;
+  use the stock Omarchy bar for their drawer presentation.
+- Notch can still oscillate at DPR 1.6. Notification focus remains limited when
+  the sender does not provide a supported application identity.
+- If Memory Sweep loses its service owner, the authorization dialog may disappear
+  without a result; avoid restarting Sweep during an owner change.
 - Horizontal Top and Bottom are supported. Vertical Full clipping and Icon
   alignment remain outside acceptance; the vertical bar is deferred to V3 in
   `0.2.0-beta`.
@@ -124,7 +205,7 @@ was performed. Each operation needs its own maintainer Go.
   physical acceptance are not claimed.
 - **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
   V1 order, roles, and splits while retaining other settings and V2.
-  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.3.md)
+  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.5.md)
   and [backup guide](install.md#backup-before-downgrade) identify the complete
   settings and recovery evidence to preserve. Restore the settings with a
   matching payload.
@@ -151,4 +232,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta.16.4.
+confers acceptance on Beta.16.5.

@@ -292,13 +292,20 @@ listPlugins`; separate bounded `/proc` checks bind that PID to the injected
 `id/name/kinds/enabled/active/canDisable/firstParty/clonedFrom` identity and adds
 only bounded display/search metadata from the matching package manifest. It is
 not an `installedPlugins` manifest map, component resolver, settings store or
-native revision. Manifest discovery is count/byte/probe bounded; every path
-component and final file is opened without following symlinks, and changed or
-ambiguous files refuse publication. This enrichment grants no mutation right:
+native revision. Manifest discovery is count/byte/probe bounded. Third-party
+plugin directories may resolve through symlinks, matching the registry's scan;
+the resolved directory is opened component-wise without following further links.
+Manifest files still require no-follow, bounded, stable, single-link regular-file
+reads. Invalid, unreadable, missing or ambiguous metadata removes only that row's
+presentation fields and supplies a `catalogIssue` code; its native fields remain.
+When an unreadable manifest has no attributable ID, the unmatched row reports
+`metadata-missing` rather than guessing its identity. Identity, IPC, native DTO
+shape, stale-catalog and resource-limit failures still refuse the whole catalog.
+This enrichment grants no mutation right:
 a current exact host component selection is revalidated before activation, so
 `defaultSection` can only suggest placement after that authority exists. Native
-ordering is retained. Empty-but-valid is ready; malformed, ambiguous or
-unavailable is not. JSON keys and catalog IDs must be unique; booleans, Unicode,
+ordering is retained. Empty-but-valid and metadata-degraded catalogs are ready;
+malformed native identity or unavailable transport is not. JSON keys and catalog IDs must be unique; booleans, Unicode,
 structural depth and sizes are checked before publication.
 Ancestry must complete within one immutable current observation and 32 entries,
 without missing or cyclic parents, mixed `entries`/`byId` rows, or inherited
@@ -328,7 +335,10 @@ bytes and three seconds; strict UTF-8/JSON rejects duplicate keys and nonfinite
 values. The native shell PID selects the IPC server; bounded `/proc` identity
 checks bind that PID to the exact shell directory before and after the read, so
 an overlapping older instance of the same path cannot answer. It exposes no
-native stderr. The QML command owns a five-second one-shot
+native stderr; refusal emits one path-free code token, forwarded to the catalog
+error state and existing page/action text. Status and Health each use one helper
+invocation (including its unchanged-snapshot verification), not an additional
+registry scan, and warn once for refusal or per-row degradation. The QML command owns a five-second one-shot
 deadline and TERM-to-KILL cancellation with a 1.5-second grace. A separate
 short-lived custodian owns the IPC process group, permits launch only after its
 ready/start handshake and retains group identity until cleanup. Launcher death,

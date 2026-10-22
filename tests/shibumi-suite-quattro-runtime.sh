@@ -33,7 +33,7 @@ cleanup() {
   (( status == 0 )) || failed=1
 
   if [[ -n $stop_shells && -x $stop_shells ]]; then
-    timeout --kill-after=1s 8s env \
+    timeout --kill-after=1s 30s env \
       SHIBUMI_TEST_SERVICE_FILE="$service_file" \
       SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" \
       SHIBUMI_TEST_SERVICE_PREFIX="$service_prefix" "$stop_shells" \
@@ -45,7 +45,7 @@ cleanup() {
     printf 'Runtime fixture did not exercise the cleanup KILL fallback\n' >&2
     cleanup_error=1
   fi
-  if (( SECONDS - cleanup_started > 9 )); then
+  if (( SECONDS - cleanup_started > 31 )); then
     printf 'Runtime fixture cleanup exceeded its wall-clock budget\n' >&2
     cleanup_error=1
   fi
@@ -273,7 +273,10 @@ for unit in "${units[@]}"; do
   timeout --kill-after=0.2s 0.8s systemctl --user --machine=@.host stop "$unit" \
     >/dev/null 2>&1 || true
 done
-for _ in {1..20}; do
+# Each observation can inspect 33 generations. Count elapsed time, not
+# nominal sleeps: slow systemctl calls must not multiply twenty full scans.
+term_deadline=$(( SECONDS + 2 ))
+while (( SECONDS < term_deadline )); do
   all_inactive && exit 0
   result=$?
   (( result == 1 )) || exit 1
@@ -289,7 +292,10 @@ for unit in "${units[@]}"; do
     (( result == 1 )) || exit 1
   fi
 done
-for _ in {1..20}; do
+# KILL delivery is not proof that the service manager has settled. Keep
+# observing, within the caller's independent 30-second total drain bound.
+kill_deadline=$(( SECONDS + 10 ))
+while (( SECONDS < kill_deadline )); do
   all_inactive && exit 0
   result=$?
   (( result == 1 )) || exit 1
@@ -350,7 +356,7 @@ cat >"$fixture_omarchy/bin/omarchy-restart-shell" <<'RESTART'
 #!/usr/bin/env bash
 set -euo pipefail
 
-timeout --kill-after=1s 8s "$SHIBUMI_TEST_STOP_SHELLS"
+timeout --kill-after=1s 30s "$SHIBUMI_TEST_STOP_SHELLS"
 "$SHIBUMI_TEST_START_SHELL" >/dev/null
 for _ in {1..100}; do
   if [[ $("$OMARCHY_PATH/bin/omarchy-shell" shell ping 2>/dev/null || true) == ok ]]; then
@@ -648,7 +654,7 @@ run_keep_settings_cycle() {
 }
 
 drain_fixture_shells() {
-  timeout --kill-after=1s 8s env \
+  timeout --kill-after=1s 30s env \
     SHIBUMI_TEST_SERVICE_FILE="$service_file" \
     SHIBUMI_TEST_CLEANUP_LOG="$cleanup_log" \
     SHIBUMI_TEST_SERVICE_PREFIX="$service_prefix" "$stop_shells"

@@ -13,7 +13,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.storage"
-    implementationVersion: "0.1.1-beta.16.4"
+    implementationVersion: "0.1.1-beta.16.5"
     owner: root
     host: root.shell
     manifest: root.manifest

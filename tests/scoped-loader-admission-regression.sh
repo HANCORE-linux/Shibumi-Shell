@@ -30,7 +30,7 @@ prepare_fixture() {
     "$fixture_dir/hancore.shibumi.bar/services"
   chmod 700 "$fixture_dir/runtime"
   cp -a "$OMARCHY_PATH/shell/Commons" "$fixture_dir/"
-  cp "$repo_root/hancore.shibumi.bar/core/WidgetSlot.qml" \
+  cp "$repo_root/hancore.shibumi.bar/core/"{WidgetSlot.qml,GroupRegistry.js} \
     "$fixture_dir/hancore.shibumi.bar/core/"
   cp "$repo_root/hancore.shibumi.bar/services/HostWidgetResolver.qml" \
     "$fixture_dir/hancore.shibumi.bar/services/"

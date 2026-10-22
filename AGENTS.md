@@ -51,9 +51,12 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.4 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-4c1b4cb3 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-246f33a2 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
+
+The forward reference is exactly `246f33a2fef66411c990860d88e0823ae83987fc`;
+its admission does not transfer fixture evidence to a live or differently packaged host.
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.
 

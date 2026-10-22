@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Effects
+import "MediaMotion.js" as Motion
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
@@ -49,9 +50,15 @@ Ui.Panel {
   readonly property bool museMode: fullMode
   readonly property bool spectrumEnabled: setting("spectrum", true) !== false
   readonly property bool spectrumRequested: visible && active && museMode
-    && (!bar || !bar.vertical)
-  readonly property var museLevels: spectrumService && spectrumService.levels
+    && !opened && (!bar || !bar.vertical)
+  readonly property var pendingLevels: spectrumService && spectrumService.levels
     ? spectrumService.levels : []
+  property var museLevels: []
+  readonly property bool pulseSettling: (horizontalPulse.visible && horizontalPulse.settling)
+    || (verticalPulse.visible && verticalPulse.settling)
+  readonly property bool motionRunning: visible && !opened && (playing || pulseSettling)
+  property bool motionStepping: false
+  property int motionStep: 0
   readonly property string spectrumState: spectrumService
     ? String(spectrumService.state || "inactive") : "unavailable"
   property var leasedSpectrumService: null
@@ -70,6 +77,38 @@ Ui.Panel {
     ? bar.barSize : mediaSurface.implicitWidth) : 0
   implicitHeight: visible ? (bar && bar.vertical
     ? mediaSurface.implicitHeight : bar ? bar.barSize : 28) : 0
+
+  function advanceMotion() {
+    if (!motionRunning) return
+    // Fixed animation-time steps: never catch up a delayed tick with a visible
+    // jump (vinyl 4.5 degrees; marquee at most 2 logical pixels per step).
+    const delta = 40
+    motionStepping = true
+    motionStep++
+    if (activeRow.visible) {
+      if (playing) marqueeClip.advance(delta)
+      horizontalPulse.advance(delta)
+    }
+    if (verticalPulse.visible) verticalPulse.advance(delta)
+    if (playing && muse.visible) {
+      muse.advance(delta)
+      if (!Motion.sameLevels(museLevels, pendingLevels)) museLevels = pendingLevels
+    }
+    motionStepping = false
+  }
+
+  // One clock per output-local widget, not one animation driver per primitive.
+  Timer {
+    interval: 40
+    repeat: true
+    running: root.motionRunning
+    onTriggered: root.advanceMotion()
+  }
+
+  onPendingLevelsChanged: {
+    if (visible && !playing && !Motion.sameLevels(museLevels, pendingLevels))
+      museLevels = pendingLevels
+  }
 
   function runAction(action) {
     return mediaService && typeof mediaService.runAction === "function"
@@ -237,15 +276,24 @@ Ui.Panel {
         height: mediaSurface.height
         anchors.verticalCenter: parent.verticalCenter
 
+        property real elapsed: 0
+
         function reset() {
-          marqueeAnimation.stop()
+          elapsed = 0
           marqueeText.x = 0
-          Qt.callLater(function() {
-            if (root.visible && root.playing && !root.opened
-                && marqueeText.implicitWidth > marqueeClip.width)
-              marqueeAnimation.start()
-          })
         }
+
+        function advance(milliseconds) {
+          if (marqueeText.implicitWidth <= width) { reset(); return }
+          const distance = marqueeText.implicitWidth - width + 4
+          const duration = Math.max(100, distance) * 20
+          elapsed = (elapsed + milliseconds) % (2000 + duration + 900)
+          marqueeText.x = elapsed < 2000 ? 0
+            : -distance * Math.min(1, (elapsed - 2000) / duration)
+        }
+
+        onWidthChanged: reset()
+        onVisibleChanged: reset()
 
         // Keep the reservation above, but give the offscreen paint layer an
         // integer physical extent and origin. A fractional layer would filter
@@ -280,6 +328,7 @@ Ui.Panel {
             font.pixelSize: root.tokens ? root.tokens.labelSize : Commons.Style.font.body
             renderType: Text.NativeRendering
             onTextChanged: marqueeClip.reset()
+            onImplicitWidthChanged: marqueeClip.reset()
           }
         }
 
@@ -289,25 +338,11 @@ Ui.Panel {
           function onOpenedChanged() { marqueeClip.reset() }
           function onVisibleChanged() { marqueeClip.reset() }
         }
-
-        SequentialAnimation {
-          id: marqueeAnimation
-          loops: Animation.Infinite
-          PauseAnimation { duration: 2000 }
-          NumberAnimation {
-            target: marqueeText
-            property: "x"
-            to: -(marqueeText.implicitWidth - marqueeClip.width + 4)
-            duration: Math.max(100,
-              marqueeText.implicitWidth - marqueeClip.width + 4) * 20
-            easing.type: Easing.Linear
-          }
-          PauseAnimation { duration: 900 }
-          PropertyAction { target: marqueeText; property: "x"; value: 0 }
-        }
       }
 
       MediaPulse {
+        id: horizontalPulse
+        admitted: root.visible && !root.opened
         anchors.verticalCenter: parent.verticalCenter
         playing: root.playing
         tint: root.widgetInk
@@ -381,6 +416,8 @@ Ui.Panel {
       }
 
       MediaPulse {
+        id: verticalPulse
+        admitted: root.visible && !root.opened
         anchors.horizontalCenter: parent.horizontalCenter
         playing: root.playing
         tint: root.widgetInk

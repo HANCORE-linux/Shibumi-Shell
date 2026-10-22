@@ -6,8 +6,9 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.1.1-beta.16.4` is the target GitHub prerelease. Install from the release
-tag using the source workflow below.
+`0.1.1-beta.16.5` is the target GitHub prerelease. See the
+[release notes](../.github/release-notes/v0.1.1-beta.16.5.md) for changes.
+Install from the release tag using the source workflow below.
 Do not install or update from `main`.
 
 ## Requirements
@@ -30,7 +31,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.4
+git checkout v0.1.1-beta.16.5
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -46,7 +47,7 @@ To inspect the transaction before installing:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.4
+git checkout v0.1.1-beta.16.5
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -126,14 +127,14 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-To update an admitted Beta.16.3 source installation to Beta.16.4, use its
-trusted checkout. The exact published Beta.16.3 tag and the documented
-source-installation integration merge are admitted predecessors:
+Update an admitted Beta.16.4 source installation to Beta.16.5 from its
+trusted checkout. The exact published Beta.16.4 tag (`64b9369`) and its main
+integration merge (`aec6c0a`) are admitted predecessors:
 
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.16.4
+git checkout v0.1.1-beta.16.5
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
@@ -186,7 +187,7 @@ authoritative origin. The old checkout is not deleted or modified.
 ### Roll back a package version
 
 > [!WARNING]
-> **Beta.16.4 downgrade warning.**
+> **Beta.16.5 downgrade warning.**
 > Beta.15.4 and older cannot read V1 layouts containing
 > `order.parked`. They reset V1 order, roles, and splits to defaults; other
 > settings and V2 remain. `uninstall --keep-settings` does not prevent this.
@@ -386,7 +387,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.1.1-beta.16.4
+git checkout v0.1.1-beta.16.5
 ./scripts/shibumi-suite install --yes
 ```
 

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import select
+import signal
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -317,10 +320,18 @@ class OmarchyRuntime:
             time.sleep(0.1)
         raise RuntimeFailure(f"reloadConfig did not settle: {detail}")
 
-    def restart_shell(self, *, timeout: float = 30) -> None:
-        """Restart Quattro for wholesale provider removal without hot-unload races."""
+    def restart_shell(self, *, timeout: float | None = None) -> None:
+        """Allow the host's per-instance stop, dying-instance and ready phases."""
+        if timeout is None:
+            # v4.0.5: 30 s per kill, including the terminating failed attempt,
+            # then 30 s for a dying instance and 60 s for native readiness.
+            count = len(self.shell_instances())
+            timeout = 30 * (count + 1) + 30 + 60
+            registry_timeout = 60
+        else:
+            registry_timeout = min(60, timeout)
         self.run([self.command("omarchy-restart-shell")], timeout=timeout)
-        self.wait_for_single_shell_instance(timeout=timeout)
+        self.wait_for_single_shell_instance(timeout=registry_timeout)
 
     @property
     def shell_config_file(self) -> Path:
@@ -359,24 +370,27 @@ class OmarchyRuntime:
                 matches.append(value)
         return matches
 
-    def verify_single_shell_instance(self) -> None:
-        instances = self.shell_instances()
+    def verify_single_shell_instance(self, *, timeout: float = 6) -> None:
+        instances = self.shell_instances(timeout=timeout)
         if len(instances) != 1:
             raise RuntimeFailure(
                 "expected exactly one Omarchy shell instance, "
                 f"found {len(instances)}; foreign Quickshell configs were left untouched"
             )
 
-    def wait_for_single_shell_instance(self, *, timeout: float = 30) -> None:
+    def wait_for_single_shell_instance(self, *, timeout: float = 60) -> None:
         deadline = time.monotonic() + timeout
         detail = "the Omarchy shell instance is not registered"
-        while time.monotonic() < deadline:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                self.verify_single_shell_instance()
+                self.verify_single_shell_instance(timeout=min(6, remaining))
                 return
             except RuntimeFailure as error:
                 detail = str(error)
-            time.sleep(0.1)
+            time.sleep(min(0.1, max(0, deadline - time.monotonic())))
         raise RuntimeFailure(f"Omarchy shell restart did not settle: {detail}")
 
     def bar_layers(self) -> list[tuple[str, int | None]] | None:
@@ -445,16 +459,133 @@ class OmarchyRuntime:
                 "the foreign instance was left untouched"
             )
 
+    def _shell_process_identity(self, pid: int) -> int:
+        """Bind signal escalation to the same user's explicit exact shell path."""
+        try:
+            directory = os.open(
+                f"/proc/{pid}", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+            )
+            try:
+                if os.fstat(directory).st_uid != os.getuid():
+                    raise ValueError("different process owner")
+
+                def field(name: str, limit: int) -> bytes:
+                    descriptor = os.open(
+                        name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                        dir_fd=directory,
+                    )
+                    with os.fdopen(descriptor, "rb") as stream:
+                        raw = stream.read(limit + 1)
+                    if len(raw) > limit:
+                        raise ValueError("process identity field exceeds its bound")
+                    return raw
+
+                def started() -> int:
+                    return int(field("stat", 4096).rsplit(b") ", 1)[1].split()[19])
+
+                before = started()
+                command = [part.decode("utf-8") for part in field("cmdline", 65536).split(b"\0") if part]
+                after = started()
+            finally:
+                os.close(directory)
+            if before != after or not command or Path(command[0]).name not in ("quickshell", "qs"):
+                raise ValueError("not the same Quickshell process")
+            paths = []
+            index = 1
+            while index < len(command):
+                argument = command[index]
+                if argument in ("-p", "--path"):
+                    index += 1
+                    paths.append(command[index])
+                elif argument.startswith("--path="):
+                    paths.append(argument[len("--path="):])
+                index += 1
+            if len(paths) != 1 or not Path(paths[0]).is_absolute():
+                raise ValueError("no unique absolute shell path")
+            path = Path(paths[0])
+            config = path if path.name == "shell.qml" else path / "shell.qml"
+            if config.resolve(strict=False) != self.shell_config_file:
+                raise ValueError("foreign shell configuration")
+            return after
+        except (OSError, UnicodeError, ValueError, IndexError) as error:
+            raise RuntimeFailure(
+                f"shell drain: refusing signals to unverified PID {pid}: {error}"
+            ) from error
+
+    def _terminate_timed_out_shell(self, target: dict[str, Any], deadline: float) -> None:
+        """TERM, then KILL, through one held kernel process reference only."""
+        pid = target["pid"]
+        identity = target.get("id")
+        if not isinstance(identity, str) or not identity:
+            raise RuntimeFailure("shell drain: signal fallback requires a registry identity")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        current = self.shell_instances(timeout=min(6, remaining))
+        if not any(value.get("pid") == pid and value.get("id") == identity for value in current):
+            return  # A replacement is handled by the outer registry drain.
+        try:
+            descriptor = os.pidfd_open(pid)
+        except ProcessLookupError:
+            return
+        except (OSError, AttributeError) as error:
+            raise RuntimeFailure(f"shell drain: cannot bind PID {pid} for signal fallback: {error}") from error
+        try:
+            def exited(wait: float = 0) -> bool:
+                remaining = max(0, deadline - time.monotonic())
+                return bool(select.select([descriptor], [], [], min(wait, remaining))[0])
+
+            if exited():
+                return
+            try:
+                started = self._shell_process_identity(pid)
+            except RuntimeFailure:
+                if exited():
+                    return
+                raise
+            if exited() or time.monotonic() >= deadline:
+                return
+            print(f"shibumi-suite: shell drain: shutdown IPC timed out for PID {pid}; sending TERM", file=sys.stderr)
+            signal.pidfd_send_signal(descriptor, signal.SIGTERM)
+            if exited(5) or time.monotonic() >= deadline:
+                return
+            try:
+                if self._shell_process_identity(pid) != started:
+                    raise RuntimeFailure("shell drain: process identity changed; refusing KILL")
+            except RuntimeFailure:
+                if exited():
+                    return
+                raise
+            if exited() or time.monotonic() >= deadline:
+                return
+            print(f"shibumi-suite: shell drain: TERM grace expired for PID {pid}; sending KILL", file=sys.stderr)
+            signal.pidfd_send_signal(descriptor, signal.SIGKILL)
+            exited(2)  # Registry emptiness, not signal delivery, still proves success.
+        except ProcessLookupError:
+            return
+        except OSError as error:
+            raise RuntimeFailure(f"shell drain: signal fallback failed for PID {pid}: {error}") from error
+        finally:
+            os.close(descriptor)
+
     def stop_shell(
         self,
         *,
-        timeout: float = 6,
+        timeout: float | None = None,
         quiet_period: float = 0.1,
     ) -> None:
         """Drain the exact Quattro registry until it remains stably empty."""
         shell_path = self.omarchy_root / "shell" if self.omarchy_root else None
         if shell_path is None:
             raise RuntimeFailure("cannot stop shell without an Omarchy root")
+        initial_instances = None
+        if timeout is None:
+            initial_instances = self.shell_instances()
+            # Freeze the budget once; respawns must never extend it. Per initial
+            # instance: 30 s IPC, 5 s TERM, 2 s KILL, two 6 s registry reads,
+            # and 1 s for preparation/quiet observation. Discovery is bounded
+            # separately by shell_instances' existing 6-second limit.
+            timeout = 50 * max(1, len(initial_instances))
         if timeout <= 0:
             raise RuntimeFailure("shell drain timeout must be positive")
         if quiet_period < 0:
@@ -489,7 +620,11 @@ class OmarchyRuntime:
             if registry_budget <= 0:
                 break
             try:
-                instances = self.shell_instances(timeout=min(6, registry_budget))
+                if initial_instances is not None:
+                    instances = initial_instances
+                    initial_instances = None
+                else:
+                    instances = self.shell_instances(timeout=min(6, registry_budget))
             except RuntimeFailure as error:
                 if time.monotonic() < deadline:
                     raise
@@ -556,14 +691,18 @@ class OmarchyRuntime:
             try:
                 self.run(
                     ["quickshell", "kill", "--pid", str(pid)],
-                    timeout=min(6, kill_budget),
+                    timeout=min(30, kill_budget),
                     check=False,
                 )
             except RuntimeFailure as error:
                 if time.monotonic() < deadline:
-                    raise
-                deadline_operation_error = str(error)
-                break
+                    if isinstance(error.__cause__, subprocess.TimeoutExpired):
+                        self._terminate_timed_out_shell(target, deadline)
+                    else:
+                        raise
+                else:
+                    deadline_operation_error = str(error)
+                    break
             now = time.monotonic()
             if now < deadline:
                 time.sleep(min(poll_interval, deadline - now))

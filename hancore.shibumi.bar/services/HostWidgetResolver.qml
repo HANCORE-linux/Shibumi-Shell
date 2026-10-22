@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import "../core/GroupRegistry.js" as GroupRegistry
 
 // Legacy hosts need locally owned Components because they expose manifest URLs.
 // Scoped hosts are read through their public snapshots only for non-rendering
@@ -34,10 +35,9 @@ QtObject {
 
   function configured(id) {
     const layout = configuredLayout
-    if (!layout) return false
-    for (const region of ["left", "center", "right"]) {
-      const entries = layout[region]
-      if (!Array.isArray(entries)) return false
+    if (!GroupRegistry.validNativeLayout(layout)) return false
+    for (const region of GroupRegistry.NativeSections) {
+      const entries = layout[region] || []
       for (const entry of entries)
         if (entry === id || (entry && entry.id === id)) return true
     }

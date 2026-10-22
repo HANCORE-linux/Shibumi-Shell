@@ -126,9 +126,15 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
+
+The forward checkout must be exactly `246f33a2fef66411c990860d88e0823ae83987fc`.
+Private forward-alignment patches do not authorize runner reprovisioning,
+Actions-variable changes, installation, or publication. Record Quickshell
+package provenance and keep `0.3.1-1` fixture results separate from edge
+`0.3.2-6` live acceptance.
 
 The release-evidence runner preflights all three external checkouts before any long host gate. Every path component must be canonical and must not be a symbolic link. The runner passes the accepted canonical paths to every gate. It verifies each checkout root, pinned HEAD commit, Git tree, cleanliness, complete tracked/untracked working-tree digest, file count, file type, and mode. Malformed, relative, missing, dirty, or wrong-revision inputs fail closed. The NativeCatalog resource regression is a required gate and resolves its unchanged pinned 4.0.4 shell assertion from `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH/shell`; its existing warmup and resource ceilings are not release-runner overrides.
 

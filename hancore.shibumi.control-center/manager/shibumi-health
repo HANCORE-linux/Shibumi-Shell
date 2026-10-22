@@ -10,6 +10,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any
 
 
 SUITE_ID = "hancore.shibumi"
+NATIVE_SECTIONS = ("left", "centerBegin", "center", "centerEnd", "right", "tray")
 MANAGED_MARKER = ".shibumi-managed.json"
 STATUS_ORDER = {"error": 0, "warning": 1, "ok": 2, "info": 3}
 ERROR_PATTERNS = re.compile(
@@ -540,6 +542,18 @@ class Probe:
         """Read the form from canonical State, with pre-migration compatibility."""
         bar = self.config.get("bar")
         bar = bar if isinstance(bar, dict) else {}
+        layout = bar.get("layout", {})
+        if not isinstance(layout, dict) or any(
+            not isinstance(layout[section], list)
+            for section in NATIVE_SECTIONS if section in layout
+        ):
+            raise ValueError("native bar layout section is malformed")
+        if any(
+            self.config_entry_id(layout_entry) == STATE_PLUGIN_ID
+            for region in NATIVE_SECTIONS
+            for layout_entry in layout.get(region, [])
+        ):
+            raise ValueError("State service must not be a bar layout entry")
         entries = self.config.get("plugins")
         canonical_expected = self.state.get("settingsStorageVersion") == 1
 
@@ -578,12 +592,6 @@ class Probe:
                 )
             ):
                 raise ValueError("canonical State shell envelope is invalid")
-            if any(
-                self.config_entry_id(layout_entry) == STATE_PLUGIN_ID
-                for region in ("left", "center", "right")
-                for layout_entry in layout[region]
-            ):
-                raise ValueError("State service must not be a bar layout entry")
             if (
                 not isinstance(entry, dict)
                 or type(entry.get(STATE_STORAGE_SCHEMA)) not in (int, float)
@@ -660,6 +668,15 @@ class Probe:
                 f"Shell form read from {self.shell_style_source} configuration.",
                 source,
             )
+            bar = self.config["bar"]
+            layout = bar.get("layout", {})
+            if (bar.get("id") == "hancore.shibumi.bar" and isinstance(layout, dict)
+                    and isinstance(layout.get("tray"), list) and layout["tray"]):
+                self.add("tray-drawer", "Runtime", "Tray-drawer bar widgets", "warning",
+                         "Deferred by Shibumi",
+                         "Tray-drawer bar widgets are preserved but not shown by Shibumi.",
+                         source, "Open Control Center > Bars and switch to Omarchy (stock bar) to use them.",
+                         owner=OWNER_SHIBUMI)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             self.add(
                 "configuration",
@@ -678,41 +695,47 @@ class Probe:
 
     def load_registry(self) -> None:
         fixture = os.environ.get("SHIBUMI_HEALTH_REGISTRY_FILE")
+        code = ""
         try:
             if fixture:
                 values = read_json_list(Path(fixture))
             else:
-                command = self.omarchy_root / "bin/omarchy-shell"
-                environment = os.environ.copy()
-                environment["OMARCHY_PATH"] = str(self.omarchy_root)
+                if len(self.production_pids) != 1 or not self.production_instance_id:
+                    code = "process-identity"
+                    raise RuntimeError(code)
+                # Reuse the enriched native read for every registry diagnostic;
+                # never launch a second listPlugins scan for this check.
                 result = run(
-                    [str(command), "shell", "listPlugins"],
-                    timeout=5,
-                    environment=environment,
+                    [sys.executable, "-I", "-S", str(Path(__file__).with_name("shibumi-native-catalog")),
+                     "--shell", str(self.omarchy_root / "shell"), "--pid", str(self.production_pids[0])],
+                    timeout=8,
                 )
                 if result.returncode != 0:
-                    raise RuntimeError(result.stderr or result.stdout or "registry failed")
+                    token = result.stderr.strip()
+                    code = token if re.fullmatch(r"[a-z][a-z-]{0,63}", token) else "read-failed"
+                    raise RuntimeError(code)
                 values = json.loads(result.stdout)
-            if not isinstance(values, list):
-                raise ValueError("registry result is not an array")
-            self.registry = [item for item in values if isinstance(item, dict)]
+            if not isinstance(values, list) or any(not isinstance(item, dict) for item in values):
+                code = "catalog-shape"
+                raise ValueError(code)
+            self.registry = values
+            issues = {item["catalogIssue"] for item in values if "catalogIssue" in item}
+            if any(not isinstance(issue, str) or not re.fullmatch(r"[a-z][a-z-]{0,63}", issue) for issue in issues):
+                code = "catalog-shape"
+                raise ValueError(code)
+            self.add("plugin-catalog", "Plugins", "Plugin catalog",
+                     "warning" if issues else "ok", "Degraded" if issues else "Ready",
+                     ", ".join(sorted(issues)))
         except (
             OSError,
             ValueError,
             RuntimeError,
             json.JSONDecodeError,
+            TypeError,
             subprocess.TimeoutExpired,
-        ) as error:
-            self.add(
-                "plugin-registry",
-                "Plugins",
-                "Plugin registry",
-                "error",
-                "Unavailable",
-                str(error),
-                self.omarchy_root / "bin/omarchy-shell",
-                "Confirm that the Omarchy shell answers IPC requests.",
-            )
+        ):
+            self.add("plugin-catalog", "Plugins", "Plugin catalog", "warning",
+                     "Unavailable", code or "ipc-failed")
             self.registry = []
 
     def load_processes(self) -> None:
@@ -1779,8 +1802,8 @@ class Probe:
 
     def result(self) -> dict[str, Any]:
         self.load_state_and_config()
-        self.load_registry()
         self.load_processes()
+        self.load_registry()
         outputs = self.load_outputs()
         self.check_bar_and_outputs(outputs)
         self.check_processes()

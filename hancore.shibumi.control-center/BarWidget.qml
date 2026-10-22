@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import qs.Ui as Ui
+import qs.Commons as Commons
 import "HostIdentity.js" as HostIdentity
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
 import "../hancore.shibumi.state/lib/presentation" as Presentation
@@ -16,6 +17,12 @@ Ui.Panel {
 
   SuiteRuntime.HostShell { id: suiteShell; host: root.bar ? root.bar.shell : null }
   readonly property var hostShell: suiteShell
+  readonly property var nativeSections: SuiteRuntime.HostContract.nativeSections
+  readonly property string trayDrawerDiagnostic: SuiteRuntime.HostContract.trayDrawerDiagnostic
+  function nativeDefaultSection(value) {
+    return SuiteRuntime.HostContract.nativeDefaultSection(value,
+      "barSections" in Commons.Util ? Commons.Util.barSections : undefined)
+  }
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
   readonly property color widgetInk: tokens

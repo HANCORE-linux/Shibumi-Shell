@@ -19,6 +19,19 @@ QtObject {
     bluetooth: "omarchy.bluetooth", network: "omarchy.network"
   })
   readonly property string shellCommand: "omarchy-shell"
+  readonly property var nativeSections: ["left", "centerBegin", "center", "centerEnd", "right", "tray"]
+  readonly property string trayDrawerDiagnostic: "Tray-drawer bar widgets are preserved but not shown by Shibumi. Open Control Center > Bars and switch to Omarchy (stock bar) to use them."
+
+  // The public Util.barSections capability, not layout contents or a version
+  // guess, selects native default-placement semantics. Its absence is the
+  // admitted legacy contract. An unknown present contract fails closed.
+  function nativeDefaultSection(value, hostSections) {
+    const section = value === undefined ? "center" : value
+    if (nativeSections.indexOf(section) < 0) return ""
+    if (hostSections === undefined) return section
+    if (JSON.stringify(hostSections) !== JSON.stringify(nativeSections)) return ""
+    return section === "center" ? "centerEnd" : section
+  }
 
   function isFirstPartyService(id) {
     return firstPartyServices.indexOf(String(id || "")) >= 0

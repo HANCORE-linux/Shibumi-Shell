@@ -121,6 +121,8 @@ Scope {
     assert(!("installedPlugins" in parsed) && !Model.entry(parsed, "constructor"), "fabricated registry or inherited entry")
     assert(JSON.stringify(Model.ancestry(parsed, "user.audio")) === '["user.audio","omarchy.audio"]', "ancestry failed")
     assert(Model.parse("[]") !== null, "empty ready catalog refused")
+    for (var section of ["centerBegin", "centerEnd", "tray"])
+      assert(!bad(function(r) { r.barWidget.defaultSection = section }), "native section metadata refused")
     assert(bad(function(_, a) { a.push(a[0]) }), "duplicate catalog admitted")
     for (var flag of ["enabled", "active", "canDisable", "firstParty"])
       assert(bad(function(r) { r[flag] = 1 }), "numeric Boolean admitted")

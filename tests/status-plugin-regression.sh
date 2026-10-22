@@ -28,6 +28,8 @@ shibumi_stage_suite_runtime "$repo_root" "$tmpdir"
 printf '{"suiteId":"hancore.shibumi","suitePayloadDigest":"%064d"}\n' 0 \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 mkdir -p "$tmpdir/hancore.shibumi.bar"
+install -Dm0644 "$repo_root/hancore.shibumi.bar/core/GroupRegistry.js" \
+  "$tmpdir/hancore.shibumi.bar/core/GroupRegistry.js"
 cp -a -- "$repo_root/hancore.shibumi.bar/services" \
   "$tmpdir/hancore.shibumi.bar/services"
 cp -a -- "$repo_root/hancore.shibumi.status" "$tmpdir/status"

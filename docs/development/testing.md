@@ -71,7 +71,7 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-4c1b4cb3 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
@@ -99,8 +99,14 @@ non-overlapping claims; the Agents job selects its separate narrower manifest:
   remain immutable optional compatibility references alongside 4.0.2; choose
   a historical manifest with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3` or
   `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
-- `contracts/baselines/omarchy-forward-compat-4c1b4cb3.json` records the
-  upstream snapshot pinned for the separate forward-compatibility gate.
+- `contracts/baselines/omarchy-forward-compat-246f33a2.json` records
+  `246f33a2fef66411c990860d88e0823ae83987fc` for the separate forward gate.
+  Its Quickshell provenance is the independently verified Arch `0.3.1-1`
+  validation package; edge-host `0.3.2-6` results require separate evidence.
+  Six native layout sections must remain distinct from three presentation regions.
+  Use the existing State/lifecycle and inline-delta fixtures; tray data is deferred,
+  not dropped. The stable 37-step bar-switch and 140-case renderer rest checks,
+  plus N3 bar-switch/focus measurements versus Beta.16.4, remain required.
 
 All three manifests bind the complete consumed `shell`, `bin`, and `config`
 subtrees by entry count, path inventory, entry type, executable state, symlink
@@ -576,7 +582,10 @@ An active malformed `busy` value cannot override an exact accepted-operation dra
 throwing cancellation remains revoked and cannot strand pre-start bookkeeping.
 
 The transport leaf has inert output/error/exit/timeout/descendant controls at all
-byte limits. A separate two-instance regression starts older and newer isolated
+byte limits. Its manifest cases cover registry-compatible development-directory
+symlinks and per-row metadata degradation, while native identity/IPC/limit
+refusals remain fail-closed. The Control Center fixture distinguishes a refused
+catalog from an empty filter using the existing text surface. A separate two-instance regression starts older and newer isolated
 shells at one path: path-only IPC demonstrates the ambiguity, while the production
 helper must return the DTO owned by each exact PID. A separate QML fixture executes actual NativeCatalog, QProcess and
 helper/custodian code, replacing **only** the IPC leaf with an inert process tree.

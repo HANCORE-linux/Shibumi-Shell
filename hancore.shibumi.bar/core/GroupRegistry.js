@@ -55,6 +55,8 @@ var ConsumedAliases = [
   "omarchy.clock",
   "omarchy.indicators"
 ]
+// Native persistence/identity and presentation capacity are distinct contracts.
+var NativeSections = ["left", "centerBegin", "center", "centerEnd", "right", "tray"]
 var Regions = ["left", "center", "right"]
 var DynamicGroupPrefix = "G:"
 
@@ -105,23 +107,73 @@ function copyGroupModuleSettings(value) {
   return result
 }
 
+function validNativeLayout(layout) {
+  if (!isObject(layout)) return false
+  for (var r = 0; r < NativeSections.length; r++) {
+    var section = NativeSections[r]
+    if (Object.prototype.hasOwnProperty.call(layout, section)
+        && !Array.isArray(layout[section])) return false
+  }
+  return true
+}
+
 function configuredEntries(layout) {
   var result = []
-  var source = isObject(layout) ? layout : {}
-  for (var r = 0; r < Regions.length; r++) {
-    var entries = Array.isArray(source[Regions[r]]) ? source[Regions[r]] : []
+  if (!validNativeLayout(layout)) return result
+  for (var r = 0; r < NativeSections.length; r++) {
+    var section = NativeSections[r]
+    var entries = layout[section] || []
     for (var i = 0; i < entries.length; i++) {
       var id = entryId(entries[i])
-      if (id) result.push({ id: id, entry: entries[i], region: Regions[r] })
+      if (id) result.push({ id: id, entry: entries[i], region: section,
+        section: section, index: i })
     }
   }
   return result
 }
 
-function configuredEntry(layout, moduleId) {
+function presentationRegion(section) {
+  return section === "centerBegin" || section === "centerEnd" ? "center"
+    : Regions.indexOf(section) >= 0 ? section : ""
+}
+
+// Projection retains the original entry objects; native coordinates remain
+// authoritative and are never serialized into provider-owned settings.
+function projectedEntries(layout, region) {
+  if (Regions.indexOf(region) < 0) return []
+  return configuredEntries(layout).filter(function(row) {
+    return presentationRegion(row.section) === region
+  })
+}
+
+function nativeLocation(layout, entry, moduleId) {
+  var rows = configuredEntries(layout)
+  var match = null
+  var count = 0
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].entry === entry) return rows[i]
+    if (rows[i].id === moduleId) { match = rows[i]; count++ }
+  }
+  // Group-derived entries are copies. Only a unique native provider is safe.
+  return count === 1 ? match : null
+}
+
+function trayOnly(layout, moduleId) {
+  var rows = configuredEntries(layout)
+  var found = false
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].id !== moduleId) continue
+    if (rows[i].section !== "tray") return false
+    found = true
+  }
+  return found
+}
+
+function configuredEntry(layout, moduleId, visibleOnly) {
   var configured = configuredEntries(layout)
   for (var i = 0; i < configured.length; i++) {
-    if (configured[i].id === moduleId) return configured[i].entry
+    if (configured[i].id === moduleId
+        && (visibleOnly !== true || configured[i].section !== "tray")) return configured[i].entry
   }
   return null
 }
@@ -140,7 +192,7 @@ function groupSettings(groupValue, moduleId, moduleCount) {
 }
 
 function childSettingsFor(groupValue, layout, moduleId) {
-  var result = copySettings(configuredEntry(layout, moduleId))
+  var result = copySettings(configuredEntry(layout, moduleId, true))
   var local = isObject(groupValue) ? copySettings(groupValue[moduleId]) : {}
   for (var key in local) result[key] = local[key]
   return result
@@ -159,11 +211,15 @@ function moduleIdsFor(groupValue, layout) {
   var groupId = String(groupValue || "")
   var dynamicModule = dynamicModuleIdForGroup(groupId)
   if (dynamicModule !== "")
-    return configuredEntry(layout, dynamicModule) !== null
+    return configuredEntry(layout, dynamicModule, true) !== null
       ? [dynamicModule] : []
   if (GroupIds.indexOf(groupId) < 0) return []
-  var result = (BaseEntries[groupId] || []).slice()
-  var configured = configuredEntries(layout)
+  var result = (BaseEntries[groupId] || []).filter(function(id) {
+    return !trayOnly(layout, id)
+  })
+  var configured = configuredEntries(layout).filter(function(row) {
+    return row.section !== "tray"
+  })
   var explicitlyInstalled = {}
   for (var i = 0; i < configured.length; i++) {
     if (isObject(configured[i].entry)
@@ -192,7 +248,7 @@ function entryFor(groupValue, moduleValue, groupValueSettings, layout) {
   var id = String(moduleValue || "")
   var ids = moduleIdsFor(groupValue, layout)
   if (!id || ids.indexOf(id) < 0) return { id: id }
-  return mergeEntry(id, configuredEntry(layout, id),
+  return mergeEntry(id, configuredEntry(layout, id, true),
     groupSettings(groupValueSettings, id, ids.length))
 }
 
@@ -200,7 +256,7 @@ function entryFor(groupValue, moduleValue, groupValueSettings, layout) {
 // write can preserve equal-valued overrides and survive consecutive updates.
 function hostEntryFor(moduleValue, layout) {
   var id = String(moduleValue || "")
-  var entry = configuredEntry(layout, id)
+  var entry = configuredEntry(layout, id, true)
   return entry !== null ? entry : { id: id }
 }
 
@@ -238,7 +294,7 @@ function isAssignedModule(moduleValue) {
 
 function unassignedEntries(layout, regionValue) {
   var region = String(regionValue || "")
-  if (Regions.indexOf(region) < 0 || !isObject(layout)
+  if (NativeSections.indexOf(region) < 0 || !validNativeLayout(layout)
       || !Array.isArray(layout[region])) return []
   var result = []
   for (var i = 0; i < layout[region].length; i++) {

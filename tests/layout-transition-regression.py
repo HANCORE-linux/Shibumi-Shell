@@ -60,9 +60,11 @@ def main():
     commons = Path(os.environ.get("OMARCHY_PATH", "/usr/share/omarchy")) / "shell/Commons"
     sources["Commons/Util.qml"] = (read_regular(commons / "Util.qml", 65536), False)
     sources["Commons/qmldir"] = (b"singleton Util 1.0 Util.qml\n", False)
+    sources["runtime/HostContract.qml"] = (read_regular(ROOT / "hancore.shibumi.state/runtime/HostContract.qml", 65536), False)
+    sources["runtime/qmldir"] = (b"singleton HostContract 1.0 HostContract.qml\n", False)
     bar = read_regular(ROOT / "hancore.shibumi.bar/Bar.qml", 262144)
     fragments = []
-    for start, end in ((b"  function planV2DynamicLayout(", b"  function requestV2LayoutTransition("),
+    for start, end in ((b"  function nativeTargetSection(", b"  function requestV2LayoutTransition("),
                        (b"  function entryId(", b"  function entrySettings(")):
         if bar.count(start) != 1 or bar.count(end) != 1:
             raise RuntimeError("Bar planner extraction anchor drifted")

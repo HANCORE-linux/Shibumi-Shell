@@ -27,7 +27,7 @@ stage_media_runtime() {
 }
 
 run_smoke() {
-  local name=$1 test_file=$2 marker=$3
+  local name=$1 test_file=$2 marker=$3 deadline=${4:-8} cadence=${5:-0}
   local smoke_root
   smoke_root=$(mktemp -d "$tmpdir/$name.XXXX")
 
@@ -50,6 +50,7 @@ run_smoke() {
   fi
 
   local -a qs_fixture_env=(
+    SHIBUMI_MEDIA_QUIESCENCE="$cadence" \
     QT_QPA_PLATFORM=offscreen \
     WAYLAND_DISPLAY= \
     XDG_RUNTIME_DIR="$smoke_root/runtime" \
@@ -58,12 +59,13 @@ run_smoke() {
   )
   set +e
   local output rc
-  output=$(qs_run_fixture "$smoke_root/shell.qml" "$smoke_root" 8 2>&1)
+  output=$(qs_run_fixture "$smoke_root/shell.qml" "$smoke_root" "$deadline" 2>&1)
   rc=$?
   set -e
 
   printf '%s\n' "$output"
   [[ $rc -eq 0 ]] || fail "$name smoke exited $rc"
+  if grep -Fq 'TypeError:' <<<"$output"; then fail "$name runtime TypeError"; fi
   grep -F "$marker" <<<"$output" >/dev/null \
     || fail "$name success marker missing"
 }
@@ -73,6 +75,7 @@ run_smoke audio audio-native-backend-seam-regression.qml \
   'audio native backend seam regression passed'
 run_smoke audio audio-runtime-smoke.qml 'audio runtime smoke passed'
 run_smoke media media-plugin-smoke.qml 'media plugin smoke passed'
+run_smoke media media-plugin-smoke.qml 'media quiescence smoke passed' 40 1
 
 run_spectrum_smoke() {
   local mode=$1 marker=$2

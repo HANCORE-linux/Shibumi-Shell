@@ -414,7 +414,7 @@
     {"value":"omarchy-powerprofiles-list","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","backend":"omarchy.power","removalStep":"Step 6","reason":"Remove the Omarchy power-profile helper after the public API is authoritative."},
     {"value":"omarchy-restart-shell","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-screenrecord-filename","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording state from the host file contract to a typed Shibumi status interface."},
-    {"value":"omarchy-shell","count":6,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
+    {"value":"omarchy-shell","count":4,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-system-lock","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"idle-policy"},
     {"value":"omarchy-system-reboot","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-system-shutdown","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"bar-host-routing"},

@@ -64,7 +64,7 @@ EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     ),
     (
         "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-forward-compat-4c1b4cb3.json",
+        ROOT / "contracts/baselines/omarchy-forward-compat-246f33a2.json",
     ),
 )
 

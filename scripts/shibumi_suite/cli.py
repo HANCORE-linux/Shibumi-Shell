@@ -25,6 +25,7 @@ from .config import (
     entry_id,
     migrate_legacy_config,
     migrate_state_settings,
+    native_sections,
     validate_state_settings,
     parse_config_bytes,
     read_config,
@@ -42,6 +43,10 @@ from .model import (
     suite_payload_digest,
 )
 from .menu_extension import (
+    END_MARKER,
+    START_MARKER,
+    MenuExtensionError,
+    StockMenuError,
     generated_extension_is_empty,
     install_picker_routing,
     read_extension,
@@ -52,6 +57,7 @@ from .transaction import (
     PluginTransaction,
     SuiteLock,
     TransactionError,
+    _read_bounded_regular_path,
     is_managed_target,
     preflight_legacy_removals,
     preflight_removals,
@@ -344,8 +350,24 @@ def install_picker_menu_extension(
     runtime: OmarchyRuntime,
     previous_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    raw = read_extension(transaction.paths.menu_extension_file)
-    payload = install_picker_routing(raw).encode("utf-8")
+    menu_path = transaction.paths.menu_extension_file
+    stock_path = transaction.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+    source_path = menu_path
+    try:
+        raw = read_extension(source_path)
+        source_path = stock_path
+        stock_menu = read_extension(source_path)
+        source_path = menu_path
+        payload = install_picker_routing(raw, stock_menu).encode("utf-8")
+    except MenuExtensionError as error:
+        if isinstance(error, StockMenuError):
+            source_path = stock_path
+        remedy = (
+            "restore the Omarchy stock menu, then retry the same command"
+            if source_path == stock_path else
+            "fix the JSONC syntax or routing markers in this regular file, then retry the same command"
+        )
+        raise CliError(f"cannot update Omarchy menu {source_path}: {error}; {remedy}") from error
     transaction.write_menu_extension(payload)
     runtime.refresh_menu()
     previous = (
@@ -397,8 +419,8 @@ def activation_drift(
     layout = bar.get("layout") if isinstance(bar.get("layout"), dict) else {}
     layout_ids = {
         entry_id(entry)
-        for region in ("left", "center", "right")
-        for entry in (layout.get(region) if isinstance(layout.get(region), list) else [])
+        for region in native_sections(layout)
+        for entry in layout.get(region, [])
     }
     service_ids = {entry_id(entry) for entry in config.get("plugins", [])}
     drift: list[str] = []
@@ -474,10 +496,8 @@ def external_runtime_enabled_plugin_ids(
     layout = bar.get("layout") if isinstance(bar.get("layout"), dict) else {}
     enabled = {
         entry_id(entry)
-        for region in ("left", "center", "right")
-        for entry in (
-            layout.get(region) if isinstance(layout.get(region), list) else []
-        )
+        for region in native_sections(layout)
+        for entry in layout.get(region, [])
     }
     enabled.update(
         plugin_id
@@ -1134,6 +1154,7 @@ def command_deactivate(
                     True,
                     CONTINUITY_PLUGIN_IDS,
                     previous_bar_for_state(state, defaults),
+                    retain_layout=not external_activation(state, config),
                 )
             ), suite.retired_plugins),
             state,
@@ -1268,10 +1289,49 @@ def command_uninstall(
         runtime.verify_uninstall(set(plugin_ids))
         transaction.finish(None, archive_previous=False)
 
-    if paths.state_dir.is_dir():
-        shutil.rmtree(paths.state_dir)
-    if paths.cache_dir.is_dir():
-        shutil.rmtree(paths.cache_dir)
+    leftovers: dict[Path, str] = {}
+    for directory in (paths.state_dir, paths.cache_dir):
+        try:
+            if directory.is_dir():
+                shutil.rmtree(directory)
+        except OSError as error:
+            leftovers[directory] = f"cleanup failed: {error}"
+        try:
+            directory.lstat()
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            leftovers[directory] = f"cannot verify removal: {error}"
+        else:
+            leftovers.setdefault(directory, "directory remains")
+    menu = paths.menu_extension_file
+    try:
+        menu.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        leftovers[menu] = f"cannot verify routing removal: {error}"
+    else:
+        try:
+            payload = _read_bounded_regular_path(menu, "Omarchy menu extension")
+            if START_MARKER.encode() in payload or END_MARKER.encode() in payload:
+                leftovers[menu] = "Shibumi picker routing markers remain"
+        except (OSError, TransactionError) as error:
+            leftovers[menu] = f"cannot verify routing removal: {error}"
+    for path, reason in leftovers.items():
+        remedy = (
+            "remove only the Shibumi picker routing start/end block from this file"
+            if path == menu else
+            "remove this Shibumi-owned directory after confirming the stock bar is active"
+        )
+        print(
+            f"shibumi-suite: uninstall incomplete: {path}: {reason}; "
+            "re-run uninstall --yes from the same checkout if install.json remains, "
+            f"or manually {remedy}.",
+            file=sys.stderr,
+        )
+    if leftovers:
+        return 1
     print("Uninstalled Shibumi and restored the stock Omarchy bar.")
     return 0
 
@@ -1297,15 +1357,63 @@ def command_status_with_admission(suite: Suite, paths: RuntimePaths) -> int:
             file=sys.stderr,
         )
         return 1
-    except AdmissionError:
+    except AdmissionError as error:
         print(
             "shibumi-suite: status admission refused; malformed, unsafe, "
             "ambiguous, or unsupported state was not inspected further; "
             "no recovery or mutation was attempted",
             file=sys.stderr,
         )
+        reason = str(error)
+        # Only format the existing preflight result: never inspect refused
+        # state again. Keep authority paths redacted, as in other status errors.
+        rendered = reason
+        for root, label in ((paths.state_dir, "<state>"),
+                            (paths.plugin_dir, "<plugins>"),
+                            (suite.root, "<suite>")):
+            rendered = rendered.replace(str(root), label)
+        print(f"shibumi-suite: refusal reason: {rendered}", file=sys.stderr)
+        plugin_ids = sorted(set(re.findall(
+            re.escape(str(paths.plugin_dir) + "/")
+            + r"([A-Za-z0-9][A-Za-z0-9._-]{0,199})(?=/|$)", reason,
+        )))
+        if plugin_ids:
+            # The existing combined check does not distinguish these causes.
+            # Do not invent a diagnosis or rescan to disambiguate it.
+            combined = reason.startswith("live plugin marker or payload")
+            labels = ("Locally modified", "Ownership mismatch") if combined else (
+                "Locally modified" if "payload" in reason else "Ownership mismatch",
+            )
+            qualifier = " (possible; preflight reports marker or payload mismatch)" if combined else ""
+            for label in labels:
+                print(f"{label}: {', '.join(plugin_ids)}{qualifier}", file=sys.stderr)
         return 1
     return command_status(suite, paths)
+
+
+def catalog_status_warning(suite: Suite, paths: RuntimePaths) -> str:
+    """One PID-bound, read-only helper read; no separate listPlugins scan."""
+    runtime = OmarchyRuntime(paths.omarchy_root)
+    try:
+        instances = runtime.shell_instances()
+        if len(instances) != 1 or type(instances[0].get("pid")) is not int or instances[0]["pid"] <= 1:
+            return "process-identity"
+        helper = suite.root / "hancore.shibumi.control-center/manager/shibumi-native-catalog"
+        result = runtime.run([sys.executable, "-I", "-S", str(helper),
+            "--shell", str(paths.omarchy_root / "shell"), "--pid", str(instances[0]["pid"])],
+            timeout=8, check=False)
+        if result.returncode:
+            code = result.stderr.strip()
+            return code if re.fullmatch(r"[a-z][a-z-]{0,63}", code) else "read-failed"
+        rows = json.loads(result.stdout)
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            return "catalog-shape"
+        codes = {row["catalogIssue"] for row in rows if "catalogIssue" in row}
+        if any(not isinstance(code, str) or not re.fullmatch(r"[a-z][a-z-]{0,63}", code) for code in codes):
+            return "catalog-shape"
+        return ", ".join(sorted(codes))
+    except (RuntimeFailure, ValueError, TypeError):
+        return "ipc-failed"
 
 
 def command_status(suite: Suite, paths: RuntimePaths) -> int:
@@ -1404,6 +1512,9 @@ def command_status(suite: Suite, paths: RuntimePaths) -> int:
         print(f"Config: invalid ({error})")
         print("Repair with: shibumi-suite repair")
         return 1
+    catalog_issue = catalog_status_warning(suite, paths)
+    if catalog_issue:
+        print(f"Warning: plugin-catalog ({catalog_issue})")
     unhealthy = bool(
         missing or unmanaged or modified or pending_retirement or drift
     )

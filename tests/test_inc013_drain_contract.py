@@ -598,6 +598,19 @@ class Incident013DrainContractTests(unittest.TestCase):
                             "an empty matching registry must not issue a kill",
                         )
 
+    def test_runtime_accepts_shutdown_longer_than_the_old_six_second_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clock = SyntheticClock()
+            scenario = self.make_scenario(
+                tmp, matching_count=1, clock=clock, kill_latency=8.0,
+            )
+            foreign_before = tuple(scenario.foreign)
+            RuntimeAdapter.run(scenario, clock)
+            self.assertEqual(
+                (scenario.matching, tuple(scenario.foreign), 8 <= clock.now <= 50),
+                ([], foreign_before, True),
+            )
+
     def test_supported_shibumi_bar_is_prepared_before_kill(self):
         for adapter in ADAPTERS:
             with self.subTest(path=adapter.name), tempfile.TemporaryDirectory() as tmp:

@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "CavaThemeModel.js" as CavaThemeModel
+import "MediaMotion.js" as Motion
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
 
 // One process-wide, lazy spectrum owner for every Shibumi output. Omarchy's
@@ -18,7 +19,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.media"
-    implementationVersion: "0.1.1-beta.16.4"
+    implementationVersion: "0.1.1-beta.16.5"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -69,7 +70,8 @@ Item {
   }
 
   function resetLevels() {
-    levels = flatLevels(active ? 0.04 : 0.02)
+    const next = flatLevels(active ? 0.04 : 0.02)
+    if (!Motion.sameLevels(levels, next)) levels = next
   }
 
   function applyTheme(raw) {
@@ -110,7 +112,9 @@ Item {
       "[smoothing]",
       "monstercat = 0",
       "waves = 0",
-      "noise_reduction = 20",
+      // cava 1.0.0 changed smoothing (upstream #752); 35 on 1.0.0 restores
+      // 0.10.7-at-20 dynamics (Hermes measurement 2026-10-21).
+      "noise_reduction = 35",
       ""
     ].join("\n")
   }
@@ -144,7 +148,9 @@ Item {
       result.push(isNaN(parsed)
         ? 0 : Math.max(0, Math.min(1, parsed / 100)))
     }
-    levels = result
+    // Event-fed latest frame only. Each surface publishes it on its own step,
+    // so one output cannot drive another output's repaint between steps.
+    if (!Motion.sameLevels(levels, result)) levels = result
   }
 
   function startCava() {

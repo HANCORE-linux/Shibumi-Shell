@@ -9,6 +9,12 @@ ShellRoot {
   property int phase: 0
   property int waits: 0
   property int failedStartCount: -1
+  property int levelNotifications: 0
+
+  Connections {
+    target: spectrum
+    function onLevelsChanged() { root.levelNotifications++ }
+  }
 
   function fail(message) {
     console.error("media-spectrum-service-smoke:", mode + ": " + message)
@@ -42,7 +48,7 @@ ShellRoot {
   Media.Service {
     id: spectrum
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.media", version: "0.1.1-beta.16.4", kinds: ["service", "bar-widget"]})
+    manifest: ({id: "hancore.shibumi.media", version: "0.1.1-beta.16.5", kinds: ["service", "bar-widget"]})
   }
 
   Timer {
@@ -118,6 +124,11 @@ ShellRoot {
         if (!spectrum.workerRunning || spectrum.clientCount !== 2
             || spectrum.workerStartCount !== 1)
           return root.fail("multi-client single-worker lease")
+        const before = root.levelNotifications
+        const nextLine = Array(24).fill("75").join(";") + ";"
+        spectrum.applySpectrumLine(nextLine)
+        spectrum.applySpectrumLine(nextLine)
+        if (root.levelNotifications !== before + 1 || spectrum.levels.some(value => value !== 0.75)) return root.fail("changed spectrum frame or duplicate publication")
         spectrum.endSpectrum(clientA)
         root.phase++
       } else if (root.phase === 4) {

@@ -21,7 +21,7 @@ from .admission import (
     supported_install_identities,
     verify_transaction_artifact_bindings,
 )
-from .config import atomic_write, parse_config_bytes, read_config
+from .config import atomic_write, native_sections, parse_config_bytes, read_config
 from .model import (
     ContractError,
     PluginSpec,
@@ -712,10 +712,8 @@ def _config_payload_enables_plugin(payload: bytes | None, plugin_id: str) -> boo
         return False
     return any(
         entry_id(entry) == plugin_id
-        for section in ("left", "center", "right")
-        for entry in (
-            layout.get(section) if isinstance(layout.get(section), list) else []
-        )
+        for section in native_sections(layout)
+        for entry in layout.get(section, [])
     )
 
 
@@ -1729,6 +1727,17 @@ def _archive_transaction_backups_open(
 
     if paths.plugin_dir.is_dir():
         _fsync_directory(paths.plugin_dir)
+
+    # A first install has replacement records but no preceding payloads.
+    # Retire its empty slot before it can displace a real retained backup.
+    if not any(destination.iterdir()):
+        slot = backup_root / logical_destination.name
+        opened = destination.stat()
+        current = slot.lstat()
+        if (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino):
+            raise TransactionError("empty transaction archive directory was replaced")
+        slot.rmdir()
+        _fsync_directory(backup_root)
 
     if backup_root.is_dir():
         retained = sorted(

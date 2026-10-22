@@ -752,6 +752,19 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertTrue(rollback["failure"]["profileChanged"])
         self.assertEqual(rollback["retry"]["phase"], "complete")
 
+    def test_stock_widgets_do_not_enter_saved_shibumi_profile(self) -> None:
+        evidence = self._saved_profile_switch_evidence(
+            "thirdparty.stock-only", installed=True, plugin_enabled=True,
+            target="shibumi", target_contains_plugin=False,
+            source_entry={"id": "thirdparty.stock-only", "shibumiModule": True,
+                          "opaque": {"keep": [False, "Hej"]}},
+            plugin_kinds=["bar-widget", "service"],
+        )
+        expected = self.module["initial_layout"]("shibumi", self.defaults, self.state)
+        ids = sorted(entry["id"] for entries in expected.values() for entry in entries)
+        observed = (evidence["error"], evidence["phase"], evidence["savedProfiles"]["layouts"]["shibumi"], evidence["layout"])
+        self.assertEqual(observed, ("", "complete", expected, ids))
+
     def test_switch_does_not_append_disabled_mixed_kind_plugin(self) -> None:
         plugin_id = "thirdparty.disabled-service-widget"
         source_entry = {"id": plugin_id, "inlineSettings": {"interval": 9}}
@@ -1173,7 +1186,21 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertIn("missing-from-registry=[]", detail)
         self.assertIn("disabled=[]", detail)
 
-    def test_legacy_shibumi_snapshot_removes_merged_stock_layout(self) -> None:
+    def test_snapshot_keeps_native_placement_absent_from_old_profile(self) -> None:
+        configured = copy.deepcopy(self.active)
+        configured["bar"]["layout"]["right"].append({
+            "id": "omarchy.elsewhen", "shibumiModule": True,
+            "zones": "Berlin|Europe/Berlin", "opaque": {"keep": [False, "Hej"]},
+        })
+        for trusted in (None, self.active["bar"]["layout"]):
+            with self.subTest(legacy=trusted is None):
+                actual = self.module["snapshot_layout"](
+                    configured, "shibumi", self.state,
+                    legacy=trusted is None, trusted_layout=trusted,
+                )
+                self.assertEqual(actual, configured["bar"]["layout"])
+
+    def test_legacy_shibumi_snapshot_preserves_current_native_layout(self) -> None:
         snapshot = self.module["snapshot_layout"](
             self.active, "shibumi", self.state, legacy=True
         )
@@ -1185,9 +1212,9 @@ class ContinuityManagerTests(unittest.TestCase):
         self.assertIn("hancore.shibumi.control-center", ids)
         self.assertIn("hancore.shibumi.widget", ids)
         self.assertIn("user.widget", ids)
-        self.assertNotIn("omarchy.weather", ids)
+        self.assertEqual(snapshot, self.active["bar"]["layout"])
 
-    def test_saved_shibumi_profile_rejects_new_stock_contamination(self) -> None:
+    def test_saved_shibumi_profile_captures_current_native_placements(self) -> None:
         config = self.root / "config/omarchy/shell.json"
         defaults = self.root / "omarchy/config/omarchy/shell.json"
         state_dir = self.root / "state/shibumi"
@@ -1249,7 +1276,7 @@ class ContinuityManagerTests(unittest.TestCase):
             globals_map["verify"] = original_verify
 
         saved = json.loads(profile.read_text(encoding="utf-8"))
-        self.assertEqual(saved["layouts"]["shibumi"], trusted_layout)
+        self.assertEqual(saved["layouts"]["shibumi"], contaminated["bar"]["layout"])
 
     def test_failed_worker_restores_exact_shell_config(self) -> None:
         config = self.root / "config/omarchy/shell.json"

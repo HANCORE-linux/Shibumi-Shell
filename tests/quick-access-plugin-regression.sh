@@ -50,6 +50,7 @@ EOF
   cp -a -- "$omarchy_path/shell/Ui" "$fixture_root/Ui"
   install -m 0644 "$repo_root/hancore.shibumi.bar/core/WidgetSlot.qml" \
     "$fixture_root/barcore/WidgetSlot.qml"
+  cp "$repo_root/hancore.shibumi.bar/core/GroupRegistry.js" "$fixture_root/barcore/"
   # The fixture exercises the production overlay body without creating a real
   # layer surface. Only the window-shell-only properties are removed.
   python3 -I -S - "$fixture_root/quickaccess/PickerOverlay.qml" <<'PY'

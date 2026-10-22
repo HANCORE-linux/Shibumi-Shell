@@ -606,11 +606,22 @@ class LifecycleAdmissionTests(unittest.TestCase):
             ),
             "oversized": oversized,
         }
-        expected = (
+        refusal = (
             "shibumi-suite: status admission refused; malformed, unsafe, "
             "ambiguous, or unsupported state was not inspected further; "
             "no recovery or mutation was attempted\n"
         )
+
+        def expected_refusal() -> str:
+            # Status forwards the preflight reason, not the refused document.
+            # Keep exact-output and all existing redaction/read-only assertions.
+            try:
+                preflight_lifecycle_state(self.paths, self.suite)
+            except AdmissionError as error:
+                reason = str(error).replace(str(self.paths.state_dir), "<state>")
+                return refusal + f"shibumi-suite: refusal reason: {reason}\n"
+            return refusal
+
         for name, payload in cases.items():
             with self.subTest(name=name):
                 state_path.write_bytes(payload)
@@ -618,6 +629,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 stderr = io.StringIO()
                 with redirect_stdout(stdout), redirect_stderr(stderr):
                     result = command_status_with_admission(self.suite, self.paths)
+                expected = expected_refusal()
                 self.assertEqual(result, 1)
                 self.assertEqual(stdout.getvalue(), "")
                 self.assertEqual(stderr.getvalue(), expected)
@@ -628,6 +640,7 @@ class LifecycleAdmissionTests(unittest.TestCase):
                 state_path.unlink()
 
         state_path.symlink_to(external)
+        expected = expected_refusal()
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
@@ -1620,6 +1633,10 @@ class LifecycleAdmissionTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AdmissionError, "marker or payload"):
             preflight_lifecycle_state(self.paths, self.suite)
+        refused = io.StringIO()
+        with redirect_stderr(refused), patch("shibumi_suite.cli.command_status", side_effect=AssertionError("refused state inspected again")):
+            result = command_status_with_admission(self.suite, self.paths)
+        self.assertEqual((result, f"Locally modified: {first}" in refused.getvalue()), (1, True))
         self.assertEqual(
             preflight_lifecycle_state(
                 self.paths, self.suite, allow_payload_repair=True

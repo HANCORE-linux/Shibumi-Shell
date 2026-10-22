@@ -60,7 +60,7 @@ Scope {
         root.mode = "failure"; root.stage = 1; break
       case 1:
         if (root.catalog.refreshing) break
-        root.assert(!root.catalog.ready && root.catalog.errorCode === "read-failed", "failed IPC was published")
+        root.assert(!root.catalog.ready && root.catalog.errorCode === "ipc-failed", "failed IPC was published")
         root.mode = "happy"; root.stage = 2; break
       case 2:
         if (!root.catalog.ready || root.catalog.refreshing) break

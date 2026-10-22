@@ -12,6 +12,7 @@ from .model import PluginSpec, ProfileSpec
 
 
 REGIONS = ("left", "center", "right")
+NATIVE_SECTIONS = ("left", "centerBegin", "center", "centerEnd", "right", "tray")
 LEGACY_PLUGIN_PREFIX = "hancore.qsrise"
 PLUGIN_PREFIX = "hancore.shibumi"
 OMARCHY_PLUGIN_PREFIX = "omarchy."
@@ -27,6 +28,20 @@ class ConfigError(RuntimeError):
 
 def _object(value: Any) -> dict[str, Any]:
     return copy.deepcopy(value) if isinstance(value, dict) else {}
+
+
+def native_sections(layout: dict[str, Any]) -> tuple[str, ...]:
+    """Canonical coordinates; absent extension sections are valid legacy input."""
+    if any(not isinstance(layout[section], list)
+           for section in NATIVE_SECTIONS if section in layout):
+        raise ConfigError("invalid bar layout region")
+    return tuple(section for section in NATIVE_SECTIONS
+                 if section in REGIONS or section in layout)
+
+
+def legacy_center_anchor(bar: dict[str, Any]) -> bool:
+    layout = bar.get("layout", {})
+    return "centerAnchor" in bar and not any(section in layout for section in ("centerBegin", "centerEnd"))
 
 
 def _array(value: Any) -> list[Any]:
@@ -80,12 +95,12 @@ def migrate_legacy_config(config: dict[str, Any]) -> dict[str, Any]:
 
     if isinstance(bar.get("id"), str):
         bar["id"] = _migrated_identifier(bar["id"])
-    if isinstance(bar.get("centerAnchor"), str):
+    if legacy_center_anchor(bar) and isinstance(bar.get("centerAnchor"), str):
         bar["centerAnchor"] = _migrated_identifier(bar["centerAnchor"])
     if bar.get("style") == "qsrise":
         bar["style"] = "shibumi"
 
-    for region in REGIONS:
+    for region in native_sections(bar["layout"]):
         bar["layout"][region] = [
             _migrated_value(entry) for entry in bar["layout"][region]
         ]
@@ -101,6 +116,7 @@ def validate_state_envelope(config: dict[str, Any]) -> None:
             or not isinstance(config["bar"].get("layout"), dict)
             or any(not isinstance(config["bar"]["layout"].get(region), list) for region in REGIONS)):
         raise ConfigError("invalid canonical State shell envelope")
+    native_sections(config["bar"]["layout"])
 
 
 def state_entry(config: dict[str, Any]) -> dict[str, Any] | None:
@@ -116,10 +132,8 @@ def state_entry(config: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(bar, dict) or not isinstance(bar.get("layout", {}), dict):
         raise ConfigError("invalid bar layout")
     layout = bar.get("layout", {})
-    if any(not isinstance(layout.get(region, []), list) for region in REGIONS):
-        raise ConfigError("invalid bar layout region")
     if any(entry_id(entry) == STATE_PLUGIN_ID
-           for region in REGIONS for entry in layout.get(region, [])):
+           for region in native_sections(layout) for entry in layout.get(region, [])):
         raise ConfigError("State service must not be a bar layout entry")
     return matches[0] if matches else None
 
@@ -254,7 +268,7 @@ def _normalize(config: dict[str, Any]) -> dict[str, Any]:
     result["version"] = 1
     result["bar"] = _object(result.get("bar"))
     result["bar"]["layout"] = _object(result["bar"].get("layout"))
-    for region in REGIONS:
+    for region in native_sections(result["bar"]["layout"]):
         result["bar"]["layout"][region] = _array(
             result["bar"]["layout"].get(region)
         )
@@ -270,7 +284,9 @@ def _prune_missing_layout_plugins(layout: dict[str, list[Any]], managed_ids: set
                          or row.is_dir(follow_symlinks=True)}
     except OSError:
         return
-    for region in REGIONS:
+    for region in native_sections(layout):
+        if region == "tray":
+            continue  # Deferred drawer entries are not inferred from visible payloads.
         layout[region] = [
             entry for entry in layout[region]
             if not (plugin_id := entry_id(entry)) or plugin_id in managed_ids
@@ -294,8 +310,9 @@ def retained_layout(config: dict[str, Any]) -> dict[str, Any] | None:
             or any(not (isinstance(entry, str) and entry
                         or isinstance(entry, dict) and isinstance(entry.get("id"), str)
                         and entry["id"])
-                   for r in REGIONS for entry in layout[r])):
+                   for r in native_sections(layout) for entry in layout.get(r, []))):
         raise ConfigError("invalid retained Shibumi layout entries")
+    native_sections(layout)
     validate_state_settings(config)
     return copy.deepcopy(layout)
 
@@ -316,13 +333,28 @@ def apply_profile(
     if saved_layout is not None and result["bar"].get("id") == profile.active_bar:
         # An older release may have left the record behind; the active bar wins.
         saved_layout = copy.deepcopy(result["bar"]["layout"])
+    if saved_layout is not None:
+        # Native listPlugins.enabled for a widget means placement (inBar), not
+        # first-party component availability. Use the freshly read host layout,
+        # including the post-drain reread, without requiring another live IPC.
+        enabled_widgets = {entry_id(entry) for region in native_sections(result["bar"]["layout"])
+                           for entry in result["bar"]["layout"][region]}
+        for region in native_sections(saved_layout):
+            if region == "tray":
+                continue  # Deferred drawer data is not our visible presentation.
+            saved_layout[region] = [entry for entry in saved_layout[region]
+                if entry_id(entry) in plugins or entry_id(entry) in enabled_widgets]
     existing_entries: dict[str, Any] = {}
-    for region in REGIONS:
+    for region in native_sections(result["bar"]["layout"]):
         for entry in result["bar"]["layout"][region]:
             plugin_id = entry_id(entry)
             if plugin_id in managed_widget_ids and plugin_id not in existing_entries:
                 existing_entries[plugin_id] = copy.deepcopy(entry)
 
+    preserved_ids = {
+        entry_id(entry) for section in native_sections(result["bar"]["layout"])
+        if section not in REGIONS for entry in result["bar"]["layout"][section]
+    }
     imported: set[str] = set()
     for region in REGIONS:
         extras = []
@@ -335,7 +367,8 @@ def apply_profile(
                 imported.add(plugin_id)
         managed = [
             copy.deepcopy(existing_entries.get(plugin_id, {"id": plugin_id}))
-            for plugin_id in profile.layout[region]
+            for plugin_id in profile.layout.get(region, ())
+            if plugin_id not in preserved_ids
         ]
         result["bar"]["layout"][region] = managed + extras
 
@@ -355,14 +388,15 @@ def apply_profile(
     result["plugins"] = plugin_entries
 
     result["bar"]["id"] = profile.active_bar
-    result["bar"]["centerAnchor"] = "hancore.shibumi.center"
+    if legacy_center_anchor(result["bar"]):
+        result["bar"]["centerAnchor"] = "hancore.shibumi.center"
     result["bar"]["style"] = "shibumi"
     if result["bar"].get("position") not in ("top", "bottom"):
         result["bar"]["position"] = "top"
     if saved_layout is not None:
-        # Reinstall restores the exact previous Shibumi layout, not the profile
-        # plus stock extras. Consume only our sibling field before publication
-        # and shell start, restoring the complete pre-uninstall State entry.
+        # Reinstall/reactivation restores the prior layout except explicitly
+        # disabled foreign widgets, never the profile plus stock extras. Consume
+        # only our sibling field before publication and shell start.
         result["bar"]["layout"] = saved_layout
         state_entry(result).pop(RETAINED_LAYOUT)
     else:
@@ -393,7 +427,7 @@ def remove_plugin_ids(
     """Remove retired Shibumi roots from services and any stale bar layout."""
     result = _normalize(config)
     retired = set(plugin_ids)
-    for region in REGIONS:
+    for region in native_sections(result["bar"]["layout"]):
         result["bar"]["layout"][region] = [
             entry
             for entry in result["bar"]["layout"][region]
@@ -415,7 +449,7 @@ def reconcile_profile_additions(
     result = _normalize(config)
     present = {
         entry_id(entry)
-        for region in REGIONS
+        for region in native_sections(result["bar"]["layout"])
         for entry in result["bar"]["layout"][region]
     }
     introduced = set(profile.install) - previous_plugin_ids
@@ -469,7 +503,9 @@ def remove_suite(
     retained_entry = copy.deepcopy(state_entry(result)) if keep_settings else None
     plugin_ids = set(plugins)
     preserved = preserve_ids or set()
-    for region in REGIONS:
+    for region in native_sections(result["bar"]["layout"]):
+        if region == "tray":
+            continue  # Retained stock-only drawer data is not a suite presentation.
         result["bar"]["layout"][region] = [
             entry
             for entry in result["bar"]["layout"][region]
@@ -493,16 +529,21 @@ def remove_suite(
         filtered_layout = result["bar"]["layout"]
         # Do not tidy existing stock duplicates. Only additions are globally
         # unique, including repeated IDs within the additions themselves.
-        known = {entry_id(entry) for region in REGIONS
+        sections = native_sections({**restored_layout, **filtered_layout})
+        native_sections(restored_layout)
+        known = {entry_id(entry) for region in sections
                  for entry in _array(restored_layout.get(region))}
-        for region in REGIONS:
+        for region in sections:
             entries = _array(restored_layout.get(region))
-            for entry in filtered_layout[region]:
+            for entry in filtered_layout.get(region, []):
                 plugin_id = entry_id(entry)
                 if plugin_id and plugin_id not in known:
                     entries.append(copy.deepcopy(entry))
                     known.add(plugin_id)
             restored_layout[region] = entries
+        for section in NATIVE_SECTIONS:
+            if section not in REGIONS and section in filtered_layout:
+                restored_layout[section] = copy.deepcopy(filtered_layout[section])
         restored["layout"] = restored_layout
         result["bar"] = restored
         _prune_missing_layout_plugins(restored_layout, plugin_ids, plugin_dir)
@@ -518,7 +559,7 @@ def remove_suite(
             result["bar"]["shibumi"] = copy.deepcopy(current_bar["shibumi"])
     elif result["bar"].get("id") == active_bar:
         result["bar"].pop("id", None)
-    if result["bar"].get("centerAnchor") == "hancore.shibumi.center":
+    if legacy_center_anchor(result["bar"]) and result["bar"].get("centerAnchor") == "hancore.shibumi.center":
         if default_center_anchor:
             result["bar"]["centerAnchor"] = default_center_anchor
         else:

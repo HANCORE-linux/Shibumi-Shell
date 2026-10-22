@@ -363,11 +363,13 @@ function v1SlotBindings(specs, order, registry, observation, scoped) {
 }
 
 function targetRegion(pluginValue, fallbackValue, registry, observation, scoped) {
+  var fallback = String(fallbackValue || "")
+  if (fallback !== "" && ["left", "centerBegin", "center", "centerEnd", "right", "tray"].indexOf(fallback) < 0) return ""
+  // Deferred tray requests must not become visible family placements.
+  if (fallback === "tray") return fallback
   var family = familyForPlugin(pluginValue, registry, observation, scoped)
   if (family) return family.region
-  var fallback = String(fallbackValue || "")
-  return ["left", "center", "right"].indexOf(fallback) >= 0
-    ? fallback : "right"
+  return fallback !== "" ? fallback : "right"
 }
 
 function replacementTargets(pluginValue, registry, observation, scoped) {

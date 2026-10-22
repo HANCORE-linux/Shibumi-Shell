@@ -12,7 +12,7 @@ compat_package_baseline="$repo_root/contracts/baselines/omarchy-installed-packag
 compat_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
 historical_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
 historical_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
-forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-4c1b4cb3.json"
+forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-246f33a2.json"
 agents_baseline="$repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
 predecessor_baseline="$repo_root/contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json"
 installed_package_job="$repo_root/tests/omarchy-installed-package-contract-regression.sh"
@@ -68,6 +68,7 @@ source "$helper"
 for manifest in \
   "$installed_package_baseline" \
   "$installed_source_baseline" \
+  "$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" \
   "$previous_package_baseline" \
   "$previous_source_baseline" \
   "$compat_package_baseline" \
@@ -184,9 +185,9 @@ for parity_subtree in shell config; do
 done
 
 jq -e '
-  .id == "forward-compat-4c1b4cb3"
+  .id == "forward-compat-246f33a2"
   and .profile == "forward-compat"
-  and .sourceRevision == "4c1b4cb3a94447aff39af98e2fcc0490a9fb32e7"
+  and .sourceRevision == "246f33a2fef66411c990860d88e0823ae83987fc"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
   and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import MANAGED_MARKER, STATE_SCHEMA_VERSION, SUITE_ID
+from .config import ConfigError, native_sections
 from .model import Suite, payload_path_excluded, suite_payload_digest
 from .runtime import RuntimePaths
 
@@ -511,6 +512,13 @@ def classify_install_state(
         or type(state["menuExtension"].get("createdFile")) is not bool
     ):
         raise AdmissionError("installation metadata values are malformed")
+    previous_layout = state.get("previousBar", {}).get("layout", {})
+    if not isinstance(previous_layout, dict):
+        raise AdmissionError("previous bar layout is malformed")
+    try:
+        native_sections(previous_layout)
+    except ConfigError as error:
+        raise AdmissionError("previous bar layout is malformed") from error
     if "migratedFrom" in state:
         migrated = state["migratedFrom"]
         if (

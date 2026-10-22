@@ -8,6 +8,8 @@ import io
 import os
 import re
 import runpy
+import select
+import signal
 import shutil
 import stat
 import subprocess
@@ -15,7 +17,8 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from importlib import import_module
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable
@@ -48,6 +51,7 @@ from shibumi_suite.cli import (  # noqa: E402
     command_activate,
     command_deactivate,
     command_install,
+    install_picker_menu_extension,
     command_migrate,
     command_repair,
     command_status,
@@ -76,6 +80,7 @@ from shibumi_suite.model import (  # noqa: E402
 from shibumi_suite.menu_extension import (  # noqa: E402
     END_MARKER,
     START_MARKER,
+    _decoded,
     install_picker_routing,
     remove_picker_routing,
 )
@@ -88,6 +93,8 @@ from shibumi_suite.transaction import (  # noqa: E402
     recover_transactions,
 )
 
+
+drain_contract = import_module((__package__ + "." if __package__ else "") + "test_inc013_drain_contract")
 
 QUICKSHELL_EMPTY_REGISTRY = "No running instances.\n"
 SESSION_LOCK_FIELDS = (
@@ -510,6 +517,84 @@ class RuntimeProcessTests(unittest.TestCase):
         self.assertNotIn([str(
             self.omarchy_root / "bin/omarchy-shell"
         ), "shell", "ping"], calls)
+
+    def test_default_restart_covers_the_host_shutdown_dying_and_ready_phases(self):
+        clock = drain_contract.SyntheticClock()
+        config = self.omarchy_root / "shell/shell.qml"
+
+        def run(command, *, timeout=20, **_kwargs):
+            duration = 119.5 if command[0].endswith("omarchy-restart-shell") else 0.05
+            clock.advance_command(min(duration, timeout))
+            if duration > timeout:
+                try:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                except subprocess.TimeoutExpired as error:
+                    raise RuntimeFailure("host restart phase timed out") from error
+            return self.result(self.instance_json(config))
+
+        self.runtime.run = Mock(side_effect=run)
+        timing = OmarchyRuntime.restart_shell.__globals__["time"]
+        with patch.object(timing, "monotonic", side_effect=clock.monotonic), \
+                patch.object(timing, "sleep", side_effect=clock.sleep):
+            self.runtime.restart_shell()
+        self.assertTrue(119.5 <= clock.now <= 180)
+
+    def test_shutdown_timeout_escalates_only_through_a_verified_pidfd(self):
+        # Refusal before TERM or after its grace must never permit KILL.
+        for stubborn, refused in ((False, 0), (True, 0), (True, 1), (True, 2)):
+            with self.subTest(stubborn=stubborn, refused=refused):
+                clock = drain_contract.SyntheticClock()
+                scenario = drain_contract.DrainScenario(self.omarchy_root, 1, clock=clock)
+                foreign = tuple(scenario.foreign)
+                sent = []
+                output = io.StringIO()
+                failure = None
+
+                def run(command, **kwargs):
+                    if command[:2] == ["quickshell", "kill"]:
+                        clock.advance_command(kwargs["timeout"])
+                        try:
+                            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+                        except subprocess.TimeoutExpired as error:
+                            raise RuntimeFailure("shutdown IPC timed out") from error
+                    return scenario.run(command, **kwargs)
+
+                def send(_descriptor, value, *_args):
+                    sent.append(value)
+                    if value == signal.SIGKILL or not stubborn:
+                        scenario.matching.clear()
+
+                def ready(readers, _writers, _errors, timeout):
+                    if not scenario.matching:
+                        return readers, [], []
+                    clock.sleep(timeout)
+                    return [], [], []
+
+                self.runtime.run = Mock(side_effect=run)
+                timing = OmarchyRuntime.stop_shell.__globals__["time"]
+                with patch.object(timing, "monotonic", side_effect=clock.monotonic), \
+                        patch.object(timing, "sleep", side_effect=clock.sleep), \
+                        patch.object(os, "pidfd_open", return_value=42), \
+                        patch.object(os, "close") as close, \
+                        patch.object(select, "select", side_effect=ready), \
+                        patch.object(signal, "pidfd_send_signal", side_effect=send), \
+                        patch.object(self.runtime, "_shell_process_identity", create=True,
+                            return_value=123,
+                            side_effect=(RuntimeFailure("foreign shell process") if refused == 1
+                                else [123, RuntimeFailure("changed shell identity")] if refused == 2
+                                else None)), \
+                        redirect_stderr(output):
+                    try:
+                        self.runtime.stop_shell()
+                    except RuntimeFailure as error:
+                        failure = error
+                expected = [] if refused == 1 else [signal.SIGTERM] + ([signal.SIGKILL] if stubborn and not refused else [])
+                self.assertEqual((sent, failure is None, bool(scenario.matching), tuple(scenario.foreign)), (expected, not refused, bool(refused), foreign))
+                close.assert_called_once_with(42)
+                self.assertLessEqual(clock.now, 50.15)
+                if refused != 1:
+                    self.assertIn("sending TERM", output.getvalue())
+                    self.assertEqual("sending KILL" in output.getvalue(), stubborn and not refused)
 
     def test_session_lock_preflight_accepts_only_explicitly_unlocked_status(
         self,
@@ -1995,6 +2080,38 @@ class SuiteLifecycleTests(unittest.TestCase):
             "shellRunning": self.runtime.shell_running,
         }
 
+    def test_menu_parse_diagnostic_names_source_location_and_remedy(self) -> None:
+        menu = self.paths.menu_extension_file
+        stock = self.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+        menu.parent.mkdir(parents=True, exist_ok=True)
+        stock.parent.mkdir(parents=True, exist_ok=True)
+        malformed = '{\n  // retained comment\n  "one": {}\n  "two": {}\n}\n'
+        marked = malformed.replace("// retained comment", START_MARKER + "\n  // generated block\n  " + END_MARKER)
+        for raw, host_raw, source in ((malformed, None, menu), (marked, None, menu), ("{}\n", malformed, stock)):
+            with self.subTest(source=source, markers=START_MARKER in raw):
+                menu.write_text(raw)
+                if host_raw is None:
+                    stock.unlink(missing_ok=True)
+                else:
+                    stock.write_text(host_raw)
+                writes = []
+                transaction = SimpleNamespace(paths=self.paths, menu_extension_existed=True, write_menu_extension=writes.append)
+                failure = None
+                try:
+                    install_picker_menu_extension(transaction, self.runtime)
+                except Exception as error:
+                    failure = error
+                invalid = host_raw if source == stock else raw
+                position = invalid.index('"two"')
+                line = invalid[:position].count("\n") + 1
+                remedy = ("restore the Omarchy stock menu, then retry the same command" if source == stock
+                    else "fix the JSONC syntax or routing markers in this regular file, then retry the same command")
+                expected = f"cannot update Omarchy menu {source}: invalid Omarchy menu extension JSONC: Expecting ',' delimiter: line {line} column 3 (char {position}); {remedy}"
+                self.assertEqual(
+                    (type(failure), str(failure), writes, self.runtime.menu_refreshes, menu.read_text(), stock.read_text() if stock.exists() else None),
+                    (CliError, expected, [], 0, raw, host_raw),
+                )
+
     def test_menu_extension_merge_is_idempotent_and_reversible(self) -> None:
         original = (
             "{\n"
@@ -2018,6 +2135,53 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertIsInstance(json.loads(quattro_json), dict)
         self.assertEqual(install_picker_routing(installed), installed)
         self.assertEqual(remove_picker_routing(installed), original)
+
+    def test_picker_routes_fall_back_only_when_router_is_not_executable(self) -> None:
+        home = self.root / "home with spaces"
+        router = home / ".config/omarchy/plugins/hancore.shibumi.quick-access/scripts/shibumi-picker-route"
+        router.parent.mkdir(parents=True)
+        commands = self.root / "commands"
+        commands.mkdir()
+        log = self.root / "route.log"
+        scripts = {
+            "omarchy-theme-switcher": 'printf "theme-switcher\\n" >>"$ROUTE_LOG"; printf "Theme With Spaces"',
+            "omarchy-theme-set": 'printf "theme-set:<%s>\\n" "$1" >>"$ROUTE_LOG"',
+            "omarchy-theme-bg-switcher": 'printf "background-switcher\\n" >>"$ROUTE_LOG"; printf "Background With Spaces"',
+            "omarchy-theme-bg-set": 'printf "background-set:<%s>\\n" "$1" >>"$ROUTE_LOG"',
+            "omarchy-shell": 'printf "native:" >>"$ROUTE_LOG"; printf "<%s>" "$@" >>"$ROUTE_LOG"; printf "\\n" >>"$ROUTE_LOG"',
+        }
+        for name, body in scripts.items():
+            target = commands / name
+            target.write_text("#!/bin/bash\n" + body + "\n")
+            target.chmod(0o700)
+        background = 'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"'
+        stock_menu = self.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
+        stock_menu.parent.mkdir(parents=True)
+        for theme, theme_calls in (
+            ('theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"', "theme-switcher\ntheme-set:<Theme With Spaces>\n"),
+            ('omarchy-shell shell summon omarchy.image-picker \'{"source":"themes"}\'', 'native:<shell><summon><omarchy.image-picker><{"source":"themes"}>\n'),
+        ):
+            stock_menu.write_text(json.dumps({"style.theme": {"action": theme}, "style.background": {"action": background}}))
+            legacy_actions = {"style.theme": "theme", "style.background": "wallpaper"}
+            legacy = "{\n" + START_MARKER + "\n" + ",\n".join(json.dumps(key) + ": " + json.dumps({"action": '\"$HOME/.config/omarchy/plugins/hancore.shibumi.quick-access/scripts/shibumi-picker-route\" ' + value}) for key, value in legacy_actions.items()) + "\n" + END_MARKER + "\n}\n"
+            self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
+            self.paths.menu_extension_file.write_text(legacy)
+            payloads = []
+            transaction = SimpleNamespace(paths=self.paths, menu_extension_existed=True, write_menu_extension=payloads.append)
+            install_picker_menu_extension(transaction, self.runtime)
+            rendered = payloads[-1].decode()
+            self.assertEqual((rendered.count(START_MARKER), rendered.count(END_MARKER), remove_picker_routing(rendered)), (1, 1, "{\n}\n"))
+            for mode in ("missing", "non-executable", "present", "failing"):
+                router.unlink(missing_ok=True)
+                if mode != "missing":
+                    router.write_text('#!/bin/bash\nprintf "router:<%s>\\n" "$1" >>"$ROUTE_LOG"\nexit ' + ("17" if mode == "failing" else "0") + "\n")
+                    router.chmod(0o600 if mode == "non-executable" else 0o700)
+                for key, argument in legacy_actions.items():
+                    with self.subTest(theme=theme, mode=mode, route=key):
+                        log.write_text("")
+                        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", _decoded(rendered)[key]["action"]], env={"HOME": str(home), "PATH": str(commands), "ROUTE_LOG": str(log)}, capture_output=True, text=True, timeout=3)
+                        expected = (theme_calls if key == "style.theme" else "background-switcher\nbackground-set:<Background With Spaces>\n") if mode in ("missing", "non-executable") else "router:<" + argument + ">\n"
+                        self.assertEqual((result.returncode, log.read_text()), (17 if mode == "failing" else 0, expected), result.stderr)
 
     def test_menu_extension_supports_items_wrapper(self) -> None:
         original = (
@@ -2499,6 +2663,37 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.restarts, restarts_before + 1)
         self.assertFalse(extension.exists())
 
+    def test_uninstall_reports_postcommit_leftovers(self) -> None:
+        self.install()
+        marked = self.paths.menu_extension_file.read_text()
+        finish = PluginTransaction.finish
+        rmtree = shutil.rmtree
+        def finish_with_leftovers(transaction, *args, **kwargs):
+            finish(transaction, *args, **kwargs)
+            # Explicit post-commit external-writer / cleanup-failure control,
+            # not attribution of the reporter's unknown live sequence.
+            self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
+            self.paths.menu_extension_file.write_text(marked)
+            self.paths.state_dir.mkdir(parents=True, exist_ok=True)
+            (self.paths.state_dir / "leftover").write_text("fixture\n")
+        def denied_state_cleanup(path, *args, **kwargs):
+            if Path(path) == self.paths.state_dir:
+                raise PermissionError("injected state cleanup refusal")
+            return rmtree(path, *args, **kwargs)
+        output = io.StringIO()
+        with patch.object(PluginTransaction, "finish", finish_with_leftovers), patch("shibumi_suite.cli.shutil.rmtree", side_effect=denied_state_cleanup), redirect_stdout(output), redirect_stderr(output):
+            try:
+                code = command_uninstall(self.args(), self.suite, self.paths, self.runtime)
+            except OSError:
+                code = -1
+        lines = output.getvalue().splitlines()
+        reports = [line for line in lines if str(self.paths.menu_extension_file) in line or str(self.paths.state_dir) in line]
+        self.assertEqual((code, len(reports), all("same checkout" in line for line in reports), "Uninstalled Shibumi and restored the stock Omarchy bar." in lines), (1, 2, True, False), output.getvalue())
+
+    def test_first_install_does_not_retain_empty_backup_slots(self) -> None:
+        self.install()
+        self.assertEqual([path.name for path in (self.paths.state_dir / "backups").glob("*") if path.is_dir() and not any(path.iterdir())], [])
+
     def test_uninstall_uses_full_restart_instead_of_hot_reload(self) -> None:
         self.install()
         reloads_before = self.runtime.reloads
@@ -2843,6 +3038,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertIn("omarchy.absent-official", restored_ids)
 
         restored["bar"]["layout"]["right"].append({"id": "foreign.unreadable"})
+        # Exercise legacy/profile import, not the exact retained-layout branch
+        # now created by managed deactivate (which must not import stock extras).
+        state_entry(restored).pop("shibumiRetainedLayout", None)
         atomic_write(self.paths.config_file, encode_config(restored))
         real_scandir = os.scandir
         failed_reads = 0
@@ -3219,14 +3417,19 @@ class SuiteLifecycleTests(unittest.TestCase):
         entry["shibumi"]["picker"] = {"imageStyle": "tanzaku", "mediaStyle": "hearthstone"}
         entry["shibumi"]["widgets"] = {"G8": {"omarchy.clock": {"format": "HH:mm", "deep": [3, 2, 1]}}}
         retained = copy.deepcopy(entry)
+        for section in ("centerBegin", "centerEnd", "tray"):
+            config["bar"]["layout"][section] = [{"id": "omarchy.clock", "opaque": [section, False, "Malmö"]}]
         atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(command_uninstall(self.args(keep_settings=True), self.suite, self.paths, self.runtime), 0)
         kept = json.loads(self.paths.config_file.read_text())
         self.assertEqual(state_entry(kept), {**retained, "shibumiRetainedLayout": {
             "schemaVersion": 1, "layout": config["bar"]["layout"]}})
         self.assertFalse((self.paths.plugin_dir / "hancore.shibumi.state").exists())
+        for section in ("centerBegin", "centerEnd", "tray"):
+            self.assertEqual(kept["bar"]["layout"][section], config["bar"]["layout"][section])
         self.assertEqual(command_install(self.args(), self.suite, self.paths, self.runtime), 0)
         self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text())), retained)
+        self.assertEqual(json.loads(self.paths.config_file.read_text())["bar"]["layout"], config["bar"]["layout"])
 
     def test_state_migration_refuses_corruption_and_does_not_resurrect_legacy(self) -> None:
         config = {"version": 1, "bar": {"id": "omarchy.bar", "shibumi": {"version": 1, "legacy": True}},
@@ -3234,6 +3437,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         migrated = migrate_state_settings(config)
         self.assertEqual(state_entry(migrated)["foreign"], {"value": 7})
         self.assertEqual(migrate_state_settings(migrated), migrated)
+        shadow = copy.deepcopy(migrated)
+        shadow["bar"]["layout"]["centerEnd"] = ["hancore.shibumi.state"]
+        with self.assertRaises(ConfigError): state_entry(shadow)
         corrupt = copy.deepcopy(migrated)
         state_entry(corrupt)["shibumiStateSchemaVersion"] = 2
         with self.assertRaises(ConfigError):
@@ -4636,6 +4842,9 @@ class SuiteLifecycleTests(unittest.TestCase):
             {"id": "user.weather", "custom": {"city": "Berlin"}}
         )
         (self.paths.plugin_dir / "user.weather").mkdir()
+        config["bar"]["layout"]["right"].append({"id": "omarchy.elsewhen",
+            "displayMode": "full", "opaque": [False, {"city": "Malmö"}]})
+        placed_layout = copy.deepcopy(config["bar"]["layout"])
         config["plugins"].append({"id": "user.service", "interval": 17})
         state_entry(config)["shibumi"]["testSetting"] = "retained"
         atomic_write(self.paths.config_file, encode_config(config))
@@ -4690,6 +4899,23 @@ class SuiteLifecycleTests(unittest.TestCase):
             if entry_id(entry) == "user.service"
         )
         self.assertEqual(user_service["interval"], 17)
+        for enabled in (True, False):
+            expected_layout = copy.deepcopy(placed_layout)
+            codes = (0, 0)
+            if not enabled:
+                deactivated = command_deactivate(self.args(), self.suite, self.paths, self.runtime)
+                stock = json.loads(self.paths.config_file.read_text())
+                # Native widget disable removes its placement, not its package.
+                for region in stock["bar"]["layout"]:
+                    stock["bar"]["layout"][region] = [entry for entry in stock["bar"]["layout"][region]
+                        if entry_id(entry) != "omarchy.elsewhen"]
+                    expected_layout[region] = [entry for entry in expected_layout[region]
+                        if entry_id(entry) != "omarchy.elsewhen"]
+                atomic_write(self.paths.config_file, encode_config(stock))
+                codes = (deactivated, command_activate(self.args(), self.suite, self.paths, self.runtime))
+                active = json.loads(self.paths.config_file.read_text())
+            self.assertEqual((codes, active["bar"]["layout"], state_entry(active).get("shibumiRetainedLayout")),
+                ((0, 0), expected_layout, None), "native placement must survive unless disabled while inactive")
 
     def test_failed_deactivation_restores_config_and_install_state(self) -> None:
         self.install()
