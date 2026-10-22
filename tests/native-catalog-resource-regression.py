@@ -91,11 +91,11 @@ MUTANTS = (
        b"    while (Date.now() < fixtureBurnUntil) {}\n"
        b"    op.event = { output: output, ok: ok === true }"),)),
     ("HELPER CPU BURN", "catalog cycle exceeded CPU ceiling", "helper",
-     ((b"    text = raw.decode(\"utf-8\", errors=\"strict\")",
-       b"    fixture_burn_until = time.process_time() + 0.6\n"
-       b"    while time.process_time() < fixture_burn_until:\n"
-       b"        pass\n"
-       b"    text = raw.decode(\"utf-8\", errors=\"strict\")"),)),
+     ((b"        text = raw.decode(\"utf-8\", errors=\"strict\")",
+       b"        fixture_burn_until = time.process_time() + 0.6\n"
+       b"        while time.process_time() < fixture_burn_until:\n"
+       b"            pass\n"
+       b"        text = raw.decode(\"utf-8\", errors=\"strict\")"),)),
     ("PSS RETENTION", "warm catalog cycles exceeded retained PSS ceiling", "catalog",
      ((b"  property var _publication: null",
        b"  property var _publication: null\n  property var _fixtureRetention: []"),
@@ -527,10 +527,10 @@ def main():
         print("NATIVE CATALOG RESOURCE CANDIDATE POSITIVE", flush=True)
         run_positive(native, base, "CANDIDATE")
 
-        cpu_anchor = b"    text = raw.decode(\"utf-8\", errors=\"strict\")"
-        cpu_allowance = (b"    fixture_burn_until = time.process_time() + 0.15\n"
-                         b"    while time.process_time() < fixture_burn_until:\n"
-                         b"        pass\n" + cpu_anchor)
+        cpu_anchor = b"        text = raw.decode(\"utf-8\", errors=\"strict\")"
+        cpu_allowance = (b"        fixture_burn_until = time.process_time() + 0.15\n"
+                         b"        while time.process_time() < fixture_burn_until:\n"
+                         b"            pass\n" + cpu_anchor)
         original, original_hash = mutate_private(
             paths["helper"], ((cpu_anchor, cpu_allowance),))
         try:
