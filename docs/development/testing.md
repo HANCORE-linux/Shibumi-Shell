@@ -49,16 +49,16 @@ baseline jobs. The installed-package job defaults to the package-managed host:
 ```
 
 The installed-source-parity job requires an explicit clean Git checkout of the
-official `v4.0.4` source revision used by the installed package:
+official `v4.0.6` source revision used by the installed package:
 
 ```bash
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 ```
 
-For an additional 4.0.2 compatibility run, invoke the aggregate contract with
-the historical selector and its exact checkout. Release jobs themselves pin
-4.0.4 and never inherit this selector:
+Historical 4.0.2 compatibility requires its recorded Quickshell package as well
+as the exact source checkout. The following historical command is not a current
+validation-host gate. Release jobs pin 4.0.6 and never inherit this selector:
 
 ```bash
 OMARCHY_PATH=/path/to/omarchy-v4.0.2 \
@@ -90,10 +90,16 @@ Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The complete-host jobs select three repository-owned manifests with
 non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-v4.0.4.json` binds the
-  package-managed `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` layout;
-- `contracts/baselines/omarchy-installed-source-parity-v4.0.4.json` binds the
-  official `v4.0.4` source form at `c668141e9c42b13c80c9ca4ea108e11708c5e8a5`;
+- `contracts/baselines/omarchy-installed-package-v4.0.6.json` binds the
+  package-managed `omarchy 4.0.6-1`, `omarchy-settings 4.0.6-1` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.0.6.json` binds the
+  official `v4.0.6` source form at `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`;
+- 4.0.4 package/source and 4.0.5 source manifests remain historical. The native
+  catalog resource/runtime source remains 4.0.4 (`c668141e`, 183 shell files).
+  Supply `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=/path/to/omarchy-v4.0.4` for the
+  resource gate; explicit `--native-shell` inputs to native runtime/fallback
+  fixtures retain the same pin. This fourth collector input does not assert the
+  historical manifest's old Quickshell package on the current host;
 - the `contracts/baselines/omarchy-installed-package-v4.0.3.json` and
   `contracts/baselines/omarchy-installed-source-parity-v4.0.3.json` manifests
   remain immutable optional compatibility references alongside 4.0.2; choose
@@ -101,8 +107,9 @@ non-overlapping claims; the Agents job selects its separate narrower manifest:
   `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
 - `contracts/baselines/omarchy-forward-compat-246f33a2.json` records
   `246f33a2fef66411c990860d88e0823ae83987fc` for the separate forward gate.
-  Its Quickshell provenance is the independently verified Arch `0.3.1-1`
-  validation package; edge-host `0.3.2-6` results require separate evidence.
+  Its active Quickshell provenance is the independently verified Omarchy-repository
+  `0.3.2.r7.g2b4501a-1` package, also required for 4.0.6 package/parity gates;
+  historical Arch `0.3.1-1` and edge-host `0.3.2-6` results remain separate.
   Six native layout sections must remain distinct from three presentation regions.
   Use the existing State/lifecycle and inline-delta fixtures; tray data is deferred,
   not dropped. The stable 37-step bar-switch and 140-case renderer rest checks,

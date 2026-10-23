@@ -8,51 +8,51 @@ by this evidence.
 
 ## Current pinned host
 
-Beta.16.3 retains Beta.16's exact official Omarchy 4.0.4 baseline. These pins are not
+Beta.16.5.1 pins the exact official Omarchy 4.0.6 validation baseline. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
 | Component | Observed value |
 | --- | --- |
-| Pinned Omarchy package reference | `omarchy 4.0.4-1`, `omarchy-settings 4.0.4-1` |
-| Pinned official Omarchy source tag | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`) |
-| Pinned source-parity revision | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
+| Pinned Omarchy package reference | `omarchy 4.0.6-1`, `omarchy-settings 4.0.6-1` |
+| Pinned official Omarchy source tag | `v4.0.6` (`237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`) |
+| Pinned source-parity revision | `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
+| Native catalog source-only reference | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, 183 shell files) |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
 | Immutable forward-compatibility revision | `246f33a2fef66411c990860d88e0823ae83987fc` |
-| Quickshell package | `quickshell 0.3.1-1` |
+| Quickshell package | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
 The installed package is the primary host-build identity. The new complete
-source-parity checkout is pinned to the official `v4.0.4` tag. The 4.0.3 and
-4.0.2 package and source manifests remain immutable optional compatibility
-references. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
+source-parity checkout is pinned to the official `v4.0.6` tag. The 4.0.4, 4.0.3 and
+4.0.2 package/source manifests and 4.0.5 source manifest remain immutable history. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
 `246f33a2` snapshot supersedes `4c1b4cb3` as the bounded forward reference;
 all earlier manifests remain unchanged.
-Manifest, panel geometry and focused Quattro/style checks pass; this is not a
-complete candidate forward-gate pass and does not follow a moving branch.
+Historical focused forward checks do not establish a new-stack candidate pass;
+complete candidate gates must be recorded separately. No pin follows a moving branch.
 
 The package-managed baseline records these authoritative production anchors:
 
 | Contract-sensitive file | SHA-256 |
 | --- | --- |
 | `shell/services/PluginRegistry.qml` | `8466127c53037b80b582544610b0bdf78a86764e4f037a3b9ce360d107359803` |
-| `shell/shell.qml` | `4a4b7694e5b9e0bd952ce0efa2d6dc2cea44cdfa98cc2f442e40fe41cbc1beab` |
-| `shell/Ui/KeyboardPanel.qml` | `96245f2da8d38baa0017caa285d596c485bd19a3a4d2cd1675bee9d84ffba42d` |
-| `shell/plugins/bar/Bar.qml` | `9874c0f36271840b43002890ae333c83097df7f4cff0bade81536a41ed83590b` |
+| `shell/shell.qml` | `1c390bb1703a8372a7d3a614bc44513b6cc91eee21f4bd507198e8601310e617` |
+| `shell/Ui/KeyboardPanel.qml` | `c8b3b0fd52d8a79469675e925ff851e1dd0588eb1eeb90bd4df004a4c7d72a0a` |
+| `shell/plugins/bar/Bar.qml` | `a8f27b3d8f29f8b8c14a5e578ad0617e6035375ccab0178a28c435e80a2822f0` |
 | `shell/plugins/bar/BarModel.js` | `908f30edce60dcba46d2039ba3d501fd0faa35fa1f90b7dbda69439288f8a8d0` |
 
 The table is a human-readable set of important anchors, not the complete
 machine identity. Three separate manifests bind every file or symlink below the
 consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 
-- [`omarchy-installed-package-v4.0.4.json`](../../contracts/baselines/omarchy-installed-package-v4.0.4.json)
-  records the package-managed `omarchy 4.0.4-1` and
-  `omarchy-settings 4.0.4-1` layout;
-- [`omarchy-installed-source-parity-v4.0.4.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.4.json)
-  records the full Git checkout of the official `v4.0.4` source tag;
+- [`omarchy-installed-package-v4.0.6.json`](../../contracts/baselines/omarchy-installed-package-v4.0.6.json)
+  records the package-managed `omarchy 4.0.6-1` and
+  `omarchy-settings 4.0.6-1` layout;
+- [`omarchy-installed-source-parity-v4.0.6.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.6.json)
+  records the full Git checkout of the official `v4.0.6` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
-  acceptance baseline without claiming that acceptance for 4.0.4;
+  acceptance baseline without claiming that acceptance for 4.0.6;
 - [`omarchy-forward-compat-246f33a2.json`](../../contracts/baselines/omarchy-forward-compat-246f33a2.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
@@ -122,12 +122,13 @@ shared panel click-forwarding implementation remains unchanged.
 
 ### Quickshell provenance and evidence limits
 
-The forward manifest records the independently verified Arch `quickshell 0.3.1-1`
-validation package (package ownership and all 123 installed files checked).
-The upstream install list names unversioned `quickshell`; migration `1787399318`
-records the return to 0.3.1's synchronous termination. A reported edge host uses
-Omarchy-repository `0.3.2-6`; no result here establishes that package's live
-acceptance. Source contracts and isolated component fixtures do not establish
+The active package/parity/forward manifests record Omarchy-repository
+`quickshell 0.3.2.r7.g2b4501a-1`, binary revision
+`2b4501a282689792b62e94f3fb30d8f512324fe6`. Historical Arch `0.3.1-1`
+validation is not relabeled. The upstream install list names unversioned
+`quickshell`; migration `1787399318` is historical context, not current package
+provenance. A reported edge host uses `0.3.2-6`; no result here establishes
+that package's live acceptance. Source contracts and isolated component fixtures do not establish
 real stock-bar switching, physical output behavior or desktop acceptance on it.
 
 ## What Shibumi validates
@@ -154,7 +155,7 @@ Run the repository contract suite separately against all four host proof gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
@@ -162,7 +163,7 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The 4.0.4 manifest records exact observed bytes and package provenance; it
+The 4.0.6 manifests record exact observed bytes and package provenance; it
 does not by itself establish live acceptance. If any recorded host file changes,
 Shibumi remains on the previous accepted baseline until the affected contracts
 and live workflows pass again.

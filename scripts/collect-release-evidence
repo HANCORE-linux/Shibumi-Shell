@@ -19,19 +19,24 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST_PROBE_MANIFEST = Path("contracts/baselines/omarchy-installed-package-v4.0.4.json")
+HOST_PROBE_MANIFEST = Path("contracts/baselines/omarchy-installed-package-v4.0.6.json")
 
 
 def host_probe_expectations() -> tuple[tuple, dict[str, str]]:
     raw = (ROOT / HOST_PROBE_MANIFEST).read_bytes()
     manifest = json.loads(raw)
-    versions = {p["name"]: p["version"].rsplit("-", 1)[0]
+    versions = {p["name"]: p["version"]
                 for p in [*manifest["provenance"]["packages"], manifest["quickshellPackage"]]}
+    # Reviewed package-to-binary mapping: the VCS pkgver suffix is not part of
+    # the binary's semantic version. Unknown packages require a new review.
+    binary_version = {
+        "0.3.2.r7.g2b4501a-1": "Quickshell 0.3.2 (revision 2b4501a282689792b62e94f3fb30d8f512324fe6, distributed by Omarchy)",
+    }[versions["quickshell"]]
     probes = (
-        ("omarchyPackage", ("pacman", "-Q", "omarchy"), f"omarchy {versions['omarchy']}-"),
-        ("omarchySettingsPackage", ("pacman", "-Q", "omarchy-settings"), f"omarchy-settings {versions['omarchy-settings']}-"),
-        ("quickshellPackage", ("pacman", "-Q", "quickshell"), f"quickshell {versions['quickshell']}-"),
-        ("quickshellVersion", ("quickshell", "--version"), f"Quickshell {versions['quickshell']}"),
+        ("omarchyPackage", ("pacman", "-Q", "omarchy"), f"omarchy {versions['omarchy']}"),
+        ("omarchySettingsPackage", ("pacman", "-Q", "omarchy-settings"), f"omarchy-settings {versions['omarchy-settings']}"),
+        ("quickshellPackage", ("pacman", "-Q", "quickshell"), f"quickshell {versions['quickshell']}"),
+        ("quickshellVersion", ("quickshell", "--version"), binary_version),
     )
     return probes, {"path": str(HOST_PROBE_MANIFEST), "sha256": hashlib.sha256(raw).hexdigest()}
 
@@ -56,6 +61,10 @@ IDENTITY_FIELDS = (
 EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     (
         "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
+        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.6.json",
+    ),
+    (
+        "SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH",
         ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.4.json",
     ),
     (
@@ -838,7 +847,7 @@ def run_guarded_evidence_gate(
 
 
 def probe_host_identity(
-    name: str, command: tuple[str, ...], expected_prefix: str
+    name: str, command: tuple[str, ...], expected: str, *, exact: bool = True
 ) -> dict[str, Any]:
     try:
         result = subprocess.run(
@@ -859,7 +868,9 @@ def probe_host_identity(
             "error": str(error),
         }
     output = (result.stdout or result.stderr).strip()
-    valid = result.returncode == 0 and output.startswith(expected_prefix)
+    valid = result.returncode == 0 and (
+        output == expected if exact else output.startswith(expected)
+    )
     return {
         "name": name,
         "command": list(command),
@@ -871,13 +882,13 @@ def probe_host_identity(
 
 def probe_omarchy_package() -> dict[str, Any]:
     stable = probe_host_identity(
-        "omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy "
+        "omarchyPackage", ("pacman", "-Q", "omarchy"), "omarchy ", exact=False
     )
     if stable["valid"]:
         return stable
 
     development = probe_host_identity(
-        "omarchyDevPackage", ("pacman", "-Q", "omarchy-dev"), "omarchy-dev "
+        "omarchyDevPackage", ("pacman", "-Q", "omarchy-dev"), "omarchy-dev ", exact=False
     )
     if development["valid"]:
         # This is useful diagnostic evidence for development hosts, but it is

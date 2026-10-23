@@ -965,9 +965,13 @@ puts JSON.generate(workflow.fetch("jobs"))
                     self.assertFalse(
                         module.probe_host_identity(name, command, prefix)["valid"]
                     )
+            with self.subTest(probe=name, failure="trailing-identity"):
+                result = subprocess.CompletedProcess(command, 0, prefix + "-wrong\n", "")
+                with patch.object(module.subprocess, "run", return_value=result):
+                    self.assertFalse(module.probe_host_identity(name, command, prefix)["valid"])
             with self.subTest(probe=name, result="valid"):
                 result = subprocess.CompletedProcess(
-                    command, 0, prefix + "test-version\n", ""
+                    command, 0, prefix + "\n", ""
                 )
                 with patch.object(module.subprocess, "run", return_value=result):
                     self.assertTrue(

@@ -24,6 +24,7 @@ env = dict(os.environ)
 if entries and entries[0] == '-i':
     env = {}; entries = entries[1:]
 env.update(entry.split('=', 1) for entry in entries)
+env['QT_FORCE_STDERR_LOGGING'] = '1'
 source = fixture.parent if fixture.name == 'shell.qml' else fixture
 command = [sys.argv[5], '-p', str(source), *sys.argv[7 + count:]]
 signal.signal(signal.SIGTERM, signal.default_int_handler)

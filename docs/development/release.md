@@ -114,15 +114,15 @@ Run the complete contract against all four pinned Quattro proof axes. Every
 external baseline variable must name a clean, canonical, absolute Git checkout
 root at the revision pinned by its baseline manifest. In particular,
 `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` must be a clean absolute checkout at
-`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`; tracked, staged, untracked, or
+`237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`; tracked, staged, untracked, or
 submodule dirt fails the gate.
 
 ```bash
 cd /path/to/shibumi
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
+SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
@@ -133,10 +133,11 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
 The forward checkout must be exactly `246f33a2fef66411c990860d88e0823ae83987fc`.
 Private forward-alignment patches do not authorize runner reprovisioning,
 Actions-variable changes, installation, or publication. Record Quickshell
-package provenance and keep `0.3.1-1` fixture results separate from edge
-`0.3.2-6` live acceptance.
+package provenance: active package/parity/forward gates require Omarchy-repository
+`0.3.2.r7.g2b4501a-1`. Historical `0.3.1-1` fixtures and edge `0.3.2-6`
+live acceptance are separate evidence.
 
-The release-evidence runner preflights all three external checkouts before any long host gate. Every path component must be canonical and must not be a symbolic link. The runner passes the accepted canonical paths to every gate. It verifies each checkout root, pinned HEAD commit, Git tree, cleanliness, complete tracked/untracked working-tree digest, file count, file type, and mode. Malformed, relative, missing, dirty, or wrong-revision inputs fail closed. The NativeCatalog resource regression is a required gate and resolves its unchanged pinned 4.0.4 shell assertion from `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH/shell`; its existing warmup and resource ceilings are not release-runner overrides.
+The release-evidence runner preflights all four external checkouts before any long host gate. Every path component must be canonical and must not be a symbolic link. The runner passes the accepted canonical paths to every gate. It verifies each checkout root, pinned HEAD commit, Git tree, cleanliness, complete tracked/untracked working-tree digest, file count, file type, and mode. Malformed, relative, missing, dirty, or wrong-revision inputs fail closed. The NativeCatalog resource regression is a required gate and resolves its unchanged pinned 4.0.4 shell assertion from `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH/shell`; its existing warmup and resource ceilings are not release-runner overrides.
 
 The candidate and all external-baseline identities are revalidated immediately before and after every evidence gate and once more after the final gate. Candidate content, mode, staged-state, untracked-state, commit, or tree drift and baseline cleanliness, revision, tree, content, or mode drift invalidate the evidence. These checks detect drift present at a validation boundary; they do not detect an input that is changed and restored entirely while one gate is running. The validation runner therefore remains a trusted, access-controlled system, and concurrent writers must be excluded for the full run. Gate commands are repository-owned tests from the exact reviewed commit, so a malicious gate means the candidate itself is already compromised and is outside the collector's threat model. Same-UID replacement of in-progress log or archive paths and symlink manipulation of output-parent directories are accepted release-machine risks; use a clean, non-symlinked output tree with no untrusted or concurrent writers.
 

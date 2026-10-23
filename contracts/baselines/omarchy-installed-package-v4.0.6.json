@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "id": "installed-package-v4.0.6",
+  "profile": "installed-package",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "237f1b4071a0bff2296c6d740ba2b9fd695ebfa0",
+  "provenance": {
+    "kind": "package",
+    "packages": [
+      {
+        "name": "omarchy",
+        "version": "4.0.6-1"
+      },
+      {
+        "name": "omarchy-settings",
+        "version": "4.0.6-1"
+      }
+    ],
+    "subtreeOwners": {
+      "bin": "omarchy",
+      "config": "omarchy-settings",
+      "shell": "omarchy"
+    }
+  },
+  "quickshellPackage": {
+    "name": "quickshell",
+    "version": "0.3.2.r7.g2b4501a-1"
+  },
+  "notes": "Shell/config match the official v4.0.6 source exactly. Package bin has 446 entries versus 449 in source: omarchy-debug, omarchy-debug-idle and omarchy-upload-log are source-only. The cached official 4.0.6-1 package confirms these omissions; all shared executable bytes match. No identical bin-roster claim.",
+  "subtrees": [
+    {
+      "path": "shell",
+      "entryPolicy": "regular-files",
+      "entryCount": 222,
+      "inventorySha256": "be094886de039e6569034aebe40777521b799df2f4d4cf006e90655cadf0fb63",
+      "structureSha256": "beb84ff10f06fe0ae77660bf28f235fffeed89094de9e07b76cabd80b0e6dc66",
+      "contentSha256": "cd2f30c76300622ead687148eda7ce5bc8bfbc7816f2e2bbc75f234222ac9176"
+    },
+    {
+      "path": "bin",
+      "entryPolicy": "absolute-symlinks",
+      "entryCount": 446,
+      "inventorySha256": "0c907e83e9e849c6ef14433350d913a774d217c14c2d7d9b3a50913e3997b816",
+      "structureSha256": "2f204b9c8efa86afe90fff6a1de74d3652731c219a6d644e8db78a6553579683",
+      "contentSha256": "3575f16366ec21da3292f11df6ca801e0cc67e582256e9cb02cd07def8fae255"
+    },
+    {
+      "path": "config",
+      "entryPolicy": "regular-files",
+      "entryCount": 75,
+      "inventorySha256": "33995e20ae22ffef7a5710c859a5f5577429aae2ecc0976d1b7978838d4277fa",
+      "structureSha256": "0d2f5855e27b9bada33e17730c99a99fa6d5e4bd971cef722c0ec7d50c4e467f",
+      "contentSha256": "adb203e2024c62c397b77fd9b30627f41675f0fd6e1525ba3634061088cf036a"
+    }
+  ]
+}

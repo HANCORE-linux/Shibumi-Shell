@@ -56,7 +56,7 @@ def measurement_output(cold=None, warm=None):
         "maximumPssOverBaselineKiB": 2,
         "pssKiB": [129, 132, 131],
         "requestSerials": [6, 7, 8],
-        "unchangedCeilingKiB": 512,
+        "unchangedCeilingKiB": 768,
     }
     if cold is not None:
         cold_record = cold
@@ -90,7 +90,7 @@ class NativeCatalogResourceContract(unittest.TestCase):
         warm["baselinePssKiB"] = 130.0
         cases.append(("float warm baseline", measurement_output(warm=warm)))
         warm = copy.deepcopy(base_warm)
-        warm["unchangedCeilingKiB"] = 512.0
+        warm["unchangedCeilingKiB"] = 768.0
         cases.append(("float ceiling", measurement_output(warm=warm)))
         cold = copy.deepcopy(base_cold)
         cold.update({

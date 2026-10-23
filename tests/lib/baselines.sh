@@ -170,7 +170,11 @@ shibumi_validate_omarchy_baseline_schema() {
     || shibumi_baseline_fail \
       "baseline provenance must be an object: $manifest" || return
   jq -e '
-    if .id == "installed-package-v4.0.4"
+    if .id == "installed-package-v4.0.6"
+        or .id == "installed-source-parity-v4.0.6"
+        or .id == "forward-compat-246f33a2" then
+      .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
+    elif .id == "installed-package-v4.0.4"
         or .id == "installed-source-parity-v4.0.4"
         or .id == "installed-source-parity-v4.0.5"
         or .id == "installed-package-v4.0.3"
@@ -180,8 +184,7 @@ shibumi_validate_omarchy_baseline_schema() {
         or .id == "forward-compat-ed7bae4a"
         or .id == "forward-compat-50d687a1"
         or .id == "forward-compat-e71a816e"
-        or .id == "forward-compat-4c1b4cb3"
-        or .id == "forward-compat-246f33a2" then
+        or .id == "forward-compat-4c1b4cb3" then
       .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
     elif .id == "installed-package-v4.0.0"
         or .id == "installed-source-parity-v4.0.0" then
@@ -251,7 +254,8 @@ shibumi_validate_omarchy_baseline_schema() {
   case $profile in
     installed-package)
       jq -e '
-        if .id == "installed-package-v4.0.4"
+        if .id == "installed-package-v4.0.6"
+            or .id == "installed-package-v4.0.4"
             or .id == "installed-package-v4.0.3"
             or .id == "installed-package-v4.0.2" then
           .provenance.kind == "package"
@@ -557,7 +561,8 @@ shibumi_validate_installed_package_provenance() {
     shibumi_validate_omarchy_baseline_schema "$requested_manifest" || return
   fi
   [[ $(jq -r '.profile' "$requested_manifest") == installed-package \
-      && ( $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.4 \
+      && ( $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.6 \
+        || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.4 \
         || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.3 \
         || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.2 ) ]] \
     || shibumi_baseline_fail \
@@ -705,16 +710,30 @@ shibumi_validate_agents_baseline() {
   SHIBUMI_VALIDATED_OMARCHY_BASELINE=$canonical_manifest
 }
 
+# Native catalog fixtures retain the historical source, not its old host package.
+# Validate its complete source tree without asserting historical Quickshell provenance.
+shibumi_load_native_catalog_baseline() {
+  local manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.4.json"
+  local requested_path=${SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH:-}
+  shibumi_preflight_clean_git_checkout "$requested_path" \
+    c668141e9c42b13c80c9ca4ea108e11708c5e8a5 native-catalog || return
+  shibumi_validate_omarchy_tree "$requested_path" "$manifest" || return
+  SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=$SHIBUMI_VALIDATED_OMARCHY_PATH
+  export SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH
+}
+
 shibumi_load_omarchy_baseline() {
   shibumi_require_baseline_tools || return
 
   local profile=${SHIBUMI_OMARCHY_BASELINE_PROFILE:-installed-package}
-  local baseline_version=${SHIBUMI_OMARCHY_BASELINE_VERSION:-4.0.4}
+  local baseline_version=${SHIBUMI_OMARCHY_BASELINE_VERSION:-4.0.6}
   local requested_path manifest
   case $profile in
     installed-package)
       requested_path=/usr/share/omarchy
       case $baseline_version in
+        4.0.6)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.6.json" ;;
         4.0.4)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.4.json" ;;
         4.0.3)
@@ -733,6 +752,8 @@ shibumi_load_omarchy_baseline() {
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
       case $baseline_version in
+        4.0.6)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.6.json" ;;
         4.0.5)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" ;;
         4.0.4)

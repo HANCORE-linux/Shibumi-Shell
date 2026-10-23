@@ -34,7 +34,9 @@ EXPECTED_COMMIT = "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
 EXPECTED_NATIVE_FINGERPRINT = "2cd0ffb0c38f31868e28c3556f0efc530f4fcd04765856ec157bc070eac748a0"
 BETA13_COMMIT = "2760cdb8272255790d5e4613fed8a48cb63c3555"
 BETA13_VERSION = "0.1.1-beta.13"
-PSS_GROWTH_CEILING_KIB = 512
+# Maintainer-reviewed host maintenance, 22/23 Oct 2026: old stack 400 KiB;
+# new stack tag 448, candidate 508/552 KiB (408-evidence/gate11-* and collector-gate11).
+PSS_GROWTH_CEILING_KIB = 768
 MAX_GIT_ARCHIVE_BYTES = 16 * 1024 * 1024
 MAX_GIT_BLOB_BYTES = 1024 * 1024
 MAX_GIT_DIAGNOSTIC_BYTES = 64 * 1024
@@ -490,12 +492,16 @@ def main():
     args = parser.parse_args()
     native_shell = args.native_shell
     if native_shell is None:
-        installed_source = os.environ.get("SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH")
-        if not installed_source:
+        native_source = os.environ.get("SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH")
+        if not native_source:
             parser.error(
-                "--native-shell or SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH is required"
+                "--native-shell or SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH is required"
             )
-        native_shell = Path(installed_source) / "shell"
+        subprocess.run([
+            "bash", "-c", 'source "$1"; shibumi_load_native_catalog_baseline',
+            "native-catalog-baseline", str(ROOT / "tests/lib/baselines.sh"),
+        ], check=True, timeout=30)
+        native_shell = Path(native_source) / "shell"
 
     native = load_native_runner()
     admitted = native.admitted_native(native_shell)

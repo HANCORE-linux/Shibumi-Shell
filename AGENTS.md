@@ -47,7 +47,7 @@ For host-facing changes, run all four pinned compatibility gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.4 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
@@ -57,6 +57,8 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-246f33a2 \
 
 The forward reference is exactly `246f33a2fef66411c990860d88e0823ae83987fc`;
 its admission does not transfer fixture evidence to a live or differently packaged host.
+Native catalog resource validation separately retains v4.0.4 (`c668141e`), supplied
+through `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH`; do not substitute the stable 4.0.6 checkout.
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.
 

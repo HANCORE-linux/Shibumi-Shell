@@ -19,8 +19,8 @@ process.</sub></p>
 `0.1.1-beta.16.5` is the target GitHub prerelease. See the
 [release notes](.github/release-notes/v0.1.1-beta.16.5.md) for changes. Before using an older version, read the
 [backup and downgrade warning](docs/install.md#backup-before-downgrade).
-The current pinned host contracts use Omarchy and Omarchy Settings `4.0.4-1`
-(source tag `v4.0.4`, revision `c668141e`) with Quickshell `0.3.1-1`; the
+The current pinned host contracts use Omarchy and Omarchy Settings `4.0.6-1`
+(source tag `v4.0.6`, revision `237f1b40`) with Quickshell `0.3.2.r7.g2b4501a-1`; the
 4.0.3 and 4.0.2 manifests remain optional compatibility baselines.
 Multi-output acceptance was not run. See the
 [Shibumi host compatibility record](docs/architecture/quattro-compatibility.md)
