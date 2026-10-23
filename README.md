@@ -16,8 +16,8 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.1.1-beta.16.5` is the target GitHub prerelease. See the
-[release notes](.github/release-notes/v0.1.1-beta.16.5.md) for changes. Before using an older version, read the
+`0.1.1-beta.16.5.1` is the target GitHub prerelease. See the
+[release notes](.github/release-notes/v0.1.1-beta.16.5.1.md) for changes. Before using an older version, read the
 [backup and downgrade warning](docs/install.md#backup-before-downgrade).
 The current pinned host contracts use Omarchy and Omarchy Settings `4.0.6-1`
 (source tag `v4.0.6`, revision `237f1b40`) with Quickshell `0.3.2.r7.g2b4501a-1`; the
@@ -68,7 +68,7 @@ for the latest validated host versions.
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.5
+git checkout v0.1.1-beta.16.5.1
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -76,15 +76,15 @@ Run the Pacman line yourself; it installs the runtime commands and fonts and
 is the only step that needs `sudo`. The Shibumi suite never calls Pacman: it
 runs as the desktop user and writes only user-scoped plugin state.
 
-Update an admitted Beta.16.4 source installation to Beta.16.5.
-The exact Beta.16.4 tag (`64b9369`) and its main integration merge (`aec6c0a`)
-are admitted predecessors. Exact identities, not a version range, govern
+Update an admitted Beta.16.4 or Beta.16.5 source installation to Beta.16.5.1.
+The exact Beta.16.4 tag (`64b9369`) and merge (`aec6c0a`), and Beta.16.5
+tag (`8b34d030`) and merge (`1d7a00b2`), are admitted predecessors. Exact identities, not a version range, govern
 admission; see the [update guide](docs/install.md#update).
 
 ```sh
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.16.5
+git checkout v0.1.1-beta.16.5.1
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status

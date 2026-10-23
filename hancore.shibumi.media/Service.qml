@@ -19,7 +19,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.media"
-    implementationVersion: "0.1.1-beta.16.5"
+    implementationVersion: "0.1.1-beta.16.5.1"
     owner: root
     host: root.shell
     manifest: root.manifest
