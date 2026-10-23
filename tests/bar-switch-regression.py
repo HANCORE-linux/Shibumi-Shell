@@ -87,7 +87,10 @@ print(json.dumps(rows));raise SystemExit(0 if len(rows)==1 else 1)
     print("BAR_SWITCH_CLEANUP "+json.dumps({"removed":not base.exists()}), flush=True)
     rows = [json.loads(line.split("BAR_SWITCH_STEP ",1)[1]) for line in text.splitlines() if "BAR_SWITCH_STEP " in line]
     census = [json.loads(line.split("BAR_SWITCH_CENSUS ",1)[1]) for line in text.splitlines() if "BAR_SWITCH_CENSUS " in line]
-    allowed = r'^\s*(?:INFO: (?:Launching config:|Shell ID:|Saving logs to|Configuration Loaded)|WARN quickshell.qmlscanner: Module path contains invalid characters for a module name:|DEBUG qml: BAR_SWITCH_)'
+    # Quickshell 0.3.2 / Qt 6.12 (Omarchy 4.0.6) report the embedded native Ui color bindings as
+    # undefined while bars are created and torn down; the unchanged Beta 16.5 fixture shows the
+    # same three lines on that stack (hotfix 16.5.1, round 408 gate 16).
+    allowed = r'^\s*(?:INFO: (?:Launching config:|Shell ID:|Saving logs to|Configuration Loaded)|WARN quickshell.qmlscanner: Module path contains invalid characters for a module name:|DEBUG qml: BAR_SWITCH_|WARN scene: @Ui/(?:WidgetButton|Panel)\.qml\[\d+:\d+\]: Unable to assign \[undefined\] to QColor$)'
     unexpected = [line for line in text.splitlines() if line.strip() and not re.match(allowed,line)]
     assert result.returncode == 0 and "BAR_SWITCH_DONE" in text, "fixture failed"
     assert not unexpected, unexpected
