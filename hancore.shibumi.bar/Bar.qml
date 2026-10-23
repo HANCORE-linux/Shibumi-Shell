@@ -3413,6 +3413,9 @@ Item {
     admitted: root.restoreAdmitted && !providerSnapshotTransition.busy
       && !stateTransition.busy
     onSettledContext: function(serial, result, context) {
+      // Qt 6.12 marshals nested signal arrays as sequences; keep validators strict.
+      if (context !== null && context !== undefined)
+        context = JSON.parse(JSON.stringify(context))
       root.lastProviderUndoReceipt = null
       const intent = context && context.intent ? context.intent : null
       const saved = root.lastCatalogTransitionSnapshot
