@@ -22,6 +22,15 @@ See [release workflow](release.md) and [testing](testing.md).
   Keep source, evidence and baseline paths canonical, non-symlinked and exclusive.
 - Plan disk/RAM capacity and serial execution. Preserve gate timeout/log budgets;
   do not raise limits or run resource measurements concurrently to obtain a pass.
+- Set `QT_FORCE_STDERR_LOGGING=1` for fixture processes. This Qt 6.12 build sends
+  non-TTY Qt diagnostics to journald otherwise, leaving captured aggregate logs
+  incomplete. The aggregate and shared fixture launcher enforce stderr logging;
+  native runtime/resource sandbox environments already set it explicitly.
+- On Quickshell 0.3.2 / Qt 6.12 the bar-switch fixture reports `Unable to assign
+  [undefined] to QColor` from the embedded native `Ui/WidgetButton.qml` and
+  `Ui/Panel.qml` bindings while bars are created and torn down. The unchanged
+  Beta 16.5 fixture shows the same three lines on this stack; the fixture's log
+  guard lists exactly these lines and nothing else.
 
 ## 2. Download and register the runner (separate approvals)
 

@@ -184,7 +184,7 @@ authoritative menu actions:
 - **Hearthstone** opens the Shibumi Hearthstone picker.
 
 During installation, Shibumi adds reversible overrides for Quattro's
-authoritative `style.theme` and `style.background` actions to the official
+authoritative `style.theme` / `style.background` (or `appearance.theme` / `appearance.background`) actions to the official
 user extension at `~/.config/omarchy/extensions/omarchy-menu.jsonc`. Existing
 user and plugin entries remain in place, updates are idempotent, and uninstall
 removes only the Shibumi-managed block. Shibumi does not patch Quattro,
