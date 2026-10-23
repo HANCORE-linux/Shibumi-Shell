@@ -25,7 +25,8 @@ elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 4c1b4cb3a94447aff39af98e2fcc0490a9fb
   keyboard_panel_sha=b7243c0397608a0a2a2dc2a3202a88c1e4b4b35d8da37895a1db8993422ce36f
 elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 246f33a2fef66411c990860d88e0823ae83987fc ]]; then
   keyboard_panel_sha=7a5dc2284b1990b2bf53a806221458c6a64ea538cb92b4787dca846c7cc33a54
-elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 94a8fbc2d67eec5673c7f16b8c5e8a9c8452ffdc ]]; then
+elif [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 94a8fbc2d67eec5673c7f16b8c5e8a9c8452ffdc \
+   || $SHIBUMI_OMARCHY_SOURCE_REVISION == 237f1b4071a0bff2296c6d740ba2b9fd695ebfa0 ]]; then
   keyboard_panel_sha=c8b3b0fd52d8a79469675e925ff851e1dd0588eb1eeb90bd4df004a4c7d72a0a
 fi
 [[ $(sha256sum "$keyboard_panel" | awk '{print $1}') == "$keyboard_panel_sha" ]] \

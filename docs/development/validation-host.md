@@ -10,7 +10,7 @@ See [release workflow](release.md) and [testing](testing.md).
 
 ## 1. Host and trust boundary
 
-- Require Omarchy and Omarchy Settings `4.0.4-1`, Quickshell `0.3.1-1`, an active
+- Require Omarchy and Omarchy Settings `4.0.6-1`, Quickshell `0.3.2.r7.g2b4501a-1`, an active
   unlocked Wayland session, and the tools required by the repository gates.
   Record `pacman -Q omarchy omarchy-settings quickshell` and package provenance.
   A new host version needs new contract review, not edited pins to bypass failure.
@@ -22,6 +22,15 @@ See [release workflow](release.md) and [testing](testing.md).
   Keep source, evidence and baseline paths canonical, non-symlinked and exclusive.
 - Plan disk/RAM capacity and serial execution. Preserve gate timeout/log budgets;
   do not raise limits or run resource measurements concurrently to obtain a pass.
+- Set `QT_FORCE_STDERR_LOGGING=1` for fixture processes. This Qt 6.12 build sends
+  non-TTY Qt diagnostics to journald otherwise, leaving captured aggregate logs
+  incomplete. The aggregate and shared fixture launcher enforce stderr logging;
+  native runtime/resource sandbox environments already set it explicitly.
+- On Quickshell 0.3.2 / Qt 6.12 the bar-switch fixture reports `Unable to assign
+  [undefined] to QColor` from the embedded native `Ui/WidgetButton.qml` and
+  `Ui/Panel.qml` bindings while bars are created and torn down. The unchanged
+  Beta 16.5 fixture shows the same three lines on this stack; the fixture's log
+  guard lists exactly these lines and nothing else.
 
 ## 2. Download and register the runner (separate approvals)
 
@@ -113,14 +122,16 @@ reviewed Shibumi checkout, match these manifest `sourceRevision` values exactly:
 
 | Profile / manifest in `contracts/baselines/` | Revision | Repository variable |
 | --- | --- | --- |
-| `omarchy-installed-source-parity-v4.0.4.json` | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
+| `omarchy-installed-source-parity-v4.0.6.json` | `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
+| `omarchy-installed-source-parity-v4.0.4.json` (native catalog source only) | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH` |
 | `omarchy-agents-v4.0.0.json` | `f0020448ca87329199de7cb12f2015ebc4a3e5e7` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
 | `omarchy-forward-compat-246f33a2.json` | `246f33a2fef66411c990860d88e0823ae83987fc` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
 
-The private Beta.16.5 alignment round uses an isolated reference checkout and
-Arch Quickshell `0.3.1-1` (package ownership/integrity independently checked).
-It does not reprovision the runner or change its Actions variable. Reported edge
-Quickshell `0.3.2-6` is a separate validation variable, not covered by that manifest.
+Beta.16.5.1 records the installed Omarchy-repository Quickshell package above,
+whose binary is `Quickshell 0.3.2 (revision 2b4501a282689792b62e94f3fb30d8f512324fe6, distributed by Omarchy)`.
+Historical Beta.16.5 fixtures used Arch `0.3.1-1`; their results are not relabeled.
+Reported edge `0.3.2-6` remains a separate validation variable.
+Repository wiring does not authorize runner provisioning or Actions-variable writes.
 
 After provisioning approval, clone `https://github.com/basecamp/omarchy` separately
 for each profile and `git checkout --detach <full-revision>`. Check `HEAD^{commit}`,
@@ -129,12 +140,19 @@ A tag name or clean status alone is not a byte/inventory proof. Use the existing
 `tests/lib/baselines.sh` validator, not a new checksum implementation. From the
 Shibumi checkout, in a fresh Bash process for each profile, supply `OMARCHY_PATH`
 and `SHIBUMI_OMARCHY_BASELINE_PROFILE` (`installed-source-parity`, `agents-current`,
-or `forward-compat`), set `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.4`, then run:
+or `forward-compat`), set `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.6`, then run:
 
 ```bash
 source tests/lib/baselines.sh
 shibumi_load_omarchy_baseline
 ```
+
+For the native catalog source, set `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH` to its
+separate clean 4.0.4 checkout and call `shibumi_load_native_catalog_baseline`
+instead. This validates the historical source tree, not its old Quickshell
+package claim. Native runtime/resource fixtures retain the c668141e 183-file
+shell inventory; warm PSS growth has a reviewed 768 KiB ceiling for the new
+host stack, with other bounds unchanged. These are not 4.0.6 source proofs.
 
 Repeat for `installed-package` against the actual installed `/usr/share/omarchy`;
 never relocate or rewrite it to mimic package provenance. Validators check the
@@ -146,7 +164,7 @@ baseline identities at gate boundaries. No concurrent writers are permitted.
 
 ## 5. Repository settings and controlled release window
 
-- Set the three repository **Actions variables** above to the accepted absolute
+- Set the four repository **Actions variables** above to the accepted absolute
   paths on the validation host, not shell expressions like `$HOME` or `~`. They
   are paths, not secrets. Each variable write needs its own approval.
 - Treat the repository as public/untrusted input: require approval for **all
@@ -162,7 +180,7 @@ baseline identities at gate boundaries. No concurrent writers are permitted.
 - Protect release branches and enforce immutable `v*` tags (no update/deletion,
   no routine bypass; restrict creation to authorized maintainers). Record actual
   settings and repository visibility; do not claim they are configured from docs.
-- After separate collector Go: clean accepted commit, `umask 022`, all three
+- After separate collector Go: clean accepted commit, `umask 022`, all four
   baseline variables, no ambient Git overrides, serial collector **14/14**.
   Use the release workflow's exact-commit procedure; no `--allow-dirty` acceptance.
   Any red gate stops the sequence for diagnosis, not blind retry or a weaker gate.

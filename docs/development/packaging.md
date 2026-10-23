@@ -1,6 +1,6 @@
 # Source installation and planned OPR packaging
 
-Status: install `0.1.1-beta.16.5` from source. OPR (omarchy-pkgs) packaging
+Status: install `0.1.1-beta.16.5.1` from source. OPR (omarchy-pkgs) packaging
 is planned; AUR publication is no longer the target.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy

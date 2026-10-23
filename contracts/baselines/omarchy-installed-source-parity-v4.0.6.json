@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 2,
+  "id": "installed-source-parity-v4.0.6",
+  "profile": "installed-source-parity",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "237f1b4071a0bff2296c6d740ba2b9fd695ebfa0",
+  "provenance": {
+    "kind": "git",
+    "revision": "237f1b4071a0bff2296c6d740ba2b9fd695ebfa0"
+  },
+  "quickshellPackage": {
+    "name": "quickshell",
+    "version": "0.3.2.r7.g2b4501a-1"
+  },
+  "notes": "Shell/config match the installed 4.0.6-1 packages exactly. Source bin has 449 entries versus 446 packaged: omarchy-debug, omarchy-debug-idle and omarchy-upload-log are source-only. All shared executable bytes match; bin inventories remain independently pinned.",
+  "subtrees": [
+    {
+      "path": "shell",
+      "entryPolicy": "regular-files",
+      "entryCount": 222,
+      "inventorySha256": "be094886de039e6569034aebe40777521b799df2f4d4cf006e90655cadf0fb63",
+      "structureSha256": "beb84ff10f06fe0ae77660bf28f235fffeed89094de9e07b76cabd80b0e6dc66",
+      "contentSha256": "cd2f30c76300622ead687148eda7ce5bc8bfbc7816f2e2bbc75f234222ac9176"
+    },
+    {
+      "path": "bin",
+      "entryPolicy": "regular-files",
+      "entryCount": 449,
+      "inventorySha256": "2ebcf2fe4f323438858510c6cbfed017aa1646d3728d2a2686f8257b55b4d730",
+      "structureSha256": "107b94159d2f7ceabbf72f57be22522ebf5a080145d9b1cc59bc463299bfa8b0",
+      "contentSha256": "093e8400903a92709137a145d8fe865ea43ef648ae17b714a0d441cf7007180e"
+    },
+    {
+      "path": "config",
+      "entryPolicy": "regular-files",
+      "entryCount": 75,
+      "inventorySha256": "33995e20ae22ffef7a5710c859a5f5577429aae2ecc0976d1b7978838d4277fa",
+      "structureSha256": "0d2f5855e27b9bada33e17730c99a99fa6d5e4bd971cef722c0ec7d50c4e467f",
+      "contentSha256": "adb203e2024c62c397b77fd9b30627f41675f0fd6e1525ba3634061088cf036a"
+    }
+  ]
+}

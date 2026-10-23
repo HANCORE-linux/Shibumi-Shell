@@ -10,7 +10,7 @@
   },
   "quickshellPackage": {
     "name": "quickshell",
-    "version": "0.3.1-1"
+    "version": "0.3.2.r7.g2b4501a-1"
   },
   "subtrees": [
     {

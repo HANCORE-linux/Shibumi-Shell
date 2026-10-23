@@ -150,7 +150,8 @@ function streamRepresentsMprisPlayer(streamLabelValue, playerLabel) {
 }
 
 function mprisLabelsFor(players, predicate) {
-  var values = Array.isArray(players) ? players : []
+  var values = players && typeof players.length === "number"
+    ? Array.prototype.slice.call(players) : []
   var playing = []
   var candidates = []
   var playingProxies = []

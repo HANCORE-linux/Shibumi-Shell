@@ -2157,11 +2157,12 @@ class SuiteLifecycleTests(unittest.TestCase):
         background = 'background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set "$background"'
         stock_menu = self.paths.omarchy_root / "default/omarchy/omarchy-menu.jsonc"
         stock_menu.parent.mkdir(parents=True)
-        for theme, theme_calls in (
-            ('theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"', "theme-switcher\ntheme-set:<Theme With Spaces>\n"),
-            ('omarchy-shell shell summon omarchy.image-picker \'{"source":"themes"}\'', 'native:<shell><summon><omarchy.image-picker><{"source":"themes"}>\n'),
+        for family, theme, theme_calls in (
+            ('style', 'theme=$(omarchy-theme-switcher); [[ -n $theme ]] && omarchy-theme-set "$theme"', "theme-switcher\ntheme-set:<Theme With Spaces>\n"),
+            ('style', 'omarchy-shell shell summon omarchy.image-picker \'{"source":"themes"}\'', 'native:<shell><summon><omarchy.image-picker><{"source":"themes"}>\n'),
+            ('appearance', 'omarchy-shell shell summon omarchy.image-picker \'{"source":"themes"}\'', 'native:<shell><summon><omarchy.image-picker><{"source":"themes"}>\n'),
         ):
-            stock_menu.write_text(json.dumps({"style.theme": {"action": theme}, "style.background": {"action": background}}))
+            stock_menu.write_text(json.dumps({f"{family}.theme": {"action": theme}, f"{family}.background": {"action": background}}))
             legacy_actions = {"style.theme": "theme", "style.background": "wallpaper"}
             legacy = "{\n" + START_MARKER + "\n" + ",\n".join(json.dumps(key) + ": " + json.dumps({"action": '\"$HOME/.config/omarchy/plugins/hancore.shibumi.quick-access/scripts/shibumi-picker-route\" ' + value}) for key, value in legacy_actions.items()) + "\n" + END_MARKER + "\n}\n"
             self.paths.menu_extension_file.parent.mkdir(parents=True, exist_ok=True)
@@ -2170,17 +2171,19 @@ class SuiteLifecycleTests(unittest.TestCase):
             transaction = SimpleNamespace(paths=self.paths, menu_extension_existed=True, write_menu_extension=payloads.append)
             install_picker_menu_extension(transaction, self.runtime)
             rendered = payloads[-1].decode()
+            self.assertEqual(set(_decoded(rendered)), {f"{family}.theme", f"{family}.background"})
+            self.assertEqual([entry["action"].split("; else ", 1)[1] for entry in _decoded(rendered).values()], [theme + "; fi", background + "; fi"])
             self.assertEqual((rendered.count(START_MARKER), rendered.count(END_MARKER), remove_picker_routing(rendered)), (1, 1, "{\n}\n"))
             for mode in ("missing", "non-executable", "present", "failing"):
                 router.unlink(missing_ok=True)
                 if mode != "missing":
                     router.write_text('#!/bin/bash\nprintf "router:<%s>\\n" "$1" >>"$ROUTE_LOG"\nexit ' + ("17" if mode == "failing" else "0") + "\n")
                     router.chmod(0o600 if mode == "non-executable" else 0o700)
-                for key, argument in legacy_actions.items():
+                for key, argument in ((f"{family}.theme", "theme"), (f"{family}.background", "wallpaper")):
                     with self.subTest(theme=theme, mode=mode, route=key):
                         log.write_text("")
                         result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-c", _decoded(rendered)[key]["action"]], env={"HOME": str(home), "PATH": str(commands), "ROUTE_LOG": str(log)}, capture_output=True, text=True, timeout=3)
-                        expected = (theme_calls if key == "style.theme" else "background-switcher\nbackground-set:<Background With Spaces>\n") if mode in ("missing", "non-executable") else "router:<" + argument + ">\n"
+                        expected = (theme_calls if argument == "theme" else "background-switcher\nbackground-set:<Background With Spaces>\n") if mode in ("missing", "non-executable") else "router:<" + argument + ">\n"
                         self.assertEqual((result.returncode, log.read_text()), (17 if mode == "failing" else 0, expected), result.stderr)
 
     def test_menu_extension_supports_items_wrapper(self) -> None:
@@ -2195,6 +2198,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         installed = install_picker_routing(original)
         self.assertIn('"style.background"', installed)
         self.assertEqual(remove_picker_routing(installed), original)
+        warnings = []
+        skipped = install_picker_routing(installed, '{"items": {}}', warnings=warnings)
+        self.assertEqual((skipped, warnings), (original, ["stock menu has neither style.theme nor appearance.theme; picker routing skipped"]))
 
     def test_menu_refresh_retries_quattro_not_ready_response(self) -> None:
         runtime = OmarchyRuntime()

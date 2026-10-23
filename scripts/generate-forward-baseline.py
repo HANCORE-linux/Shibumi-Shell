@@ -66,4 +66,4 @@ if identity() != tree:
 print(json.dumps(dict(schemaVersion=2, id="forward-compat-" + revision[:8],
     profile="forward-compat", repository="https://github.com/basecamp/omarchy",
     sourceRevision=revision, provenance=dict(kind="git", revision=revision),
-    quickshellPackage=dict(name="quickshell", version="0.3.1-1"), subtrees=subtrees), indent=2))
+    quickshellPackage=dict(name="quickshell", version="0.3.2.r7.g2b4501a-1"), subtrees=subtrees), indent=2))

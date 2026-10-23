@@ -1066,9 +1066,72 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
+        "8b34d030a303aa35d6033923c8f3c38c4c25b29b",
+        "1d7a00b2742fb4d479774a4f722c6c2ef96d0601",
         "package:0.1.1-beta.16.5"
       ],
       "suiteVersion": "0.1.1-beta.16.5"
+    },
+    {
+      "id": "public-beta.16.5.1",
+      "payloadDigest": "a4a0b43a04603a9b40354df1498e74b4b42e55158c1d3f9d68c9460db30802cf",
+      "pluginDigests": {
+        "hancore.shibumi.bar": "1d1a47515cafa53176338645f8525f8e6e5021f124948eff6794b708d02aacc9",
+        "hancore.shibumi.state": "22328fdf2ecd627db310a76ced163ca05a49d4cfafb724c3f4881b4e4dc2b178",
+        "hancore.shibumi.control-center": "82cb345955cb2f0c0eb1b214bf013f730d51c09725cc46617e26d4af49d0917d",
+        "hancore.shibumi.reactor": "d6b8f38de80b09abeac9789ded26650f0213208923b62597acbfa58c449ea9cb",
+        "hancore.shibumi.telemetry": "75fc48d3ffbc3a14f4df3cd296ab93623fff10244e83d0af0cace9f096cabde5",
+        "hancore.shibumi.power-state": "0e4727de0b2611faa7f289d79e7090e3db0460138d5ede2409ae1b5a6a7c9fe3",
+        "hancore.shibumi.workspaces": "59cc5627a465f22562e3a7afa0d30f7c8567ecd83fb7c6329b809541561c7280",
+        "hancore.shibumi.update-center": "ad8fb3564ff3953bdb8cd86359483baa7aeb355dcfd133a2c6f12a962c0da387",
+        "hancore.shibumi.status": "da0f8012856223ecab3dc6ea7e6967701fe9630b5d9ecff6e3f2e954becead3d",
+        "hancore.shibumi.memory": "7de6243824ec33bbe793c0e2be74dc849494b258b8a56eff18c319115a734196",
+        "hancore.shibumi.cpu": "3f255ec4c90967ac42e9376d5bd5f99f3b9c55e60f82f4343860df78b6ff5eac",
+        "hancore.shibumi.audio": "7cb7693721fc4fb75e405d565a1579d8a32c5dc1fea6177dbba6c518127ac79e",
+        "hancore.shibumi.ai": "2482b5468ac8dcf8a5afaf0d4f50ca15be63698d53dd62b75e7def10a39dcf17",
+        "hancore.shibumi.center": "84d211c187643f2eaa9e2ea1bd6b12ad0290a7fd768de422d190361f065f9dd1",
+        "hancore.shibumi.media": "c30e513978e1cb5be1bfdc7592d851980094144dd42bb67035b3a5e840b55c49",
+        "hancore.shibumi.quick-access": "d36db702d2ab65ac035ad2c0ec555e8ef713eee7aed7a9dd01f5b5e88b554aa3",
+        "hancore.shibumi.network": "5f5cbf5963e7110eb09b10ed9e519627a2082c7a94cd928b2e4289928db67337",
+        "hancore.shibumi.battery": "2ac5f7e49ff237fab5301312b041547eef1cd076608985b5df4448cd44445d4a",
+        "hancore.shibumi.brightness": "4614cf5aa35917063b98a28d5a03d5b9d84c72190084c10b651f8ff393d9ca6d",
+        "hancore.shibumi.power-profile": "f0687c709da571d20eeb861ca36497bdf54c864ca0f2114dc5844bff804a56bf",
+        "hancore.shibumi.bluetooth": "554b5cc954e26acd07f1b7950bd9d2bb9564a061f69685f111a6a1fc998e3e26",
+        "hancore.shibumi.temperature": "208d750c66099d3da6f1f6fae04fa83762b4b6a4d9603ad15383c4b53f0a8632",
+        "hancore.shibumi.gpu": "b3cbde40eb3492d16943ba967b9f806c060066d2664f733d4a09d7a02ce6d8bd",
+        "hancore.shibumi.storage": "52167d83e786165b0b32594a02c1d001866dbaf05a7c3bb18be10288a5f2ebe7"
+      },
+      "pluginIds": [
+        "hancore.shibumi.bar",
+        "hancore.shibumi.state",
+        "hancore.shibumi.control-center",
+        "hancore.shibumi.reactor",
+        "hancore.shibumi.telemetry",
+        "hancore.shibumi.power-state",
+        "hancore.shibumi.workspaces",
+        "hancore.shibumi.update-center",
+        "hancore.shibumi.status",
+        "hancore.shibumi.memory",
+        "hancore.shibumi.cpu",
+        "hancore.shibumi.audio",
+        "hancore.shibumi.ai",
+        "hancore.shibumi.center",
+        "hancore.shibumi.media",
+        "hancore.shibumi.quick-access",
+        "hancore.shibumi.network",
+        "hancore.shibumi.battery",
+        "hancore.shibumi.brightness",
+        "hancore.shibumi.power-profile",
+        "hancore.shibumi.bluetooth",
+        "hancore.shibumi.temperature",
+        "hancore.shibumi.gpu",
+        "hancore.shibumi.storage"
+      ],
+      "settingsStorageVersion": 1,
+      "sourceRevisions": [
+        "package:0.1.1-beta.16.5.1"
+      ],
+      "suiteVersion": "0.1.1-beta.16.5.1"
     }
   ]
 }

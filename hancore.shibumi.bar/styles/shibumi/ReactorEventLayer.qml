@@ -52,7 +52,8 @@ Item {
       quote: event.profile === "quote",
       count: Math.max(1, Math.min(36, Number(event.count) || 1)),
       gain: Math.max(0.1, Math.min(1, Number(event.gain) || 1)),
-      choices: Array.isArray(event.choices) ? event.choices.slice(0, 64) : [],
+      choices: event.choices && typeof event.choices.length === "number"
+        ? Array.prototype.slice.call(event.choices, 0, 64) : [],
       grid: null
     }
     if (pulse.kind === "text") {

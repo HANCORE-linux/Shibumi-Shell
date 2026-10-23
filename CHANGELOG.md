@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.1-beta.16.5.1] - 2026-10-23
+
+### Fixed
+
+- Accept Omarchy's renamed `appearance.theme` and `appearance.background` menu
+  keys while retaining `style.*` support and the host's native fallback actions.
+  Install, update, repair and migrate no longer reject an intact newer stock
+  menu. If neither key family exists, remove stale picker routing and warn
+  rather than aborting the transaction.
+- Restore Reactor quote text on Qt 6.12. Arrays delivered through QML signals
+  arrive as sequences rather than JavaScript Arrays; retain those quote choices
+  instead of discarding them before rendering. Normalize settled Bar layout
+  context at its signal boundary, preserving strict downstream validators, and
+  accept Quickshell's player sequences when resolving Audio stream labels.
+
+### Validation
+
+- The validation host is re-pinned to Omarchy 4.0.6 / Quickshell 0.3.2 (Qt 6.12) with the native catalog reference kept at Omarchy 4.0.4; the collector warm-PSS ceiling is 768 KiB on that stack, and QML fixtures force stderr logging under Qt 6.12. The forward compatibility reference stays `246f33a2`.
+
 ## [0.1.1-beta.16.5] - 2026-10-22
 
 ### Highlights

@@ -1,10 +1,141 @@
-# Shibumi 0.1.1-beta.16.5 release readiness
+# Shibumi 0.1.1-beta.16.5.1 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## Accepted Beta.16.5 product series and validation boundary
+## Beta 16.5.1 hotfix and validation boundary
+
+The approved release date is **2026-10-23**. The release branch starts from
+main integration merge `1d7a00b2742fb4d479774a4f722c6c2ef96d0601`, whose tree
+equals published Beta 16.5 tag `8b34d030a303aa35d6033923c8f3c38c4c25b29b`.
+Both revisions are admitted with unchanged published payload pins. The rolling
+predecessor fixture now records that published Beta 16.5 release.
+
+The hotfix accepts both `style.*` and `appearance.*` picker menu keys, preserving
+the host actions and warning without a routing block when neither family is
+present. The affected lifecycle paths are install, update, repair and migrate.
+Release-identity maintenance changes no QML behavior. The product fix separately
+restores Reactor quote text on Qt 6.12: arrays crossing a QML `var` signal arrive
+as sequences, so an Array-only guard discarded every quote choice. The fix
+converts the sequence without changing renderer timing or geometry. The settled
+Bar layout context is JSON-cloned once at the receive boundary, preserving strict
+provider-group/native-section validators. Audio stream-label resolution converts
+Quickshell player sequences to local arrays while retaining QObject identity.
+
+The accepted candidate is tag + patches 01–05 + replacement 06-r2, snapshot
+`1dc8c3be2ed076401e0fd90cdf235a9aaa17c63e`, tree
+`6677721db7289df940ab76042763c0c4fe476139`. Its payload identities are:
+
+- Suite (24 plugins): `a4a0b43a04603a9b40354df1498e74b4b42e55158c1d3f9d68c9460db30802cf`.
+- Bar: `1d1a47515cafa53176338645f8525f8e6e5021f124948eff6794b708d02aacc9`.
+- Audio: `7cb7693721fc4fb75e405d565a1579d8a32c5dc1fea6177dbba6c518127ac79e`.
+
+Only the current candidate's Bar and Audio payload pins change in 06-r2; all
+published predecessor pins remain unchanged. The release cut preserves these
+product bytes. The source archive checksum is a separate finalisation step.
+
+**Candidate gates:** all 13 requested groups passed on that exact snapshot.
+
+| Gate | Candidate result |
+| --- | --- |
+| Suite | 180/180 in each of five forms: 4.0.6 script/module, retained 4.0.4 script/module, forward script. |
+| Package / admission / baseline | 27/27, 40/40, and baseline contract PASS. |
+| Lifecycle | Both complete stable/forward groups passed 9/9, including dry-run. |
+| Native catalog resource (gate 11) | One run; candidate warm growth 424 KiB against 768 KiB. Exact Beta 13 control 0 KiB, below-CPU control 4 KiB, restored candidate 388 KiB; all seven mutants failed as intended. |
+| Complete aggregates | Stable 4.0.6 and forward `246f33a2` completed with exit 0, including renderer PASS and the final complete-contract markers. |
+
+Candidate and all four external baseline identities remained unchanged before
+and after every group and at the final audit. All 13 outer roots and 18 recorded
+owned cgroups were absent afterward, with no reported survivors. These are
+candidate results, not exact-final release or physical acceptance.
+
+**Menu proof:** the forward pin
+`246f33a2fef66411c990860d88e0823ae83987fc` predates the rename and does not prove
+appearance-family routing. Suite coverage and Hermes's offline replay use the
+real stock menu from Omarchy `6bee248a3`: Beta 16.5 rejects it, the candidate
+routes it, and removal restores the original bytes. No live host with that
+revision was available; machine2 and .140 could not be powered on. The Maintainer
+accepted this offline proof in place of the live appearance-menu check. Later
+Phase D live acceptance runs on main only; it has not run for this release.
+
+The first exact-final run on `3ec5346e` stopped at gate 16's bar-switch log
+guard on native Ui color warnings under Quickshell 0.3.2 / Qt 6.12; Hermes
+reproduced the same diagnostic lines with unchanged Beta 16.5 code and attributed
+the red to the host stack. The preceding test-only fix-up commit applies the
+approved native-Ui warning allowance without changing product code. The second
+exact-final run on `8b8fa237` passed all 26 release gates but stopped at collector
+gate 9: Hermes attributed it to the installed-package regression's stale 4.0.4
+version pin on the same unchanged Omarchy 4.0.6 host. A further preceding
+test-only fix-up corrects that pin to 4.0.6 without changing product code.
+No exact-final pass transfers from either stopped run; results for this re-cut
+remain pending against literal `FINAL_SHA`.
+
+**Final release boundary:** exact-final gates remain pending against `FINAL_SHA`:
+26 release gates, the complete 14-gate collector, separate 37-step bar-switch,
+local package rehearsal, clean-status and reproducible archive verification.
+Standalone renderer-rest and audio/media results must also be bound to the
+exact final commit; the candidate aggregates do not relabel them as completed
+standalone gates. Independent release review and applicable live/physical
+acceptance remain separate. The candidate snapshot is not the tag target.
+
+### Preserved attribution and earlier attempts
+
+On the initial fix-only tree, five suite runs passed 180/180, package 27/27 and
+admission 40/40. Lifecycle stopped on Quickshell package drift. Resource gate 11
+recorded 552 KiB warm PSS growth against 512 KiB. The authorized unchanged-tag
+control and candidate repeat passed at 448 KiB and 508 KiB respectively on the
+updated host stack, with all controls passing; the original failure is retained.
+No ceiling changed during attribution. Historical Beta 16.5 exact-final measured
+400 KiB on the old stack. The fixture never executes the changed lifecycle
+Python. The Maintainer subsequently authorized **768 KiB** warm-growth fixture
+maintenance for the Omarchy 4.0.6 / Quickshell 0.3.2.r7 / Qt 6.12 stack. Wrapper,
+probe and parser fixtures are synchronized; CPU/cadence and the separate
+512 * 1024 host-PSS bound remain unchanged. None of the original observations
+is erased by the accepted candidate's 424 KiB result.
+
+Patch 5 pins Omarchy/Settings 4.0.6-1 and Omarchy-repository Quickshell
+0.3.2.r7.g2b4501a-1 from recorded pacman identity/provenance. The observed stack
+also has Qt Base 6.12.0-3, Qt Declarative 6.12.0-2 and Mesa 1:26.2.5-1; these
+are evidence, not additional manifest pins. The Quickshell binary reports
+`Quickshell 0.3.2 (revision 2b4501a282689792b62e94f3fb30d8f512324fe6, distributed by Omarchy)`.
+Collector probes match exact package and binary identities, including pkgrel.
+
+The 4.0.6 package/source shell and config inventories are exact. Package bin has
+446 entries, source 449: `omarchy-debug`, `omarchy-debug-idle` and
+`omarchy-upload-log` are source-only, confirmed against the cached official
+4.0.6-1 archive. All shared executable bytes match; each bin roster stays pinned
+independently. `pacman -Qkk` found no altered Omarchy/Quickshell files; its exit 1
+reflects four unreadable Settings `/etc/sudoers.d/omarchy-*` files. Full Settings
+package integrity is not claimed; no permission changes were made.
+
+Stable gates move to 4.0.6 (`237f1b40`). Native catalog runtime/resource source
+proof stays at 4.0.4 (`c668141e`, 183 shell files), independently supplied by
+`SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH`; the collector now binds four external
+inputs. Old manifest bytes stay unchanged; warm growth uses the reviewed 768 KiB ceiling.
+This source-only historical pin does not assert old Quickshell provenance on
+the new host. Actions-variable changes and exact-final acceptance remain separate.
+
+The tag + patches 01–05 snapshot passed reduced gates, both complete lifecycle
+groups and its single gate 11 run (392 KiB warm growth under 768 KiB), but both
+aggregates exited 1. Their logs ended after a passing ShibumiConfig fixture
+because Qt 6.12 sent later non-TTY console output to journald. Read-only tag
+diagnosis attributed both reds to `reactor-renderer-regression.qml`:
+`quote fit did not skip an oversized candidate`. Theme-palette and reactor-model
+had passed silently in between. The existing renderer fixture is the observed-red
+coverage for patch 6; no new test is added. `QT_FORCE_STDERR_LOGGING=1` is now
+explicit in aggregate/shared fixture launches; native runtime/resource sandbox
+environments already set it. Both complete 06-r2 aggregates passed as recorded
+above; earlier passes or silent logs are not substituted for them.
+
+The initial patch 6 snapshot `f114ba1c` passed all five suite forms but stopped
+at package tests (27 tests, one failure): the candidate payload literal in the
+package fixture had not been updated. No later gate ran in that attempt. The
+replacement 06-r2 corrects only that literal above `f114ba1c`; product bytes and
+payload are unchanged. Its complete 13-group run is the accepted result above.
+The original failed attempt and its cleanup audit remain preserved.
+
+## Historical Beta.16.5 product series and validation boundary
 
 The accepted local C1–C8 series is based on
 `aec6c0a3266d71f6a5f9cfa17562d8bec0ce9b17`, the main integration merge of
@@ -89,7 +220,8 @@ commit externally. No predecessor gate result transfers to this candidate.
 Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
 `1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It was the frozen rolling
 predecessor for Beta.16.4; [`release-predecessor.json`](../tests/fixtures/release-predecessor.json)
-now records Beta.16.4 for the private Beta.16.5 preparation.
+recorded Beta.16.4 during Beta.16.5 preparation and now records Beta.16.5
+for the hotfix.
 That exact tag checkout and the source-installation integration merge
 `494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
@@ -126,21 +258,22 @@ permit another run. Real Polkit/root and owner-loss acceptance remain separate.
 ## Pinned host contracts
 
 The release's installed-package and source-parity contracts target Omarchy
-4.0.4. Pinned configuration is not a physical-acceptance claim.
+4.0.6. Pinned configuration is not a physical-acceptance claim.
 
 | Component | Required identity |
 | --- | --- |
-| Omarchy | `omarchy 4.0.4-1` |
-| Omarchy Settings | `omarchy-settings 4.0.4-1` |
-| Quickshell | `quickshell 0.3.1-1` |
-| Installed package profile | `installed-package-v4.0.4` |
-| Source parity | `installed-source-parity-v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
+| Omarchy | `omarchy 4.0.6-1` |
+| Omarchy Settings | `omarchy-settings 4.0.6-1` |
+| Quickshell | `quickshell 0.3.2.r7.g2b4501a-1` |
+| Installed package profile | `installed-package-v4.0.6` |
+| Source parity | `installed-source-parity-v4.0.6`, `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
+| Native catalog source-only reference | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
 | Forward reference | `246f33a2fef66411c990860d88e0823ae83987fc` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
-files and subtrees. Historical 4.0.3/4.0.2 manifests remain explicit compatibility
-references, not substitutes for the release jobs' 4.0.4 pins. Provisioning is
+files and subtrees. Historical 4.0.4/4.0.3/4.0.2 package/source and 4.0.5 source
+manifests remain unchanged, not substitutes for the release jobs' 4.0.6 pins. Provisioning is
 covered by the [validation-host runbook](development/validation-host.md);
 [host compatibility](architecture/quattro-compatibility.md) describes the proof axes.
 
@@ -232,4 +365,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta.16.5.
+confers acceptance on Beta 16.5.1.

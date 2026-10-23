@@ -4,8 +4,10 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 helper="$repo_root/tests/lib/baselines.sh"
-installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.4.json"
-installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.4.json"
+installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.6.json"
+installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.6.json"
+native_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.4.json"
+native_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.4.json"
 previous_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.3.json"
 previous_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.3.json"
 compat_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.2.json"
@@ -68,6 +70,8 @@ source "$helper"
 for manifest in \
   "$installed_package_baseline" \
   "$installed_source_baseline" \
+  "$native_package_baseline" \
+  "$native_source_baseline" \
   "$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" \
   "$previous_package_baseline" \
   "$previous_source_baseline" \
@@ -81,20 +85,20 @@ for manifest in \
 done
 
 jq -e '
-  .id == "installed-package-v4.0.4"
+  .id == "installed-package-v4.0.6"
   and .profile == "installed-package"
-  and .sourceRevision == "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
+  and .sourceRevision == "237f1b4071a0bff2296c6d740ba2b9fd695ebfa0"
   and .provenance.kind == "package"
   and ([.provenance.packages[] | [.name, .version]] | sort) == ([
-    ["omarchy", "4.0.4-1"],
-    ["omarchy-settings", "4.0.4-1"]
+    ["omarchy", "4.0.6-1"],
+    ["omarchy-settings", "4.0.6-1"]
   ] | sort)
   and .provenance.subtreeOwners == {
     "bin": "omarchy",
     "config": "omarchy-settings",
     "shell": "omarchy"
   }
-  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
   and ([.subtrees[] | select(.path == "bin" and .entryPolicy == "absolute-symlinks")] | length) == 1
   and all(.subtrees[] | select(.path != "bin"); .entryPolicy == "regular-files")
 ' "$installed_package_baseline" >/dev/null \
@@ -133,19 +137,25 @@ jq -e '
   || fail 'historical source-parity baseline identity is invalid'
 
 jq -e '
-  .id == "installed-source-parity-v4.0.4"
+  .id == "installed-source-parity-v4.0.6"
   and .profile == "installed-source-parity"
-  and .sourceRevision == "c668141e9c42b13c80c9ca4ea108e11708c5e8a5"
+  and .sourceRevision == "237f1b4071a0bff2296c6d740ba2b9fd695ebfa0"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
-  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
   and all(.subtrees[]; .entryPolicy == "regular-files")
 ' "$installed_source_baseline" >/dev/null \
   || fail 'installed-source-parity baseline identity or provenance is invalid'
 [[ $(sha256sum "$installed_package_baseline" | awk '{print $1}') \
+    == 4a62fa1b0def2e1618ddca2696b12ba7e0d50e14ab00663722e88c3c9320b258 ]] \
+  || fail 'Omarchy 4.0.6 installed-package manifest bytes drifted'
+[[ $(sha256sum "$installed_source_baseline" | awk '{print $1}') \
+    == 13b3309b6c3b3fea25f24a7e6cd259a01979052b884b3a7540ae1880f02c1469 ]] \
+  || fail 'Omarchy 4.0.6 source-parity manifest bytes drifted'
+[[ $(sha256sum "$native_package_baseline" | awk '{print $1}') \
     == 9dfb421f339f282d762a1d0a000dc038bbe6f13e1b5f65c1f5e428d9522152c2 ]] \
   || fail 'Omarchy 4.0.4 installed-package manifest bytes drifted'
-[[ $(sha256sum "$installed_source_baseline" | awk '{print $1}') \
+[[ $(sha256sum "$native_source_baseline" | awk '{print $1}') \
     == 96229f17b4c18a077f484c681d1331865a3558b8c27c19b3cafaf047f91042dc ]] \
   || fail 'Omarchy 4.0.4 source-parity manifest bytes drifted'
 [[ $(sha256sum "$previous_package_baseline" | awk '{print $1}') \
@@ -181,7 +191,7 @@ for parity_subtree in shell config; do
   source_row=$(jq -c --arg path "$parity_subtree" \
     '.subtrees[] | select(.path == $path)' "$installed_source_baseline")
   [[ $package_row == "$source_row" ]] \
-    || fail "Omarchy 4.0.4 package/source parity drifted: $parity_subtree"
+    || fail "Omarchy 4.0.6 package/source parity drifted: $parity_subtree"
 done
 
 jq -e '
@@ -190,7 +200,7 @@ jq -e '
   and .sourceRevision == "246f33a2fef66411c990860d88e0823ae83987fc"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
-  and .quickshellPackage == {"name": "quickshell", "version": "0.3.1-1"}
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
   and all(.subtrees[]; .entryPolicy == "regular-files")
 ' "$forward_compat_baseline" >/dev/null \
   || fail 'forward-compat baseline identity or provenance is invalid'
@@ -308,7 +318,7 @@ shibumi_validate_omarchy_baseline_schema "$agents_fixture" \
   || fail 'baseline replacement probe could not capture its initial snapshot'
 printf '{"sourceRevision":"replaced"}\n' >"$agents_fixture"
 [[ $(jq -r '.sourceRevision' "$agents_fixture") \
-    == c668141e9c42b13c80c9ca4ea108e11708c5e8a5 ]] \
+    == 237f1b4071a0bff2296c6d740ba2b9fd695ebfa0 ]] \
   || fail 'baseline replacement changed an already accepted snapshot'
 if shibumi_validate_omarchy_baseline_schema \
     "$agents_fixture" >/dev/null 2>&1; then

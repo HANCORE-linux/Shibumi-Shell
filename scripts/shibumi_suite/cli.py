@@ -358,18 +358,25 @@ def install_picker_menu_extension(
         source_path = stock_path
         stock_menu = read_extension(source_path)
         source_path = menu_path
-        payload = install_picker_routing(raw, stock_menu).encode("utf-8")
+        warnings: list[str] = []
+        payload = install_picker_routing(raw, stock_menu, warnings=warnings).encode("utf-8")
     except MenuExtensionError as error:
         if isinstance(error, StockMenuError):
             source_path = stock_path
+            if not error.unparsable:
+                raise CliError(f"cannot update Omarchy menu {stock_path}: {error}") from error
         remedy = (
             "restore the Omarchy stock menu, then retry the same command"
+            if isinstance(error, StockMenuError) and error.unparsable else
+            "check that the stock menu is readable, then retry the same command"
             if source_path == stock_path else
             "fix the JSONC syntax or routing markers in this regular file, then retry the same command"
         )
         raise CliError(f"cannot update Omarchy menu {source_path}: {error}; {remedy}") from error
     transaction.write_menu_extension(payload)
     runtime.refresh_menu()
+    for warning in warnings:
+        print(f"shibumi-suite: warning: {stock_path}: {warning}", file=sys.stderr)
     previous = (
         previous_state.get("menuExtension")
         if isinstance(previous_state, dict) else None

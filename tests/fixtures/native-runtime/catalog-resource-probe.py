@@ -30,9 +30,9 @@ POST_DRAIN_FLOOR_SECONDS = 4.5
 RELEASE_QUIET_SECONDS = 5.2
 COLD_INITIALIZATION_CYCLES = 3
 WARM_CYCLES = 3
-# The 512 KiB warm-state allowance is unchanged. Cold reconstruction is measured
-# separately, and the third cold-cycle sample becomes the warm-state baseline.
-PSS_GROWTH_CEILING_KIB = 512
+# The reviewed 768 KiB warm-state allowance matches the resource wrapper.
+# Cold reconstruction is separate; the third cold sample is the warm baseline.
+PSS_GROWTH_CEILING_KIB = 768
 # Warm acquisitions include the host and every observed acquisition descendant.
 # The allowance leaves headroom over calibrated positives but rejects a 1s burn
 # in either QML or the launcher/custodian/IPC tree.
