@@ -19,22 +19,24 @@ Canvas {
   property real phaseOffset: 0
   readonly property bool animationActive: water && panelOpen && (waves || bubbles)
   readonly property bool animating: clock.running
-  property int waveFrame: 0
+  property real waveFrame: 0
   property real displayedPercent: percent
 
   width: Commons.Style.space(80)
   height: width
 
   function repaint() { if (!water || panelOpen) requestPaint() }
-  Timer {
+  // Follows the display refresh; the wave keeps its 20 steps/s speed and the
+  // percent easing its 25% per 50 ms rate, whatever the frame time.
+  FrameAnimation {
     id: clock
-    interval: 50
     running: root.water && root.panelOpen && (root.waves || root.bubbles)
-    repeat: true
     onTriggered: {
-      root.waveFrame = (root.waveFrame + 1) % 72
+      const step = Math.min(frameTime, 0.1) / 0.05
+      root.waveFrame = (root.waveFrame + step) % 72
       const delta = root.percent - root.displayedPercent
-      root.displayedPercent = Math.abs(delta) < 0.1 ? root.percent : root.displayedPercent + delta * 0.25
+      root.displayedPercent = Math.abs(delta) < 0.1 ? root.percent
+        : root.displayedPercent + delta * (1 - Math.pow(0.75, step))
       root.requestPaint()
     }
   }
