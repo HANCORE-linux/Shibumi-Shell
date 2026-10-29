@@ -111,6 +111,9 @@ if ('else if (lifecycleBar && "tearingDown" in lifecycleBar\n'
     raise SystemExit("Status no longer handles WidgetSlot's pre-destruction Bar revoke")
 PY
 printf 'status teardown ordering source guard passed\n'
+rg -U -q 'Math\.abs\(saved - spacingSavingsLeft\) <= 1e-7\n[[:space:]]*&& now - spacingSavingsChangedAt < 500\) return' \
+  "$status_widget" \
+  || fail "status spacing savings no longer settle a self-induced width cycle"
 rg -Fq '["full", "icon", "text"]' "$status_widget" \
   || fail "status widget does not expose Full/Icon/Text display modes"
 if rg -q 'SystemTray\.items|NotificationServer|makoctl|pgrep -x hypridle' \
