@@ -43,7 +43,7 @@ Ui.Panel {
   readonly property color usageIconColor: widgetInk
   readonly property real baseIconOpacity: customFillActive ? 0.65
     : providerId === "claude" ? 0.25
-      : providerId === "codex" ? 0.65 : 0.5
+      : providerId === "codex" || providerId === "agy" ? 0.65 : 0.5
   readonly property bool claudeLayersAligned:
     Math.abs(claudeGlyphBase.x
       - (claudeUsageClip.x + claudeUsageGlyph.x)) < 0.01
@@ -223,7 +223,7 @@ Ui.Panel {
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId === "codex"
+            visible: root.providerId === "codex" || root.providerId === "agy"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0
@@ -234,7 +234,9 @@ Ui.Panel {
               anchors.fill: parent
               source: root.providerId === "opencode"
                 ? Qt.resolvedUrl("assets/opencode-mark.svg")
-                : Qt.resolvedUrl("assets/codex.svg")
+                : root.providerId === "agy"
+                  ? Qt.resolvedUrl("assets/antigravity.svg")
+                  : Qt.resolvedUrl("assets/codex.svg")
               sourceSize: root.providerId === "opencode"
                 ? Qt.size(20, 12) : Qt.size(56, 56)
               smooth: root.providerId !== "opencode"
@@ -259,7 +261,9 @@ Ui.Panel {
                 anchors.bottom: parent.bottom
                 source: root.providerId === "opencode"
                   ? Qt.resolvedUrl("assets/opencode-mark.svg")
-                  : Qt.resolvedUrl("assets/codex.svg")
+                  : root.providerId === "agy"
+                    ? Qt.resolvedUrl("assets/antigravity.svg")
+                    : Qt.resolvedUrl("assets/codex.svg")
                 sourceSize: root.providerId === "opencode"
                   ? Qt.size(20, 12) : Qt.size(56, 56)
                 smooth: root.providerId !== "opencode"

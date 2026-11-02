@@ -340,8 +340,8 @@ fi
   || fail "AI panel clock must be singular, bounded and open-only"
 [[ $(rg -c 'Process \{' "$service") -eq 1 ]] \
   || fail "AI providers do not have exactly one process owner"
-[[ $(rg -c 'FileView \{' "$service") -eq 2 ]] \
-  || fail "AI agents records do not have exactly two bounded readers"
+[[ $(rg -c 'FileView \{' "$service") -eq 3 ]] \
+  || fail "AI agents records do not have exactly three bounded readers"
 rg -q 'running: root\.runtimeProbesEnabled' "$service" \
   || fail "AI polling cannot be disabled for lifecycle validation"
 rg -q 'Component\.onDestruction:' "$service" \

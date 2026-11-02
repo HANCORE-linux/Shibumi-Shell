@@ -42,6 +42,7 @@ Item {
   property bool openCodeAvailable: false
   property var agentsClaudeRecord: null
   property var agentsCodexRecord: null
+  property var agentsAgyRecord: null
   // Current third-party PluginShellApi instances intentionally do not expose
   // the host registry. Prefer the current agents backend when the host root is
   // available; the bounded wrapper returns 66 only when that backend itself is
@@ -53,6 +54,8 @@ Item {
       expiries.push(Number(agentsClaudeRecord.expiresAtMs))
     if (agentsCodexRecord && Number(agentsCodexRecord.expiresAtMs) > 0)
       expiries.push(Number(agentsCodexRecord.expiresAtMs))
+    if (agentsAgyRecord && Number(agentsAgyRecord.expiresAtMs) > 0)
+      expiries.push(Number(agentsAgyRecord.expiresAtMs))
     return expiries.length > 0 ? Math.min.apply(null, expiries) : 0
   }
   property int providerRevision: 0
@@ -128,6 +131,7 @@ Item {
     JSON.stringify({
       claude: providerEnabled("claude"),
       codex: providerEnabled("codex"),
+      agy: providerEnabled("agy"),
       opencode: providerEnabled("opencode"),
       active: serviceActive,
       probes: runtimeProbesEnabled,
@@ -137,7 +141,7 @@ Item {
     })
   readonly property bool anyProviderEnabled:
     providerEnabled("claude") || providerEnabled("codex")
-      || providerEnabled("opencode")
+      || providerEnabled("agy") || providerEnabled("opencode")
   readonly property var providers: {
     void(providerRevision)
     void(settings)
@@ -150,6 +154,7 @@ Item {
     if (agentsBackendActive) {
       appendProviderSnapshot(result, agentsClaudeRecord)
       appendProviderSnapshot(result, agentsCodexRecord)
+      appendProviderSnapshot(result, agentsAgyRecord)
     } else {
       appendProviderSnapshot(result, claudeLoader.item)
       appendProviderSnapshot(result, codexLoader.item)
@@ -369,7 +374,7 @@ Item {
   function resolveTool(preferred) {
     const requested = String(preferred || "")
     if (providerFor(requested)) return requested
-    const order = ["claude", "codex", "opencode"]
+    const order = ["claude", "codex", "agy", "opencode"]
     for (let index = 0; index < order.length; index++) {
       if (providerFor(order[index])) return order[index]
     }
@@ -457,7 +462,8 @@ Item {
     const number = Number(value)
     if (!isFinite(number) || number < 0) return -1
     const providerId = provider ? String(provider.providerId || "") : ""
-    if ((providerId === "claude" || providerId === "codex") && number <= 1)
+    if ((providerId === "claude" || providerId === "codex"
+        || providerId === "agy") && number <= 1)
       return Math.min(100, number * 100)
     return Math.min(100, number)
   }
@@ -537,6 +543,7 @@ Item {
     const record = AgentUsageModel.parseRecord(raw, expectedId, nowMs)
     if (expectedId === "claude") agentsClaudeRecord = record
     else if (expectedId === "codex") agentsCodexRecord = record
+    else if (expectedId === "agy") agentsAgyRecord = record
     providerRevision++
   }
 
@@ -551,14 +558,20 @@ Item {
       agentsCodexRecord = null
       changed = true
     }
+    if (agentsAgyRecord && !agentRecordFresh(agentsAgyRecord, currentMs)) {
+      agentsAgyRecord = null
+      changed = true
+    }
     // Recheck status by age even before the record's admission expires.
-    if (changed || agentsClaudeRecord || agentsCodexRecord) providerRevision++
+    if (changed || agentsClaudeRecord || agentsCodexRecord || agentsAgyRecord)
+      providerRevision++
     return changed
   }
 
   function clearAgentRecord(expectedId) {
     if (expectedId === "claude") agentsClaudeRecord = null
     else if (expectedId === "codex") agentsCodexRecord = null
+    else if (expectedId === "agy") agentsAgyRecord = null
     providerRevision++
   }
 
@@ -577,13 +590,15 @@ Item {
 
   function agentsUpdateCommand(force) {
     const command = [agentsUpdateScript, String(omarchyPath || "")]
-    if (!providerEnabled("claude") && !providerEnabled("codex")) {
+    if (!providerEnabled("claude") && !providerEnabled("codex")
+        && !providerEnabled("agy")) {
       command.push("--probe-only")
       return command
     }
     if (force === true) command.push("--force")
     if (providerEnabled("claude")) command.push("claude")
     if (providerEnabled("codex")) command.push("codex")
+    if (providerEnabled("agy")) command.push("agy")
     return command
   }
 
@@ -668,6 +683,7 @@ Item {
       } else {
         agentsClaudeFile.reload()
         agentsCodexFile.reload()
+        agentsAgyFile.reload()
       }
       if (Number(exitCode) !== 0 && Number(exitCode) !== 66 && error !== "")
         console.warn("Shibumi AI agents update failed:", error.slice(0, 512))
@@ -743,6 +759,19 @@ Item {
     onLoaded: root.applyAgentRecord("codex", text())
     onFileChanged: reload()
     onLoadFailed: root.clearAgentRecord("codex")
+  }
+
+  FileView {
+    id: agentsAgyFile
+    path: root.serviceActive && root.agentsBackendActive
+        && root.providerEnabled("agy")
+      ? root.agentsUsageDir + "/agy.json" : ""
+    watchChanges: root.serviceActive && root.agentsBackendActive
+      && root.providerEnabled("agy")
+    printErrors: false
+    onLoaded: root.applyAgentRecord("agy", text())
+    onFileChanged: reload()
+    onLoadFailed: root.clearAgentRecord("agy")
   }
 
   Loader {

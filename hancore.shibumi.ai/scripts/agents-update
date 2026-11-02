@@ -94,6 +94,15 @@ if [[ ${1:-} == --probe-only ]]; then
   exit 0
 fi
 
+# Antigravity's collector only ships with newer Omarchy; without it the provider
+# is simply absent, and the Claude and Codex records must still update.
+requested_agents=()
+for argument in "$@"; do
+  [[ $argument == agy && ! -x $omarchy_path/bin/omarchy-agent-usage-agy ]] \
+    || requested_agents+=("$argument")
+done
+set -- "${requested_agents[@]}"
+
 codex_requested=false
 agent_id_count=0
 for argument in "$@"; do
