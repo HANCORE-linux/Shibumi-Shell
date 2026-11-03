@@ -195,10 +195,9 @@ Shibumi provider. If the quick-access service is unavailable, declines the
 request, or **Omarchy** is selected, routing falls back to the native Omarchy
 picker.
 
-Switching to the stock Omarchy bar resets the Theme & Wallpaper provider to
-**Omarchy** automatically. The Screenshots & Videos choice is independent and
-is retained. When Shibumi is activated again, Theme & Wallpaper remains on
-**Omarchy** until Tanzaku or Hearthstone is selected explicitly.
+`shibumi-suite deactivate` remembers the Theme & Wallpaper provider and selects **Omarchy** while the stock bar is active.
+`shibumi-suite activate` restores the remembered provider. Screenshots & Videos is independent and retained.
+`deactivate --keep-layout` continues to select **Omarchy** without remembering the provider.
 
 ## Bar ownership
 

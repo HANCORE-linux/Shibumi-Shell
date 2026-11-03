@@ -1,22 +1,99 @@
 # Changelog
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-11-04
 
 ### Highlights
 
-- Placeholder: Maintainer-approved release text pending.
+- **First stable release.** Horizontal Top and Bottom bars on Omarchy Quattro, validated on
+  Omarchy 4.0.6 / Quickshell 0.3.2 / Qt 6.12 and against the forward reference 0d8edf38.
+  The release channel is stable; Beta 16.4, 16.5 and 16.5.1 installations update in place.
+- **Per-monitor workspaces (#88).** When Omarchy's monitor-workspaces state file exists, the
+  Workspaces widget shows and focuses the slots of its own monitor; without the file the
+  behavior is unchanged.
+- **Notifications on the new Omarchy engine.** The Recent list reads the host's history.json
+  read-only; on Omarchy 4.0.6 nothing changes.
+- **V1 "Icon only".** Every V1 widget gains a third presentation next to Default and Compact:
+  symbol only, no values. The clock keeps its time, the workspace row keeps every marker, Now
+  Playing shows only play/pause. Saved Compact settings are unchanged.
+- **Control Center header.** The "SHIBUMI V1 ACTIVE" status is replaced by a compact readout
+  of the rendered bar style and position, for example "Default · Top" or "Omarchy · Top".
+
+### Changed
+
+- Default-style marquee renders through a shader over a static text texture: one commit per
+  scroll step and about half the process CPU while media plays, with identical pixels.
+- Workspace widgets share one ink grid per module; GUI work per workspace switch drops from
+  about 220–280 ms to 12–26 ms in the fixture, pixels identical.
+- Memory Sweep runs are bound to the telemetry owner; an owner change ends the run and shows
+  "Sweep owner changed" instead of a vanished dialog.
+- Forward compatibility is pinned to Omarchy 0d8edf38 (2026-10-23).
+- Three unread media properties and an obsolete test fixture were removed.
 
 ### Fixed
 
-- Placeholder: Maintainer-approved stabilization summary pending.
+- Status width oscillation at fractional scales (#92, by Matthew Guzzo): in the content-sized
+  Fit, Dock and Notch shells at 1.25x the status group's ink contraction fed back into its own
+  position, the bar resized by 1–3 px every frame and Quickshell pinned a core. The cause was
+  the shell origin being rounded to logical instead of device pixels; it is now snapped to the
+  device grid, and the reservation additionally ignores an immediate return to the value it
+  just left. At fractional scales Fit, Dock and Notch may sit up to one logical pixel from
+  their 16.5.1 position, with their left edge on a whole device pixel.
+- Switching to the stock Omarchy bar and back (Control Center → Bars, or `shibumi-suite
+  deactivate` / `activate`) now keeps the Shibumi bar position and the Theme & Wallpaper
+  provider: a bottom bar returns at the bottom, Tanzaku or Hearthstone is restored; while the
+  stock bar is active the native picker is used.
+- The low-battery pulse, the recording and voxtype indicators and the launcher hover effect no
+  longer animate every display frame. They step about ten times per second along the same
+  curve; on a 120 Hz display a bar with a low battery dropped from full-rate redraws (about a
+  tenth of a CPU core) to ten frames per second.
 
 ### Validation
 
-- Placeholder: exact-candidate evidence and acceptance wording pending.
+- Complete forward (0d8edf38), installed-package and source-parity (4.0.6) aggregates, the
+  full Python suites and the identity, scaffold and documentation checks pass on the exact
+  candidate. Default and Compact rest images are pixel-identical to the previous candidate in
+  all 336 compared pairs; the 1.25x status cycle is reproduced and stopped in the fixture.
 
 ### Known limits
 
-- Placeholder: Maintainer-approved limits and downgrade wording pending.
+- Horizontal Top and Bottom bars are supported. Vertical bars are outside the 0.2.0 scope.
+- Notifications: the host hands plugins only the Do-Not-Disturb switch, so Live rows are
+  unavailable in the Shibumi panel. Recent comes from the host's persisted history. On
+  Omarchy 4.0.6 the list, per-row removal and "Clear all" work as before; on the new
+  notification engine (Omarchy 4.5 prerelease, forward pin 0d8edf38) Recent is read-only
+  and those two controls are hidden because the host offers no history mutation. Clicking a
+  Recent row only focuses the application. Notification focus remains limited when the
+  sender provides no supported application identity.
+- Omarchy 4.5 is validated against the pinned source tree 0d8edf38 and fixtures only, not
+  on a live 4.5 host. Support for every 4.5 build is not implied.
+- Content-sized shells (Fit, Dock, Notch): after a layout change that crosses a responsive
+  threshold (for example the centre group hiding or showing its date), the shell can settle
+  through a few one-device-pixel steps for well under a second. The self-induced relayout
+  cycle of the status group at fractional scales is fixed (shell origin on the device grid,
+  plus #92). Live acceptance of the final candidate on a fractional-scale host is pending.
+- Tray-drawer entries are retained and disclosed but not rendered in Shibumi; use the stock
+  Omarchy bar for their drawer presentation.
+- Physical multi-output, mixed-scale, hotplug, DPMS/suspend/resume, enterprise Wi-Fi and
+  Bluetooth device workflows need their own live evidence. No blanket hardware acceptance
+  follows from these fixtures.
+- Local whole-ink, workspace/Pacman, meter, Calendar overhang and charge-bolt raster limits
+  are not declared solved by the ordinary-text baseline work.
+- Bluetooth power affects all radios through the host helper and cannot clear a hardware
+  block. The 20-second pending deadline does not stop the detached process or prevent later
+  effects.
+- The horizontal update count shares the bar-value baseline and CPU ink spacing.
+  Its leading reservation grows on an output-scale grid. Status inner-spacing
+  savings are returned to the group width; centered Fit preserves whole-physical-
+  pixel movements relative to the previous raster phase. Complete other-widget
+  rectangles are not all RGBA-identical after translation, and the restored V1
+  island edges change slot backgrounds. Exact whole-bar pixel identity and
+  physical acceptance are not claimed.
+- Downgrade: Beta.15.4 and older cannot read V1 `order.parked`; they reset V1 order, roles
+  and splits while retaining other settings and V2. `--keep-settings` does not prevent this.
+  Back up the settings before a downgrade (see install.md) and restore them with a matching
+  payload.
+- Packaging: an omarchy-pkgs (OPR) recipe is prepared after this release; AUR is not the
+  target.
 
 ## [0.1.1-beta.16.5.1] - 2026-10-23
 

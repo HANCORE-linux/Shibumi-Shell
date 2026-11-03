@@ -16,7 +16,7 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.2.0` is the target GitHub prerelease. See the
+`0.2.0` is the first stable release target. See the
 [release notes](.github/release-notes/v0.2.0.md) for changes. Before using an older version, read the
 [backup and downgrade warning](docs/install.md#backup-before-downgrade).
 The current pinned host contracts use Omarchy and Omarchy Settings `4.0.6-1`
@@ -59,6 +59,17 @@ for the latest validated host versions.
   </tr>
 </table>
 
+## What 0.2.0 supports
+
+Shibumi 0.2.0 is the first stable release: a stabilization of the Beta 16 line for horizontal
+Top and Bottom bars on Omarchy Quattro. The validated stack is Omarchy 4.0.6, Quickshell 0.3.2
+and Qt 6.12; forward compatibility is checked against the pinned Omarchy revision 0d8edf38,
+not against arbitrary newer hosts. Physical acceptance is single-output; multi-output,
+mixed-scale, hotplug and suspend/resume need their own live evidence. Update through the
+admitted update and recovery route (docs/install.md#update), never from a checkout of main.
+The 0.x series is release-stable but API-unstable: plugin and configuration APIs may still
+change between releases.
+
 ## Install
 
 > [!IMPORTANT]
@@ -76,10 +87,11 @@ Run the Pacman line yourself; it installs the runtime commands and fonts and
 is the only step that needs `sudo`. The Shibumi suite never calls Pacman: it
 runs as the desktop user and writes only user-scoped plugin state.
 
-Update an admitted Beta.16.4 or Beta.16.5 source installation to 0.2.0.
-The exact Beta.16.4 tag (`64b9369`) and merge (`aec6c0a`), and Beta.16.5
-tag (`8b34d030`) and merge (`1d7a00b2`), are admitted predecessors. Exact identities, not a version range, govern
-admission; see the [update guide](docs/install.md#update).
+Update an exactly admitted source installation to 0.2.0. The most recent
+published predecessor is Beta.16.5.1: tag `20108270` and main integration merge
+`a5302f11` have the same released payload. Older supported identities remain
+admitted; exact revisions and payloads, not a version range, govern admission.
+See the [update guide](docs/install.md#update).
 
 ```sh
 cd Shibumi-Shell
