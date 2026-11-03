@@ -2920,6 +2920,9 @@ class SuiteLifecycleTests(unittest.TestCase):
 
     def test_activate_after_deactivate_keeps_host_layouts_separate(self) -> None:
         self.install()
+        config = json.loads(self.paths.config_file.read_text())
+        config["bar"]["position"] = "bottom"
+        atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(
             command_deactivate(self.args(), self.suite, self.paths, self.runtime),
             0,
@@ -2933,6 +2936,8 @@ class SuiteLifecycleTests(unittest.TestCase):
             for entry in inactive["bar"]["layout"][region]
         }
         self.assertIn("omarchy.menu", inactive_ids)
+        self.assertEqual(inactive["bar"]["position"], "top")
+        command_deactivate(self.args(), self.suite, self.paths, self.runtime)
 
         self.assertEqual(
             command_activate(self.args(), self.suite, self.paths, self.runtime),
@@ -2948,6 +2953,29 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertFalse(
             any(plugin_id.startswith("omarchy.") for plugin_id in active_ids)
         )
+        self.assertEqual(active["bar"]["position"], "bottom")
+        active["bar"].pop("id")  # Native bar reset/use keeps position host-shared.
+        active["bar"]["position"] = "top"
+        atomic_write(self.paths.config_file, encode_config(active))
+        command_activate(self.args(), self.suite, self.paths, self.runtime)
+        self.assertEqual(json.loads(self.paths.config_file.read_text())["bar"]["position"], "top")
+
+    def test_deactivate_activate_restores_picker_provider(self) -> None:
+        self.install()
+        for provider in ("tanzaku", "hearthstone", "omarchy"):
+            with self.subTest(provider=provider):
+                config = json.loads(self.paths.config_file.read_text())
+                picker = {"imageStyle": provider, "mediaStyle": "hearthstone"}
+                state_entry(config)["shibumi"]["picker"] = picker
+                atomic_write(self.paths.config_file, encode_config(config))
+                for _ in range(2):  # An already inactive host must not overwrite memory.
+                    self.assertEqual(command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0)
+                    inactive = json.loads(self.paths.config_file.read_text())
+                    self.assertEqual(state_entry(inactive)["shibumi"]["picker"],
+                                     {**picker, "imageStyle": "omarchy"})
+                self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
+                active = json.loads(self.paths.config_file.read_text())
+                self.assertEqual(state_entry(active)["shibumi"]["picker"], picker)
 
     def test_uninstall_preserves_existing_menu_extension(self) -> None:
         extension = self.paths.menu_extension_file
