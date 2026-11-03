@@ -182,6 +182,8 @@ Item {
     const mode = String(value || "full")
     if (variant === "v2")
       return ["full", "icon", "text"].indexOf(mode) >= 0 ? mode : "full"
+    if (/^G([1-9]|1[0-5])$/.test(group) && mode === "icon-only")
+      return "icon-only"
     const compactGroups = [
       "G4", "G5", "G6", "G11", "G12", "G13", "G14", "G15", "G18",
       "G:hancore.shibumi.storage"

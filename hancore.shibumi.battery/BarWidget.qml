@@ -41,13 +41,15 @@ Ui.Panel {
     ? Qt.rgba(chargingDetailColor.r, chargingDetailColor.g,
         chargingDetailColor.b, chargingDetailColor.a * 0.18)
     : Qt.rgba(1, 1, 1, 0.18)
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property string batteryOrientation:
     setting("batteryOrientation", "horizontal") === "vertical"
       ? "vertical" : "horizontal"
   readonly property bool compact: displayMode === "icon"
-  readonly property bool compactValueVisible: !!bar && !bar.vertical
+  readonly property bool compactValueVisible: !iconOnly && !!bar && !bar.vertical
     && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property bool hasBattery: !!(powerService && powerService.hasBattery)
   readonly property int percent: powerService ? powerService.percent : 0

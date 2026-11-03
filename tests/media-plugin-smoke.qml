@@ -573,6 +573,11 @@ ShellRoot {
       } else if (root.phase === 5) {
         if (media.opened || media.panelLoaded || media.activePlayer !== playerB)
           return root.fail("lazy panel close")
+        root.mediaShellStyle = "shibumi"
+        root.mediaSettings = ({displayMode: "icon-only", mediaStyle: "full"})
+        if (!media.iconMode || media.v1FullVisible || media.museVisible || media.spectrumRequested || media.motionRunning)
+          return root.fail("Icon-only media must be static play/pause only")
+        root.mediaSettings = ({mediaStyle: "default"})
         mediaState.activePlayer = null
       } else if (root.phase === 6) {
         if (media.active || media.implicitWidth >= root.activeWidth)

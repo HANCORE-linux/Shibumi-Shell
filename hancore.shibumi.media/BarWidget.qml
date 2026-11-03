@@ -34,15 +34,14 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  // Now Playing follows the two-presentation contract shared by the original
-  // V1 and V2 shells. It is deliberately not part of the generic
-  // icon/text/full content-mode family used by the other V2 widgets.
+  // Keep both saved media styles; only V1 admits the separate Icon-only mode.
   readonly property string mediaStyle:
     String(setting("mediaStyle", "default")) === "full"
       ? "full" : "default"
-  readonly property bool defaultMode: mediaStyle === "default"
-  readonly property bool fullMode: mediaStyle === "full"
-  readonly property bool iconMode: false
+  readonly property bool defaultMode: mediaStyle === "default" && !iconMode
+  readonly property bool fullMode: mediaStyle === "full" && !iconMode
+  readonly property bool iconMode: v1Presentation
+    && setting("displayMode", "full") === "icon-only"
   readonly property bool textMode: false
   readonly property bool v1Presentation: !tokens
     || String(tokens.shellStyle || "shibumi") === "shibumi"
@@ -55,7 +54,7 @@ Ui.Panel {
   property var museLevels: []
   readonly property bool pulseSettling: (horizontalPulse.visible && horizontalPulse.settling)
     || (verticalPulse.visible && verticalPulse.settling)
-  readonly property bool motionRunning: visible && !opened && (playing || pulseSettling)
+  readonly property bool motionRunning: visible && !opened && (playing || pulseSettling) && !iconMode
   property bool motionStepping: false
   property int motionStep: 0
   readonly property string spectrumState: spectrumService
@@ -165,7 +164,7 @@ Ui.Panel {
     anchors.centerIn: parent
     implicitWidth: !root.tokens ? 0 : root.bar && root.bar.vertical
       ? root.bar.barSize
-      : (root.active
+      : (root.active && !root.iconMode
           ? (root.museMode ? muse.implicitWidth
             : activeRow.implicitWidth)
           : idleIcon.implicitWidth)
@@ -213,7 +212,7 @@ Ui.Panel {
     Presentation.BarGlyph {
       id: idleIcon
       anchors.centerIn: parent
-      visible: !root.active
+      visible: !root.active && !root.iconMode
       text: "music_note"
       color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
         root.widgetInk.b, 0.45)
@@ -388,8 +387,7 @@ Ui.Panel {
 
     Presentation.BarGlyph {
       id: activeIcon
-      visible: root.active && root.iconMode
-        && (!root.bar || !root.bar.vertical)
+      visible: root.iconMode
       anchors.centerIn: parent
       text: root.playing ? "pause" : "play_arrow"
       color: root.widgetInk
@@ -416,7 +414,7 @@ Ui.Panel {
     }
 
     Column {
-      visible: root.active && root.bar && root.bar.vertical
+      visible: root.active && !root.iconMode && root.bar && root.bar.vertical
       anchors.centerIn: parent
       spacing: Commons.Style.space(2)
 

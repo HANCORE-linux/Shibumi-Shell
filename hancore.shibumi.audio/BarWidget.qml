@@ -40,11 +40,13 @@ Ui.Panel {
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
   readonly property var audioStateService: suiteShell.serviceFor("hancore.shibumi.audio")
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
-  readonly property bool horizontalValueVisible: displayMode !== "icon"
-    || tokens.v2Shell !== true
+  readonly property bool horizontalValueVisible: !iconOnly
+    && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property var panelItem: popupLoader.item
   readonly property bool panelLoaded: panelItem !== null
   readonly property bool audioReady: audioBridge.ready
@@ -421,6 +423,7 @@ Ui.Panel {
       }
 
       Text {
+        visible: !root.iconOnly
         anchors.horizontalCenter: parent.horizontalCenter
         text: String(root.volume).padStart(2, "0") + "%"
         color: root.widgetInk

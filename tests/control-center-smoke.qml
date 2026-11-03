@@ -779,7 +779,7 @@ ShellRoot {
         if (!appearance.openWidgetDetails("G5", "")
             || !appearance.selectedV1Appearance
             || appearance.selectedV1CpuCompact
-            || appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions.length !== 3
             || appearance.selectedWidgetModeOptions[0].value !== "full"
             || appearance.selectedWidgetModeOptions[0].label !== "Default"
             || appearance.selectedWidgetModeOptions[1].value !== "icon"
@@ -788,6 +788,8 @@ ShellRoot {
         if (!appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "icon"
             || !appearance.selectedV1CpuCompact
+            || !appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "icon-only"
             || !appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "full"
             || appearance.selectedV1CpuCompact)
@@ -837,7 +839,7 @@ ShellRoot {
         appearance.showWidgetOverview()
         if (!appearance.openWidgetDetails("G9", "")
             || appearance.selectedWidgetMode !== "default"
-            || appearance.selectedWidgetModeOptions.length !== 2
+            || appearance.selectedWidgetModeOptions.length !== 3
             || appearance.selectedWidgetModeOptions[0].value !== "default"
             || appearance.selectedWidgetModeOptions[0].label !== "Default"
             || appearance.selectedWidgetModeOptions[1].value !== "full"
@@ -848,6 +850,8 @@ ShellRoot {
               "G9", "v2", "mediaStyle", "") !== "default")
           return root.fail("V1 Now Playing Default/Compact contract drifted")
         if (!appearance.cycleSelectedWidgetMode()
+            || appearance.selectedWidgetMode !== "icon-only"
+            || !appearance.cycleSelectedWidgetMode()
             || appearance.selectedWidgetMode !== "default")
           return root.fail("V1 Now Playing style did not restore")
         if (!appearance.controller.setGroupSetting("G9", "color", "color05")

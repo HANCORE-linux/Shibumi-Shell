@@ -71,7 +71,9 @@ Ui.Panel {
     : stateService && stateService.config ? stateService.config : ({})
   readonly property var launcherConfig: launcherStateConfig.launcher
     || ({ mode: "text", text: "shibumi", icon: "omarchy" })
-  readonly property bool iconMode: stockOmarchyHost
+  readonly property bool iconOnly: shellStyle === "shibumi"
+    && setting("displayMode", "full") === "icon-only"
+  readonly property bool iconMode: stockOmarchyHost || iconOnly
     || String(launcherConfig.mode || "text") === "icon"
   readonly property string effectiveLauncherText:
     String(launcherConfig.text || "shibumi")

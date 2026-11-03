@@ -60,7 +60,11 @@ Ui.Panel {
   Presentation.HostTokens { id: hostTokens; bar: root.bar }
   readonly property var tokens: bar && "visualTokens" in bar
     && bar.visualTokens ? bar.visualTokens : hostTokens
-  readonly property bool countVisible: !vertical && updateCount > 0
+  readonly property bool iconOnly: tokens.v2Shell !== true && stateService
+    && typeof stateService.groupAppearanceSettingForVariant === "function"
+    && stateService.groupAppearanceSettingForVariant(
+      "G3", "v1", "displayMode", "full") === "icon-only"
+  readonly property bool countVisible: !iconOnly && !vertical && updateCount > 0
   Presentation.BarInk { id: countPlacement; target: root }
   // Fit rounds its origin in logical pixels. Keep both the full expansion and
   // its centered half integral in logical AND physical pixels (Wayland /120).

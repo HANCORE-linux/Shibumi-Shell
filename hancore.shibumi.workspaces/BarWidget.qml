@@ -41,12 +41,15 @@ Ui.Panel {
     ? workspaceService.workspaceIdsForMonitor(monitor) : workspaceService.visibleWorkspaceIds
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && displayMode === "icon-only"
   readonly property bool compact: displayMode === "icon"
   readonly property string workspaceStyle: workspaceService
     ? workspaceService.style : "default"
   readonly property bool v2Mode: bar && bar.layoutController
     ? bar.layoutController.v2Mode === true : false
-  readonly property string renderStyle: displayMode === "icon" ? "rings"
+  readonly property string renderStyle: iconOnly ? "default"
+    : displayMode === "icon" ? "rings"
     : displayMode === "text" ? "numbers" : workspaceStyle
   // V1 keeps the original QS Rise radius contract. The later V2 renderer has
   // fixed marker geometry and must not inherit the V1 Radius 12/6 setting.
@@ -61,7 +64,7 @@ Ui.Panel {
       && tokens.presentation.radius === "small"
         ? Commons.Style.space(6) : Commons.Style.space(9)
   readonly property var displayedWorkspaceIds: {
-    if (displayMode === "full") return workspaceIds
+    if (displayMode === "full" || iconOnly) return workspaceIds
     for (var index = 0; index < workspaceIds.length; index++) {
       if (workspaceState(workspaceIds[index]).focused)
         return [workspaceIds[index]]

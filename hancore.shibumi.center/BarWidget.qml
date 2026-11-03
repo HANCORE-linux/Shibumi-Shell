@@ -37,6 +37,8 @@ Ui.Panel {
     && tokens.widgetHasFill(settings))
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && displayMode === "icon-only"
   readonly property bool compact: displayMode === "icon"
   property var centerService: bar && bar.shell
     && typeof bar.shell.serviceFor === "function"
@@ -62,6 +64,7 @@ Ui.Panel {
   readonly property real centerPadding: tokens ? tokens.pillPaddingX : 9
   readonly property real centerSpacing: Commons.Style.space(8)
   readonly property real needMinimal: 2 * centerPadding + clockWidget.implicitWidth
+    + (iconOnly ? centerSpacing + scheduleGlyph.implicitWidth : 0)
     + (showIndicators ? centerSpacing + statusNaturalWidth : 0)
   readonly property real minimumResponsiveWidth: needMinimal
   readonly property real needCompact: needMinimal
@@ -231,7 +234,8 @@ Ui.Panel {
     }
 
     Presentation.BarGlyph {
-      visible: root.displayMode === "icon"
+      id: scheduleGlyph
+      visible: root.displayMode === "icon" || root.iconOnly
       anchors.verticalCenter: parent.verticalCenter
       text: "schedule"
       color: root.widgetInk

@@ -213,7 +213,7 @@ for launcher_owner_contract in \
     'BarWidget.qml:String(launcherConfig.text || "shibumi")' \
     'WidgetAppearanceWorkbench.qml:readonly property bool selectedLauncher: selectedCatalogGroup === "G1"' \
     'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G1") return []' \
-    'WidgetAppearanceWorkbench.qml:if (!selectedSupported || selectedLauncher) return false' \
+    'WidgetAppearanceWorkbench.qml:if (!selectedSupported || (selectedLauncher && !v1LayoutActive)) return false' \
     'WidgetAppearanceWorkbench.qml:visible: !root.selectedLauncher' \
     'WidgetAppearanceWorkbench.qml:return "Logo · " + (String(controller.launcherConfig.mode || "text")' \
     'BarFunctionsPage.qml:Launcher identity stays under Logo.'; do
@@ -222,10 +222,9 @@ for launcher_owner_contract in \
   rg -Fq "$label" "$control_dir/$file" \
     || fail "launcher presentation ownership drifted: $label"
 done
-if rg -q 'setting\("displayMode"|displayMode ===' \
-    "$control_dir/BarWidget.qml"; then
-  fail "launcher rendering still depends on generic widget presentation"
-fi
+rg -Fq '&& setting("displayMode", "full") === "icon-only"' \
+  "$control_dir/BarWidget.qml" \
+  || fail "launcher Icon-only presentation missing"
 for header_contract in \
   'ControlCenterPanel.qml:id: headerBand' \
   'ControlCenterPanel.qml:id: headerDivider' \
@@ -1851,7 +1850,7 @@ for profile_icon_contract in \
     'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Compact" }' \
     'WidgetAppearanceWorkbench.qml:readonly property var v1CompactGroupIds:' \
     'WidgetAppearanceWorkbench.qml:if (catalogGroup === "G9") return mediaStyleOptions' \
-    'WidgetAppearanceWorkbench.qml:if (controller.v2LayoutActive === true) return displayModeOptions' \
+    'WidgetAppearanceWorkbench.qml:return displayModeOptions' \
     'WidgetAppearanceWorkbench.qml:{ value: "full", label: "Default", enabled: true }' \
     'WidgetAppearanceWorkbench.qml:{ value: "icon", label: "Compact", enabled: true }' \
     'WidgetAppearanceWorkbench.qml:readonly property bool selectedV1Appearance:' \

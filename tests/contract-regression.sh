@@ -697,7 +697,7 @@ if rg -q 'Process \{|FileView \{|Animation.*\{|Qt\.callLater' hancore.shibumi.me
   || [[ $(rg -c 'Timer \{' hancore.shibumi.media/BarWidget.qml) -ne 1 ]] \
   || ! rg -q 'interval: 40' hancore.shibumi.media/BarWidget.qml \
   || ! rg -q 'running: root.motionRunning' hancore.shibumi.media/BarWidget.qml \
-  || ! rg -Fq 'readonly property bool motionRunning: visible && !opened && (playing || pulseSettling)' hancore.shibumi.media/BarWidget.qml \
+  || ! rg -Fq 'readonly property bool motionRunning: visible && !opened && (playing || pulseSettling) && !iconMode' hancore.shibumi.media/BarWidget.qml \
   || ! rg -Fq 'restElapsed = Math.min(480, restElapsed + milliseconds)' hancore.shibumi.media/MediaPulse.qml; then
   fail "media surface must own exactly one bounded cadence and no backend workers"
 fi

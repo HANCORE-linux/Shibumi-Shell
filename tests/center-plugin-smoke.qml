@@ -474,6 +474,11 @@ ShellRoot {
         if (!reveal) return root.fail("reveal helper load")
         reveal.hide(); center.availableWidth = 500
         if (!reveal.checkReveal()) return root.fail("reveal helper")
+        fakeBar.visualTokens = Object.assign({}, fakeBar.visualTokens, {v2Shell: false, shellStyle: "shibumi"})
+        center.settings = ({displayMode: "icon-only"})
+        const clock = Array.from(center.children).reduce((all, c) => all.concat(Array.from(c.children || [])), []).find(c => "clockService" in c)
+        if (!center.iconOnly || center.showDate || center.showWeather || !clock || !clock.visible)
+          return root.fail("Icon-only keeps clock, hides date/weather")
         console.log("center plugin smoke passed")
         Qt.quit()
       }

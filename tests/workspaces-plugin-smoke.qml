@@ -395,6 +395,10 @@ ShellRoot {
         const lazy = Qt.createComponent("workspace-lazy-paint.qml").createObject(root, {workspace: widget})
         if (!lazy || !lazy.check()) return root.fail("lazy paint helper")
         lazy.destroy()
+        widget.settings = ({displayMode: "icon-only"})
+        if (widget.renderStyle !== "default" || widget.renderedWorkspaceCount !== 10
+            || !widget.activateWorkspace(8) || !fakeBar.lastCommand[2].includes('"8"'))
+          return root.fail("Icon-only keeps selectable marker row")
         console.log("workspaces plugin smoke passed")
         Qt.quit()
       }
