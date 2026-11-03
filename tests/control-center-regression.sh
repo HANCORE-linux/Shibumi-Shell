@@ -229,9 +229,9 @@ for header_contract in \
   'ControlCenterPanel.qml:id: headerBand' \
   'ControlCenterPanel.qml:id: headerDivider' \
   'ControlCenterPanel.qml:ActiveBarStatus {' \
-  'ActiveBarStatus.qml:stateService.paletteColor("color03")' \
-  'ActiveBarStatus.qml:"OMARCHY BAR ACTIVE"' \
-  'ActiveBarStatus.qml:"SHIBUMI V2 ACTIVE" : "SHIBUMI V1 ACTIVE"' \
+  'ControlCenterPanel.qml:shellStyle: panel.shellStyle' \
+  'ControlCenterPanel.qml:barPosition: panel.barPosition' \
+  'ActiveBarStatus.qml:readonly property string statusText: styleName + " · " + positionName' \
   'ControlCenterPanel.qml:anchors.leftMargin: Commons.Style.space(20)' \
   'ControlCenterPanel.qml:anchors.rightMargin: Commons.Style.space(20)' \
   'ControlSettings.qml:anchors.leftMargin: Commons.Style.space(20)' \

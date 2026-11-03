@@ -27,10 +27,7 @@ ShellRoot {
   property var stableHealthReport: null
   property var lifecycleHealthService: null
   property int lifecycleReportEpoch: 0
-  property int activeBarStatusStep: 0
   property bool statusStockHost: false
-  property bool statusV2Layout: false
-  property real widestActiveBarStatus: 0
   property int paletteLifecycleStep: 0
   property int paletteInitialTileCount: 0
   property int quickBarIdentityStep: 0
@@ -329,17 +326,17 @@ ShellRoot {
 
   QtObject {
     id: fakeStatusState
-    function paletteColor(name) {
-      return name === "color03" ? "#33aa55" : "#ffffff"
-    }
+    property var config: ({presentation: {shellStyle: "shibumi"}})
+    property var requestedConfig: ({presentation: {shellStyle: "notch"}})
+    property string position: "top"
   }
 
   Control.ActiveBarStatus {
     id: activeBarStatusProbe
     visible: false
     stockOmarchyHost: root.statusStockHost
-    v2LayoutActive: root.statusV2Layout
-    stateService: fakeStatusState
+    shellStyle: fakeStatusState.config.presentation.shellStyle
+    barPosition: fakeStatusState.position
     neutralColor: "#aabbcc"
     fontFamily: "monospace"
   }
@@ -388,34 +385,21 @@ ShellRoot {
 
       if (root.phase === 0) {
         if (!stateService.ready || !widget || root.ticks < 3) return
-        root.widestActiveBarStatus = Math.max(root.widestActiveBarStatus,
-          activeBarStatusProbe.implicitWidth)
-        if (root.activeBarStatusStep === 0) {
-          if (activeBarStatusProbe.statusText !== "SHIBUMI V1 ACTIVE"
-              || activeBarStatusProbe.Accessible.role !== Accessible.StaticText
-              || activeBarStatusProbe.Accessible.name !== "SHIBUMI V1 ACTIVE"
-              || String(activeBarStatusProbe.renderedDotColor) !== "#33aa55"
-              || String(activeBarStatusProbe.renderedLabelColor) !== "#aabbcc")
-            return root.fail("V1 active-bar header status")
-          root.statusV2Layout = true
-          root.activeBarStatusStep = 1
-          return
-        }
-        if (root.activeBarStatusStep === 1) {
-          if (activeBarStatusProbe.statusText !== "SHIBUMI V2 ACTIVE"
-              || activeBarStatusProbe.Accessible.name !== "SHIBUMI V2 ACTIVE")
-            return root.fail("V2 active-bar header status")
-          root.statusStockHost = true
-          root.activeBarStatusStep = 2
-          return
-        }
-        if (root.activeBarStatusStep === 2) {
-          if (activeBarStatusProbe.statusText !== "OMARCHY BAR ACTIVE"
-              || activeBarStatusProbe.Accessible.name !== "OMARCHY BAR ACTIVE"
-              || activeBarStatusProbe.implicitWidth <= 0
-              || root.widestActiveBarStatus >= 240)
-            return root.fail("Omarchy active-bar header status geometry")
-          root.activeBarStatusStep = 3
+        for (const style of ["shibumi", "full", "fit", "notch", "omarchy"]) {
+          for (const position of ["top", "bottom", "left", "right"]) {
+            fakeStatusState.config = ({presentation: {shellStyle: style}})
+            fakeStatusState.requestedConfig = ({presentation: {shellStyle: "notch"}})
+            fakeStatusState.position = position
+            root.statusStockHost = style === "omarchy"
+            const expected = ({shibumi: "Default", full: "Full", fit: "Fit", notch: "Notch", omarchy: "Omarchy"})[style]
+              + " · " + position[0].toUpperCase() + position.slice(1)
+            if (activeBarStatusProbe.statusText !== expected
+                || activeBarStatusProbe.Accessible.role !== Accessible.StaticText
+                || activeBarStatusProbe.Accessible.name !== expected
+                || String(activeBarStatusProbe.renderedLabelColor) !== "#aabbcc"
+                || activeBarStatusProbe.implicitWidth <= 0 || activeBarStatusProbe.implicitWidth >= 240)
+              return root.fail("authoritative header style/position: " + expected)
+          }
         }
         if (String(favoriteTileProbe.favoriteStatusColor) !== "#336699"
             || String(favoriteTileProbe.favoriteGlyphColor) !== "#336699"

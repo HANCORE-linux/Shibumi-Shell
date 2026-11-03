@@ -1558,6 +1558,7 @@ ShibumiPanel {
         Text {
           width: parent.width - stateSync.width - closeAction.width
             - parent.spacing * 2
+          elide: Text.ElideRight
           anchors.verticalCenter: parent.verticalCenter
           text: panel.stockOmarchyHost
             ? "SHIBUMI  /  RETURN TO SHIBUMI"
@@ -1589,8 +1590,8 @@ ShibumiPanel {
           id: stateSync
           anchors.verticalCenter: parent.verticalCenter
           stockOmarchyHost: panel.stockOmarchyHost
-          v2LayoutActive: panel.v2LayoutActive
-          stateService: panel.stateService
+          shellStyle: panel.shellStyle
+          barPosition: panel.barPosition
           neutralColor: panel.marketText
           fontFamily: panel.bar
             ? panel.bar.fontFamily : Commons.Style.font.family
