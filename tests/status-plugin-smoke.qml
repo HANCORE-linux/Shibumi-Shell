@@ -447,6 +447,7 @@ ShellRoot {
       const notifications = scopedDiagnosticStatus.notificationService
       if (scopedDiagnosticStatus.idleService !== leasedIdleA || !notifications)
         return fail("scoped Status did not resolve owner A")
+      if (notifications.historyState === "loading") return false
       if (notifications === leasedNotificationsA
           || !scopedDiagnosticStatus.stayAwake
           || !scopedDiagnosticStatus.notificationsSilenced
@@ -502,6 +503,7 @@ ShellRoot {
       const notifications = scopedDiagnosticStatus.notificationService
       if (scopedDiagnosticStatus.idleService !== leasedIdleB || !notifications)
         return fail("scoped Status did not resolve owner B")
+      if (notifications.historyState === "loading") return false
       if (scopedDiagnosticStatus.stayAwake
           || scopedDiagnosticStatus.notificationsSilenced
           || !notifications.historyAvailable

@@ -1433,8 +1433,24 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
       rg -q "$status_contract" "$official_notification_service" \
         || fail "official legacy notification contract changed: $status_contract"
     done
+  elif rg -Fq 'service.stateDir + "/history.json"' "$official_notification_service"; then
+    # The plugin proxy grants DND only; Recent consumes documented disk state,
+    # not the root service's private models or toast mutation methods.
+    for status_contract in doNotDisturb setDoNotDisturb; do
+      rg -q "$status_contract" "$official_notification_service" \
+        && rg -q "$status_contract" "${OMARCHY_PATH}/shell/services/PluginFirstPartyServiceApi.qml" \
+        || fail "official notification proxy contract changed: $status_contract"
+    done
+    rg -Fq 'Quickshell.env("HOME") + "/.local/state/omarchy/notifications"' "$official_notification_service" \
+      || fail 'official notification state directory changed'
+    for status_contract in '"key"' 'ts: Date.now() / 1000' closed_ts closed_reason 'function parseHistory('; do
+      rg -Fq "$status_contract" "${official_notification_service%/*}/Store.js" \
+        || fail "official notification history format changed: $status_contract"
+    done
+    rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
+      || fail 'official notification history persistence is no longer documented'
   else
-    fail "official notification service exposes neither current nor legacy model contract"
+    fail "official notification service exposes no supported model or history.json contract"
   fi
 
   host_has_module() {

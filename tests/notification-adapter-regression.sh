@@ -85,7 +85,28 @@ EOF
       >"$root/state/omarchy/notifications/history/poison.json"
   fi
 
-  if [[ $history_mode == proxy ]]; then
+  if [[ $history_mode == json* ]]; then
+    local base="$root/home/.local/state/omarchy/notifications"
+    printf '%s\n' '{"summary":"Migration leftover","timestamp":999}' >"$base/history/leftover.json"
+    printf 'keep live\n' >"$base/live.json"
+    printf 'keep quiet\n' >"$base/quiet.json"
+    python3 - "$base" "$proxy_app" <<'PY'
+import json, pathlib, sys
+base = pathlib.Path(sys.argv[1])
+rows = [dict(key=f'n{i}', originalId=i, app=sys.argv[2], summary=f'History {i}',
+             ts=100-i, closed_ts=i, closed_reason='silenced' if i == 12 else 'dismissed',
+             execArgv='["touch","MUST-NOT-EXECUTE"]') for i in range(12, 0, -1)]
+(base/'history.json').write_text(json.dumps(rows))
+rows[0]['summary'] = 'Replaced'
+(base/'history.next').write_text(json.dumps(rows[:1]))
+PY
+    [[ $history_mode != json-bad ]] || printf '{malformed\n' >"$base/history.json"
+    cp "$base/history.json" "$root/original.json"
+    cp "$base/history.next" "$root/replaced.json"
+    [[ $history_mode != json-unreadable ]] || chmod 000 "$base/history.json"
+  fi
+
+  if [[ $history_mode == proxy || $history_mode == json ]]; then
     mkdir -p "$root/omarchy fixture/bin"
     printf '#!/bin/sh\nprintf '\''%%s\\0'\'' "$0" "$@" >"$SHIBUMI_FOCUS_ARGV"\n' \
       >"$root/omarchy fixture/bin/omarchy-hyprland-focus-app"
@@ -133,7 +154,18 @@ EOF
   if grep -Eq "$HOST_DIAGNOSTICS_COMPOSITION" "$output"; then
     fail "$name runtime log contains a composition error"
   fi
-  if [[ $history_mode == proxy ]]; then
+  if [[ $history_mode == json* ]]; then
+    [[ ! -e $root/focus.argv.mutation && ! -e $tmpdir/MUST-NOT-EXECUTE ]] || fail 'JSON history dispatched a command'
+    [[ $(<"$base/live.json") == 'keep live' && $(<"$base/quiet.json") == 'keep quiet' \
+      && -e $base/history/leftover.json ]] || fail 'JSON history mutated host files'
+    chmod 600 "$base/history.json"
+    if [[ $history_mode == json ]]; then
+      cmp -s "$root/replaced.json" "$base/history.json" || fail 'JSON replacement changed'
+    else
+      cmp -s "$root/original.json" "$base/history.json" || fail 'invalid JSON history changed'
+    fi
+  fi
+  if [[ $history_mode == proxy || $history_mode == json ]]; then
     cmp -s "$root/expected.argv" "$root/focus.argv" || fail 'proxy focus helper argv differs'
     printf '259_PROXY_HELPER_ARGV exact [helper, app]\n'
   fi
@@ -155,6 +187,9 @@ EOF
   fi
 }
 
+run_case json-history 10 json 'notification JSON history passed'
+run_case json-malformed 0 json-bad 'notification JSON history passed'
+run_case json-unreadable 0 json-unreadable 'notification JSON history passed'
 run_case proxy 0 proxy 'notification proxy badge/focus passed'
 run_case populated 10 populated
 run_case external-clear 10 populated 'notification history clear passed' '' external-clear
