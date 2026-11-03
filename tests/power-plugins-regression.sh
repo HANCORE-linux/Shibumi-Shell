@@ -122,7 +122,7 @@ for plugin in battery power-profile; do
   if rg -q 'Quickshell\.Services\.UPower|UPower\.|Process \{|FileView \{' \
       "$repo_root/hancore.shibumi.$plugin" --glob '*.qml' \
       --glob '!ShibumiPanel.qml' || \
-      rg -q 'Timer \{' "$repo_root/hancore.shibumi.$plugin" --glob '*.qml' --glob '!ShibumiPanel.qml' --glob '!WaterRing.qml' --glob '!BatteryRing.qml'; then
+      rg -q 'Timer \{' "$repo_root/hancore.shibumi.$plugin" --glob '*.qml' --glob '!ShibumiPanel.qml' --glob '!WaterRing.qml' --glob '!BatteryRing.qml' --glob '!BarWidget.qml' || { [[ $plugin != battery ]] && rg -q 'Timer \{' "$widget"; }; then
     fail "$plugin presentation owns hardware state or background work"
   fi
 done
@@ -140,6 +140,11 @@ done
 if rg -Fq 'rotation: -90' "$repo_root/hancore.shibumi.battery/BarWidget.qml"; then
   fail "battery bar gauge drifted from the horizontal V1 presentation"
 fi
+for pulse_site in hancore.shibumi.battery/BarWidget.qml hancore.shibumi.center/StatusIndicators.qml hancore.shibumi.control-center/BarWidget.qml; do
+  if rg -Fq 'Animation.Infinite' "$repo_root/$pulse_site"; then
+    fail "bar pulse must not animate per frame: $pulse_site"
+  fi
+done
 for charging_contract in \
     ': batteryIcon(gauge.ratio * 100, gauge.charging, gauge.full)' \
     'visible: gauge.horizontalCharging' \

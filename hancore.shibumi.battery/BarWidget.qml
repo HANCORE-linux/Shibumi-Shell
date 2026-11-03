@@ -274,11 +274,20 @@ Ui.Panel {
     opacity: low ? pulse : 1
     property real pulse: 1
 
-    SequentialAnimation on pulse {
+    Timer {
+      interval: 100
+      repeat: true
       running: gauge.visible && gauge.low
-      loops: Animation.Infinite
-      NumberAnimation { from: 1; to: 0.35; duration: 1100; easing.type: Easing.InOutSine }
-      NumberAnimation { from: 0.35; to: 1; duration: 1100; easing.type: Easing.InOutSine }
+      property double startedAt: 0
+      onRunningChanged: if (running) {
+        startedAt = Date.now()
+        gauge.pulse = 1
+      }
+      onTriggered: {
+        // Sample the 2200 ms InOutSine cycle, without per-frame bar redraws.
+        const elapsed = Math.round((Date.now() - startedAt) / interval) * interval
+        gauge.pulse = 0.35 + 0.65 * (1 + Math.cos(2 * Math.PI * (elapsed % 2200) / 2200)) / 2
+      }
     }
 
     readonly property bool horizontalCharging:

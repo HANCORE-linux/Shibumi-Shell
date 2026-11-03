@@ -271,12 +271,20 @@ Ui.Panel {
       registeredBar.unregisterClickTarget(root)
   }
 
-  NumberAnimation on phase {
-    from: 0
-    to: 2 * Math.PI
-    duration: 2600
-    loops: Animation.Infinite
+  Timer {
+    interval: 100
+    repeat: true
     running: root.animationActive
+    property double startedAt: 0
+    onRunningChanged: if (running) {
+      startedAt = Date.now()
+      root.phase = 0
+    }
+    onTriggered: {
+      // Retain the linear 2600 ms wave cycle at a low paint cadence.
+      const elapsed = Math.round((Date.now() - startedAt) / interval) * interval
+      root.phase = 2 * Math.PI * (elapsed % 2600) / 2600
+    }
   }
 
   RectangularShadow {

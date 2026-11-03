@@ -869,7 +869,8 @@ rg -q 'omarchy-battery-status --shell' \
   || fail "power owner must retain exactly four operation slots"
 [[ $(rg -c 'Process \{' hancore.shibumi.power-state/PowerCommand.qml) -eq 1 ]] \
   || fail "each power operation slot must own exactly one process"
-if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|Timer \{|FileView \{' \
+# Visibility-gated pulse timers are presentation; power-plugins-regression checks their scope.
+if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|FileView \{' \
   hancore.shibumi.battery/BarWidget.qml hancore.shibumi.battery/BatteryPanel.qml \
   hancore.shibumi.power-profile/BarWidget.qml hancore.shibumi.power-profile/PowerProfilePanel.qml; then
   fail "power views must not duplicate UPower, worker, or polling ownership"
