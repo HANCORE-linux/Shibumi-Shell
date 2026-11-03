@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0] - Unreleased
+
+### Highlights
+
+- Placeholder: Maintainer-approved release text pending.
+
+### Fixed
+
+- Placeholder: Maintainer-approved stabilization summary pending.
+
+### Validation
+
+- Placeholder: exact-candidate evidence and acceptance wording pending.
+
+### Known limits
+
+- Placeholder: Maintainer-approved limits and downgrade wording pending.
+
 ## [0.1.1-beta.16.5.1] - 2026-10-23
 
 ### Fixed

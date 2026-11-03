@@ -994,7 +994,7 @@ rg -Fq 'result.ok === true' "$bluetooth_panel" \
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
-[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml) -eq 1 ]] \
+[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/MemorySweep.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide Memory Sweep worker"
 rg -q '"service": "WorkspaceService.qml"' hancore.shibumi.workspaces/manifest.json \
   || fail "workspace state must have exactly one shipped owner"
@@ -1061,11 +1061,25 @@ rg -q 'serviceFor\("hancore\.shibumi\.workspaces"\)' "$workspace_widget" \
   || fail "workspace widget does not resolve the shipped service"
 rg -q '^ShibumiPanel \{' "$workspace_panel" \
   || fail "workspace panel does not use the screen-local keyboard panel contract"
-if rg -q 'Process \{|Timer \{|FileView \{' \
-    "$workspace_service" "$workspace_widget" "$workspace_panel" \
-    "$workspace_panel_content"; then
-  fail "workspace state and views must remain event-driven and worker-free"
+if rg -q 'Process \{|Timer \{' "$workspace_service" \
+  || rg -q 'Process \{|Timer \{|FileView \{' \
+    "$workspace_widget" "$workspace_panel" "$workspace_panel_content"; then
+  fail "workspace service must not poll; views must remain worker-free"
 fi
+[[ $(rg -c 'FileView[[:space:]]*\{' "$workspace_service") -eq 1 ]] \
+  || fail "workspace service must own exactly one host connector-map reader"
+for workspace_map_contract in \
+    'path: root.backendAdmitted' \
+    '? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")' \
+    '+ "/omarchy/monitor-workspaces" : ""' \
+    'watchChanges: root.backendAdmitted' \
+    'onFileChanged: reload()' \
+    'onLoaded: root.blocks = WorkspaceModel.readBlocks(text())' \
+    'onLoadFailed: root.blocks = ({})' \
+    'onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})'; do
+  rg -Fq "$workspace_map_contract" "$workspace_service" \
+    || fail "workspace connector-map admission drifted: $workspace_map_contract"
+done
 if rg -q 'Quickshell\.Hyprland|Hyprland\.' \
     "$workspace_widget" "$workspace_panel" "$workspace_panel_content"; then
   fail "workspace views must consume the shared workspace service"

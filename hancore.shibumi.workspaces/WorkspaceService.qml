@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import Quickshell.Hyprland
 import "WorkspaceModel.js" as WorkspaceModel
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
@@ -14,7 +16,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.workspaces"
-    implementationVersion: "0.1.1-beta.16.5.1"
+    implementationVersion: "0.2.0"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -44,6 +46,96 @@ Item {
   visible: false
   width: 0
   height: 0
+
+  // One admitted reader for the host's connector map, shared by every output.
+  // No file means the historical global-id path, not an inferred active block:
+  // the active workspace can be a guest after an unplug.
+  property var blocks: ({})
+  readonly property bool perMonitorWorkspaces: backendAdmitted
+    && Object.keys(blocks).length > 0
+
+  FileView {
+    path: root.backendAdmitted
+      ? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")
+        + "/omarchy/monitor-workspaces" : ""
+    watchChanges: root.backendAdmitted
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.blocks = WorkspaceModel.readBlocks(text())
+    onLoadFailed: root.blocks = ({})
+  }
+  onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})
+
+  function blockOf(id) { return Math.floor((Number(id) - 1) / 10) }
+  function slotOf(id) { return (Number(id) - 1) % 10 + 1 }
+  function blockForMonitor(monitor) {
+    const name = monitor ? String(monitor.name || "") : ""
+    return perMonitorWorkspaces && Object.prototype.hasOwnProperty.call(blocks, name)
+      ? blocks[name] : 0
+  }
+
+  // Views receive only an output-local primitive snapshot, never a native model.
+  // Explicit fakes replace monitor lookup and slot actions too; no fallthrough.
+  function monitorFor(screen) {
+    if (!backendAdmitted || !perMonitorWorkspaces) return null
+    try {
+      const monitor = backendOverride !== null
+        ? backend.record && typeof backendOverride.monitorFor === "function"
+          ? backendOverride.monitorFor(screen) : null
+        : screen ? Hyprland.monitorFor(screen) : null
+      return monitor ? {name: String(monitor.name || ""),
+        activeId: WorkspaceModel.positiveId(monitor.activeWorkspace
+          ? monitor.activeWorkspace.id : 0)} : null
+    } catch (error) { return null }
+  }
+
+  function workspaceIdsForMonitor(monitor) {
+    if (!perMonitorWorkspaces) return visibleWorkspaceIds
+    if (!monitor) return []
+    return WorkspaceModel.monitorIds(mode,
+      backend.overridden ? backend.record ? backend.record.sources : [] : backend.workspaces,
+      blockForMonitor(monitor), monitor.name, monitor.activeId)
+  }
+
+  function focusSlot(slot, monitorName) {
+    if (!backendAdmitted || !perMonitorWorkspaces) return false
+    let target, name
+    try { target = Number(slot); name = String(monitorName || "") }
+    catch (error) { return false }
+    if (!Number.isInteger(target) || target < 1 || target > 10
+        || !/^[A-Za-z0-9_.:-]+$/.test(name)
+        || !Object.prototype.hasOwnProperty.call(blocks, name)) return false
+    if (backendOverride !== null) {
+      try {
+        return backend.record && typeof backendOverride.focusSlot === "function"
+          ? backendOverride.focusSlot(target, name) === true : false
+      } catch (error) { return false }
+    }
+    return workspaceActions.focusSlot(target, name)
+  }
+
+  function refreshForEvent(event) {
+    if (!backendAdmitted || !perMonitorWorkspaces) return
+    const name = event ? String(event.name || "") : ""
+    if (["workspacev2", "moveworkspacev2", "changeworkspaceid"].indexOf(name) < 0) return
+    if (backendOverride !== null) {
+      try {
+        if (backend.record && typeof backendOverride.refreshMonitors === "function"
+            && typeof backendOverride.refreshWorkspaces === "function") {
+          backendOverride.refreshMonitors()
+          backendOverride.refreshWorkspaces()
+        }
+      } catch (error) {}
+      return
+    }
+    Hyprland.refreshMonitors()
+    Hyprland.refreshWorkspaces()
+  }
+
+  Connections {
+    target: root.backendAdmitted && root.backendOverride === null ? Hyprland : null
+    function onRawEvent(event) { root.refreshForEvent(event) }
+  }
 
   function workspaceState(id) {
     return WorkspaceModel.stateFor(id, entries, focusedId)
@@ -106,7 +198,7 @@ Item {
         const focusId = WorkspaceModel.positiveId(focusValue)
         const rows = WorkspaceModel.snapshot(sources, focusId)
         if (rows.some(function(row) { return !Number.isInteger(row.windowCount) || row.windowCount < 0 })) return null
-        return {owner: value, entries: rows, focusedId: focusId, action: action}
+        return {owner: value, entries: rows, sources: sources, focusedId: focusId, action: action}
       } catch (error) { return null }
     }
   }

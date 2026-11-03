@@ -10,7 +10,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.center"
-    implementationVersion: "0.1.1-beta.16.5.1"
+    implementationVersion: "0.2.0"
     owner: root
     host: root.shell
     manifest: root.manifest

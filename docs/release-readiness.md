@@ -1,8 +1,16 @@
-# Shibumi 0.1.1-beta.16.5.1 release readiness
+# Shibumi 0.2.0 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+
+## 0.2.0 private forward preparation
+
+The current forward reference is fixed at
+`0d8edf3812e0caafd155760c96bc2862933f611a` (2026-10-24), recorded in
+`contracts/baselines/omarchy-forward-compat-0d8edf38.json`. Stable 4.0.6 is
+unchanged. This pin does not transfer the historical results below to 0.2.0;
+complete candidate gates and physical multi-output acceptance remain separate.
 
 ## Beta 16.5.1 hotfix and validation boundary
 

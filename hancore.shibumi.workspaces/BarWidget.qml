@@ -1,7 +1,9 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Window
 import QtQuick.Shapes
+import Quickshell
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
@@ -28,8 +30,15 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property var workspaceIds: workspaceService
-    ? workspaceService.visibleWorkspaceIds : []
+  readonly property bool perMonitorWorkspaces: workspaceService
+    && workspaceService.perMonitorWorkspaces === true
+  readonly property var monitor: perMonitorWorkspaces
+    ? workspaceService.monitorFor(root.QsWindow.window ? root.QsWindow.window.screen : null) : null
+  readonly property string monitorName: monitor ? monitor.name : ""
+  readonly property int monitorBlock: perMonitorWorkspaces
+    ? workspaceService.blockForMonitor(monitor) : 0
+  readonly property var workspaceIds: !workspaceService ? [] : perMonitorWorkspaces
+    ? workspaceService.workspaceIdsForMonitor(monitor) : workspaceService.visibleWorkspaceIds
   readonly property string displayMode: String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
@@ -119,7 +128,13 @@ Ui.Panel {
     return focusedDisplayIndex >= 0
       ? workspaceRepeater.itemAt(focusedDisplayIndex) : null
   }
+  // Row publishes the combined width at layout, after the cells have advanced
+  // together. Summing each animated width in a binding exposes intermediate
+  // grow/shrink values and needlessly relayouts the entire bar twice per tick.
   readonly property real workspaceContentWidth: {
+    if (root.Window.window) return workspaceRow.implicitWidth
+    // Detached components have no scene-graph polish to update a positioner.
+    // Preserve their logical geometry until they are attached to a window.
     void(displayedWorkspaceIds)
     void(renderStyle)
     var total = 0
@@ -138,8 +153,28 @@ Ui.Panel {
   implicitHeight: !visible ? 0 : bar && bar.vertical
     ? workspaceSurface.implicitHeight : bar ? bar.barSize : 28
 
+  // The three width-animated paints are centered in untransformed cell
+  // containers. Share the module-to-scene mapping instead of walking the same
+  // ancestors separately for every marker on every width-animation frame.
+  function markerShiftX(cell, x) {
+    const left = workspaceRow.x + cell.x + x
+    return surfaceInk.snapX(left) - left
+  }
+
+  function markerShiftY(y, height) {
+    return surfaceInk.rectangleY(height) - workspaceRow.y - y
+  }
+
   function activateWorkspace(id) {
-    return workspaceService ? workspaceService.focusWorkspace(id) : false
+    if (!workspaceService) return false
+    if (perMonitorWorkspaces && monitorName !== ""
+        && workspaceService.blockOf(id) === monitorBlock)
+      return workspaceService.focusSlot(workspaceService.slotOf(id), monitorName)
+    return workspaceService.focusWorkspace(id)
+  }
+
+  function workspaceLabel(id) {
+    return perMonitorWorkspaces ? workspaceService.slotOf(id) : id
   }
 
   function paletteColor(id, fallback) {
@@ -232,16 +267,18 @@ Ui.Panel {
   }
 
   function workspaceState(id) {
-    return workspaceService
-      ? workspaceService.workspaceState(id)
+    const info = workspaceService ? workspaceService.workspaceState(id)
       : ({ id: Number(id) || 0, focused: false, occupied: false, windowCount: 0 })
+    if (!perMonitorWorkspaces) return info
+    return {id: info.id, focused: !!monitor && info.id === monitor.activeId,
+      occupied: info.occupied, windowCount: info.windowCount}
   }
 
   function workspaceTooltip(id) {
     const info = workspaceState(id)
     const windows = info.windowCount === 1 ? "1 window"
       : info.windowCount + " windows"
-    return "Workspace " + info.id + " · " + windows
+    return "Workspace " + workspaceLabel(info.id) + " · " + windows
       + " · Right-click for workspace panel"
   }
 
@@ -276,6 +313,7 @@ Ui.Panel {
 
   Item {
     id: workspaceSurface
+    Presentation.BarInk { id: surfaceInk; target: workspaceSurface }
     anchors.centerIn: parent
     implicitWidth: root.workspaceContentWidth + 2 * root.workspacePadding
     implicitHeight: root.bar ? root.bar.barSize : Commons.Style.space(28)
@@ -399,7 +437,7 @@ Ui.Panel {
       z: 1
       anchors.centerIn: parent
       spacing: root.workspaceGap
-      width: root.workspaceContentWidth
+      width: root.Window.window ? implicitWidth : root.workspaceContentWidth
       onPositioningComplete: {
         if (root.renderStyle === "rings" && root.frameTarget
             && Array.from(children).filter(item => item.visible && item.implicitWidth > 0)
@@ -484,10 +522,9 @@ Ui.Panel {
               anchors.fill: parent
           Rectangle {
             id: defaultHalo
-            Presentation.BarInk { id: haloInk; target: defaultHalo }
             transform: Translate {
-              x: haloInk.enabled ? haloInk.snapX(0) : 0
-              y: haloInk.enabled ? haloInk.rectangleY(defaultHalo.height) : 0
+              x: surfaceInk.enabled ? root.markerShiftX(cell, defaultHalo.x) : 0
+              y: surfaceInk.enabled ? root.markerShiftY(defaultHalo.y, defaultHalo.height) : 0
             }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
@@ -501,10 +538,9 @@ Ui.Panel {
 
           Rectangle {
             id: defaultMarker
-            Presentation.BarInk { id: markerInk; target: defaultMarker }
             transform: Translate {
-              x: markerInk.enabled ? markerInk.snapX(0) : 0
-              y: markerInk.enabled ? markerInk.rectangleY(defaultMarker.height) : 0
+              x: surfaceInk.enabled ? root.markerShiftX(cell, defaultMarker.x) : 0
+              y: surfaceInk.enabled ? root.markerShiftY(defaultMarker.y, defaultMarker.height) : 0
             }
             visible: root.renderStyle === "default"
             anchors.centerIn: parent
@@ -546,7 +582,7 @@ Ui.Panel {
             Presentation.IconText {
               barText: true
               anchors.centerIn: parent
-              text: cell.modelData
+              text: root.workspaceLabel(cell.modelData)
               color: cell.tintColor(cell.focused ? root.widgetInk
                 : Qt.rgba(root.widgetInk.r, root.widgetInk.g,
                   root.widgetInk.b, cell.occupied ? 0.5 : 0.28))
@@ -593,9 +629,9 @@ Ui.Panel {
             hintedInk: true
             visible: root.renderStyle === "kanji"
             anchors.centerIn: parent
-            text: cell.modelData >= 1 && cell.modelData <= 10
+            text: root.workspaceLabel(cell.modelData) >= 1 && root.workspaceLabel(cell.modelData) <= 10
               ? ["一", "二", "三", "四", "五",
-                 "六", "七", "八", "九", "十"][cell.modelData - 1]
+                 "六", "七", "八", "九", "十"][root.workspaceLabel(cell.modelData) - 1]
               : String(cell.modelData)
             color: cell.tintColor(cell.kanjiColor)
             font.family: "Noto Sans CJK JP"
@@ -616,7 +652,7 @@ Ui.Panel {
             barText: true
             visible: root.renderStyle === "rings"
             anchors.centerIn: parent
-            text: cell.modelData
+            text: root.workspaceLabel(cell.modelData)
             color: cell.tintColor(root.widgetInk)
             opacity: cell.ringOpacity + (1 - cell.ringOpacity) * cell.hoverPhase
             font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
@@ -642,10 +678,11 @@ Ui.Panel {
 
             Rectangle {
               id: auroraMarker
-              Presentation.BarInk { id: auroraInk; target: auroraMarker }
               transform: Translate {
-                x: auroraInk.enabled ? auroraInk.snapX(0) : 0
-                y: auroraInk.enabled ? auroraInk.rectangleY(auroraMarker.height) : 0
+                x: surfaceInk.enabled ? root.markerShiftX(cell,
+                  auroraMarker.parent.x + auroraMarker.x) : 0
+                y: surfaceInk.enabled ? root.markerShiftY(
+                  auroraMarker.parent.y + auroraMarker.y, auroraMarker.height) : 0
               }
               anchors.centerIn: parent
               width: cell.auroraMarkerWidth

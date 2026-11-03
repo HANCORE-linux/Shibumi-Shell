@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "." as Local
 
 Scope {
   id: root
@@ -30,11 +31,14 @@ Scope {
   property int memBuffersMiB: 0
   property int memCachedMiB: 0
   property bool memorySampleReady: false
-  property bool memorySweepRunning: false
-  property bool memorySweepStarted: false
-  property string memorySweepError: ""
-  property real memorySweepBeforeMiB: -1
-  property real memorySweepAfterMiB: -1
+  property bool sweepOwnerActive: true
+  readonly property bool memorySweepRunning: Local.MemorySweep.busy
+  readonly property bool memorySweepStarted: Local.MemorySweep.started
+  readonly property string memorySweepError: Local.MemorySweep.error
+  readonly property real memorySweepBeforeMiB: Local.MemorySweep.beforeMiB
+  readonly property real memorySweepAfterMiB: Local.MemorySweep.afterMiB
+  onSweepOwnerActiveChanged: if (!sweepOwnerActive) Local.MemorySweep.release(root)
+  Component.onDestruction: Local.MemorySweep.release(root)
   readonly property int memUsedMiB: Math.max(0, memTotalMiB - memAvailableMiB)
   readonly property int memPercent: memTotalMiB > 0
     ? Math.max(0, Math.min(100, Math.round(memUsedMiB / memTotalMiB * 100)))
@@ -139,49 +143,23 @@ Scope {
   }
 
   function clearMemorySweepResult() {
-    if (memorySweepRunning) return
-    memorySweepError = ""
-    memorySweepBeforeMiB = -1
-    memorySweepAfterMiB = -1
+    Local.MemorySweep.clearResult()
   }
 
   function startMemorySweep(pageCache, compact) {
-    if (memorySweepRunning || typeof pageCache !== "boolean"
+    if (!sweepOwnerActive || memorySweepRunning || typeof pageCache !== "boolean"
         || typeof compact !== "boolean" || !(pageCache || compact)) return false
     clearMemorySweepResult()
-    memorySweepRunning = true
-    memorySweepStarted = false
     if (!readMemoryNow()) {
-      memorySweepError = "Could not read fresh memory data"
-      memorySweepRunning = false
+      Local.MemorySweep.error = "Could not read fresh memory data"
       return false
     }
-    memorySweepBeforeMiB = memAvailableMiB
     const steps = ["status=0"]
     if (pageCache) steps.push("sync && echo 3 > /proc/sys/vm/drop_caches || status=1")
     if (compact) steps.push("echo 1 > /proc/sys/vm/compact_memory || status=1")
     steps.push("exit \"$status\"")
-    memorySweepProcess.command = ["pkexec", "/bin/sh", "-c", steps.join("; ")]
-    memorySweepProcess.running = true
-    return true
-  }
-
-  function finishMemorySweep(exitCode, exitStatus) {
-    if (!memorySweepRunning) return
-    memorySweepError = exitStatus === 0 && exitCode === 126 ? "cancelled"
-      : exitStatus !== 0 || exitCode !== 0
-        ? "Sweep failed (exit " + exitCode + ")" : ""
-    if (readMemoryNow()) memorySweepAfterMiB = memAvailableMiB
-    else if (!memorySweepError) memorySweepError = "Could not read fresh memory data"
-    memorySweepRunning = false
-  }
-
-  Process {
-    id: memorySweepProcess
-    onStarted: root.memorySweepStarted = true
-    onRunningChanged: if (!running && root.memorySweepRunning && !root.memorySweepStarted)
-      root.finishMemorySweep(-1, 1)
-    onExited: function(exitCode, exitStatus) { root.finishMemorySweep(exitCode, exitStatus) }
+    return Local.MemorySweep.start(root,
+      ["pkexec", "/bin/sh", "-c", steps.join("; ")], memAvailableMiB)
   }
 
   function parseMemoryHardware(text) {

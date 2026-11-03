@@ -72,6 +72,43 @@ function visibleIds(modeValue, entries, focusedValue) {
   return ids
 }
 
+// The host keeps disconnected identities with an empty connector. They must
+// not claim block zero or overwrite the connected monitor after an unplug.
+function readBlocks(text) {
+  var result = {}
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var fields = lines[i].split("\t")
+    if (fields.length !== 3 || !/^\d+$/.test(fields[0])
+        || !/^[A-Za-z0-9_.:-]+$/.test(fields[1]) || !fields[2]) continue
+    var block = Number(fields[0])
+    if (!Number.isInteger(block) || block < 0 || block > 998
+        || fields[1] === "__proto__") continue
+    result[fields[1]] = block
+  }
+  return result
+}
+
+function monitorIds(mode, source, block, connector, activeValue) {
+  var ids = [], guests = []
+  var minimum = mode === "active" ? 0 : mode === "5" ? 5 : 10
+  for (var slot = 1; slot <= minimum; slot++) ids.push(block * 10 + slot)
+  var active = positiveId(activeValue)
+  if (active && Math.floor((active - 1) / 10) === block
+      && ids.indexOf(active) < 0) ids.push(active)
+  for (var i = 0; i < source.length; i++) {
+    var workspace = source[i], id = positiveId(workspace ? workspace.id : 0)
+    if (!id) continue
+    if (Math.floor((id - 1) / 10) === block) {
+      if (ids.indexOf(id) < 0) ids.push(id)
+    } else if (workspace.monitor && workspace.monitor.name === connector
+        && guests.indexOf(id) < 0) guests.push(id)
+  }
+  ids.sort(function(a, b) { return a - b })
+  guests.sort(function(a, b) { return a - b })
+  return ids.concat(guests)
+}
+
 function stateFor(idValue, entries, focusedValue) {
   var id = positiveId(idValue)
   var focusedId = positiveId(focusedValue)

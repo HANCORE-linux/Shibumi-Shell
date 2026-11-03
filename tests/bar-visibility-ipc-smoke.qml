@@ -60,7 +60,7 @@ ShellRoot {
     shell: fakeShell
     manifest: ({
       id: "hancore.shibumi.bar",
-      version: "0.1.1-beta.16.5.1",
+      version: "0.2.0",
       kinds: ["bar"]
     })
     pluginRegistry: fakePluginRegistry

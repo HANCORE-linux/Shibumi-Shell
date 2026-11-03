@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Effects
 import "MediaMotion.js" as Motion
 import qs.Commons as Commons
 import qs.Ui as Ui
@@ -65,11 +64,8 @@ Ui.Panel {
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
   readonly property var interactionTarget: actionButton
-  readonly property var museInteractionTarget: museMouse
   readonly property bool museVisible: muse.visible
   readonly property int museBandCount: muse.renderedBandCount
-  readonly property bool textVisible: activeText.visible
-  readonly property bool iconVisible: activeIcon.visible
   readonly property bool v1FullVisible: activeRow.visible
 
   visible: mediaService !== null
@@ -277,10 +273,11 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
 
         property real elapsed: 0
+        property real scrollX: 0
 
         function reset() {
           elapsed = 0
-          marqueeText.x = 0
+          scrollX = 0
         }
 
         function advance(milliseconds) {
@@ -288,7 +285,7 @@ Ui.Panel {
           const distance = marqueeText.implicitWidth - width + 4
           const duration = Math.max(100, distance) * 20
           elapsed = (elapsed + milliseconds) % (2000 + duration + 900)
-          marqueeText.x = elapsed < 2000 ? 0
+          scrollX = elapsed < 2000 ? 0
             : -distance * Math.min(1, (elapsed - 2000) / duration)
         }
 
@@ -298,7 +295,7 @@ Ui.Panel {
         // Keep the reservation above, but give the offscreen paint layer an
         // integer physical extent and origin. A fractional layer would filter
         // the already aligned native text a second time when composited.
-        Item {
+        ShaderEffect {
           id: marqueePaint
           width: paintGrid.rasterExtent(marqueeClip.width)
           height: paintGrid.rasterExtent(marqueeClip.height)
@@ -309,26 +306,42 @@ Ui.Panel {
             x: marqueePaint.inkOffsetX
             y: marqueePaint.inkOffsetY
           }
-          layer.enabled: true
-          layer.effect: MultiEffect {
-            maskEnabled: true
-            maskSource: marqueeMask
-            maskThresholdMin: 0.5
-            maskSpreadAtMin: 0.5
+          // Only the sampling offset moves. Neither texture contains moving
+          // content, so a scroll step needs no offscreen repaint.
+          property var source: marqueeTexture
+          property var maskSource: marqueeMask
+          property vector2d sourceScale: Qt.vector2d(width / marqueeContent.width, 1)
+          property real scrollOffset: -Math.round(marqueeClip.scrollX * paintGrid.dpr)
+            / (paintGrid.dpr * marqueeContent.width)
+          fragmentShader: Qt.resolvedUrl("assets/marquee.frag.qsb")
+
+          ShaderEffectSource {
+            id: marqueeTexture
+            sourceItem: marqueeContent
+            hideSource: true
+            textureSize: Qt.size(Math.round(marqueeContent.width * paintGrid.dpr),
+              Math.round(marqueeContent.height * paintGrid.dpr))
           }
 
-          Presentation.IconText {
-            id: marqueeText
-            barText: true
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.trackLabel
-            color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
-              root.widgetInk.b, root.playing ? 0.85 : 0.42)
-            font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-            font.pixelSize: root.tokens ? root.tokens.labelSize : Commons.Style.font.body
-            renderType: Text.NativeRendering
-            onTextChanged: marqueeClip.reset()
-            onImplicitWidthChanged: marqueeClip.reset()
+          Item {
+            id: marqueeContent
+            width: Math.max(marqueePaint.width,
+              Math.ceil(marqueeText.implicitWidth * paintGrid.dpr) / paintGrid.dpr)
+            height: marqueePaint.height
+
+            Presentation.IconText {
+              id: marqueeText
+              barText: true
+              anchors.verticalCenter: parent.verticalCenter
+              text: root.trackLabel
+              color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
+                root.widgetInk.b, root.playing ? 0.85 : 0.42)
+              font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
+              font.pixelSize: root.tokens ? root.tokens.labelSize : Commons.Style.font.body
+              renderType: Text.NativeRendering
+              onTextChanged: marqueeClip.reset()
+              onImplicitWidthChanged: marqueeClip.reset()
+            }
           }
         }
 

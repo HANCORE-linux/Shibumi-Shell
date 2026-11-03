@@ -2198,6 +2198,17 @@ class SuiteLifecycleTests(unittest.TestCase):
         installed = install_picker_routing(original)
         self.assertIn('"style.background"', installed)
         self.assertEqual(remove_picker_routing(installed), original)
+        appearance = install_picker_routing(original, json.dumps({"items": {
+            "appearance.theme": {"action": "theme-command"},
+            "appearance.background": {"action": "background-command"},
+        }}))
+        self.assertEqual(set(_decoded(appearance)["items"]),
+            {"personal", "appearance.theme", "appearance.background"})
+        self.assertEqual(remove_picker_routing(appearance), original)
+        self.assertEqual(install_picker_routing(appearance, json.dumps({"items": {
+            "appearance.theme": {"action": "theme-command"},
+            "appearance.background": {"action": "background-command"},
+        }})), appearance)
         warnings = []
         skipped = install_picker_routing(installed, '{"items": {}}', warnings=warnings)
         self.assertEqual((skipped, warnings), (original, ["stock menu has neither style.theme nor appearance.theme; picker routing skipped"]))
@@ -2602,7 +2613,9 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         state_path = self.paths.state_dir / "install.json"
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        state["suiteVersion"] = "0.1.1"
+        newer_version = "0.3.0"
+        self.assertGreater(version_key(newer_version), version_key(CURRENT_VERSION))
+        state["suiteVersion"] = newer_version
         state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
         state_before = state_path.read_bytes()
         config_before = self.paths.config_file.read_bytes()
@@ -2621,8 +2634,10 @@ class SuiteLifecycleTests(unittest.TestCase):
         )
         state_path = self.paths.state_dir / "install.json"
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        state["suiteVersion"] = "0.1.1"
-        state["packageVersion"] = "0.1.1"
+        newer_version = "0.3.0"
+        self.assertGreater(version_key(newer_version), version_key(CURRENT_VERSION))
+        state["suiteVersion"] = newer_version
+        state["packageVersion"] = newer_version
         state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
         self.assertEqual(
