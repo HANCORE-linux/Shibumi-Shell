@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "author": "HANCORE",
   "license": "MIT",
-  "description": "Shibumi Claude, Codex, and OpenCode usage presentation.",
+  "description": "Shibumi Claude, Codex, Antigravity, and OpenCode usage presentation.",
   "kinds": ["bar-widget", "service"],
   "keepLoaded": true,
   "entryPoints": {

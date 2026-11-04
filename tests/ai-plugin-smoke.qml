@@ -836,6 +836,7 @@ ShellRoot {
         providers: {
           claude: { enabled: false },
           codex: { enabled: !fakeBar.agentsDisabled },
+          agy: { enabled: !fakeBar.agentsDisabled },
           fireworks: { enabled: false }
         }
       })
