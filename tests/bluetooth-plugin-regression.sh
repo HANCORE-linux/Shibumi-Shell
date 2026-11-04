@@ -219,7 +219,7 @@ rg -Fq 'const current = rowAt(index)' "$panel" \
   || fail "Bluetooth section boundaries do not guard transient model rows"
 rg -Fq 'connected ? "\uE1A8" : "\uE1A7"' "$widget" \
   || fail "connected Bluetooth bar state does not use stable glyph codepoints"
-rg -Fq 'readonly property bool showConnectedCount: connected' "$widget" \
+rg -Fq 'readonly property bool showConnectedCount: !iconOnly && connected' "$widget" \
   || fail "connected Bluetooth count has no horizontal bar presentation state"
 [[ $(rg -Fc 'visible: root.showConnectedCount' "$widget") -eq 2 ]] \
   || fail "connected Bluetooth count is not shown in every horizontal mode"

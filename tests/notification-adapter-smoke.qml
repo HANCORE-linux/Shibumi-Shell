@@ -24,6 +24,7 @@ ShellRoot {
   property int mutationPhase: 0
   property int mutationStartTick: 0
   readonly property bool proxyCase: Quickshell.env("SHIBUMI_HISTORY_MODE") === "proxy"
+  readonly property bool jsonCase: Quickshell.env("SHIBUMI_HISTORY_MODE").startsWith("json")
   property int proxyPhase: 0
   property var proxyChecks: ({})
 
@@ -120,13 +121,16 @@ ShellRoot {
   Status.NotificationAdapter { id: unavailableAdapter }
   Status.NotificationStatusView { id: counts; bar: null; notificationService: dndOnlyAdapter }
   Process { id: externalClear; command: ["sh", "-c", "rm -f \"$1\"/*.json", "--", dndOnlyAdapter.historyDir] }
+  Process { id: jsonReplace; command: ["mv", "--", dndOnlyAdapter.historyDir + ".next", dndOnlyAdapter.historyDir + ".json"] }
   FileView { id: proxyHistory; path: dndOnlyAdapter.historyDir + "/proxy.json"; preload: false; printErrors: false }
   FileView { id: proxyReceipt; path: Quickshell.env("SHIBUMI_FOCUS_ARGV"); preload: false; printErrors: false }
 
   Component.onCompleted: {
     dndOnlyAdapter.attachShell(dndOnlyShell)
-    adapter.attachShell(currentShell)
-    legacyAdapter.attachShell(legacyShell)
+    if (!jsonCase) {
+      adapter.attachShell(currentShell)
+      legacyAdapter.attachShell(legacyShell)
+    }
     unavailableAdapter.attachShell(null)
     if (dndOnlyAdapter.historyState !== "loading" || counts.tooltipText !== "Recent: Loading · DND")
       root.fail("initial history state is not loading without hover/open")
@@ -140,6 +144,44 @@ ShellRoot {
     onTriggered: {
       if (root.finished) return
       root.ticks++
+      if (root.jsonCase) {
+        if (root.ticks > 100) return root.fail("JSON history deadline")
+        if (dndOnlyAdapter.historyState === "loading") return
+        if (dndOnlyAdapter.historyLayout !== "json" || dndOnlyAdapter.liveAvailable
+            || dndOnlyAdapter.pendingCount || dndOnlyAdapter.pastDismissAvailable
+            || dndOnlyAdapter.pastClearAvailable || dndOnlyAdapter.dismissPast(0)
+            || dndOnlyAdapter.clearPast()
+            || dndOnlyAdapter.startHistoryMutation(["touch", Quickshell.env("SHIBUMI_FOCUS_ARGV") + ".mutation"]))
+          return root.fail("JSON history exposed mutation or Live access")
+        if (Quickshell.env("SHIBUMI_HISTORY_MODE") !== "json") {
+          if (dndOnlyAdapter.historyState !== "unavailable" || dndOnlyAdapter.recentCount
+              || counts.tooltipText !== "Recent: Unavailable · DND")
+            return root.fail("invalid JSON history fell back to directory")
+        } else if (root.proxyPhase === 0) {
+          const first = dndOnlyAdapter.pastModel.get(0)
+          if (dndOnlyAdapter.historyState !== "ready" || dndOnlyAdapter.recentCount !== 10
+              || first.summary !== "History 12" || first.timestamp !== 88000
+              || first.fileName || first.image || first.exec || first.execArgv
+              || dndOnlyAdapter.pastModel.get(9).summary !== "History 3"
+              || counts.tooltipText !== "10 Recent · DND")
+            return root.fail("keyed JSON order/seconds/limit/tooltip")
+          if (!dndOnlyAdapter.focusApp(first, true)) return root.fail("JSON focus-only refused")
+          jsonReplace.running = true
+          root.proxyPhase = 1
+          return
+        } else {
+          if (dndOnlyAdapter.recentCount !== 1) return
+          if (dndOnlyAdapter.pastModel.get(0).summary !== "Replaced"
+              || counts.tooltipText !== "1 Recent · DND") return root.fail("atomic JSON refresh")
+          proxyReceipt.reload()
+          if (!proxyReceipt.text().length) return
+        }
+        if (!dndOnlyAdapter.setDoNotDisturb(false) || dndOnlyAdapter.doNotDisturb)
+          return root.fail("JSON proxy DND")
+        console.log("notification JSON history passed")
+        root.finish(0)
+        return
+      }
       if (root.proxyCase) {
         if (root.ticks > 100) return root.fail("proxy badge/focus deadline")
         if (dndOnlyAdapter.historyState !== "ready") return

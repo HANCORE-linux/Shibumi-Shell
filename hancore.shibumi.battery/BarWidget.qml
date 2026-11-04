@@ -41,13 +41,15 @@ Ui.Panel {
     ? Qt.rgba(chargingDetailColor.r, chargingDetailColor.g,
         chargingDetailColor.b, chargingDetailColor.a * 0.18)
     : Qt.rgba(1, 1, 1, 0.18)
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property string batteryOrientation:
     setting("batteryOrientation", "horizontal") === "vertical"
       ? "vertical" : "horizontal"
   readonly property bool compact: displayMode === "icon"
-  readonly property bool compactValueVisible: !!bar && !bar.vertical
+  readonly property bool compactValueVisible: !iconOnly && !!bar && !bar.vertical
     && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property bool hasBattery: !!(powerService && powerService.hasBattery)
   readonly property int percent: powerService ? powerService.percent : 0
@@ -272,11 +274,20 @@ Ui.Panel {
     opacity: low ? pulse : 1
     property real pulse: 1
 
-    SequentialAnimation on pulse {
+    Timer {
+      interval: 100
+      repeat: true
       running: gauge.visible && gauge.low
-      loops: Animation.Infinite
-      NumberAnimation { from: 1; to: 0.35; duration: 1100; easing.type: Easing.InOutSine }
-      NumberAnimation { from: 0.35; to: 1; duration: 1100; easing.type: Easing.InOutSine }
+      property double startedAt: 0
+      onRunningChanged: if (running) {
+        startedAt = Date.now()
+        gauge.pulse = 1
+      }
+      onTriggered: {
+        // Sample the 2200 ms InOutSine cycle, without per-frame bar redraws.
+        const elapsed = Math.round((Date.now() - startedAt) / interval) * interval
+        gauge.pulse = 0.35 + 0.65 * (1 + Math.cos(2 * Math.PI * (elapsed % 2200) / 2200)) / 2
+      }
     }
 
     readonly property bool horizontalCharging:

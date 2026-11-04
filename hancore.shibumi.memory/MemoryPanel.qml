@@ -11,13 +11,15 @@ ShibumiPanel {
   required property var telemetry
   readonly property var usageRing: memoryRing
   readonly property var hardwareInfoView: hardwareInfo
-  property QtObject sweepSource: null
+  property bool sweepVisible: false
+  property string sweepOwnerError: ""
+  property bool sweepWasRunning: false
   property bool cacheSelected: true
   property bool compactSelected: true
   readonly property bool sweepAvailable: !!telemetry && typeof telemetry.startMemorySweep === "function"
-  readonly property bool sweepVisible: sweepAvailable && sweepSource === telemetry
   readonly property bool sweepRunning: sweepAvailable && telemetry.memorySweepRunning === true
-  readonly property string sweepError: sweepAvailable ? String(telemetry.memorySweepError || "") : ""
+  readonly property string sweepError: sweepOwnerError
+    || (sweepAvailable ? String(telemetry.memorySweepError || "") : "")
   function gib(value) { return typeof value === "number" && value >= 0 ? (value / 1024).toFixed(1) + " GiB" : "—" }
 
   owner: ownerWidget
@@ -35,8 +37,18 @@ ShibumiPanel {
     acquiredTelemetry = next
     if (next) next.acquire("memoryPanel")
   }
-  onTelemetryChanged: syncHardwareLease()
-  onOpenChanged: { syncHardwareLease(); if (!open) sweepSource = null }
+  property Connections sweepWatcher: Connections {
+    target: panel.telemetry
+    ignoreUnknownSignals: true
+    function onMemorySweepRunningChanged() { panel.sweepWasRunning = panel.sweepRunning }
+  }
+  onTelemetryChanged: {
+    if (sweepVisible && sweepWasRunning) sweepOwnerError = "Sweep owner changed"
+    else if (!sweepOwnerError) sweepVisible = false
+    sweepWasRunning = sweepRunning
+    syncHardwareLease()
+  }
+  onOpenChanged: { syncHardwareLease(); if (!open) sweepVisible = false }
   Component.onCompleted: syncHardwareLease()
   Component.onDestruction: if (acquiredTelemetry) acquiredTelemetry.release("memoryPanel")
 
@@ -192,7 +204,7 @@ ShibumiPanel {
         MemoryAction {
           label: panel.sweepVisible ? "Back" : "Open btop"
           onTriggered: {
-            if (panel.sweepVisible) panel.sweepSource = null
+            if (panel.sweepVisible) panel.sweepVisible = false
             else { panel.ownerWidget.close(); panel.ownerWidget.openSystemMonitor() }
           }
         }
@@ -205,8 +217,12 @@ ShibumiPanel {
             if (!panel.sweepVisible) {
               panel.telemetry.clearMemorySweepResult()
               panel.cacheSelected = true; panel.compactSelected = true
-              panel.sweepSource = panel.telemetry
-            } else panel.telemetry.startMemorySweep(panel.cacheSelected, panel.compactSelected)
+              panel.sweepOwnerError = ""
+              panel.sweepVisible = true
+            } else {
+              panel.sweepOwnerError = ""
+              panel.telemetry.startMemorySweep(panel.cacheSelected, panel.compactSelected)
+            }
           }
         }
       }

@@ -15,7 +15,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.telemetry"
-    implementationVersion: "0.1.1-beta.16.5.1"
+    implementationVersion: "0.2.0"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -41,7 +41,7 @@ Item {
   Loader {
     id: systemLoader
     active: false
-    sourceComponent: SystemTelemetry {}
+    sourceComponent: SystemTelemetry { sweepOwnerActive: root.backendAdmitted }
   }
   Loader {
     id: thermalLoader

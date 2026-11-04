@@ -83,7 +83,7 @@ Column {
   readonly property bool selectedSupported: selectedWidget
     && String(selectedWidget.group || "") !== ""
   readonly property string selectedDisplayMode: selectedSupported
-    ? selectedLauncher
+    ? selectedLauncher && !v1LayoutActive
       ? String(controller.launcherConfig.mode || "text")
       : widgetMode(selectedWidget.group, selectedCatalogGroup)
     : "full"
@@ -471,21 +471,26 @@ Column {
   function modeOptionsForGroup(groupValue, catalogGroupValue) {
     const catalogGroup = String(catalogGroupValue
       || catalogGroupForSettingsGroup(groupValue) || "")
-    if (catalogGroup === "G1") return []
-    if (catalogGroup === "G9") return mediaStyleOptions
-    if (controller.v2LayoutActive === true) return displayModeOptions
-    const compactAvailable = v1CompactGroupIds.indexOf(catalogGroup) >= 0
-    return compactAvailable ? [
-      { value: "full", label: "Default", enabled: true },
-      { value: "icon", label: "Compact", enabled: true }
-    ] : [
+    if (controller.v2LayoutActive === true) {
+      if (catalogGroup === "G1") return []
+      if (catalogGroup === "G9") return mediaStyleOptions
+      return displayModeOptions
+    }
+    const options = catalogGroup === "G9" ? mediaStyleOptions.slice() : [
       { value: "full", label: "Default", enabled: true }
     ]
+    if (v1CompactGroupIds.indexOf(catalogGroup) >= 0)
+      options.push({ value: "icon", label: "Compact", enabled: true })
+    if (/^G([1-9]|1[0-5])$/.test(catalogGroup))
+      options.push({ value: "icon-only", label: "Icon only", enabled: true })
+    return options
   }
 
   function widgetMode(group, catalogGroupValue) {
     const catalogGroup = String(catalogGroupValue
       || catalogGroupForSettingsGroup(group) || "")
+    if (v1LayoutActive && widgetSetting(group, "displayMode", "full") === "icon-only")
+      return "icon-only"
     if (catalogGroup === "G9")
       return String(widgetSetting(group, "mediaStyle", "default")) === "full"
         ? "full" : "default"
@@ -518,22 +523,28 @@ Column {
   function widgetPresentationLabel(group, catalogGroupValue) {
     const catalogGroup = String(catalogGroupValue
       || catalogGroupForSettingsGroup(group) || "")
-    if (catalogGroup === "G1")
+    if (catalogGroup === "G1" && !v1LayoutActive)
       return "Logo · " + (String(controller.launcherConfig.mode || "text")
         === "icon" ? "Icon" : "Wordmark")
     return displayModeLabel(group, widgetMode(group, catalogGroup))
   }
 
   function setWidgetMode(mode) {
-    if (!selectedSupported || selectedLauncher) return false
+    if (!selectedSupported || (selectedLauncher && !v1LayoutActive)) return false
     const value = String(mode)
     const available = selectedModeOptions.some(function(option) {
       return String(option.value) === value && option.enabled !== false
     })
     if (!available) return false
-    if (selectedMedia)
-      return controller.setGroupSetting(
-        selectedWidget.group, "mediaStyle", value)
+    if (selectedMedia) {
+      let changed = false
+      if (v1LayoutActive) {
+        if (value === "icon-only")
+          return controller.setGroupSetting(selectedWidget.group, "displayMode", value)
+        changed = controller.setGroupSetting(selectedWidget.group, "displayMode", "full")
+      }
+      return controller.setGroupSetting(selectedWidget.group, "mediaStyle", value) || changed
+    }
     return controller.setGroupSetting(
       selectedWidget.group, "displayMode", value)
   }
@@ -1091,7 +1102,7 @@ Column {
             spacing: Commons.Style.space(8)
 
             Item {
-              visible: !root.selectedLauncher
+              visible: !root.selectedLauncher || root.v1LayoutActive
               width: root.v1LayoutActive
                 ? (parent.width - parent.spacing) * 2 / 3
                 : (parent.width - parent.spacing * 2) / 3 * 2
@@ -1140,7 +1151,7 @@ Column {
 
             Column {
               visible: !root.v1LayoutActive || root.selectedV1Appearance
-              width: root.selectedLauncher ? parent.width
+              width: root.selectedLauncher && !root.v1LayoutActive ? parent.width
                 : root.v1LayoutActive
                   ? (parent.width - parent.spacing) / 3
                   : (parent.width - parent.spacing * 2) / 3

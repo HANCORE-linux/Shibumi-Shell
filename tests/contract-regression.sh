@@ -697,7 +697,7 @@ if rg -q 'Process \{|FileView \{|Animation.*\{|Qt\.callLater' hancore.shibumi.me
   || [[ $(rg -c 'Timer \{' hancore.shibumi.media/BarWidget.qml) -ne 1 ]] \
   || ! rg -q 'interval: 40' hancore.shibumi.media/BarWidget.qml \
   || ! rg -q 'running: root.motionRunning' hancore.shibumi.media/BarWidget.qml \
-  || ! rg -Fq 'readonly property bool motionRunning: visible && !opened && (playing || pulseSettling)' hancore.shibumi.media/BarWidget.qml \
+  || ! rg -Fq 'readonly property bool motionRunning: visible && !opened && (playing || pulseSettling) && !iconMode' hancore.shibumi.media/BarWidget.qml \
   || ! rg -Fq 'restElapsed = Math.min(480, restElapsed + milliseconds)' hancore.shibumi.media/MediaPulse.qml; then
   fail "media surface must own exactly one bounded cadence and no backend workers"
 fi
@@ -869,7 +869,8 @@ rg -q 'omarchy-battery-status --shell' \
   || fail "power owner must retain exactly four operation slots"
 [[ $(rg -c 'Process \{' hancore.shibumi.power-state/PowerCommand.qml) -eq 1 ]] \
   || fail "each power operation slot must own exactly one process"
-if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|Timer \{|FileView \{' \
+# Visibility-gated pulse timers are presentation; power-plugins-regression checks their scope.
+if rg -q 'Quickshell\.Services\.UPower|Quickshell\.Io|Process \{|FileView \{' \
   hancore.shibumi.battery/BarWidget.qml hancore.shibumi.battery/BatteryPanel.qml \
   hancore.shibumi.power-profile/BarWidget.qml hancore.shibumi.power-profile/PowerProfilePanel.qml; then
   fail "power views must not duplicate UPower, worker, or polling ownership"
@@ -994,7 +995,7 @@ rg -Fq 'result.ok === true' "$bluetooth_panel" \
 
 [[ $(rg -c 'SystemTelemetry \{' hancore.shibumi.telemetry/Service.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide owner"
-[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/SystemTelemetry.qml) -eq 1 ]] \
+[[ $(rg -c 'Process \{' hancore.shibumi.telemetry/MemorySweep.qml) -eq 1 ]] \
   || fail "system telemetry must have one process-wide Memory Sweep worker"
 rg -q '"service": "WorkspaceService.qml"' hancore.shibumi.workspaces/manifest.json \
   || fail "workspace state must have exactly one shipped owner"
@@ -1061,11 +1062,25 @@ rg -q 'serviceFor\("hancore\.shibumi\.workspaces"\)' "$workspace_widget" \
   || fail "workspace widget does not resolve the shipped service"
 rg -q '^ShibumiPanel \{' "$workspace_panel" \
   || fail "workspace panel does not use the screen-local keyboard panel contract"
-if rg -q 'Process \{|Timer \{|FileView \{' \
-    "$workspace_service" "$workspace_widget" "$workspace_panel" \
-    "$workspace_panel_content"; then
-  fail "workspace state and views must remain event-driven and worker-free"
+if rg -q 'Process \{|Timer \{' "$workspace_service" \
+  || rg -q 'Process \{|Timer \{|FileView \{' \
+    "$workspace_widget" "$workspace_panel" "$workspace_panel_content"; then
+  fail "workspace service must not poll; views must remain worker-free"
 fi
+[[ $(rg -c 'FileView[[:space:]]*\{' "$workspace_service") -eq 1 ]] \
+  || fail "workspace service must own exactly one host connector-map reader"
+for workspace_map_contract in \
+    'path: root.backendAdmitted' \
+    '? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")' \
+    '+ "/omarchy/monitor-workspaces" : ""' \
+    'watchChanges: root.backendAdmitted' \
+    'onFileChanged: reload()' \
+    'onLoaded: root.blocks = WorkspaceModel.readBlocks(text())' \
+    'onLoadFailed: root.blocks = ({})' \
+    'onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})'; do
+  rg -Fq "$workspace_map_contract" "$workspace_service" \
+    || fail "workspace connector-map admission drifted: $workspace_map_contract"
+done
 if rg -q 'Quickshell\.Hyprland|Hyprland\.' \
     "$workspace_widget" "$workspace_panel" "$workspace_panel_content"; then
   fail "workspace views must consume the shared workspace service"
@@ -1419,8 +1434,24 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
       rg -q "$status_contract" "$official_notification_service" \
         || fail "official legacy notification contract changed: $status_contract"
     done
+  elif rg -Fq 'service.stateDir + "/history.json"' "$official_notification_service"; then
+    # The plugin proxy grants DND only; Recent consumes documented disk state,
+    # not the root service's private models or toast mutation methods.
+    for status_contract in doNotDisturb setDoNotDisturb; do
+      rg -q "$status_contract" "$official_notification_service" \
+        && rg -q "$status_contract" "${OMARCHY_PATH}/shell/services/PluginFirstPartyServiceApi.qml" \
+        || fail "official notification proxy contract changed: $status_contract"
+    done
+    rg -Fq 'Quickshell.env("HOME") + "/.local/state/omarchy/notifications"' "$official_notification_service" \
+      || fail 'official notification state directory changed'
+    for status_contract in '"key"' 'ts: Date.now() / 1000' closed_ts closed_reason 'function parseHistory('; do
+      rg -Fq "$status_contract" "${official_notification_service%/*}/Store.js" \
+        || fail "official notification history format changed: $status_contract"
+    done
+    rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
+      || fail 'official notification history persistence is no longer documented'
   else
-    fail "official notification service exposes neither current nor legacy model contract"
+    fail "official notification service exposes no supported model or history.json contract"
   fi
 
   host_has_module() {

@@ -22,7 +22,9 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
   readonly property int iconSlotSize: tokens.v2Shell === true
@@ -40,7 +42,7 @@ Ui.Panel {
   readonly property int connectedCount: bluetoothReady
     ? bluetoothService.connectedCount : 0
   readonly property bool connected: connectedCount > 0
-  readonly property bool showConnectedCount: connected
+  readonly property bool showConnectedCount: !iconOnly && connected
     && bar && !bar.vertical
   readonly property string stateIcon: !radioEnabled ? "\uE1A9"
     : connected ? "\uE1A8" : "\uE1A7"

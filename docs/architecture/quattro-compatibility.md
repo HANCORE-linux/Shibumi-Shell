@@ -8,7 +8,8 @@ by this evidence.
 
 ## Current pinned host
 
-Beta.16.5.1 pins the exact official Omarchy 4.0.6 validation baseline. These pins are not
+The 0.2.0 candidate retains Beta.16.5.1's exact official Omarchy 4.0.6
+validation baseline and advances only the forward reference. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
@@ -19,7 +20,7 @@ below applies to its recorded single-output Omarchy 4.0.3 setup:
 | Pinned source-parity revision | `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
 | Native catalog source-only reference | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, 183 shell files) |
 | Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
-| Immutable forward-compatibility revision | `246f33a2fef66411c990860d88e0823ae83987fc` |
+| Immutable forward-compatibility revision | `0d8edf3812e0caafd155760c96bc2862933f611a` |
 | Quickshell package | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
@@ -27,7 +28,7 @@ The installed package is the primary host-build identity. The new complete
 source-parity checkout is pinned to the official `v4.0.6` tag. The 4.0.4, 4.0.3 and
 4.0.2 package/source manifests and 4.0.5 source manifest remain immutable history. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
 the separate
-`246f33a2` snapshot supersedes `4c1b4cb3` as the bounded forward reference;
+`0d8edf38` snapshot supersedes `246f33a2` as the bounded forward reference;
 all earlier manifests remain unchanged.
 Historical focused forward checks do not establish a new-stack candidate pass;
 complete candidate gates must be recorded separately. No pin follows a moving branch.
@@ -53,7 +54,7 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
   records the full Git checkout of the official `v4.0.6` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
   acceptance baseline without claiming that acceptance for 4.0.6;
-- [`omarchy-forward-compat-246f33a2.json`](../../contracts/baselines/omarchy-forward-compat-246f33a2.json)
+- [`omarchy-forward-compat-0d8edf38.json`](../../contracts/baselines/omarchy-forward-compat-0d8edf38.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -159,7 +160,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-0d8edf38 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

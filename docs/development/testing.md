@@ -71,7 +71,7 @@ The forward-compat job separately requires the immutable upstream snapshot used
 by the engineering audit:
 
 ```bash
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-246f33a2 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-0d8edf38 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
@@ -105,8 +105,8 @@ non-overlapping claims; the Agents job selects its separate narrower manifest:
   remain immutable optional compatibility references alongside 4.0.2; choose
   a historical manifest with `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.3` or
   `SHIBUMI_OMARCHY_BASELINE_VERSION=4.0.2`;
-- `contracts/baselines/omarchy-forward-compat-246f33a2.json` records
-  `246f33a2fef66411c990860d88e0823ae83987fc` for the separate forward gate.
+- `contracts/baselines/omarchy-forward-compat-0d8edf38.json` records
+  `0d8edf3812e0caafd155760c96bc2862933f611a` for the separate forward gate.
   Its active Quickshell provenance is the independently verified Omarchy-repository
   `0.3.2.r7.g2b4501a-1` package, also required for 4.0.6 package/parity gates;
   historical Arch `0.3.1-1` and edge-host `0.3.2-6` results remain separate.

@@ -204,11 +204,11 @@ ShellRoot {
     SuiteRuntime.Provider {
       id: leasedBarProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.1.1-beta.16.5.1"
+      implementationVersion: "0.2.0"
       owner: leasedBarOwner
       host: leasedBarOwner.providerHost
       manifest: ({ id: "hancore.shibumi.bar",
-        version: "0.1.1-beta.16.5.1", kinds: ["bar"] })
+        version: "0.2.0", kinds: ["bar"] })
     }
   }
 
@@ -226,7 +226,7 @@ ShellRoot {
       Status.Service {
         shell: rawScopedStatusShell
         manifest: ({ id: "hancore.shibumi.status",
-          version: "0.1.1-beta.16.5.1", kinds: ["service"] })
+          version: "0.2.0", kinds: ["service"] })
         actionRunner: actionRecorder
         runtimeProbesEnabled: false
       }
@@ -447,6 +447,7 @@ ShellRoot {
       const notifications = scopedDiagnosticStatus.notificationService
       if (scopedDiagnosticStatus.idleService !== leasedIdleA || !notifications)
         return fail("scoped Status did not resolve owner A")
+      if (notifications.historyState === "loading") return false
       if (notifications === leasedNotificationsA
           || !scopedDiagnosticStatus.stayAwake
           || !scopedDiagnosticStatus.notificationsSilenced
@@ -502,6 +503,7 @@ ShellRoot {
       const notifications = scopedDiagnosticStatus.notificationService
       if (scopedDiagnosticStatus.idleService !== leasedIdleB || !notifications)
         return fail("scoped Status did not resolve owner B")
+      if (notifications.historyState === "loading") return false
       if (scopedDiagnosticStatus.stayAwake
           || scopedDiagnosticStatus.notificationsSilenced
           || !notifications.historyAvailable

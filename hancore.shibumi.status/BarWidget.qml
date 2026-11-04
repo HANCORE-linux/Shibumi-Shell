@@ -122,13 +122,25 @@ Item {
   property real spacingSavings: 0
   property bool savingsPending: false
   property bool spacingActive: false
+  property real spacingSavingsLeft: -1
+  property double spacingSavingsChangedAt: 0
   // Settle after layout: binding width directly to snapped ink feeds the
   // parent's new position back into its own reservation.
   function syncSpacingSavings() {
     if (!root || !spacingActive) return
     const saved = Math.max(0, updateShift - bellShift)
     savingsPending = false
-    if (Math.abs(spacingSavings - saved) > 1e-7) spacingSavings = saved
+    if (Math.abs(spacingSavings - saved) <= 1e-7) return
+    // Deferring alone does not settle it: a centered compact shell moves with
+    // its own width, and at fractional scales (1.25x) that move flips the
+    // snapped ink edges straight back, resizing the bar every frame. Ignore an
+    // immediate return to the value just left.
+    const now = Date.now()
+    if (Math.abs(saved - spacingSavingsLeft) <= 1e-7
+        && now - spacingSavingsChangedAt < 500) return
+    spacingSavingsLeft = spacingSavings
+    spacingSavingsChangedAt = now
+    spacingSavings = saved
   }
   function scheduleSpacingSavings() {
     savingsPending = true

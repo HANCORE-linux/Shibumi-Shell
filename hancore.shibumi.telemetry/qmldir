@@ -1,0 +1,4 @@
+singleton MemorySweep 1.0 MemorySweep.qml
+Service 1.0 Service.qml
+SystemTelemetry 1.0 SystemTelemetry.qml
+ThermalTelemetry 1.0 ThermalTelemetry.qml

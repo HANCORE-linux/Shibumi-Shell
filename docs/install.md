@@ -6,8 +6,8 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.1.1-beta.16.5.1` is the target GitHub prerelease. See the
-[release notes](../.github/release-notes/v0.1.1-beta.16.5.1.md) for changes.
+`0.2.0` is the first stable release target. See the
+[release notes](../.github/release-notes/v0.2.0.md) for changes.
 Install from the release tag using the source workflow below.
 Do not install or update from `main`.
 
@@ -23,6 +23,11 @@ Do not install or update from `main`.
 The exact accepted Omarchy and Quickshell packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
 
+Notification history follows the host's on-disk layout. On Omarchy 4.0.6 the Recent list
+keeps per-row removal and "Clear all". On the new notification engine (Omarchy 4.5
+prerelease, forward pin 0d8edf38) Shibumi reads history.json without modifying it, and
+those two controls are hidden. Live rows are unavailable through the host proxy on both.
+
 ## Install from source
 
 For an intentional non-interactive installation:
@@ -31,7 +36,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.5.1
+git checkout v0.2.0
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -47,7 +52,7 @@ To inspect the transaction before installing:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.1.1-beta.16.5.1
+git checkout v0.2.0
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -127,15 +132,18 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-Update an admitted Beta.16.4 or Beta.16.5 source installation to Beta.16.5.1
-from its trusted checkout. The exact Beta.16.4 tag (`64b9369`) and merge
-(`aec6c0a`), and Beta.16.5 tag (`8b34d030`) and merge (`1d7a00b2`), are admitted
-predecessors:
+Update an exactly admitted source installation to 0.2.0 from its trusted
+checkout. The most recent published predecessor is Beta.16.5.1: its tag
+(`20108270`) and main integration merge (`a5302f11`) are both admitted with the
+unchanged released payload. Its package identity is admitted too. Older
+supported identities, including Beta.16.4 and Beta.16.5, remain in the
+[lifecycle predecessor contract](../contracts/lifecycle-predecessors-v1.json).
+Do not treat this list as a version range:
 
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.1.1-beta.16.5.1
+git checkout v0.2.0
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
@@ -155,7 +163,7 @@ discards staging, and leaves the live plugins unchanged; unlock the active
 session and retry. For an external-bar installation, update preserves the
 active bar and layout.
 
-Beta.14.1 inventories every existing journal before recovery and admits only
+The lifecycle inventories every existing journal before recovery and admits only
 exact revision, plugin-digest, payload-digest, activation, marker, and journal
 identities declared by the lifecycle predecessor contract. A shared version
 string is not sufficient. Step-6 Power registration or journal metadata, mixed
@@ -188,7 +196,7 @@ authoritative origin. The old checkout is not deleted or modified.
 ### Roll back a package version
 
 > [!WARNING]
-> **Beta.16.5 downgrade warning.**
+> **Downgrade warning (also applies to 0.2.0).**
 > Beta.15.4 and older cannot read V1 layouts containing
 > `order.parked`. They reset V1 order, roles, and splits to defaults; other
 > settings and V2 remain. `uninstall --keep-settings` does not prevent this.
@@ -388,7 +396,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.1.1-beta.16.5.1
+git checkout v0.2.0
 ./scripts/shibumi-suite install --yes
 ```
 

@@ -273,9 +273,19 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "public-beta.16.5.1": {
                 "suiteVersion": "0.1.1-beta.16.5.1",
-                "sourceRevisions": ["package:0.1.1-beta.16.5.1"],
+                "sourceRevisions": [
+                    "20108270fb408cf562e0117de19e56978ca529a8",
+                    "a5302f11398b785c24d783d07ee22f657b2d9970",
+                    "package:0.1.1-beta.16.5.1",
+                ],
                 "settingsStorageVersion": 1,
                 "payloadDigest": "a4a0b43a04603a9b40354df1498e74b4b42e55158c1d3f9d68c9460db30802cf",
+            },
+            "public-0.2.0": {
+                "suiteVersion": "0.2.0",
+                "sourceRevisions": ["package:0.2.0"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "700b94610f999ec50c1c39c06ee82e9083b4dc1f1749f775955c801848f1af43",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -368,6 +378,7 @@ class PackageReleaseTests(unittest.TestCase):
             ("0.1.1-beta.8", "--prerelease"),
             ("0.1.1-rc.1+build.7", "--prerelease"),
             ("0.1.1", "--latest"),
+            ("0.2.0", "--latest"),
             ("1.0.0+build.7", "--latest"),
         ):
             with self.subTest(version=version):

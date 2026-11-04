@@ -1,16 +1,44 @@
-# Shibumi 0.1.1-beta.16.5.1 release readiness
+# Shibumi 0.2.0 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## Beta 16.5.1 hotfix and validation boundary
+## 0.2.0 stable-release scope and acceptance boundary
+
+0.2.0 is the first stable release target, focused on stabilization rather than
+new UI. The `0.x` series is release-stable but API-unstable: release status does
+not promise frozen plugin or configuration APIs. Release texts, the date and
+known-points wording require Maintainer approval; this preparation record is
+not publication approval.
+
+Supported presentation is horizontal Top and Bottom on Omarchy Quattro. The
+validated stack is Omarchy 4.0.6, Quickshell 0.3.2 and Qt 6.12, with exact
+package identities below. Physical acceptance is single-output; physical
+multi-output, mixed-scale, hotplug and DPMS/suspend/resume remain distinct gates.
+Enterprise Wi-Fi and Bluetooth device workflows also need their own hardware
+or credentials. Private fixtures do not replace those checks.
+
+The forward reference is fixed at
+`0d8edf3812e0caafd155760c96bc2862933f611a` (2026-10-24), recorded in
+`contracts/baselines/omarchy-forward-compat-0d8edf38.json`. Stable 4.0.6 is
+unchanged. Neither pin transfers historical results to 0.2.0 or claims support
+for arbitrary newer hosts. Complete candidate aggregates, clean-commit release
+evidence and live acceptance must each identify their actual inputs.
+
+The frozen rolling predecessor is published Beta.16.5.1 (release 422308942,
+2026-10-23T21:05:02Z). Tag `20108270` and main integration merge `a5302f11`
+share its release tree and unchanged payload. Older supported identities remain
+admitted. Use the [update and recovery guide](install.md#update); unknown or
+modified installations need diagnosis, not manually rewritten lifecycle state.
+
+## Historical Beta 16.5.1 hotfix and validation boundary
 
 The approved release date is **2026-10-23**. The release branch starts from
 main integration merge `1d7a00b2742fb4d479774a4f722c6c2ef96d0601`, whose tree
 equals published Beta 16.5 tag `8b34d030a303aa35d6033923c8f3c38c4c25b29b`.
 Both revisions are admitted with unchanged published payload pins. The rolling
-predecessor fixture now records that published Beta 16.5 release.
+predecessor fixture recorded that published Beta 16.5 release for the hotfix.
 
 The hotfix accepts both `style.*` and `appearance.*` picker menu keys, preserving
 the host actions and warning without a routing block when neither family is
@@ -220,8 +248,8 @@ commit externally. No predecessor gate result transfers to this candidate.
 Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
 `1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It was the frozen rolling
 predecessor for Beta.16.4; [`release-predecessor.json`](../tests/fixtures/release-predecessor.json)
-recorded Beta.16.4 during Beta.16.5 preparation and now records Beta.16.5
-for the hotfix.
+recorded Beta.16.4 during Beta.16.5 preparation and Beta.16.5 for the hotfix.
+The current 0.2.0 selection is recorded above.
 That exact tag checkout and the source-installation integration merge
 `494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
@@ -269,7 +297,7 @@ The release's installed-package and source-parity contracts target Omarchy
 | Source parity | `installed-source-parity-v4.0.6`, `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
 | Native catalog source-only reference | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `246f33a2fef66411c990860d88e0823ae83987fc` |
+| Forward reference | `0d8edf3812e0caafd155760c96bc2862933f611a` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.4/4.0.3/4.0.2 package/source and 4.0.5 source
@@ -306,29 +334,31 @@ was performed. Each operation needs its own maintainer Go.
 
 ## Known limits and downgrade warning
 
-- The Default-style marquee commits two frames per scroll step while text
-  scrolls (about 250 commits for 125 steps in five seconds). There is no visible
-  effect and the cost stays well below Beta 16.4; a layer-free marquee is planned
-  for 0.2.0.
-- Tray-drawer entries are retained and disclosed but not rendered in Shibumi;
-  use the stock Omarchy bar for their drawer presentation.
-- Notch can still oscillate at DPR 1.6. Notification focus remains limited when
-  the sender does not provide a supported application identity.
-- If Memory Sweep loses its service owner, the authorization dialog may disappear
-  without a result; avoid restarting Sweep during an owner change.
-- Horizontal Top and Bottom are supported. Vertical Full clipping and Icon
-  alignment remain outside acceptance; the vertical bar is deferred to V3 in
-  `0.2.0-beta`.
-- Physical multi-output, mixed-scale, hotplug, DPMS/suspend/resume, enterprise
-  Wi-Fi, and Bluetooth device workflows need their own raw setup and live
-  evidence. No blanket hardware acceptance follows from these fixtures.
-- Local whole-ink, workspace/Pacman, meter, Calendar overhang, and charge-bolt
-  raster limits are not declared solved by the ordinary-text baseline work.
-- The pinned host exposes Recent notification history, not Live popup access.
-- Bluetooth power affects all radios through the host helper and cannot clear
-  a hardware block. The 20-second pending deadline does not stop the detached
-  process or prevent later effects. Real rfkill and persistence acceptance is
-  separate from controlled native-QML feedback.
+- Horizontal Top and Bottom bars are supported. Vertical bars are outside the 0.2.0 scope.
+- Notifications: the host hands plugins only the Do-Not-Disturb switch, so Live rows are
+  unavailable in the Shibumi panel. Recent comes from the host's persisted history. On
+  Omarchy 4.0.6 the list, per-row removal and "Clear all" work as before; on the new
+  notification engine (Omarchy 4.5 prerelease, forward pin 0d8edf38) Recent is read-only
+  and those two controls are hidden because the host offers no history mutation. Clicking a
+  Recent row only focuses the application. Notification focus remains limited when the
+  sender provides no supported application identity.
+- Omarchy 4.5 is validated against the pinned source tree 0d8edf38 and fixtures only, not
+  on a live 4.5 host. Support for every 4.5 build is not implied.
+- Content-sized shells (Fit, Dock, Notch): after a layout change that crosses a responsive
+  threshold (for example the centre group hiding or showing its date), the shell can settle
+  through a few one-device-pixel steps for well under a second. The self-induced relayout
+  cycle of the status group at fractional scales is fixed (shell origin on the device grid,
+  plus #92). Live acceptance of the final candidate on a fractional-scale host is pending.
+- Tray-drawer entries are retained and disclosed but not rendered in Shibumi; use the stock
+  Omarchy bar for their drawer presentation.
+- Physical multi-output, mixed-scale, hotplug, DPMS/suspend/resume, enterprise Wi-Fi and
+  Bluetooth device workflows need their own live evidence. No blanket hardware acceptance
+  follows from these fixtures.
+- Local whole-ink, workspace/Pacman, meter, Calendar overhang and charge-bolt raster limits
+  are not declared solved by the ordinary-text baseline work.
+- Bluetooth power affects all radios through the host helper and cannot clear a hardware
+  block. The 20-second pending deadline does not stop the detached process or prevent later
+  effects.
 - The horizontal update count shares the bar-value baseline and CPU ink spacing.
   Its leading reservation grows on an output-scale grid. Status inner-spacing
   savings are returned to the group width; centered Fit preserves whole-physical-
@@ -336,13 +366,12 @@ was performed. Each operation needs its own maintainer Go.
   rectangles are not all RGBA-identical after translation, and the restored V1
   island edges change slot backgrounds. Exact whole-bar pixel identity and
   physical acceptance are not claimed.
-- **Downgrade:** Beta.15.4 and older cannot read V1 `order.parked`; they reset
-  V1 order, roles, and splits while retaining other settings and V2.
-  `--keep-settings` does not prevent this. The [release notes](../.github/release-notes/v0.1.1-beta.16.5.md)
-  and [backup guide](install.md#backup-before-downgrade) identify the complete
-  settings and recovery evidence to preserve. Restore the settings with a
-  matching payload.
-- OPR packaging is separate work, not authorized here; AUR publication is not the target.
+- Downgrade: Beta.15.4 and older cannot read V1 `order.parked`; they reset V1 order, roles
+  and splits while retaining other settings and V2. `--keep-settings` does not prevent this.
+  Back up the settings before a downgrade (see install.md) and restore them with a matching
+  payload.
+- Packaging: an omarchy-pkgs (OPR) recipe is prepared after this release; AUR is not the
+  target.
 
 ## Immutable asset and publication gate
 
@@ -358,11 +387,11 @@ block updates and deletion. See [packaging](development/packaging.md).
 ## Historical evidence
 
 Beta.13's single-output Omarchy 4.0.3 acceptance remains historical in
-[Get started](getting-started.md#know-the-beta-boundary). The paused
+[Get started](getting-started.md#know-the-release-boundary). The paused
 [Beta.14 validation record](development/beta14-validation.md) is not a current
 release checklist. Beta.16's published changes and limits remain in its
 [release notes](../.github/release-notes/v0.1.1-beta.16.md). Its earlier product
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on Beta 16.5.1.
+confers acceptance on 0.2.0.

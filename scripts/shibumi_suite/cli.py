@@ -34,6 +34,7 @@ from .config import (
     remove_plugin_ids,
     remove_suite,
     select_omarchy_image_picker,
+    state_entry,
 )
 from .model import (
     ContractError,
@@ -1064,10 +1065,21 @@ def command_activate(
     def desired_for(config: dict[str, Any]) -> dict[str, Any]:
         if state.get("settingsStorageVersion") == 1:
             config = migrate_state_settings(config, import_legacy=False)
-        return apply_identity_contract(
+        desired = apply_identity_contract(
             apply_profile(config, profile, suite.plugins, paths.plugin_dir),
             migrate_storage=state.get("settingsStorageVersion") == 1,
         )
+        entry = state_entry(desired)
+        if entry is not None:
+            position = entry.pop("shibumiRetainedPosition", None)
+            if configured_bar_id(config) != profile.active_bar and position in ("top", "bottom"):
+                desired["bar"]["position"] = position
+            provider = entry.pop("shibumiRetainedImageStyle", None)
+            picker = entry.get("shibumi", {}).get("picker")
+            if (provider in ("tanzaku", "hearthstone") and isinstance(picker, dict)
+                    and picker.get("imageStyle") == "omarchy"):
+                picker["imageStyle"] = provider
+        return desired
 
     desired = desired_for(current)
     specs = suite.selected(profile.install)
@@ -1150,6 +1162,19 @@ def command_deactivate(
             activation["configuredBar"] = configured_bar_id(desired_config)
             next_state["updatedEpoch"] = int(time.time())
             return desired_config, next_state
+        config = copy.deepcopy(config)
+        entry = state_entry(config)
+        if (entry is not None and configured_bar_id(config) == active_bar
+                and not external_activation(state, config)):
+            # Only the supported managed handoff owns a private position snapshot.
+            position = config["bar"].get("position")
+            if position in ("top", "bottom"):
+                entry["shibumiRetainedPosition"] = position
+        if entry is not None:
+            picker = entry.get("shibumi", {}).get("picker")
+            if isinstance(picker, dict) and picker.get("imageStyle") in ("tanzaku", "hearthstone"):
+                # Repeated deactivation must not remember our native fallback.
+                entry["shibumiRetainedImageStyle"] = picker["imageStyle"]
         return (
             remove_plugin_ids(select_omarchy_image_picker(
                 remove_suite(

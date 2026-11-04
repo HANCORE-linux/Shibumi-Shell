@@ -51,11 +51,11 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/tmp/omarchy-installed-source-v4.0.6 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/tmp/omarchy-v4.0.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-246f33a2 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/tmp/omarchy-forward-compat-0d8edf38 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The forward reference is exactly `246f33a2fef66411c990860d88e0823ae83987fc`;
+The forward reference is exactly `0d8edf3812e0caafd155760c96bc2862933f611a`;
 its admission does not transfer fixture evidence to a live or differently packaged host.
 Native catalog resource validation separately retains v4.0.4 (`c668141e`), supplied
 through `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH`; do not substitute the stable 4.0.6 checkout.

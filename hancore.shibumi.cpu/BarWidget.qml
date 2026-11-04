@@ -48,11 +48,13 @@ Ui.Panel {
     target: root.gpuTelemetry
     function onUtilizationChanged() { if (root.gpuTelemetry.utilization > 0) root.gpuActivitySeen = true }
   }
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
-  readonly property bool percentageVisible: displayMode !== "icon"
-    || tokens.v2Shell !== true
+  readonly property bool percentageVisible: !iconOnly
+    && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property bool v1CustomFillActive: cpuPill.v1CustomFill
   readonly property color renderedPillFillColor: cpuPill.renderedFillColor
   readonly property real renderedPillFillOpacity: cpuPill.v1FillOpacity
@@ -205,7 +207,16 @@ Ui.Panel {
     Column {
       spacing: Commons.Style.space(2)
 
+      Presentation.BarGlyph {
+        visible: root.iconOnly
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: "planner_review"
+        color: root.widgetInk
+        font.pixelSize: root.tokens.iconSize
+      }
+
       Text {
+        visible: !root.iconOnly
         anchors.horizontalCenter: parent.horizontalCenter
         text: "CPU"
         color: Qt.rgba(root.widgetInk.r, root.widgetInk.g,
@@ -216,6 +227,7 @@ Ui.Panel {
       }
 
       Text {
+        visible: !root.iconOnly
         anchors.horizontalCenter: parent.horizontalCenter
         text: String(root.percent).padStart(2, "0") + "%"
         color: root.widgetInk

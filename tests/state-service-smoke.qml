@@ -55,7 +55,7 @@ ShellRoot {
     id: state
     omarchyPath: Quickshell.env("OMARCHY_PATH")
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.16.5.1", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.2.0", kinds: ["service"]})
   }
   Component.onCompleted: steps = [
     function() {
@@ -104,6 +104,11 @@ ShellRoot {
         && state.groupSettingsForVariant("G4", "v1").compact && !state.groupSettingsForVariant("G4", "v2").compact
         && appearance("G:hancore.shibumi.storage", "v1", "displayMode") === "icon"
         && appearance("G:hancore.shibumi.storage", "v2", "displayMode") === "full", "appearance isolation")
+      check(state.setGroupAppearanceSettingForVariant("G4", "v1", "displayMode", "icon-only"), "Icon-only queue")
+    }, function() {
+      check(appearance("G4", "v1", "displayMode") === "icon-only"
+        && !state.groupSettingsForVariant("G4", "v1").compact
+        && appearance("G4", "v2", "displayMode") === "text", "Icon-only persisted separately")
       check(state.resetGroupAppearanceForVariant("G4", "v1"), "local appearance reset")
     }, function() {
       check(appearance("G4", "v1", "displayMode") === "full" && appearance("G4", "v2", "displayMode") === "text", "local reset publication")

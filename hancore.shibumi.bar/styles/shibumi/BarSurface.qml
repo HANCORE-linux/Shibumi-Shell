@@ -112,12 +112,15 @@ Item {
       readonly property real expandedShellWidth: compactShell
         ? Math.min(width - 2 * frameInset, shellWidth + spacingRecovery) : shellWidth
       readonly property real expandedShellX: shibumiShell ? frameInset
+        : compactShell ? Math.round((width - expandedShellWidth) * pixelRatio / 2) / pixelRatio
         : Math.round((width - expandedShellWidth) / 2)
-      // Preserve the old raster phase; recover real width, not outer padding.
+      // Keep compact origins on the device grid; recover width, not outer padding.
       readonly property real shellX: compactShell && spacingRecovery > 0
         ? expandedShellX + Math.round((expandedShellWidth - shellWidth)
             * pixelRatio / 2) / pixelRatio
-        : shibumiShell ? frameInset : Math.round((width - shellWidth) / 2)
+        : shibumiShell ? frameInset
+        : compactShell ? Math.round((width - shellWidth) * pixelRatio / 2) / pixelRatio
+        : Math.round((width - shellWidth) / 2)
       readonly property real shellContentInset: contentInset
         + (shellStyle === "notch"
           ? root.bar.visualTokens.shellWingWidth : 0)

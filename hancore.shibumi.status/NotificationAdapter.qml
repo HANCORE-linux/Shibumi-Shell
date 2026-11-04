@@ -42,11 +42,14 @@ Item {
   property string historyState: "unavailable"
   readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
-  readonly property bool pastDismissAvailable: available &&
-    (typeof state.hostService.dismissPast === "function" || !historySourceModel())
-  readonly property bool pastClearAvailable: available && (!historySourceModel()
-    || typeof state.hostService.clearPast === "function"
-    || typeof state.hostService.clearHistory === "function")
+  property string historyLayout: "unknown"
+  readonly property bool pastDismissAvailable: available && historyLayout !== "json" &&
+    (typeof state.hostService.dismissPast === "function"
+      || (!historySourceModel() && historyLayout === "directory"))
+  readonly property bool pastClearAvailable: available && historyLayout !== "json" &&
+    ((!historySourceModel() && historyLayout === "directory")
+      || typeof state.hostService.clearPast === "function"
+      || typeof state.hostService.clearHistory === "function")
   readonly property string historyDir: Quickshell.env("HOME")
     + "/.local/state/omarchy/notifications/history"
   readonly property string imagesDir: Quickshell.env("HOME")
@@ -62,7 +65,7 @@ Item {
   readonly property var historyWatchPaths: {
     const paths = []
     if (!available || historySourceModel()) return paths
-    paths.push(historyDir, historyDir.slice(0, historyDir.lastIndexOf("/") + 1))
+    paths.push(historyDir, historyDir + ".json", historyDir.slice(0, historyDir.lastIndexOf("/") + 1))
     for (let index = 0; index < Math.min(10, pastRows.count); index++) {
       const name = pastRows.get(index).fileName
       if (validHistoryFileName(name)) paths.push(historyDir + "/" + name)
@@ -98,6 +101,7 @@ Item {
     historyRefresh.stop()
     state.hostGeneration++
     state.hostService = nextService
+    historyLayout = "unknown"
     historyState = nextService ? "loading" : "unavailable"
     state.historyOutput = ""
     state.queuedHistoryHost = null
@@ -198,6 +202,28 @@ Item {
       pastRows.append(rows[index])
   }
 
+  // Store.js history.json is already newest-closed first, including silenced
+  // rows. Keep that order (ts is arrival time), and never import click commands.
+  function applyJsonHistory(raw) {
+    try {
+      const values = JSON.parse(raw)
+      if (!Array.isArray(values)) return false
+      const rows = []
+      for (const value of values) {
+        if (!value || typeof value.key !== "string" || !value.key
+            || typeof value.ts !== "number" || !isFinite(value.ts)
+            || typeof value.closed_ts !== "number" || !isFinite(value.closed_ts)) return false
+        const row = primitiveEntry(value)
+        row.timestamp = value.ts * 1000
+        row.fileName = row.image = row.exec = row.execArgv = ""
+        if (rows.length < 10) rows.push(row)
+      }
+      pastRows.clear()
+      for (const row of rows) pastRows.append(row)
+      return true
+    } catch (_error) { return false }
+  }
+
   function sourceIndex(entry, model) {
     if (!entry || !model || typeof model.get !== "function") return -1
     const timestamp = Number(entry.timestamp || 0)
@@ -265,15 +291,15 @@ Item {
 
   function dismissPast(index) {
     const service = state.hostService
-    if (!service || index < 0 || index >= pastRows.count) return false
+    if (!pastDismissAvailable || index < 0 || index >= pastRows.count) return false
     if (typeof service.dismissPast === "function") {
       service.dismissPast(index)
       return true
     }
     const fileName = String(pastRows.get(index).fileName || "")
-    if (historySourceModel() || !validHistoryFileName(fileName)) return false
+    if (historyLayout !== "directory" || historySourceModel() || !validHistoryFileName(fileName)) return false
     return startHistoryMutation(["bash", "-c",
-      "rm -f \"$1/$3\" \"$2/$4\"-*", "--", historyDir, imagesDir,
+      "[ ! -e \"$1.json\" ] && [ ! -L \"$1.json\" ] && rm -f \"$1/$3\" \"$2/$4\"-*", "--", historyDir, imagesDir,
       fileName, fileName.slice(0, -5)])
   }
 
@@ -297,7 +323,7 @@ Item {
 
   function clearPast() {
     const service = state.hostService
-    if (!service) return false
+    if (!pastClearAvailable) return false
     if (typeof service.clearPast === "function") {
       service.clearPast()
       return true
@@ -306,15 +332,17 @@ Item {
       service.clearHistory()
       return true
     }
-    if (historySourceModel()) return false
+    if (historyLayout !== "directory" || historySourceModel()) return false
     return startHistoryMutation(["bash", "-c",
-      "for f in \"$1\"/*.json; do\n  [[ -e $f ]] || continue\n"
+      "[ ! -e \"$1.json\" ] && [ ! -L \"$1.json\" ] || exit 1; "
+      + "for f in \"$1\"/*.json; do\n  [[ -e $f ]] || continue\n"
       + "  stale=\"${f##*/}\"\n  rm -f \"$f\" \"$2/${stale%.json}\"-*\n"
       + "done", "--", historyDir, imagesDir])
   }
 
   function startHistoryMutation(command) {
-    if (!state.hostService || mutationProcess.running) return false
+    if (!state.hostService || historyLayout !== "directory"
+        || historySourceModel() || mutationProcess.running) return false
     state.mutationHost = state.hostService
     state.mutationGeneration = state.hostGeneration
     mutationProcess.command = command
@@ -397,9 +425,13 @@ Item {
   Process {
     id: historyReader
     command: ["timeout", "--foreground", "--kill-after=1", "2", "sh", "-c",
-      "dir=$1; set -- \"$dir\"/*.json; "
+      // JSON wins over migration leftovers, even on read/parse failure. Once
+      // observed, keep it for this attachment if the file temporarily vanishes.
+      "dir=$1; if [ \"$2\" = json ] || [ -e \"$dir.json\" ] || [ -L \"$dir.json\" ]; then "
+      + "printf 'json\\n'; exec cat -- \"$dir.json\"; fi; "
+      + "printf 'directory\\n'; set -- \"$dir\"/*.json; "
       + "if [ -d \"$dir\" ] && [ -r \"$dir\" ] && [ -x \"$dir\" ] && [ ! -e \"$1\" ]; then exit 0; fi; "
-      + "exec awk '{ print FILENAME \"\\t\" $0 }' \"$@\"", "--", historyDir]
+      + "exec awk '{ print FILENAME \"\\t\" $0 }' \"$@\"", "--", historyDir, root.historyLayout]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: state.historyOutput = text
@@ -413,8 +445,14 @@ Item {
       state.historyReadHost = null
       state.historyReadGeneration = -1
       if (current && !root.historySourceModel()) {
-        root.historyState = exitCode === 0 ? "ready" : "unavailable"
-        root.applyHistory(exitCode === 0 ? state.historyOutput : "")
+        const separator = state.historyOutput.indexOf("\n")
+        root.historyLayout = state.historyOutput.slice(0, separator)
+        const body = state.historyOutput.slice(separator + 1)
+        let ready = exitCode === 0
+        if (root.historyLayout === "json") ready = ready && root.applyJsonHistory(body)
+        else root.applyHistory(ready ? body : "")
+        if (!ready) pastRows.clear()
+        root.historyState = ready ? "ready" : "unavailable"
       }
     }
   }

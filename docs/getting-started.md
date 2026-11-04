@@ -62,15 +62,13 @@ hashes, and transaction recovery data live separately in the XDG state directory
 Use the Control Center for normal changes. Read [configuration](configuration.md)
 before editing JSON or suite state by hand.
 
-## Know the beta boundary
+## Know the release boundary
 
-Version `0.1.1-beta.13` is a published GitHub prerelease. Its exact package
-payload and complete package lifecycle passed, including physical V1/V2,
-stock-bar return, style, and top/bottom acceptance on single-output Omarchy
-4.0.3. The validation machine exposed only `eDP-1`, so this is not multi-output
-acceptance. Shibumi supports Omarchy Quattro only. The pinned source contracts
-and accepted host evidence are recorded in the
-[Shibumi host compatibility record](architecture/quattro-compatibility.md).
+Shibumi 0.2.0 is the first stable release and focuses on stabilization. It supports Omarchy
+Quattro with horizontal Top and Bottom bars. "0.x" means APIs may still change between
+releases, not that a release is a prerelease. Use tagged releases and the documented update
+and recovery route. Validated stack: Omarchy 4.0.6, Quickshell 0.3.2, Qt 6.12; forward
+reference 0d8edf38. Physical acceptance is single-output.
 
 Read [release readiness](release-readiness.md) for the current evidence and
 open gates. Use [troubleshooting](development/troubleshooting.md) if the bar,

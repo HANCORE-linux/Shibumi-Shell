@@ -26,11 +26,13 @@ Ui.Panel {
     ? tokens.widgetContentColor(settings,
       bar ? bar.urgent : Commons.Color.accent)
     : (bar ? bar.urgent : Commons.Color.accent)
-  readonly property string displayMode: String(
+  readonly property bool iconOnly: tokens.v2Shell !== true
+    && setting("displayMode", "full") === "icon-only"
+  readonly property string displayMode: iconOnly ? "icon" : String(
     setting("displayMode", setting("compact", false) ? "icon" : "full"))
   readonly property bool compact: displayMode === "icon"
-  readonly property bool horizontalValueVisible: displayMode !== "icon"
-    || tokens.v2Shell !== true
+  readonly property bool horizontalValueVisible: !iconOnly
+    && (displayMode !== "icon" || tokens.v2Shell !== true)
   readonly property int percent: telemetry ? telemetry.memPercent : 0
   readonly property real usedGiB: telemetry ? telemetry.memUsedGiB : 0
   readonly property real totalGiB: telemetry ? telemetry.memTotalGiB : 0
@@ -182,6 +184,7 @@ Ui.Panel {
       }
 
       Text {
+        visible: !root.iconOnly
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.usedLabel
         color: root.widgetInk

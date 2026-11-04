@@ -14,6 +14,8 @@ ShellRoot {
   property real batteryFullWidth: 0
   property real profileFullWidth: 0
   property var clickTargets: []
+  property var pulseGauge: null
+  property real stoppedPulse: 0
 
   function fail(message) {
     console.error("power-plugins-smoke:", message)
@@ -219,6 +221,7 @@ ShellRoot {
         v2Tokens.shellStyle = "full"
         v2Tokens.v2Shell = true
         fakeBar.visualTokens = v2Tokens
+        power.charging = false
         root.phase++
         root.ticks = 0
       } else if (root.phase === 2) {
@@ -238,11 +241,21 @@ ShellRoot {
         outline.text = glyph.nativeText; outline.font = Qt.font({family: descendants(glyph).find(item => item.fontFamily !== undefined).fontFamily, pixelSize: glyph.nativePixelSize * 64, hintingPreference: Font.PreferNoHinting})
         if (Math.abs(glyph.nativeBounds.height - outline.height) > 0.000001) return root.fail("V1 to V2 battery outline retained a stale path height")
         outline.destroy()
+        root.pulseGauge = glyph.parent
+        const pulseTimer = Array.from(root.pulseGauge.data).find(o => o.interval === 100)
+        if (!pulseTimer || !pulseTimer.running || root.pulseGauge.pulse >= 1 || root.pulseGauge.pulse < 0.35)
+          return root.fail("low battery must pulse at low cadence")
+        power.charging = true
+        root.stoppedPulse = root.pulseGauge.pulse
+        if (batA.low || pulseTimer.running || root.pulseGauge.opacity !== 1)
+          return root.fail("charging must stop the low-battery pulse")
         pwrA.activate(Qt.LeftButton)
         root.phase++
         root.ticks = 0
       } else if (root.phase === 3) {
         if (root.ticks < 3) return
+        if (root.pulseGauge.pulse !== root.stoppedPulse)
+          return root.fail("stopped battery pulse must remain idle")
         if (batA.opened || power.detailConsumers !== 0 || !pwrA.opened
             || !pwrA.panelLoaded || !pwrA.panelItem
             || fakeBar.activePopout !== pwrA)

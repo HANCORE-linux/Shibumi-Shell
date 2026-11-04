@@ -15,7 +15,7 @@ ShellRoot {
   property var cachedPreference: null
   property int callsBeforeLoss: 0
   property int writesBeforeLoss: 0
-  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.1.1-beta.16.5.1", kinds: ["service"]})
+  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.2.0", kinds: ["service"]})
   function check(value, message) {
     if (value) return
     console.error("workspaces-runtime:", message)
@@ -44,10 +44,10 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.1.1-beta.16.5.1"
+    implementationVersion: "0.2.0"
     owner: state
     host: root.stateEnabled ? stateHost : null
-    manifest: ({id: "hancore.shibumi.state", version: "0.1.1-beta.16.5.1", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.2.0", kinds: ["service"]})
   }
   QtObject {
     id: backend
@@ -203,6 +203,19 @@ ShellRoot {
           "incomplete explicit fake reached native action fallback")
         root.check(service.entries.length === 0 && service.focusedId === 0,
           "incomplete fake fell through to native models")
+        service.blocks = {"DP-1": 1}
+        root.check(service.focusSlot(2, "DP-1") === false
+          && service.monitorFor({name: "DP-1"}) === null,
+          "incomplete per-monitor fake reached native backend")
+        service.backendOverride = backend
+        root.check(service.focusSlot(2, "DP-1") === false,
+          "legacy complete fake fell through to native slot action")
+        for (const slot of [0, 11, 1.5, "2; reboot"])
+          root.check(service.focusSlot(slot, "DP-1") === false,
+            "invalid slot accepted")
+        service.shell = null
+        root.check(service.focusSlot(2, "DP-1") === false,
+          "revoked per-monitor action accepted")
         console.log("workspaces runtime smoke passed")
         Qt.exit(0)
         return
