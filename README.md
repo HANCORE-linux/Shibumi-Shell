@@ -59,21 +59,26 @@ for the latest validated host versions.
   </tr>
 </table>
 
-## What 0.2.0 supports
-
-Shibumi 0.2.0 is the first stable release: a stabilization of the Beta 16 line for horizontal
-Top and Bottom bars on Omarchy Quattro. The validated stack is Omarchy 4.0.6, Quickshell 0.3.2
-and Qt 6.12; forward compatibility is checked against the pinned Omarchy revision 0d8edf38,
-not against arbitrary newer hosts. Physical acceptance is single-output; multi-output,
-mixed-scale, hotplug and suspend/resume need their own live evidence. Update through the
-admitted update and recovery route (docs/install.md#update), never from a checkout of main.
-The 0.x series is release-stable but API-unstable: plugin and configuration APIs may still
-change between releases.
-
 ## Install
 
 > [!IMPORTANT]
-> Install from the release tag, not `main`. Shibumi supports Omarchy Quattro only.
+> Shibumi supports Omarchy Quattro only. Install the package or the release
+> tag, never `main`.
+
+### From the Omarchy package repository
+
+Available since 0.2.0 (`edge` from 2026-11-04; `rc` and `stable` after
+Omarchy's promotion).
+
+```sh
+sudo pacman -S shibumi-shell
+shibumi-shell install --yes
+```
+
+Pacman brings the dependencies; the second line stages the plugins into your
+shell as your user. Update with `omarchy update` and `shibumi-shell update --yes`.
+
+### From the release tag
 
 ```bash
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
