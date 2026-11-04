@@ -92,8 +92,8 @@
   and splits while retaining other settings and V2. `--keep-settings` does not prevent this.
   Back up the settings before a downgrade (see install.md) and restore them with a matching
   payload.
-- Packaging: an omarchy-pkgs (OPR) recipe is prepared after this release; AUR is not the
-  target.
+- Packaging: `shibumi-shell` is published through omarchy-pkgs (omacom/omarchy-pkgs#2119,
+  2026-11-04); AUR is not the target.
 
 ## [0.1.1-beta.16.5.1] - 2026-10-23
 

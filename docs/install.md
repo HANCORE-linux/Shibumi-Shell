@@ -28,6 +28,23 @@ keeps per-row removal and "Clear all". On the new notification engine (Omarchy 4
 prerelease, forward pin 0d8edf38) Shibumi reads history.json without modifying it, and
 those two controls are hidden. Live rows are unavailable through the host proxy on both.
 
+## Install from the Omarchy package
+
+`shibumi-shell` is available from the Omarchy package repository since 0.2.0
+(`edge` from 2026-11-04; `rc` and `stable` after Omarchy's promotion).
+
+```bash
+sudo pacman -S shibumi-shell
+shibumi-shell install --yes
+```
+
+Pacman brings the dependencies; the second line stages the plugins into your
+shell as your user. `shibumi-shell install --dry-run` prints every target
+without changing anything. Existing source installations switch as described
+in [Move from a checkout to the package](#move-from-a-checkout-to-the-package).
+Package installations update with `omarchy update` followed by
+`shibumi-shell update --yes` (see [Update](#update)).
+
 ## Install from source
 
 For an intentional non-interactive installation:
