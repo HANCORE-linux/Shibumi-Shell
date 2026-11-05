@@ -206,21 +206,16 @@ ShellRoot {
       const before = JSON.stringify({ state: stateService.config, shell: fakeShell.shellConfig,
         layout: hostBar.layoutConfig, revision: stateService.revision, writes: fakeShell.configWrites,
         enables: fakePluginRegistry.enableCalls })
-      if (!removalChecks.verify("example.outer", false)
-          || hostBar.canRemoveBarWidget("example.outer")
-          || hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
-          || JSON.stringify({ state: stateService.config, shell: fakeShell.shellConfig,
-            layout: hostBar.layoutConfig, revision: stateService.revision, writes: fakeShell.configWrites,
-            enables: fakePluginRegistry.enableCalls }) !== before)
-        return root.fail("ambiguous provider removal mutated bar/state/registry")
-      const home = LayoutModel.locationFor(swapped, "G8")
-      if (!hostBar.layoutController.moveGroupToSlot("G:example.outer", home.region, home.index)
+      if (!removalChecks.verify("example.outer", true)
           || !hostBar.canRemoveBarWidget("example.outer")
-          || !removalChecks.verify("example.outer", true)
-          || !hostBar.removeBarWidgetAndRestoreFamilies("example.outer", [])
-          || JSON.stringify(stateService.config.order) !== JSON.stringify(pair)
-          || JSON.stringify(stateService.config.splits) !== JSON.stringify(pairSplits))
-        return root.fail("explicit return-to-extra did not permit safe removal")
+          || !hostBar.removeBarWidgetAndRestoreFamilies("example.outer", []))
+        return root.fail("ambiguous provider removal was refused")
+      hostBar.layoutConfig = JSON.parse(JSON.stringify(fakeShell.shellConfig.bar.layout))
+      if (JSON.stringify(stateService.config.order) !== JSON.stringify(Object.assign({}, swapped, { center: ["", swapped.center[1]] }))
+          || JSON.stringify(stateService.config.splits) !== JSON.stringify(added.splits)
+          || hostBar.layoutConfig.left.some(entry => entry.id === "example.outer") || fakePluginRegistry.enableCalls !== JSON.parse(before).enables
+          || fakeShell.configWrites !== JSON.parse(before).writes + 1 || stateService.revision !== JSON.parse(before).revision + 1)
+        return root.fail("ambiguous provider removal: " + JSON.stringify({ order: stateService.config.order, splits: stateService.config.splits, left: hostBar.layoutConfig.left, enables: fakePluginRegistry.enableCalls - JSON.parse(before).enables, writes: fakeShell.configWrites - JSON.parse(before).writes, revision: stateService.revision - JSON.parse(before).revision }))
     } finally {
       stateService.config = savedState
       fakeShell.shellConfig = savedShell

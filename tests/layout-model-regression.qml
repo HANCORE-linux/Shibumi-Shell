@@ -133,9 +133,11 @@ QtObject {
 
     const dynamicInBase = LayoutModel.moveGroupToSlot(
       reconciled.order, "G:custom.left", "left", 0)
-    if (LayoutModel.reconcilePluginGroups(dynamicInBase, reconciled.splits,
-          [{ pluginId: "custom.right", region: "right" }]) !== null)
-      fail("ambiguous base repair guessed among fixed and dynamic extras")
+    const withoutBase = LayoutModel.reconcilePluginGroups(dynamicInBase, reconciled.splits, [{ pluginId: "custom.right", region: "right" }])
+    if (!withoutBase || withoutBase.unplaced.length !== 0 || LayoutModel.locationFor(withoutBase.order, "G:custom.left") !== null
+        || !same(withoutBase.order, Object.assign({}, dynamicInBase, { left: [""].concat(dynamicInBase.left.slice(1)) })) || !LayoutModel.validOrder(withoutBase.order)
+        || !same(withoutBase.splits, reconciled.splits) || !LayoutModel.validSplits(withoutBase.splits, withoutBase.order))
+      fail("ambiguous base removal changed remaining occupants, slots or splits")
     const returnedToExtra = LayoutModel.swapGroups(dynamicInBase, "G:custom.left", "G1")
     const withoutLeft = returnedToExtra
       ? LayoutModel.reconcilePluginGroups(

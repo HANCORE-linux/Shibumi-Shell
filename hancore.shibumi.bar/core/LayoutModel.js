@@ -297,22 +297,19 @@ function removeDynamicGroup(orderValue, splitsValue, groupValue) {
     return removeEmptyExtraAt(
       order, splits, location.region, location.index)
 
-  // The persisted layout has no swap provenance. Only a single occupied
-  // extra is an unambiguous repair candidate. Another dynamic provider may
-  // itself have been displaced, so it also makes the source ambiguous. Refuse multiple
-  // candidates without changing the caller's order/splits. The user can
-  // move the provider back into an extra slot before removing it.
+  // Without swap provenance, only a single occupied fixed extra is an
+  // unambiguous repair candidate. Otherwise leave the base slot empty.
   var candidate = null
   for (var r = 0; r < Regions.length; r++) {
     var region = Regions[r]
     for (var index = baseCount(region); index < order[region].length; index++) {
       if (order[region][index] === "") continue
-      if (candidate) return null
+      if (candidate) return { order: order, splits: splits }
       candidate = { region: region, index: index }
     }
   }
   if (!candidate || GroupIds.indexOf(order[candidate.region][candidate.index]) < 0)
-    return null
+    return { order: order, splits: splits }
   order[location.region][location.index] = order[candidate.region][candidate.index]
   order[candidate.region][candidate.index] = ""
   return removeEmptyExtraAt(order, splits, candidate.region, candidate.index)

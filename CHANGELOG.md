@@ -7,6 +7,7 @@ Validated on Omarchy 4.5.0 (v4.5.0, 76e11b4f; source contracts and isolated fixt
 ### Fixed
 
 - #88: Read the moved per-monitor workspace state file with legacy-path fallback.
+- V1: removing an added plugin that had been dragged into a base slot no longer fails and no longer blocks every other plugin change; the slot is left empty. Reported by oko on Discord.
 
 ## [0.2.0] - 2026-11-04
 
