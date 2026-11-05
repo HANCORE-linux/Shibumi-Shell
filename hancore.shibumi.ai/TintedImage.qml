@@ -7,6 +7,12 @@ Item {
   id: root
 
   property url source
+  property var candidates: source ? [source] : []
+  property string fallbackText: ""
+  property int candidateIndex: 0
+  readonly property string candidatesKey: candidates.join("\n")
+  onCandidatesKeyChanged: candidateIndex = 0
+  readonly property url resolvedSource: sourceImage.status === Image.Ready ? sourceImage.source : ""
   property color tint: "white"
   property size sourceSize: Qt.size(0, 0)
   property bool smooth: true
@@ -18,7 +24,10 @@ Item {
     id: sourceImage
     anchors.fill: parent
     visible: false
-    source: root.source
+    source: root.candidateIndex < root.candidates.length ? root.candidates[root.candidateIndex] : ""
+    onStatusChanged: if (status === Image.Error) Qt.callLater(function() {
+      if (sourceImage.status === Image.Error) root.candidateIndex++
+    })
     sourceSize: root.sourceSize
     fillMode: Image.PreserveAspectFit
     cache: true
@@ -26,7 +35,17 @@ Item {
     mipmap: root.mipmap
   }
 
+  Text {
+    anchors.centerIn: parent
+    visible: sourceImage.status !== Image.Ready
+    text: root.fallbackText
+    color: root.tint
+    font.family: "Material Symbols Rounded"
+    font.pixelSize: Math.min(root.width, root.height)
+  }
+
   MultiEffect {
+    visible: sourceImage.status === Image.Ready
     anchors.fill: parent
     source: sourceImage
     // MultiEffect uses colorizationColor.a as color-mix strength, not output

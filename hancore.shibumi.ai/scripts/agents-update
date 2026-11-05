@@ -95,16 +95,28 @@ if [[ ${1:-} == --probe-only ]]; then
 fi
 
 codex_requested=false
+codex_excluded=false
 agent_id_count=0
-for argument in "$@"; do
+forwarded=()
+while (( $# )); do
+  argument=$1; shift
+  except=false
   case $argument in
-    --force | --limits-only) continue ;;
+    --force | --limits-only) forwarded+=("$argument"); continue ;;
+    --except) except=true; argument=${1:-}; shift || true ;;
     --*) fail "unsupported agent updater option: $argument" ;;
   esac
   [[ $argument =~ ^[a-z0-9][a-z0-9._-]*$ ]] \
     || fail "invalid agent id: $argument"
   collector="$omarchy_path/bin/omarchy-agent-usage-$argument"
+  if $except; then
+    [[ -x $collector ]] || continue
+    forwarded+=(--except "$argument")
+    [[ $argument != codex ]] || codex_excluded=true
+    continue
+  fi
   [[ -x $collector ]] || fail "agent collector is missing: $collector"
+  forwarded+=("$argument")
   agent_id_count=$((agent_id_count + 1))
   [[ $argument != codex ]] || codex_requested=true
 done
@@ -114,7 +126,7 @@ if (( agent_id_count == 0 )) \
 fi
 
 compat_environment=()
-if $codex_requested; then
+if $codex_requested && ! $codex_excluded; then
   codex_search_path=${PATH:-/usr/bin:/bin}
   for candidate_dir in \
       "${HOME:?}/.local/bin" \
@@ -136,7 +148,7 @@ if $codex_requested; then
 fi
 
 setsid env OMARCHY_PATH="$omarchy_path" \
-  "${compat_environment[@]}" "$updater" "$@" &
+  "${compat_environment[@]}" "$updater" "${forwarded[@]}" &
 child_pid=$!
 watch_parent "$$" "$child_pid" &
 watchdog_pid=$!

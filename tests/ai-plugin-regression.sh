@@ -56,17 +56,31 @@ chmod 0644 "$tmpdir/state/omarchy/agents/usage/claude.json" \
 install -m 0755 \
   "$repo_root/tests/fixtures/ai-agents/omarchy-agent-usage-update" \
   "$tmpdir/omarchy/bin/omarchy-agent-usage-update"
-for collector in claude codex; do
+for collector in claude codex fireworks; do
   install -m 0755 /usr/bin/true \
     "$tmpdir/omarchy/bin/omarchy-agent-usage-$collector"
 done
 
+mkdir -p "$tmpdir/generic" "$tmpdir/omarchy/shell/plugins/agents/assets"
+cp "$repo_root/hancore.shibumi.ai/assets/codex.svg" "$tmpdir/omarchy/shell/plugins/agents/assets/agy.svg"
+cp "$tmpdir/omarchy/shell/plugins/agents/assets/agy.svg" "$tmpdir/omarchy/shell/plugins/agents/assets/agy-light.svg"
+for id in claude codex fireworks grok agy; do
+  jq -n --arg id "$id" --arg now "$record_now" '{schemaVersion:1,id:$id,name:$id,updatedAt:$now,
+    ready:($id != "fireworks"),hasLocalStats:false,tierLabel:"Test",unknownKey:"ignored",
+    limits:(if $id == "fireworks" then [] else [{label:"Session",percent:(if $id == "agy" then 0.29 else 0.41 end),resetsAt:""}] end),
+    totalPrompts:1,usageStatusText:"Sign in to Fireworks",authHelpText:"Authenticate"}' >"$tmpdir/generic/$id.json"
+done
+
+if [[ -n ${SHIBUMI_TEST_EMPTY_AGENTS_DIR:-} ]]; then
+  mkdir -p "$tmpdir/generic/empty"; for record in "$SHIBUMI_TEST_EMPTY_AGENTS_DIR"/*.json; do jq --arg updatedAt "$record_now" '.updatedAt = $updatedAt' "$record" >"$tmpdir/generic/empty/${record##*/}"; done
+fi
 set +e
 output=$(timeout 8 env \
   HOME="$tmpdir/home" \
   XDG_STATE_HOME="$tmpdir/state" \
   SHIBUMI_TEST_OMARCHY_PATH="$tmpdir/omarchy" \
   SHIBUMI_TEST_AGENT_USAGE_DIR="$tmpdir/state/omarchy/agents/usage" \
+  SHIBUMI_TEST_GENERIC_DIR="$tmpdir/generic" \
   SHIBUMI_TEST_MODEL_USAGE_SOURCE="file://$repo_root/tests/fixtures/ai-model-usage/Main.qml" \
   QT_QPA_PLATFORM=offscreen \
   WAYLAND_DISPLAY= \
@@ -83,7 +97,8 @@ grep -F 'ai plugin smoke passed' <<<"$output" >/dev/null \
   || fail "success marker missing"
 if grep -E ' WARN| ERROR|CRITICAL|TypeError|ReferenceError|Unable to assign' <<<"$output" \
     | host_filter_startup_diagnostics \
-      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' >/dev/null; then
+      -e 'Unable to find hyprland socket. Cannot connect to hyprland.' \
+      -e "Cannot open: file://$tmpdir/omarchy/shell/plugins/agents/assets/grok.svg" >/dev/null; then
   fail "component smoke emitted a QML/runtime warning or error"
 fi
 
@@ -126,9 +141,9 @@ python3 "$repo_root/tests/opencode-usage-regression.py" \
   || fail "OpenCode current-model scope regression failed"
 [[ -s $tmpdir/state/shibumi-ai-agent-update.log ]] \
   || fail "agents update owner did not run"
-grep -Fx 'claude codex' "$tmpdir/state/shibumi-ai-agent-update.log" >/dev/null \
-  || fail "agents owner did not perform its bounded initial update"
-grep -Fx -- '--force claude codex' \
+grep -Fx -- '--except fireworks' "$tmpdir/state/shibumi-ai-agent-update.log" >/dev/null \
+  || fail "agents owner did not exclude the disabled collector"
+grep -Fx -- '--force --except fireworks' \
   "$tmpdir/state/shibumi-ai-agent-update.log" >/dev/null \
   || fail "agents owner did not forward a forced refresh"
 
@@ -338,10 +353,10 @@ if rg -q 'Process \{|FileView \{' "$widget" "$panel" \
 fi
 [[ $(rg -c 'Timer \{' "$panel") -eq 1 ]] && grep -Fq 'interval: 30000; repeat: true; running: panel.open' "$panel" \
   || fail "AI panel clock must be singular, bounded and open-only"
-[[ $(rg -c 'Process \{' "$service") -eq 1 ]] \
-  || fail "AI providers do not have exactly one process owner"
-[[ $(rg -c 'FileView \{' "$service") -eq 2 ]] \
-  || fail "AI agents records do not have exactly two bounded readers"
+[[ $(rg -c 'Process \{' "$service") -eq 2 ]] \
+  || fail "AI providers need one updater and one directory discovery owner"
+[[ $(rg -c 'FileView \{' "$service") -eq 1 ]] \
+  || fail "AI agents records need one reader delegate per discovered id"
 rg -q 'running: root\.runtimeProbesEnabled' "$service" \
   || fail "AI polling cannot be disabled for lifecycle validation"
 rg -q 'Component\.onDestruction:' "$service" \

@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQml.Models
 import Quickshell
 import Quickshell.Io
 import "../hancore.shibumi.state/runtime" as SuiteRuntime
@@ -40,8 +41,9 @@ Item {
   property bool claudeAvailable: false
   property bool codexAvailable: false
   property bool openCodeAvailable: false
-  property var agentsClaudeRecord: null
-  property var agentsCodexRecord: null
+  property var agentIds: []
+  property var agentRecords: ({})
+  property bool pendingAgentScan: false
   // Current third-party PluginShellApi instances intentionally do not expose
   // the host registry. Prefer the current agents backend when the host root is
   // available; the bounded wrapper returns 66 only when that backend itself is
@@ -49,10 +51,12 @@ Item {
   property bool agentsBackendUnavailable: false
   readonly property double nextAgentRecordExpiryAtMs: {
     const expiries = []
-    if (agentsClaudeRecord && Number(agentsClaudeRecord.expiresAtMs) > 0)
-      expiries.push(Number(agentsClaudeRecord.expiresAtMs))
-    if (agentsCodexRecord && Number(agentsCodexRecord.expiresAtMs) > 0)
-      expiries.push(Number(agentsCodexRecord.expiresAtMs))
+    void(providerRevision)
+    for (const id of Object.keys(agentRecords)) {
+      const record = agentRecords[id]
+      if (record && Number(record.expiresAtMs) > 0)
+        expiries.push(Number(record.expiresAtMs))
+    }
     return expiries.length > 0 ? Math.min.apply(null, expiries) : 0
   }
   property int providerRevision: 0
@@ -126,17 +130,15 @@ Item {
   }
   readonly property string providerEnablementSignature:
     JSON.stringify({
-      claude: providerEnabled("claude"),
-      codex: providerEnabled("codex"),
-      opencode: providerEnabled("opencode"),
+      providers: settings.providers || ({}),
       active: serviceActive,
       probes: runtimeProbesEnabled,
       agentsSource: agentsSource,
       agentsUnavailable: agentsBackendUnavailable,
       legacySource: modelUsageSource
     })
-  readonly property bool anyProviderEnabled:
-    providerEnabled("claude") || providerEnabled("codex")
+  readonly property bool anyProviderEnabled: agentsBackendActive
+    || providerEnabled("claude") || providerEnabled("codex")
       || providerEnabled("opencode")
   readonly property var providers: {
     void(providerRevision)
@@ -145,17 +147,17 @@ Item {
     if (!serviceActive) return result
     if (Array.isArray(providerOverrides) && providerOverrides.length > 0) {
       appendProviderSnapshots(result, providerOverrides)
-      return result
+      return orderProviders(result, requestedTool)
     }
     if (agentsBackendActive) {
-      appendProviderSnapshot(result, agentsClaudeRecord)
-      appendProviderSnapshot(result, agentsCodexRecord)
+      for (const id of Object.keys(agentRecords))
+        appendProviderSnapshot(result, agentRecords[id])
     } else {
       appendProviderSnapshot(result, claudeLoader.item)
       appendProviderSnapshot(result, codexLoader.item)
     }
     if (openCodeProvider.enabled) appendProviderSnapshot(result, openCodeProvider)
-    return result
+    return orderProviders(result, requestedTool)
   }
   readonly property string selectedTool: resolveTool(requestedTool)
   readonly property var selectedProvider: providerFor(selectedTool)
@@ -369,11 +371,18 @@ Item {
   function resolveTool(preferred) {
     const requested = String(preferred || "")
     if (providerFor(requested)) return requested
-    const order = ["claude", "codex", "opencode"]
-    for (let index = 0; index < order.length; index++) {
-      if (providerFor(order[index])) return order[index]
-    }
-    return ""
+    return providers.length ? providers[0].providerId : ""
+  }
+
+  function orderProviders(source, preferred) {
+    return source.sort((a, b) => {
+      const first = a.providerId, second = b.providerId
+      if (first === preferred) return -1
+      if (second === preferred) return 1
+      if (first === "opencode") return 1
+      if (second === "opencode") return -1
+      return first < second ? -1 : first > second ? 1 : 0
+    })
   }
 
   function selectTool(id) {
@@ -386,15 +395,16 @@ Item {
 
   function cycleTool(direction) {
     if (providers.length < 2) return false
+    const ordered = orderProviders(providers.slice(), "")
     let index = 0
-    for (let current = 0; current < providers.length; current++) {
-      if (String(providers[current].providerId || "") === selectedTool) {
+    for (let current = 0; current < ordered.length; current++) {
+      if (String(ordered[current].providerId || "") === selectedTool) {
         index = current
         break
       }
     }
     const step = Number(direction) < 0 ? -1 : 1
-    const next = providers[(index + step + providers.length) % providers.length]
+    const next = ordered[(index + step + ordered.length) % ordered.length]
     return selectTool(next.providerId)
   }
 
@@ -456,8 +466,7 @@ Item {
   function displayPercent(provider, value) {
     const number = Number(value)
     if (!isFinite(number) || number < 0) return -1
-    const providerId = provider ? String(provider.providerId || "") : ""
-    if ((providerId === "claude" || providerId === "codex") && number <= 1)
+    if (number <= 1 && (!provider || provider.providerId !== "opencode"))
       return Math.min(100, number * 100)
     return Math.min(100, number)
   }
@@ -535,30 +544,27 @@ Item {
 
   function applyAgentRecord(expectedId, raw, nowMs) {
     const record = AgentUsageModel.parseRecord(raw, expectedId, nowMs)
-    if (expectedId === "claude") agentsClaudeRecord = record
-    else if (expectedId === "codex") agentsCodexRecord = record
+    if (expectedId === "opencode") return
+    agentRecords[expectedId] = record
     providerRevision++
   }
 
   function expireAgentRecords(nowMs) {
     const currentMs = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
     let changed = false
-    if (agentsClaudeRecord && !agentRecordFresh(agentsClaudeRecord, currentMs)) {
-      agentsClaudeRecord = null
-      changed = true
-    }
-    if (agentsCodexRecord && !agentRecordFresh(agentsCodexRecord, currentMs)) {
-      agentsCodexRecord = null
-      changed = true
+    for (const id of Object.keys(agentRecords)) {
+      if (agentRecords[id] && !agentRecordFresh(agentRecords[id], currentMs)) {
+        delete agentRecords[id]
+        changed = true
+      }
     }
     // Recheck status by age even before the record's admission expires.
-    if (changed || agentsClaudeRecord || agentsCodexRecord) providerRevision++
+    if (changed || Object.keys(agentRecords).length) providerRevision++
     return changed
   }
 
   function clearAgentRecord(expectedId) {
-    if (expectedId === "claude") agentsClaudeRecord = null
-    else if (expectedId === "codex") agentsCodexRecord = null
+    delete agentRecords[expectedId]
     providerRevision++
   }
 
@@ -577,13 +583,12 @@ Item {
 
   function agentsUpdateCommand(force) {
     const command = [agentsUpdateScript, String(omarchyPath || "")]
-    if (!providerEnabled("claude") && !providerEnabled("codex")) {
-      command.push("--probe-only")
-      return command
-    }
+    // Omarchy discovers collectors; Shibumi owns OpenCode independently.
     if (force === true) command.push("--force")
-    if (providerEnabled("claude")) command.push("claude")
-    if (providerEnabled("codex")) command.push("codex")
+    command.push("--except", "opencode")
+    for (const id of Object.keys(settings.providers || {})) {
+      if (id !== "opencode" && !providerEnabled(id)) command.push("--except", id)
+    }
     return command
   }
 
@@ -666,8 +671,7 @@ Item {
       if (Number(exitCode) === 66) {
         agentsBackendUnavailable = true
       } else {
-        agentsClaudeFile.reload()
-        agentsCodexFile.reload()
+        rescanAgents()
       }
       if (Number(exitCode) !== 0 && Number(exitCode) !== 66 && error !== "")
         console.warn("Shibumi AI agents update failed:", error.slice(0, 512))
@@ -719,31 +723,64 @@ Item {
     }
   }
 
-  FileView {
-    id: agentsClaudeFile
-    path: root.serviceActive && root.agentsBackendActive
-        && root.providerEnabled("claude")
-      ? root.agentsUsageDir + "/claude.json" : ""
-    watchChanges: root.serviceActive && root.agentsBackendActive
-      && root.providerEnabled("claude")
-    printErrors: false
-    onLoaded: root.applyAgentRecord("claude", text())
-    onFileChanged: reload()
-    onLoadFailed: root.clearAgentRecord("claude")
+  function rescanAgents() {
+    if (!serviceActive || !agentsBackendActive) return
+    if (agentDiscovery.running) { pendingAgentScan = true; return }
+    agentDiscovery.running = true
   }
 
-  FileView {
-    id: agentsCodexFile
-    path: root.serviceActive && root.agentsBackendActive
-        && root.providerEnabled("codex")
-      ? root.agentsUsageDir + "/codex.json" : ""
-    watchChanges: root.serviceActive && root.agentsBackendActive
-      && root.providerEnabled("codex")
-    printErrors: false
-    onLoaded: root.applyAgentRecord("codex", text())
-    onFileChanged: reload()
-    onLoadFailed: root.clearAgentRecord("codex")
+  function reconcileAgentReaders() {
+    if (!providerSettingsReady) return
+    if (serviceActive && agentsBackendActive) rescanAgents()
+    else {
+      pendingAgentScan = false
+      agentDiscovery.running = false
+      agentIds = []
+      agentRecords = ({})
+    }
   }
+
+  Process {
+    id: agentDiscovery
+    command: ["find", root.agentsUsageDir, "-maxdepth", "1", "-name", "*.json", "-printf", "%f\n"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (!root.serviceActive || !root.agentsBackendActive) return
+        const ids = text.trim().split("\n").filter(name => /^[a-z0-9][a-z0-9._-]*\.json$/.test(name))
+          .map(name => name.slice(0, -5)).filter(id => id !== "opencode").sort()
+        for (const id of Object.keys(root.agentRecords))
+          if (ids.indexOf(id) < 0) delete root.agentRecords[id]
+        if (JSON.stringify(ids) !== JSON.stringify(root.agentIds)) root.agentIds = ids
+        for (let i = 0; i < agentReaders.count; i++) agentReaders.objectAt(i).reload()
+        root.providerRevision++
+      }
+    }
+    onExited: {
+      if (root.pendingAgentScan) {
+        root.pendingAgentScan = false
+        Qt.callLater(root.rescanAgents)
+      }
+    }
+  }
+
+  Instantiator {
+    id: agentReaders
+    model: root.agentIds
+    delegate: FileView {
+      required property string modelData
+      path: root.serviceActive && root.agentsBackendActive && root.providerEnabled(modelData)
+        ? root.agentsUsageDir + "/" + modelData + ".json" : ""
+      watchChanges: path !== ""
+      printErrors: false
+      onLoaded: root.applyAgentRecord(modelData, text())
+      onFileChanged: reload()
+      onLoadFailed: root.clearAgentRecord(modelData)
+    }
+  }
+
+  onServiceActiveChanged: reconcileAgentReaders()
+  onAgentsBackendActiveChanged: reconcileAgentReaders()
+  onAgentsUsageDirChanged: reconcileAgentReaders()
 
   Loader {
     id: claudeLoader
@@ -795,12 +832,14 @@ Item {
 
   Component.onCompleted: {
     providerSettingsReady = true
+    reconcileAgentReaders()
     reconcileBackendLifecycle(false)
   }
 
   Component.onDestruction: {
     agentRecordExpiryTimer.stop()
     backendTimer.stop()
+    agentDiscovery.running = false
     if (backendProcess.running) backendProcess.running = false
   }
 }

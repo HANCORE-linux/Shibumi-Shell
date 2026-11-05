@@ -38,7 +38,7 @@ WORKER_POLICIES = {
     "action-only",
     "output-local-ui-only",
 }
-RULE_KINDS = {"token", "provider", "firstPartyService", "helper"}
+RULE_KINDS = {"token", "provider", "firstPartyService", "helper", "resource"}
 TOKEN_NAMES = {
     "embed.resolveComponent", "embed.resolveSource", "embed.syncLoader",
     "entryPointUrl",
@@ -465,6 +465,11 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> tuple[set[str], b
             require(owner == value, f"{context}: host exception owner must be {value}")
         if kind in {"provider", "firstPartyService"}:
             require(re.fullmatch(r"omarchy\.[A-Za-z0-9_.-]+", value) is not None, f"{context}: invalid provider id")
+        if kind == "resource":
+            require(owner == "hancore.shibumi.ai" and capability == "ai-usage"
+                    and category == "omarchyBackend" and value in {
+                        "/omarchy/agents/usage", "/shell/plugins/agents/assets/"},
+                    f"{context}: only Agents record discovery and SVG resources are admitted")
         if kind == "firstPartyService" and category == "hostOwnedProvider":
             require(value in HOST_EXCEPTIONS.values(), f"{context}: undeclared host provider")
         if category == "hostOwnedProvider":
@@ -575,8 +580,15 @@ def check_tree(root: Path, manifest_path: Path) -> list[str]:
             continue
         source_text[relative] = text
 
+        # Explicit resource literals admit data/SVG access, never private QML.
+        component_text = text
+        for rule in rules_for(manifest, relative, "resource"):
+            literal = json.dumps(rule["value"])
+            if text.count(literal) != rule["count"]:
+                add(findings, relative, "resource path", "literal count drifted")
+            component_text = component_text.replace(literal, '""')
         for pattern in PRIVATE_PATHS:
-            if pattern.search(text):
+            if pattern.search(component_text):
                 add(findings, relative, "private component path", pattern.pattern)
 
         # Dotted embed.* tokens are raw substring tripwires, not argument checks:

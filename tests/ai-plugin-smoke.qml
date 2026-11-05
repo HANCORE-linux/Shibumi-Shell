@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "ai" as Ai
 
 ShellRoot {
@@ -83,10 +84,66 @@ ShellRoot {
           label.value >= 1e9 && label.columnWidth > 0
           && label.implicitWidth <= label.columnWidth))
         return root.fail("daily token labels exceed their columns or compact format drifted")
-      watchdog.stop()
-      console.log("ai plugin smoke passed")
-      Qt.quit()
+      genericProbe.start()
     })
+  }
+
+  property bool genericDisabled: false
+  property int genericPhase: 0
+  property string genericTool: "grok"
+  QtObject {
+    id: discoveryShell
+    property var shellConfig: ({bar: {layout: {left: [{id: "hancore.shibumi.ai", aiTool: root.genericTool,
+      providers: {codex: {enabled: !root.genericDisabled}}}]}}})
+    function serviceFor(id) { return id === "hancore.shibumi.state" ? agentsState : null }
+  }
+  Ai.Service {
+    id: discoveryService
+    shell: discoveryShell; runtimeProbesEnabled: false
+    omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
+    agentsUsageDirOverride: Quickshell.env("SHIBUMI_TEST_GENERIC_DIR")
+  }
+  Loader { id: genericMark; active: genericProbe.running && root.genericPhase < 2; sourceComponent: Ai.BarWidget { bar: fakeBar; aiServiceOverride: discoveryService } }
+  Process {
+    id: mutateRecords
+    command: ["bash", "-c", "jq '.id = \"kimi\"' \"$1/agy.json\" > \"$1/kimi.json\"; rm -- \"$1/grok.json\"", "fixture", discoveryService.agentsUsageDir]
+    onExited: discoveryService.rescanAgents()
+  }
+  Timer {
+    id: genericProbe; interval: 80; repeat: true
+    onTriggered: {
+      const ids = discoveryService.providers.map(p => p.providerId).join(",")
+      if (root.genericPhase === 0) {
+        const fireworks = discoveryService.providerFor("fireworks")
+        const neutral = root.descendants(genericMark.item).filter(item => "fallbackText" in item && item.fallbackText === "smart_toy")
+        if (ids !== "grok,agy,claude,codex,fireworks"
+            || discoveryService.usagePercent(discoveryService.providerFor("claude")) !== 41
+            || discoveryService.usagePercent(discoveryService.providerFor("agy")) !== 29
+            || !fireworks || fireworks.ready || fireworks.usageStatusText !== "Sign in to Fireworks"
+            || discoveryService.limitWindows(fireworks).length !== 0
+            || neutral.length !== 2 || !neutral.every(mark => mark.candidateIndex >= mark.candidates.length))
+          return root.fail("generic discovery/order/fraction/status/marks: " + ids)
+        root.genericPhase = 1; root.genericTool = "agy"; fakeBar.background = "#ffffff"
+      } else if (root.genericPhase === 1) {
+        const marks = root.descendants(genericMark.item).filter(item => "resolvedSource" in item)
+        if (marks.length !== 2 || !marks.every(mark => String(mark.resolvedSource).endsWith("/agy-light.svg")))
+          return root.fail("generic Omarchy light SVG priority")
+        root.genericPhase = 2; emptyAgentsPanel.aiService = discoveryService; root.genericTool = "fireworks"
+        root.genericDisabled = true; mutateRecords.running = true
+      } else if (root.genericPhase === 2 && ids === "fireworks,agy,claude,kimi") {
+        if (emptyAgentsPanel.providerEmptyStateText !== "Authenticate"
+            || discoveryService.agentIds.length !== 5 || discoveryService.providerFor("codex") !== null)
+          return root.fail("generic removal/addition/disabled id")
+        console.log("423_GENERIC", ids, "percent=41/29 status=PASS marks=PASS runtime-add-remove=PASS disabled=PASS")
+        if (Quickshell.env("SHIBUMI_TEST_EMPTY_AGENTS_DIR")) { root.genericPhase = 3; discoveryService.agentsUsageDirOverride += "/empty"; Qt.callLater(discoveryService.rescanAgents); return }
+        stop(); watchdog.stop(); console.log("ai plugin smoke passed"); Qt.quit()
+      } else if ((root.genericPhase === 3 || root.genericPhase === 4) && discoveryService.agentIds.length === 22 && ids === "" && !mutateRecords.running) {
+        mutateRecords.command = ["bash", "-c", root.genericPhase === 3 ? "jq '.ready = false | .tierLabel = \"Prepaid\" | .usageStatusText = \"Fireworks unavailable\"' \"$1/fireworks.json\" > \"$1/phantom\"; mv \"$1/phantom\" \"$1/fireworks.json\"" : "jq '.id = \"claude-ready\"' \"$1/../claude.json\" > \"$1/claude-ready.json\"", "fixture", discoveryService.agentsUsageDir]; root.genericPhase++; mutateRecords.running = true
+      } else if (root.genericPhase === 5 && discoveryService.agentIds.length === 23 && ids === "claude-ready") {
+        if (discoveryService.usagePercent(discoveryService.providerFor("claude-ready")) !== 41) return root.fail("4.5.0 synthetic Claude fraction")
+        console.log("423_450_EMPTY", "0/23; phantom Fireworks still 0/23; then 1/24 (claude-ready filename/id)"); stop(); watchdog.stop(); console.log("ai plugin smoke passed"); Qt.quit()
+      }
+    }
   }
 
   function linearChannel(value) {
@@ -170,7 +227,7 @@ ShellRoot {
 
   function advanceCodexStatusProbe() {
     if (codexStatusProbeStage === 0) {
-      codexStatusOriginalRecord = agentsService.agentsCodexRecord
+      codexStatusOriginalRecord = agentsService.agentRecords.codex
       codexStatusOriginalTool = fakeState.selectedTool
       fakeState.selectedTool = "codex"
       fakeState.revision++
@@ -218,7 +275,7 @@ ShellRoot {
       return false
     }
 
-    agentsService.agentsCodexRecord = codexStatusOriginalRecord
+    agentsService.agentRecords.codex = codexStatusOriginalRecord
     agentsService.providerRevision++
     fakeState.selectedTool = codexStatusOriginalTool
     fakeState.revision++
@@ -244,7 +301,7 @@ ShellRoot {
       && agentsService.providerStatusText(fresh) === "live"
       && emptyAgentsPanel.providerStatusLabel === "live"
       && agentsService.tooltipText() === "Claude Code · live\nWeekly: 24%" }
-    const record = agentsService.agentsClaudeRecord
+    const record = agentsService.agentRecords.claude
     const threshold = 2 * agentsService.agentsRefreshInterval
     const boundary = agentsService.providerSnapshot(record,
       record.updatedAtMs + threshold)
@@ -300,7 +357,7 @@ ShellRoot {
         === "Authenticate Claude"
 
     const expiredSnapshotRejected = agentsService.providerSnapshot(
-      agentsService.agentsClaudeRecord,
+      agentsService.agentRecords.claude,
       recordNow + 24 * 60 * 60 * 1000 + 1) === null
 
     agentsService.applyAgentRecord("claude", JSON.stringify({
@@ -1060,8 +1117,8 @@ ShellRoot {
           agentsState.revision++
           fakeBar.agentsDisabled = true
           const probeCommand = agentsService.agentsUpdateCommand(false)
-          if (probeCommand[probeCommand.length - 1] !== "--probe-only")
-            return root.fail("OpenCode probe depends on enabled agent collectors")
+          if (probeCommand.slice(2).join(" ") !== "--except opencode --except claude --except codex --except fireworks")
+            return root.fail("disabled/owned collectors were not excluded")
           fakeBar.agentsDisabled = false
           legacyService.refreshAll(true)
         }
@@ -1132,12 +1189,12 @@ ShellRoot {
         if (!root.waitingExpiryProbe) {
           if (!root.readyRecordWithoutCurrentDataAccepted())
             return root.fail("ready empty/stale agents record contract")
-          root.expiryProbeRecord = agentsService.agentsClaudeRecord
+          root.expiryProbeRecord = agentsService.agentRecords.claude
           const expiringRecord = ({})
           for (const key in root.expiryProbeRecord)
             expiringRecord[key] = root.expiryProbeRecord[key]
           expiringRecord.expiresAtMs = Date.now() + 30
-          agentsService.agentsClaudeRecord = expiringRecord
+          agentsService.agentRecords.claude = expiringRecord
           agentsService.providerRevision++
           root.waitingExpiryProbe = true
           root.ticks = 0
@@ -1150,7 +1207,7 @@ ShellRoot {
         }
         if (!root.failedRefreshKeepsFreshUsage())
           return root.fail("failed refresh or stale status hid valid Claude usage")
-        agentsService.agentsClaudeRecord = root.expiryProbeRecord
+        agentsService.agentRecords.claude = root.expiryProbeRecord
         agentsService.providerRevision++
         root.waitingExpiryProbe = false
         const backendGeneration = agentsService.providerSettingsGeneration

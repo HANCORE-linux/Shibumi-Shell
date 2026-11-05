@@ -23,6 +23,8 @@
     "omarchy.weather"
   ],
   "transitionLedger": [
+    {"scope":"rule","source":"hancore.shibumi.ai/Service.qml","kind":"resource","kindValue":"/omarchy/agents/usage","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
+    {"scope":"rule","source":"hancore.shibumi.ai/BarWidget.qml","kind":"resource","kindValue":"/shell/plugins/agents/assets/","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":1,"backend":"omarchy.agents","removalStep":"Step 8"},
     {"scope":"capability","id":"audio","owner":"hancore.shibumi.audio","outputCardinality":"process-wide","workerPolicy":"shared-demand-driven","backend":"omarchy.audio","removalStep":"Step 4A"},
     {"scope":"capability","id":"displays","owner":"hancore.shibumi.brightness","outputCardinality":"process-wide","workerPolicy":"shared-demand-driven","backend":"omarchy.monitor","removalStep":"Step 6"},
     {"scope":"capability","id":"media","owner":"hancore.shibumi.media","outputCardinality":"process-wide","workerPolicy":"shared-demand-driven","backend":"omarchy.media","removalStep":"Step 7"},
@@ -299,6 +301,8 @@
     }
   ],
   "rules": [
+    {"source":"hancore.shibumi.ai/Service.qml","kind":"resource","value":"/omarchy/agents/usage","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","backend":"omarchy.agents","removalStep":"Step 8","reason":"One process-wide find lists immediate JSON records at start, update completion and panel open; one watched reader per filename id."},
+    {"source":"hancore.shibumi.ai/BarWidget.qml","kind":"resource","value":"/shell/plugins/agents/assets/","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","backend":"omarchy.agents","removalStep":"Step 8","reason":"Read only conventional provider SVG marks, including light variants; never load private host QML."},
     {"source":"hancore.shibumi.ai/Service.qml","kind":"token","value":"entryPointUrl","count":2,"category":"hostIntegration","owner":"hancore.shibumi.ai","capability":"ai-usage"},
     {"source":"hancore.shibumi.ai/Service.qml","kind":"token","value":"registeredWidgetSource","count":2,"category":"hostIntegration","owner":"hancore.shibumi.ai","capability":"ai-usage"},
     {"source":"hancore.shibumi.ai/Service.qml","kind":"token","value":"standardWidgetSource","count":3,"category":"hostIntegration","owner":"hancore.shibumi.ai","capability":"ai-usage"},
