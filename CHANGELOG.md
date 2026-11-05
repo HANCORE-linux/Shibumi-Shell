@@ -1,11 +1,12 @@
 # Changelog
 
-## [0.2.1] - DATE-PLACEHOLDER
+## [0.2.1] - 2026-11-06
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 84b3f287.
 
 ### Changed
 
+- AI: the widget shows every agent-usage provider Omarchy publishes (Fireworks, Grok and Kimi on 4.5.0) with Omarchy's own admission rules and marks; nothing is hard-wired to Claude and Codex any more.
 - Quick Access: the idle button now toggles Omarchy Stay Awake, so the state survives shell reloads and reboots and is shared with the Status widget and Omarchy's own indicator; hosts without the idle service keep the session-only inhibitor. Requested by oko on Discord.
 
 ### Fixed

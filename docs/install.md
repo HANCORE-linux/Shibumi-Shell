@@ -6,8 +6,8 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.2.0` is the first stable release target. See the
-[release notes](../.github/release-notes/v0.2.0.md) for changes.
+`0.2.1` is the current stable release target. See the
+[release notes](../.github/release-notes/v0.2.1.md) for changes.
 Install from the release tag using the source workflow below.
 Do not install or update from `main`.
 
@@ -150,8 +150,8 @@ desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
 Update an exactly admitted source installation to 0.2.1 from its trusted
-checkout. The most recent published predecessor is Beta.16.5.1: its tag
-(`20108270`) and main integration merge (`a5302f11`) are both admitted with the
+checkout. The most recent published predecessor is 0.2.0: its tag
+(`795eae86`) and main integration merge (`5c14ced1`) are both admitted with the
 unchanged released payload. Its package identity is admitted too. Older
 supported identities, including Beta.16.4 and Beta.16.5, remain in the
 [lifecycle predecessor contract](../contracts/lifecycle-predecessors-v1.json).

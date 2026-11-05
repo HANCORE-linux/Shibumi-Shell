@@ -16,8 +16,8 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.2.0` is the first stable release target. See the
-[release notes](.github/release-notes/v0.2.0.md) for changes. Before using an older version, read the
+`0.2.1` is the current stable release target. See the
+[release notes](.github/release-notes/v0.2.1.md) for changes. Before using an older version, read the
 [backup and downgrade warning](docs/install.md#backup-before-downgrade).
 The current pinned host contracts target Omarchy and Omarchy Settings `4.5.0-3`
 (source tag `v4.5.0`, revision `ac2690cd7`) with Quickshell `0.3.2.r7.g2b4501a-1`; the
@@ -93,8 +93,8 @@ is the only step that needs `sudo`. The Shibumi suite never calls Pacman: it
 runs as the desktop user and writes only user-scoped plugin state.
 
 Update an exactly admitted source installation to 0.2.1. The most recent
-published predecessor is Beta.16.5.1: tag `20108270` and main integration merge
-`a5302f11` have the same released payload. Older supported identities remain
+published predecessor is 0.2.0: tag `795eae86` and main integration merge
+`5c14ced1` have the same released payload. Older supported identities remain
 admitted; exact revisions and payloads, not a version range, govern admission.
 See the [update guide](docs/install.md#update).
 
