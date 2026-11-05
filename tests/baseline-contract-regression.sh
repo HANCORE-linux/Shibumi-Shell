@@ -6,6 +6,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 helper="$repo_root/tests/lib/baselines.sh"
 installed_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.6.json"
 installed_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.6.json"
+source_parity_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.5.0.json"
 native_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.4.json"
 native_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.4.json"
 previous_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.3.json"
@@ -14,8 +15,8 @@ compat_package_baseline="$repo_root/contracts/baselines/omarchy-installed-packag
 compat_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
 historical_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
 historical_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
-forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-0d8edf38.json"
-agents_baseline="$repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
+forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-84b3f287.json"
+agents_baseline="$repo_root/contracts/baselines/omarchy-agents-v4.5.0.json"
 predecessor_baseline="$repo_root/contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json"
 installed_package_job="$repo_root/tests/omarchy-installed-package-contract-regression.sh"
 installed_source_job="$repo_root/tests/omarchy-installed-source-parity-contract-regression.sh"
@@ -70,6 +71,8 @@ source "$helper"
 for manifest in \
   "$installed_package_baseline" \
   "$installed_source_baseline" \
+  "$source_parity_baseline" \
+  "$repo_root/contracts/baselines/omarchy-forward-compat-0d8edf38.json" \
   "$native_package_baseline" \
   "$native_source_baseline" \
   "$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.5.json" \
@@ -195,9 +198,26 @@ for parity_subtree in shell config; do
 done
 
 jq -e '
-  .id == "forward-compat-0d8edf38"
+  .id == "installed-source-parity-v4.5.0"
+  and .profile == "installed-source-parity"
+  and .sourceRevision == "76e11b4f4c031cc9c5291dd5c7115eb2815b765f"
+  and .provenance.kind == "git"
+  and .provenance.revision == .sourceRevision
+  and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
+  and all(.subtrees[]; .entryPolicy == "regular-files")
+' "$source_parity_baseline" >/dev/null \
+  || fail 'Omarchy 4.5.0 source-parity identity or provenance is invalid'
+[[ $(sha256sum "$source_parity_baseline" | awk '{print $1}') \
+    == 06a40fb63b779bbcf69e99e72d79b04cc21bbfdb7da7c2fa34d6509c4b2d712a ]] \
+  || fail 'Omarchy 4.5.0 source-parity manifest bytes drifted'
+shibumi_validate_agents_baseline_schema \
+  "$repo_root/contracts/baselines/omarchy-agents-v4.0.0.json" \
+  || fail 'historical Agents baseline does not satisfy its central schema'
+
+jq -e '
+  .id == "forward-compat-84b3f287"
   and .profile == "forward-compat"
-  and .sourceRevision == "0d8edf3812e0caafd155760c96bc2862933f611a"
+  and .sourceRevision == "84b3f2872b5023c13967543ed4a98b08fcac5b21"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
   and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
@@ -346,7 +366,7 @@ shibumi_validate_agents_baseline_schema "$agents_fixture" \
   || fail 'Agents replacement probe could not capture its initial snapshot'
 printf '{"sourceRevision":"replaced"}\n' >"$agents_fixture"
 [[ $(jq -r '.sourceRevision' "$agents_fixture") \
-    == f0020448ca87329199de7cb12f2015ebc4a3e5e7 ]] \
+    == 76e11b4f4c031cc9c5291dd5c7115eb2815b765f ]] \
   || fail 'Agents replacement changed an already accepted snapshot'
 if shibumi_validate_agents_baseline_schema \
     "$agents_fixture" >/dev/null 2>&1; then
@@ -379,7 +399,7 @@ if shibumi_validate_agents_baseline_schema \
     "$agents_fixture" >/dev/null 2>&1; then
   fail 'Agents baseline accepts revision substitution'
 fi
-jq 'del(.files["shell/plugins/agents/Agent.qml"])
+jq 'del(.files["shell/plugins/agents/Panel.qml"])
   | .files["shell/plugins/agents/README.md"] =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
   "$agents_baseline" >"$agents_fixture"

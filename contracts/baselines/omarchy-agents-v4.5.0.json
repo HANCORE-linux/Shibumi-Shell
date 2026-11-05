@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "omarchy-agents-v4.5.0",
+  "profile": "agents-current",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f",
+  "provenance": {
+    "kind": "git",
+    "revision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f"
+  },
+  "files": {
+    "bin/omarchy-agent-usage-agy": "dd3d3736a1ed44a25119ddbc80fdaa18dba603c1561d79d2f2baf0218f6d886b",
+    "bin/omarchy-agent-usage-claude": "7e27cba7be0725b6e37c9e88d8d206ac942ece8196283cb079568457ff8ff1c2",
+    "bin/omarchy-agent-usage-codex": "2f57f4095d2f4548754b4b86caa7bf9d68e4281836b6fd8652bef38fce09d219",
+    "bin/omarchy-agent-usage-copilot": "085b7b87abf8e41a7347cd7ec37ce9d900cb0119f49bccafdd0476d45fc68967",
+    "bin/omarchy-agent-usage-cursor": "a864ac2c61ebd140a4f0f13a4197777f4ef0c1d0506e2d74e7f9391c4381d074",
+    "bin/omarchy-agent-usage-deepseek": "337687045d953a6ca1302f9a82911281b27efe65db2a8d3d065805178c4eee5c",
+    "bin/omarchy-agent-usage-devin": "b94a811aa5bf6c778c2313cf2bec1f20d0c32d7923214dc1860cbebce43fbdc8",
+    "bin/omarchy-agent-usage-fireworks": "c3e15e3af745beeb1814a03e3a6d0a08a2bd4fd38474f29dd5858ce40b75ea48",
+    "bin/omarchy-agent-usage-grok": "152ef80ff98358b265d38efb17c10d41b7fc4ab832405ca43fa87d93bf449593",
+    "bin/omarchy-agent-usage-grokbot": "5e199aec383bdf67f11b50567314508ca3518ae423dfaaabb9d58f15462769ed",
+    "bin/omarchy-agent-usage-hermes": "5f3e885f0a25a4561d91e61c672e10ee6b9c2dcb9d7ef310f5c370c8c78e02cc",
+    "bin/omarchy-agent-usage-kimchi": "507ea1e3dcc79875bd936044f86d40126fb57def8767e289f39d413a55fc421e",
+    "bin/omarchy-agent-usage-kimi": "0cfd1e17b7d460848a26a39723829eea7662be233b0d500dc6588dfd0a20a4c3",
+    "bin/omarchy-agent-usage-local": "a78200d8fa5f3ac004b9686e6744c48d7f193314a517cb3b18333598ac0cde27",
+    "bin/omarchy-agent-usage-minimax": "0c3d77783e015a0e0ffcba9e2142713dfad8e56ea8aa7aabadca61623604ce5b",
+    "bin/omarchy-agent-usage-muse": "75ecc39b6356a34e0363f7a199d6b4ab142c89effddb297600eb2bc267173393",
+    "bin/omarchy-agent-usage-ollama": "d891624244410cf9057ed774c3d7d829c73f0fe1f19c376f3e3081aefc48892e",
+    "bin/omarchy-agent-usage-opencode": "21153ed38d062758edbdc70d51e0e49e86875573d43e300896701d0353c911cc",
+    "bin/omarchy-agent-usage-openrouter": "7609cf8184c12c32719173961115a9aaafcad021af8f68f5579a290631ef4d96",
+    "bin/omarchy-agent-usage-qwen": "a0deedde64465b69cafa5364788866977d399e4b84d84b0026ea88ad98248ca2",
+    "bin/omarchy-agent-usage-synthetic": "63d8d9eead30018478162fe1aeb38fce191fb78b29c4015f690dcb05677c0159",
+    "bin/omarchy-agent-usage-update": "1bdca3e3797c80ca2cbd2601fe457bb10a134dd12b126a2fcface30f07f34e1e",
+    "bin/omarchy-agent-usage-vibe": "087ed08700da60507799848ce90d31b2639e6a8388fd2c15f8361508b8220111",
+    "bin/omarchy-agent-usage-zai": "7159cebdf624a07a924a7209f9c61936bdec574f4303576bdf12fe01704fad23",
+    "shell/plugins/agents/Main.qml": "5811977c29f2068f7941fc722441823eceef9f8995b3448da5d7bcb763749c32",
+    "shell/plugins/agents/Panel.qml": "9e23f39a47f416fae9df00f8451c17d198d24026d107bd0fed20ec95fa7b4b94",
+    "shell/plugins/agents/collectors.py": "6d46504c8cd4210f46c98e1288f1d5addbeaca63b52d7b43ec2e53db210bd9bf",
+    "shell/plugins/agents/manifest.json": "fea1cbd95ceca4b05bc9ca9dc9632b144c62c8c027e52657156e0734b1bbba26"
+  }
+}

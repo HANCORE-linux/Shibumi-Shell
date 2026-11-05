@@ -13,16 +13,17 @@ known-points wording require Maintainer approval; this preparation record is
 not publication approval.
 
 Supported presentation is horizontal Top and Bottom on Omarchy Quattro. The
-validated stack is Omarchy 4.0.6, Quickshell 0.3.2 and Qt 6.12, with exact
-package identities below. Physical acceptance is single-output; physical
+pinned source stack is Omarchy 4.5.0, Quickshell 0.3.2 and Qt 6.12, with exact
+identities below. Historical physical acceptance is single-output, not a live 4.5.0 pass; physical
 multi-output, mixed-scale, hotplug and DPMS/suspend/resume remain distinct gates.
 Enterprise Wi-Fi and Bluetooth device workflows also need their own hardware
 or credentials. Private fixtures do not replace those checks.
 
 The forward reference is fixed at
-`0d8edf3812e0caafd155760c96bc2862933f611a` (2026-10-24), recorded in
-`contracts/baselines/omarchy-forward-compat-0d8edf38.json`. Stable 4.0.6 is
-unchanged. Neither pin transfers historical results to 0.2.0 or claims support
+`84b3f2872b5023c13967543ed4a98b08fcac5b21` (2026-11-04), recorded in
+`contracts/baselines/omarchy-forward-compat-84b3f287.json`. Source parity and Agents
+pin v4.5.0 (`76e11b4f`); the installed-package gate stays at 4.0.6 pending its
+separately approved update. Neither pin transfers historical results to 0.2.1 or claims support
 for arbitrary newer hosts. Complete candidate aggregates, clean-commit release
 evidence and live acceptance must each identify their actual inputs.
 
@@ -285,8 +286,9 @@ permit another run. Real Polkit/root and owner-loss acceptance remain separate.
 
 ## Pinned host contracts
 
-The release's installed-package and source-parity contracts target Omarchy
-4.0.6. Pinned configuration is not a physical-acceptance claim.
+The release targets Omarchy 4.5.0-1 with source parity and Agents at v4.5.0;
+the installed-package gate retains 4.0.6 pending its approved update.
+Pinned configuration is not a physical-acceptance claim.
 
 | Component | Required identity |
 | --- | --- |
@@ -294,14 +296,15 @@ The release's installed-package and source-parity contracts target Omarchy
 | Omarchy Settings | `omarchy-settings 4.0.6-1` |
 | Quickshell | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Installed package profile | `installed-package-v4.0.6` |
-| Source parity | `installed-source-parity-v4.0.6`, `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
+| Source parity | `installed-source-parity-v4.5.0`, `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
 | Native catalog source-only reference | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
-| Agents reference | `v4.0.0`, `f0020448ca87329199de7cb12f2015ebc4a3e5e7` |
-| Forward reference | `0d8edf3812e0caafd155760c96bc2862933f611a` |
+| Agents reference | `v4.5.0`, `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
+| Forward reference | `84b3f2872b5023c13967543ed4a98b08fcac5b21` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.4/4.0.3/4.0.2 package/source and 4.0.5 source
-manifests remain unchanged, not substitutes for the release jobs' 4.0.6 pins. Provisioning is
+manifests remain unchanged, as do the historical 4.0.6 source, v4.0.0 Agents and
+0d8edf38 forward manifests; none substitutes for the current pins. Provisioning is
 covered by the [validation-host runbook](development/validation-host.md);
 [host compatibility](architecture/quattro-compatibility.md) describes the proof axes.
 
@@ -338,12 +341,12 @@ was performed. Each operation needs its own maintainer Go.
 - Notifications: the host hands plugins only the Do-Not-Disturb switch, so Live rows are
   unavailable in the Shibumi panel. Recent comes from the host's persisted history. On
   Omarchy 4.0.6 the list, per-row removal and "Clear all" work as before; on the new
-  notification engine (Omarchy 4.5 prerelease, forward pin 0d8edf38) Recent is read-only
+  notification engine (Omarchy 4.5.0, source pin 76e11b4f) Recent is read-only
   and those two controls are hidden because the host offers no history mutation. Clicking a
   Recent row only focuses the application. Notification focus remains limited when the
   sender provides no supported application identity.
-- Omarchy 4.5 is validated against the pinned source tree 0d8edf38 and fixtures only, not
-  on a live 4.5 host. Support for every 4.5 build is not implied.
+- Omarchy 4.5.0 is pinned to source tree 76e11b4f and isolated fixtures only, not
+  a live 4.5.0 acceptance. Support for every 4.5 build is not implied.
 - Content-sized shells (Fit, Dock, Notch): after a layout change that crosses a responsive
   threshold (for example the centre group hiding or showing its date), the shell can settle
   through a few one-device-pixel steps for well under a second. The self-induced relayout

@@ -2,6 +2,8 @@
 
 ## [0.2.1] - DATE-PLACEHOLDER
 
+Validated on Omarchy 4.5.0 (v4.5.0, 76e11b4f; source contracts and isolated fixtures); forward reference 84b3f287.
+
 ### Fixed
 
 - #88: Read the moved per-monitor workspace state file with legacy-path fallback.

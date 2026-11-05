@@ -8,27 +8,30 @@ by this evidence.
 
 ## Current pinned host
 
-The 0.2.0 candidate retains Beta.16.5.1's exact official Omarchy 4.0.6
-validation baseline and advances only the forward reference. These pins are not
+The 0.2.1 candidate pins official Omarchy 4.5.0 source and Agents contracts,
+retains the installed 4.0.6 package gate pending its approved update, and advances
+the forward reference to 84b3f287. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
 | Component | Observed value |
 | --- | --- |
 | Pinned Omarchy package reference | `omarchy 4.0.6-1`, `omarchy-settings 4.0.6-1` |
-| Pinned official Omarchy source tag | `v4.0.6` (`237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`) |
-| Pinned source-parity revision | `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` |
+| Release package target (gate deferred) | `omarchy 4.5.0-1`, `omarchy-settings 4.5.0-1` |
+| Pinned official Omarchy source tag | `v4.5.0` (`76e11b4f4c031cc9c5291dd5c7115eb2815b765f`) |
+| Pinned source-parity revision | `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
 | Native catalog source-only reference | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, 183 shell files) |
-| Immutable Agents reference | `v4.0.0` (`f0020448ca87329199de7cb12f2015ebc4a3e5e7`) |
-| Immutable forward-compatibility revision | `0d8edf3812e0caafd155760c96bc2862933f611a` |
+| Immutable Agents reference | `v4.5.0` (`76e11b4f4c031cc9c5291dd5c7115eb2815b765f`) |
+| Immutable forward-compatibility revision | `84b3f2872b5023c13967543ed4a98b08fcac5b21` |
 | Quickshell package | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
 The installed package is the primary host-build identity. The new complete
-source-parity checkout is pinned to the official `v4.0.6` tag. The 4.0.4, 4.0.3 and
-4.0.2 package/source manifests and 4.0.5 source manifest remain immutable history. The older Agents-only gate remains explicitly pinned to `v4.0.0`;
+source-parity checkout is pinned to the official `v4.5.0` tag. The 4.0.6 source,
+4.0.4, 4.0.3 and 4.0.2 package/source manifests and 4.0.5 source manifest remain
+immutable history. The Agents-only gate pins `v4.5.0`, retaining `v4.0.0` as history;
 the separate
-`0d8edf38` snapshot supersedes `246f33a2` as the bounded forward reference;
+`84b3f287` snapshot supersedes `0d8edf38` as the bounded forward reference;
 all earlier manifests remain unchanged.
 Historical focused forward checks do not establish a new-stack candidate pass;
 complete candidate gates must be recorded separately. No pin follows a moving branch.
@@ -50,11 +53,11 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 - [`omarchy-installed-package-v4.0.6.json`](../../contracts/baselines/omarchy-installed-package-v4.0.6.json)
   records the package-managed `omarchy 4.0.6-1` and
   `omarchy-settings 4.0.6-1` layout;
-- [`omarchy-installed-source-parity-v4.0.6.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.0.6.json)
-  records the full Git checkout of the official `v4.0.6` source tag;
+- [`omarchy-installed-source-parity-v4.5.0.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.5.0.json)
+  records the full Git checkout of the official `v4.5.0` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
-  acceptance baseline without claiming that acceptance for 4.0.6;
-- [`omarchy-forward-compat-0d8edf38.json`](../../contracts/baselines/omarchy-forward-compat-0d8edf38.json)
+  acceptance baseline without claiming that acceptance for 4.5.0;
+- [`omarchy-forward-compat-84b3f287.json`](../../contracts/baselines/omarchy-forward-compat-84b3f287.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -156,16 +159,16 @@ Run the repository contract suite separately against all four host proof gates:
 
 ```bash
 ./tests/omarchy-installed-package-contract-regression.sh
-SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.0.6 \
+SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
-SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.0.0 \
+SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-0d8edf38 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-84b3f287 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The 4.0.6 manifests record exact observed bytes and package provenance; it
-does not by itself establish live acceptance. If any recorded host file changes,
+The 4.5.0 source and 4.0.6 installed-package manifests record exact observed
+bytes and their separate provenance; neither establishes live 4.5.0 acceptance. If any recorded host file changes,
 Shibumi remains on the previous accepted baseline until the affected contracts
 and live workflows pass again.
 

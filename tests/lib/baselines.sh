@@ -173,7 +173,9 @@ shibumi_validate_omarchy_baseline_schema() {
     if .id == "installed-package-v4.0.6"
         or .id == "installed-source-parity-v4.0.6"
         or .id == "forward-compat-246f33a2"
-        or .id == "forward-compat-0d8edf38" then
+        or .id == "forward-compat-0d8edf38"
+        or .id == "installed-source-parity-v4.5.0"
+        or .id == "forward-compat-84b3f287" then
       .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
     elif .id == "installed-package-v4.0.4"
         or .id == "installed-source-parity-v4.0.4"
@@ -624,21 +626,54 @@ shibumi_validate_agents_baseline_schema() {
 
   jq -e '
     .schemaVersion == 1
-    and .id == "omarchy-agents-v4.0.0"
     and .profile == "agents-current"
     and .repository == "https://github.com/basecamp/omarchy"
-    and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
     and .provenance.kind == "git"
     and .provenance.revision == .sourceRevision
-    and (.files | type == "object" and length == 6)
-    and ((.files | keys | sort) == [
-      "bin/omarchy-agent-usage-claude",
-      "bin/omarchy-agent-usage-codex",
-      "bin/omarchy-agent-usage-update",
-      "shell/plugins/agents/Agent.qml",
-      "shell/plugins/agents/Main.qml",
-      "shell/plugins/agents/manifest.json"
-    ])
+    and (.files | type == "object")
+    and (if .id == "omarchy-agents-v4.0.0" then
+      .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+      and ((.files | keys | sort) == [
+        "bin/omarchy-agent-usage-claude",
+        "bin/omarchy-agent-usage-codex",
+        "bin/omarchy-agent-usage-update",
+        "shell/plugins/agents/Agent.qml",
+        "shell/plugins/agents/Main.qml",
+        "shell/plugins/agents/manifest.json"
+      ])
+    elif .id == "omarchy-agents-v4.5.0" then
+      .sourceRevision == "76e11b4f4c031cc9c5291dd5c7115eb2815b765f"
+      and ((.files | keys | sort) == [
+        "bin/omarchy-agent-usage-agy",
+        "bin/omarchy-agent-usage-claude",
+        "bin/omarchy-agent-usage-codex",
+        "bin/omarchy-agent-usage-copilot",
+        "bin/omarchy-agent-usage-cursor",
+        "bin/omarchy-agent-usage-deepseek",
+        "bin/omarchy-agent-usage-devin",
+        "bin/omarchy-agent-usage-fireworks",
+        "bin/omarchy-agent-usage-grok",
+        "bin/omarchy-agent-usage-grokbot",
+        "bin/omarchy-agent-usage-hermes",
+        "bin/omarchy-agent-usage-kimchi",
+        "bin/omarchy-agent-usage-kimi",
+        "bin/omarchy-agent-usage-local",
+        "bin/omarchy-agent-usage-minimax",
+        "bin/omarchy-agent-usage-muse",
+        "bin/omarchy-agent-usage-ollama",
+        "bin/omarchy-agent-usage-opencode",
+        "bin/omarchy-agent-usage-openrouter",
+        "bin/omarchy-agent-usage-qwen",
+        "bin/omarchy-agent-usage-synthetic",
+        "bin/omarchy-agent-usage-update",
+        "bin/omarchy-agent-usage-vibe",
+        "bin/omarchy-agent-usage-zai",
+        "shell/plugins/agents/Main.qml",
+        "shell/plugins/agents/Panel.qml",
+        "shell/plugins/agents/collectors.py",
+        "shell/plugins/agents/manifest.json"
+      ])
+    else false end)
     and all(.files | to_entries[];
       (.key | type == "string" and length > 0
         and (startswith("/") | not)
@@ -753,6 +788,8 @@ shibumi_load_omarchy_baseline() {
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
       case $baseline_version in
+        4.5.0)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.5.0.json" ;;
         4.0.6)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.6.json" ;;
         4.0.5)
@@ -774,14 +811,14 @@ shibumi_load_omarchy_baseline() {
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for forward-compat' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-0d8edf38.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-84b3f287.json"
       ;;
     agents-current)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for agents-current' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.5.0.json"
       ;;
     *)
       shibumi_baseline_fail "unsupported Omarchy baseline profile: $profile"

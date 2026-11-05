@@ -61,7 +61,7 @@ IDENTITY_FIELDS = (
 EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     (
         "SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.0.6.json",
+        ROOT / "contracts/baselines/omarchy-installed-source-parity-v4.5.0.json",
     ),
     (
         "SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH",
@@ -69,11 +69,11 @@ EXTERNAL_BASELINES: tuple[tuple[str, Path], ...] = (
     ),
     (
         "SHIBUMI_AGENTS_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-agents-v4.0.0.json",
+        ROOT / "contracts/baselines/omarchy-agents-v4.5.0.json",
     ),
     (
         "SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH",
-        ROOT / "contracts/baselines/omarchy-forward-compat-0d8edf38.json",
+        ROOT / "contracts/baselines/omarchy-forward-compat-84b3f287.json",
     ),
 )
 
