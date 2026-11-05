@@ -1,4 +1,4 @@
-# Shibumi 0.2.0 release readiness
+# Shibumi 0.2.1 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.

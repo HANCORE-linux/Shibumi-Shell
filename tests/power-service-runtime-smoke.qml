@@ -14,7 +14,7 @@ ShellRoot {
   PowerState.Service {
     id: power
     shell: scopedHost
-    manifest: ({ id: "hancore.shibumi.power-state", version: "0.2.0",
+    manifest: ({ id: "hancore.shibumi.power-state", version: "0.2.1",
       kinds: ["service"], entryPoints: { service: "Service.qml" } })
     batterySnapshotOverride: ({ ready: false })
     commandOverrides: ({

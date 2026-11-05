@@ -53,7 +53,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.0
+git checkout v0.2.1
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -69,7 +69,7 @@ To inspect the transaction before installing:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.0
+git checkout v0.2.1
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -149,7 +149,7 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-Update an exactly admitted source installation to 0.2.0 from its trusted
+Update an exactly admitted source installation to 0.2.1 from its trusted
 checkout. The most recent published predecessor is Beta.16.5.1: its tag
 (`20108270`) and main integration merge (`a5302f11`) are both admitted with the
 unchanged released payload. Its package identity is admitted too. Older
@@ -160,7 +160,7 @@ Do not treat this list as a version range:
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.2.0
+git checkout v0.2.1
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
@@ -413,7 +413,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.2.0
+git checkout v0.2.1
 ./scripts/shibumi-suite install --yes
 ```
 

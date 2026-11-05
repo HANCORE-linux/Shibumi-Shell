@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.2.1] - DATE-PLACEHOLDER
+
+### Fixed
+
 ## [0.2.0] - 2026-11-04
 
 ### Highlights
