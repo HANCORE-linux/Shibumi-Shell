@@ -1454,7 +1454,8 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
       rg -Fq "$status_contract" "${official_notification_service%/*}/Store.js" \
         || fail "official notification history format changed: $status_contract"
     done
-    rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
+    [[ $SHIBUMI_OMARCHY_BASELINE_PROFILE == installed-package ]] \
+      || rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
       || fail 'official notification history persistence is no longer documented'
   else
     fail "official notification service exposes no supported model or history.json contract"

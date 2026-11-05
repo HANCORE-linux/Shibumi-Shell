@@ -90,11 +90,11 @@ Every host-bound test both imports `tests/lib/baselines.sh` and invokes its
 loader. The complete-host jobs select three repository-owned manifests with
 non-overlapping claims; the Agents job selects its separate narrower manifest:
 
-- `contracts/baselines/omarchy-installed-package-v4.0.6.json` binds the
-  package-managed `omarchy 4.0.6-1`, `omarchy-settings 4.0.6-1` layout;
-- `contracts/baselines/omarchy-installed-source-parity-v4.0.6.json` binds the
-  official `v4.0.6` source form at `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`;
-- 4.0.4 package/source and 4.0.5 source manifests remain historical. The native
+- `contracts/baselines/omarchy-installed-package-v4.5.0.json` binds the
+  package-managed `omarchy 4.5.0-3`, `omarchy-settings 4.5.0-3` layout;
+- `contracts/baselines/omarchy-installed-source-parity-v4.5.0.json` binds the
+  official `v4.5.0` source form at `ac2690cd7be4f47e4a255f5e2e78d904d436b068`;
+- 4.0.6/4.0.4 package/source and 4.0.5 source manifests remain historical. The native
   catalog resource/runtime source remains 4.0.4 (`c668141e`, 183 shell files).
   Supply `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=/path/to/omarchy-v4.0.4` for the
   resource gate; explicit `--native-shell` inputs to native runtime/fallback

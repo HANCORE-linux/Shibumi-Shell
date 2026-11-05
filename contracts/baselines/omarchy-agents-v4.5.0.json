@@ -3,10 +3,10 @@
   "id": "omarchy-agents-v4.5.0",
   "profile": "agents-current",
   "repository": "https://github.com/basecamp/omarchy",
-  "sourceRevision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f",
+  "sourceRevision": "ac2690cd7be4f47e4a255f5e2e78d904d436b068",
   "provenance": {
     "kind": "git",
-    "revision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f"
+    "revision": "ac2690cd7be4f47e4a255f5e2e78d904d436b068"
   },
   "files": {
     "bin/omarchy-agent-usage-agy": "dd3d3736a1ed44a25119ddbc80fdaa18dba603c1561d79d2f2baf0218f6d886b",

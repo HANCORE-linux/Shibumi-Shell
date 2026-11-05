@@ -9,25 +9,25 @@ by this evidence.
 ## Current pinned host
 
 The 0.2.1 candidate pins official Omarchy 4.5.0 source and Agents contracts,
-retains the installed 4.0.6 package gate pending its approved update, and advances
+pins the installed 4.5.0-3 package gate, and advances
 the forward reference to 84b3f287. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
 | Component | Observed value |
 | --- | --- |
-| Pinned Omarchy package reference | `omarchy 4.0.6-1`, `omarchy-settings 4.0.6-1` |
-| Release package target (gate deferred) | `omarchy 4.5.0-1`, `omarchy-settings 4.5.0-1` |
-| Pinned official Omarchy source tag | `v4.5.0` (`76e11b4f4c031cc9c5291dd5c7115eb2815b765f`) |
-| Pinned source-parity revision | `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
+| Pinned Omarchy package reference | `omarchy 4.5.0-3`, `omarchy-settings 4.5.0-3` |
+| Release package target | `omarchy 4.5.0-3`, `omarchy-settings 4.5.0-3` |
+| Pinned official Omarchy source tag | `v4.5.0` (`ac2690cd7be4f47e4a255f5e2e78d904d436b068`) |
+| Pinned source-parity revision | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
 | Native catalog source-only reference | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, 183 shell files) |
-| Immutable Agents reference | `v4.5.0` (`76e11b4f4c031cc9c5291dd5c7115eb2815b765f`) |
+| Immutable Agents reference | `v4.5.0` (`ac2690cd7be4f47e4a255f5e2e78d904d436b068`) |
 | Immutable forward-compatibility revision | `84b3f2872b5023c13967543ed4a98b08fcac5b21` |
 | Quickshell package | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
 The installed package is the primary host-build identity. The new complete
-source-parity checkout is pinned to the official `v4.5.0` tag. The 4.0.6 source,
+source-parity checkout is pinned to the official `v4.5.0` tag. The 4.0.6,
 4.0.4, 4.0.3 and 4.0.2 package/source manifests and 4.0.5 source manifest remain
 immutable history. The Agents-only gate pins `v4.5.0`, retaining `v4.0.0` as history;
 the separate
@@ -50,9 +50,10 @@ The table is a human-readable set of important anchors, not the complete
 machine identity. Three separate manifests bind every file or symlink below the
 consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
 
-- [`omarchy-installed-package-v4.0.6.json`](../../contracts/baselines/omarchy-installed-package-v4.0.6.json)
-  records the package-managed `omarchy 4.0.6-1` and
-  `omarchy-settings 4.0.6-1` layout;
+- [`omarchy-installed-package-v4.5.0.json`](../../contracts/baselines/omarchy-installed-package-v4.5.0.json)
+  records the package-managed `omarchy 4.5.0-3` and
+  `omarchy-settings 4.5.0-3` layout;
+  on 4.5.0-3 `bin/` is shared: omarchy-settings ships `omarchy-security-functions` and `omarchy-sudo-passwordless`.
 - [`omarchy-installed-source-parity-v4.5.0.json`](../../contracts/baselines/omarchy-installed-source-parity-v4.5.0.json)
   records the full Git checkout of the official `v4.5.0` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
@@ -167,7 +168,7 @@ SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-84b3f287 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The 4.5.0 source and 4.0.6 installed-package manifests record exact observed
+The 4.5.0 source and installed-package manifests record exact observed
 bytes and their separate provenance; neither establishes live 4.5.0 acceptance. If any recorded host file changes,
 Shibumi remains on the previous accepted baseline until the affected contracts
 and live workflows pass again.

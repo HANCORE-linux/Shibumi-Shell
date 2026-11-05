@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST_PROBE_MANIFEST = Path("contracts/baselines/omarchy-installed-package-v4.0.6.json")
+HOST_PROBE_MANIFEST = Path("contracts/baselines/omarchy-installed-package-v4.5.0.json")
 
 
 def host_probe_expectations() -> tuple[tuple, dict[str, str]]:

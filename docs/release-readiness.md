@@ -22,8 +22,8 @@ or credentials. Private fixtures do not replace those checks.
 The forward reference is fixed at
 `84b3f2872b5023c13967543ed4a98b08fcac5b21` (2026-11-04), recorded in
 `contracts/baselines/omarchy-forward-compat-84b3f287.json`. Source parity and Agents
-pin v4.5.0 (`76e11b4f`); the installed-package gate stays at 4.0.6 pending its
-separately approved update. Neither pin transfers historical results to 0.2.1 or claims support
+pin v4.5.0 (`ac2690cd7`); the installed-package gate pins 4.5.0-3.
+Neither pin transfers historical results to 0.2.1 or claims support
 for arbitrary newer hosts. Complete candidate aggregates, clean-commit release
 evidence and live acceptance must each identify their actual inputs.
 
@@ -286,24 +286,24 @@ permit another run. Real Polkit/root and owner-loss acceptance remain separate.
 
 ## Pinned host contracts
 
-The release targets Omarchy 4.5.0-1 with source parity and Agents at v4.5.0;
-the installed-package gate retains 4.0.6 pending its approved update.
+The release targets Omarchy 4.5.0-3 with source parity and Agents at v4.5.0;
+the installed-package gate pins 4.5.0-3.
 Pinned configuration is not a physical-acceptance claim.
 
 | Component | Required identity |
 | --- | --- |
-| Omarchy | `omarchy 4.0.6-1` |
-| Omarchy Settings | `omarchy-settings 4.0.6-1` |
+| Omarchy | `omarchy 4.5.0-3` |
+| Omarchy Settings | `omarchy-settings 4.5.0-3` |
 | Quickshell | `quickshell 0.3.2.r7.g2b4501a-1` |
-| Installed package profile | `installed-package-v4.0.6` |
-| Source parity | `installed-source-parity-v4.5.0`, `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
+| Installed package profile | `installed-package-v4.5.0` |
+| Source parity | `installed-source-parity-v4.5.0`, `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
 | Native catalog source-only reference | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
-| Agents reference | `v4.5.0`, `76e11b4f4c031cc9c5291dd5c7115eb2815b765f` |
+| Agents reference | `v4.5.0`, `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
 | Forward reference | `84b3f2872b5023c13967543ed4a98b08fcac5b21` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.4/4.0.3/4.0.2 package/source and 4.0.5 source
-manifests remain unchanged, as do the historical 4.0.6 source, v4.0.0 Agents and
+manifests remain unchanged, as do the historical 4.0.6 package/source, v4.0.0 Agents and
 0d8edf38 forward manifests; none substitutes for the current pins. Provisioning is
 covered by the [validation-host runbook](development/validation-host.md);
 [host compatibility](architecture/quattro-compatibility.md) describes the proof axes.
@@ -341,11 +341,11 @@ was performed. Each operation needs its own maintainer Go.
 - Notifications: the host hands plugins only the Do-Not-Disturb switch, so Live rows are
   unavailable in the Shibumi panel. Recent comes from the host's persisted history. On
   Omarchy 4.0.6 the list, per-row removal and "Clear all" work as before; on the new
-  notification engine (Omarchy 4.5.0, source pin 76e11b4f) Recent is read-only
+  notification engine (Omarchy 4.5.0, source pin ac2690cd7) Recent is read-only
   and those two controls are hidden because the host offers no history mutation. Clicking a
   Recent row only focuses the application. Notification focus remains limited when the
   sender provides no supported application identity.
-- Omarchy 4.5.0 is pinned to source tree 76e11b4f and isolated fixtures only, not
+- Omarchy 4.5.0 is pinned to source tree ac2690cd7 and isolated fixtures only, not
   a live 4.5.0 acceptance. Support for every 4.5 build is not implied.
 - Content-sized shells (Fit, Dock, Notch): after a layout change that crosses a responsive
   threshold (for example the centre group hiding or showing its date), the shell can settle

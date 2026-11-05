@@ -3,10 +3,10 @@
   "id": "installed-source-parity-v4.5.0",
   "profile": "installed-source-parity",
   "repository": "https://github.com/basecamp/omarchy",
-  "sourceRevision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f",
+  "sourceRevision": "ac2690cd7be4f47e4a255f5e2e78d904d436b068",
   "provenance": {
     "kind": "git",
-    "revision": "76e11b4f4c031cc9c5291dd5c7115eb2815b765f"
+    "revision": "ac2690cd7be4f47e4a255f5e2e78d904d436b068"
   },
   "quickshellPackage": {
     "name": "quickshell",
@@ -19,7 +19,7 @@
       "entryCount": 320,
       "inventorySha256": "85a06a3a41c69c91a6c3b023c98723d18f1b06df56f7fe296053c5d0b0738afe",
       "structureSha256": "59f46a73a7ac99008b4bfcaa3c49df27c7258016ca8f250ef7c1f6c60d425bf3",
-      "contentSha256": "16e6f532206e26d72c0ee4b22132aac6bfb71dce9e1b29639521ced59fa1bb82"
+      "contentSha256": "3ebcccd8e66cf581744e331dfb268b570d65e65ed3afc567150e2e4191f31c85"
     },
     {
       "path": "bin",
@@ -27,7 +27,7 @@
       "entryCount": 560,
       "inventorySha256": "313789e116f95e26da59b1075c4784aa73bbec02a35698b8971469913708f4d3",
       "structureSha256": "9fb943a0eb3938e446b95b8c9dece973cddb7304b70e0e98c6066399e80fab48",
-      "contentSha256": "2948a6258bc80f7394efb77eb09f035349d59fd7f08b0d613709efcec44e567d"
+      "contentSha256": "81a7176f9f98d3d3805ab9190767ea9cde173e95b694dd5383def7d4e05ee621"
     },
     {
       "path": "config",

@@ -10,7 +10,7 @@ See [release workflow](release.md) and [testing](testing.md).
 
 ## 1. Host and trust boundary
 
-- Require Omarchy and Omarchy Settings `4.0.6-1`, Quickshell `0.3.2.r7.g2b4501a-1`, an active
+- Require Omarchy and Omarchy Settings `4.5.0-3`, Quickshell `0.3.2.r7.g2b4501a-1`, an active
   unlocked Wayland session, and the tools required by the repository gates.
   Record `pacman -Q omarchy omarchy-settings quickshell` and package provenance.
   A new host version needs new contract review, not edited pins to bypass failure.
@@ -122,10 +122,10 @@ reviewed Shibumi checkout, match these manifest `sourceRevision` values exactly:
 
 | Profile / manifest in `contracts/baselines/` | Revision | Repository variable |
 | --- | --- | --- |
-| `omarchy-installed-source-parity-v4.0.6.json` | `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
+| `omarchy-installed-source-parity-v4.5.0.json` | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
 | `omarchy-installed-source-parity-v4.0.4.json` (native catalog source only) | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH` |
-| `omarchy-agents-v4.0.0.json` | `f0020448ca87329199de7cb12f2015ebc4a3e5e7` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
-| `omarchy-forward-compat-0d8edf38.json` | `0d8edf3812e0caafd155760c96bc2862933f611a` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
+| `omarchy-agents-v4.5.0.json` | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
+| `omarchy-forward-compat-84b3f287.json` | `84b3f2872b5023c13967543ed4a98b08fcac5b21` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
 
 Beta.16.5.1 records the installed Omarchy-repository Quickshell package above,
 whose binary is `Quickshell 0.3.2 (revision 2b4501a282689792b62e94f3fb30d8f512324fe6, distributed by Omarchy)`.

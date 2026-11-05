@@ -59,8 +59,8 @@ The forward reference is exactly `84b3f2872b5023c13967543ed4a98b08fcac5b21`;
 its admission does not transfer fixture evidence to a live or differently packaged host.
 Native catalog resource validation separately retains v4.0.4 (`c668141e`), supplied
 through `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH`; do not substitute the stable 4.5.0 checkout.
-Source parity and Agents pin `76e11b4f4c031cc9c5291dd5c7115eb2815b765f`;
-the installed-package gate retains 4.0.6 until the separately approved package update.
+Source parity and Agents pin `ac2690cd7be4f47e4a255f5e2e78d904d436b068`;
+the installed-package gate pins Omarchy and Omarchy Settings 4.5.0-3.
 
 Live acceptance must record what was actually exercised and must not claim unavailable hardware, credentials, multi-monitor, nested-compositor, or clean-chroot evidence as passed. Physical hardware gates require raw setup details, relevant command output, screenshots or video, and sanitized logs; fixtures cannot replace them.
 
