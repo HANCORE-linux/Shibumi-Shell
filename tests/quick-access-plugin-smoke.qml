@@ -95,8 +95,16 @@ ShellRoot {
   }
 
   QtObject {
+    id: fakeIdle
+    property bool stayAwake: false
+    property int setCalls: 0
+    function setIdleEnabled(enabled) { stayAwake = !enabled; setCalls++ }
+  }
+
+  QtObject {
     id: fakeShell
     property var bar: scalarBar
+    function firstPartyServiceFor(id) { return id === "omarchy.idle" ? fakeIdle : null }
     function serviceFor(pluginId) {
       if (pluginId === "hancore.shibumi.state") return fakeState
       if (pluginId === "hancore.shibumi.quick-access") return quickAccessService
@@ -582,8 +590,13 @@ ShellRoot {
             || imageWindowCarousel.skewOffset <= 0)
           return root.fail("Carousel did not retain its skewed-slice geometry")
         if (!first.toggleIdleInhibitor() || !first.idleInhibited
-            || !second.idleInhibited)
+            || !second.idleInhibited || fakeIdle.stayAwake !== true
+            || fakeIdle.setCalls !== 1)
           return root.fail("shared idle-inhibitor state")
+        fakeIdle.stayAwake = false
+        if (first.idleInhibited)
+          return root.fail("external Stay Awake change did not propagate")
+        fakeIdle.stayAwake = true
         first.openMode("wallpaper")
         root.phase++
         root.ticks = 0
