@@ -55,14 +55,24 @@ Item {
     && Object.keys(blocks).length > 0
 
   FileView {
+    property bool legacy: false
     path: root.backendAdmitted
       ? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")
-        + "/omarchy/monitor-workspaces" : ""
+        + (legacy ? "/omarchy/monitor-workspaces"
+                  : "/omarchy/monitors/workspaces") : ""
     watchChanges: root.backendAdmitted
     printErrors: false
-    onFileChanged: reload()
+    // Retry the preferred path on observed changes, including legacy removal.
+    onFileChanged: { legacy = false; reload() }
+    onWatchChangesChanged: if (!watchChanges) legacy = false
     onLoaded: root.blocks = WorkspaceModel.readBlocks(text())
-    onLoadFailed: root.blocks = ({})
+    onLoadFailed: {
+      root.blocks = ({})
+      // Let FileView finish the failed operation before switching its path.
+      if (!legacy) Qt.callLater(function() {
+        if (root.backendAdmitted && !legacy) legacy = true
+      })
+    }
   }
   onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})
 

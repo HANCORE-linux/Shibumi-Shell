@@ -1072,11 +1072,12 @@ fi
 for workspace_map_contract in \
     'path: root.backendAdmitted' \
     '? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")' \
-    '+ "/omarchy/monitor-workspaces" : ""' \
+    '+ (legacy ? "/omarchy/monitor-workspaces"' \
+    ': "/omarchy/monitors/workspaces") : ""' \
     'watchChanges: root.backendAdmitted' \
-    'onFileChanged: reload()' \
+    'onFileChanged: { legacy = false; reload() }' \
     'onLoaded: root.blocks = WorkspaceModel.readBlocks(text())' \
-    'onLoadFailed: root.blocks = ({})' \
+    'if (root.backendAdmitted && !legacy) legacy = true' \
     'onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})'; do
   rg -Fq "$workspace_map_contract" "$workspace_service" \
     || fail "workspace connector-map admission drifted: $workspace_map_contract"

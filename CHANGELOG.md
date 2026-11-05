@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- #88: Read the moved per-monitor workspace state file with legacy-path fallback.
+
 ## [0.2.0] - 2026-11-04
 
 ### Highlights
