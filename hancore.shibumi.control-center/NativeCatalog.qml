@@ -73,7 +73,7 @@ Item {
     _wanted = active
     var token = ++_deferred
     Qt.callLater(function() {
-      if (token !== root._deferred || !root._wanted || !root.active) return
+      if (!root || token !== root._deferred || !root._wanted || !root.active) return
       root.refresh()
     })
   }

@@ -12,6 +12,7 @@ Validated on Omarchy 4.5.0 (v4.5.0, 76e11b4f; source contracts and isolated fixt
 
 - #88: Read the moved per-monitor workspace state file with legacy-path fallback.
 - Lifecycle: after `deactivate --keep-layout`, `activate` no longer records Shibumi's own layout as the stock bar; `deactivate` strips suite widgets from the restored stock bar and falls back to Omarchy's default bar when nothing stock is left, and `uninstall` no longer leaves a Control Center entry behind, so switching back to the original Omarchy bar works again instead of failing after 60 s.
+- Control Center: a native-catalog refresh scheduled right before a shell handoff no longer throws during teardown.
 - Display panel: the brightness bridge follows Omarchy's upcoming per-monitor panel API (forward 84b3f287) while keeping the 4.5.0 behaviour; where the upcoming panel has no display on/off switch, Shibumi shows none either.
 - V1: removing an added plugin that had been dragged into a base slot no longer fails and no longer blocks every other plugin change; the slot is left empty. Reported by oko on Discord.
 
