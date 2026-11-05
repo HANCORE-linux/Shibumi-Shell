@@ -1393,10 +1393,15 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
+  monitor_shape_contracts=(enabledDisplayCount toggleDisplay)
+  if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 84b3f2872b5023c13967543ed4a98b08fcac5b21 ]]; then
+    monitor_shape_contracts=('function previewBrightness(name, value)'
+      'function setScale(name, scale)' 'function runAction(')
+  fi
   for monitor_contract in brightnessAvailable brightnessPercent refresh \
     setBrightness previewBrightness monitorScale setScale displays \
-    enabledDisplayCount toggleDisplay normalizeScale brightnessName; do
-    rg -q "${monitor_contract}" "$official_monitor_panel" \
+    normalizeScale brightnessName "${monitor_shape_contracts[@]}"; do
+    rg -Fq "${monitor_contract}" "$official_monitor_panel" \
       || fail "official monitor panel contract changed: $monitor_contract"
   done
   official_power_panel=${OMARCHY_PATH}/shell/plugins/panels/power/Panel.qml

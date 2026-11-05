@@ -1201,7 +1201,7 @@
     },
     {
       "id": "public-0.2.1",
-      "payloadDigest": "f0da837d27abce606f263d330b2f84b33be4baf300b7214eab6bfc0a89e07b7e",
+      "payloadDigest": "75c26c0966a0ba069abc10dc12c2de1def59938ef1a3aa99f944d76fc924fea0",
       "pluginDigests": {
         "hancore.shibumi.bar": "f78a5d774c7b971fbb4da7c53e25d99fb8c31c3186665144a7ab870fb4de9dbb",
         "hancore.shibumi.state": "12b2c6de31fbe607ed38514d4bf4b1f180ef56463b4511cae148f63f6cc9d24d",
@@ -1221,7 +1221,7 @@
         "hancore.shibumi.quick-access": "f37cac096e2bf1a092bb87d6a73dd58ae1dbc646e2afc9c89da5368a10e81641",
         "hancore.shibumi.network": "88f8cc42f7d1126c9649905667f948a2b0d4bc18a4b7e9edfc20b6937c07842d",
         "hancore.shibumi.battery": "dc375b5e3144f6918ef050b65a75f2f7d6477e59b7d3cbc0e5a04325d1a55e88",
-        "hancore.shibumi.brightness": "0918683042281eba4ef3954fa01f73ff1803d68c98e8909009c4308f064d08fa",
+        "hancore.shibumi.brightness": "1e0c262a3c2d4abd8729699d33854dad1b9d20fd2433a103cddafd5c0c3f660d",
         "hancore.shibumi.power-profile": "015d6fa9fa7a83e9c1a7714c0aea85a655f88b6104b614c52834aafbc7190175",
         "hancore.shibumi.bluetooth": "adf6b033127dea5541d5fee5473844a514f064b8443bd5737a74d0d988ad5525",
         "hancore.shibumi.temperature": "8c3654a716976df3965b9c479e6e8234a0633af1fd77102ef82feaea51be1456",

@@ -44,7 +44,9 @@ Item {
     && Array.isArray(panel.displays) ? panel.displays : []
   readonly property int enabledDisplayCount: ready
     && panel.enabledDisplayCount !== undefined
-    ? Math.max(0, Number(panel.enabledDisplayCount) || 0) : 0
+    ? Math.max(0, Number(panel.enabledDisplayCount) || 0)
+    : displays.filter(display => display.enabled === true).length
+  readonly property bool displayToggleAvailable: ready && typeof panel.toggleDisplay === "function"
   readonly property bool textSizeAvailable: ready
     && Array.isArray(panel.textSizeStops) && panel.textSizeStops.length > 0
     && typeof panel.currentTextIndex === "function"
@@ -73,9 +75,12 @@ Item {
 
   function previewBrightness(value) {
     if (!ready || !brightnessAvailable) return false
-    if (typeof panel.previewBrightness === "function")
-      panel.previewBrightness(Math.max(1, Math.min(100, Number(value) || 1)))
-    else return setBrightness(value)
+    if (typeof panel.previewBrightness !== "function") return setBrightness(value)
+    const clamped = Math.max(1, Math.min(100, Number(value) || 1))
+    if (panel.previewBrightness.length === 1) panel.previewBrightness(clamped)
+    else if (panel.previewBrightness.length === 2 && focusedMonitor)
+      panel.previewBrightness(focusedMonitor, clamped)
+    else return false
     return true
   }
 
@@ -87,7 +92,10 @@ Item {
 
   function setScale(value) {
     if (!ready || typeof panel.setScale !== "function") return false
-    panel.setScale(String(value || ""))
+    if (panel.setScale.length === 1) panel.setScale(String(value || ""))
+    else if (panel.setScale.length === 2 && focusedMonitor)
+      panel.setScale(focusedMonitor, String(value || ""))
+    else return false
     return true
   }
 
