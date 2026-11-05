@@ -1772,7 +1772,8 @@ def preflight_lifecycle_state(
     ]
     if public_transactions and not allow_pending_recovery:
         raise AdmissionError(
-            "an admitted interrupted transaction requires recovery before status"
+            "an admitted interrupted transaction requires recovery before status; "
+            "rerun the interrupted suite command (for example update --dry-run) to recover it"
         )
 
     state_path = paths.state_dir / "install.json"
