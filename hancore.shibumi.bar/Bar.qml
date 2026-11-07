@@ -3363,6 +3363,13 @@ Item {
     function onV2ModeChanged() {
       if (!root.shutdownPrepared) v1PluginReconcileTimer.restart()
     }
+
+    // A background reconcile skipped while a State write or layout
+    // transition was busy must run again once the store is mutable.
+    function onMutationBusyChanged() {
+      if (!root.shutdownPrepared && !layoutStateController.mutationBusy)
+        v1PluginReconcileTimer.restart()
+    }
   }
 
   Connections {
