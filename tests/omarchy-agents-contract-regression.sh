@@ -29,13 +29,26 @@ done < <(jq -r '.files | to_entries[] | [.key, .value] | @tsv' "$manifest")
 
 agents_manifest="$source_path/shell/plugins/agents/manifest.json"
 jq -e '
+  .schemaVersion == 1 and
   .id == "omarchy.agents" and
+  .version == "1.0.0" and
   .kinds == ["bar-widget"] and
+  .activation == "on-demand" and
   .entryPoints.barWidget == "Panel.qml" and
-  (.barWidget.aliases | index("model-usage")) != null and
-  .barWidget.defaults.providers.claude.enabled == true and
-  .barWidget.defaults.providers.codex.enabled == true and
-  .barWidget.defaults.refreshIntervalSec == 900
+  .barWidget.aliases == ["agents", "model-usage"] and
+  .barWidget.allowMultiple == false and
+  (.barWidget.defaults.providers | keys | sort) == [
+    "agy", "claude", "codex", "copilot", "cursor", "deepseek", "devin",
+    "fireworks", "grok", "grokbot", "hermes", "kimchi", "kimi", "local",
+    "minimax", "muse", "ollama", "opencode", "openrouter", "qwen",
+    "synthetic", "vibe", "zai"
+  ] and
+  all(.barWidget.defaults.providers[]; .enabled == true) and
+  .barWidget.defaults.refreshIntervalSec == 900 and
+  .barWidget.defaults.syncMode == "Off" and
+  .barWidget.defaults.syncDir == "" and
+  .barWidget.defaults.syncFileName == "" and
+  .barWidget.defaults.syncDeviceId == ""
 ' "$agents_manifest" >/dev/null \
   || fail "agents manifest contract drifted"
 
@@ -63,13 +76,28 @@ for contract in \
     || fail "agents updater contract drifted: $contract"
 done
 
+collectors="$source_path/shell/plugins/agents/collectors.py"
+for contract in \
+  'def base_record(' \
+  '"schemaVersion": 1' \
+  '"id": agent_id' \
+  '"name": name' \
+  '"ready": False' \
+  '"limits": []' \
+  '"todayTotalTokens": 0' \
+  'record.update(empty_stats())' \
+  'record.update(overrides)'; do
+  rg -Fq "$contract" "$collectors" \
+    || fail "shared collector record contract drifted: $contract"
+done
 for collector in claude codex; do
   file="$source_path/bin/omarchy-agent-usage-$collector"
   [[ -x $file ]] || fail "$collector collector is not executable"
-  for key in schemaVersion id name ready limits todayTotalTokens; do
-    rg -Fq "\"${key}\"" "$file" \
-      || rg -Fq "'${key}'" "$file" \
-      || fail "$collector record key is missing: $key"
+  for contract in 'from collectors import (' '  base_record,' \
+    "AGENT_ID = \"$collector\"" 'record = base_record(' \
+    '    AGENT_ID,' '    AGENT_NAME,' '    ready=' 'record.update(stats)' 'emit(record'; do
+    rg -Fq "$contract" "$file" \
+      || fail "$collector shared record contract drifted: $contract"
   done
 done
 

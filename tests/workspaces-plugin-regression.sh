@@ -63,9 +63,17 @@ grep -F 'workspaces plugin smoke passed' <<<"$output" >/dev/null \
 cp "$repo_root/tests/fixtures/ShibumiPanelTest.qml" "$tmpdir/workspaces/ShibumiPanel.qml"
 cp "$repo_root/tests/workspaces-runtime-smoke.qml" "$tmpdir/runtime-shell.qml"
 mkdir -m 700 "$tmpdir/scoped-runtime"
+map_root="$fixture_home/.local/state/omarchy"
+mkdir -p "$map_root/monitors"
+for map_case in runtime new old neither; do
+rm -f "$map_root/monitors/workspaces" "$map_root/monitor-workspaces"
+map_file=$([[ $map_case == new ]] && echo monitors/workspaces || echo monitor-workspaces)
+if [[ $map_case == new || $map_case == old ]]; then
+  printf '0\teDP-1\tpanel\n1\tDP-1\texternal\n2\t\tunplugged\n' > "$map_root/$map_file"
+fi
 set +e
 runtime_output=$(timeout 8 env \
-  "${fixture_env[@]}" \
+  "${fixture_env[@]}" SHIBUMI_WORKSPACE_MAP_CASE="$map_case" \
   QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software WAYLAND_DISPLAY= \
   XDG_RUNTIME_DIR="$tmpdir/scoped-runtime" \
   QML_IMPORT_PATH="$omarchy_path/shell${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" \
@@ -80,6 +88,7 @@ grep -F 'workspaces runtime smoke passed' <<<"$runtime_output" >/dev/null \
 if grep -Eq "$HOST_DIAGNOSTICS_BINDING" <<<"$runtime_output"; then
   fail "scoped workspace QML error"
 fi
+done
 
 cp -a "$repo_root/hancore.shibumi.memory" "$tmpdir/memory"
 mkdir -p "$tmpdir/geometry" "$tmpdir/geometry-runtime"

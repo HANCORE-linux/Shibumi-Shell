@@ -87,6 +87,25 @@ ShellRoot {
     Fixtures.MonitorTestPanel {}
   }
 
+  Component {
+    id: forwardPanelComponent
+    Item {
+      property string focusedMonitor: "HDMI-A-1"
+      property string selectedName: "eDP-1"
+      property bool brightnessAvailable: true
+      property bool opened: false
+      property var displays: [{ name: "HDMI-A-1", enabled: true }, { name: "eDP-1", enabled: true }]
+      property var calls: []
+      function previewBrightness(name, value) { calls = calls.concat([[name, value]]) }
+      function setScale(name, scale) { calls = calls.concat([[name, scale]]) }
+      function setBrightness(value) { calls = calls.concat([[value]]) }
+    }
+  }
+  Brightness.MonitorPanelBridge {
+    id: forwardBridge
+    bar: fakeBar; ownerShell: visualShell; ownerWidget: fakeBar
+    panelComponent: forwardPanelComponent
+  }
   QtObject {
     id: visualShell
     function summon(_id, _payload) { return true }
@@ -294,6 +313,17 @@ ShellRoot {
             || backend.toggleCount !== 1 || sharedMonitorService.monitorScale !== "1.6"
             || sharedMonitorService.enabledDisplayCount !== 1)
           return root.fail("monitor action forwarding")
+        backend.enabledDisplayCount = 0
+        if (sharedMonitorService.enabledDisplayCount !== 0 || !sharedMonitorService.displayToggleAvailable) return root.fail("legacy declared zero/toggle")
+        backend.enabledDisplayCount = 1
+        const forward = forwardBridge.panel
+        if (!forwardBridge.ready || !forwardBridge.previewBrightness(37)
+            || !forwardBridge.setScale(1.6) || !forwardBridge.setBrightness(42)) return root.fail("forward actions")
+        if (JSON.stringify(forward.calls) !== '[["HDMI-A-1",37],["HDMI-A-1","1.6"],[42]]'
+            || forwardBridge.enabledDisplayCount !== 2 || forwardBridge.displayToggleAvailable
+            || forwardBridge.toggleDisplay("HDMI-A-1", true) || forward.calls.length !== 3) return root.fail("forward shape/arguments")
+        forward.focusedMonitor = ""
+        if (forwardBridge.previewBrightness(59) || forward.calls.length !== 3) return root.fail("forward empty focus")
 
         first.interactionTarget.triggerPress(Qt.LeftButton)
         second.open()

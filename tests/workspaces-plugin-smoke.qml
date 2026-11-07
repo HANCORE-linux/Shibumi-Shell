@@ -12,6 +12,9 @@ ShellRoot {
   property real preInterruptX: 0
   property real oldPacmanTargetX: 0
 
+  function auroraMarker(item) {
+    for (const child of item.children || []) { if ("radius" in child) return child; const found = auroraMarker(child); if (found) return found }
+  }
   function fail(message) {
     console.error("workspace-widget-smoke:", message)
     Qt.exit(1)
@@ -125,7 +128,7 @@ ShellRoot {
   Workspaces.WorkspaceService {
     id: workspaceState
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.workspaces", version: "0.2.0", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.workspaces", version: "0.2.1", kinds: ["service"]})
     stateService: preferenceState
     backendOverride: QtObject {
       property var focusedWorkspace: ({ id: 8 })
@@ -270,6 +273,11 @@ ShellRoot {
           if (root.geometryWaits < 10) return
           return root.fail("V2 Aurora presentation geometry: " + widget.implicitWidth)
         }
+        if (!root.animationWaits) workspaceState.backendOverride.focusedWorkspace = ({ id: 2 })
+        if (++root.animationWaits <= 5) return
+        const marker = root.auroraMarker(widget.workspaceCell(2))
+        if (!marker || marker.x !== Math.round(marker.x) || marker.width !== Math.round(marker.width)) return root.fail("Aurora marker is off the DPR-1 grid after 300 ms")
+        root.animationWaits = 0; workspaceState.backendOverride.focusedWorkspace = ({ id: 8 })
         root.geometryWaits = 0
         if (!workspaceState.setPreference("style", "pacman"))
           return root.fail("Pacman workspace preference")

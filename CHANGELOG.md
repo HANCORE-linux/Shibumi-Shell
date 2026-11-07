@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.1] - 2026-11-06
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 84b3f287.
+
+### Changed
+
+- AI: the widget shows every agent-usage provider Omarchy publishes (Fireworks, Grok and Kimi on 4.5.0) with Omarchy's own admission rules and marks; nothing is hard-wired to Claude and Codex any more.
+- Quick Access: the idle button now toggles Omarchy Stay Awake, so the state survives shell reloads and reboots and is shared with the Status widget and Omarchy's own indicator; hosts without the idle service keep the session-only inhibitor. Requested by oko on Discord.
+
+### Fixed
+
+- #88: Read the moved per-monitor workspace state file with legacy-path fallback.
+- Lifecycle: after `deactivate --keep-layout`, `activate` no longer records Shibumi's own layout as the stock bar; `deactivate` strips suite widgets from the restored stock bar and falls back to Omarchy's default bar when nothing stock is left, and `uninstall` no longer leaves a Control Center entry behind, so switching back to the original Omarchy bar works again instead of failing after 60 s.
+- Control Center: a native-catalog refresh scheduled right before a shell handoff no longer throws during teardown.
+- Control Center: Reboot and Shutdown use Omarchy 4.5's `omarchy-system reboot|shutdown`; hosts that still ship the 4.0.6 scripts keep working.
+- Workspaces: the aurora focus marker no longer settles with a visible one-pixel step on integer-scale displays.
+- Display panel: the brightness bridge follows Omarchy's upcoming per-monitor panel API (forward 84b3f287) while keeping the 4.5.0 behaviour; where the upcoming panel has no display on/off switch, Shibumi shows none either.
+- V1: removing an added plugin that had been dragged into a base slot no longer fails and no longer blocks every other plugin change; the slot is left empty. Reported by oko on Discord.
+
 ## [0.2.0] - 2026-11-04
 
 ### Highlights

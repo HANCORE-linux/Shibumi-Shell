@@ -1171,7 +1171,7 @@ if rg -Fq 'warning(s)' "$control_dir/ControlMainPage.qml"; then
   fail "Health still exposes machine-oriented status grammar"
 fi
 
-if rg -q 'runQuickSystemAction|omarchy-system-lock|omarchy-system-reboot|omarchy-system-shutdown|systemctl.*suspend' \
+if rg -q 'runQuickSystemAction|omarchy-system|systemctl.*suspend' \
     "$control_dir/ControlMainPage.qml"; then
   fail "Health still duplicates authoritative App Menu session actions"
 fi
@@ -1179,8 +1179,8 @@ for action_contract in \
     'function runQuickSystemAction(action)' \
     'screensaver: ["omarchy-launch-screensaver", "force"]' \
     'lock: ["omarchy-system-lock"]' \
-    'reboot: ["omarchy-system-reboot"]' \
-    'shutdown: ["omarchy-system-shutdown"]' \
+    'reboot: ["sh", "-c", "if command -v omarchy-system >/dev/null 2>&1; then exec omarchy-system reboot; else exec omarchy-system-reboot; fi"]' \
+    'shutdown: ["sh", "-c", "if command -v omarchy-system >/dev/null 2>&1; then exec omarchy-system shutdown; else exec omarchy-system-shutdown; fi"]' \
     'if (stockOmarchyHost) return false'; do
   rg -Fq "$action_contract" "$control_dir/ControlCenterPanel.qml" \
     || fail "Quick system-action delegation drifted: $action_contract"

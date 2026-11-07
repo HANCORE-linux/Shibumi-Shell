@@ -687,8 +687,9 @@ Ui.Panel {
                 y: surfaceInk.enabled ? root.markerShiftY(
                   auroraMarker.parent.y + auroraMarker.y, auroraMarker.height) : 0
               }
-              anchors.centerIn: parent
-              width: cell.auroraMarkerWidth
+              anchors.verticalCenter: parent.verticalCenter
+              x: surfaceInk.rasterExtent((parent.width - width) / 2)
+              width: surfaceInk.rasterExtent(cell.auroraMarkerWidth)
               height: cell.auroraMarkerHeight
               radius: height / 2
               color: cell.tintColor(root.widgetInk)

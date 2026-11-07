@@ -300,21 +300,19 @@ Window {
           { pluginId: "custom.right", region: "right" }
         ])
         || !controller.moveGroupToSlot("G:custom.left", "left", 0)
-        || controller.reconcileV1PluginGroups([
+        || root.writes !== 15 || !controller.reconcileV1PluginGroups([
           { pluginId: "custom.right", region: "right" }
         ])
-        || root.writes !== 15
-        || !controller.moveGroupToSlot("G:custom.left", "left", 7)
-        || !controller.reconcileV1PluginGroups([
-          { pluginId: "custom.right", region: "right" }
-        ])
+        || root.writes !== 16 || controller.v1Slots.left[0] !== ""
         || controller.groupLocation("G:custom.left") !== null
         || controller.groupLocation("G1").region !== "left"
-        || controller.groupLocation("G1").index !== 0
+        || controller.groupLocation("G1").index !== 7
         || !controller.reconcileV1PluginGroups([])
+        || root.writes !== 17 || !controller.moveGroupToSlot("G1", "left", 0)
+        || root.writes !== 18 || !controller.removeV1Slot("left")
         || !same(controller.order, ShibumiConfig.defaultOrder())
         || !same(controller.splits, ShibumiConfig.defaultSplits())
-        || root.writes !== 18)
+        || root.writes !== 19)
       fail("V1 plugin-group lifecycle transaction")
 
     const restoreOrder = controller.currentV1Order()

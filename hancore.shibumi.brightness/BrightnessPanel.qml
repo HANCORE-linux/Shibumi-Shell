@@ -89,6 +89,7 @@ ShibumiPanel {
     }
     if (cursorSection !== "displays" || cursorIndex < 0
         || cursorIndex >= monitorService.displays.length) return
+    if (!monitorService.displayToggleAvailable) return
     const display = monitorService.displays[cursorIndex]
     if (!display || (display.enabled && monitorService.enabledDisplayCount <= 1)) return
     monitorService.toggleDisplay(display.name, display.enabled)
@@ -624,6 +625,7 @@ ShibumiPanel {
     readonly property bool enabledDisplay: display && display.enabled === true
     readonly property bool focusedDisplay: display && display.focused === true
     readonly property bool canToggle: display
+      && panel.monitorService.displayToggleAvailable
       && (!enabledDisplay || panel.monitorService.enabledDisplayCount > 1)
     readonly property bool keyboardFocused: panel.cursorActive
       && panel.cursorSection === "displays" && panel.cursorIndex === rowIndex

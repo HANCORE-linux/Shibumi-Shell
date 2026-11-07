@@ -287,15 +287,38 @@ def make_install_state(
     return result
 
 
-def previous_bar_for_state(
-    state: dict[str, Any], defaults: dict[str, Any]
+def strip_suite_bar(
+    bar: dict[str, Any], plugin_ids: set[str], *, continuity: bool = True
 ) -> dict[str, Any]:
-    """Return the pre-Shibumi bar or a Quattro default for older state files."""
+    result = copy.deepcopy(bar)
+    layout = result.get("layout", {})
+    for region in native_sections(layout):
+        if region in layout:
+            layout[region] = [entry for entry in layout[region]
+                              if entry_id(entry) not in plugin_ids - (CONTINUITY_PLUGIN_IDS if continuity else set())]
+    if result.get("centerAnchor") in plugin_ids:
+        result.pop("centerAnchor")
+    return result
+
+
+def has_stock_widgets(bar: dict[str, Any], plugin_ids: set[str]) -> bool:
+    return any(entry_id(entry) not in plugin_ids
+               for region in ("left", "center", "right") for entry in bar.get("layout", {}).get(region, []))
+
+
+def previous_bar_for_state(
+    state: dict[str, Any], defaults: dict[str, Any], suite: Suite,
+    *, continuity: bool = True,
+) -> dict[str, Any]:
+    """Return a sanitized predecessor with stock widgets, or the host default."""
+    plugin_ids = set(suite.plugins)
     previous = state.get("previousBar")
     if isinstance(previous, dict):
-        return copy.deepcopy(previous)
+        previous = strip_suite_bar(previous, plugin_ids, continuity=continuity)
+        if has_stock_widgets(previous, plugin_ids):
+            return previous
     fallback = defaults.get("bar")
-    return copy.deepcopy(fallback) if isinstance(fallback, dict) else {}
+    return strip_suite_bar(fallback, plugin_ids, continuity=continuity) if isinstance(fallback, dict) else {}
 
 
 def stock_bar_for_self_reference(paths: RuntimePaths) -> dict[str, Any]:
@@ -726,7 +749,7 @@ def command_migrate(
         transaction.stop_shell()
         current = transaction.refresh_config_after_stop()
         desired = desired_for(current)
-        previous_bar = previous_bar_for_state(legacy_state, defaults)
+        previous_bar = previous_bar_for_state(legacy_state, defaults, suite)
         current_bar = current.get("bar")
         if isinstance(current_bar, dict) and "transparent" in current_bar:
             previous_bar["transparent"] = copy.deepcopy(
@@ -898,7 +921,7 @@ def command_update(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
-            previous_bar=previous_bar_for_state(state, defaults),
+            previous_bar=previous_bar_for_state(state, defaults, suite),
         )
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
@@ -1006,7 +1029,7 @@ def command_repair(
             activation_mode="external" if external else "managed",
             layout_policy="preserved" if external else "managed",
             configured_bar=configured_bar_id(desired),
-            previous_bar=previous_bar_for_state(state, defaults),
+            previous_bar=previous_bar_for_state(state, defaults, suite),
         )
         transaction.expose()
         transaction.stage_removal_ids(retired_installed)
@@ -1112,11 +1135,14 @@ def command_activate(
         if (
             configured_bar_id(current) != profile.active_bar
             and isinstance(current_bar, dict)
+            and has_stock_widgets(current_bar, set(suite.plugins))
+            and (not external_activation(state, current) or "previousBar" not in state)
         ):
             # Only an actual external-owner -> managed-owner transition updates
             # the complete restoration snapshot. Re-activating an already
             # managed bar must never snapshot Shibumi as its own predecessor.
-            activated_state["previousBar"] = copy.deepcopy(current_bar)
+            # A preserved external layout may still contain Shibumi's widgets.
+            activated_state["previousBar"] = strip_suite_bar(current_bar, set(suite.plugins))
         activation = activated_state.setdefault("activation", {})
         activation["mode"] = "managed"
         activation["layoutPolicy"] = "managed"
@@ -1185,7 +1211,7 @@ def command_deactivate(
                     default_center_anchor(defaults),
                     True,
                     CONTINUITY_PLUGIN_IDS,
-                    previous_bar_for_state(state, defaults),
+                    previous_bar_for_state(state, defaults, suite),
                     retain_layout=not external_activation(state, config),
                 )
             ), suite.retired_plugins),
@@ -1287,7 +1313,7 @@ def command_uninstall(
                 args.keep_settings,
                 retain_layout=args.keep_settings,
                 restore_bar=(
-                    previous_bar_for_state(state, defaults)
+                    previous_bar_for_state(state, defaults, suite, continuity=False)
                     if str(state.get("activation", {}).get("mode") or "managed")
                     == "managed"
                     else None

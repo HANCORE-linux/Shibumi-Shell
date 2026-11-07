@@ -43,7 +43,7 @@ Ui.Panel {
   readonly property color usageIconColor: widgetInk
   readonly property real baseIconOpacity: customFillActive ? 0.65
     : providerId === "claude" ? 0.25
-      : providerId === "codex" ? 0.65 : 0.5
+      : providerId === "opencode" ? 0.5 : 0.65
   readonly property bool claudeLayersAligned:
     Math.abs(claudeGlyphBase.x
       - (claudeUsageClip.x + claudeUsageGlyph.x)) < 0.01
@@ -60,12 +60,12 @@ Ui.Panel {
   readonly property int providerIconSlotHeight: 16
   readonly property int claudeGlyphPixelSize: 15
   readonly property int providerGlyphWidth: providerId === "opencode" ? 15
-    : providerId === "codex" ? 14 : 15
+    : providerId === "claude" ? 15 : 14
   readonly property int providerGlyphHeight: providerId === "opencode" ? 10
-    : providerId === "codex" ? 14 : 15
+    : providerId === "claude" ? 15 : 14
   readonly property int providerGlyphHorizontalOffset: 0
   readonly property int providerContentHorizontalOffset:
-    providerId === "codex" && displayMode !== "text" ? -1 : 0
+    providerId !== "claude" && providerId !== "opencode" && displayMode !== "text" ? -1 : 0
   readonly property var interactionTarget: actionButton
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -77,11 +77,27 @@ Ui.Panel {
     ? bar.barSize : aiSurface.implicitWidth) : 0
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
+  readonly property var markCandidates: {
+    if (!providerId || providerId === "claude" || providerId === "opencode") return []
+    const path = aiService && "omarchyPath" in aiService ? String(aiService.omarchyPath || "") : ""
+    const candidates = providerId === "codex" ? [Qt.resolvedUrl("assets/codex.svg")] : []
+    const surface = bar ? bar.background : Commons.Color.background
+    const channel = value => value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4)
+    const light = 0.2126 * channel(surface.r) + 0.7152 * channel(surface.g) + 0.0722 * channel(surface.b) >= 0.5
+    if (path) {
+      const base = "file://" + path + "/shell/plugins/agents/assets/" + providerId
+      if (light) candidates.push(base + "-light.svg")
+      candidates.push(base + ".svg")
+    }
+    return candidates
+  }
+
   function syncPanelLoader() {
     if (!opened) {
       panelLoader.source = ""
       return
     }
+    if (aiService && typeof aiService.rescanAgents === "function") aiService.rescanAgents()
     panelLoader.setSource(panelSource, {
       anchorItem: aiSurface,
       bar: root.bar,
@@ -225,7 +241,7 @@ Ui.Panel {
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId === "codex"
+            visible: root.providerId !== "claude" && root.providerId !== "opencode"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0
@@ -234,9 +250,8 @@ Ui.Panel {
 
             TintedImage {
               anchors.fill: parent
-              source: root.providerId === "opencode"
-                ? Qt.resolvedUrl("assets/opencode-mark.svg")
-                : Qt.resolvedUrl("assets/codex.svg")
+              candidates: root.markCandidates
+              fallbackText: "smart_toy"
               sourceSize: root.providerId === "opencode"
                 ? Qt.size(20, 12) : Qt.size(56, 56)
               smooth: root.providerId !== "opencode"
@@ -259,9 +274,8 @@ Ui.Panel {
                 width: providerGlyph.width
                 height: providerGlyph.height
                 anchors.bottom: parent.bottom
-                source: root.providerId === "opencode"
-                  ? Qt.resolvedUrl("assets/opencode-mark.svg")
-                  : Qt.resolvedUrl("assets/codex.svg")
+                candidates: root.markCandidates
+                fallbackText: "smart_toy"
                 sourceSize: root.providerId === "opencode"
                   ? Qt.size(20, 12) : Qt.size(56, 56)
                 smooth: root.providerId !== "opencode"

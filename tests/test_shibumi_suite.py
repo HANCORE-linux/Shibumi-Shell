@@ -48,6 +48,7 @@ from shibumi_suite.admission import (  # noqa: E402
 )
 from shibumi_suite.cli import (  # noqa: E402
     CliError,
+    CONTINUITY_PLUGIN_IDS,
     command_activate,
     command_deactivate,
     command_install,
@@ -3939,6 +3940,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(
             active_state["activation"]["layoutPolicy"], "managed"
         )
+        expected_bar = copy.deepcopy(base["bar"])  # Original predecessor, not later external edits.
+        expected_bar["layout"]["right"].pop()  # Shibumi Bluetooth is not a stock widget.
         self.assertEqual(active_state["previousBar"], expected_bar)
 
         # Activating an already managed bar must not replace the external
@@ -4876,6 +4879,52 @@ class SuiteLifecycleTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ContractError, "manifest drifts"):
             Suite.load(self.source)
+
+    def test_keep_layout_round_trip_and_poisoned_predecessor(self) -> None:
+        self.install()
+        previous = load_install_state(self.paths, self.suite)["previousBar"]
+        config = json.loads(self.paths.config_file.read_text())
+        config["bar"]["layout"]["right"] = [entry for entry in config["bar"]["layout"]["right"] if entry_id(entry) in self.suite.plugins]
+        atomic_write(self.paths.config_file, encode_config(config))
+        self.assertEqual(command_deactivate(self.args(keep_layout=True), self.suite, self.paths, self.runtime), 0)
+        poisoned_bar = json.loads(self.paths.config_file.read_text())["bar"]
+        self.assertTrue(all(entry_id(entry) in self.suite.plugins for entries in poisoned_bar["layout"].values() for entry in entries))
+        self.assertEqual(poisoned_bar["centerAnchor"], "hancore.shibumi.center")
+        self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
+        self.assertEqual(load_install_state(self.paths, self.suite)["previousBar"], previous)
+        for predecessor in ("original", "poisoned", "missing"):
+            with self.subTest(predecessor=predecessor):
+                if predecessor != "original":
+                    self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
+                    state = load_install_state(self.paths, self.suite)
+                    if predecessor == "poisoned":
+                        state["previousBar"] = poisoned_bar
+                    else:
+                        state.pop("previousBar", None)
+                    atomic_write(self.paths.state_dir / "install.json", encode_config(state))
+                    if predecessor == "missing":
+                        self.assertEqual(command_deactivate(self.args(keep_layout=True), self.suite, self.paths, self.runtime), 0)
+                        self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
+                        self.assertNotIn("previousBar", load_install_state(self.paths, self.suite))
+                self.assertEqual(command_deactivate(self.args(), self.suite, self.paths, self.runtime), 0)
+                inactive = json.loads(self.paths.config_file.read_text())
+                self.assertEqual(inactive["bar"].get("id", "omarchy.bar"), "omarchy.bar")
+                layout = inactive["bar"]["layout"]
+                ids = {entry_id(entry) for entries in layout.values() for entry in entries}
+                self.assertFalse((ids & set(self.suite.plugins)) - CONTINUITY_PLUGIN_IDS)
+                self.assertEqual(ids, {"omarchy.menu", "omarchy.clock", "local.extra", "hancore.shibumi.control-center"})
+                self.assertNotIn(inactive["bar"].get("centerAnchor"), self.suite.plugins)
+                if predecessor != "original":
+                    self.assertEqual(layout, clean_layout)
+                else:
+                    clean_layout = layout
+                    self.assertEqual(load_install_state(self.paths, self.suite)["previousBar"], previous)
+        self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
+        self.assertEqual(command_uninstall(self.args(), self.suite, self.paths, self.runtime), 0)
+        uninstalled = json.loads(self.paths.config_file.read_text())["bar"]
+        ids = {entry_id(entry) for entries in uninstalled["layout"].values() for entry in entries}
+        self.assertFalse(ids & set(self.suite.plugins))
+        self.assertNotIn(uninstalled.get("centerAnchor"), self.suite.plugins)
 
     def test_deactivate_activate_round_trip_preserves_user_state_and_payload(self) -> None:
         self.install()

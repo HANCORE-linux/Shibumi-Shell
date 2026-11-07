@@ -13,7 +13,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.brightness"
-    implementationVersion: "0.2.0"
+    implementationVersion: "0.2.1"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -56,6 +56,7 @@ Item {
   readonly property string monitorScale: bridge.monitorScale
   readonly property var displays: bridge.displays
   readonly property int enabledDisplayCount: bridge.enabledDisplayCount
+  readonly property bool displayToggleAvailable: bridge.displayToggleAvailable
   readonly property var scaleValues: ["1", "1.25", "1.6", "2", "3", "4"]
   readonly property bool textSizeAvailable: bridge.textSizeAvailable
   readonly property var textSizeStops: bridge.textSizeStops

@@ -1072,11 +1072,12 @@ fi
 for workspace_map_contract in \
     'path: root.backendAdmitted' \
     '? (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state")' \
-    '+ "/omarchy/monitor-workspaces" : ""' \
+    '+ (legacy ? "/omarchy/monitor-workspaces"' \
+    ': "/omarchy/monitors/workspaces") : ""' \
     'watchChanges: root.backendAdmitted' \
-    'onFileChanged: reload()' \
+    'onFileChanged: { legacy = false; reload() }' \
     'onLoaded: root.blocks = WorkspaceModel.readBlocks(text())' \
-    'onLoadFailed: root.blocks = ({})' \
+    'if (root.backendAdmitted && !legacy) legacy = true' \
     'onBackendAdmittedChanged: if (!backendAdmitted) blocks = ({})'; do
   rg -Fq "$workspace_map_contract" "$workspace_service" \
     || fail "workspace connector-map admission drifted: $workspace_map_contract"
@@ -1392,10 +1393,15 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
+  monitor_shape_contracts=(enabledDisplayCount toggleDisplay)
+  if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 84b3f2872b5023c13967543ed4a98b08fcac5b21 ]]; then
+    monitor_shape_contracts=('function previewBrightness(name, value)'
+      'function setScale(name, scale)' 'function runAction(')
+  fi
   for monitor_contract in brightnessAvailable brightnessPercent refresh \
     setBrightness previewBrightness monitorScale setScale displays \
-    enabledDisplayCount toggleDisplay normalizeScale brightnessName; do
-    rg -q "${monitor_contract}" "$official_monitor_panel" \
+    normalizeScale brightnessName "${monitor_shape_contracts[@]}"; do
+    rg -Fq "${monitor_contract}" "$official_monitor_panel" \
       || fail "official monitor panel contract changed: $monitor_contract"
   done
   official_power_panel=${OMARCHY_PATH}/shell/plugins/panels/power/Panel.qml
@@ -1448,7 +1454,8 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
       rg -Fq "$status_contract" "${official_notification_service%/*}/Store.js" \
         || fail "official notification history format changed: $status_contract"
     done
-    rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
+    [[ $SHIBUMI_OMARCHY_BASELINE_PROFILE == installed-package ]] \
+      || rg -Fq 'history.json`: closed rows, newest first' "${OMARCHY_PATH}/docs/notifications.md" \
       || fail 'official notification history persistence is no longer documented'
   else
     fail "official notification service exposes no supported model or history.json contract"

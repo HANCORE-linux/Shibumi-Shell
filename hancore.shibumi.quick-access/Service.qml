@@ -18,7 +18,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.quick-access"
-    implementationVersion: "0.2.0"
+    implementationVersion: "0.2.1"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -26,6 +26,7 @@ Item {
   property bool runtimeWorkersEnabled: true
   property bool presentationEnabled: true
   readonly property var stateService: suiteShell.serviceFor("hancore.shibumi.state")
+  readonly property var idleService: suiteShell.firstPartyServiceFor("omarchy.idle")
   readonly property var bar: shell ? shell.bar : null
   // Tests may substitute an isolated screen list; production follows the
   // public reactive Quickshell screen collection.
@@ -65,7 +66,9 @@ Item {
     ? imagePickerStyle : mediaPickerStyle
   readonly property bool usingOfficialPicker: imageMode
     && imagePickerStyle === "omarchy"
-  property bool idleInhibited: false
+  property bool localIdleInhibited: false
+  readonly property bool idleInhibited: idleService
+    ? idleService.stayAwake === true : localIdleInhibited
   property var activeScreen: null
   property string activeScreenName: activeScreen ? String(activeScreen.name || "") : ""
   property var entries: []
@@ -176,8 +179,12 @@ Item {
   }
 
   function toggleIdleInhibitor() {
-    idleInhibited = !idleInhibited
-    return idleInhibited
+    if (idleService && typeof idleService.setIdleEnabled === "function") {
+      idleService.setIdleEnabled(idleInhibited)
+      return idleInhibited
+    }
+    localIdleInhibited = !localIdleInhibited
+    return localIdleInhibited
   }
 
   function syncOverlay() {

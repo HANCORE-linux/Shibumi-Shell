@@ -34,6 +34,8 @@ Scope {
       }
     }
   }
+  Component { id: catalogFactory
+    Catalog.NativeCatalog { admitted: false; sourceToken: null; shellDirectory: ""; Component.onDestruction: schedule() } }
   QtObject { id: firstOwner }
   QtObject { id: secondOwner }
   QtObject { id: incomplete }
@@ -457,6 +459,12 @@ Scope {
         root.assert(catalog.ready, "throwing backend recovery failed")
         catalog.demand = false
         root.assert(!catalog.requestRefresh(), "inactive refresh accepted")
+        root.dyingBackend = catalogFactory.createObject(catalog)
+        root.dyingBackend.schedule()
+        root.dyingBackend.destroy()
+        root.stage = 46; break
+      case 46:
+        root.assert(!Qt.isQtObject(root.dyingBackend), "catalog teardown did not complete")
         console.log("native catalog parsing/lifetime passed; no family or desktop acceptance")
         Qt.quit()
       }

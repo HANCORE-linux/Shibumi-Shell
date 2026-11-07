@@ -1379,8 +1379,8 @@ ShibumiPanel {
     const commands = {
       screensaver: ["omarchy-launch-screensaver", "force"],
       lock: ["omarchy-system-lock"],
-      reboot: ["omarchy-system-reboot"],
-      shutdown: ["omarchy-system-shutdown"]
+      reboot: ["sh", "-c", "if command -v omarchy-system >/dev/null 2>&1; then exec omarchy-system reboot; else exec omarchy-system-reboot; fi"],
+      shutdown: ["sh", "-c", "if command -v omarchy-system >/dev/null 2>&1; then exec omarchy-system shutdown; else exec omarchy-system-shutdown; fi"]
     }
     const requested = String(action || "")
     if (!Object.prototype.hasOwnProperty.call(commands, requested))

@@ -15,7 +15,7 @@ ShellRoot {
   property var cachedPreference: null
   property int callsBeforeLoss: 0
   property int writesBeforeLoss: 0
-  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.2.0", kinds: ["service"]})
+  readonly property var validManifest: ({id: "hancore.shibumi.workspaces", version: "0.2.1", kinds: ["service"]})
   function check(value, message) {
     if (value) return
     console.error("workspaces-runtime:", message)
@@ -44,10 +44,10 @@ ShellRoot {
   }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.2.0"
+    implementationVersion: "0.2.1"
     owner: state
     host: root.stateEnabled ? stateHost : null
-    manifest: ({id: "hancore.shibumi.state", version: "0.2.0", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.state", version: "0.2.1", kinds: ["service"]})
   }
   QtObject {
     id: backend
@@ -118,6 +118,16 @@ ShellRoot {
         service.manifest = root.validManifest
       } else if (root.phase === 2) {
         if (!service.backendAdmitted) return
+        const mapCase = Quickshell.env("SHIBUMI_WORKSPACE_MAP_CASE")
+        if (["new", "old", "neither"].indexOf(mapCase) !== -1) {
+          const expected = mapCase !== "neither"
+          if (root.ticks < 10 || (expected && !service.perMonitorWorkspaces)) return
+          root.check(service.perMonitorWorkspaces === expected
+            && service.blockForMonitor({name: "DP-1"}) === (expected ? 1 : 0)
+            && service.blockForMonitor({name: "eDP-1"}) === 0, "state map: " + mapCase)
+          console.log("workspaces runtime smoke passed: state map " + mapCase)
+          Qt.exit(0); return
+        }
         root.check(widgetA.workspaceService === service && widgetB.workspaceService === service
           && !service.stateService && service.setPreference("mode", "active") === false,
           "shared owner or missing-State refusal")

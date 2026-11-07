@@ -77,9 +77,9 @@ QtObject {
       const ambiguousAdded = Layout.addDynamicGroup(moved, splits, "custom.outer", "left")
       const ambiguousOrder = Layout.swapGroups(ambiguousAdded.order, "G:custom.outer", "G8")
       const ambiguousBefore = JSON.stringify({ order: ambiguousOrder, splits: ambiguousAdded.splits })
-      require(Layout.reconcilePluginGroups(ambiguousOrder, ambiguousAdded.splits, []) === null
+      require((result => result && same(result.order, Object.assign({}, ambiguousOrder, { center: ["", ambiguousOrder.center[1]] })) && same(result.splits, ambiguousAdded.splits) && result.unplaced.length === 0)(Layout.reconcilePluginGroups(ambiguousOrder, ambiguousAdded.splits, []))
         && JSON.stringify({ order: ambiguousOrder, splits: ambiguousAdded.splits }) === ambiguousBefore,
-        "ambiguous center/outer repair refuses without deleting the center slot")
+        "ambiguous center/outer removal leaves only the base empty and preserves extras and splits")
       const extraHome = Layout.locationFor(ambiguousOrder, "G8")
       const returnedProvider = Layout.moveGroupToSlot(ambiguousOrder,
         "G:custom.outer", extraHome.region, extraHome.index)
@@ -91,8 +91,8 @@ QtObject {
       const bothOuter = Layout.addDynamicGroup(twoOuter.order, twoOuter.splits, "custom.b", "right")
       const firstBase = Layout.swapGroups(bothOuter.order, "G:custom.a", "G1")
       const bothBase = Layout.swapGroups(firstBase, "G:custom.b", "G9")
-      require(Layout.reconcilePluginGroups(bothBase, bothOuter.splits, []) === null,
-        "multiple outer repair candidates also refuse instead of guessing")
+      require((result => result && same(result.order, Object.assign({}, bothBase, { left: [""].concat(bothBase.left.slice(1)), right: [""].concat(bothBase.right.slice(1)) })) && same(result.splits, bothOuter.splits) && result.unplaced.length === 0)(Layout.reconcilePluginGroups(bothBase, bothOuter.splits, [])),
+        "multiple outer removals leave only their bases empty and preserve extras and splits")
 
       const fullSpecs = ["a", "b", "c", "d", "e"].map(id =>
         ({ pluginId: "custom." + id, region: "left" }))

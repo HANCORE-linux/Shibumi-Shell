@@ -58,14 +58,15 @@ function validRecordShape(record, expectedId) {
       || typeof record.ready !== "boolean"
       || !validTimestamp(record.updatedAt)
       || !Array.isArray(record.limits)
-      || !isPlainObject(record.modelUsage)
+      || (record.modelUsage !== undefined && !isPlainObject(record.modelUsage))
       || !validOptionalString(record, "tierLabel")
       || !validOptionalString(record, "usageStatusText")
       || !validOptionalString(record, "authHelpText")) return false
   var counters = ["todayPrompts", "todaySessions", "todayTotalTokens",
     "totalPrompts", "totalSessions", "activeDays"]
   for (var index = 0; index < counters.length; index++) {
-    if (!isNonNegativeRecordNumber(record[counters[index]])) return false
+    if (record[counters[index]] !== undefined
+        && !isNonNegativeRecordNumber(record[counters[index]])) return false
   }
   return true
 }
@@ -76,10 +77,12 @@ function hasDisplayData(record, limits) {
   return limits.length > 0
     || nonNegativeNumber(record.todayPrompts) > 0
     || nonNegativeNumber(record.todaySessions) > 0
-    || nonNegativeNumber(record.todayTotalTokens) > 0
     || nonNegativeNumber(record.totalPrompts) > 0
     || nonNegativeNumber(record.totalSessions) > 0
     || nonNegativeNumber(record.activeDays) > 0
+    || (Array.isArray(record.accounts) && record.accounts.length > 0)
+    || isPlainObject(record.balance)
+    || (record.ready === true && boundedString(record.tierLabel, "") !== "")
 }
 
 function freshUpdatedAt(value, nowMs) {
@@ -137,6 +140,7 @@ function parseRecord(raw, expectedId, nowMs) {
     if (limits.length < 6) limits.push(limit)
   }
   if (!hasDisplayData(record, limits)) return null
+  if (!record.ready) limits = []
 
   var primary = limits.length > 0 ? limits[0] : null
   var secondary = limits.length > 1 ? limits[1] : null
@@ -150,7 +154,7 @@ function parseRecord(raw, expectedId, nowMs) {
         && isNonNegativeRecordNumber(day.messageCount))
       .map(day => ({ date: day.date, messageCount: day.messageCount }))
       .sort((a, b) => a.date.localeCompare(b.date)).slice(-7),
-    modelUsage: record.modelUsage,
+    modelUsage: record.modelUsage || {},
     rateLimitPercent: primary ? primary.percent : -1,
     rateLimitLabel: primary ? primary.label : "",
     rateLimitResetAt: primary ? primary.resetsAt : "",

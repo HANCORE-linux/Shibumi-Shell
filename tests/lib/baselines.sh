@@ -170,10 +170,13 @@ shibumi_validate_omarchy_baseline_schema() {
     || shibumi_baseline_fail \
       "baseline provenance must be an object: $manifest" || return
   jq -e '
-    if .id == "installed-package-v4.0.6"
+    if .id == "installed-package-v4.5.0"
+        or .id == "installed-package-v4.0.6"
         or .id == "installed-source-parity-v4.0.6"
         or .id == "forward-compat-246f33a2"
-        or .id == "forward-compat-0d8edf38" then
+        or .id == "forward-compat-0d8edf38"
+        or .id == "installed-source-parity-v4.5.0"
+        or .id == "forward-compat-84b3f287" then
       .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
     elif .id == "installed-package-v4.0.4"
         or .id == "installed-source-parity-v4.0.4"
@@ -255,7 +258,8 @@ shibumi_validate_omarchy_baseline_schema() {
   case $profile in
     installed-package)
       jq -e '
-        if .id == "installed-package-v4.0.6"
+        if .id == "installed-package-v4.5.0"
+            or .id == "installed-package-v4.0.6"
             or .id == "installed-package-v4.0.4"
             or .id == "installed-package-v4.0.3"
             or .id == "installed-package-v4.0.2" then
@@ -274,7 +278,9 @@ shibumi_validate_omarchy_baseline_schema() {
           and (.provenance.subtreeOwners | type == "object")
           and (.provenance.subtreeOwners | keys | sort
             == ["bin", "config", "shell"])
-          and .provenance.subtreeOwners.bin == "omarchy"
+          and (if .id == "installed-package-v4.5.0" then
+            .provenance.subtreeOwners.bin == ["omarchy", "omarchy-settings"]
+          else .provenance.subtreeOwners.bin == "omarchy" end)
           and .provenance.subtreeOwners.config == "omarchy-settings"
           and .provenance.subtreeOwners.shell == "omarchy"
         elif .id == "installed-package-v4.0.0" then
@@ -562,7 +568,8 @@ shibumi_validate_installed_package_provenance() {
     shibumi_validate_omarchy_baseline_schema "$requested_manifest" || return
   fi
   [[ $(jq -r '.profile' "$requested_manifest") == installed-package \
-      && ( $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.6 \
+      && ( $(jq -r '.id' "$requested_manifest") == installed-package-v4.5.0 \
+        || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.6 \
         || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.4 \
         || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.3 \
         || $(jq -r '.id' "$requested_manifest") == installed-package-v4.0.2 ) ]] \
@@ -592,14 +599,16 @@ shibumi_validate_installed_package_provenance() {
     "$requested_manifest")
 
   local subtree expected_owner actual_owner
-  while IFS=$'\t' read -r subtree expected_owner; do
+  while IFS= read -r subtree; do
+    expected_owner=$(jq -r --arg path "$subtree" '.provenance.subtreeOwners[$path] | if type == "array" then sort | join("\n") else . end' "$requested_manifest")
     actual_owner=$(/usr/bin/pacman -Qqo -- "$canonical_path/$subtree" 2>/dev/null) \
       || shibumi_baseline_fail \
         "cannot resolve package owner for Omarchy subtree: $subtree" || return
+    actual_owner=$(printf '%s\n' "$actual_owner" | LC_ALL=C sort)
     shibumi_require_exact_subtree_owner \
       "$subtree" "$expected_owner" "$actual_owner" || return
   done < <(jq -r '
-    .provenance.subtreeOwners | to_entries[] | [.key, .value] | @tsv
+    .provenance.subtreeOwners | keys[]
   ' "$requested_manifest")
 }
 
@@ -624,21 +633,54 @@ shibumi_validate_agents_baseline_schema() {
 
   jq -e '
     .schemaVersion == 1
-    and .id == "omarchy-agents-v4.0.0"
     and .profile == "agents-current"
     and .repository == "https://github.com/basecamp/omarchy"
-    and .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
     and .provenance.kind == "git"
     and .provenance.revision == .sourceRevision
-    and (.files | type == "object" and length == 6)
-    and ((.files | keys | sort) == [
-      "bin/omarchy-agent-usage-claude",
-      "bin/omarchy-agent-usage-codex",
-      "bin/omarchy-agent-usage-update",
-      "shell/plugins/agents/Agent.qml",
-      "shell/plugins/agents/Main.qml",
-      "shell/plugins/agents/manifest.json"
-    ])
+    and (.files | type == "object")
+    and (if .id == "omarchy-agents-v4.0.0" then
+      .sourceRevision == "f0020448ca87329199de7cb12f2015ebc4a3e5e7"
+      and ((.files | keys | sort) == [
+        "bin/omarchy-agent-usage-claude",
+        "bin/omarchy-agent-usage-codex",
+        "bin/omarchy-agent-usage-update",
+        "shell/plugins/agents/Agent.qml",
+        "shell/plugins/agents/Main.qml",
+        "shell/plugins/agents/manifest.json"
+      ])
+    elif .id == "omarchy-agents-v4.5.0" then
+      .sourceRevision == "ac2690cd7be4f47e4a255f5e2e78d904d436b068"
+      and ((.files | keys | sort) == [
+        "bin/omarchy-agent-usage-agy",
+        "bin/omarchy-agent-usage-claude",
+        "bin/omarchy-agent-usage-codex",
+        "bin/omarchy-agent-usage-copilot",
+        "bin/omarchy-agent-usage-cursor",
+        "bin/omarchy-agent-usage-deepseek",
+        "bin/omarchy-agent-usage-devin",
+        "bin/omarchy-agent-usage-fireworks",
+        "bin/omarchy-agent-usage-grok",
+        "bin/omarchy-agent-usage-grokbot",
+        "bin/omarchy-agent-usage-hermes",
+        "bin/omarchy-agent-usage-kimchi",
+        "bin/omarchy-agent-usage-kimi",
+        "bin/omarchy-agent-usage-local",
+        "bin/omarchy-agent-usage-minimax",
+        "bin/omarchy-agent-usage-muse",
+        "bin/omarchy-agent-usage-ollama",
+        "bin/omarchy-agent-usage-opencode",
+        "bin/omarchy-agent-usage-openrouter",
+        "bin/omarchy-agent-usage-qwen",
+        "bin/omarchy-agent-usage-synthetic",
+        "bin/omarchy-agent-usage-update",
+        "bin/omarchy-agent-usage-vibe",
+        "bin/omarchy-agent-usage-zai",
+        "shell/plugins/agents/Main.qml",
+        "shell/plugins/agents/Panel.qml",
+        "shell/plugins/agents/collectors.py",
+        "shell/plugins/agents/manifest.json"
+      ])
+    else false end)
     and all(.files | to_entries[];
       (.key | type == "string" and length > 0
         and (startswith("/") | not)
@@ -727,12 +769,14 @@ shibumi_load_omarchy_baseline() {
   shibumi_require_baseline_tools || return
 
   local profile=${SHIBUMI_OMARCHY_BASELINE_PROFILE:-installed-package}
-  local baseline_version=${SHIBUMI_OMARCHY_BASELINE_VERSION:-4.0.6}
+  local baseline_version=${SHIBUMI_OMARCHY_BASELINE_VERSION:-4.5.0}
   local requested_path manifest
   case $profile in
     installed-package)
       requested_path=/usr/share/omarchy
       case $baseline_version in
+        4.5.0)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.5.0.json" ;;
         4.0.6)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-package-v4.0.6.json" ;;
         4.0.4)
@@ -753,6 +797,8 @@ shibumi_load_omarchy_baseline() {
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for installed-source-parity' || return
       case $baseline_version in
+        4.5.0)
+          manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.5.0.json" ;;
         4.0.6)
           manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.6.json" ;;
         4.0.5)
@@ -774,14 +820,14 @@ shibumi_load_omarchy_baseline() {
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for forward-compat' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-0d8edf38.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-84b3f287.json"
       ;;
     agents-current)
       requested_path=${OMARCHY_PATH:-}
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for agents-current' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.0.0.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-agents-v4.5.0.json"
       ;;
     *)
       shibumi_baseline_fail "unsupported Omarchy baseline profile: $profile"

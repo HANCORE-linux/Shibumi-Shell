@@ -687,7 +687,7 @@ for ai_contract in \
   'width: root.providerGlyphWidth' \
   'height: root.providerGlyphHeight' \
   'readonly property int providerContentHorizontalOffset:' \
-  'providerId === "codex" && displayMode !== "text" ? -1 : 0' \
+  'providerId !== "claude" && providerId !== "opencode" && displayMode !== "text" ? -1 : 0' \
   'anchors.horizontalCenterOffset: root.providerContentHorizontalOffset' \
   'anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset' \
   '? Qt.size(20, 12) : Qt.size(56, 56)' \
