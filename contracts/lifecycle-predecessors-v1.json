@@ -1201,9 +1201,9 @@
     },
     {
       "id": "public-0.2.1",
-      "payloadDigest": "b1e172d609c09d28da9a643aa0ae24a61e6f16f286b56afb3aaea76aa04141e1",
+      "payloadDigest": "f9e16a5577dd1f3e9648fab4f6c7b308c34026a5d271208a3bd3a8a318fa4a9d",
       "pluginDigests": {
-        "hancore.shibumi.bar": "f78a5d774c7b971fbb4da7c53e25d99fb8c31c3186665144a7ab870fb4de9dbb",
+        "hancore.shibumi.bar": "acbb2c184d871286b772cfc0e3cac2b5c1e896bc7e429eefff31867866bafcd7",
         "hancore.shibumi.state": "12b2c6de31fbe607ed38514d4bf4b1f180ef56463b4511cae148f63f6cc9d24d",
         "hancore.shibumi.control-center": "aa8895fe90a7c962c2caa20bac90af8b3d5b967906ad8a05131626526da99a65",
         "hancore.shibumi.reactor": "aee3b1ab26402ff5cd5cd5dff2020b4ae9c6c2bffd88470dd6a4c62a39a247e0",
