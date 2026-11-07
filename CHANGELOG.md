@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.1] - 2026-11-06
+## [0.2.1] - 2026-11-08
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 84b3f287.
 
@@ -11,6 +11,7 @@ Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source 
 
 ### Fixed
 
+- Bar: a plugin or foreign widget that enters the host layout while a settings write is still pending is now placed into the V2 layout once that write settles, instead of staying missing until the next layout change.
 - #88: Read the moved per-monitor workspace state file with legacy-path fallback.
 - Lifecycle: after `deactivate --keep-layout`, `activate` no longer records Shibumi's own layout as the stock bar; `deactivate` strips suite widgets from the restored stock bar and falls back to Omarchy's default bar when nothing stock is left, and `uninstall` no longer leaves a Control Center entry behind, so switching back to the original Omarchy bar works again instead of failing after 60 s.
 - Control Center: a native-catalog refresh scheduled right before a shell handoff no longer throws during teardown.
