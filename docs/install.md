@@ -34,11 +34,11 @@ those two controls are hidden. Live rows are unavailable through the host proxy 
 (`edge` from 2026-11-04; `rc` and `stable` after Omarchy's promotion).
 
 ```bash
-sudo pacman -S shibumi-shell
+omarchy pkg add shibumi-shell
 shibumi-shell install --yes
 ```
 
-Pacman brings the dependencies; the second line stages the plugins into your
+The package brings the dependencies; the second line stages the plugins into your
 shell as your user. `shibumi-shell install --dry-run` prints every target
 without changing anything. Existing source installations switch as described
 in [Move from a checkout to the package](#move-from-a-checkout-to-the-package).

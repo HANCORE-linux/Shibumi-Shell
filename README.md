@@ -71,11 +71,11 @@ Available since 0.2.0 (`edge` from 2026-11-04; `rc` and `stable` after
 Omarchy's promotion).
 
 ```sh
-sudo pacman -S shibumi-shell
+omarchy pkg add shibumi-shell
 shibumi-shell install --yes
 ```
 
-Pacman brings the dependencies; the second line stages the plugins into your
+The package brings the dependencies; the second line stages the plugins into your
 shell as your user. Update with `omarchy update` and `shibumi-shell update --yes`.
 
 ### From the release tag
