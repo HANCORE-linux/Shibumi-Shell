@@ -3008,6 +3008,29 @@ class SuiteLifecycleTests(unittest.TestCase):
                 active = json.loads(self.paths.config_file.read_text())
                 self.assertEqual(state_entry(active)["shibumi"]["picker"], picker)
 
+    def test_uninstall_refuses_invalid_menu_before_mutation(self) -> None:
+        self.install()
+        menu = self.paths.menu_extension_file
+        state_file = self.paths.state_dir / "install.json"
+        state_before = state_file.read_bytes()
+        config_before = self.paths.config_file.read_bytes()
+        events_before = list(self.runtime.events)
+        transactions = list(self.paths.state_dir.glob("transactions/*"))
+        for raw in ('{"broken": }', menu.read_text().replace(
+                "{\n", '{\n  "one": {}\n  "two": {},\n', 1)):
+            with self.subTest(raw=raw):
+                menu.write_text(raw)
+                with self.assertRaises(CliError) as caught:
+                    command_uninstall(self.args(yes=True), self.suite, self.paths, self.runtime)
+                self.assertIn("invalid Omarchy menu extension JSONC", str(caught.exception))
+                self.assertIn(str(menu), str(caught.exception))
+                self.assertIn("move this file aside, then retry uninstall", str(caught.exception))
+                self.assertEqual(state_file.read_bytes(), state_before)
+                self.assertEqual(self.paths.config_file.read_bytes(), config_before)
+                self.assertEqual(menu.read_text(), raw)
+                self.assertEqual(self.runtime.events, events_before)
+                self.assertEqual(list(self.paths.state_dir.glob("transactions/*")), transactions)
+
     def test_uninstall_preserves_existing_menu_extension(self) -> None:
         extension = self.paths.menu_extension_file
         extension.parent.mkdir(parents=True)

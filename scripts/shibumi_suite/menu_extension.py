@@ -206,6 +206,11 @@ def remove_picker_routing(raw: str) -> str:
     return result
 
 
+def preflight_picker_removal(raw: str) -> None:
+    _decoded(raw)
+    remove_picker_routing(raw)
+
+
 def install_picker_routing(
     raw: str | None, stock_menu: str | None = None, *, warnings: list[str] | None = None
 ) -> str:
