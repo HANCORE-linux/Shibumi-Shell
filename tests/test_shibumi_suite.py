@@ -1101,6 +1101,36 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
         transaction._close_config_parent()
 
+    def test_recovery_accepts_only_previous_boot_device_change(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        for mode in ("stale", "legacy", "inode"):
+            with self.subTest(mode=mode):
+                path.write_bytes(b'{"version":1,"before":true}\n')
+                transaction = PluginTransaction(self.paths, self.runtime)
+                transaction.write_config(b'{"version":1,"after":true}\n')
+                transaction._close_config_parent()
+                journal = json.loads(transaction.journal_file.read_text())
+                journal["configParentIdentity"]["device"] += 1
+                journal["configParentIdentity"]["inode"] += int(mode == "inode")
+                if mode == "legacy":
+                    journal.pop("bootId")
+                else:
+                    journal["bootId"] = "00000000-0000-0000-0000-000000000000"
+                transaction.journal_file.write_text(json.dumps(journal))
+                if mode == "legacy":
+                    os.utime(transaction.journal_file, (1, 1))
+                events = list(self.runtime.events)
+                if mode == "inode":
+                    with self.assertRaisesRegex(TransactionError, "config parent identity"):
+                        recover_transactions(self.paths, self.runtime, suite=self.suite)
+                    self.assertEqual(path.read_bytes(), b'{"version":1,"after":true}\n')
+                    self.assertEqual(self.runtime.events, events)
+                    self.assertTrue(transaction.journal_file.is_file())
+                else:
+                    self.assertEqual(recover_transactions(self.paths, self.runtime, suite=self.suite), 1)
+                    self.assertEqual(path.read_bytes(), b'{"version":1,"before":true}\n')
+
     def test_recovery_rejects_regular_config_parent_swap_before_mutation(self) -> None:
         path = self.paths.config_file
         path.parent.mkdir(parents=True)

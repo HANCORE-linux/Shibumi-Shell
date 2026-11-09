@@ -295,6 +295,24 @@ def _open_config_parent(path: Path, *, create: bool) -> int:
         raise
 
 
+def _boot_id() -> str:
+    return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+
+
+def _journal_predates_boot(journal: dict[str, Any], path: Path) -> bool:
+    try:
+        if "bootId" in journal:
+            boot = journal["bootId"]
+            return (isinstance(boot, str) and str(uuid.UUID(boot)) == boot
+                    and boot != _boot_id())
+        boot_time = next(
+            int(line.split()[1]) for line in Path("/proc/stat").read_text().splitlines()
+            if line.startswith("btime "))
+        return path.stat(follow_symlinks=False).st_mtime < boot_time
+    except (OSError, ValueError, StopIteration):
+        return False
+
+
 def _open_verified_config_parent(
     path: Path, expected_device: int, expected_inode: int
 ) -> int:
@@ -815,6 +833,7 @@ class PluginTransaction:
             "phase": phase,
             "pluginRoot": str(self.paths.plugin_dir.resolve(strict=False)),
             "configPath": str(self._config_path),
+            "bootId": _boot_id(),
             "configParentIdentity": {
                 "device": self._config_parent_identity.st_dev,
                 "inode": self._config_parent_identity.st_ino,
@@ -2207,6 +2226,15 @@ def recover_transactions(
             verify_transaction_artifact_bindings(
                 artifact_bindings, artifact_identities
             )
+
+        if _journal_predates_boot(journal, directory / "journal.json"):
+            descriptor = _open_config_parent(config_path.parent, create=False)
+            try:
+                current = os.fstat(descriptor)
+                if current.st_ino == config_parent_inode:
+                    config_parent_device = current.st_dev
+            finally:
+                os.close(descriptor)
 
         if phase in COMMIT_PHASES:
             if "desiredState" not in journal:

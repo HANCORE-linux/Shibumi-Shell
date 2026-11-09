@@ -390,6 +390,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/shibumi/
 ```
 
 Interrupted transactions are recovered before the next mutating suite command.
+After a reboot, recovery accepts a changed device number only for the same config-directory inode and a journal from an earlier boot (older journals use their modification time); inode changes still refuse recovery.
 Do not edit `install.json`, transaction snapshots, ownership markers, or plugin
 hashes by hand.
 

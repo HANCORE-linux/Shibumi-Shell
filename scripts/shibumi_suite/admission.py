@@ -117,6 +117,7 @@ ROLLBACK_PHASES = {
     "recovery-required",
 }
 JOURNAL_KEYS = {
+    "bootId",
     "schemaVersion",
     "suiteId",
     "token",
@@ -906,6 +907,13 @@ def _classify_journal(
             or schema != JOURNAL_SCHEMA_VERSION \
             or journal.get("suiteId") != SUITE_ID:
         errors.append(f"unknown transaction journal schema: {directory}")
+    if "bootId" in journal and (
+        not isinstance(journal["bootId"], str)
+        or re.fullmatch(
+            r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", journal["bootId"]
+        ) is None
+    ):
+        errors.append(f"transaction bootId is malformed: {directory}")
     if journal.get("token") != token:
         errors.append(f"transaction token mismatch: {directory}")
     phase_value = journal.get("phase")
