@@ -298,11 +298,21 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "f9e16a5577dd1f3e9648fab4f6c7b308c34026a5d271208a3bd3a8a318fa4a9d",
             },
-            "source-0.2.2": {
+            "source-0.2.1": {
                 "suiteVersion": "0.2.1",
-                "sourceRevisions": ["9f0ba15f67e4ed3a591cfa853559d785056284a4"],
+                "sourceRevisions": [
+                    "29a588a9d3ec82a5d5c75cc76e8f745f5c9ae629",
+                    "5698d93d55bce8ec0494a95c98e9882265615354",
+                    "cab07a0897df090c6d8de32e6073912109a7beca",
+                ],
                 "settingsStorageVersion": 1,
-                "payloadDigest": "0ef77efbe2e0a801e965adf6711580d149b6b26d3923132f94d6190c7a4839f0",
+                "payloadDigest": "f9e16a5577dd1f3e9648fab4f6c7b308c34026a5d271208a3bd3a8a318fa4a9d",
+            },
+            "public-0.2.2": {
+                "suiteVersion": "0.2.2",
+                "sourceRevisions": ["package:0.2.2"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "b2abbef69091df607c6b540c4a0edb8a37cd76a402d4c9efd862b5dab3cd602f",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -327,7 +337,7 @@ class PackageReleaseTests(unittest.TestCase):
 
         suite = Suite.load(ROOT)
         current_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-        current_id = "source-0.2.2"
+        current_id = f"public-{current_version.split('-', 1)[-1]}"
         self.assertEqual(states[current_id]["suiteVersion"], current_version)
         current_plugin_digests = {
             plugin_id: spec.payload_digest()

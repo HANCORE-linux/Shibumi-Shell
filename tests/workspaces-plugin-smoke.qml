@@ -128,7 +128,7 @@ ShellRoot {
   Workspaces.WorkspaceService {
     id: workspaceState
     shell: fakeShell
-    manifest: ({id: "hancore.shibumi.workspaces", version: "0.2.1", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.workspaces", version: "0.2.2", kinds: ["service"]})
     stateService: preferenceState
     backendOverride: QtObject {
       property var focusedWorkspace: ({ id: 8 })

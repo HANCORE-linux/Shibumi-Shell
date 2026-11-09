@@ -1,12 +1,12 @@
-# Shibumi 0.2.1 release readiness
+# Shibumi 0.2.2 release readiness
 
 > **Document status: Revision-bound validation record.** This page separates
 > recorded product evidence from release, package, and physical acceptance.
 > It cannot override [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-## 0.2.1 stable-release scope and acceptance boundary
+## 0.2.2 stable-release scope and acceptance boundary
 
-0.2.1 is the current stable release target, focused on stabilization rather than
+0.2.2 is the current stable release target, focused on stabilization rather than
 new UI. The `0.x` series is release-stable but API-unstable: release status does
 not promise frozen plugin or configuration APIs. Release texts, the date and
 known-points wording require Maintainer approval; this preparation record is
@@ -23,7 +23,7 @@ The forward reference is fixed at
 `8e33e7233c01bf3b563b344bffc790a5d2dd98ea` (2026-11-08), recorded in
 `contracts/baselines/omarchy-forward-compat-8e33e723.json`. Source parity and Agents
 pin v4.5.0 (`ac2690cd7`); the installed-package gate pins 4.5.0-3.
-Neither pin transfers historical results to 0.2.1 or claims support
+Neither pin transfers historical results to 0.2.2 or claims support
 for arbitrary newer hosts. Complete candidate aggregates, clean-commit release
 evidence and live acceptance must each identify their actual inputs.
 
@@ -250,7 +250,7 @@ Beta.16.3 was published on 2026-10-10 as a GitHub prerelease from
 `1a13d6be7d5b4bc9aa03590b77b6531aefcad497`. It was the frozen rolling
 predecessor for Beta.16.4; [`release-predecessor.json`](../tests/fixtures/release-predecessor.json)
 recorded Beta.16.4 during Beta.16.5 preparation and Beta.16.5 for the hotfix.
-The current 0.2.1 selection is recorded above.
+The current 0.2.2 selection is recorded above.
 That exact tag checkout and the source-installation integration merge
 `494fa69b9e348fa595eb4d55d2e11b4aa2fd4470` (PR #77) are admitted by
 [`lifecycle-predecessors-v1.json`](../contracts/lifecycle-predecessors-v1.json),
@@ -337,7 +337,7 @@ was performed. Each operation needs its own maintainer Go.
 
 ## Known limits and downgrade warning
 
-- Horizontal Top and Bottom bars are supported. Vertical bars are outside the 0.2.1 scope.
+- Horizontal Top and Bottom bars are supported. Vertical bars are outside the 0.2.2 scope.
 - Notifications: the host hands plugins only the Do-Not-Disturb switch, so Live rows are
   unavailable in the Shibumi panel. Recent comes from the host's persisted history. On
   Omarchy 4.0.6 the list, per-row removal and "Clear all" work as before; on the new
@@ -397,4 +397,4 @@ release checklist. Beta.16's published changes and limits remain in its
 revision `30746f5` passed the complete contract and 32-generation runtime;
 those fixtures retained known teardown warnings and did not establish blanket
 hardware acceptance. Earlier readiness snapshots remain in Git history; none
-confers acceptance on 0.2.1.
+confers acceptance on 0.2.2.
