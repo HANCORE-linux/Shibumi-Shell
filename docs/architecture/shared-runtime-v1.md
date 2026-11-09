@@ -93,9 +93,13 @@ revoke a configured bar-only widget during the first `shell.json` mutation.
 The Runtime therefore owns one process-bound startup prime for an admitted
 scoped Bar. There is no later output-recovery rescan or lock IPC probe. After
 the State service, payload marker, exact Bar provider, and host facade are
-admitted, the startup prime runs the public host call
-`/usr/bin/quickshell ipc --pid <own-pid> call -- shell rescanPlugins` with a
-fixed argument vector. It does not interpret command output as authority.
+admitted, the startup prime probes `/usr/bin/quickshell ipc --pid <own-pid> show`
+and chooses `reloadPlugins` only if target `shell` lists
+`function reloadPlugins(): void`, otherwise `rescanPlugins`. The same Process then
+runs `/usr/bin/quickshell ipc --pid <own-pid> call -- shell <chosen-call>` with a
+fixed argument vector; output selects only these two built-in calls, never supplies
+arguments or grants readiness. The existing deadline covers both probe and call;
+a nonzero exit remains terminal, and a replacement Bar lease is still required.
 
 The first Bar remains not ready and has no output or catalog consumer. Its
 shared mutation admission also rejects shell-config, layout, State appearance,

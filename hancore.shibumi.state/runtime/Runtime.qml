@@ -278,8 +278,7 @@ QtObject {
     hostRegistryPrimeDeadline.interval = hostRegistryPrimeTimeoutMs
     hostRegistryPrimeDeadline.restart()
     hostRegistryPrimeProcess.command = [
-      "/usr/bin/quickshell", "ipc", "--pid", String(pid),
-      "call", "--", "shell", "rescanPlugins"
+      "/usr/bin/quickshell", "ipc", "--pid", String(pid), "show"
     ]
     hostRegistryPrimeProcess.running = true
     return false
@@ -364,11 +363,29 @@ QtObject {
 
   property Process hostRegistryPrimeProcess: Process {
     running: false
+    stdout: StdioCollector {
+      id: hostRegistryPrimeOutput
+      waitForEnd: true
+    }
     onExited: function(exitCode, _exitStatus) {
       if (runtime.hostRegistryPrimePhase !== "dispatching") return
       if (exitCode !== 0) {
         runtime.observeHostRegistryPrime("native-rescan-refused")
         runtime.failHostRegistryPrime(false)
+        return
+      }
+      if (command[4] === "show") {
+        // Drain the probe before reusing this Process; the deadline keeps running.
+        Qt.callLater(function() {
+          if (runtime.hostRegistryPrimePhase !== "dispatching") return
+          const shell = /^target shell\n((?:[ \t]+.*\n?)*)/m.exec(hostRegistryPrimeOutput.text)
+          const call = shell && /^[ \t]+function reloadPlugins\(\): void[ \t]*$/m.test(shell[1])
+            ? ["shell", "reloadPlugins"] : ["shell", "rescanPlugins"]
+          runtime.hostRegistryPrimeProcess.command = [
+            "/usr/bin/quickshell", "ipc", "--pid", String(runtime.hostRegistryPrimePid),
+            "call", "--"].concat(call)
+          runtime.hostRegistryPrimeProcess.running = true
+        })
         return
       }
       runtime._hostRegistryPrimeAcknowledged = true
