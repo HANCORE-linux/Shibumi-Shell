@@ -1,6 +1,12 @@
 # Changelog
 
-## [0.2.2] - Unreleased
+## [0.2.2] - 2026-11-09
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 8e33e723.
+
+### Changed
+
+- Validation: forward compatibility is pinned to Omarchy quattro 8e33e723; the historical widget-pipeline control follows Beta.13's regions.
 
 ### Fixed
 
@@ -8,6 +14,7 @@
 - Notifications: on Omarchy 4.5, Clear all hides every row of the host's history locally; ✕ hides one row; the host's history.json is not modified.
 - Recovery: accept a btrfs device-number change after a reboot only when the config-directory inode is unchanged and the interrupted journal predates the current boot.
 - Uninstall: refuse invalid menu-extension JSONC before starting the transaction, with the file path and guidance to fix it or move it aside and retry.
+- Bar: the plugin reconcile re-arms only when a busy store deferred it; since 0.2.1 every layout transition restarted it, and an unchanged V2 layout looped endlessly.
 
 ## [0.2.1] - 2026-11-08
 
