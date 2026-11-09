@@ -27,6 +27,8 @@ ShellRoot {
   readonly property bool jsonCase: Quickshell.env("SHIBUMI_HISTORY_MODE").startsWith("json")
   property int proxyPhase: 0
   property var proxyChecks: ({})
+  property var reloadedAdapter: null
+  Component { id: reloadFactory; Status.NotificationAdapter {} }
 
   function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
@@ -148,9 +150,8 @@ ShellRoot {
         if (root.ticks > 100) return root.fail("JSON history deadline")
         if (dndOnlyAdapter.historyState === "loading") return
         if (dndOnlyAdapter.historyLayout !== "json" || dndOnlyAdapter.liveAvailable
-            || dndOnlyAdapter.pendingCount || dndOnlyAdapter.pastDismissAvailable
-            || dndOnlyAdapter.pastClearAvailable || dndOnlyAdapter.dismissPast(0)
-            || dndOnlyAdapter.clearPast()
+            || dndOnlyAdapter.pendingCount || !dndOnlyAdapter.pastDismissAvailable
+            || !dndOnlyAdapter.pastClearAvailable
             || dndOnlyAdapter.startHistoryMutation(["touch", Quickshell.env("SHIBUMI_FOCUS_ARGV") + ".mutation"]))
           return root.fail("JSON history exposed mutation or Live access")
         if (Quickshell.env("SHIBUMI_HISTORY_MODE") !== "json") {
@@ -166,13 +167,26 @@ ShellRoot {
               || counts.tooltipText !== "10 Recent · DND")
             return root.fail("keyed JSON order/seconds/limit/tooltip")
           if (!dndOnlyAdapter.focusApp(first, true)) return root.fail("JSON focus-only refused")
-          jsonReplace.running = true
+          if (!dndOnlyAdapter.dismissPast(0) || dndOnlyAdapter.recentCount !== 9
+              || !dndOnlyAdapter.clearPast() || dndOnlyAdapter.recentCount !== 0)
+            return root.fail("JSON local dismiss/clear")
+          root.reloadedAdapter = reloadFactory.createObject(root)
+          root.reloadedAdapter.attachShell(dndOnlyShell)
           root.proxyPhase = 1
           return
+        } else if (root.proxyPhase === 1) {
+          if (root.reloadedAdapter.historyState !== "ready") return
+          if (root.reloadedAdapter.recentCount !== 2
+              || root.reloadedAdapter.pastModel.get(0).key !== "n2"
+              || root.reloadedAdapter.pastModel.get(1).key !== "n1")
+            return root.fail("hidden rows returned on reload; unlisted rows must remain")
+          jsonReplace.running = true
+          root.proxyPhase = 2
+          return
         } else {
-          if (dndOnlyAdapter.recentCount !== 1) return
-          if (dndOnlyAdapter.pastModel.get(0).summary !== "Replaced"
-              || counts.tooltipText !== "1 Recent · DND") return root.fail("atomic JSON refresh")
+          if (root.reloadedAdapter.recentCount !== 0) return
+          if (dndOnlyAdapter.recentCount !== 0
+              || counts.tooltipText !== "0 Recent · DND") return root.fail("atomic JSON refresh")
           proxyReceipt.reload()
           if (!proxyReceipt.text().length) return
         }

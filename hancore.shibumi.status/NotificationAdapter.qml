@@ -43,11 +43,11 @@ Item {
   readonly property bool liveAvailable: sourceModel() !== null
   readonly property bool historyAvailable: available
   property string historyLayout: "unknown"
-  readonly property bool pastDismissAvailable: available && historyLayout !== "json" &&
-    (typeof state.hostService.dismissPast === "function"
+  readonly property bool pastDismissAvailable: available &&
+    (historyLayout === "json" || typeof state.hostService.dismissPast === "function"
       || (!historySourceModel() && historyLayout === "directory"))
-  readonly property bool pastClearAvailable: available && historyLayout !== "json" &&
-    ((!historySourceModel() && historyLayout === "directory")
+  readonly property bool pastClearAvailable: available &&
+    (historyLayout === "json" || (!historySourceModel() && historyLayout === "directory")
       || typeof state.hostService.clearPast === "function"
       || typeof state.hostService.clearHistory === "function")
   readonly property string historyDir: Quickshell.env("HOME")
@@ -59,6 +59,34 @@ Item {
 
   ListModel { id: pendingRows }
   ListModel { id: pastRows }
+
+  FileView {
+    id: hiddenHistory
+    path: Quickshell.env("HOME") + "/.local/state/shibumi/notifications/hidden.json"
+    preload: false; printErrors: false
+    atomicWrites: true; blockWrites: true; blockAllReads: true
+    property bool writeFailed: false
+    onSaveFailed: writeFailed = true
+  }
+  function hiddenHistoryKeys() {
+    hiddenHistory.reload()
+    try {
+      const keys = JSON.parse(hiddenHistory.text() || "[]")
+      return Array.isArray(keys) ? Array.from(new Set(keys.filter(key => typeof key === "string" && key))) : []
+    } catch (_error) { return [] }
+  }
+  function hideJsonPast(index) {
+    const keys = hiddenHistoryKeys()
+    for (let i = 0; i < pastRows.count; i++)
+      if ((index < 0 || i === index) && keys.indexOf(pastRows.get(i).key) < 0)
+        keys.push(pastRows.get(i).key)
+    hiddenHistory.writeFailed = false
+    hiddenHistory.setText(JSON.stringify(keys))
+    if (hiddenHistory.writeFailed) return false
+    if (index < 0) pastRows.clear()
+    else pastRows.remove(index)
+    return true
+  }
 
   // Watch creation/removal and in-place writes, never poll or replay host popups.
   // Trailing slash keeps FileView's implicit parent inside notifications.
@@ -208,16 +236,21 @@ Item {
     try {
       const values = JSON.parse(raw)
       if (!Array.isArray(values)) return false
+      const hidden = hiddenHistoryKeys(), present = []
       const rows = []
       for (const value of values) {
         if (!value || typeof value.key !== "string" || !value.key
             || typeof value.ts !== "number" || !isFinite(value.ts)
             || typeof value.closed_ts !== "number" || !isFinite(value.closed_ts)) return false
+        present.push(value.key)
         const row = primitiveEntry(value)
+        row.key = value.key
         row.timestamp = value.ts * 1000
         row.fileName = row.image = row.exec = row.execArgv = ""
-        if (rows.length < 10) rows.push(row)
+        if (hidden.indexOf(value.key) < 0 && rows.length < 10) rows.push(row)
       }
+      const retained = hidden.filter(key => present.indexOf(key) >= 0)
+      if (retained.length !== hidden.length) hiddenHistory.setText(JSON.stringify(retained))
       pastRows.clear()
       for (const row of rows) pastRows.append(row)
       return true
@@ -292,6 +325,7 @@ Item {
   function dismissPast(index) {
     const service = state.hostService
     if (!pastDismissAvailable || index < 0 || index >= pastRows.count) return false
+    if (historyLayout === "json") return hideJsonPast(index)
     if (typeof service.dismissPast === "function") {
       service.dismissPast(index)
       return true
@@ -324,6 +358,7 @@ Item {
   function clearPast() {
     const service = state.hostService
     if (!pastClearAvailable) return false
+    if (historyLayout === "json") return hideJsonPast(-1)
     if (typeof service.clearPast === "function") {
       service.clearPast()
       return true
