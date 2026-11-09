@@ -256,6 +256,7 @@ Item {
   property var lastProviderUndoReceipt: null
   property var lastCatalogTransitionSnapshot: null
   readonly property alias layoutTransitionBusy: layoutTransition.busy
+  property bool pluginReconcileDeferred: false
   readonly property alias layoutTransitionSerial: layoutTransition.requestSerial
   readonly property alias layoutTransitionResult: layoutTransition.lastResult
   readonly property alias providerSnapshotTransitionBusy:
@@ -3346,8 +3347,10 @@ Item {
     interval: 1
     repeat: false
     onTriggered: {
-      if (!root.shutdownPrepared && root.hostReady)
-        root.reconcileActivePluginGroupsAndProviders()
+      if (root.shutdownPrepared || !root.hostReady) return
+      // Remember a reconcile the busy store refuses; the mutable store re-arms it once.
+      root.pluginReconcileDeferred = layoutStateController.mutationBusy
+      if (!root.pluginReconcileDeferred) root.reconcileActivePluginGroupsAndProviders()
     }
   }
 
@@ -3367,7 +3370,8 @@ Item {
     // A background reconcile skipped while a State write or layout
     // transition was busy must run again once the store is mutable.
     function onMutationBusyChanged() {
-      if (!root.shutdownPrepared && !layoutStateController.mutationBusy)
+      if (!root.shutdownPrepared && !layoutStateController.mutationBusy
+          && root.pluginReconcileDeferred)
         v1PluginReconcileTimer.restart()
     }
   }
