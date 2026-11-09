@@ -136,6 +136,11 @@ directories, invalid state, and unfinished predecessor transactions.
 
 ## Update
 
+Run `shibumi-shell update` and `shibumi-shell uninstall` (or their source equivalents)
+from a terminal inside the Hyprland session. Plain SSH cannot reach the compositor
+for the shell restart; it can hang and leave an interrupted transaction, recovered
+by the next run from a session terminal.
+
 For a package installation, update the system package through Omarchy and then
 stage the new immutable payload into the current user's shell:
 
@@ -165,6 +170,9 @@ git checkout v0.2.1
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
 ```
+
+If `git fetch --tags` reports `would clobber existing tag`, use `git fetch --tags --force`;
+`v0.2.1` was re-tagged before publication.
 
 An update requires a suite-managed Shibumi installation. It stages all 24
 current plugin roots as one transaction and verifies that the shell executes
@@ -333,6 +341,8 @@ Canonical settings in the State `plugins[]` service entry survive; activation
 restores the managed layout.
 
 ## Uninstall
+
+Run these commands from a terminal inside the Hyprland session, not plain SSH.
 
 For a package installation, remove the user-scoped suite first and the system
 package second:

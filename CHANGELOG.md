@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.2] - Unreleased
+
+### Fixed
+
+- Startup (#102): probe the host IPC surface and use `reloadPlugins` when available, retaining `rescanPlugins` on older hosts so the startup prime still obtains a replacement Bar.
+- Notifications: per-row dismiss and Clear all return on Omarchy 4.5; listed rows are hidden locally in Shibumi, and the host's history is not modified.
+- Recovery: accept a btrfs device-number change after a reboot only when the config-directory inode is unchanged and the interrupted journal predates the current boot.
+- Uninstall: refuse invalid menu-extension JSONC before starting the transaction, with the file path and guidance to fix it or move it aside and retry.
+
 ## [0.2.1] - 2026-11-08
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 84b3f287.
