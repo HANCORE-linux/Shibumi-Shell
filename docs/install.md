@@ -24,9 +24,9 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
 
 Notification history follows the host's on-disk layout. On Omarchy 4.0.6 the Recent list
-keeps per-row removal and "Clear all". On Omarchy 4.5.0, both controls hide listed rows
-locally in Shibumi; the host's history.json is not modified. Live rows remain
-unavailable through the host proxy on both.
+keeps per-row removal and "Clear all". On Omarchy 4.5.0, Clear all hides every row of
+the host's history locally; ✕ hides one row; the host's history.json is not modified.
+Live rows remain unavailable through the host proxy on both.
 
 ## Install from the Omarchy package
 

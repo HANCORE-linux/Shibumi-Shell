@@ -29,6 +29,7 @@ Item {
     property var queuedHistoryHost: null
     property int queuedHistoryGeneration: -1
     property string historyOutput: ""
+    property var jsonHistoryKeys: []
     property var mutationHost: null
     property int mutationGeneration: -1
   }
@@ -77,9 +78,9 @@ Item {
   }
   function hideJsonPast(index) {
     const keys = hiddenHistoryKeys()
-    for (let i = 0; i < pastRows.count; i++)
-      if ((index < 0 || i === index) && keys.indexOf(pastRows.get(i).key) < 0)
-        keys.push(pastRows.get(i).key)
+    const targets = index < 0 ? state.jsonHistoryKeys : [pastRows.get(index).key]
+    for (const key of targets)
+      if (keys.indexOf(key) < 0) keys.push(key)
     hiddenHistory.writeFailed = false
     hiddenHistory.setText(JSON.stringify(keys))
     if (hiddenHistory.writeFailed) return false
@@ -132,6 +133,7 @@ Item {
     historyLayout = "unknown"
     historyState = nextService ? "loading" : "unavailable"
     state.historyOutput = ""
+    state.jsonHistoryKeys = []
     state.queuedHistoryHost = null
     state.queuedHistoryGeneration = -1
     pendingRows.clear()
@@ -249,6 +251,7 @@ Item {
         row.fileName = row.image = row.exec = row.execArgv = ""
         if (hidden.indexOf(value.key) < 0 && rows.length < 10) rows.push(row)
       }
+      state.jsonHistoryKeys = present
       const retained = hidden.filter(key => present.indexOf(key) >= 0)
       if (retained.length !== hidden.length) hiddenHistory.setText(JSON.stringify(retained))
       pastRows.clear()

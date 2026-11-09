@@ -126,6 +126,7 @@ ShellRoot {
   Process { id: jsonReplace; command: ["mv", "--", dndOnlyAdapter.historyDir + ".next", dndOnlyAdapter.historyDir + ".json"] }
   FileView { id: proxyHistory; path: dndOnlyAdapter.historyDir + "/proxy.json"; preload: false; printErrors: false }
   FileView { id: proxyReceipt; path: Quickshell.env("SHIBUMI_FOCUS_ARGV"); preload: false; printErrors: false }
+  FileView { id: hiddenKeys; path: Quickshell.env("HOME") + "/.local/state/shibumi/notifications/hidden.json"; preload: false; printErrors: false }
 
   Component.onCompleted: {
     dndOnlyAdapter.attachShell(dndOnlyShell)
@@ -176,14 +177,15 @@ ShellRoot {
           return
         } else if (root.proxyPhase === 1) {
           if (root.reloadedAdapter.historyState !== "ready") return
-          if (root.reloadedAdapter.recentCount !== 2
-              || root.reloadedAdapter.pastModel.get(0).key !== "n2"
-              || root.reloadedAdapter.pastModel.get(1).key !== "n1")
-            return root.fail("hidden rows returned on reload; unlisted rows must remain")
+          if (root.reloadedAdapter.recentCount !== 0)
+            return root.fail("Clear all did not persist hides for the entire host history")
           jsonReplace.running = true
           root.proxyPhase = 2
           return
         } else {
+          // Require the host rewrite to prune hides, not merely an already-empty view.
+          hiddenKeys.reload()
+          if (hiddenKeys.text() !== '["n12"]') return
           if (root.reloadedAdapter.recentCount !== 0) return
           if (dndOnlyAdapter.recentCount !== 0
               || counts.tooltipText !== "0 Recent · DND") return root.fail("atomic JSON refresh")
