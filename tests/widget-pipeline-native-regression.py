@@ -176,6 +176,8 @@ def instrument_beta13(files, candidate):
     )
     legacy_load_ready_block = "      const currentLoadReady = false\n"
     replacements = {
+        "    for (const region of GroupRegistry.NativeSections) {\n":
+            "    for (const region of GroupRegistry.Regions) {\n",
         sequence_function: legacy_sequence_function,
         load_ready_block: legacy_load_ready_block,
         "        presenceObserved: hostOutputPresenceObserved === true,\n":
