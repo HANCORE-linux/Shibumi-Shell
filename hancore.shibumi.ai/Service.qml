@@ -147,7 +147,7 @@ Item {
     if (!serviceActive) return result
     if (Array.isArray(providerOverrides) && providerOverrides.length > 0) {
       appendProviderSnapshots(result, providerOverrides)
-      return orderProviders(result, requestedTool)
+      return orderProviders(result)
     }
     if (agentsBackendActive) {
       for (const id of Object.keys(agentRecords))
@@ -157,7 +157,7 @@ Item {
       appendProviderSnapshot(result, codexLoader.item)
     }
     if (openCodeProvider.enabled) appendProviderSnapshot(result, openCodeProvider)
-    return orderProviders(result, requestedTool)
+    return orderProviders(result)
   }
   readonly property string selectedTool: resolveTool(requestedTool)
   readonly property var selectedProvider: providerFor(selectedTool)
@@ -374,11 +374,9 @@ Item {
     return providers.length ? providers[0].providerId : ""
   }
 
-  function orderProviders(source, preferred) {
+  function orderProviders(source) {
     return source.sort((a, b) => {
       const first = a.providerId, second = b.providerId
-      if (first === preferred) return -1
-      if (second === preferred) return 1
       if (first === "opencode") return 1
       if (second === "opencode") return -1
       return first < second ? -1 : first > second ? 1 : 0
@@ -395,16 +393,15 @@ Item {
 
   function cycleTool(direction) {
     if (providers.length < 2) return false
-    const ordered = orderProviders(providers.slice(), "")
     let index = 0
-    for (let current = 0; current < ordered.length; current++) {
-      if (String(ordered[current].providerId || "") === selectedTool) {
+    for (let current = 0; current < providers.length; current++) {
+      if (String(providers[current].providerId || "") === selectedTool) {
         index = current
         break
       }
     }
     const step = Number(direction) < 0 ? -1 : 1
-    const next = ordered[(index + step + ordered.length) % ordered.length]
+    const next = providers[(index + step + providers.length) % providers.length]
     return selectTool(next.providerId)
   }
 

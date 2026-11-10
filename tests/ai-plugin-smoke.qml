@@ -116,13 +116,19 @@ ShellRoot {
       if (root.genericPhase === 0) {
         const fireworks = discoveryService.providerFor("fireworks")
         const neutral = root.descendants(genericMark.item).filter(item => "fallbackText" in item && item.fallbackText === "smart_toy")
-        if (ids !== "grok,agy,claude,codex,fireworks"
+        if (ids !== "agy,claude,codex,fireworks,grok"
             || discoveryService.usagePercent(discoveryService.providerFor("claude")) !== 41
             || discoveryService.usagePercent(discoveryService.providerFor("agy")) !== 29
             || !fireworks || fireworks.ready || fireworks.usageStatusText !== "Sign in to Fireworks"
             || discoveryService.limitWindows(fireworks).length !== 0
             || neutral.length !== 2 || !neutral.every(mark => mark.candidateIndex >= mark.candidates.length))
           return root.fail("generic discovery/order/fraction/status/marks: " + ids)
+        root.genericTool = ids.split(",")[0]
+        discoveryService.selectTool(ids.split(",").pop())
+        root.genericTool = fakeState.selectedTool
+        if (discoveryService.selectedTool !== "grok"
+            || discoveryService.providers.map(p => p.providerId).join(",") !== ids)
+          return root.fail("provider selection reordered the tabs")
         root.genericPhase = 1; root.genericTool = "agy"; fakeBar.background = "#ffffff"
       } else if (root.genericPhase === 1) {
         const marks = root.descendants(genericMark.item).filter(item => "resolvedSource" in item)
@@ -130,7 +136,7 @@ ShellRoot {
           return root.fail("generic Omarchy light SVG priority")
         root.genericPhase = 2; emptyAgentsPanel.aiService = discoveryService; root.genericTool = "fireworks"
         root.genericDisabled = true; mutateRecords.running = true
-      } else if (root.genericPhase === 2 && ids === "fireworks,agy,claude,kimi") {
+      } else if (root.genericPhase === 2 && ids === "agy,claude,fireworks,kimi") {
         if (emptyAgentsPanel.providerEmptyStateText !== "Authenticate"
             || discoveryService.agentIds.length !== 5 || discoveryService.providerFor("codex") !== null)
           return root.fail("generic removal/addition/disabled id")

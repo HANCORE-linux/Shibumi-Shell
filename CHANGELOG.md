@@ -5,6 +5,7 @@
 ### Fixed
 
 - Lifecycle: preserve the picker image style across `deactivate --keep-layout` and `activate`.
+- AI: keep provider tabs in a stable order when changing the selected provider.
 
 ## [0.2.2] - 2026-11-09
 
