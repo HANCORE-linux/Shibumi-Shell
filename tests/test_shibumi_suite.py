@@ -1892,6 +1892,8 @@ class SuiteLifecycleTests(unittest.TestCase):
     ) -> Suite:
         if source_revision is None and version == "0.2.1":
             source_revision = "29a588a9d3ec82a5d5c75cc76e8f745f5c9ae629"
+        if source_revision is None and version == "0.2.2":
+            source_revision = "d20f0526b12684453252fe2d722e996fedfe5eab"
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
         suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
         plugin_ids = [item["id"] for item in suite_contract["plugins"]]
