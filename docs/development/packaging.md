@@ -1,7 +1,8 @@
-# Source installation and planned OPR packaging
+# Source installation and OPR packaging
 
-Status: install `0.2.2` from source. OPR (omarchy-pkgs) packaging
-is planned; AUR publication is no longer the target.
+Status: `0.2.2` source and package workflows. `shibumi-shell` has been in
+`omacom/omarchy-pkgs` since 0.2.0 (2026-11-04), reaching the `edge` ring first.
+AUR publication is not a target.
 
 Shibumi ships one versioned suite containing 24 separately validated Omarchy
 Quattro plugin roots. Pacman owns the immutable program files; the Shibumi
@@ -49,8 +50,8 @@ NVIDIA telemetry; their absence does not prevent the core suite from starting.
 
 ## User lifecycle
 
-Install from source using the [installation guide](../install.md).
-The planned package lifecycle requires an explicit staging step for upgrades:
+Follow the [installation guide](../install.md) for package and source routes.
+Package upgrades require an explicit per-user staging step:
 
 ```bash
 omarchy update
@@ -137,12 +138,12 @@ their declared compatibility boundaries; global Bluetooth power delegates
 rfkill persistence to the host while BlueZ remains authoritative for state.
 A clean-chroot build must perform normal dependency resolution before publication.
 
-## Publication gates
+## Per-release packaging conditions
 
-OPR publication remains blocked until all of these are true:
+For every release, retain these source, package and acceptance requirements:
 
 1. The exact candidate commit passes the source, package, and Health tests.
-2. the validation system passes package install, source-to-package migration, update,
+2. The validation system passes package install, source-to-package migration, update,
    intentional rollback, repair, uninstall, and stock recovery.
 3. Every Shibumi V1/V2/Omarchy bar-switch transition passes with one responsive
    production Quickshell process and no new bounded runtime error.
@@ -153,8 +154,10 @@ OPR publication remains blocked until all of these are true:
 6. OPR's package checks pass against the pinned release archive. The local
    `scripts/check-aur-package --publish-check` validates the remote tag and
    asset; it is not an OPR submission gate or an AUR publication target.
-7. The OPR package is accepted and installation is repeated from a clean
+7. The OPR update is accepted and installation is repeated from a clean
    supported Omarchy Quattro account.
 
-OPR publication remains separate from local package construction and the
-validation system lifecycle acceptance.
+After each GitHub release, open an `update-shibumi-shell-<version>` pull request
+in `omacom/omarchy-pkgs`. The package reaches `edge` first; later rings follow
+Omarchy's promotion. OPR updates remain separate from local package construction
+and validation-system lifecycle acceptance.
