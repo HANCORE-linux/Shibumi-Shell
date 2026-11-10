@@ -81,10 +81,6 @@ Item {
     return true
   }
 
-  function toggleEditing() {
-    return setEditing(!editing)
-  }
-
   function registerTarget(groupId, item) {
     const group = String(groupId || "")
     if (!groupExists(group) || !item) return false

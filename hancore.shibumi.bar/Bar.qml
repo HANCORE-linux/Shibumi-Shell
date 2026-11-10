@@ -190,7 +190,6 @@ Item {
       suiteHostShell.scoped)
   }
   readonly property string styleId: styleRegistry.resolvedId
-  readonly property var availableStyleIds: styleRegistry.availableIds
   property color foreground: styleReady ? activeStyle.foreground : Commons.Color.bar.text
   property color barForeground: styleReady ? activeStyle.barForeground : Commons.Color.bar.text
   property color background: styleReady ? activeStyle.background : Commons.Color.bar.background
@@ -896,10 +895,6 @@ Item {
 
   function v1PluginSpecs(excludeValue, includeSpec) {
     return v1PluginSpecsForLayout(layoutConfig, excludeValue, includeSpec)
-  }
-
-  function v2PluginSpecs(excludeValue, includeSpec) {
-    return v2PluginSpecsForLayout(layoutConfig, excludeValue, includeSpec)
   }
 
   function activePluginSpecsForLayout(layoutValue, excludeValue, includeSpec) {
@@ -2559,14 +2554,6 @@ Item {
       if (items[i].opened === true) return true
     }
     return false
-  }
-
-  function barWidgetPage(pluginId, fallbackPage) {
-    const widget = findPanelWidget(pluginId)
-    return widget && widget.panelLoaded === true && widget.panelItem
-      && widget.panelItem.settingsPage !== undefined
-      ? String(widget.panelItem.settingsPage || fallbackPage || "")
-      : String(fallbackPage || "")
   }
 
   function scheduleOpenControlCenterRestores(page, needsReplacement,
