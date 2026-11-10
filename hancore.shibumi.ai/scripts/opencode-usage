@@ -66,24 +66,31 @@ def model_label(model_id: str, provider_id: str = "") -> str:
 def assistant_messages(
     con: sqlite3.Connection, since_ms: int, before_ms: int
 ) -> list[dict]:
-    rows = con.execute(
-        """
-        select session_id, time_created, time_updated, data
-        from message
-        where time_updated >= ? and time_updated < ?
-        order by time_updated asc
-        """,
-        (since_ms, before_ms),
-    ).fetchall()
+    tables = {row[0] for row in con.execute("select name from sqlite_master where type = 'table'")}
+    rows = []
+    key = "id" if "session_message" in tables else "null"
+    for table in ("session_message", "message"):
+        if table not in tables and (table == "session_message" or "session_message" in tables):
+            continue
+        rows.extend(con.execute(
+            f"select {key}, session_id, time_created, time_updated, data, {int(table == 'session_message')} "
+            f"from {table} where time_updated >= ? and time_updated < ?"
+            + (" and type = 'assistant'" if table == "session_message" else "")
+            + " order by time_updated asc", (since_ms, before_ms),
+        ).fetchall())
+    migrated = {row[0] for row in rows if row[-1]}
     out = []
-    for session_id, time_created, time_updated, raw in rows:
+    for message_id, session_id, time_created, time_updated, raw, v2 in rows:
+        if not v2 and message_id in migrated:
+            continue
         try:
             data = json.loads(raw or "{}")
         except Exception:
             continue
-        if data.get("role") != "assistant":
+        if not v2 and data.get("role") != "assistant":
             continue
-        model_id = data.get("modelID") or ""
+        model = (data.get("model") or {}) if v2 else data
+        model_id = model.get("id" if v2 else "modelID") or ""
         if not model_id:
             continue
         tokens = data.get("tokens") or {}
@@ -99,7 +106,7 @@ def assistant_messages(
         out.append({
             "session_id": session_id,
             "model_id": model_id,
-            "provider_id": data.get("providerID") or "",
+            "provider_id": model.get("providerID") or "",
             "input": inp,
             "output": output,
             "reasoning": reasoning,
