@@ -7,6 +7,7 @@
 - Lifecycle: preserve the picker image style across `deactivate --keep-layout` and `activate`.
 - AI: keep provider tabs in a stable order when changing the selected provider.
 - AI: read OpenCode 2.x usage and count migrated messages only once, retaining legacy-store support.
+- Bar: avoid an empty V2 reconcile request only when both settled State and the planned native layout already match.
 
 ### Removed
 

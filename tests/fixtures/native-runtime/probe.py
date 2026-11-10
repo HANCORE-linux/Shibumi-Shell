@@ -490,6 +490,19 @@ with (BASE / "native.log").open("xb") as log:
               and native_added_entries[0].get("shibumiModule") is True,
               "B(b) native file readback lost the exact marker")
 
+        for region in ("right", "left"):
+            before = wait_status("native-runtime-probe", lambda value: not value["stateWritePending"] and not value["layoutBusy"])
+            check(ipc("native-runtime-probe", "reconcileFixture", region) == (0, "true"), "native-different reconcile refused")
+            after = wait_status("native-runtime-probe", lambda value: not value["stateWritePending"] and not value["layoutBusy"]
+                and value["layoutResult"] in ("confirmed", "unchanged") and "G:fixture.native-widget" in value["config"]["v2Layout"][region]
+                and any(isinstance(entry, dict) and entry.get("id") == "fixture.native-widget" for entry in value["injectedBar"]["layout"][region]))
+            check(after["layoutSerial"] > before["layoutSerial"], "native-different reconcile did not dispatch")
+            print("436_NATIVE_RECONCILE", region, before["layoutSerial"], after["layoutSerial"], flush=True)
+        before = after
+        check(ipc("native-runtime-probe", "reconcileFixture", "left") == (0, "true"), "empty V2 reconcile refused")
+        after = wait_status("native-runtime-probe", lambda value: not value["stateWritePending"] and not value["layoutBusy"])
+        print("436_EMPTY_RECONCILE", before["layoutSerial"], after["layoutSerial"], flush=True)
+        check(after["layoutSerial"] == before["layoutSerial"], "empty V2 reconcile dispatched a request")
         full_order["left"][0] = "G:fixture.native-widget"
         check(ipc("native-runtime-probe", "setShellStyle", "shibumi") == (0, "queued"),
               "B(b) full V1 switch refused")
