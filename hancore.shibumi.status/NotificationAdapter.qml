@@ -306,10 +306,6 @@ Item {
     return false
   }
 
-  function toggleDoNotDisturb() {
-    return setDoNotDisturb(!doNotDisturb)
-  }
-
   function dismissPending(index) {
     const service = state.hostService
     if (!service || index < 0 || index >= pendingRows.count) return false
