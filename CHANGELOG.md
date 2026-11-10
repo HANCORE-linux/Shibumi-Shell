@@ -8,6 +8,10 @@
 - AI: keep provider tabs in a stable order when changing the selected provider.
 - AI: read OpenCode 2.x usage and count migrated messages only once, retaining legacy-store support.
 
+### Removed
+
+- Unused declarations across 14 plugins and two obsolete, runner-less test fixtures.
+
 ## [0.2.2] - 2026-11-09
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 8e33e723.
