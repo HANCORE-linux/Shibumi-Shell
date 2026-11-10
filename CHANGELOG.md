@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.3] - Unreleased
+
+### Fixed
+
+- Lifecycle: preserve the picker image style across `deactivate --keep-layout` and `activate`.
+
 ## [0.2.2] - 2026-11-09
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 8e33e723.

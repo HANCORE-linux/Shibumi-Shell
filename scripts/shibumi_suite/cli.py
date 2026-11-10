@@ -1172,6 +1172,12 @@ def command_deactivate(
         if state.get("settingsStorageVersion") == 1:
             config = migrate_state_settings(config, import_legacy=False)
         if args.keep_layout:
+            config = copy.deepcopy(config)
+            entry = state_entry(config)
+            if entry is not None:
+                picker = entry.get("shibumi", {}).get("picker")
+                if isinstance(picker, dict) and picker.get("imageStyle") in ("tanzaku", "hearthstone"):
+                    entry["shibumiRetainedImageStyle"] = picker["imageStyle"]
             desired_config = remove_plugin_ids(select_omarchy_image_picker(
                 preserve_external_bar(
                     config,

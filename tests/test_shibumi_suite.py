@@ -4940,6 +4940,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         previous = load_install_state(self.paths, self.suite)["previousBar"]
         config = json.loads(self.paths.config_file.read_text())
         config["bar"]["layout"]["right"] = [entry for entry in config["bar"]["layout"]["right"] if entry_id(entry) in self.suite.plugins]
+        state_entry(config)["shibumi"]["picker"] = {"imageStyle": "tanzaku"}
         atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(command_deactivate(self.args(keep_layout=True), self.suite, self.paths, self.runtime), 0)
         poisoned_bar = json.loads(self.paths.config_file.read_text())["bar"]
@@ -4947,6 +4948,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(poisoned_bar["centerAnchor"], "hancore.shibumi.center")
         self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
         self.assertEqual(load_install_state(self.paths, self.suite)["previousBar"], previous)
+        self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text()))["shibumi"]["picker"]["imageStyle"], "tanzaku")
         for predecessor in ("original", "poisoned", "missing"):
             with self.subTest(predecessor=predecessor):
                 if predecessor != "original":
