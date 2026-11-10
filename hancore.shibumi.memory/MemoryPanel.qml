@@ -9,8 +9,6 @@ ShibumiPanel {
 
   required property var ownerWidget
   required property var telemetry
-  readonly property var usageRing: memoryRing
-  readonly property var hardwareInfoView: hardwareInfo
   property bool sweepVisible: false
   property string sweepOwnerError: ""
   property bool sweepWasRunning: false
