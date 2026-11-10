@@ -251,12 +251,6 @@ Item {
     }
   }
 
-  function themeChanged() {
-    if (!active || !runtimeProbesEnabled) return
-    themeNameReader.reload()
-    themeDelay.restart()
-  }
-
   function handleThemeText() {
     if (!themeNameReader.available) return
     const name = String(themeNameReader.text || "").trim()
