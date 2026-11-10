@@ -3,9 +3,11 @@ import Quickshell
 import "hancore.shibumi.bar" as BarPlugin
 import "hancore.shibumi.bar/core/LayoutModel.js" as LayoutModel
 import "fixtures" as Fixtures
+import "Commons" as Commons
 
 ShellRoot {
   id: root
+  readonly property bool splitCenter: "centerEnd" in Commons.Util.normalizeLayout({})
 
   property int attempts: 0
   property int stage: 0
@@ -914,7 +916,7 @@ ShellRoot {
           return root.fail("bar shutdown accepted a late registry reconciliation")
 
         stop()
-        console.log("bar host registry smoke passed")
+        console.log("bar host registry smoke passed; native center:", root.splitCenter ? "centerEnd" : "center")
         Qt.exit(0)
         return
       }
@@ -1294,7 +1296,7 @@ ShellRoot {
         return root.fail("Add plugin did not work with the active V2 layout")
       }
       const replacedConfig = fakeShell.shellConfig.bar
-      const centerEntries = (l => ["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(replacedConfig.layout)
+      const centerEntries = (l => root.splitCenter ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(replacedConfig.layout)
       if (!replacedConfig.shibumi
           || !replacedConfig.shibumi.widgets
           || !replacedConfig.shibumi.widgets.G8
@@ -1307,7 +1309,7 @@ ShellRoot {
           + " Shibumi Center in the center region")
       }
       if (!hostBar.removeWidgetFamilyAlternatives("G8")
-          || (l => (l.center || []).concat(["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0) {
+          || (l => (l.center || []).concat(root.splitCenter ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0) {
         return root.fail("Shibumi Center did not remove its alternatives")
       }
 
@@ -1449,9 +1451,8 @@ ShellRoot {
       if (!hostBar.layoutController.moveGroupToSlot(
             "G:example.inline-state", "center", 0))
         return root.fail("V2 generic third-party cross-region move")
-      const movedDynamicV2Group = hostBar.layoutController.groupLocation(
-        "G:example.inline-state")
-      const movedDynamicEntries = (l => ["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout)
+      const movedDynamicV2Group = hostBar.layoutController.groupLocation("G:example.inline-state")
+      const movedDynamicEntries = (l => root.splitCenter ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout)
       if (!movedDynamicV2Group || movedDynamicV2Group.region !== "center"
           || movedDynamicEntries.length !== 1
           || String(movedDynamicEntries[0].id || "")
@@ -1465,7 +1466,7 @@ ShellRoot {
             "example.inline-state", false, "center")
           || hostBar.layoutController.groupLocation(
             "G:example.inline-state") !== null
-          || (l => (l.center || []).concat(["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0)
+          || (l => (l.center || []).concat(root.splitCenter ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0)
         return root.fail("V2 generic third-party removal")
       hostBar.layoutConfig = JSON.parse(JSON.stringify(
         fakeShell.shellConfig.bar.layout))
@@ -1520,7 +1521,7 @@ ShellRoot {
           || !hostBar.setBarWidgetInstalled(
             "example.future-clock", true, "center"))
         return root.fail("same-capability provider replacement")
-      const complementaryEntries = (l => ["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? ((l.center || []).length === 1 && (l.centerEnd || []).length === 1 ? l.center.concat(l.centerEnd) : []) : l.center)(fakeShell.shellConfig.bar.layout)
+      const complementaryEntries = (l => root.splitCenter ? ((l.center || []).length === 1 && (l.centerEnd || []).length === 1 ? l.center.concat(l.centerEnd) : []) : l.center)(fakeShell.shellConfig.bar.layout)
       if (complementaryEntries.length !== 2
           || String(complementaryEntries[0].id || complementaryEntries[0])
             !== "omarchy.weather"
@@ -1531,9 +1532,8 @@ ShellRoot {
         fakeShell.shellConfig.bar.layout))
       if (!hostBar.removeBarWidgetAndRestoreFamilies(
             "omarchy.weather", ["G8"])
-          || (l => ["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout).length !== 1
-          || String(fakeShell.shellConfig.bar.layout[["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? "centerEnd" : "center"][0].id || "")
-            !== "example.future-clock"
+          || (l => root.splitCenter ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout).length !== 1
+          || String(fakeShell.shellConfig.bar.layout[root.splitCenter ? "centerEnd" : "center"][0].id || "") !== "example.future-clock"
           || stateService.groupEnabledForVariant("G8", "v1")
           || stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("remaining provider lost family ownership")
@@ -1545,14 +1545,14 @@ ShellRoot {
           }))
         return root.fail("rejected provider restore was reported as success")
       stateService.rejectGroupVariantStates = false
-      if ((l => ["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout).length !== 1
+      if ((l => root.splitCenter ? ((l.center || []).length ? [] : l.centerEnd || []) : l.center || [])(fakeShell.shellConfig.bar.layout).length !== 1
           || stateService.groupEnabledForVariant("G8", "v1")
           || stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("rejected provider restore did not roll back")
       if (!hostBar.restoreWidgetFamilyProviderStates({
             G8: { v1: true, v2: false }
           })
-          || (l => (l.center || []).concat(["forward-compat-0d8edf38", "forward-compat-84b3f287", "forward-compat-8e33e723", "installed-source-parity-v4.5.0", "installed-package-v4.5.0"].indexOf(Quickshell.env("SHIBUMI_OMARCHY_BASELINE_ID")) >= 0 ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0
+          || (l => (l.center || []).concat(root.splitCenter ? l.centerEnd || [] : []))(fakeShell.shellConfig.bar.layout).length !== 0
           || !stateService.groupEnabledForVariant("G8", "v1")
           || stateService.groupEnabledForVariant("G8", "v2"))
         return root.fail("exact cross-variant provider restore")

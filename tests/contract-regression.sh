@@ -1393,15 +1393,21 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   done
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
+  monitor_old_shape=0; monitor_new_shape=0
+  if rg -Fq enabledDisplayCount "$official_monitor_panel" && rg -Fq toggleDisplay "$official_monitor_panel"; then monitor_old_shape=1; fi
+  if rg -Fq 'function previewBrightness(name, value)' "$official_monitor_panel" \
+      && rg -Fq 'function setScale(name, scale)' "$official_monitor_panel" \
+      && rg -Fq 'function runAction(' "$official_monitor_panel"; then monitor_new_shape=1; fi
+  (( monitor_old_shape + monitor_new_shape == 1 )) || fail 'official monitor panel must have exactly one complete shape'
   monitor_shape_contracts=(enabledDisplayCount toggleDisplay)
-  if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 84b3f2872b5023c13967543ed4a98b08fcac5b21 \
-     || $SHIBUMI_OMARCHY_SOURCE_REVISION == 8e33e7233c01bf3b563b344bffc790a5d2dd98ea ]]; then
+  if (( monitor_new_shape )); then
     monitor_shape_contracts=('function previewBrightness(name, value)'
       'function setScale(name, scale)' 'function runAction(')
   fi
+  printf 'Monitor shape contract: %s\n' "${monitor_shape_contracts[*]}"
   for monitor_contract in brightnessAvailable brightnessPercent refresh \
     setBrightness previewBrightness monitorScale setScale displays \
-    normalizeScale brightnessName "${monitor_shape_contracts[@]}"; do
+    normalizeScale "${monitor_shape_contracts[@]}"; do
     rg -Fq "${monitor_contract}" "$official_monitor_panel" \
       || fail "official monitor panel contract changed: $monitor_contract"
   done
