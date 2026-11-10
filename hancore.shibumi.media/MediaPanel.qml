@@ -40,10 +40,7 @@ ShibumiPanel {
   readonly property var spectrumThemeColors: spectrumService
     && spectrumService.themeColors ? spectrumService.themeColors : []
   readonly property int renderedSourceCount: sourceRepeater.count
-  readonly property bool sourcesVisible: sourceList.visible
   readonly property bool vinylRotating: vinylArtwork.rotating
-  readonly property bool albumVisible: albumText.visible
-  readonly property bool playerNameVisible: playerText.visible
   readonly property var shuffleControl: shuffleButton
   readonly property var repeatControl: repeatButton
   readonly property var seekControl: seekMouse
