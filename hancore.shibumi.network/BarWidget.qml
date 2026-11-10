@@ -48,10 +48,6 @@ Ui.Panel {
   readonly property real uploadRate: networkValue(0, service => Math.max(0, Number(service.uploadRate || 0)))
   readonly property bool v2Presentation: tokens && tokens.v2Shell === true
   readonly property string v2MonoFont: "JetBrainsMono Nerd Font"
-  readonly property bool v1TrafficPresentation: mode === "ethernet"
-    && displayMode === "full" && !v2Presentation
-  readonly property bool v2TrafficPresentation: mode === "ethernet"
-    && displayMode === "full" && v2Presentation
   // Match content's horizontal full-content branch, including its fallback.
   readonly property bool trafficPresentationVisible: visible && !!bar && !!tokens
     && !bar.vertical && displayMode !== "icon" && displayMode !== "text"

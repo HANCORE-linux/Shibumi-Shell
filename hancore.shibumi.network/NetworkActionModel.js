@@ -88,17 +88,6 @@ function validDispatchResult(value, entityId) {
     && validGeneration(value.generation)
 }
 
-function fixedDispatchMessage(code) {
-  switch (code) {
-  case "stale-generation": return "Network state changed before dispatch."
-  case "stale-id": return "Network identity is no longer present."
-  case "ambiguous": return "Network identity is ambiguous."
-  case "unsupported": return "Network action is unsupported."
-  case "invalid": return "Network action request is invalid."
-  default: return "Network backend is unavailable."
-  }
-}
-
 function fixedTerminalMessage(code) {
   switch (code) {
   case "completed": return ""

@@ -43,15 +43,6 @@ Item {
   readonly property bool processRestartRequired:
     root.continuityState !== null
       && root.continuityState.processRestartRequired === true
-  readonly property var livenessSnapshot: ({
-    schemaVersion: root.schemaVersion,
-    available: root.serviceUsable,
-    present: root.servicePresent,
-    recoveryBlocked: root.recoveryBlocked,
-    processRestartRequired: root.processRestartRequired,
-    phase: root.phase,
-    generation: root.generation
-  })
   property QtObject authorityGuard: QtObject {
     property bool authorityAlive: true
     property int claim: 0

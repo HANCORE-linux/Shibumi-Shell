@@ -33,9 +33,6 @@ ShibumiPanel {
   readonly property var displayNetworks: filteredNetworks()
   readonly property var presentedNetworks: passwordKey !== ""
     ? credentialDisplayNetworks : displayNetworks
-  readonly property bool credentialEditorFocused: !!(credentialEditor
-    && credentialEditor.activeFocus)
-  readonly property bool panelKeyboardFocusActive: keyCatcher.activeFocus
   readonly property int savedCount: {
     let count = 0
     const rows = networkService ? networkService.networks : []
