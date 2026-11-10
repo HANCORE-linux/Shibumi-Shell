@@ -69,6 +69,10 @@ Item {
   property bool runningBackendDiscovery: true
   property double lastDiscoveryStartedAtMs: 0
   readonly property int agentsDiscoveryInterval: 6 * 60 * 60 * 1000
+  readonly property int startupRefreshDelayMs: 10 * 1000
+  readonly property int startupDiscoveryDelayMs: 120 * 1000
+  property bool startupRefreshPending: true
+  property bool startupDiscoveryPending: true
   readonly property var tabProviderIds: providers.filter(provider =>
     provider.providerId !== "opencode" && providerEnabled(provider.providerId))
     .map(provider => provider.providerId)
@@ -643,6 +647,7 @@ Item {
     }
     runningBackendDiscovery = discover
     const started = startBackendProcess("agents-update", agentsUpdateCommand(force, discover))
+    if (started) startupRefreshPending = false
     if (started && discover) lastDiscoveryStartedAtMs = Date.now()
     return started
   }
@@ -655,6 +660,7 @@ Item {
   }
 
   function reconcileBackendLifecycle(force) {
+    const defer = startupRefreshPending || (agentsBackendActive && startupDiscoveryPending)
     providerSettingsGeneration++
     pendingBackendRefresh = false
     pendingBackendForce = false
@@ -662,11 +668,11 @@ Item {
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled) {
       if (backendProcess.running) backendProcess.running = false
     } else if (backendProcess.running || backendProcessKind !== "") {
-      pendingBackendRefresh = true
+      pendingBackendRefresh = !defer
       pendingBackendForce = force === true
       pendingBackendDiscovery = true
       if (backendProcess.running) backendProcess.running = false
-    } else {
+    } else if (!defer) {
       requestCurrentBackend(force === true)
     }
     providerRevision++
@@ -704,6 +710,8 @@ Item {
         console.warn("Shibumi AI agents update failed:", error.slice(0, 512))
     }
     providerRevision++
+    if (agentsBackendActive && startupDiscoveryPending && runningSettingsGeneration !== providerSettingsGeneration
+        && !pendingBackendForce) pendingBackendRefresh = false
     if (pendingBackendRefresh) {
       const force = pendingBackendForce, discovery = pendingBackendDiscovery
       pendingBackendRefresh = false
@@ -736,6 +744,30 @@ Item {
       && root.nextAgentRecordExpiryAtMs > 0
     repeat: true
     onTriggered: root.expireAgentRecords(Date.now())
+  }
+
+  Timer {
+    id: startupRefreshTimer
+    interval: root.startupRefreshDelayMs
+    running: root.providerSettingsReady && root.startupRefreshPending
+    repeat: false
+    onTriggered: {
+      root.startupRefreshPending = false
+      const discover = root.tabProviderIds.length === 0
+      if (root.requestCurrentBackend(false, discover) && root.agentsBackendActive && discover)
+        root.startupDiscoveryPending = false
+    }
+  }
+
+  Timer {
+    id: startupDiscoveryTimer
+    interval: root.startupDiscoveryDelayMs
+    running: root.providerSettingsReady && root.startupDiscoveryPending
+    repeat: false
+    onTriggered: {
+      root.startupDiscoveryPending = false
+      if (root.agentsBackendActive) root.requestAgentsUpdate(false, true)
+    }
   }
 
   Timer {
@@ -855,7 +887,7 @@ Item {
   }
 
   onProviderEnablementSignatureChanged: {
-    if (providerSettingsReady) reconcileBackendLifecycle(true)
+    if (providerSettingsReady) reconcileBackendLifecycle(false)
   }
 
   Component.onCompleted: {
@@ -866,6 +898,8 @@ Item {
 
   Component.onDestruction: {
     agentRecordExpiryTimer.stop()
+    startupRefreshTimer.stop()
+    startupDiscoveryTimer.stop()
     backendTimer.stop()
     agentDiscovery.running = false
     if (backendProcess.running) backendProcess.running = false

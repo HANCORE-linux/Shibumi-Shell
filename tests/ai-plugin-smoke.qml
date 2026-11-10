@@ -88,6 +88,31 @@ ShellRoot {
     })
   }
 
+  property bool startupChecked: false
+  Ai.Service { id: startupEmpty; shell: agentsShell
+    omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
+    agentsUsageDirOverride: omarchyPath + "/bin"
+  }
+  function checkStartup() {
+    const s = agentsService
+    if (s.providers.length !== 2) return false
+    const timer = (service, ms) => Array.from(service.resources).find(o => "interval" in o && o.interval === ms)
+    const first = timer(s, 10000), discovery = timer(s, 120000)
+    if (!first.running || !discovery.running || first.repeat || discovery.repeat || s.backendProcessKind !== "") { fail("startup clocks/early dispatch"); return false }
+    s.reconcileBackendLifecycle(false)
+    if (s.backendProcessKind !== "") { fail("pre-start reconcile dispatched"); return false }
+    first.triggered()
+    if (s.backendProcessKind !== "agents-update" || s.runningBackendDiscovery) { fail("first startup run was not tab-only"); return false }
+    discovery.triggered()
+    if (!s.pendingBackendRefresh || !s.pendingBackendDiscovery || s.pendingBackendForce) { fail("startup discovery did not coalesce unforced"); return false }
+    legacyService.startupRefreshPending = false; legacyService.backendProcessKind = "legacy-detection"
+    legacyService.reconcileBackendLifecycle(false); legacyService.finishBackendProcess(0)
+    if (legacyService.backendProcessKind !== "legacy-detection" || legacyService.pendingBackendRefresh) { fail("legacy settings refresh was dropped before startup discovery"); return false }
+    timer(startupEmpty, 10000).triggered()
+    if (startupEmpty.backendProcessKind !== "agents-update" || !startupEmpty.runningBackendDiscovery || startupEmpty.startupDiscoveryPending) { fail("empty startup did not discover once"); return false }
+    console.log("436_AI_STARTUP", "controlled Timer.triggered: records visible before work; tab-only at nominal 10000ms; queued discovery at 120000ms; empty discovery at 10000ms")
+    startupChecked = true; return true
+  }
   property int refreshDemandStage: 0
   property double serviceTraceStarted: Date.now()
   Connections {
@@ -1082,6 +1107,7 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
+      if (!root.startupChecked && !root.checkStartup()) return
       if (!root.midnightRacePassed) {
         root.midnightRaceTicks++
         if (root.midnightRaceStage === 1
