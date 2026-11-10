@@ -657,26 +657,6 @@ Item {
     return commit(function(next) { next.reactor = { mode: mode } })
   }
 
-  function setOrder(value) {
-    const normalized = ShibumiConfig.normalizedOrder(value)
-    const splits = normalized
-      ? ShibumiConfig.normalizedSplits(storage.draft().splits, normalized) : null
-    if (!normalized || !splits) return false
-    return commit(function(next) {
-      next.order = normalized
-      next.v1SlotRoles = ShibumiConfig.slotRolesForOrder(normalized)
-      next.splits = splits
-    })
-  }
-
-  function setSplits(value) {
-    const order = ShibumiConfig.normalizedOrder(storage.draft().order)
-    const normalized = order
-      ? ShibumiConfig.normalizedSplits(value, order) : null
-    if (!normalized) return false
-    return commit(function(next) { next.splits = normalized })
-  }
-
   // A transition writes all affected State fields in one existing own-entry
   // request. The caller still waits for persistenceSettled before native work.
   function exactKeys(value, keys) {
