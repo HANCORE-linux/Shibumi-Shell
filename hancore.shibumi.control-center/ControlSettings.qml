@@ -232,8 +232,6 @@ Item {
         ? searchPage : pageLoader.item
   readonly property bool fitsWidth: implicitWidth <= width + 0.5
   readonly property var settingsSearchSuggestions: settingsSearch.suggestions
-  readonly property int activeSettingsSearchSuggestion:
-    settingsSearch.activeSuggestionIndex
   readonly property var settingsSearchResults: searchPage.results
   readonly property var filteredPlugins: {
     const needle = query.trim().toLowerCase()

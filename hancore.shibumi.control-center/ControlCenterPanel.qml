@@ -116,10 +116,6 @@ ShibumiPanel {
       return entry.userToggleable && entry.styleAvailable
         && entry.installedInBar
     }).length
-  readonly property int nativePluginCount: pluginEntries.filter(
-    function(entry) { return entry.firstParty }).length
-  readonly property int shibumiPluginCount: pluginEntries.filter(
-    function(entry) { return entry.compatibility === "Native" }).length + 1
   readonly property int registryShibumiPluginCount: pluginEntries.filter(
     function(entry) { return entry.suiteManaged }).length
   readonly property int registryOmarchyPluginCount: pluginEntries.filter(
@@ -127,10 +123,6 @@ ShibumiPanel {
   readonly property int registryExternalPluginCount: pluginEntries.filter(
     function(entry) {
       return !entry.suiteManaged && !entry.firstParty
-    }).length
-  readonly property int preservedExtraCount: pluginEntries.filter(
-    function(entry) {
-      return entry.compatibility !== "Native" && entry.enabled
     }).length
   readonly property bool pluginRemovalRunning: pluginRemoval.running
   readonly property bool pluginUpdateCheckRunning:

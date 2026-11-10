@@ -185,8 +185,6 @@ Column {
       : controller.pluginUpdateCount > 0 ? accent : foreground
   readonly property bool feedbackCountdownRunning:
     feedbackCountdown.running
-  readonly property bool feedbackCountdownPaused:
-    feedbackCountdown.paused
   readonly property bool ready:
     providerSwitchRepeater.count === providerSwitchEntries.length
     && activeRepeater.count === displayedActiveEntries.length
