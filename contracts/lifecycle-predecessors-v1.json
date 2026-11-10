@@ -1386,9 +1386,9 @@
     },
     {
       "id": "source-0.2.3",
-      "payloadDigest": "52c49d89f797574c9db3558cf62635ce8ca08fba3df03f354779de27a638c24d",
+      "payloadDigest": "524117632a1427aacb8824b26f8b7c292cfb35f2130a4c955caf536f86a0ebe7",
       "pluginDigests": {
-        "hancore.shibumi.bar": "bb3fd080a6f303911487a8978c8345526085e10657c7cd4d5def01878fdb5369",
+        "hancore.shibumi.bar": "b18716a9df11383a0fb255b7384cd5feb18c0a09a83a632a805380ef35730b27",
         "hancore.shibumi.state": "a7e46373b360ce03df22bd76df134a2551f9e72f38e513ed677f671222eb121d",
         "hancore.shibumi.control-center": "731a95adbce2ff95f103c0753e5705bba5c375c64e8121142631f9d5d0d1a6b6",
         "hancore.shibumi.reactor": "1e0783d7d4d5793f0a65aa75d489afd55d79a11dc19a37c0e52389ea265a1f3d",
@@ -1400,7 +1400,7 @@
         "hancore.shibumi.memory": "4a0d86cae8fe86c1f2b8a0d9e483da3923c958f1ad147eaf334594cefa74de01",
         "hancore.shibumi.cpu": "e1d78f66b28210f6b6ee14fa3436ff16c8fdeafbbd2b42e4be32076a6d123107",
         "hancore.shibumi.audio": "4f9467320a2fa93182e798d780eb89af21d4850180c63fb13c2de18d47c0a827",
-        "hancore.shibumi.ai": "394f418e09b0b58cc4b6ce68acf55312b944e5d9b59116aeb68c9a71e0f6e552",
+        "hancore.shibumi.ai": "47538f65f16d002cd7be65b694c7da84f73ebc0a20b2375288efd7d72e78a774",
         "hancore.shibumi.center": "e44e030d4e5bc7c0cb150896dd1df9d257b7b67d5bb90a93e993a92c47f26526",
         "hancore.shibumi.media": "ed727ed6b399e771689e4923651017321c89db2c9233528f2a6c645f7cf748e1",
         "hancore.shibumi.quick-access": "a3405b0a34e14f1901f3927cacdada61f2223d2a02f55afda00469906e947780",
@@ -1441,7 +1441,7 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
-        "3fef35f409a0a245df9e4fc98e1bed385a7931f2"
+        "3e3a8dc4f6747a5e0ed965c163dff3d53931e433"
       ],
       "suiteVersion": "0.2.2"
     }
