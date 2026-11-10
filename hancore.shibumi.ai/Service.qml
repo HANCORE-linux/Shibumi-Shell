@@ -65,6 +65,13 @@ Item {
   property string backendError: ""
   property bool pendingBackendRefresh: false
   property bool pendingBackendForce: false
+  property bool pendingBackendDiscovery: false
+  property bool runningBackendDiscovery: true
+  property double lastDiscoveryStartedAtMs: 0
+  readonly property int agentsDiscoveryInterval: 6 * 60 * 60 * 1000
+  readonly property var tabProviderIds: providers.filter(provider =>
+    provider.providerId !== "opencode" && providerEnabled(provider.providerId))
+    .map(provider => provider.providerId)
   property bool providerSettingsReady: false
   property int providerSettingsGeneration: 0
   property int runningSettingsGeneration: 0
@@ -578,7 +585,7 @@ Item {
     ].join("; ")]
   }
 
-  function agentsUpdateCommand(force) {
+  function agentsUpdateCommand(force, discovery) {
     const command = [agentsUpdateScript, String(omarchyPath || "")]
     // Omarchy discovers collectors; Shibumi owns OpenCode independently.
     if (force === true) command.push("--force")
@@ -586,7 +593,19 @@ Item {
     for (const id of Object.keys(settings.providers || {})) {
       if (id !== "opencode" && !providerEnabled(id)) command.push("--except", id)
     }
+    if (force !== true && discovery === false) command.push(...tabProviderIds)
     return command
+  }
+
+  function requestPeriodicBackend() {
+    return requestCurrentBackend(false, lastDiscoveryStartedAtMs > 0
+      && Date.now() - lastDiscoveryStartedAtMs >= agentsDiscoveryInterval)
+  }
+
+  function panelOpened() {
+    if (lastDiscoveryStartedAtMs > 0
+        && Date.now() - lastDiscoveryStartedAtMs >= agentsRefreshInterval)
+      requestAgentsUpdate(false, true)
   }
 
   function startBackendProcess(kind, command) {
@@ -612,33 +631,40 @@ Item {
     return startBackendProcess("legacy-detection", legacyDetectionCommand())
   }
 
-  function requestAgentsUpdate(force) {
+  function requestAgentsUpdate(force, discovery) {
     if (!agentsBackendActive || !runtimeProbesEnabled
         || !serviceActive) return false
+    const discover = force === true || discovery !== false || tabProviderIds.length === 0
     if (backendProcess.running || backendProcessKind !== "") {
       pendingBackendRefresh = true
       pendingBackendForce = pendingBackendForce || force === true
+      pendingBackendDiscovery = pendingBackendDiscovery || discover
       return true
     }
-    return startBackendProcess("agents-update", agentsUpdateCommand(force))
+    runningBackendDiscovery = discover
+    const started = startBackendProcess("agents-update", agentsUpdateCommand(force, discover))
+    if (started && discover) lastDiscoveryStartedAtMs = Date.now()
+    return started
   }
 
-  function requestCurrentBackend(force) {
+  function requestCurrentBackend(force, discovery) {
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled)
       return false
     return agentsBackendActive
-      ? requestAgentsUpdate(force === true) : requestLegacyDetection()
+      ? requestAgentsUpdate(force === true, discovery) : requestLegacyDetection()
   }
 
   function reconcileBackendLifecycle(force) {
     providerSettingsGeneration++
     pendingBackendRefresh = false
     pendingBackendForce = false
+    pendingBackendDiscovery = false
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled) {
       if (backendProcess.running) backendProcess.running = false
     } else if (backendProcess.running || backendProcessKind !== "") {
       pendingBackendRefresh = true
       pendingBackendForce = force === true
+      pendingBackendDiscovery = true
       if (backendProcess.running) backendProcess.running = false
     } else {
       requestCurrentBackend(force === true)
@@ -668,6 +694,10 @@ Item {
       if (Number(exitCode) === 66) {
         agentsBackendUnavailable = true
       } else {
+        if (Number(exitCode) !== 0 && !runningBackendDiscovery) {
+          pendingBackendRefresh = true
+          pendingBackendDiscovery = true
+        }
         rescanAgents()
       }
       if (Number(exitCode) !== 0 && Number(exitCode) !== 66 && error !== "")
@@ -675,10 +705,11 @@ Item {
     }
     providerRevision++
     if (pendingBackendRefresh) {
-      const force = pendingBackendForce
+      const force = pendingBackendForce, discovery = pendingBackendDiscovery
       pendingBackendRefresh = false
       pendingBackendForce = false
-      if (agentsBackendActive) requestAgentsUpdate(force)
+      pendingBackendDiscovery = false
+      if (agentsBackendActive) requestAgentsUpdate(force, discovery)
       else requestLegacyDetection()
     }
   }
@@ -716,7 +747,7 @@ Item {
     repeat: true
     onTriggered: {
       root.providerRevision++
-      root.requestCurrentBackend(false)
+      root.requestPeriodicBackend()
     }
   }
 

@@ -9,6 +9,10 @@
 - AI: read OpenCode 2.x usage and count migrated messages only once, retaining legacy-store support.
 - Bar: avoid an empty V2 reconcile request only when both settled State and the planned native layout already match.
 
+### Changed
+
+- AI: refresh existing provider tabs periodically, with bounded discovery and a full discovery fallback after a failed tab-only update.
+
 ### Removed
 
 - Unused declarations across 14 plugins and two obsolete, runner-less test fixtures.

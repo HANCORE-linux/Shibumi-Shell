@@ -88,6 +88,51 @@ ShellRoot {
     })
   }
 
+  property int refreshDemandStage: 0
+  property double serviceTraceStarted: Date.now()
+  Connections {
+    target: agentsService
+    function onBackendRunningChanged() {
+      if (agentsService.backendRunning) console.log("436_AI_COMMAND", Date.now() - root.serviceTraceStarted,
+        JSON.stringify(Array.from(agentsService.resources).filter(p => "command" in p && p.command[0] === agentsService.agentsUpdateScript).map(p => p.command)))
+    }
+  }
+  function refreshDemandContract() {
+    const s = agentsService
+    if (s.backendRunning || s.backendProcessKind !== "") return false
+    if (refreshDemandStage === 1) {
+      s.backendProcessKind = "agents-update"; s.runningBackendDiscovery = true; s.finishBackendProcess(1)
+      if (s.backendRunning || s.pendingBackendRefresh) { fail("failed discovery retried itself"); return false }
+      s.requestPeriodicBackend()
+      if (s.backendProcessKind !== "agents-update" || s.runningBackendDiscovery) { fail("periodic tab refresh did not start"); return false }
+      refreshDemandStage = 2; return false
+    }
+    if (refreshDemandStage === 2) { s.refreshAll(true); refreshDemandStage = 3; return false }
+    if (refreshDemandStage === 3) { refreshDemandStage = 4; console.log("436_AI_DEMAND passed"); return true }
+    s.providerOverrides = ["claude", "codex", "grok", "hermes", "opencode"].map(id => ({providerId: id, ready: true}))
+    const before = s.agentsUpdateCommand(false), after = s.agentsUpdateCommand(false, false)
+    let ok = after.slice(2).join(" ") === "--except opencode --except fireworks claude codex grok hermes"
+    console.log("436_AI_TAB_COMMANDS", JSON.stringify({before: before, after: after}))
+    s.providerOverrides = []; s.backendProcessKind = "agents-update"; s.runningBackendDiscovery = false
+    s.pendingBackendRefresh = false; s.pendingBackendForce = false; s.pendingBackendDiscovery = false
+    s.lastDiscoveryStartedAtMs = Date.now(); s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendRefresh && !s.pendingBackendDiscovery && !s.pendingBackendForce
+    s.lastDiscoveryStartedAtMs = Date.now() - s.agentsDiscoveryInterval; s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
+    s.lastDiscoveryStartedAtMs = Date.now() - s.agentsRefreshInterval
+    emptyPanelOwner.opened = false; void(emptyAgentsPanel.open); emptyPanelOwner.opened = true; void(emptyAgentsPanel.open)
+    ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
+    const records = s.agentRecords; s.agentRecords = ({}); s.providerRevision++; s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendDiscovery; s.agentRecords = records; s.providerRevision++
+    s.pendingBackendRefresh = false; s.pendingBackendDiscovery = false; s.backendError = ""
+    s.finishBackendProcess(1)
+    if (!ok || s.backendProcessKind !== "agents-update" || !s.runningBackendDiscovery || s.pendingBackendRefresh) {
+      console.log("436_AI_DEMAND_FAILURE", ok, s.backendProcessKind, s.runningBackendDiscovery, s.pendingBackendRefresh)
+      fail("tab/discovery coalescing or failed-tab fallback"); return false
+    }
+    refreshDemandStage = 1; return false
+  }
+
   property bool genericDisabled: false
   property int genericPhase: 0
   property string genericTool: "grok"
@@ -112,6 +157,7 @@ ShellRoot {
   Timer {
     id: genericProbe; interval: 80; repeat: true
     onTriggered: {
+      if (root.refreshDemandStage !== 4) { root.fail("demand checks unfinished"); return }
       const ids = discoveryService.providers.map(p => p.providerId).join(",")
       if (root.genericPhase === 0) {
         const fireworks = discoveryService.providerFor("fireworks")
@@ -1057,6 +1103,7 @@ ShellRoot {
           return root.fail("OpenCode midnight refresh race timed out")
         }
       }
+      if (root.phase > 0 && root.refreshDemandStage < 4) root.refreshDemandContract()
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item

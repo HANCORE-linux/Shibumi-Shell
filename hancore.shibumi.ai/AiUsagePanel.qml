@@ -44,7 +44,10 @@ ShibumiPanel {
   }
   readonly property bool clockRunning: panelClock.running
   property double nowMs: Date.now()
-  onOpenChanged: if (open) nowMs = Date.now()
+  onOpenChanged: if (open) {
+    nowMs = Date.now()
+    if (aiService && typeof aiService.panelOpened === "function") aiService.panelOpened()
+  }
   property Timer presentationClock: Timer {
     id: panelClock
     interval: 30000; repeat: true; running: panel.open
