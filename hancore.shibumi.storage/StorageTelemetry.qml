@@ -20,7 +20,6 @@ Scope {
     inventoryProbe.running && !inventoryAvailable
   readonly property real totalGiB: totalBytes / 1073741824
   readonly property real usedGiB: usedBytes / 1073741824
-  readonly property real freeGiB: freeBytes / 1073741824
 
   function acquire() {
     consumers++
