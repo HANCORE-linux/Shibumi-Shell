@@ -28,7 +28,7 @@ permission to change a host; each operation needs separate maintainer approval.
    the source, package, and clean-build gates in [packaging](packaging.md).
 8. On host baseline change, rerun every retained update arm before tagging;
    do not silently drop an arm or choose an older rolling predecessor.
-9. Re-pin forward compatibility to current `quattro` with `scripts/generate-forward-baseline.py`; update pins in `tests/lib/baselines.sh`, `tests/baseline-contract-regression.sh`, `tests/bar-host-registry-smoke.qml` (its 4.5 layout-id lists), `tests/contract-regression.sh` (its monitor-shape revision switch), `tests/quattro-contract-regression.sh`, `tests/panel-window-geometry-regression.sh`, `scripts/collect-release-evidence`, `tests/documentation-regression.py`, `AGENTS.md`, `docs/release-readiness.md`, `docs/architecture/quattro-compatibility.md`, `docs/development/testing.md`, `docs/development/validation-host.md`, and `docs/development/release.md`, provision the clean runner checkout `~/.local/share/shibumi/validation-baselines/omarchy-forward-compat-<sha>`, and have the maintainer update Actions variable `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH`.
+9. Re-pin forward compatibility to current `quattro` with `scripts/generate-forward-baseline.py`; update pins in `tests/lib/baselines.sh`, `tests/baseline-contract-regression.sh`, `tests/quattro-contract-regression.sh`, `tests/panel-window-geometry-regression.sh`, `scripts/collect-release-evidence`, `tests/documentation-regression.py`, `AGENTS.md`, `docs/release-readiness.md`, `docs/architecture/quattro-compatibility.md`, `docs/development/testing.md`, `docs/development/validation-host.md`, and `docs/development/release.md`, provision the clean runner checkout `~/.local/share/shibumi/validation-baselines/omarchy-forward-compat-<sha>`, and have the maintainer update Actions variable `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH`. The bar-host layout and monitor-shape checks derive capabilities from the pinned host and need no id/revision-list edit.
 
 ## Version pin categories
 
@@ -126,11 +126,11 @@ SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-8e33e723 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-f428bb4f \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The forward checkout must be exactly `8e33e7233c01bf3b563b344bffc790a5d2dd98ea`.
+The forward checkout must be exactly `f428bb4fe4d2e688fa05190b7d3c61430805b601`.
 Private forward-alignment patches do not authorize runner reprovisioning,
 Actions-variable changes, installation, or publication. Record Quickshell
 package provenance: active package/parity/forward gates require Omarchy-repository

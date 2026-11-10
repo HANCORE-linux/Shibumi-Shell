@@ -10,7 +10,7 @@ by this evidence.
 
 The development branch retains official Omarchy 4.5.0 source and Agents contracts,
 pins the installed 4.5.0-3 package gate, and advances
-the forward reference to 8e33e723. These pins are not
+the forward reference to f428bb4f. These pins are not
 physical release acceptance. The historical Beta.13 physical host acceptance
 below applies to its recorded single-output Omarchy 4.0.3 setup:
 
@@ -22,7 +22,7 @@ below applies to its recorded single-output Omarchy 4.0.3 setup:
 | Pinned source-parity revision | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
 | Native catalog source-only reference | `v4.0.4` (`c668141e9c42b13c80c9ca4ea108e11708c5e8a5`, 183 shell files) |
 | Immutable Agents reference | `v4.5.0` (`ac2690cd7be4f47e4a255f5e2e78d904d436b068`) |
-| Immutable forward-compatibility revision | `8e33e7233c01bf3b563b344bffc790a5d2dd98ea` |
+| Immutable forward-compatibility revision | `f428bb4fe4d2e688fa05190b7d3c61430805b601` |
 | Quickshell package | `quickshell 0.3.2.r7.g2b4501a-1` |
 | Recorded Beta.13 physical validation date (4.0.3) | 2026-09-13 |
 
@@ -31,7 +31,7 @@ source-parity checkout is pinned to the official `v4.5.0` tag. The 4.0.6,
 4.0.4, 4.0.3 and 4.0.2 package/source manifests and 4.0.5 source manifest remain
 immutable history. The Agents-only gate pins `v4.5.0`, retaining `v4.0.0` as history;
 the separate
-`8e33e723` snapshot supersedes `84b3f287` as the bounded forward reference;
+`f428bb4f` snapshot supersedes `8e33e723` as the bounded forward reference;
 all earlier manifests remain unchanged.
 Historical focused forward checks do not establish a new-stack candidate pass;
 complete candidate gates must be recorded separately. No pin follows a moving branch.
@@ -58,7 +58,7 @@ consumed `shell`, `bin`, and `config` subtrees without conflating their claims:
   records the full Git checkout of the official `v4.5.0` source tag;
 - the immutable 4.0.3 package/source manifests retain the previous physical
   acceptance baseline without claiming that acceptance for 4.5.0;
-- [`omarchy-forward-compat-8e33e723.json`](../../contracts/baselines/omarchy-forward-compat-8e33e723.json)
+- [`omarchy-forward-compat-f428bb4f.json`](../../contracts/baselines/omarchy-forward-compat-f428bb4f.json)
   records the immutable forward-compatibility snapshot at the recorded upstream
   revision. It does not follow the moving remote branch.
 
@@ -164,7 +164,7 @@ SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-installed-source-parity-contract-regression.sh
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-8e33e723 \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-f428bb4f \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 

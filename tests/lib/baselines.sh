@@ -177,7 +177,8 @@ shibumi_validate_omarchy_baseline_schema() {
         or .id == "forward-compat-0d8edf38"
         or .id == "installed-source-parity-v4.5.0"
         or .id == "forward-compat-84b3f287"
-        or .id == "forward-compat-8e33e723" then
+        or .id == "forward-compat-8e33e723"
+        or .id == "forward-compat-f428bb4f" then
       .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}
     elif .id == "installed-package-v4.0.4"
         or .id == "installed-source-parity-v4.0.4"
@@ -821,7 +822,7 @@ shibumi_load_omarchy_baseline() {
       [[ -n $requested_path ]] \
         || shibumi_baseline_fail \
           'OMARCHY_PATH is required for forward-compat' || return
-      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-8e33e723.json"
+      manifest="$shibumi_baseline_repo_root/contracts/baselines/omarchy-forward-compat-f428bb4f.json"
       ;;
     agents-current)
       requested_path=${OMARCHY_PATH:-}

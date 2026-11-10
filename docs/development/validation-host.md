@@ -125,7 +125,7 @@ reviewed Shibumi checkout, match these manifest `sourceRevision` values exactly:
 | `omarchy-installed-source-parity-v4.5.0.json` | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` | `SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH` |
 | `omarchy-installed-source-parity-v4.0.4.json` (native catalog source only) | `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` | `SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH` |
 | `omarchy-agents-v4.5.0.json` | `ac2690cd7be4f47e4a255f5e2e78d904d436b068` | `SHIBUMI_AGENTS_OMARCHY_PATH` |
-| `omarchy-forward-compat-8e33e723.json` | `8e33e7233c01bf3b563b344bffc790a5d2dd98ea` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
+| `omarchy-forward-compat-f428bb4f.json` | `f428bb4fe4d2e688fa05190b7d3c61430805b601` | `SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH` |
 
 Beta.16.5.1 records the installed Omarchy-repository Quickshell package above,
 whose binary is `Quickshell 0.3.2 (revision 2b4501a282689792b62e94f3fb30d8f512324fe6, distributed by Omarchy)`.

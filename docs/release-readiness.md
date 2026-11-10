@@ -20,8 +20,8 @@ Enterprise Wi-Fi and Bluetooth device workflows also need their own hardware
 or credentials. Private fixtures do not replace those checks.
 
 The forward reference is fixed at
-`8e33e7233c01bf3b563b344bffc790a5d2dd98ea` (2026-11-08), recorded in
-`contracts/baselines/omarchy-forward-compat-8e33e723.json`. Source parity and Agents
+`f428bb4fe4d2e688fa05190b7d3c61430805b601` (2026-11-10), recorded in
+`contracts/baselines/omarchy-forward-compat-f428bb4f.json`. Source parity and Agents
 pin v4.5.0 (`ac2690cd7`); the installed-package gate pins 4.5.0-3.
 Neither pin transfers historical results to 0.2.2 or claims support
 for arbitrary newer hosts. Complete candidate aggregates, clean-commit release
@@ -299,7 +299,7 @@ Pinned configuration is not a physical-acceptance claim.
 | Source parity | `installed-source-parity-v4.5.0`, `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
 | Native catalog source-only reference | `v4.0.4`, `c668141e9c42b13c80c9ca4ea108e11708c5e8a5` |
 | Agents reference | `v4.5.0`, `ac2690cd7be4f47e4a255f5e2e78d904d436b068` |
-| Forward reference | `8e33e7233c01bf3b563b344bffc790a5d2dd98ea` |
+| Forward reference | `f428bb4fe4d2e688fa05190b7d3c61430805b601` |
 
 The manifests in [`contracts/baselines/`](../contracts/baselines/) bind consumed
 files and subtrees. Historical 4.0.4/4.0.3/4.0.2 package/source and 4.0.5 source

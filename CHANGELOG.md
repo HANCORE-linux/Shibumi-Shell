@@ -13,6 +13,7 @@
 
 - AI: refresh existing provider tabs periodically, with bounded discovery and a full discovery fallback after a failed tab-only update.
 - AI: defer automatic startup collection without forcing it, while reading existing records immediately.
+- Validation: forward compatibility is pinned to Omarchy quattro f428bb4f.
 
 ### Removed
 
