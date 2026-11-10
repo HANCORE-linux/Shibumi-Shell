@@ -33,7 +33,6 @@ Scope {
   property bool memorySampleReady: false
   property bool sweepOwnerActive: true
   readonly property bool memorySweepRunning: Local.MemorySweep.busy
-  readonly property bool memorySweepStarted: Local.MemorySweep.started
   readonly property string memorySweepError: Local.MemorySweep.error
   readonly property real memorySweepBeforeMiB: Local.MemorySweep.beforeMiB
   readonly property real memorySweepAfterMiB: Local.MemorySweep.afterMiB

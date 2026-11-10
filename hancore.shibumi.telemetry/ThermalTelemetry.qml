@@ -42,11 +42,6 @@ Scope {
         temperatureC: memoryTemperatureC, maximum: 0, critical: 0 })
     return rows
   }
-  readonly property int maxTemperatureC: Math.max(cpuTemperatureC,
-    cpuCoreMaxTemperatureC, gpuTemperatureC, nvmeTemperatureC,
-    memoryTemperatureC)
-  readonly property string temperatureSource:
-    temperatures.length > 0 ? temperatures[0].label : ""
 
   function acquire() {
     consumers++
