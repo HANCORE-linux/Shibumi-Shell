@@ -50,11 +50,11 @@ ShellRoot {
   Shared.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.2.1"
+    implementationVersion: "0.2.2"
     owner: stateOwner
     host: stateHost
     manifest: ({ id: "hancore.shibumi.state",
-      version: "0.2.1", kinds: ["service"] })
+      version: "0.2.2", kinds: ["service"] })
   }
 
   QtObject {
@@ -77,11 +77,11 @@ ShellRoot {
       }
       Shared.Provider {
         pluginId: "hancore.shibumi.bar"
-        implementationVersion: "0.2.1"
+        implementationVersion: "0.2.2"
         owner: owner
         host: owner.providerHost
         manifest: ({ id: "hancore.shibumi.bar",
-          version: "0.2.1", kinds: ["bar"] })
+          version: "0.2.2", kinds: ["bar"] })
       }
     }
   }
@@ -107,6 +107,7 @@ ShellRoot {
   }
 
   IpcHandler {
+    enabled: root.mode !== "reload"
     target: "shell"
     function rescanPlugins(): void {
       if (root.mode === "refusal") {
@@ -122,9 +123,19 @@ ShellRoot {
     }
   }
 
+  IpcHandler {
+    enabled: root.mode === "reload"
+    target: "shell"
+    function rescanPlugins(): void { root.rescanCalls++ }
+    function reloadPlugins(): void {
+      root.rescanCalls++
+      replacementTimer.restart()
+    }
+  }
+
   Component.onCompleted: {
     if (["success", "refusal", "timeout", "owner-change",
-         "process-change", "scope-loss", "diagnostic"].indexOf(mode) < 0)
+         "process-change", "scope-loss", "diagnostic", "reload"].indexOf(mode) < 0)
       fail("invalid SHIBUMI_PRIME_MODE")
     Shared.Runtime.hostRegistryPrimeTimeoutMs = 300
   }
@@ -167,7 +178,7 @@ ShellRoot {
       }
 
       const primeSucceeds = ["success", "owner-change", "process-change",
-        "diagnostic"].indexOf(root.mode) >= 0
+        "diagnostic", "reload"].indexOf(root.mode) >= 0
       if (primeSucceeds) {
         if (root.stage === 5) {
           if (!root.replacementBar

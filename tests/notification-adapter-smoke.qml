@@ -27,6 +27,8 @@ ShellRoot {
   readonly property bool jsonCase: Quickshell.env("SHIBUMI_HISTORY_MODE").startsWith("json")
   property int proxyPhase: 0
   property var proxyChecks: ({})
+  property var reloadedAdapter: null
+  Component { id: reloadFactory; Status.NotificationAdapter {} }
 
   function clickLive(token) { return typeof adapter.invokeLive === "function" ? adapter.invokeLive(token) : adapter.focusApp(adapter.pendingModel.get(0)) }
   function fail(message) {
@@ -124,6 +126,7 @@ ShellRoot {
   Process { id: jsonReplace; command: ["mv", "--", dndOnlyAdapter.historyDir + ".next", dndOnlyAdapter.historyDir + ".json"] }
   FileView { id: proxyHistory; path: dndOnlyAdapter.historyDir + "/proxy.json"; preload: false; printErrors: false }
   FileView { id: proxyReceipt; path: Quickshell.env("SHIBUMI_FOCUS_ARGV"); preload: false; printErrors: false }
+  FileView { id: hiddenKeys; path: Quickshell.env("HOME") + "/.local/state/shibumi/notifications/hidden.json"; preload: false; printErrors: false }
 
   Component.onCompleted: {
     dndOnlyAdapter.attachShell(dndOnlyShell)
@@ -148,9 +151,8 @@ ShellRoot {
         if (root.ticks > 100) return root.fail("JSON history deadline")
         if (dndOnlyAdapter.historyState === "loading") return
         if (dndOnlyAdapter.historyLayout !== "json" || dndOnlyAdapter.liveAvailable
-            || dndOnlyAdapter.pendingCount || dndOnlyAdapter.pastDismissAvailable
-            || dndOnlyAdapter.pastClearAvailable || dndOnlyAdapter.dismissPast(0)
-            || dndOnlyAdapter.clearPast()
+            || dndOnlyAdapter.pendingCount || !dndOnlyAdapter.pastDismissAvailable
+            || !dndOnlyAdapter.pastClearAvailable
             || dndOnlyAdapter.startHistoryMutation(["touch", Quickshell.env("SHIBUMI_FOCUS_ARGV") + ".mutation"]))
           return root.fail("JSON history exposed mutation or Live access")
         if (Quickshell.env("SHIBUMI_HISTORY_MODE") !== "json") {
@@ -166,13 +168,27 @@ ShellRoot {
               || counts.tooltipText !== "10 Recent · DND")
             return root.fail("keyed JSON order/seconds/limit/tooltip")
           if (!dndOnlyAdapter.focusApp(first, true)) return root.fail("JSON focus-only refused")
-          jsonReplace.running = true
+          if (!dndOnlyAdapter.dismissPast(0) || dndOnlyAdapter.recentCount !== 9
+              || !dndOnlyAdapter.clearPast() || dndOnlyAdapter.recentCount !== 0)
+            return root.fail("JSON local dismiss/clear")
+          root.reloadedAdapter = reloadFactory.createObject(root)
+          root.reloadedAdapter.attachShell(dndOnlyShell)
           root.proxyPhase = 1
           return
+        } else if (root.proxyPhase === 1) {
+          if (root.reloadedAdapter.historyState !== "ready") return
+          if (root.reloadedAdapter.recentCount !== 0)
+            return root.fail("Clear all did not persist hides for the entire host history")
+          jsonReplace.running = true
+          root.proxyPhase = 2
+          return
         } else {
-          if (dndOnlyAdapter.recentCount !== 1) return
-          if (dndOnlyAdapter.pastModel.get(0).summary !== "Replaced"
-              || counts.tooltipText !== "1 Recent · DND") return root.fail("atomic JSON refresh")
+          // Require the host rewrite to prune hides, not merely an already-empty view.
+          hiddenKeys.reload()
+          if (hiddenKeys.text() !== '["n12"]') return
+          if (root.reloadedAdapter.recentCount !== 0) return
+          if (dndOnlyAdapter.recentCount !== 0
+              || counts.tooltipText !== "0 Recent · DND") return root.fail("atomic JSON refresh")
           proxyReceipt.reload()
           if (!proxyReceipt.text().length) return
         }

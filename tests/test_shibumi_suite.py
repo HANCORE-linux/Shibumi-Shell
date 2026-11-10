@@ -1101,6 +1101,36 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(self.runtime.events, [])
         transaction._close_config_parent()
 
+    def test_recovery_accepts_only_previous_boot_device_change(self) -> None:
+        path = self.paths.config_file
+        path.parent.mkdir(parents=True)
+        for mode in ("stale", "legacy", "inode"):
+            with self.subTest(mode=mode):
+                path.write_bytes(b'{"version":1,"before":true}\n')
+                transaction = PluginTransaction(self.paths, self.runtime)
+                transaction.write_config(b'{"version":1,"after":true}\n')
+                transaction._close_config_parent()
+                journal = json.loads(transaction.journal_file.read_text())
+                journal["configParentIdentity"]["device"] += 1
+                journal["configParentIdentity"]["inode"] += int(mode == "inode")
+                if mode == "legacy":
+                    journal.pop("bootId")
+                else:
+                    journal["bootId"] = "00000000-0000-0000-0000-000000000000"
+                transaction.journal_file.write_text(json.dumps(journal))
+                if mode == "legacy":
+                    os.utime(transaction.journal_file, (1, 1))
+                events = list(self.runtime.events)
+                if mode == "inode":
+                    with self.assertRaisesRegex(TransactionError, "config parent identity"):
+                        recover_transactions(self.paths, self.runtime, suite=self.suite)
+                    self.assertEqual(path.read_bytes(), b'{"version":1,"after":true}\n')
+                    self.assertEqual(self.runtime.events, events)
+                    self.assertTrue(transaction.journal_file.is_file())
+                else:
+                    self.assertEqual(recover_transactions(self.paths, self.runtime, suite=self.suite), 1)
+                    self.assertEqual(path.read_bytes(), b'{"version":1,"before":true}\n')
+
     def test_recovery_rejects_regular_config_parent_swap_before_mutation(self) -> None:
         path = self.paths.config_file
         path.parent.mkdir(parents=True)
@@ -1860,6 +1890,8 @@ class SuiteLifecycleTests(unittest.TestCase):
         version: str = CURRENT_VERSION,
         source_revision: str | None = None,
     ) -> Suite:
+        if source_revision is None and version == "0.2.1":
+            source_revision = "29a588a9d3ec82a5d5c75cc76e8f745f5c9ae629"
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
         suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
         plugin_ids = [item["id"] for item in suite_contract["plugins"]]
@@ -2977,6 +3009,29 @@ class SuiteLifecycleTests(unittest.TestCase):
                 self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
                 active = json.loads(self.paths.config_file.read_text())
                 self.assertEqual(state_entry(active)["shibumi"]["picker"], picker)
+
+    def test_uninstall_refuses_invalid_menu_before_mutation(self) -> None:
+        self.install()
+        menu = self.paths.menu_extension_file
+        state_file = self.paths.state_dir / "install.json"
+        state_before = state_file.read_bytes()
+        config_before = self.paths.config_file.read_bytes()
+        events_before = list(self.runtime.events)
+        transactions = list(self.paths.state_dir.glob("transactions/*"))
+        for raw in ('{"broken": }', menu.read_text().replace(
+                "{\n", '{\n  "one": {}\n  "two": {},\n', 1)):
+            with self.subTest(raw=raw):
+                menu.write_text(raw)
+                with self.assertRaises(CliError) as caught:
+                    command_uninstall(self.args(yes=True), self.suite, self.paths, self.runtime)
+                self.assertIn("invalid Omarchy menu extension JSONC", str(caught.exception))
+                self.assertIn(str(menu), str(caught.exception))
+                self.assertIn("move this file aside, then retry uninstall", str(caught.exception))
+                self.assertEqual(state_file.read_bytes(), state_before)
+                self.assertEqual(self.paths.config_file.read_bytes(), config_before)
+                self.assertEqual(menu.read_text(), raw)
+                self.assertEqual(self.runtime.events, events_before)
+                self.assertEqual(list(self.paths.state_dir.glob("transactions/*")), transactions)
 
     def test_uninstall_preserves_existing_menu_extension(self) -> None:
         extension = self.paths.menu_extension_file

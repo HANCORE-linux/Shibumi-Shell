@@ -50,6 +50,7 @@ from .menu_extension import (
     StockMenuError,
     generated_extension_is_empty,
     install_picker_routing,
+    preflight_picker_removal,
     read_extension,
     remove_picker_routing,
 )
@@ -1287,6 +1288,15 @@ def command_uninstall(
     runtime: OmarchyRuntime,
 ) -> int:
     state = load_install_state(paths, suite)
+    try:
+        menu = read_extension(paths.menu_extension_file)
+        if menu is not None:
+            preflight_picker_removal(menu)
+    except MenuExtensionError as error:
+        raise CliError(
+            f"cannot remove Omarchy menu routing {paths.menu_extension_file}: {error}; "
+            "fix the JSONC syntax or routing markers, or move this file aside, then retry uninstall"
+        ) from error
     plugin_ids = list(dict.fromkeys(state["plugins"]))
     current_plugin_ids = [
         plugin_id for plugin_id in plugin_ids if plugin_id in suite.plugins

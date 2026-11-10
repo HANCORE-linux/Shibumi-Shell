@@ -23,7 +23,9 @@ bar_source="$repo_root/hancore.shibumi.bar/Bar.qml"
   || fail 'registry prime added a production worker or poller'
 [[ $(grep -Fc '"shell", "rescanPlugins"' "$runtime_source") -eq 1 ]] \
   || fail 'runtime must contain exactly the startup-prime rescan dispatch'
-if grep -Eq 'requestHostRegistryRecovery|hostRegistryRecovery|"lock", "isLocked"|StdioCollector' \
+[[ $(grep -Fc '"shell", "reloadPlugins"' "$runtime_source") -eq 1 ]] \
+  || fail 'runtime must contain exactly the startup-prime reload dispatch'
+if grep -Eq 'requestHostRegistryRecovery|hostRegistryRecovery|"lock", "isLocked"' \
     "$runtime_source" "$bar_source"; then
   fail 'retired post-output recovery or lock-probe machinery remains'
 fi
@@ -35,7 +37,7 @@ printf '%s\n' \
   > "$tmpdir/hancore.shibumi.state/.shibumi-managed.json"
 
 mode_index=0
-for mode in success refusal timeout owner-change process-change scope-loss diagnostic; do
+for mode in success refusal timeout owner-change process-change scope-loss diagnostic reload; do
   mode_index=$((mode_index + 1))
   # Keep Quickshell's derived Unix-domain IPC socket below sockaddr_un limits.
   runtime="$tmpdir/r$mode_index"
@@ -82,7 +84,7 @@ for mode in success refusal timeout owner-change process-change scope-loss diagn
 
   phase_sequence="${phases[*]-}"
   case "$mode" in
-    success|owner-change|process-change|diagnostic)
+    success|owner-change|process-change|diagnostic|reload)
       [[ $phase_sequence == "request-accepted native-rescan-acknowledged replacement-bar-observed ready"
           || $phase_sequence == "request-accepted replacement-bar-observed native-rescan-acknowledged ready" ]] \
         || fail "$mode emitted the wrong bounded event sequence: $phase_sequence"

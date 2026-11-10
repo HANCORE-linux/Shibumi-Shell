@@ -6,8 +6,8 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.2.1` is the current stable release target. See the
-[release notes](../.github/release-notes/v0.2.1.md) for changes.
+`0.2.2` is the current stable release target. See the
+[release notes](../.github/release-notes/v0.2.2.md) for changes.
 Install from the release tag using the source workflow below.
 Do not install or update from `main`.
 
@@ -24,9 +24,9 @@ The exact accepted Omarchy and Quickshell packages are recorded in the
 [Shibumi host compatibility record](architecture/quattro-compatibility.md).
 
 Notification history follows the host's on-disk layout. On Omarchy 4.0.6 the Recent list
-keeps per-row removal and "Clear all". On Omarchy 4.5.0 the new notification engine stores
-history in ~/.local/state/omarchy/notifications/history.json; Shibumi reads it without modifying it, and
-those two controls are hidden. Live rows are unavailable through the host proxy on both.
+keeps per-row removal and "Clear all". On Omarchy 4.5.0, Clear all hides every row of
+the host's history locally; ✕ hides one row; the host's history.json is not modified.
+Live rows remain unavailable through the host proxy on both.
 
 ## Install from the Omarchy package
 
@@ -53,7 +53,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.1
+git checkout v0.2.2
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -69,7 +69,7 @@ To inspect the transaction before installing:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.1
+git checkout v0.2.2
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -136,6 +136,11 @@ directories, invalid state, and unfinished predecessor transactions.
 
 ## Update
 
+Run `shibumi-shell update` and `shibumi-shell uninstall` (or their source equivalents)
+from a terminal inside the Hyprland session. Plain SSH cannot reach the compositor
+for the shell restart; it can hang and leave an interrupted transaction, recovered
+by the next run from a session terminal.
+
 For a package installation, update the system package through Omarchy and then
 stage the new immutable payload into the current user's shell:
 
@@ -149,10 +154,10 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-Update an exactly admitted source installation to 0.2.1 from its trusted
-checkout. The most recent published predecessor is 0.2.0: its tag
-(`795eae86`) and main integration merge (`5c14ced1`) are both admitted with the
-unchanged released payload. Its package identity is admitted too. Older
+Update an exactly admitted source installation to 0.2.2 from its trusted
+checkout. The most recent published predecessor is 0.2.1: tag `29a588a9` and
+the main integration merges `5698d93` (#100) and `cab07a08` (#101, docs only)
+carry the same released payload; its package identity is admitted too. Older
 supported identities, including Beta.16.4 and Beta.16.5, remain in the
 [lifecycle predecessor contract](../contracts/lifecycle-predecessors-v1.json).
 Do not treat this list as a version range:
@@ -160,11 +165,14 @@ Do not treat this list as a version range:
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.2.1
+git checkout v0.2.2
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
 ```
+
+If `git fetch --tags` reports `would clobber existing tag`, use `git fetch --tags --force`;
+`v0.2.1` was re-tagged before publication.
 
 An update requires a suite-managed Shibumi installation. It stages all 24
 current plugin roots as one transaction and verifies that the shell executes
@@ -334,6 +342,8 @@ restores the managed layout.
 
 ## Uninstall
 
+Run these commands from a terminal inside the Hyprland session, not plain SSH.
+
 For a package installation, remove the user-scoped suite first and the system
 package second:
 
@@ -390,6 +400,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/shibumi/
 ```
 
 Interrupted transactions are recovered before the next mutating suite command.
+After a reboot, recovery accepts a changed device number only for the same config-directory inode and a journal from an earlier boot (older journals use their modification time); inode changes still refuse recovery.
 Do not edit `install.json`, transaction snapshots, ownership markers, or plugin
 hashes by hand.
 
@@ -413,7 +424,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.2.1
+git checkout v0.2.2
 ./scripts/shibumi-suite install --yes
 ```
 

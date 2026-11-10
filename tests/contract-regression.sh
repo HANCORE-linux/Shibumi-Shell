@@ -1394,7 +1394,8 @@ OMARCHY_PATH="$OMARCHY_PATH" "$repo_root/tests/state-service-regression.sh"
   official_monitor_panel=${OMARCHY_PATH}/shell/plugins/panels/monitor/Panel.qml
   [[ -s $official_monitor_panel ]] || fail "official Quattro monitor panel is missing"
   monitor_shape_contracts=(enabledDisplayCount toggleDisplay)
-  if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 84b3f2872b5023c13967543ed4a98b08fcac5b21 ]]; then
+  if [[ $SHIBUMI_OMARCHY_SOURCE_REVISION == 84b3f2872b5023c13967543ed4a98b08fcac5b21 \
+     || $SHIBUMI_OMARCHY_SOURCE_REVISION == 8e33e7233c01bf3b563b344bffc790a5d2dd98ea ]]; then
     monitor_shape_contracts=('function previewBrightness(name, value)'
       'function setScale(name, scale)' 'function runAction(')
   fi
