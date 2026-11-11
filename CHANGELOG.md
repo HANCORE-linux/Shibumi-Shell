@@ -5,6 +5,7 @@
 ### Fixed
 
 - Status: promptly track recording starts and exits with either supported recorder and marker location.
+- Status: follow voxtype directly when the host status helper is absent, without retrying an unavailable backend.
 
 ## [0.2.3] - 2026-11-11
 

@@ -54,6 +54,7 @@ Item {
   property string voxtypeState: "idle"
   property string voxtypeHint: ""
   property bool voxtypeAvailable: false
+  property bool voxtypeRetryEnabled: true
   readonly property bool voxtypeActive: voxtypeState === "recording"
     || voxtypeState === "transcribing"
 
@@ -217,12 +218,13 @@ Item {
 
   Process {
     id: voxtypeStatus
-    command: ["bash", "-lc", "exec omarchy-voxtype-status"]
+    command: ["bash", "-c", "if command -v omarchy-voxtype-status >/dev/null 2>&1; then exec omarchy-voxtype-status; elif command -v voxtype >/dev/null 2>&1; then exec setpriv --pdeathsig TERM voxtype status --follow --extended --format json; else exit 69; fi"]
     running: root.runtimeProbesEnabled
     stdout: SplitParser {
       onRead: function(data) { root.updateVoxtype(data) }
     }
-    onExited: {
+    onExited: function(exitCode) {
+      root.voxtypeRetryEnabled = exitCode !== 69
       root.voxtypeAvailable = false
       root.voxtypeState = "idle"
       root.voxtypeHint = ""
@@ -231,7 +233,7 @@ Item {
 
   Timer {
     interval: 60000
-    running: root.runtimeProbesEnabled && !voxtypeStatus.running
+    running: root.runtimeProbesEnabled && root.voxtypeRetryEnabled && !voxtypeStatus.running
     repeat: true
     onTriggered: voxtypeStatus.running = true
   }
