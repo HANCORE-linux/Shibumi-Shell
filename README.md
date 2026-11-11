@@ -16,8 +16,8 @@ process.</sub></p>
 [Documentation](docs/README.md) ·
 [Release status](docs/release-readiness.md)
 
-`0.2.2` is the current stable release target. See the
-[release notes](.github/release-notes/v0.2.2.md) for changes. Before using an older version, read the
+`0.2.3` is the current stable release target. See the
+[release notes](.github/release-notes/v0.2.3.md) for changes. Before using an older version, read the
 [backup and downgrade warning](docs/install.md#backup-before-downgrade).
 The current pinned host contracts target Omarchy and Omarchy Settings `4.5.0-3`
 (source tag `v4.5.0`, revision `ac2690cd7`) with Quickshell `0.3.2.r7.g2b4501a-1`; the
@@ -84,7 +84,7 @@ shell as your user. Update with `omarchy update` and `shibumi-shell update --yes
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.2
+git checkout v0.2.3
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -92,9 +92,9 @@ Run the Pacman line yourself; it installs the runtime commands and fonts and
 is the only step that needs `sudo`. The Shibumi suite never calls Pacman: it
 runs as the desktop user and writes only user-scoped plugin state.
 
-Update an exactly admitted source installation to 0.2.2. The most recent
-published predecessor is 0.2.1: tag `29a588a9` and the main integration merges
-`5698d93` (#100) and `cab07a08` (#101, docs only) carry the same released payload;
+Update an exactly admitted source installation to 0.2.3. The most recent
+published predecessor is 0.2.2: tag `5380c0db` and the main integration merge
+`d20f0526` (#103) carry the same released payload;
 its package identity is admitted too. Older supported identities remain
 admitted; exact revisions and payloads, not a version range, govern admission.
 See the [update guide](docs/install.md#update).
@@ -102,7 +102,7 @@ See the [update guide](docs/install.md#update).
 ```sh
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.2.2
+git checkout v0.2.3
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status

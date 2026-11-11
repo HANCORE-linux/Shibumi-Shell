@@ -1,6 +1,6 @@
 # Source installation and OPR packaging
 
-Status: `0.2.2` source and package workflows. `shibumi-shell` has been in
+Status: `0.2.3` source and package workflows. `shibumi-shell` has been in
 `omacom/omarchy-pkgs` since 0.2.0 (2026-11-04), reaching the `edge` ring first.
 AUR publication is not a target.
 
