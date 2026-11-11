@@ -1,6 +1,8 @@
 # Changelog
 
-## [0.2.3] - Unreleased
+## [0.2.3] - 2026-11-11
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference f428bb4f.
 
 ### Fixed
 
