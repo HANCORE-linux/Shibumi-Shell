@@ -277,6 +277,9 @@ def main() -> None:
     ):
         if marker not in testing_guide:
             fail(f"testing guide does not explain the baseline contract: {marker}")
+        if marker.startswith("contracts/baselines/omarchy-forward-compat-"):
+            if f"forward reference {Path(marker).stem.rsplit('-', 1)[1]}." not in " ".join(current_content["docs/getting-started.md"].split()):
+                fail("getting-started guide does not match the forward reference")
 
     for stale_claim in (
         "remain separate unfinished work",
