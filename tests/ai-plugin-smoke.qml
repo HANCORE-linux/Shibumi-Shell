@@ -88,6 +88,31 @@ ShellRoot {
     })
   }
 
+  QtObject { id: cacheShell; property var state: null; property var bar: fakeBar; function serviceFor(_id) { return state } }
+  Component { id: cacheProbe; Ai.Service {
+    property var calls: []
+    function startBackendProcess(_kind, command) { calls = calls.concat([command]); return true }
+  } }
+  function checkCachedDiscovery() {
+    const timer = (s, ms) => Array.from(s.resources).find(o => "interval" in o && o.interval === ms)
+    for (const hours of [1, 7, 0, 6, 25, -1, 2, 3]) {
+      cacheShell.state = null
+      const p = cacheProbe.createObject(startupEmpty, {shell: cacheShell, omarchyPath: startupEmpty.omarchyPath, agentsUsageDirOverride: startupEmpty.agentsUsageDir})
+      p.providerOverrides = ["claude", "codex", "grok", "hermes", "opencode"].map(id => ({providerId: id, ready: true}))
+      const before = p.providerEnablementSignature, now = Date.now(), at = now - hours * 3600000
+      if (hours !== 0) p.applyAgentRecord("unused", JSON.stringify({schemaVersion: hours === 3 ? 2 : 1, id: "unused", name: "Unused", ready: false, limits: [], updatedAt: new Date(at).toISOString()}), now)
+      cacheShell.state = agentsState; void(p.serviceActive); void(p.providers); timer(p, 10000).triggered()
+      if (hours === 2) { fakeBar.agentsDisabled = true; fakeBar.agentsDisabled = false }
+      timer(p, 120000).triggered()
+      if (before === p.providerEnablementSignature || p.calls[0].slice(2).join(" ") !== "--except opencode --except fireworks claude codex grok hermes"
+          || p.calls.length !== (hours === 1 ? 1 : 2) || (hours === 1 && p.lastDiscoveryStartedAtMs !== at)) { p.destroy(); return false }
+      console.log("442_AI_CACHE", JSON.stringify({hours: hours, commands: p.calls, nextDueAfterStartMs: (hours === 1 ? -3600000 : 120000) + p.agentsDiscoveryInterval}))
+      p.lastDiscoveryStartedAtMs = Date.now() - p.agentsDiscoveryInterval + 1000; p.requestPeriodicBackend(); if (p.runningBackendDiscovery) { p.destroy(); return false }
+      p.lastDiscoveryStartedAtMs = Date.now() - p.agentsDiscoveryInterval; p.requestPeriodicBackend(); if (!p.runningBackendDiscovery) { p.destroy(); return false }
+      p.destroy()
+    }
+    return true
+  }
   property bool startupChecked: false
   Ai.Service { id: startupEmpty; shell: agentsShell
     omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
@@ -96,6 +121,7 @@ ShellRoot {
   function checkStartup() {
     const s = agentsService
     if (s.providers.length !== 2) return false
+    if (!checkCachedDiscovery()) { fail("cached discovery/startup enablement/periodic boundary"); return false }
     const timer = (service, ms) => Array.from(service.resources).find(o => "interval" in o && o.interval === ms)
     const first = timer(s, 10000), discovery = timer(s, 120000)
     if (!first.running || !discovery.running || first.repeat || discovery.repeat || s.backendProcessKind !== "") { fail("startup clocks/early dispatch"); return false }
