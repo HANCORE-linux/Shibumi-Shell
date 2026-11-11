@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.4] - Unreleased
+
+### Fixed
+
+- Status: promptly track recording starts and exits with either supported recorder and marker location.
+
 ## [0.2.3] - 2026-11-11
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference f428bb4f.

@@ -144,14 +144,31 @@ Item {
     onFileChanged: {
       reload()
       root.refreshRecording()
+      recordingRetry.restart()
     }
     onLoaded: root.refreshRecording()
     onLoadFailed: root.refreshRecording()
   }
 
+  FileView {
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-screenrecord-filename"
+    watchChanges: root.runtimeProbesEnabled
+    printErrors: false
+    onFileChanged: { reload(); root.refreshRecording(); recordingRetry.restart() }
+    onLoaded: root.refreshRecording()
+    onLoadFailed: root.refreshRecording()
+  }
+
+  // Markers survive video finalization; pidwait observes exit without polling.
+  Process {
+    command: ["pidwait", "-p", root.recordingPid]
+    running: root.runtimeProbesEnabled && root.recordingPid !== ""
+    onExited: { root.refreshRecording(); recordingRetry.restart() }
+  }
+
   Process {
     id: recordingProbe
-    command: ["pgrep", "-o", "-f", "^gpu-screen-recorder"]
+    command: ["pgrep", "-o", "-f", "^(gpu-screen-recorder|wf-recorder)( |$)"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.setRecordingPid(text)

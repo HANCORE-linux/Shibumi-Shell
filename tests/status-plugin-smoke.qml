@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "status" as Status
 import "hancore.shibumi.bar/services" as BarServices
 import "hancore.shibumi.state/runtime" as SuiteRuntime
@@ -10,6 +11,30 @@ import "fixtures" as Fixtures
 ShellRoot {
   id: root
 
+  property int recordingPhase: 0
+  property double recordingChangedAt: 0
+  property bool recordingChecked: false
+  Status.Service { id: recordingBackend; runtimeProbesEnabled: false }
+  FileView { id: recordingMarker; path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-screenrecord-filename"; preload: false; printErrors: false }
+  Process { id: recordingChild; command: ["bash", "-c", "exec -a wf-recorder sleep 30"] }
+  Timer {
+    interval: 40; repeat: true; running: true
+    onTriggered: {
+      const now = Date.now()
+      if (root.recordingPhase === 0) {
+        Array.from(recordingBackend.resources).filter(p => "command" in p && p.command[0] === "bash").forEach(p => p.command = ["true"])
+        recordingBackend.runtimeProbesEnabled = true; recordingChild.running = true; root.recordingPhase = 1; return
+      }
+      if (root.recordingPhase === 1) { recordingMarker.setText("fixture"); root.recordingChangedAt = now; root.recordingPhase = 2; return }
+      if ((root.recordingPhase === 2 || root.recordingPhase === 4) && now - root.recordingChangedAt > 1100) return root.fail("recording event deadline")
+      if (root.recordingPhase === 2 && recordingBackend.recording) { console.log("recording start ms", now - root.recordingChangedAt); root.recordingPhase = 3 }
+      if (root.recordingPhase === 3 && now - root.recordingChangedAt >= 2200) {
+        if (recordingBackend.recordingElapsed < 1) return root.fail("recording elapsed did not advance")
+        recordingChild.signal(15); root.recordingChangedAt = now; root.recordingPhase = 4
+      }
+      if (root.recordingPhase === 4 && !recordingBackend.recording) { console.log("recording stop ms", now - root.recordingChangedAt); root.recordingChecked = true; stop() }
+    }
+  }
   property int phase: 0
   property int phaseTicks: 0
   property real initialWidth: 0
@@ -847,6 +872,7 @@ ShellRoot {
         if (root.phaseTicks < 3) return
         if (root.clickTargets.length !== 0 || fakeBar.activePopout !== null)
           return root.fail("destruction cleanup")
+        if (!root.recordingChecked) return
         stop()
         console.log("status plugin smoke passed")
         Qt.quit()
