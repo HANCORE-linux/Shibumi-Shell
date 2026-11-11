@@ -9,6 +9,10 @@
 - Update Center: recheck package counts after package transactions without polling or reading the package log.
 - AI: avoid repeating a recent discovery after a shell restart when provider enablement is unchanged.
 
+### Changed
+
+- Validation: forward compatibility is pinned to Omarchy quattro 551dc629.
+
 ## [0.2.3] - 2026-11-11
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference f428bb4f.

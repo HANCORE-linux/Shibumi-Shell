@@ -126,11 +126,11 @@ SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH=/path/to/omarchy-v4.0.4 \
   python3 tests/native-catalog-resource-regression.py
 SHIBUMI_AGENTS_OMARCHY_PATH=/path/to/omarchy-v4.5.0 \
   ./tests/omarchy-agents-contract-regression.sh
-SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-f428bb4f \
+SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH=/path/to/omarchy-forward-compat-551dc629 \
   ./tests/omarchy-forward-compat-contract-regression.sh
 ```
 
-The forward checkout must be exactly `f428bb4fe4d2e688fa05190b7d3c61430805b601`.
+The forward checkout must be exactly `551dc62969046709e7c6176dbdbccacce580a487`.
 Private forward-alignment patches do not authorize runner reprovisioning,
 Actions-variable changes, installation, or publication. Record Quickshell
 package provenance: active package/parity/forward gates require Omarchy-repository

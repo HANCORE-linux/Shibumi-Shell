@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "id": "forward-compat-551dc629",
+  "profile": "forward-compat",
+  "repository": "https://github.com/basecamp/omarchy",
+  "sourceRevision": "551dc62969046709e7c6176dbdbccacce580a487",
+  "provenance": {
+    "kind": "git",
+    "revision": "551dc62969046709e7c6176dbdbccacce580a487"
+  },
+  "quickshellPackage": {
+    "name": "quickshell",
+    "version": "0.3.2.r7.g2b4501a-1"
+  },
+  "subtrees": [
+    {
+      "path": "shell",
+      "entryPolicy": "regular-files",
+      "entryCount": 324,
+      "inventorySha256": "a6372c2bbaa7de9d7835395483baafdb6554e36fe95f1eb20b85fdaf91fbfa96",
+      "structureSha256": "b863d0119f4403c85a784321bf285f23e2e7884dbd0a7de64e4356d8b8c60675",
+      "contentSha256": "af203bba2969761ab5654aa8faf52f318d35283a228a3d32ffc43896a2837c25"
+    },
+    {
+      "path": "bin",
+      "entryPolicy": "regular-files",
+      "entryCount": 592,
+      "inventorySha256": "fafaa0e2e1d857d74326a33e344f55c266f67facdf35ebbb5af3bc3d28c62284",
+      "structureSha256": "c8d8e178d5574b0abbabb51053ff24560cf132ac097be7ccca986043f3b34d69",
+      "contentSha256": "9bcbe2e48db11141f811bcbc89fba0a7662b95d318825a0c43265c5019130e29"
+    },
+    {
+      "path": "config",
+      "entryPolicy": "regular-files",
+      "entryCount": 85,
+      "inventorySha256": "e8753b382ee2e948fb16d252334bd5c813d5def9b814ddc6d7553585c122c58d",
+      "structureSha256": "9afc861344ebc5a29f5408d98d4aa7ae5248b7d41a4d0bc50585e45ea8759d7f",
+      "contentSha256": "5c7ef2a4779465ac4c2c04f08cd8914283e5f78e3867d9d50f7b001f8bedc68a"
+    }
+  ]
+}
