@@ -15,7 +15,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.network"
-    implementationVersion: "0.2.2"
+    implementationVersion: "0.2.3"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -34,14 +34,11 @@ Item {
     || root.recoveryBlocked || root.livenessPhase === "recovery-blocked"
   readonly property bool busy: actions.busy || profileActions.busy
     || qrSecrets.busy
-  readonly property bool qrSecretBusy: qrSecrets.busy
-  readonly property string qrSecretError: qrSecrets.errorCode
   readonly property bool wifiEnabled: adapter.radioSnapshot.enabled
   readonly property bool wifiAvailable: adapter.radioSnapshot.available
   readonly property bool scanning: scanner.scanning || scanner.scannerEnabled
   readonly property var radioSnapshot: adapter.radioSnapshot
   readonly property var deviceSnapshots: adapter.deviceSnapshots
-  readonly property var visibleNetworkSnapshots: adapter.networkSnapshots
   readonly property var profileSnapshots: adapter.profileSnapshots
   readonly property var savedProfileSnapshots: adapter.savedProfileSnapshots
   readonly property var connectionSnapshot: adapter.connectionDetailsSnapshot
@@ -94,7 +91,6 @@ Item {
   readonly property bool speedTestReady: speedTest.available
     && speedTest.testInput !== null
   readonly property bool speedTestRunning: speedTest.running
-  readonly property bool speedTestHasRun: speedTest.speedTestResult !== null
   readonly property string speedTestPhase: speedTest.phase === "down"
     || speedTest.phase === "up" ? speedTest.phase : ""
   readonly property string speedTestDownloadMbps:
@@ -218,11 +214,6 @@ Item {
     if (root.mutationBlocked) return false
     const target = owner || implementation.firstSessionOwner()
     return target ? speedTest.requestRun(target) : false
-  }
-
-  function stopSpeedTest(owner) {
-    const target = owner || implementation.firstSessionOwner()
-    return target ? speedTest.cancel(target) : false
   }
 
   function beginQrGesture(owner, entry) {

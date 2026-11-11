@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.3] - 2026-11-11
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference f428bb4f.
+
+### Fixed
+
+- Lifecycle: preserve the picker image style across `deactivate --keep-layout` and `activate`.
+- AI: keep provider tabs in a stable order when changing the selected provider.
+- AI: read OpenCode 2.x usage and count migrated messages only once, retaining legacy-store support.
+- Bar: avoid an empty V2 reconcile request only when both settled State and the planned native layout already match.
+
+### Changed
+
+- AI: refresh existing provider tabs periodically, with bounded discovery and a full discovery fallback after a failed tab-only update.
+- AI: defer automatic startup collection without forcing it, while reading existing records immediately.
+- Validation: forward compatibility is pinned to Omarchy quattro f428bb4f.
+
+### Removed
+
+- Unused declarations across 14 plugins and two obsolete, runner-less test fixtures.
+
 ## [0.2.2] - 2026-11-09
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 8e33e723.

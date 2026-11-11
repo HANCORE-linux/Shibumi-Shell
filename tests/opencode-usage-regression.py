@@ -155,6 +155,29 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
         self.assertEqual(output["_today_tokens"], 215)
         self.assertEqual(output["_day"], today.date().isoformat())
 
+    def test_v2_assistant_overrides_migrated_legacy_message(self) -> None:
+        timestamp = int(time.time() * 1000)
+        self.add_message(session="session", timestamp_ms=timestamp,
+                         model="legacy-model", input_tokens=9000)
+        data = {"model": {"id": "v2-model", "providerID": "opencode", "variant": "free"},
+                "tokens": {"input": 100, "output": 50, "reasoning": 10,
+                           "cache": {"read": 1000, "write": 5}},
+                "cost": 0, "time": {"created": timestamp, "completed": timestamp}}
+        with sqlite3.connect(self.database) as con:
+            con.execute("alter table message add column id text")
+            con.execute("update message set id = 'same-id'")
+            con.execute("create table session_message (id text primary key, session_id text, "
+                        "type text, seq integer, time_created integer, time_updated integer, data text)")
+            con.execute("insert into session_message values (?, ?, ?, ?, ?, ?, ?)",
+                        ("same-id", "session", "assistant", 1, timestamp, timestamp, json.dumps(data)))
+        output = self.run_scripts()
+        self.assertEqual(output["_today_tokens"], 165)
+        self.assertEqual(output["_today_tokens_with_cache_read"], 1165)
+        self.assertEqual(output["_model"], "v2-model (opencode)")
+        self.assertEqual(len(output["_models"]), 1)
+        self.assertEqual(output["_models"][0]["total"], 165)
+        self.assertEqual(output["_cost_today"], 0)
+
     def test_local_day_bounds_follow_dst_midnights(self) -> None:
         if not hasattr(time, "tzset"):
             self.skipTest("tzset is unavailable")

@@ -15,7 +15,6 @@ PanelWindow {
   readonly property bool validScreen: controller.activeScreen !== null
     && String(controller.activeScreen.name || "") !== ""
   readonly property bool tanzakuActive: controller.pickerStyle === "tanzaku"
-  readonly property bool carouselActive: controller.pickerStyle === "carousel"
   readonly property bool selectedIsCurrent: controller.selectedEntry !== null
     && (controller.mode === "theme"
       ? String(controller.selectedEntry.label || "")

@@ -1892,6 +1892,8 @@ class SuiteLifecycleTests(unittest.TestCase):
     ) -> Suite:
         if source_revision is None and version == "0.2.1":
             source_revision = "29a588a9d3ec82a5d5c75cc76e8f745f5c9ae629"
+        if source_revision is None and version == "0.2.2":
+            source_revision = "d20f0526b12684453252fe2d722e996fedfe5eab"
         suite_contract_path = self.source / "contracts/plugin-suite-v1.json"
         suite_contract = json.loads(suite_contract_path.read_text(encoding="utf-8"))
         plugin_ids = [item["id"] for item in suite_contract["plugins"]]
@@ -4940,6 +4942,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         previous = load_install_state(self.paths, self.suite)["previousBar"]
         config = json.loads(self.paths.config_file.read_text())
         config["bar"]["layout"]["right"] = [entry for entry in config["bar"]["layout"]["right"] if entry_id(entry) in self.suite.plugins]
+        state_entry(config)["shibumi"]["picker"] = {"imageStyle": "tanzaku"}
         atomic_write(self.paths.config_file, encode_config(config))
         self.assertEqual(command_deactivate(self.args(keep_layout=True), self.suite, self.paths, self.runtime), 0)
         poisoned_bar = json.loads(self.paths.config_file.read_text())["bar"]
@@ -4947,6 +4950,7 @@ class SuiteLifecycleTests(unittest.TestCase):
         self.assertEqual(poisoned_bar["centerAnchor"], "hancore.shibumi.center")
         self.assertEqual(command_activate(self.args(), self.suite, self.paths, self.runtime), 0)
         self.assertEqual(load_install_state(self.paths, self.suite)["previousBar"], previous)
+        self.assertEqual(state_entry(json.loads(self.paths.config_file.read_text()))["shibumi"]["picker"]["imageStyle"], "tanzaku")
         for predecessor in ("original", "poisoned", "missing"):
             with self.subTest(predecessor=predecessor):
                 if predecessor != "original":

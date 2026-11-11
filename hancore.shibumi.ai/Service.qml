@@ -20,7 +20,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.ai"
-    implementationVersion: "0.2.2"
+    implementationVersion: "0.2.3"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -65,6 +65,17 @@ Item {
   property string backendError: ""
   property bool pendingBackendRefresh: false
   property bool pendingBackendForce: false
+  property bool pendingBackendDiscovery: false
+  property bool runningBackendDiscovery: true
+  property double lastDiscoveryStartedAtMs: 0
+  readonly property int agentsDiscoveryInterval: 6 * 60 * 60 * 1000
+  readonly property int startupRefreshDelayMs: 10 * 1000
+  readonly property int startupDiscoveryDelayMs: 120 * 1000
+  property bool startupRefreshPending: true
+  property bool startupDiscoveryPending: true
+  readonly property var tabProviderIds: providers.filter(provider =>
+    provider.providerId !== "opencode" && providerEnabled(provider.providerId))
+    .map(provider => provider.providerId)
   property bool providerSettingsReady: false
   property int providerSettingsGeneration: 0
   property int runningSettingsGeneration: 0
@@ -147,7 +158,7 @@ Item {
     if (!serviceActive) return result
     if (Array.isArray(providerOverrides) && providerOverrides.length > 0) {
       appendProviderSnapshots(result, providerOverrides)
-      return orderProviders(result, requestedTool)
+      return orderProviders(result)
     }
     if (agentsBackendActive) {
       for (const id of Object.keys(agentRecords))
@@ -157,7 +168,7 @@ Item {
       appendProviderSnapshot(result, codexLoader.item)
     }
     if (openCodeProvider.enabled) appendProviderSnapshot(result, openCodeProvider)
-    return orderProviders(result, requestedTool)
+    return orderProviders(result)
   }
   readonly property string selectedTool: resolveTool(requestedTool)
   readonly property var selectedProvider: providerFor(selectedTool)
@@ -374,11 +385,9 @@ Item {
     return providers.length ? providers[0].providerId : ""
   }
 
-  function orderProviders(source, preferred) {
+  function orderProviders(source) {
     return source.sort((a, b) => {
       const first = a.providerId, second = b.providerId
-      if (first === preferred) return -1
-      if (second === preferred) return 1
       if (first === "opencode") return 1
       if (second === "opencode") return -1
       return first < second ? -1 : first > second ? 1 : 0
@@ -395,16 +404,15 @@ Item {
 
   function cycleTool(direction) {
     if (providers.length < 2) return false
-    const ordered = orderProviders(providers.slice(), "")
     let index = 0
-    for (let current = 0; current < ordered.length; current++) {
-      if (String(ordered[current].providerId || "") === selectedTool) {
+    for (let current = 0; current < providers.length; current++) {
+      if (String(providers[current].providerId || "") === selectedTool) {
         index = current
         break
       }
     }
     const step = Number(direction) < 0 ? -1 : 1
-    const next = ordered[(index + step + ordered.length) % ordered.length]
+    const next = providers[(index + step + providers.length) % providers.length]
     return selectTool(next.providerId)
   }
 
@@ -581,7 +589,7 @@ Item {
     ].join("; ")]
   }
 
-  function agentsUpdateCommand(force) {
+  function agentsUpdateCommand(force, discovery) {
     const command = [agentsUpdateScript, String(omarchyPath || "")]
     // Omarchy discovers collectors; Shibumi owns OpenCode independently.
     if (force === true) command.push("--force")
@@ -589,7 +597,19 @@ Item {
     for (const id of Object.keys(settings.providers || {})) {
       if (id !== "opencode" && !providerEnabled(id)) command.push("--except", id)
     }
+    if (force !== true && discovery === false) command.push(...tabProviderIds)
     return command
+  }
+
+  function requestPeriodicBackend() {
+    return requestCurrentBackend(false, lastDiscoveryStartedAtMs > 0
+      && Date.now() - lastDiscoveryStartedAtMs >= agentsDiscoveryInterval)
+  }
+
+  function panelOpened() {
+    if (lastDiscoveryStartedAtMs > 0
+        && Date.now() - lastDiscoveryStartedAtMs >= agentsRefreshInterval)
+      requestAgentsUpdate(false, true)
   }
 
   function startBackendProcess(kind, command) {
@@ -615,35 +635,44 @@ Item {
     return startBackendProcess("legacy-detection", legacyDetectionCommand())
   }
 
-  function requestAgentsUpdate(force) {
+  function requestAgentsUpdate(force, discovery) {
     if (!agentsBackendActive || !runtimeProbesEnabled
         || !serviceActive) return false
+    const discover = force === true || discovery !== false || tabProviderIds.length === 0
     if (backendProcess.running || backendProcessKind !== "") {
       pendingBackendRefresh = true
       pendingBackendForce = pendingBackendForce || force === true
+      pendingBackendDiscovery = pendingBackendDiscovery || discover
       return true
     }
-    return startBackendProcess("agents-update", agentsUpdateCommand(force))
+    runningBackendDiscovery = discover
+    const started = startBackendProcess("agents-update", agentsUpdateCommand(force, discover))
+    if (started) startupRefreshPending = false
+    if (started && discover) lastDiscoveryStartedAtMs = Date.now()
+    return started
   }
 
-  function requestCurrentBackend(force) {
+  function requestCurrentBackend(force, discovery) {
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled)
       return false
     return agentsBackendActive
-      ? requestAgentsUpdate(force === true) : requestLegacyDetection()
+      ? requestAgentsUpdate(force === true, discovery) : requestLegacyDetection()
   }
 
   function reconcileBackendLifecycle(force) {
+    const defer = startupRefreshPending || (agentsBackendActive && startupDiscoveryPending)
     providerSettingsGeneration++
     pendingBackendRefresh = false
     pendingBackendForce = false
+    pendingBackendDiscovery = false
     if (!runtimeProbesEnabled || !serviceActive || !anyProviderEnabled) {
       if (backendProcess.running) backendProcess.running = false
     } else if (backendProcess.running || backendProcessKind !== "") {
-      pendingBackendRefresh = true
+      pendingBackendRefresh = !defer
       pendingBackendForce = force === true
+      pendingBackendDiscovery = true
       if (backendProcess.running) backendProcess.running = false
-    } else {
+    } else if (!defer) {
       requestCurrentBackend(force === true)
     }
     providerRevision++
@@ -671,17 +700,24 @@ Item {
       if (Number(exitCode) === 66) {
         agentsBackendUnavailable = true
       } else {
+        if (Number(exitCode) !== 0 && !runningBackendDiscovery) {
+          pendingBackendRefresh = true
+          pendingBackendDiscovery = true
+        }
         rescanAgents()
       }
       if (Number(exitCode) !== 0 && Number(exitCode) !== 66 && error !== "")
         console.warn("Shibumi AI agents update failed:", error.slice(0, 512))
     }
     providerRevision++
+    if (agentsBackendActive && startupDiscoveryPending && runningSettingsGeneration !== providerSettingsGeneration
+        && !pendingBackendForce) pendingBackendRefresh = false
     if (pendingBackendRefresh) {
-      const force = pendingBackendForce
+      const force = pendingBackendForce, discovery = pendingBackendDiscovery
       pendingBackendRefresh = false
       pendingBackendForce = false
-      if (agentsBackendActive) requestAgentsUpdate(force)
+      pendingBackendDiscovery = false
+      if (agentsBackendActive) requestAgentsUpdate(force, discovery)
       else requestLegacyDetection()
     }
   }
@@ -711,6 +747,30 @@ Item {
   }
 
   Timer {
+    id: startupRefreshTimer
+    interval: root.startupRefreshDelayMs
+    running: root.providerSettingsReady && root.startupRefreshPending
+    repeat: false
+    onTriggered: {
+      root.startupRefreshPending = false
+      const discover = root.tabProviderIds.length === 0
+      if (root.requestCurrentBackend(false, discover) && root.agentsBackendActive && discover)
+        root.startupDiscoveryPending = false
+    }
+  }
+
+  Timer {
+    id: startupDiscoveryTimer
+    interval: root.startupDiscoveryDelayMs
+    running: root.providerSettingsReady && root.startupDiscoveryPending
+    repeat: false
+    onTriggered: {
+      root.startupDiscoveryPending = false
+      if (root.agentsBackendActive) root.requestAgentsUpdate(false, true)
+    }
+  }
+
+  Timer {
     id: backendTimer
     interval: root.agentsBackendActive
       ? root.agentsRefreshInterval : 60 * 1000
@@ -719,7 +779,7 @@ Item {
     repeat: true
     onTriggered: {
       root.providerRevision++
-      root.requestCurrentBackend(false)
+      root.requestPeriodicBackend()
     }
   }
 
@@ -827,7 +887,7 @@ Item {
   }
 
   onProviderEnablementSignatureChanged: {
-    if (providerSettingsReady) reconcileBackendLifecycle(true)
+    if (providerSettingsReady) reconcileBackendLifecycle(false)
   }
 
   Component.onCompleted: {
@@ -838,6 +898,8 @@ Item {
 
   Component.onDestruction: {
     agentRecordExpiryTimer.stop()
+    startupRefreshTimer.stop()
+    startupDiscoveryTimer.stop()
     backendTimer.stop()
     agentDiscovery.running = false
     if (backendProcess.running) backendProcess.running = false

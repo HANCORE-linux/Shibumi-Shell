@@ -116,7 +116,6 @@ Column {
     Commons.Style.font.bodySmall * uiScale
   readonly property real detailFontSize:
     Commons.Style.font.caption * uiScale
-  readonly property int labelFontWeight: Font.DemiBold
   readonly property int valueFontWeight: Font.DemiBold
   readonly property int detailFontWeight: Font.Normal
 

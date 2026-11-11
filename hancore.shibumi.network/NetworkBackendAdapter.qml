@@ -88,13 +88,6 @@ Item {
   readonly property var savedProfileSnapshots: Model.cloneWithGeneration(
     root.savedProfileCatalogAvailable ? root.savedProfileProjection.rows : [],
     root.generation)
-  readonly property var savedProfileCatalogSnapshot: ({
-    schemaVersion: root.schemaVersion,
-    available: root.savedProfileCatalogAvailable,
-    degraded: root.savedProfileCatalogDegraded,
-    count: root.savedProfileSnapshots.length,
-    generation: root.generation
-  })
   readonly property var telemetryProjection: implementation.telemetryProjection()
   readonly property bool networkTelemetryAvailable:
     root.telemetryProjection.available
@@ -129,13 +122,6 @@ Item {
     sampleMonotonicMs: root.telemetryProjection.row.sampleMonotonicMs,
     generation: root.generation
   }) : null
-  readonly property var networkTelemetrySnapshot: ({
-    schemaVersion: root.schemaVersion,
-    available: root.networkTelemetryAvailable,
-    degraded: root.networkTelemetryDegraded,
-    connected: root.networkTelemetryConnected,
-    generation: root.generation
-  })
   readonly property var reachabilityProjection:
     implementation.reachabilityProjection()
   readonly property bool networkReachabilityAvailable:
@@ -146,12 +132,6 @@ Item {
     root.networkReachabilityAvailable
       ? implementation.reachabilityPublic(root.reachabilityProjection.row)
       : null
-  readonly property var networkReachabilitySnapshot: ({
-    schemaVersion: root.schemaVersion,
-    available: root.networkReachabilityAvailable,
-    degraded: root.networkReachabilityDegraded,
-    generation: root.generation
-  })
   readonly property var connectionFailureSnapshot:
     implementation.publicFailure()
   readonly property real connectionFailureGeneration:

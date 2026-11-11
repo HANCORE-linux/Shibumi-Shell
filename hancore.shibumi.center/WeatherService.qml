@@ -61,23 +61,6 @@ Item {
     }
   }
 
-  function chanceOfRain(day) {
-    const hourly = day && day.hourly ? day.hourly : []
-    let maximum = 0
-    for (let index = 0; index < hourly.length; index++) {
-      const chance = parseFloat(hourly[index].chanceofrain)
-      if (!isNaN(chance) && chance > maximum) maximum = chance
-    }
-    return maximum
-  }
-
-  function forecastCode(day) {
-    const hourly = day && day.hourly ? day.hourly : []
-    const representative = hourly.length > 4
-      ? hourly[4] : hourly.length > 0 ? hourly[0] : null
-    return representative ? String(representative.weatherCode || "") : ""
-  }
-
   function minutesForClock(value) {
     const match = String(value || "").match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
     if (!match) return -1

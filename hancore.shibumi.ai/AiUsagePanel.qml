@@ -17,11 +17,6 @@ ShibumiPanel {
   readonly property var limitWindows: aiService ? aiService.limitWindows(provider) : []
   readonly property var headline: aiService ? aiService.bindingWindow(provider) : null
   readonly property bool headlineAlarm: !!headline && headline.percent >= 90
-  readonly property color headlineColor: !providerReady ? panel.controlMuted
-    : headlineAlarm ? Commons.Color.urgent : panel.controlForeground
-  readonly property string heroTitle: heroName.text
-  readonly property string heroTier: heroPlan.text
-  readonly property bool providerSwitchVisible: providerRow.visible
   readonly property bool balanceVisible: balanceSection.visible
   readonly property var balance: provider && provider.balance
     && typeof provider.balance.remaining === "number" && isFinite(provider.balance.remaining)
@@ -49,21 +44,16 @@ ShibumiPanel {
   }
   readonly property bool clockRunning: panelClock.running
   property double nowMs: Date.now()
-  onOpenChanged: if (open) nowMs = Date.now()
+  onOpenChanged: if (open) {
+    nowMs = Date.now()
+    if (aiService && typeof aiService.panelOpened === "function") aiService.panelOpened()
+  }
   property Timer presentationClock: Timer {
     id: panelClock
     interval: 30000; repeat: true; running: panel.open
     onTriggered: panel.nowMs = Date.now()
   }
   readonly property bool limitsUnavailableVisible: limitsUnavailable.visible
-  readonly property string todaySummary: provider && aiService ? [
-    Number(provider.todayTotalTokens) > 0
-      ? aiService.formatTokens(provider.todayTotalTokens) + " tokens" : "",
-    Number(provider.todayPrompts) > 0 ? Math.round(Number(provider.todayPrompts))
-      + (Number(provider.todayPrompts) === 1 ? " prompt" : " prompts") : "",
-    Number(provider.todaySessions) > 0 ? Math.round(Number(provider.todaySessions))
-      + (Number(provider.todaySessions) === 1 ? " session" : " sessions") : ""
-  ].filter(value => value !== "").join(" · ") : ""
   readonly property var providerModels: provider
     && Array.isArray(provider.models) ? provider.models : []
   readonly property int renderedModelCount: modelRepeater.count

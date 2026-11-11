@@ -204,11 +204,11 @@ ShellRoot {
     SuiteRuntime.Provider {
       id: leasedBarProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.2.2"
+      implementationVersion: "0.2.3"
       owner: leasedBarOwner
       host: leasedBarOwner.providerHost
       manifest: ({ id: "hancore.shibumi.bar",
-        version: "0.2.2", kinds: ["bar"] })
+        version: "0.2.3", kinds: ["bar"] })
     }
   }
 
@@ -226,7 +226,7 @@ ShellRoot {
       Status.Service {
         shell: rawScopedStatusShell
         manifest: ({ id: "hancore.shibumi.status",
-          version: "0.2.2", kinds: ["service"] })
+          version: "0.2.3", kinds: ["service"] })
         actionRunner: actionRecorder
         runtimeProbesEnabled: false
       }

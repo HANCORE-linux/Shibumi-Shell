@@ -88,6 +88,76 @@ ShellRoot {
     })
   }
 
+  property bool startupChecked: false
+  Ai.Service { id: startupEmpty; shell: agentsShell
+    omarchyPath: Quickshell.env("SHIBUMI_TEST_OMARCHY_PATH")
+    agentsUsageDirOverride: omarchyPath + "/bin"
+  }
+  function checkStartup() {
+    const s = agentsService
+    if (s.providers.length !== 2) return false
+    const timer = (service, ms) => Array.from(service.resources).find(o => "interval" in o && o.interval === ms)
+    const first = timer(s, 10000), discovery = timer(s, 120000)
+    if (!first.running || !discovery.running || first.repeat || discovery.repeat || s.backendProcessKind !== "") { fail("startup clocks/early dispatch"); return false }
+    s.reconcileBackendLifecycle(false)
+    if (s.backendProcessKind !== "") { fail("pre-start reconcile dispatched"); return false }
+    first.triggered()
+    if (s.backendProcessKind !== "agents-update" || s.runningBackendDiscovery) { fail("first startup run was not tab-only"); return false }
+    discovery.triggered()
+    if (!s.pendingBackendRefresh || !s.pendingBackendDiscovery || s.pendingBackendForce) { fail("startup discovery did not coalesce unforced"); return false }
+    legacyService.startupRefreshPending = false; legacyService.backendProcessKind = "legacy-detection"
+    legacyService.reconcileBackendLifecycle(false); legacyService.finishBackendProcess(0)
+    if (legacyService.backendProcessKind !== "legacy-detection" || legacyService.pendingBackendRefresh) { fail("legacy settings refresh was dropped before startup discovery"); return false }
+    timer(startupEmpty, 10000).triggered()
+    if (startupEmpty.backendProcessKind !== "agents-update" || !startupEmpty.runningBackendDiscovery || startupEmpty.startupDiscoveryPending) { fail("empty startup did not discover once"); return false }
+    console.log("436_AI_STARTUP", "controlled Timer.triggered: records visible before work; tab-only at nominal 10000ms; queued discovery at 120000ms; empty discovery at 10000ms")
+    startupChecked = true; return true
+  }
+  property int refreshDemandStage: 0
+  property double serviceTraceStarted: Date.now()
+  Connections {
+    target: agentsService
+    function onBackendRunningChanged() {
+      if (agentsService.backendRunning) console.log("436_AI_COMMAND", Date.now() - root.serviceTraceStarted,
+        JSON.stringify(Array.from(agentsService.resources).filter(p => "command" in p && p.command[0] === agentsService.agentsUpdateScript).map(p => p.command)))
+    }
+  }
+  function refreshDemandContract() {
+    const s = agentsService
+    if (s.backendRunning || s.backendProcessKind !== "") return false
+    if (refreshDemandStage === 1) {
+      s.backendProcessKind = "agents-update"; s.runningBackendDiscovery = true; s.finishBackendProcess(1)
+      if (s.backendRunning || s.pendingBackendRefresh) { fail("failed discovery retried itself"); return false }
+      s.requestPeriodicBackend()
+      if (s.backendProcessKind !== "agents-update" || s.runningBackendDiscovery) { fail("periodic tab refresh did not start"); return false }
+      refreshDemandStage = 2; return false
+    }
+    if (refreshDemandStage === 2) { s.refreshAll(true); refreshDemandStage = 3; return false }
+    if (refreshDemandStage === 3) { refreshDemandStage = 4; console.log("436_AI_DEMAND passed"); return true }
+    s.providerOverrides = ["claude", "codex", "grok", "hermes", "opencode"].map(id => ({providerId: id, ready: true}))
+    const before = s.agentsUpdateCommand(false), after = s.agentsUpdateCommand(false, false)
+    let ok = after.slice(2).join(" ") === "--except opencode --except fireworks claude codex grok hermes"
+    console.log("436_AI_TAB_COMMANDS", JSON.stringify({before: before, after: after}))
+    s.providerOverrides = []; s.backendProcessKind = "agents-update"; s.runningBackendDiscovery = false
+    s.pendingBackendRefresh = false; s.pendingBackendForce = false; s.pendingBackendDiscovery = false
+    s.lastDiscoveryStartedAtMs = Date.now(); s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendRefresh && !s.pendingBackendDiscovery && !s.pendingBackendForce
+    s.lastDiscoveryStartedAtMs = Date.now() - s.agentsDiscoveryInterval; s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
+    s.lastDiscoveryStartedAtMs = Date.now() - s.agentsRefreshInterval
+    emptyPanelOwner.opened = false; void(emptyAgentsPanel.open); emptyPanelOwner.opened = true; void(emptyAgentsPanel.open)
+    ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
+    const records = s.agentRecords; s.agentRecords = ({}); s.providerRevision++; s.requestPeriodicBackend()
+    ok = ok && s.pendingBackendDiscovery; s.agentRecords = records; s.providerRevision++
+    s.pendingBackendRefresh = false; s.pendingBackendDiscovery = false; s.backendError = ""
+    s.finishBackendProcess(1)
+    if (!ok || s.backendProcessKind !== "agents-update" || !s.runningBackendDiscovery || s.pendingBackendRefresh) {
+      console.log("436_AI_DEMAND_FAILURE", ok, s.backendProcessKind, s.runningBackendDiscovery, s.pendingBackendRefresh)
+      fail("tab/discovery coalescing or failed-tab fallback"); return false
+    }
+    refreshDemandStage = 1; return false
+  }
+
   property bool genericDisabled: false
   property int genericPhase: 0
   property string genericTool: "grok"
@@ -112,17 +182,24 @@ ShellRoot {
   Timer {
     id: genericProbe; interval: 80; repeat: true
     onTriggered: {
+      if (root.refreshDemandStage !== 4) { root.fail("demand checks unfinished"); return }
       const ids = discoveryService.providers.map(p => p.providerId).join(",")
       if (root.genericPhase === 0) {
         const fireworks = discoveryService.providerFor("fireworks")
         const neutral = root.descendants(genericMark.item).filter(item => "fallbackText" in item && item.fallbackText === "smart_toy")
-        if (ids !== "grok,agy,claude,codex,fireworks"
+        if (ids !== "agy,claude,codex,fireworks,grok"
             || discoveryService.usagePercent(discoveryService.providerFor("claude")) !== 41
             || discoveryService.usagePercent(discoveryService.providerFor("agy")) !== 29
             || !fireworks || fireworks.ready || fireworks.usageStatusText !== "Sign in to Fireworks"
             || discoveryService.limitWindows(fireworks).length !== 0
             || neutral.length !== 2 || !neutral.every(mark => mark.candidateIndex >= mark.candidates.length))
           return root.fail("generic discovery/order/fraction/status/marks: " + ids)
+        root.genericTool = ids.split(",")[0]
+        discoveryService.selectTool(ids.split(",").pop())
+        root.genericTool = fakeState.selectedTool
+        if (discoveryService.selectedTool !== "grok"
+            || discoveryService.providers.map(p => p.providerId).join(",") !== ids)
+          return root.fail("provider selection reordered the tabs")
         root.genericPhase = 1; root.genericTool = "agy"; fakeBar.background = "#ffffff"
       } else if (root.genericPhase === 1) {
         const marks = root.descendants(genericMark.item).filter(item => "resolvedSource" in item)
@@ -130,7 +207,7 @@ ShellRoot {
           return root.fail("generic Omarchy light SVG priority")
         root.genericPhase = 2; emptyAgentsPanel.aiService = discoveryService; root.genericTool = "fireworks"
         root.genericDisabled = true; mutateRecords.running = true
-      } else if (root.genericPhase === 2 && ids === "fireworks,agy,claude,kimi") {
+      } else if (root.genericPhase === 2 && ids === "agy,claude,fireworks,kimi") {
         if (emptyAgentsPanel.providerEmptyStateText !== "Authenticate"
             || discoveryService.agentIds.length !== 5 || discoveryService.providerFor("codex") !== null)
           return root.fail("generic removal/addition/disabled id")
@@ -1030,6 +1107,7 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
+      if (!root.startupChecked && !root.checkStartup()) return
       if (!root.midnightRacePassed) {
         root.midnightRaceTicks++
         if (root.midnightRaceStage === 1
@@ -1051,6 +1129,7 @@ ShellRoot {
           return root.fail("OpenCode midnight refresh race timed out")
         }
       }
+      if (root.phase > 0 && root.refreshDemandStage < 4) root.refreshDemandContract()
       root.ticks++
       const first = firstLoader.item
       const second = secondLoader.item

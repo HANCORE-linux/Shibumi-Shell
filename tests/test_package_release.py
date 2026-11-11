@@ -314,6 +314,21 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "b2abbef69091df607c6b540c4a0edb8a37cd76a402d4c9efd862b5dab3cd602f",
             },
+            "source-0.2.2": {
+                "suiteVersion": "0.2.2",
+                "sourceRevisions": [
+                    "5380c0db9aaf076c985835bb2eea31df8ec2652a",
+                    "d20f0526b12684453252fe2d722e996fedfe5eab",
+                ],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "b2abbef69091df607c6b540c4a0edb8a37cd76a402d4c9efd862b5dab3cd602f",
+            },
+            "public-0.2.3": {
+                "suiteVersion": "0.2.3",
+                "sourceRevisions": ["package:0.2.3"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "97bdf62db126f34b1dafe576e8eeb6889227c100a4f5ec91d0053bdcfb7b8432",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():

@@ -628,15 +628,6 @@ Item {
     audioSwitchTimer.restart()
   }
 
-  function nativeDeviceByAddress(address) {
-    const key = String(address || "")
-    for (let i = 0; i < nativeDevices.length; i++) {
-      const device = nativeDevices[i]
-      if (device && String(device.address || "") === key) return device
-    }
-    return null
-  }
-
   function deviceUsesCurrentAdapter(device) {
     return device && (device.adapter === undefined || device.adapter === null
       || device.adapter === adapter)

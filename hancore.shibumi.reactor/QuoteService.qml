@@ -12,8 +12,6 @@ Item {
   property bool backendEnabled: true
   property bool runtimeProbesEnabled: true
   readonly property bool active: backendEnabled
-  readonly property string quotesPath: Quickshell.env("HOME")
-    + "/.config/shibumi/quotes.txt"
   property var quotes: QuoteDefaults.values()
   property int currentIndex: -1
   property int serial: 0

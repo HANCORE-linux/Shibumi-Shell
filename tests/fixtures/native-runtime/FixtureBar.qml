@@ -244,6 +244,11 @@ Bar {
       })
       return state.setLayoutFamilyTransition({v2Layout: initial}) ? "queued" : "failed"
     }
+    function reconcileFixture(region: string): bool {
+      const specs = probe.activePluginSpecs().map(spec =>
+        spec.pluginId === "fixture.native-widget" ? Object.assign({}, spec, {region: region}) : spec)
+      return probe.layoutController.reconcileV2PluginGroups(specs, true, true, true)
+    }
     function runTransition(): string {
       const before = JSON.stringify(probe.barConfig)
       const accepted = probe.layoutController.persistV2Layout(probe.transitionTarget)

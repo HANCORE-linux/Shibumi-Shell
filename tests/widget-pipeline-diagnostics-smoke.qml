@@ -237,11 +237,11 @@ ShellRoot {
   Shared.Provider {
     id: stateProvider
     pluginId: "hancore.shibumi.state"
-    implementationVersion: "0.2.2"
+    implementationVersion: "0.2.3"
     owner: stateOwner
     host: stateHost
     manifest: ({ id: "hancore.shibumi.state",
-      version: "0.2.2", kinds: ["service"] })
+      version: "0.2.3", kinds: ["service"] })
   }
 
   QtObject {
@@ -290,7 +290,7 @@ ShellRoot {
     barWidgetRegistry: scopedWidgetRegistry
     manifest: ({
       id: "hancore.shibumi.bar",
-      version: "0.2.2",
+      version: "0.2.3",
       kinds: ["bar"]
     })
     barConfig: ({

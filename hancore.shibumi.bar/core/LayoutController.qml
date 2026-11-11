@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "LayoutModel.js" as LayoutModel
 import "V2LayoutModel.js" as V2LayoutModel
+import "GroupRegistry.js" as GroupRegistry
 
 Item {
   id: root
@@ -245,8 +246,26 @@ Item {
       current, specs, followRegionsValue === true)
     if (!next || (next.unplaced.length > 0 && allowPartialValue !== true) || mutationBusy) return false
     if (bar && bar.layoutTransitionsSupported === true) {
-      if (syncValue === true)
+      if (syncValue === true) {
+        const host = bar, writer = stateService, serial = writer.writeSerial
+        if (writer.ready === true && writer.writePending === false
+            && Number.isInteger(serial) && host.mutationAdmissionReady === true
+            && V2LayoutModel.same(current, next.layout)
+            && typeof host.currentLayoutSnapshot === "function"
+            && typeof host.planV2DynamicLayout === "function") {
+          const observed = host.currentLayoutSnapshot()
+          const planned = host.planV2DynamicLayout(observed, next.layout)
+          if (GroupRegistry.validNativeLayout(observed)
+              && GroupRegistry.validNativeLayout(planned) && writer.same(observed, planned)
+              && stateService === writer && bar === host
+              && writer.ready === true && writer.writePending === false
+              && writer.writeSerial === serial && !mutationBusy
+              && host.mutationAdmissionReady === true
+              && V2LayoutModel.same(current, v2Slots)
+              && writer.same(observed, host.currentLayoutSnapshot())) return true
+        }
         return bar.requestV2LayoutTransition({v2Layout: next.layout})
+      }
       // The legacy provider chain must not consume queued State as saved.
       return V2LayoutModel.same(current, next.layout)
     }

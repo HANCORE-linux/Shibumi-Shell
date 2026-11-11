@@ -139,7 +139,6 @@ Item {
           - rightExtras.width - rightGroups.width - 2 * centerGap
           - centerExtras.width)
       property int narrowStage: 0
-      readonly property real sideMargin: shellX + shellContentInset
       readonly property real responsiveSideInset: shellContentInset
       readonly property real centerFloorWidth: Math.max(80,
         Number(centerGroups.minimumResponsiveWidth) || 0)

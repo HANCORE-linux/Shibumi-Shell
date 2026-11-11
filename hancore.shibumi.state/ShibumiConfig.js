@@ -396,21 +396,6 @@ function normalizePresentation(value) {
   return result
 }
 
-function normalizedDesktopIds(value) {
-  if (!Array.isArray(value)) return []
-  var result = []
-  var seen = {}
-  for (var i = 0; i < value.length && result.length < 128; i++) {
-    var id = String(value[i] || "").trim()
-    if (id.slice(-8).toLowerCase() === ".desktop") id = id.slice(0, -8)
-    var key = "$" + id
-    if (!id || id.length > 255 || /[\x00-\x1f\x7f/\\]/.test(id) || seen[key]) continue
-    seen[key] = true
-    result.push(id)
-  }
-  return result
-}
-
 function normalizedPluginIds(value) {
   if (!Array.isArray(value)) return []
   var result = []

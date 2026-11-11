@@ -55,8 +55,6 @@ Column {
     appearanceWorkbench.selectedContentTone
   readonly property real selectedWidgetOpacity:
     appearanceWorkbench.selectedSurfaceOpacity
-  readonly property real selectedWidgetOutlineWidth:
-    appearanceWorkbench.selectedOutlineWidth
   readonly property bool allWidgetModesReady: widgetOptions.every(
     function(option) {
       return option.modes.join(",") === "full,icon,text"

@@ -47,7 +47,6 @@ ShibumiPanel {
     ? recentCount : pendingCount
   // Omarchy 4.0.3 exposes no history model. The adapter reads the same
   // host-owned compact JSON directory independently of this panel.
-  readonly property var notificationListView: notificationList
   readonly property var activeRows: {
     const groups = new Map()
     function append(model, bucket) {

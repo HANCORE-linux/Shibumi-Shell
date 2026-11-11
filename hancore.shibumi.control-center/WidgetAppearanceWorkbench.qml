@@ -198,10 +198,6 @@ Column {
     })
   }
 
-  function isEditableWidget(groupValue, idValue) {
-    return editableOption(groupValue, idValue) !== null
-  }
-
   function pluginIdForGroup(groupValue) {
     const plugin = pluginForGroup(groupValue)
     if (plugin) return String(plugin.id || "")
@@ -455,11 +451,6 @@ Column {
 
   function widgetAppearanceIndicatorColor(groupValue) {
     return controller.accentColor("color03")
-  }
-
-  function isActiveWidget(groupValue) {
-    const option = editableOption(groupValue, "")
-    return option !== null && option.active === true
   }
 
   function catalogGroupForSettingsGroup(groupValue) {
