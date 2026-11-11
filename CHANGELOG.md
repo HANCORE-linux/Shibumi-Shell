@@ -6,6 +6,7 @@
 
 - Status: promptly track recording starts and exits with either supported recorder and marker location.
 - Status: follow voxtype directly when the host status helper is absent, without retrying an unavailable backend.
+- Update Center: recheck package counts after package transactions without polling or reading the package log.
 
 ## [0.2.3] - 2026-11-11
 

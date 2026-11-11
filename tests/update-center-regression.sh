@@ -86,8 +86,8 @@ rg -q 'interval: 6 \* 60 \* 60 \* 1000' "$service" \
   || fail 'six-hour background checks drifted'
 rg -F -q '["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"]' \
   "$service" || fail 'package apply no longer delegates to the full Omarchy update'
-if rg -n '(^|[^A-Za-z])(pacman|paru|yay)([^A-Za-z]|$)' \
-    --glob '*.qml' --glob '*.js' "$plugin" >/dev/null; then
+if rg --no-heading --no-filename '^' --glob '*.qml' --glob '*.js' "$plugin" \
+    | sed 's#"/var/log/pacman\.log"##g' | rg -n '(^|[^A-Za-z])(pacman|paru|yay)([^A-Za-z]|$)' >/dev/null; then
   fail 'update-center QML invokes a package manager directly'
 fi
 for package_update_contract in \

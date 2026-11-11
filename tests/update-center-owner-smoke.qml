@@ -6,6 +6,8 @@ ShellRoot {
   id: root
 
   property int phase: 0
+  property int transactionChecks: 0
+  Update.Service { id: transactions; function refreshPackages() { root.transactionChecks++ } function refreshThemes() {} }
 
   function fail(message) {
     console.error("update-center-owner-smoke:", message)
@@ -97,6 +99,21 @@ ShellRoot {
     repeat: true
     running: true
     onTriggered: {
+      const resources = Array.from(transactions.resources)
+      const watch = resources.find(o => "path" in o && o.path === "/var/log/pacman.log")
+      const debounce = resources.find(o => "interval" in o && o.interval === 30000)
+      const check = resources.find(o => "command" in o && o.command[1] === transactions.packageStatusScript)
+      // Trigger the real debounce deterministically; never shorten its interval.
+      if (root.phase === 0) {
+        if (root.transactionChecks !== 1 || watch.preload || watch.loaded || debounce.running) return root.fail("unsolicited transaction refresh/read")
+        watch.fileChanged(); watch.fileChanged()
+        if (root.transactionChecks !== 1 || !debounce.running) return root.fail("burst bypassed debounce")
+        debounce.stop(); debounce.triggered()
+        if (root.transactionChecks !== 2) return root.fail("burst did not coalesce")
+        check.command = ["sleep", "0.08"]; check.running = true
+        watch.fileChanged(); debounce.stop(); debounce.triggered(); debounce.triggered()
+        if (!transactions._packageRefreshPending || root.transactionChecks !== 2) return root.fail("busy check lost/coexecuted refresh")
+      }
       if (root.phase === 0) {
         widget.open()
       } else if (root.phase === 1
@@ -113,6 +130,8 @@ ShellRoot {
             || fakeBar.releaseCalls !== 1 || fakeBar.clearCalls < 1)) {
         return root.fail("panel coordination was not released on close")
       } else {
+        if (root.transactionChecks < 3) return
+        if (root.transactionChecks !== 3 || transactions._packageRefreshPending || debounce.running || watch.loaded) return root.fail("follow-up/idle/read contract")
         console.log("update center owner smoke passed")
         Qt.quit()
       }

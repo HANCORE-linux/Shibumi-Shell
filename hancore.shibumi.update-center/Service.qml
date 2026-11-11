@@ -51,6 +51,7 @@ Item {
   property string _actionOutput: ""
   property string _actionErrorOutput: ""
   property bool _packageTimedOut: false
+  property bool _packageRefreshPending: false
   property bool _themeTimedOut: false
   property bool _actionTimedOut: false
   property bool _actionTouchedCurrent: false
@@ -283,6 +284,21 @@ Item {
     }
   }
 
+  FileView {
+    path: "/var/log/pacman.log"
+    preload: false
+    watchChanges: true
+    printErrors: false
+    onFileChanged: packageRefreshDebounce.restart()
+  }
+  Timer {
+    id: packageRefreshDebounce
+    interval: 30000
+    onTriggered: {
+      if (packageProcess.running) root._packageRefreshPending = true
+      else root.refreshPackages()
+    }
+  }
   Timer {
     interval: 6 * 60 * 60 * 1000
     running: true
@@ -364,6 +380,10 @@ Item {
     onExited: function(exitCode) {
       packageWatchdog.stop()
       root.packageRefreshing = false
+      if (root._packageRefreshPending) {
+        root._packageRefreshPending = false
+        Qt.callLater(() => { if (!packageRefreshDebounce.running) root.refreshPackages() })
+      }
       if (root._packageTimedOut) return
       if (exitCode !== 0) {
         root.packageError = root.elideError(packageStderr.text || root._packageErrorOutput, "Package check failed")
