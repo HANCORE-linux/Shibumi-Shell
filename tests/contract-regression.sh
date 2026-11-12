@@ -882,7 +882,7 @@ rg -Fq 'commandFor("profiles", ["omarchy-powerprofiles-list", "--active-state"])
 rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not use the lightweight active-profile probe"
-rg -Fq 'onTriggered: root.refreshActiveProfile()' \
+rg -Fq 'function onProfileChanged() { root.refreshActiveProfile() }' \
   hancore.shibumi.power-state/Service.qml \
   || fail "power hot path still refreshes the complete profile list"
 rg -Fq 'interval: 5 * 60 * 1000' hancore.shibumi.power-state/Service.qml \

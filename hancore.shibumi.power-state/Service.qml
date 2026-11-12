@@ -333,11 +333,9 @@ Item {
     }
   }
 
-  Timer {
-    interval: 5000
-    running: root.ready && root.profileConsumers > 0
-    repeat: true
-    onTriggered: root.refreshActiveProfile()
+  Connections {
+    target: root.ready && root.profileConsumers > 0 ? PowerProfiles : null
+    function onProfileChanged() { root.refreshActiveProfile() }
   }
   Timer {
     interval: 5 * 60 * 1000

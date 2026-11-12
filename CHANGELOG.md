@@ -12,6 +12,7 @@
 ### Changed
 
 - Audio: refresh sink availability on PulseAudio events, retaining the periodic fallback when subscription is unavailable.
+- Power: refresh the active power profile on its native change signal instead of polling every five seconds.
 - Validation: forward compatibility is pinned to Omarchy quattro 551dc629.
 
 ## [0.2.3] - 2026-11-11
