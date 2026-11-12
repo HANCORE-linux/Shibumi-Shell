@@ -1509,20 +1509,20 @@
     },
     {
       "id": "source-0.2.4",
-      "payloadDigest": "159d4727fb33a8fdf462111b83dbc186ea582252822681b3d3ca9d738680a5c5",
+      "payloadDigest": "7e00c6903487f17e6518f72c228344b730b760df409e48d822bf5835dd1af856",
       "pluginDigests": {
         "hancore.shibumi.bar": "46724f5359add3b02eaa8bfe84edac1f988200b9da1bf7445cef552853bedf2b",
         "hancore.shibumi.state": "d378c1c78487d37cd21c89c031d77b3787da7bb39b77ef2877cc3a47b7528d82",
         "hancore.shibumi.control-center": "6703d937700b28cdc3dce2045ab904c8ebfc447c451f41581ea1e2c7e20a3f5d",
         "hancore.shibumi.reactor": "78889ab3ea18ecb27cbbd18dc52d1660bfdc90d0ae9359f5b15bab858e7cf6e3",
         "hancore.shibumi.telemetry": "52dd263e8b1a40c43a5cdfe7c2461e6273cc6dabd1ec39271a8fb457fa6a96e1",
-        "hancore.shibumi.power-state": "e779c298d038c94de250735775ed0e028ca5b1c374d9d9700f7995035f2e2fb4",
+        "hancore.shibumi.power-state": "56f1e42b790aeda01702e94368c542026167429b1767d50f19ec1f72f2a8535a",
         "hancore.shibumi.workspaces": "4889a8adf143ee5aa9782d2e752710b062cd7727a1dc65619d4c44fcdcf3bd64",
         "hancore.shibumi.update-center": "c25cceee4129b6c87d916b742fc2b3e4a110549af4e12357d574856f61b30d08",
         "hancore.shibumi.status": "15b343e13550525aca49310768de38409f017d2cf64486c638dcd7ddbd7c1d8f",
         "hancore.shibumi.memory": "206bea70ef87ad453897a69ff295e6831295de0effe287d2b512e978f863ef43",
         "hancore.shibumi.cpu": "2372bc2041ab7155c175210ba11792b550f2106f22173a690cb1b03d3ac1d4c0",
-        "hancore.shibumi.audio": "b3a5b7f4574d86deffc89ee22c28c4e0ef94682cd60ff9921f50b6c81851b6e4",
+        "hancore.shibumi.audio": "0ff9258e32488f3e722c2620d89c37a32f3bc8ff64ef3372a0861f893a1474cc",
         "hancore.shibumi.ai": "149706c5fbb7be833a715f716ddd7a666dcc59f38809a01a13cbf60406731a82",
         "hancore.shibumi.center": "9189900d1a1311a51423c25c8f89849a00947ffbc9674a3099ce0a59f68cf8d4",
         "hancore.shibumi.media": "9571934599a91993e05f1475bc960747fd7c5bbfa3a0df0cac764c9fbe9cdfea",
@@ -1564,7 +1564,7 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
-        "20fdee07dd825c9eaedbb50f2ff001729772f088"
+        "4ddfed92dc97e49837fb7aa5081065a16e681510"
       ],
       "suiteVersion": "0.2.3"
     }
