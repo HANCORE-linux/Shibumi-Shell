@@ -424,8 +424,8 @@ ShellRoot {
             || backend.outputMuted)
           return root.fail("inactive native backend remained active")
         const p = root.availabilityProbe; if (p.reader.running || p.starts < 1) return
-        if (p.step === 0) { if (!p.watch.running) return; for (let i = 0; i < 12; i++) p.timer.triggered()
-          if (p.starts !== 1 || availability.sinkAvailabilityDirty) return root.fail("availability idle polling")
+        if (p.step === 0) { if (!p.watch.running) return; const generation = availability.sinkAvailabilityRequestGeneration; for (let i = 0; i < 12; i++) p.timer.triggered()
+          if (availability.sinkAvailabilityRequestGeneration !== generation || availability.sinkAvailabilityDirty) return root.fail("availability idle polling")
           p.watch.stdout.read("Event 'change' on card #1"); p.timer.triggered(); p.step++; return
         } else if (p.step === 1) { if (p.starts !== 2) return root.fail("card did not refresh availability")
           for (let i = 0; i < 3; i++) { availability.sinkEventsStartedAt = Date.now(); p.watch.exited(1, 0) }
