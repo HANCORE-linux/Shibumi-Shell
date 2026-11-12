@@ -11,6 +11,7 @@
 
 ### Changed
 
+- Audio: refresh sink availability on PulseAudio events, retaining the periodic fallback when subscription is unavailable.
 - Validation: forward compatibility is pinned to Omarchy quattro 551dc629.
 
 ## [0.2.3] - 2026-11-11

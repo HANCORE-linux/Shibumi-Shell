@@ -39,6 +39,9 @@ run_smoke() {
   install -Dm0644 "$repo_root/tests/$test_file" "$smoke_root/shell.qml"
 
   stage_media_runtime "$smoke_root"
+  if [[ $test_file == audio-native-backend-seam-regression.qml ]]; then # Fixture readiness only; helpers use private argv.
+    sed -i 's/return Pipewire.ready === true/return true/' "$smoke_root/audio/AudioBackendAdapter.qml"
+  fi
   if [[ $name == audio ]]; then
     cp "$repo_root/tests/fixtures/AudioTestPanel.qml" \
       "$repo_root/tests/fixtures/AudioTestView.qml" \

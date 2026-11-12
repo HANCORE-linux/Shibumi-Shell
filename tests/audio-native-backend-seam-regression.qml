@@ -7,6 +7,8 @@ ShellRoot {
 
   property int phase: 0
   property int ticks: 0
+  property var availabilityProbe: null
+  Audio.AudioBackendAdapter { id: availability }
 
   function fail(message) {
     console.error("audio-native-backend-seam-regression:", message)
@@ -214,6 +216,14 @@ ShellRoot {
       if (root.phase === 0) {
         if (!backend) return root.fail("native backend component did not instantiate")
         if (root.ticks < 3) return
+        const data = Array.from(availability.data)
+        const reader = data.find(o => o.command && o.command[0] === "omarchy-audio-sink-availability"), watch = data.find(o => o.command && o.command[0] === "setpriv")
+        if (!watch || watch.command.join(" ") !== "setpriv --pdeathsig TERM pactl subscribe" || watch.environment.LC_ALL !== "C") return root.fail("availability follower command")
+        if (Array.from(backend.data).some(o => o.command && o.command[0] === "setpriv" && (o.enabled || o.running))) return root.fail("override follower active")
+        root.availabilityProbe = { reader: reader, watch: watch, timer: data.find(o => o.interval === 5000), starts: 0, step: 0 }
+        data.find(o => o.command && o.command[0] === "omarchy-audio-output-sink").command = ["true"]; reader.command = ["sh", "-c", "printf '{}\\n'"]
+        reader.started.connect(function() { root.availabilityProbe.starts++ })
+        watch.command = ["setpriv", "--pdeathsig", "TERM", "sleep", "30"]; availability.active = true
         if (!backend.ready || backend.audioSinks.length !== 2
             || backend.audioSources.length !== 1
             || backend.audioStreams.length !== 1)
@@ -413,6 +423,19 @@ ShellRoot {
             || backend.outputVolume !== 0
             || backend.outputMuted)
           return root.fail("inactive native backend remained active")
+        const p = root.availabilityProbe; if (p.reader.running || p.starts < 1) return
+        if (p.step === 0) { if (!p.watch.running) return; for (let i = 0; i < 12; i++) p.timer.triggered()
+          if (p.starts !== 1 || availability.sinkAvailabilityDirty) return root.fail("availability idle polling")
+          p.watch.stdout.read("Event 'change' on card #1"); p.timer.triggered(); p.step++; return
+        } else if (p.step === 1) { if (p.starts !== 2) return root.fail("card did not refresh availability")
+          for (let i = 0; i < 3; i++) { availability.sinkEventsStartedAt = Date.now(); p.watch.exited(1, 0) }
+          if (availability.sinkEventsQuickExits !== 3) return root.fail("follower quick-exit limit")
+          p.watch.running = false; p.step++; return
+        }
+        if (p.step++ < 14) { p.timer.triggered(); return }
+        if (p.starts !== 14 || p.watch.running) return root.fail("availability absent fallback/retry limit")
+        availability.active = false; availability.active = true; if (availability.sinkEventsQuickExits !== 0) return root.fail("follower activation reset")
+        availability.active = false
         stop()
         console.log("audio native backend seam regression passed")
         Qt.quit()
