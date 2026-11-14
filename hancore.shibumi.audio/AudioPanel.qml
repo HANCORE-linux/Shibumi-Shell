@@ -402,6 +402,8 @@ ShibumiPanel {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: inputSlider.bottom
+                anchors.leftMargin: inputSlider.knobSize / 2
+                anchors.rightMargin: inputSlider.knobSize / 2
                 anchors.topMargin: Commons.Style.space(4)
                 height: Commons.Style.space(4)
                 radius: height / 2
