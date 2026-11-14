@@ -117,7 +117,7 @@ function limitSnapshot(limits, index) {
   }
 }
 
-function parseRecord(raw, expectedId, nowMs) {
+function parseRecord(raw, expectedId, nowMs, nonTabRecord) {
   var text = String(raw || "")
   if (text.length === 0 || text.length > 2 * 1024 * 1024) return null
   var record
@@ -139,7 +139,10 @@ function parseRecord(raw, expectedId, nowMs) {
     if (!limit) return null
     if (limits.length < 6) limits.push(limit)
   }
-  if (!hasDisplayData(record, limits)) return null
+  if (!hasDisplayData(record, limits)) {
+    if (typeof nonTabRecord === "function") nonTabRecord(Date.parse(updatedAt))
+    return null
+  }
   if (!record.ready) limits = []
 
   var primary = limits.length > 0 ? limits[0] : null

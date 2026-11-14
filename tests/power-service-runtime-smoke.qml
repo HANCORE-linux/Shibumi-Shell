@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Services.UPower
 import "powerState" as PowerState
 
 ShellRoot {
@@ -9,12 +10,13 @@ ShellRoot {
 
   property int phase: -1
   property int attempts: 0
+  property bool signalChecked: false
 
   QtObject { id: scopedHost; property string pluginId: "hancore.shibumi.power-state" }
   PowerState.Service {
     id: power
     shell: scopedHost
-    manifest: ({ id: "hancore.shibumi.power-state", version: "0.2.3",
+    manifest: ({ id: "hancore.shibumi.power-state", version: "0.2.4",
       kinds: ["service"], entryPoints: { service: "Service.qml" } })
     batterySnapshotOverride: ({ ready: false })
     commandOverrides: ({
@@ -51,6 +53,12 @@ ShellRoot {
         }
         if (power.profiles.length !== 3 || power.profileConsumers !== 1)
           return root.fail("profile list/shared lease")
+        if (!root.signalChecked) {
+          const reader = Array.from(power.children).filter(o => o.operation !== undefined)[1]; for (let i = 0; i < 12; i++) for (const t of Array.from(power.data).filter(o => o.interval === 5000 && o.running)) t.triggered()
+          if (reader.busy) return root.fail("idle active-profile polling")
+          PowerProfiles.profileChanged(); if (!reader.busy) return root.fail("native profile signal ignored")
+          root.signalChecked = true; return
+        }
         if (power.setProfile("performance;touch /tmp/unsafe"))
           return root.fail("unlisted profile accepted")
         if (!power.setProfile("performance"))
@@ -65,6 +73,7 @@ ShellRoot {
         if (power.profileError !== "")
           return root.fail("successful action reported an error")
         power.releaseProfiles()
+        PowerProfiles.profileChanged(); if (power.busyWorkers !== 0) return root.fail("profile signal without consumer")
         if (power.profileConsumers !== 0)
           return root.fail("profile lease release")
         stop()

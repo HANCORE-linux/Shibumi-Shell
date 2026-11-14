@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.4] - 2026-11-14
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 551dc629.
+
+### Fixed
+
+- Status: promptly track recording starts and exits with either supported recorder and marker location.
+- Status: follow voxtype directly when the host status helper is absent, without retrying an unavailable backend.
+- Update Center: recheck package counts after package transactions without polling or reading the package log.
+- AI: avoid repeating a recent discovery after a shell restart when provider enablement is unchanged.
+- AI: report OpenCode prompts, sessions and the seven-day token series; prompts of subagent sessions are not counted.
+- Audio: mirror a microphone mute from the volume panel to the laptop's microphone LED.
+- Audio: keep the microphone level bar within the slider track.
+- Control Center: pad the Health version row on the left.
+- Power: show the status line below the profile buttons only for an error.
+
+### Changed
+
+- Audio: refresh sink availability on PulseAudio events, retaining the periodic fallback when subscription is unavailable.
+- Power: refresh the active power profile on its native change signal instead of polling every five seconds.
+- Validation: forward compatibility is pinned to Omarchy quattro 551dc629.
+
 ## [0.2.3] - 2026-11-11
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference f428bb4f.

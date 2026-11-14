@@ -20,7 +20,7 @@ def alive(record):
     try:
         value = Path(f'/proc/{record["pid"]}/stat').read_text().rsplit(')', 1)[1].split()
         return value[19] == record['start'] and value[0] != 'Z'
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return False
 
 

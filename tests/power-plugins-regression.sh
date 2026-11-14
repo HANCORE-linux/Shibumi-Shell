@@ -164,7 +164,7 @@ rg -q 'function profileLabel\(profile\)' \
 rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   "$repo_root/hancore.shibumi.power-state/Service.qml" \
   || fail "power-state service does not use the lightweight active-profile probe"
-rg -Fq 'onTriggered: root.refreshActiveProfile()' \
+rg -Fq 'function onProfileChanged() { root.refreshActiveProfile() }' \
   "$repo_root/hancore.shibumi.power-state/Service.qml" \
   || fail "power-state hot path still refreshes the complete profile list"
 rg -q 'readonly property string batteryId:' \

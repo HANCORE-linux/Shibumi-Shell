@@ -187,10 +187,8 @@ ShibumiPanel {
       Text {
         id: actionStatus
         width: parent.width
-        height: actionMetrics.height
-        FontMetrics { id: actionMetrics; font: actionStatus.font }
-        text: panel.powerState.profileError !== "" ? panel.powerState.profileError
-          : panel.powerState.profileActionRunning ? "Applying profile…" : ""
+        visible: panel.powerState.profileError !== ""
+        text: panel.powerState.profileError
         color: panel.powerState.profileError !== "" && panel.bar
           ? panel.bar.urgent : panel.bar ? panel.bar.foreground : Commons.Color.foreground
         font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family

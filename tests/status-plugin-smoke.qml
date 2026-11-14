@@ -2,6 +2,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
+import Quickshell.Io
+import Quickshell.Io as DictationIo
 import "status" as Status
 import "hancore.shibumi.bar/services" as BarServices
 import "hancore.shibumi.state/runtime" as SuiteRuntime
@@ -10,6 +12,48 @@ import "fixtures" as Fixtures
 ShellRoot {
   id: root
 
+  property bool dictationChecked: false
+  Status.Service { id: dictationBackend; runtimeProbesEnabled: false }
+  DictationIo.Process {
+    id: dictationSetup; running: true
+    command: ["bash", "-c", "d=$XDG_RUNTIME_DIR/dictation-bin; mkdir \"$d\"; ln -s /usr/bin/bash \"$d/bash\"; ln -s /usr/bin/setpriv \"$d/setpriv\"; printf '%s\\n' \"$1\" >\"$d/voxtype\"; chmod 700 \"$d/voxtype\"", "fixture", "#!/bin/bash\n[[ \"$*\" == \"status --follow --extended --format json\" ]] || exit 2\nprintf '%s\\n' '{\"alt\":\"recording\",\"tooltip\":\"fixture\"}'\nexec /usr/bin/sleep 0.2"]
+    onExited: function(code) { if (code !== 0) return root.fail("dictation fixture setup"); const p = Array.from(dictationBackend.resources).find(p => "command" in p && p.command[0] === "bash"); p.environment = ({ PATH: Quickshell.env("XDG_RUNTIME_DIR") + "/dictation-bin" }); dictationBackend.runtimeProbesEnabled = true; p.running = true }
+  }
+  Timer { id: dictationCheck; interval: 40; repeat: true; running: true; property int phase: 0
+    onTriggered: {
+      const p = Array.from(dictationBackend.resources).find(p => "command" in p && p.command[0] === "bash")
+      if (dictationCheck.phase === 0 && dictationBackend.voxtypeActive) { if (dictationBackend.voxtypeHint !== "fixture") return root.fail("direct dictation status"); dictationCheck.phase = 1 }
+      else if (dictationCheck.phase === 1 && !p.running) { dictationCheck.phase = 2; dictationSetup.command = ["/usr/bin/rm", Quickshell.env("XDG_RUNTIME_DIR") + "/dictation-bin/voxtype"]; dictationSetup.running = true }
+      else if (dictationCheck.phase === 2 && !dictationBackend.voxtypeRetryEnabled) {
+        if (dictationBackend.voxtypeAvailable || Array.from(dictationBackend.resources).find(t => "interval" in t && t.interval === 60000).running) return root.fail("absent dictation backend retried")
+        root.dictationChecked = true; stop()
+      }
+    }
+  }
+  property int recordingPhase: 0
+  property double recordingChangedAt: 0
+  property bool recordingChecked: false
+  Status.Service { id: recordingBackend; runtimeProbesEnabled: false }
+  FileView { id: recordingMarker; path: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-screenrecord-filename"; preload: false; printErrors: false }
+  Process { id: recordingChild; command: ["bash", "-c", "exec -a wf-recorder sleep 30"] }
+  Timer {
+    interval: 40; repeat: true; running: true
+    onTriggered: {
+      const now = Date.now()
+      if (root.recordingPhase === 0) {
+        Array.from(recordingBackend.resources).filter(p => "command" in p && p.command[0] === "bash").forEach(p => p.command = ["true"])
+        recordingBackend.runtimeProbesEnabled = true; recordingChild.running = true; root.recordingPhase = 1; return
+      }
+      if (root.recordingPhase === 1) { recordingMarker.setText("fixture"); root.recordingChangedAt = now; root.recordingPhase = 2; return }
+      if ((root.recordingPhase === 2 || root.recordingPhase === 4) && now - root.recordingChangedAt > 1100) return root.fail("recording event deadline")
+      if (root.recordingPhase === 2 && recordingBackend.recording) { console.log("recording start ms", now - root.recordingChangedAt); root.recordingPhase = 3 }
+      if (root.recordingPhase === 3 && now - root.recordingChangedAt >= 2200) {
+        if (recordingBackend.recordingElapsed < 1) return root.fail("recording elapsed did not advance")
+        recordingChild.signal(15); root.recordingChangedAt = now; root.recordingPhase = 4
+      }
+      if (root.recordingPhase === 4 && !recordingBackend.recording) { console.log("recording stop ms", now - root.recordingChangedAt); root.recordingChecked = true; stop() }
+    }
+  }
   property int phase: 0
   property int phaseTicks: 0
   property real initialWidth: 0
@@ -204,11 +248,11 @@ ShellRoot {
     SuiteRuntime.Provider {
       id: leasedBarProvider
       pluginId: "hancore.shibumi.bar"
-      implementationVersion: "0.2.3"
+      implementationVersion: "0.2.4"
       owner: leasedBarOwner
       host: leasedBarOwner.providerHost
       manifest: ({ id: "hancore.shibumi.bar",
-        version: "0.2.3", kinds: ["bar"] })
+        version: "0.2.4", kinds: ["bar"] })
     }
   }
 
@@ -226,7 +270,7 @@ ShellRoot {
       Status.Service {
         shell: rawScopedStatusShell
         manifest: ({ id: "hancore.shibumi.status",
-          version: "0.2.3", kinds: ["service"] })
+          version: "0.2.4", kinds: ["service"] })
         actionRunner: actionRecorder
         runtimeProbesEnabled: false
       }
@@ -847,6 +891,8 @@ ShellRoot {
         if (root.phaseTicks < 3) return
         if (root.clickTargets.length !== 0 || fakeBar.activePopout !== null)
           return root.fail("destruction cleanup")
+        if (!root.recordingChecked) return
+        if (!root.dictationChecked) return
         stop()
         console.log("status plugin smoke passed")
         Qt.quit()

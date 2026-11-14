@@ -23,7 +23,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.power-state"
-    implementationVersion: "0.2.3"
+    implementationVersion: "0.2.4"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -333,11 +333,9 @@ Item {
     }
   }
 
-  Timer {
-    interval: 5000
-    running: root.ready && root.profileConsumers > 0
-    repeat: true
-    onTriggered: root.refreshActiveProfile()
+  Connections {
+    target: root.ready && root.profileConsumers > 0 ? PowerProfiles : null
+    function onProfileChanged() { root.refreshActiveProfile() }
   }
   Timer {
     interval: 5 * 60 * 1000

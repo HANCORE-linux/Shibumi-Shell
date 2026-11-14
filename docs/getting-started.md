@@ -64,11 +64,11 @@ before editing JSON or suite state by hand.
 
 ## Know the release boundary
 
-Shibumi 0.2.3 is the current stable release and focuses on stabilization. It supports Omarchy
+Shibumi 0.2.4 is the current stable release and focuses on stabilization. It supports Omarchy
 Quattro with horizontal Top and Bottom bars. "0.x" means APIs may still change between
 releases, not that a release is a prerelease. Use tagged releases and the documented update
 and recovery route. Pinned source stack: Omarchy 4.5.0, Quickshell 0.3.2, Qt 6.12; forward
-reference f428bb4f. Historical physical acceptance is single-output, not a live 4.5.0 pass.
+reference 551dc629. Historical physical acceptance is single-output, not a live 4.5.0 pass.
 
 Read [release readiness](release-readiness.md) for the current evidence and
 open gates. Use [troubleshooting](development/troubleshooting.md) if the bar,

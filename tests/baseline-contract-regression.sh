@@ -16,7 +16,7 @@ compat_package_baseline="$repo_root/contracts/baselines/omarchy-installed-packag
 compat_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.2.json"
 historical_package_baseline="$repo_root/contracts/baselines/omarchy-installed-package-v4.0.0.json"
 historical_source_baseline="$repo_root/contracts/baselines/omarchy-installed-source-parity-v4.0.0.json"
-forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-f428bb4f.json"
+forward_compat_baseline="$repo_root/contracts/baselines/omarchy-forward-compat-551dc629.json"
 agents_baseline="$repo_root/contracts/baselines/omarchy-agents-v4.5.0.json"
 predecessor_baseline="$repo_root/contracts/baselines/quickshell-dots-d0896fc-v2-deec8103.json"
 installed_package_job="$repo_root/tests/omarchy-installed-package-contract-regression.sh"
@@ -242,9 +242,9 @@ shibumi_validate_agents_baseline_schema \
   || fail 'historical Agents baseline does not satisfy its central schema'
 
 jq -e '
-  .id == "forward-compat-f428bb4f"
+  .id == "forward-compat-551dc629"
   and .profile == "forward-compat"
-  and .sourceRevision == "f428bb4fe4d2e688fa05190b7d3c61430805b601"
+  and .sourceRevision == "551dc62969046709e7c6176dbdbccacce580a487"
   and .provenance.kind == "git"
   and .provenance.revision == .sourceRevision
   and .quickshellPackage == {"name": "quickshell", "version": "0.3.2.r7.g2b4501a-1"}

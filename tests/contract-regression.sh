@@ -18,6 +18,31 @@ command -v rg >/dev/null 2>&1 || fail "rg is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 [[ -x /usr/bin/quickshell ]] || fail "quickshell is required for the complete contract"
 
+# Host command compatibility includes bin/, not only QML capabilities.
+python3 - "$repo_root" "$OMARCHY_PATH" <<'PY'
+import os, re, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+hosts = {Path(sys.argv[2])} | {Path(v) for k, v in os.environ.items() if k in (
+    'SHIBUMI_INSTALLED_SOURCE_OMARCHY_PATH', 'SHIBUMI_AGENTS_OMARCHY_PATH',
+    'SHIBUMI_FORWARD_COMPAT_OMARCHY_PATH', 'SHIBUMI_NATIVE_CATALOG_OMARCHY_PATH') and v}
+# Namespace, marker, package name, and a validated dynamic collector prefix.
+noncommands = {'omarchy-keyboard-panel', 'omarchy-screenrecord-filename', 'omarchy-dev', 'omarchy-agent-usage-'}
+for host in sorted(hosts):
+    assert (host / 'bin').is_dir(), f'missing host bin/: {host}'
+    for path in sorted(root.glob('hancore.*/**/*')):
+        if not path.is_file() or path.suffix not in ('', '.qml', '.js', '.py', '.sh'): continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if line.lstrip().startswith(('#', '//')): continue
+            branch = re.search(r'if command -v ([\w-]+) [^;]+; then ([^;]+); else ([^;]+); fi', line)
+            if branch:
+                line = line.replace(branch[0], branch[2 if os.access(host / 'bin' / branch[1], os.X_OK) else 3])
+            for name in set(re.findall(r'\bomarchy-[\w-]+', line)) - noncommands:
+                if re.search(r'(?:if|elif) command -v ' + re.escape(name) + r'\s', line): continue
+                if not os.access(host / 'bin' / name, os.X_OK):
+                    raise SystemExit(f'{path.relative_to(root)}:{number}: {name} missing in {host}/bin without a presence test')
+print('plugin host-command contract passed:', ', '.join(map(str, sorted(hosts))))
+PY
 "$repo_root/tests/baseline-contract-regression.sh"
 "$repo_root/tests/documentation-regression.py"
 python3 "$repo_root/tests/production-boundary-regression.py"
@@ -857,7 +882,7 @@ rg -Fq 'commandFor("profiles", ["omarchy-powerprofiles-list", "--active-state"])
 rg -Fq 'commandFor("activeProfile", ["busctl", "--system", "get-property",' \
   hancore.shibumi.power-state/Service.qml \
   || fail "power owner does not use the lightweight active-profile probe"
-rg -Fq 'onTriggered: root.refreshActiveProfile()' \
+rg -Fq 'function onProfileChanged() { root.refreshActiveProfile() }' \
   hancore.shibumi.power-state/Service.qml \
   || fail "power hot path still refreshes the complete profile list"
 rg -Fq 'interval: 5 * 60 * 1000' hancore.shibumi.power-state/Service.qml \

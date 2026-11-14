@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "version": "0.2.2",
-  "tag": "v0.2.2",
-  "revision": "5380c0db9aaf076c985835bb2eea31df8ec2652a",
-  "payloadDigest": "b2abbef69091df607c6b540c4a0edb8a37cd76a402d4c9efd862b5dab3cd602f",
-  "releaseId": 440092391,
-  "releaseUrl": "https://github.com/HANCORE-linux/Shibumi-Shell/releases/tag/v0.2.2",
-  "publishedAt": "2026-11-10T08:12:58Z",
+  "version": "0.2.3",
+  "tag": "v0.2.3",
+  "revision": "a8fc782b6c10cd65c64ab8e3a8d8e1a3157b04f3",
+  "payloadDigest": "97bdf62db126f34b1dafe576e8eeb6889227c100a4f5ec91d0053bdcfb7b8432",
+  "releaseId": 441687574,
+  "releaseUrl": "https://github.com/HANCORE-linux/Shibumi-Shell/releases/tag/v0.2.3",
+  "publishedAt": "2026-11-11T12:50:08Z",
   "prerelease": false
 }

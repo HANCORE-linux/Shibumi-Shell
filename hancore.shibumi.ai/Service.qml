@@ -20,7 +20,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.ai"
-    implementationVersion: "0.2.3"
+    implementationVersion: "0.2.4"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -68,6 +68,13 @@ Item {
   property bool pendingBackendDiscovery: false
   property bool runningBackendDiscovery: true
   property double lastDiscoveryStartedAtMs: 0
+  property double cachedDiscoveryAtMs: 0
+  property bool startupProviderEnablementChanged: false
+  // Admission/host injection can change the lifecycle signature after completion;
+  // only a change to the enabled provider set invalidates the cached discovery.
+  readonly property string disabledProviderSignature: Object.keys(settings.providers || {})
+    .filter(id => !providerEnabled(id)).sort().join(",")
+  onDisabledProviderSignatureChanged: if (providerSettingsReady) startupProviderEnablementChanged = true
   readonly property int agentsDiscoveryInterval: 6 * 60 * 60 * 1000
   readonly property int startupRefreshDelayMs: 10 * 1000
   readonly property int startupDiscoveryDelayMs: 120 * 1000
@@ -551,8 +558,10 @@ Item {
   }
 
   function applyAgentRecord(expectedId, raw, nowMs) {
-    const record = AgentUsageModel.parseRecord(raw, expectedId, nowMs)
     if (expectedId === "opencode") return
+    const record = AgentUsageModel.parseRecord(raw, expectedId, nowMs, updatedAtMs => {
+      if (startupDiscoveryPending) cachedDiscoveryAtMs = Math.max(cachedDiscoveryAtMs, updatedAtMs)
+    })
     agentRecords[expectedId] = record
     providerRevision++
   }
@@ -766,7 +775,11 @@ Item {
     repeat: false
     onTriggered: {
       root.startupDiscoveryPending = false
-      if (root.agentsBackendActive) root.requestAgentsUpdate(false, true)
+      const age = Date.now() - root.cachedDiscoveryAtMs
+      if (root.agentsBackendActive && !root.startupProviderEnablementChanged
+          && root.cachedDiscoveryAtMs > 0 && age >= 0 && age < root.agentsDiscoveryInterval)
+        root.lastDiscoveryStartedAtMs = Math.max(root.lastDiscoveryStartedAtMs, root.cachedDiscoveryAtMs)
+      else if (root.agentsBackendActive) root.requestAgentsUpdate(false, true)
     }
   }
 

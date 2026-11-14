@@ -25,6 +25,9 @@ Item {
   property string secondaryRateLimitResetAt: ""
 
   property real todayTotalTokens: 0
+  property int todayPrompts: 0
+  property int todaySessions: 0
+  property var recentDays: []
   property real windowTokens: 0
   property real hourlyTokens: 0
   property var models: []
@@ -57,6 +60,8 @@ Item {
 
   function clearCurrentDayData() {
     todayTotalTokens = 0
+    todayPrompts = 0
+    todaySessions = 0
     latestModel = ""
     models = []
     dataDay = ""
@@ -68,6 +73,7 @@ Item {
     secondaryRateLimitPercent = -1
     windowTokens = 0
     hourlyTokens = 0
+    recentDays = []
     clearCurrentDayData()
   }
 
@@ -127,9 +133,12 @@ Item {
       secondaryRateLimitPercent = clampPercent(data["7d-utilization"])
       windowTokens = Math.max(0, Number(data._tokens_used) || 0)
       hourlyTokens = Math.max(0, Number(data._rate_per_hour) || 0)
+      recentDays = Array.isArray(data._recent_days) ? data._recent_days : []
       const scanDay = String(data._day || "")
       if (scanDay === localDay()) {
         todayTotalTokens = Math.max(0, Number(data._today_tokens) || 0)
+        todayPrompts = Math.max(0, Number(data._today_prompts) || 0)
+        todaySessions = Math.max(0, Number(data._today_sessions) || 0)
         latestModel = String(data._model || "")
         models = Array.isArray(data._models) ? data._models : []
         dataDay = scanDay

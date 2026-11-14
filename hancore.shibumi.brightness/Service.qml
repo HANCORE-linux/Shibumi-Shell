@@ -13,7 +13,7 @@ Item {
   property var manifest: null
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.brightness"
-    implementationVersion: "0.2.3"
+    implementationVersion: "0.2.4"
     owner: root
     host: root.shell
     manifest: root.manifest

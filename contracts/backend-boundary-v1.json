@@ -45,7 +45,7 @@
     {"scope":"rule","source":"hancore.shibumi.power-state/Service.qml","kind":"helper","kindValue":"omarchy-battery-status","category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"battery-ac","count":1,"backend":"omarchy.power","removalStep":"Step 6"},
     {"scope":"rule","source":"hancore.shibumi.power-state/Service.qml","kind":"helper","kindValue":"omarchy-powerprofiles-list","category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","count":1,"backend":"omarchy.power","removalStep":"Step 6"},
     {"scope":"rule","source":"hancore.shibumi.status/Service.qml","kind":"helper","kindValue":"/tmp/omarchy-screenrecord-filename","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.recording","removalStep":"Step 8"},
-    {"scope":"rule","source":"hancore.shibumi.status/Service.qml","kind":"helper","kindValue":"omarchy-voxtype-status","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.voxtype","removalStep":"Step 8"},
+    {"scope":"rule","source":"hancore.shibumi.status/Service.qml","kind":"helper","kindValue":"omarchy-voxtype-status","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":2,"backend":"omarchy.voxtype","removalStep":"Step 8"},
     {"scope":"hostIdRule","target":"omarchy.agents","category":"omarchyBackend","owner":"hancore.shibumi.ai","capability":"ai-usage","count":13,"backend":"omarchy.agents","removalStep":"Step 8"},
     {"scope":"hostIdRule","target":"omarchy.audio","category":"omarchyBackend","owner":"hancore.shibumi.audio","capability":"audio","count":13,"backend":"omarchy.audio","removalStep":"Step 4A"},
     {"scope":"hostIdRule","target":"omarchy.media","category":"omarchyBackend","owner":"hancore.shibumi.media","capability":"media","count":8,"backend":"omarchy.media","removalStep":"Step 7"},
@@ -66,10 +66,10 @@
     {"scope":"commandRule","value":"omarchy-bluetooth-device","category":"omarchyBackend","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","count":1,"backend":"omarchy.bluetooth","removalStep":"Step 4B"},
     {"scope":"commandRule","value":"omarchy-capture-screenrecording","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.recording","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-powerprofiles-list","category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","count":1,"backend":"omarchy.power","removalStep":"Step 6"},
-    {"scope":"commandRule","value":"omarchy-screenrecord-filename","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.recording","removalStep":"Step 8"},
+    {"scope":"commandRule","value":"omarchy-screenrecord-filename","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":2,"backend":"omarchy.recording","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-voxtype-config","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.voxtype","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-voxtype-model","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.voxtype","removalStep":"Step 8"},
-    {"scope":"commandRule","value":"omarchy-voxtype-status","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":1,"backend":"omarchy.voxtype","removalStep":"Step 8"},
+    {"scope":"commandRule","value":"omarchy-voxtype-status","category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","count":2,"backend":"omarchy.voxtype","removalStep":"Step 8"},
     {"scope":"commandRule","value":"omarchy-weather-location","category":"omarchyBackend","owner":"hancore.shibumi.center","capability":"weather","count":3,"backend":"omarchy.weather","removalStep":"Step 8"}
   ],
   "outputCardinalities": [
@@ -365,7 +365,7 @@
     {"source":"hancore.shibumi.power-state/Service.qml","kind":"helper","value":"omarchy-battery-status","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"battery-ac","backend":"omarchy.power","removalStep":"Step 6","reason":"Use UPower snapshots without the Omarchy battery status helper."},
     {"source":"hancore.shibumi.power-state/Service.qml","kind":"helper","value":"omarchy-powerprofiles-list","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","backend":"omarchy.power","removalStep":"Step 6","reason":"Use the public power-profiles API without the Omarchy list helper."},
     {"source":"hancore.shibumi.status/Service.qml","kind":"helper","value":"/tmp/omarchy-screenrecord-filename","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording state to a Shibumi-owned public status interface."},
-    {"source":"hancore.shibumi.status/Service.qml","kind":"helper","value":"omarchy-voxtype-status","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype status behind the typed Shibumi status service."},
+    {"source":"hancore.shibumi.status/Service.qml","kind":"helper","value":"omarchy-voxtype-status","count":2,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype status behind the typed Shibumi status service."},
     {"source":"hancore.shibumi.status/Service.qml","kind":"helper","value":"pgrep","count":1,"category":"nativeApi","owner":"hancore.shibumi.status","capability":"recording-voxtype"},
     {"source":"hancore.shibumi.quick-access/scripts/shibumi-picker","kind":"helper","value":"pgrep","count":1,"category":"nativeApi","owner":"hancore.shibumi.quick-access","capability":"quick-access"}
   ],
@@ -406,6 +406,7 @@
     {"value":"omarchy-battery-status","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"battery-ac","backend":"omarchy.power","removalStep":"Step 6","reason":"Remove the Omarchy battery helper after UPower is authoritative."},
     {"value":"omarchy-bluetooth-device","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","backend":"omarchy.bluetooth","removalStep":"Step 4B","reason":"Beta.13 resolves the current device and adapter incarnation immediately before this single helper dispatch and rejects a multi-adapter production inventory because the Omarchy 4.0.2 helper carries only action/address, not controller path; closing the residual post-dispatch helper race remains a separately scoped native-action cutover."},
     {"value":"omarchy-bluetooth-power","count":1,"category":"omarchyAction","owner":"hancore.shibumi.bluetooth","capability":"bluetooth","reason":"Explicit global radio power requests use the host rfkill persistence policy through one argv-only detached action; BlueZ remains the native state source."},
+    {"value":"omarchy-brightness-keyboard-mute","count":1,"category":"omarchyAction","owner":"hancore.shibumi.audio","capability":"audio","reason":"Explicit microphone mute toggles mirror the state to the host laptop LED helper; no startup call or state-following worker."},
     {"value":"omarchy-capture-screenrecording","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording actions behind the typed Shibumi status service."},
     {"value":"omarchy-cmd-missing","count":1,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-cmd-present","count":4,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
@@ -419,7 +420,7 @@
     {"value":"omarchy-plugin-update","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"settings"},
     {"value":"omarchy-powerprofiles-list","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.power-state","capability":"power-profile","backend":"omarchy.power","removalStep":"Step 6","reason":"Remove the Omarchy power-profile helper after the public API is authoritative."},
     {"value":"omarchy-restart-shell","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"bar-host-routing"},
-    {"value":"omarchy-screenrecord-filename","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording state from the host file contract to a typed Shibumi status interface."},
+    {"value":"omarchy-screenrecord-filename","count":2,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.recording","removalStep":"Step 8","reason":"Move recording state from the host file contract to a typed Shibumi status interface."},
     {"value":"omarchy-shell","count":4,"category":"hostIntegration","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-system","count":4,"category":"omarchyAction","owner":"quattro.host","capability":"bar-host-routing"},
     {"value":"omarchy-system-lock","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"idle-policy"},
@@ -434,7 +435,7 @@
     {"value":"omarchy-update","count":1,"category":"omarchyAction","owner":"quattro.host","capability":"omarchy-update-action"},
     {"value":"omarchy-voxtype-config","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype actions behind the typed Shibumi status service."},
     {"value":"omarchy-voxtype-model","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype actions behind the typed Shibumi status service."},
-    {"value":"omarchy-voxtype-status","count":1,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype status behind the typed Shibumi status service."},
+    {"value":"omarchy-voxtype-status","count":2,"category":"omarchyBackend","owner":"hancore.shibumi.status","capability":"recording-voxtype","backend":"omarchy.voxtype","removalStep":"Step 8","reason":"Move Voxtype status behind the typed Shibumi status service."},
     {"value":"omarchy-weather-location","count":3,"category":"omarchyBackend","owner":"hancore.shibumi.center","capability":"weather","backend":"omarchy.weather","removalStep":"Step 8","reason":"Move weather location persistence to Shibumi-owned XDG state."}
   ]
 }
