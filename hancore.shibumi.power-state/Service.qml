@@ -23,7 +23,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.power-state"
-    implementationVersion: "0.2.3"
+    implementationVersion: "0.2.4"
     owner: root
     host: root.shell
     manifest: root.manifest

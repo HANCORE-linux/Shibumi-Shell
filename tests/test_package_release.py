@@ -329,11 +329,21 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "97bdf62db126f34b1dafe576e8eeb6889227c100a4f5ec91d0053bdcfb7b8432",
             },
-            "source-0.2.4": {
+            "source-0.2.3": {
                 "suiteVersion": "0.2.3",
-                "sourceRevisions": ["530ca12af591c4838bd1b314a2fba0e0b2ee57db"],
+                "sourceRevisions": [
+                    "a8fc782b6c10cd65c64ab8e3a8d8e1a3157b04f3",
+                    "41002a830027faaac2a8436eea6f6aae0dcca4b5",
+                    "80fe4cd99062e5b29e001e6a57c6f55c78cc0709",
+                ],
                 "settingsStorageVersion": 1,
-                "payloadDigest": "095a9edcd808af42b173eda66e7cb6c70bb932457848ad66aded346477c4b851",
+                "payloadDigest": "97bdf62db126f34b1dafe576e8eeb6889227c100a4f5ec91d0053bdcfb7b8432",
+            },
+            "public-0.2.4": {
+                "suiteVersion": "0.2.4",
+                "sourceRevisions": ["package:0.2.4"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "685e88c5bddf448be0f0e1b4f092edfa747c487d4c7993f1fc20af11c7a59496",
             },
         }
         self.assertEqual(set(states), set(expected))
@@ -358,7 +368,7 @@ class PackageReleaseTests(unittest.TestCase):
 
         suite = Suite.load(ROOT)
         current_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-        current_id = "source-0.2.4"
+        current_id = f"public-{current_version.split('-', 1)[-1]}"
         self.assertEqual(states[current_id]["suiteVersion"], current_version)
         current_plugin_digests = {
             plugin_id: spec.payload_digest()
