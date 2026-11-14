@@ -1509,7 +1509,7 @@
     },
     {
       "id": "source-0.2.4",
-      "payloadDigest": "5a37f84ddbcb1402ec0f7994ad2012cbf22afbd41773d7673e227ed3f83caadf",
+      "payloadDigest": "095a9edcd808af42b173eda66e7cb6c70bb932457848ad66aded346477c4b851",
       "pluginDigests": {
         "hancore.shibumi.bar": "46724f5359add3b02eaa8bfe84edac1f988200b9da1bf7445cef552853bedf2b",
         "hancore.shibumi.state": "d378c1c78487d37cd21c89c031d77b3787da7bb39b77ef2877cc3a47b7528d82",
@@ -1530,7 +1530,7 @@
         "hancore.shibumi.network": "cf0912424390e7813b9f33bba2259ebb6a0802d930ae172e4efb59433a9eae4f",
         "hancore.shibumi.battery": "d5759cd822be9716059785db8f7a7725df2c410530cf86f51cd0905fcfb08738",
         "hancore.shibumi.brightness": "df29669639fe45a2e71e2e910dbb7ce6fb1acb6b962cd4cc366103881c51ae1c",
-        "hancore.shibumi.power-profile": "ab5a0bead60c27e4f9820078dad89b013ef6f38a0d56841132df6a38bc49a94e",
+        "hancore.shibumi.power-profile": "62b9084263692ea2125df37ecff04dfa0d5bd145f72eebd5ebade2d2bb7bc93f",
         "hancore.shibumi.bluetooth": "1dfbda78246e00203dea2c0f4c768980b4b7b858950ad8919a5df0f196b53543",
         "hancore.shibumi.temperature": "da105e2ebea9d3a87603d6bff4d401b0a5611ef62df5da81114697ba841ecda1",
         "hancore.shibumi.gpu": "7d2ebd579fee6c3bc0622b28db1b7f95bb9fecccfc39583e8767bf4010c49865",
@@ -1564,7 +1564,7 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
-        "2935a82a3015e2be97db140628667744ea8da12e"
+        "530ca12af591c4838bd1b314a2fba0e0b2ee57db"
       ],
       "suiteVersion": "0.2.3"
     }

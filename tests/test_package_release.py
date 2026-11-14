@@ -331,9 +331,9 @@ class PackageReleaseTests(unittest.TestCase):
             },
             "source-0.2.4": {
                 "suiteVersion": "0.2.3",
-                "sourceRevisions": ["2935a82a3015e2be97db140628667744ea8da12e"],
+                "sourceRevisions": ["530ca12af591c4838bd1b314a2fba0e0b2ee57db"],
                 "settingsStorageVersion": 1,
-                "payloadDigest": "5a37f84ddbcb1402ec0f7994ad2012cbf22afbd41773d7673e227ed3f83caadf",
+                "payloadDigest": "095a9edcd808af42b173eda66e7cb6c70bb932457848ad66aded346477c4b851",
             },
         }
         self.assertEqual(set(states), set(expected))
