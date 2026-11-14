@@ -625,6 +625,8 @@ ShellRoot {
       "7d-utilization": "0.10",
       _day: currentDay,
       _today_tokens: 150,
+      _today_prompts: 2, _today_sessions: 3,
+      _recent_days: [{ date: currentDay, messageCount: 150 }],
       _tokens_used: 200,
       _rate_per_hour: 50,
       _model: "current-model",
@@ -635,6 +637,8 @@ ShellRoot {
     openCodeParserProbe.parseScannerOutput(success)
     const loaded = openCodeParserProbe.ready
       && openCodeParserProbe.todayTotalTokens === 150
+      && openCodeParserProbe.todayPrompts === 2 && openCodeParserProbe.todaySessions === 3
+      && JSON.stringify(openCodeParserProbe.recentDays) === JSON.stringify(JSON.parse(success)._recent_days)
       && openCodeParserProbe.windowTokens === 200
       && openCodeParserProbe.hourlyTokens === 50
       && openCodeParserProbe.latestModel === "current-model"
@@ -643,6 +647,8 @@ ShellRoot {
 
     openCodeParserProbe.handleLocalMidnight()
     const midnightCleared = openCodeParserProbe.todayTotalTokens === 0
+      && openCodeParserProbe.todayPrompts === 0 && openCodeParserProbe.todaySessions === 0
+      && openCodeParserProbe.recentDays[0].date === currentDay
       && openCodeParserProbe.latestModel === ""
       && openCodeParserProbe.models.length === 0
       && openCodeParserProbe.dataDay === ""
@@ -652,6 +658,7 @@ ShellRoot {
     openCodeParserProbe.parseScannerOutput(success)
     openCodeParserProbe.parseScannerOutput('{"ready":false}')
     const unavailableCleared = !openCodeParserProbe.ready
+      && openCodeParserProbe.todayPrompts === 0 && openCodeParserProbe.todaySessions === 0 && openCodeParserProbe.recentDays.length === 0
       && openCodeParserProbe.rateLimitPercent === -1
       && openCodeParserProbe.secondaryRateLimitPercent === -1
       && openCodeParserProbe.todayTotalTokens === 0
@@ -663,6 +670,7 @@ ShellRoot {
     openCodeParserProbe.parseScannerOutput(success)
     openCodeParserProbe.parseScannerOutput("not-json")
     const malformedCleared = !openCodeParserProbe.ready
+      && openCodeParserProbe.todayPrompts === 0 && openCodeParserProbe.todaySessions === 0 && openCodeParserProbe.recentDays.length === 0
       && openCodeParserProbe.todayTotalTokens === 0
       && openCodeParserProbe.windowTokens === 0
       && openCodeParserProbe.latestModel === ""

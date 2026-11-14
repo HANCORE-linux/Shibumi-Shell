@@ -178,6 +178,41 @@ class OpenCodeUsageRegressionTests(unittest.TestCase):
         self.assertEqual(output["_models"][0]["total"], 165)
         self.assertEqual(output["_cost_today"], 0)
 
+    def test_prompts_sessions_and_recent_days(self) -> None:
+        now = datetime.now()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if min(now - today, today + timedelta(days=1) - now) < timedelta(minutes=5):
+            self.skipTest("local midnight boundary is too close for deterministic scope")
+        days = [(today - timedelta(days=offset)).date().isoformat() for offset in range(6, -1, -1)]
+        with sqlite3.connect(self.database) as con:
+            con.execute("alter table message add column id text")
+            con.execute("create table session (id text, parent_id text)")
+            con.execute("insert into session values ('root', null), ('other', null), ('child', 'root')")
+            con.execute("create table session_message (id text, session_id text, type text, "
+                        "time_created integer, time_updated integer, data text)")
+            for mid, session, at, role, tokens in [
+                ("prompt", "root", now, "user", 0), ("other", "other", now, "user", 0),
+                ("yesterday", "root", today - timedelta(hours=1), "user", 0),
+                ("child-prompt", "child", now, "user", 0),
+                ("answer", "root", now, "assistant", 10),
+                ("child-answer", "child", now, "assistant", 20),
+                ("no-model", "ignored", now, "assistant", 99),
+                ("oldest", "root", today - timedelta(days=6), "assistant", 5),
+            ]:
+                stamp = int(at.timestamp() * 1000)
+                data = {"model": {"id": "" if mid == "no-model" else "fixture"},
+                        "tokens": {"input": tokens, "cache": {"read": 1000}}}
+                con.execute("insert into session_message values (?, ?, ?, ?, ?, ?)",
+                            (mid, session, role, stamp, stamp, json.dumps(data)))
+            con.execute("insert into message values (?, ?, ?, ?, ?)",
+                        ("migrated", int(now.timestamp() * 1000), int(now.timestamp() * 1000),
+                         json.dumps({"role": "user"}), "prompt"))
+        output = self.run_scripts()
+        self.assertEqual(output["_today_prompts"], 2)
+        self.assertEqual(output["_today_sessions"], 3)
+        self.assertEqual(output["_recent_days"], [{"date": day, "messageCount": tokens}
+                         for day, tokens in zip(days, [5, 0, 0, 0, 0, 0, 30])])
+
     def test_local_day_bounds_follow_dst_midnights(self) -> None:
         if not hasattr(time, "tzset"):
             self.skipTest("tzset is unavailable")

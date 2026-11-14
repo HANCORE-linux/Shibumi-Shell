@@ -63,9 +63,9 @@ def model_label(model_id: str, provider_id: str = "") -> str:
     return model_id + (f" ({provider_id})" if provider_id else "")
 
 
-def assistant_messages(
+def usage_messages(
     con: sqlite3.Connection, since_ms: int, before_ms: int
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     tables = {row[0] for row in con.execute("select name from sqlite_master where type = 'table'")}
     rows = []
     key = "id" if "session_message" in tables else "null"
@@ -73,21 +73,30 @@ def assistant_messages(
         if table not in tables and (table == "session_message" or "session_message" in tables):
             continue
         rows.extend(con.execute(
-            f"select {key}, session_id, time_created, time_updated, data, {int(table == 'session_message')} "
+            f"select {key}, session_id, time_created, time_updated, data, {'type' if table == 'session_message' else 'null'} "
             f"from {table} where time_updated >= ? and time_updated < ?"
-            + (" and type = 'assistant'" if table == "session_message" else "")
+            + (" and type in ('assistant', 'user')" if table == "session_message" else "")
             + " order by time_updated asc", (since_ms, before_ms),
         ).fetchall())
     migrated = {row[0] for row in rows if row[-1]}
-    out = []
-    for message_id, session_id, time_created, time_updated, raw, v2 in rows:
+    session_columns = {row[1] for row in con.execute("pragma table_info(session)")}
+    children = {row[0] for row in con.execute("select id from session where parent_id is not null")} \
+        if {"id", "parent_id"} <= session_columns else set()
+    out, prompts = [], []
+    for message_id, session_id, time_created, time_updated, raw, v2_type in rows:
+        v2 = v2_type is not None
         if not v2 and message_id in migrated:
             continue
         try:
             data = json.loads(raw or "{}")
         except Exception:
             continue
-        if not v2 and data.get("role") != "assistant":
+        role = v2_type if v2 else data.get("role")
+        if role == "user":
+            if session_id not in children:
+                prompts.append({"session_id": session_id, "time": as_int(time_updated or time_created)})
+            continue
+        if role != "assistant":
             continue
         model = (data.get("model") or {}) if v2 else data
         model_id = model.get("id" if v2 else "modelID") or ""
@@ -117,7 +126,7 @@ def assistant_messages(
             "cost": as_float(data.get("cost")),
             "time": as_int(time_updated or time_created),
         })
-    return out
+    return out, prompts
 
 
 def sum_since(messages: list[dict], since_ms: int) -> tuple[int, float, int]:
@@ -243,7 +252,9 @@ def main() -> None:
     five_h_ms = int((now - 5 * 3600) * 1000)
     seven_d_ms = int((now - 7 * 24 * 3600) * 1000)
     hour_ms = int((now - 3600) * 1000)
-    today_ms, tomorrow_ms, local_day = local_day_bounds()
+    days = [local_day_bounds(datetime.fromtimestamp(now) - timedelta(days=offset))
+            for offset in range(6, -1, -1)]
+    today_ms, tomorrow_ms, local_day = days[-1]
     current_ms_exclusive = int(now * 1000) + 1
 
     try:
@@ -253,8 +264,8 @@ def main() -> None:
             # concurrent OpenCode write cannot split latestModel, model rows,
             # and token totals across different database states.
             con.execute("begin")
-            messages = assistant_messages(
-                con, min(seven_d_ms, today_ms),
+            messages, prompts = usage_messages(
+                con, min(seven_d_ms, days[0][0]),
                 min(tomorrow_ms, current_ms_exclusive),
             )
             tok_5h, cost_5h, tok_5h_with_cache = sum_since(messages, five_h_ms)
@@ -263,6 +274,9 @@ def main() -> None:
             tok_today, cost_today, tok_today_with_cache = sum_since(messages, today_ms)
             model = newest_model(messages, today_ms, tomorrow_ms)
             models = model_rows(messages, today_ms, tomorrow_ms)
+            today_prompts = [msg for msg in prompts if today_ms <= msg["time"] < tomorrow_ms]
+            today_sessions = {msg["session_id"] for msg in today_prompts + messages
+                              if today_ms <= msg["time"] < tomorrow_ms}
     except sqlite3.Error:
         unavailable()
         return
@@ -284,6 +298,11 @@ def main() -> None:
         "_rate_per_hour": tok_1h,
         "_rate_per_hour_with_cache_read": tok_1h_with_cache,
         "_today_tokens": tok_today,
+        "_today_prompts": len(today_prompts),
+        "_today_sessions": len(today_sessions),
+        "_recent_days": [{"date": day, "messageCount": sum(
+            msg["total"] for msg in messages if start <= msg["time"] < end)}
+            for start, end, day in days],
         "_today_tokens_with_cache_read": tok_today_with_cache,
         "_7d_tokens": tok_7d,
         "_7d_tokens_with_cache_read": tok_7d_with_cache,
