@@ -1509,11 +1509,11 @@
     },
     {
       "id": "source-0.2.4",
-      "payloadDigest": "7e00c6903487f17e6518f72c228344b730b760df409e48d822bf5835dd1af856",
+      "payloadDigest": "5a37f84ddbcb1402ec0f7994ad2012cbf22afbd41773d7673e227ed3f83caadf",
       "pluginDigests": {
         "hancore.shibumi.bar": "46724f5359add3b02eaa8bfe84edac1f988200b9da1bf7445cef552853bedf2b",
         "hancore.shibumi.state": "d378c1c78487d37cd21c89c031d77b3787da7bb39b77ef2877cc3a47b7528d82",
-        "hancore.shibumi.control-center": "6703d937700b28cdc3dce2045ab904c8ebfc447c451f41581ea1e2c7e20a3f5d",
+        "hancore.shibumi.control-center": "8dfe1a7b27a322d7c377b151a75592db6e94682141a16987d4df2629f1eebf90",
         "hancore.shibumi.reactor": "78889ab3ea18ecb27cbbd18dc52d1660bfdc90d0ae9359f5b15bab858e7cf6e3",
         "hancore.shibumi.telemetry": "52dd263e8b1a40c43a5cdfe7c2461e6273cc6dabd1ec39271a8fb457fa6a96e1",
         "hancore.shibumi.power-state": "56f1e42b790aeda01702e94368c542026167429b1767d50f19ec1f72f2a8535a",
@@ -1522,8 +1522,8 @@
         "hancore.shibumi.status": "15b343e13550525aca49310768de38409f017d2cf64486c638dcd7ddbd7c1d8f",
         "hancore.shibumi.memory": "206bea70ef87ad453897a69ff295e6831295de0effe287d2b512e978f863ef43",
         "hancore.shibumi.cpu": "2372bc2041ab7155c175210ba11792b550f2106f22173a690cb1b03d3ac1d4c0",
-        "hancore.shibumi.audio": "0ff9258e32488f3e722c2620d89c37a32f3bc8ff64ef3372a0861f893a1474cc",
-        "hancore.shibumi.ai": "149706c5fbb7be833a715f716ddd7a666dcc59f38809a01a13cbf60406731a82",
+        "hancore.shibumi.audio": "73aac55004ee77216f568ab69b87257be67bdd900fe2e0af8270d06f0636c3a2",
+        "hancore.shibumi.ai": "47635d4ba6c9b634386d6badfded1e86e6bed232c2273102597d3de3f28e400f",
         "hancore.shibumi.center": "9189900d1a1311a51423c25c8f89849a00947ffbc9674a3099ce0a59f68cf8d4",
         "hancore.shibumi.media": "9571934599a91993e05f1475bc960747fd7c5bbfa3a0df0cac764c9fbe9cdfea",
         "hancore.shibumi.quick-access": "019dc1f3399b6430ac042aeab2603cba4001733f570e881ec68ece69562846f2",
@@ -1564,7 +1564,7 @@
       ],
       "settingsStorageVersion": 1,
       "sourceRevisions": [
-        "4ddfed92dc97e49837fb7aa5081065a16e681510"
+        "2935a82a3015e2be97db140628667744ea8da12e"
       ],
       "suiteVersion": "0.2.3"
     }
