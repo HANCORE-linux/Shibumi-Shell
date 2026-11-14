@@ -1108,7 +1108,7 @@ for health_contract in \
     'width: root.statusColumnWidth' \
     'width: Math.max(1, checkRow.width - root.rowHorizontalPadding * 2)' \
     'horizontalAlignment: Text.AlignLeft' \
-    'anchors.leftMargin: 0' \
+    'anchors.leftMargin: Commons.Style.space(10)' \
     'text: "Shibumi " + root.installedShibumiVersion' \
     'text: root.installChannelLabel' \
     'report.installOrigin === "package"' \

@@ -227,7 +227,7 @@ Column {
 
     Row {
       anchors.fill: parent
-      anchors.leftMargin: 0
+      anchors.leftMargin: Commons.Style.space(10)
       anchors.rightMargin: Commons.Style.space(10)
       spacing: Commons.Style.space(8)
 
