@@ -596,7 +596,10 @@ Item {
       if (!source.audio)
         return result(false, "unavailable", "Input is unavailable",
           Model.stableNodeId(source, "source"))
-      source.audio.muted = !source.audio.muted
+      const muted = !source.audio.muted
+      source.audio.muted = muted
+      if (root.backendOverride === null)
+        Quickshell.execDetached(["omarchy-brightness-keyboard-mute", muted ? "on" : "off"])
       root.generation++
       return result(true, "ok", "", Model.stableNodeId(source, "source"))
     }
