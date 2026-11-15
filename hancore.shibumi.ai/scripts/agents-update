@@ -147,7 +147,13 @@ if $codex_requested && ! $codex_excluded; then
   fi
 fi
 
-setsid env OMARCHY_PATH="$omarchy_path" \
+background=()
+if command -v taskset >/dev/null 2>&1; then
+  cpu_list=$(python3 -c 'import os; cpus = sorted(os.sched_getaffinity(0)); print(",".join(map(str, cpus[-max(2, len(cpus) // 4):])) if len(cpus) > 2 else "")' 2>/dev/null || true)
+  [[ -z $cpu_list ]] || background=(nice -n 19 taskset -c "$cpu_list")
+fi
+
+setsid "${background[@]}" env OMARCHY_PATH="$omarchy_path" \
   "${compat_environment[@]}" "$updater" "${forwarded[@]}" &
 child_pid=$!
 watch_parent "$$" "$child_pid" &
