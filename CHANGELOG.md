@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.5] - Unreleased
+
+### Changed
+
+- AI: show periodically refreshed usage when opening the panel without starting a discovery.
+
 ## [0.2.4] - 2026-11-14
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 551dc629.

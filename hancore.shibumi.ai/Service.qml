@@ -615,12 +615,6 @@ Item {
       && Date.now() - lastDiscoveryStartedAtMs >= agentsDiscoveryInterval)
   }
 
-  function panelOpened() {
-    if (lastDiscoveryStartedAtMs > 0
-        && Date.now() - lastDiscoveryStartedAtMs >= agentsRefreshInterval)
-      requestAgentsUpdate(false, true)
-  }
-
   function startBackendProcess(kind, command) {
     if (!runtimeProbesEnabled || !serviceActive
         || backendProcess.running || backendProcessKind !== "") return false

@@ -170,9 +170,6 @@ ShellRoot {
     ok = ok && s.pendingBackendRefresh && !s.pendingBackendDiscovery && !s.pendingBackendForce
     s.lastDiscoveryStartedAtMs = Date.now() - s.agentsDiscoveryInterval; s.requestPeriodicBackend()
     ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
-    s.lastDiscoveryStartedAtMs = Date.now() - s.agentsRefreshInterval
-    emptyPanelOwner.opened = false; void(emptyAgentsPanel.open); emptyPanelOwner.opened = true; void(emptyAgentsPanel.open)
-    ok = ok && s.pendingBackendDiscovery; s.pendingBackendDiscovery = false
     const records = s.agentRecords; s.agentRecords = ({}); s.providerRevision++; s.requestPeriodicBackend()
     ok = ok && s.pendingBackendDiscovery; s.agentRecords = records; s.providerRevision++
     s.pendingBackendRefresh = false; s.pendingBackendDiscovery = false; s.backendError = ""
