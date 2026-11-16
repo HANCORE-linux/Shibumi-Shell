@@ -109,6 +109,16 @@ ShellRoot {
       console.log("442_AI_CACHE", JSON.stringify({hours: hours, commands: p.calls, nextDueAfterStartMs: (hours === 1 ? -3600000 : 120000) + p.agentsDiscoveryInterval}))
       p.lastDiscoveryStartedAtMs = Date.now() - p.agentsDiscoveryInterval + 1000; p.requestPeriodicBackend(); if (p.runningBackendDiscovery) { p.destroy(); return false }
       p.lastDiscoveryStartedAtMs = Date.now() - p.agentsDiscoveryInterval; p.requestPeriodicBackend(); if (!p.runningBackendDiscovery) { p.destroy(); return false }
+      const savedService = emptyAgentsPanel.aiService, discoveryAt = p.lastDiscoveryStartedAtMs, flags = () => JSON.stringify([p.pendingBackendRefresh, p.pendingBackendForce, p.pendingBackendDiscovery, p.startupRefreshPending, p.startupDiscoveryPending]), beforeFlags = flags()
+      p.runningBackendDiscovery = false; p.providerOverrides = ["claude", "codex"].map(id => ({providerId: id, ready: true})); p.calls = []; emptyAgentsPanel.aiService = p
+      const openingDiscoveryFlag = p.runningBackendDiscovery; emptyPanelOwner.opened = true; void(emptyAgentsPanel.open); emptyPanelOwner.opened = false; void(emptyAgentsPanel.open)
+      const openRuns = p.calls.length, command = p.calls[0]; p.backendProcessKind = "agents-update"; p.panelOpened()
+      const activeRuns = p.calls.length - openRuns, activeQueued = p.pendingBackendRefresh; p.finishBackendProcess(1); const failedRuns = p.calls.length - openRuns, failedQueued = p.pendingBackendRefresh || p.pendingBackendDiscovery; p.pendingBackendRefresh = true; p.panelOpened()
+      const pendingRuns = p.calls.length - openRuns; p.pendingBackendRefresh = false; p.providerOverrides = [{providerId: "opencode", ready: true}]; p.panelOpened()
+      const emptyRuns = p.calls.length - openRuns; emptyAgentsPanel.aiService = savedService
+      const unchanged = p.lastDiscoveryStartedAtMs === discoveryAt && flags() === beforeFlags && !openingDiscoveryFlag && p.runningBackendDiscovery
+      console.log("457_AI_OPEN", JSON.stringify({hours: hours, openRuns: openRuns, command: command, activeRuns: activeRuns, activeQueued: activeQueued, pendingRuns: pendingRuns, emptyRuns: emptyRuns, openingDiscoveryFlag: openingDiscoveryFlag, failedRuns: failedRuns, failedQueued: failedQueued, discoveryBefore: discoveryAt, discoveryAfter: p.lastDiscoveryStartedAtMs, flagsUnchanged: flags() === beforeFlags}))
+      if (openRuns !== 1 || activeRuns || activeQueued || pendingRuns || emptyRuns || failedRuns || failedQueued || !unchanged || command.slice(2).join(" ") !== "--limits-only --except opencode --except fireworks claude codex") { p.destroy(); return false }
       p.destroy()
     }
     return true

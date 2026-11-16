@@ -4,7 +4,7 @@
 
 ### Changed
 
-- AI: show periodically refreshed usage when opening the panel without starting a discovery.
+- AI: refresh only limits for the visible provider tabs when opening the panel, without starting a discovery.
 - AI: run usage collection at low priority on the last quarter of allowed CPUs, with at least two when available.
 
 ## [0.2.4] - 2026-11-14
