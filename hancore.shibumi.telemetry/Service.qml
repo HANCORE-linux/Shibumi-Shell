@@ -15,7 +15,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.telemetry"
-    implementationVersion: "0.2.4"
+    implementationVersion: "0.2.5"
     owner: root
     host: root.shell
     manifest: root.manifest

@@ -20,7 +20,7 @@ Item {
   SuiteRuntime.HostShell { id: suiteShell; host: root.shell }
   SuiteRuntime.Provider {
     pluginId: "hancore.shibumi.ai"
-    implementationVersion: "0.2.4"
+    implementationVersion: "0.2.5"
     owner: root
     host: root.shell
     manifest: root.manifest
@@ -610,15 +610,20 @@ Item {
     return command
   }
 
+  function panelOpened() {
+    if (!agentsBackendActive || !runtimeProbesEnabled || !serviceActive
+        || tabProviderIds.length === 0 || pendingBackendRefresh
+        || backendProcess.running || backendProcessKind !== "") return false
+    const command = agentsUpdateCommand(false, false)
+    command.splice(2, 0, "--limits-only")
+    // Suppress the discovery fallback on failure, even though this run only refreshes limits.
+    runningBackendDiscovery = true
+    return startBackendProcess("agents-update", command)
+  }
+
   function requestPeriodicBackend() {
     return requestCurrentBackend(false, lastDiscoveryStartedAtMs > 0
       && Date.now() - lastDiscoveryStartedAtMs >= agentsDiscoveryInterval)
-  }
-
-  function panelOpened() {
-    if (lastDiscoveryStartedAtMs > 0
-        && Date.now() - lastDiscoveryStartedAtMs >= agentsRefreshInterval)
-      requestAgentsUpdate(false, true)
   }
 
   function startBackendProcess(kind, command) {

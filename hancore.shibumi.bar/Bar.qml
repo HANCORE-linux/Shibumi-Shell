@@ -28,7 +28,7 @@ Item {
   SuiteRuntime.Provider {
     id: barRuntimeProvider
     pluginId: "hancore.shibumi.bar"
-    implementationVersion: "0.2.4"
+    implementationVersion: "0.2.5"
     owner: root
     host: suiteHostShell.host
     manifest: root.manifest

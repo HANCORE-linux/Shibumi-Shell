@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.5] - 2026-11-18
+
+Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 551dc629.
+
+### Changed
+
+- AI: refresh only limits for the visible provider tabs when opening the panel, without starting a discovery.
+- AI: run usage collection at low priority on the last quarter of allowed CPUs, with at least two when available.
+
 ## [0.2.4] - 2026-11-14
 
 Validated on Omarchy 4.5.0 (package 4.5.0-3, source v4.5.0 at ac2690cd7; source contracts and isolated fixtures); forward reference 551dc629.

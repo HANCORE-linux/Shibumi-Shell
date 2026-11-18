@@ -148,6 +148,18 @@ grep -Fx -- '--force --except fireworks' \
   || fail "agents owner did not forward a forced refresh"
 
 wrapper="$repo_root/hancore.shibumi.ai/scripts/agents-update"
+cp "$tmpdir/omarchy/bin/omarchy-agent-usage-update" "$tmpdir/updater-original"
+printf '#!/usr/bin/env bash\nexec "$OMARCHY_PATH/bin/omarchy-agent-usage-claude"\n' >"$tmpdir/omarchy/bin/omarchy-agent-usage-update"
+printf '#!/usr/bin/env python3\nimport json,os\nprint(json.dumps([os.getpriority(os.PRIO_PROCESS,0), sorted(os.sched_getaffinity(0))]))\n' >"$tmpdir/omarchy/bin/omarchy-agent-usage-claude"
+python3 - "$wrapper" "$tmpdir" <<'PY'
+import json, os, subprocess, sys
+wrapper, root = sys.argv[1:]; allowed = sorted(os.sched_getaffinity(0)); env = os.environ | {"HOME": root + "/home", "XDG_STATE_HOME": root + "/state"}
+for cpus in [allowed, allowed[-2:]]:
+    actual = json.loads(subprocess.check_output(["taskset", "-c", ",".join(map(str, cpus)), wrapper, root + "/omarchy", "claude"], env=env, text=True).splitlines()[-1])
+    assert actual == [19 if len(cpus) > 2 else os.getpriority(os.PRIO_PROCESS, 0), cpus[-max(2, len(cpus) // 4):] if len(cpus) > 2 else cpus], actual
+PY
+mv "$tmpdir/updater-original" "$tmpdir/omarchy/bin/omarchy-agent-usage-update"
+install -m 0755 /usr/bin/true "$tmpdir/omarchy/bin/omarchy-agent-usage-claude"
 SHIBUMI_TEST_STUBBORN=1 SHIBUMI_AI_UPDATE_TIMEOUT=30 \
   HOME="$tmpdir/home" XDG_STATE_HOME="$tmpdir/state" \
   "$wrapper" "$tmpdir/omarchy" claude >/dev/null 2>&1 &
