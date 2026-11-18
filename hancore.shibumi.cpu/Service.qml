@@ -13,7 +13,7 @@ Item {
   SuiteRuntime.Provider {
     id: runtimeProvider
     pluginId: "hancore.shibumi.cpu"
-    implementationVersion: "0.2.4"
+    implementationVersion: "0.2.5"
     owner: root
     host: root.shell
     manifest: root.manifest

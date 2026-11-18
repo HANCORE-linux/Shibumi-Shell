@@ -6,8 +6,8 @@ Shibumi installs 24 independent plugin roots into Omarchy's normal plugin
 directory. The repository root is a suite source, not a single installable
 Omarchy plugin.
 
-`0.2.4` is the current stable release target. See the
-[release notes](../.github/release-notes/v0.2.4.md) for changes.
+`0.2.5` is the current stable release target. See the
+[release notes](../.github/release-notes/v0.2.5.md) for changes.
 Install from the release tag using the source workflow below.
 Do not install or update from `main`.
 
@@ -53,7 +53,7 @@ For an intentional non-interactive installation:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.4
+git checkout v0.2.5
 ./scripts/shibumi-suite install --yes
 ```
 
@@ -69,7 +69,7 @@ To inspect the transaction before installing:
 sudo pacman -S --needed python jq curl networkmanager power-profiles-daemon upower xdg-utils libnotify wl-clipboard ttf-material-symbols-variable ttf-jetbrains-mono-nerd-basic noto-fonts-cjk adwaita-fonts
 git clone https://github.com/HANCORE-linux/Shibumi-Shell.git
 cd Shibumi-Shell
-git checkout v0.2.4
+git checkout v0.2.5
 ./scripts/shibumi-suite install --dry-run
 ./scripts/shibumi-suite install
 ```
@@ -154,9 +154,9 @@ Pacman updating `/usr/share/shibumi-shell` does not silently change a running
 desktop. The explicit update validates, stages, reloads, and verifies all 24
 plugins as one transaction.
 
-Update an exactly admitted source installation to 0.2.4 from its trusted
-checkout. The most recent published predecessor is 0.2.3: tag `a8fc782b` and
-the main integration merges `41002a83` (#104) and `80fe4cd9` (#105, docs and one test only)
+Update an exactly admitted source installation to 0.2.5 from its trusted
+checkout. The most recent published predecessor is 0.2.4: tag `12763c68` and
+the main integration merge `700180ef` (#106)
 carry the same released payload; its package identity is admitted too. Older
 supported identities, including Beta.16.4 and Beta.16.5, remain in the
 [lifecycle predecessor contract](../contracts/lifecycle-predecessors-v1.json).
@@ -165,7 +165,7 @@ Do not treat this list as a version range:
 ```bash
 cd Shibumi-Shell
 git fetch --tags
-git checkout v0.2.4
+git checkout v0.2.5
 ./scripts/shibumi-suite update --dry-run
 ./scripts/shibumi-suite update --yes
 ./scripts/shibumi-suite status
@@ -424,7 +424,7 @@ then install the published tag. For example, only if the recorded revision is
 ```bash
 git checkout e92d8ee1ce9821d0b203a9d4d5dd9932d2e460fb
 ./scripts/shibumi-suite uninstall --keep-settings --yes
-git checkout v0.2.4
+git checkout v0.2.5
 ./scripts/shibumi-suite install --yes
 ```
 

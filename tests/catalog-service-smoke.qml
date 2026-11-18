@@ -62,7 +62,7 @@ Scope {
     }
   }
   function manifest(valid) {
-    return {id: "hancore.shibumi.control-center", version: valid ? "0.2.4" : "invalid",
+    return {id: "hancore.shibumi.control-center", version: valid ? "0.2.5" : "invalid",
       kinds: ["service", "bar-widget"]}
   }
   function changedCatalogOutput() {

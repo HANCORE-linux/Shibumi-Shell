@@ -176,7 +176,7 @@ ShellRoot {
   Audio.Service {
     id: service
     shell: serviceHost
-    manifest: ({id: "hancore.shibumi.audio", version: "0.2.4", kinds: ["service"]})
+    manifest: ({id: "hancore.shibumi.audio", version: "0.2.5", kinds: ["service"]})
     nativeBackendEnabled: true
     nativeBackendOverride: fakeBackend
   }
