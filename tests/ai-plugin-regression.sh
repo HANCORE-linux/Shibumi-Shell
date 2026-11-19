@@ -406,7 +406,8 @@ rg -q 'newest_model\(messages, today_ms, tomorrow_ms\)' \
   && -x $repo_root/hancore.shibumi.ai/scripts/compat-bin/codex ]] \
   || fail "AI provider scripts are not executable"
 [[ -s $repo_root/hancore.shibumi.ai/assets/codex.svg \
-  && -s $repo_root/hancore.shibumi.ai/assets/opencode-mark.svg ]] \
+  && -s $repo_root/hancore.shibumi.ai/assets/opencode-mark.svg \
+  && -s $repo_root/hancore.shibumi.ai/assets/claude.svg ]] \
   || fail "AI provider assets are missing"
 
 printf 'AI plugin regression passed\n'

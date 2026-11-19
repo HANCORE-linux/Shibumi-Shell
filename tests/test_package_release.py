@@ -360,6 +360,12 @@ class PackageReleaseTests(unittest.TestCase):
                 "settingsStorageVersion": 1,
                 "payloadDigest": "6eb8ce380d21ad8454c33357198f917d63a8a5458ed5a69ba87583cec083bc26",
             },
+            "source-0.2.6": {
+                "suiteVersion": "0.2.5",
+                "sourceRevisions": ["18870619e24b2f501b4772bde39ed6078d3f8b96"],
+                "settingsStorageVersion": 1,
+                "payloadDigest": "41990db60b90ce0c9991ab258a6b4d6f83dd99fe0b2a60ed00e8120508f7260d",
+            },
         }
         self.assertEqual(set(states), set(expected))
         for identity_id, pinned in expected.items():
@@ -383,7 +389,7 @@ class PackageReleaseTests(unittest.TestCase):
 
         suite = Suite.load(ROOT)
         current_version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-        current_id = "public-0.2.5"
+        current_id = "source-0.2.6"
         self.assertEqual(states[current_id]["suiteVersion"], current_version)
         current_plugin_digests = {
             plugin_id: spec.payload_digest()

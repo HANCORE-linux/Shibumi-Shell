@@ -20,6 +20,9 @@ Ui.Panel {
   readonly property var provider: aiService ? aiService.selectedProvider : null
   readonly property string providerId: provider
     ? String(provider.providerId || "") : ""
+  // Extra Claude Code profiles (for example `claude-personal`) share the mark.
+  readonly property bool claudeMark: providerId === "claude"
+    || providerId.indexOf("claude-") === 0
   readonly property int usagePercent: aiService
     ? aiService.usagePercent(provider) : -1
   readonly property int steppedPercent: usagePercent < 0
@@ -42,15 +45,8 @@ Ui.Panel {
       ? tokens.ink : (bar ? bar.foreground : Commons.Color.foreground)
   readonly property color usageIconColor: widgetInk
   readonly property real baseIconOpacity: customFillActive ? 0.65
-    : providerId === "claude" ? 0.25
+    : claudeMark ? 0.25
       : providerId === "opencode" ? 0.5 : 0.65
-  readonly property bool claudeLayersAligned:
-    Math.abs(claudeGlyphBase.x
-      - (claudeUsageClip.x + claudeUsageGlyph.x)) < 0.01
-    && Math.abs(claudeGlyphBase.y
-      - (claudeUsageClip.y + claudeUsageGlyph.y)) < 0.01
-    && claudeGlyphBase.width === claudeUsageGlyph.width
-    && claudeGlyphBase.height === claudeUsageGlyph.height
   readonly property bool iconOnly: tokens.v2Shell !== true
     && setting("displayMode", "full") === "icon-only"
   readonly property string displayMode: iconOnly ? "icon" : String(
@@ -58,14 +54,13 @@ Ui.Panel {
   readonly property bool compact: displayMode === "icon"
   readonly property int providerIconSlotWidth: 20
   readonly property int providerIconSlotHeight: 16
-  readonly property int claudeGlyphPixelSize: 15
   readonly property int providerGlyphWidth: providerId === "opencode" ? 15
-    : providerId === "claude" ? 15 : 14
+    : claudeMark ? 15 : 14
   readonly property int providerGlyphHeight: providerId === "opencode" ? 10
-    : providerId === "claude" ? 15 : 14
+    : claudeMark ? 15 : 14
   readonly property int providerGlyphHorizontalOffset: 0
   readonly property int providerContentHorizontalOffset:
-    providerId !== "claude" && providerId !== "opencode" && displayMode !== "text" ? -1 : 0
+    !claudeMark && providerId !== "opencode" && displayMode !== "text" ? -1 : 0
   readonly property var interactionTarget: actionButton
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -78,14 +73,16 @@ Ui.Panel {
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
   readonly property var markCandidates: {
-    if (!providerId || providerId === "claude" || providerId === "opencode") return []
+    if (!providerId || providerId === "opencode") return []
     const path = aiService && "omarchyPath" in aiService ? String(aiService.omarchyPath || "") : ""
-    const candidates = providerId === "codex" ? [Qt.resolvedUrl("assets/codex.svg")] : []
+    const candidates = providerId === "codex" ? [Qt.resolvedUrl("assets/codex.svg")]
+      : claudeMark ? [Qt.resolvedUrl("assets/claude.svg")] : []
     const surface = bar ? bar.background : Commons.Color.background
     const channel = value => value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4)
     const light = 0.2126 * channel(surface.r) + 0.7152 * channel(surface.g) + 0.0722 * channel(surface.b) >= 0.5
     if (path) {
-      const base = "file://" + path + "/shell/plugins/agents/assets/" + providerId
+      const base = "file://" + path + "/shell/plugins/agents/assets/"
+        + (claudeMark ? "claude" : providerId)
       if (light) candidates.push(base + "-light.svg")
       candidates.push(base + ".svg")
     }
@@ -171,10 +168,8 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.providerIconSlotWidth
         height: root.providerIconSlotHeight
-        readonly property real inkLeft: providerGlyph.x + (root.providerId === "claude"
-          ? claudeGlyphBase.x + claudeGlyphBase.inkLeft : 0)
-        readonly property real inkRight: providerGlyph.x + (root.providerId === "claude"
-          ? claudeGlyphBase.x + claudeGlyphBase.inkRight : providerGlyph.width)
+        readonly property real inkLeft: providerGlyph.x
+        readonly property real inkRight: providerGlyph.x + providerGlyph.width
 
         Item {
           id: providerGlyph
@@ -182,51 +177,6 @@ Ui.Panel {
           anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset
           width: root.providerGlyphWidth
           height: root.providerGlyphHeight
-
-          Item {
-            id: claudeIcon
-            anchors.fill: parent
-            visible: root.providerId === "claude"
-
-            Presentation.BarGlyph {
-              id: claudeGlyphBase
-              // Keep the original advance/line box for both aligned layers.
-              optical: !root.bar || !root.bar.vertical
-              anchors.centerIn: parent
-              text: "\udb85\ude7a"
-              color: Qt.rgba(root.baseIconColor.r,
-                root.baseIconColor.g, root.baseIconColor.b,
-                root.baseIconOpacity)
-              font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-              font.pixelSize: root.claudeGlyphPixelSize
-              renderType: Text.QtRendering
-            }
-
-            Item {
-              id: claudeUsageClip
-              width: parent.width
-              height: root.steppedPercent > 0
-                ? Math.min(parent.height, Math.max(parent.height * root.steppedPercent / 100,
-                    parent.height * 0.25)) : 0
-              anchors.bottom: parent.bottom
-              clip: true
-              Behavior on height { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
-
-              Presentation.BarGlyph {
-                id: claudeUsageGlyph
-                optical: !root.bar || !root.bar.vertical
-                x: claudeGlyphBase.x
-                y: claudeGlyphBase.y - claudeUsageClip.y
-                width: claudeGlyphBase.width
-                height: claudeGlyphBase.height
-                text: "\udb85\ude7a"
-                color: root.usageIconColor
-                font.family: root.bar ? root.bar.fontFamily : Commons.Style.font.family
-                font.pixelSize: root.claudeGlyphPixelSize
-                renderType: Text.QtRendering
-              }
-            }
-          }
 
           OpenCodeUsageIcon {
             anchors.fill: parent
@@ -241,7 +191,7 @@ Ui.Panel {
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId !== "claude" && root.providerId !== "opencode"
+            visible: root.providerId !== "opencode"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0

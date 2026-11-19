@@ -98,17 +98,27 @@ codex_requested=false
 codex_excluded=false
 agent_id_count=0
 forwarded=()
+flags=()
+user_collectors=()
 while (( $# )); do
   argument=$1; shift
   except=false
   case $argument in
-    --force | --limits-only) forwarded+=("$argument"); continue ;;
+    --force | --limits-only)
+      forwarded+=("$argument"); flags+=("$argument"); continue ;;
     --except) except=true; argument=${1:-}; shift || true ;;
     --*) fail "unsupported agent updater option: $argument" ;;
   esac
   [[ $argument =~ ^[a-z0-9][a-z0-9._-]*$ ]] \
     || fail "invalid agent id: $argument"
-  collector="$omarchy_path/bin/omarchy-agent-usage-$argument"
+  collector_name="omarchy-agent-usage-$argument"
+  collector="$omarchy_path/bin/$collector_name"
+  user_collector="${HOME:?}/.local/bin/$collector_name"
+  # Extra profiles (for example claude-personal) ship their own collector.
+  if [[ ! -x $collector && -x $user_collector ]]; then
+    $except || user_collectors+=("$argument" "$user_collector")
+    continue
+  fi
   if $except; then
     [[ -x $collector ]] || continue
     forwarded+=(--except "$argument")
@@ -120,7 +130,9 @@ while (( $# )); do
   agent_id_count=$((agent_id_count + 1))
   [[ $argument != codex ]] || codex_requested=true
 done
-if (( agent_id_count == 0 )) \
+run_host_updater=true
+(( agent_id_count > 0 || ${#user_collectors[@]} == 0 )) || run_host_updater=false
+if $run_host_updater && (( agent_id_count == 0 )) \
     && [[ -x $omarchy_path/bin/omarchy-agent-usage-codex ]]; then
   codex_requested=true
 fi
@@ -153,8 +165,33 @@ if command -v taskset >/dev/null 2>&1; then
   [[ -z $cpu_list ]] || background=(nice -n 19 taskset -c "$cpu_list")
 fi
 
+host_command=()
+! $run_host_updater || host_command=("$updater" "${forwarded[@]}")
 setsid "${background[@]}" env OMARCHY_PATH="$omarchy_path" \
-  "${compat_environment[@]}" "$updater" "${forwarded[@]}" &
+  "${compat_environment[@]}" bash -c '
+    flag_count=$1; shift
+    flags=("${@:1:flag_count}"); shift "$flag_count"
+    user_count=$1; shift
+    status=0
+    usage_dir=${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/agents/usage
+    for (( index = 1; index < user_count; index += 2 )); do
+      agent=${!index}
+      next=$((index + 1))
+      collector=${!next}
+      record=$("$collector" "${flags[@]}") || { status=1; continue; }
+      # Collectors either save their own record or print it like the host ones.
+      [[ -n $record ]] || continue
+      jq -e "type == \"object\"" >/dev/null 2>&1 <<<"$record" \
+        || { status=1; continue; }
+      mkdir -p "$usage_dir"
+      tmp=$(mktemp "$usage_dir/.$agent.XXXXXX")
+      printf "%s\n" "$record" >"$tmp" && mv "$tmp" "$usage_dir/$agent.json"
+    done
+    shift "$user_count"
+    if (( $# )); then "$@" || status=1; fi
+    exit "$status"
+  ' agents-update "${#flags[@]}" "${flags[@]}" \
+  "${#user_collectors[@]}" "${user_collectors[@]}" "${host_command[@]}" &
 child_pid=$!
 watch_parent "$$" "$child_pid" &
 watchdog_pid=$!
