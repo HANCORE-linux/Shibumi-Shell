@@ -588,9 +588,7 @@ Column {
       Component.onCompleted: requestPaint()
     }
 
-    Timer {
-      interval: 33
-      repeat: true
+    FrameAnimation {
       running: gapChoice.previewRunning
       onTriggered: previewCanvas.requestPaint()
     }

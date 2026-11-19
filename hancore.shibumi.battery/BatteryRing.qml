@@ -14,7 +14,7 @@ Item {
   readonly property bool water: true
   readonly property bool animating: liquid.animating || arcClock.running
   readonly property bool plasmaAnimating: arcClock.running
-  readonly property int waveFrame: liquid.waveFrame
+  readonly property real waveFrame: liquid.waveFrame
   readonly property real physicalPixel: 1 / Math.max(1, Screen.devicePixelRatio)
   readonly property color lightAccent: Qt.tint(accent, Qt.rgba(foreground.r, foreground.g, foreground.b, 0.55))
   readonly property color brightInk: Qt.lighter(foreground, 1.12)
