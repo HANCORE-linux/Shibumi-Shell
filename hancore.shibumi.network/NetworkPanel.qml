@@ -6,6 +6,7 @@ import QtQuick.Effects
 import qs.Commons as Commons
 import qs.Ui as Ui
 import "../hancore.shibumi.state/lib/presentation" as Presentation
+import "NetworkTailscaleModel.js" as TailscaleModel
 
 ShibumiPanel {
   id: panel
@@ -28,6 +29,23 @@ ShibumiPanel {
   property Item actionFocusItem: null
   property string pendingForgetKey: ""
   property int cursorIndex: -1
+  property bool tailscaleShowAll: false
+  property string tailscaleCopiedKey: ""
+  readonly property int tailscalePeerPreview: 6
+  readonly property var tailscale: networkService
+    && networkService.tailscaleSnapshot
+    ? networkService.tailscaleSnapshot : null
+  readonly property bool tailscaleVisible: !!tailscale
+    && tailscale.reason !== "missing"
+  readonly property bool tailscaleRunning: !!tailscale
+    && tailscale.running === true
+  readonly property var tailscalePeers: tailscaleRunning
+    && Array.isArray(tailscale.peers) ? tailscale.peers : []
+  readonly property var tailscaleExitNodes: tailscalePeers.filter(
+    function(peer) {
+      return peer.exitNodeOption === true
+        && (peer.online === true || peer.exitNode === true)
+    })
   readonly property bool wifiControlsVisible: networkService
     && networkService.wifiAvailable === true
   readonly property var displayNetworks: filteredNetworks()
@@ -76,6 +94,29 @@ ShibumiPanel {
     if (signal < 44) return "\uEBD6"
     if (signal < 66) return "\uEBE1"
     return "\uF065"
+  }
+
+  function tailscaleStatusText() {
+    const fields = [TailscaleModel.stateLabel(tailscale)]
+    if (tailscaleRunning && tailscale.tailnet) fields.push(tailscale.tailnet)
+    if (tailscaleRunning)
+      fields.push(tailscale.onlineCount + "/" + tailscalePeers.length
+        + " online")
+    return fields.join(" · ")
+  }
+
+  function tailscaleToggleLabel() {
+    const kind = String(networkService && networkService.tailscaleActionKind || "")
+    if (kind === "up" || kind === "down") return "..."
+    return tailscaleRunning ? "ON" : "OFF"
+  }
+
+  function copyTailscale(key, value) {
+    if (!networkService || !networkService.copyTailscaleText(value))
+      return false
+    tailscaleCopiedKey = String(key || "")
+    tailscaleCopiedReset.restart()
+    return true
   }
 
   function restartRequired() {
@@ -749,6 +790,242 @@ ShibumiPanel {
             font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
             font.pixelSize: Commons.Style.font.caption
             wrapMode: Text.Wrap
+          }
+        }
+
+        Ui.PanelSeparator {
+          width: parent.width
+          visible: panel.tailscaleVisible
+        }
+
+        Column {
+          id: tailscaleSection
+          width: parent.width
+          spacing: Commons.Style.space(6)
+          visible: panel.tailscaleVisible
+
+          Timer {
+            id: tailscaleCopiedReset
+            interval: 1400
+            onTriggered: panel.tailscaleCopiedKey = ""
+          }
+
+          Row {
+            width: parent.width
+            height: Commons.Style.space(24)
+
+            SectionLabel {
+              width: parent.width - tailscaleToggle.width
+              anchors.verticalCenter: parent.verticalCenter
+              text: "TAILSCALE"
+            }
+
+            PanelButton {
+              id: tailscaleToggle
+              width: Commons.Style.space(50)
+              height: Commons.Style.space(22)
+              label: panel.tailscaleToggleLabel()
+              current: panel.tailscaleRunning
+              enabled: !!panel.tailscale && panel.tailscale.available === true
+                && panel.tailscale.needsLogin !== true
+                && !panel.networkService.tailscaleBusy
+              onClicked: panel.networkService.setTailscaleEnabled(
+                !panel.tailscaleRunning)
+            }
+          }
+
+          Text {
+            width: parent.width
+            text: panel.tailscaleStatusText()
+            textFormat: Text.PlainText
+            color: panel.bar ? Qt.rgba(panel.bar.foreground.r,
+              panel.bar.foreground.g, panel.bar.foreground.b, 0.58)
+              : Commons.Color.foreground
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption
+            elide: Text.ElideRight
+            renderType: Text.NativeRendering
+          }
+
+          Text {
+            width: parent.width
+            visible: text !== ""
+            text: String(panel.networkService.tailscaleError || "")
+            textFormat: Text.PlainText
+            color: panel.bar ? panel.bar.urgent : Commons.Color.accent
+            font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+            font.pixelSize: Commons.Style.font.caption
+            wrapMode: Text.Wrap
+          }
+
+          Grid {
+            width: parent.width
+            columns: 2
+            columnSpacing: Commons.Style.space(6)
+            rowSpacing: Commons.Style.space(4)
+            visible: panel.tailscaleRunning
+
+            DetailCell {
+              width: (tailscaleSection.width - parent.columnSpacing) / 2
+              label: panel.tailscaleCopiedKey === "self" ? "COPIED" : "THIS DEVICE"
+              value: String(panel.tailscale && panel.tailscale.selfIp || "--")
+
+              MouseArea {
+                anchors.fill: parent
+                enabled: !!panel.tailscale && panel.tailscale.selfIp !== ""
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: panel.copyTailscale("self", panel.tailscale.selfIp)
+              }
+            }
+            DetailCell {
+              width: (tailscaleSection.width - parent.columnSpacing) / 2
+              label: "EXIT NODE"
+              value: String(panel.tailscale && panel.tailscale.exitNodeName
+                || "None")
+            }
+          }
+
+          SectionLabel {
+            width: parent.width
+            visible: panel.tailscaleExitNodes.length > 0
+            text: "USE EXIT NODE"
+          }
+
+          Flow {
+            width: parent.width
+            spacing: Commons.Style.space(4)
+            visible: panel.tailscaleExitNodes.length > 0
+
+            PanelButton {
+              width: (tailscaleSection.width - parent.spacing) / 2
+              label: "None"
+              current: !!panel.tailscale && panel.tailscale.exitNodeIp === ""
+              enabled: !panel.networkService.tailscaleBusy
+              onClicked: panel.networkService.setTailscaleExitNode("")
+            }
+
+            Repeater {
+              model: panel.tailscaleExitNodes
+
+              PanelButton {
+                required property var modelData
+                width: (tailscaleSection.width - Commons.Style.space(4)) / 2
+                label: String(modelData.name || modelData.ip)
+                current: modelData.exitNode === true
+                enabled: !panel.networkService.tailscaleBusy
+                onClicked: panel.networkService.setTailscaleExitNode(
+                  modelData.exitNode === true ? "" : modelData.ip)
+              }
+            }
+          }
+
+          Row {
+            width: parent.width
+            visible: panel.tailscalePeers.length > 0
+
+            SectionLabel {
+              width: parent.width - tailscaleMore.width
+              anchors.verticalCenter: parent.verticalCenter
+              text: "MACHINES"
+            }
+
+            PanelButton {
+              id: tailscaleMore
+              visible: panel.tailscalePeers.length > panel.tailscalePeerPreview
+              width: visible ? Commons.Style.space(86) : 0
+              height: Commons.Style.space(22)
+              label: panel.tailscaleShowAll ? "Show less"
+                : "Show all (" + panel.tailscalePeers.length + ")"
+              onClicked: panel.tailscaleShowAll = !panel.tailscaleShowAll
+            }
+          }
+
+          Column {
+            width: parent.width
+            spacing: Commons.Style.space(3)
+
+            Repeater {
+              model: panel.tailscaleShowAll ? panel.tailscalePeers
+                : panel.tailscalePeers.slice(0, panel.tailscalePeerPreview)
+
+              Ui.CursorSurface {
+                id: peerRow
+                required property var modelData
+                readonly property bool copied:
+                  panel.tailscaleCopiedKey === String(modelData.key)
+                width: tailscaleSection.width
+                height: Commons.Style.space(30)
+                radius: panel.controlRadius
+                hasCursor: peerMouse.containsMouse
+                current: modelData.exitNode === true
+                foreground: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+                accent: panel.bar ? panel.bar.urgent : Commons.Color.accent
+                opacity: modelData.online === true ? 1 : 0.55
+
+                Row {
+                  anchors.fill: parent
+                  anchors.leftMargin: Commons.Style.space(8)
+                  anchors.rightMargin: Commons.Style.space(8)
+                  spacing: Commons.Style.space(7)
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 7
+                    height: 7
+                    radius: 3.5
+                    color: peerRow.modelData.online === true
+                      ? (panel.bar ? panel.bar.urgent : Commons.Color.accent)
+                      : "transparent"
+                    border.width: 1
+                    border.color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+                  }
+
+                  Text {
+                    width: parent.width - x - peerAddress.width - parent.spacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: String(peerRow.modelData.name || "")
+                      + (peerRow.modelData.os ? "  ·  " + peerRow.modelData.os : "")
+                    textFormat: Text.PlainText
+                    color: panel.bar ? panel.bar.foreground : Commons.Color.foreground
+                    font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+                    font.pixelSize: Commons.Style.font.body
+                    elide: Text.ElideRight
+                    renderType: Text.NativeRendering
+                  }
+
+                  Text {
+                    id: peerAddress
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: peerRow.copied ? "Copied"
+                      : String(peerRow.modelData.ip || "--")
+                    textFormat: Text.PlainText
+                    color: peerRow.copied && panel.bar ? panel.bar.urgent
+                      : panel.bar ? Qt.rgba(panel.bar.foreground.r,
+                        panel.bar.foreground.g, panel.bar.foreground.b, 0.58)
+                        : Commons.Color.foreground
+                    font.family: panel.bar ? panel.bar.fontFamily : Commons.Style.font.family
+                    font.pixelSize: Commons.Style.font.caption
+                    renderType: Text.NativeRendering
+                  }
+                }
+
+                MouseArea {
+                  id: peerMouse
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  enabled: String(peerRow.modelData.ip || "") !== ""
+                  cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                  onClicked: panel.copyTailscale(peerRow.modelData.key,
+                    peerRow.modelData.ip)
+                }
+
+                Presentation.ShibumiPanelToolTip {
+                  panel: panel
+                  visible: peerMouse.containsMouse && !peerRow.copied
+                  text: "Copy " + String(peerRow.modelData.ip || "")
+                }
+              }
+            }
           }
         }
 

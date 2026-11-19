@@ -1404,4 +1404,45 @@ for source_contract in \
     || fail "V2 RX/TX meter drifted from source: $source_contract"
 done
 
+run_tailscale_case() {
+  local test_file=$1 marker=$2 case_dir
+  case_dir=$(mktemp -d "$tmpdir/tailscale.XXXXXX")
+  mkdir -m 700 "$case_dir/runtime"
+  mkdir -p "$case_dir/bin"
+  cp -a -- "$repo_root/hancore.shibumi.network" "$case_dir/network"
+  install -m 0644 "$repo_root/tests/$test_file" "$case_dir/shell.qml"
+  install -m 0755 "$repo_root/tests/fixtures/tailscale-fixture.sh" \
+    "$case_dir/bin/tailscale"
+  printf 'Stopped' > "$case_dir/state"
+  : > "$case_dir/calls.log"
+  set +e
+  tailscale_output=$(timeout 20 env \
+    PATH="$case_dir/bin:$PATH" \
+    HOME="$tmpdir/home" \
+    SHIBUMI_TAILSCALE_LOG="$case_dir/calls.log" \
+    SHIBUMI_TAILSCALE_STATE="$case_dir/state" \
+    QT_QPA_PLATFORM=offscreen \
+    WAYLAND_DISPLAY= \
+    XDG_RUNTIME_DIR="$case_dir/runtime" \
+    "$quickshell_bin" -p "$case_dir" 2>&1)
+  tailscale_rc=$?
+  set -e
+  printf '%s\n' "$tailscale_output"
+  [[ $tailscale_rc -eq 0 ]] || fail "$test_file exited $tailscale_rc"
+  grep -F "$marker" <<<"$tailscale_output" >/dev/null \
+    || fail "$test_file success marker missing"
+  if grep -Eq 'TypeError|ReferenceError|Binding loop|Unable to assign' \
+      <<<"$tailscale_output"; then
+    fail "$test_file produced a QML runtime error"
+  fi
+}
+
+run_tailscale_case network-tailscale-model-regression.qml \
+  'network tailscale model regression passed'
+run_tailscale_case network-tailscale-service-regression.qml \
+  'network tailscale service regression passed'
+if rg -q 'Process \{' "$repo_root/hancore.shibumi.network/NetworkTailscaleModel.js"; then
+  fail "Tailscale model must stay a pure parser"
+fi
+
 printf 'network plugin regression passed\n'

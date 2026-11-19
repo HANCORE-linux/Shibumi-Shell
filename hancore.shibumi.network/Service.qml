@@ -100,6 +100,11 @@ Item {
   readonly property string speedTestError: speedTest.errorCode === ""
     ? "" : implementation.speedError(speedTest.errorCode)
 
+  readonly property var tailscaleSnapshot: tailscale.snapshot
+  readonly property bool tailscaleBusy: tailscale.busy
+  readonly property string tailscaleActionKind: tailscale.actionKind
+  readonly property string tailscaleError: tailscale.errorText
+
   visible: false
   width: 0
   height: 0
@@ -215,6 +220,13 @@ Item {
     const target = owner || implementation.firstSessionOwner()
     return target ? speedTest.requestRun(target) : false
   }
+
+  function refreshTailscale() { return tailscale.refresh() }
+  function setTailscaleEnabled(enabled) {
+    return tailscale.setEnabled(enabled === true)
+  }
+  function setTailscaleExitNode(ip) { return tailscale.setExitNode(ip) }
+  function copyTailscaleText(value) { return tailscale.copyText(value) }
 
   function beginQrGesture(owner, entry) {
     return implementation.beginQrGesture(owner, entry)
@@ -362,6 +374,11 @@ Item {
     actionCoordinator: actions
   }
 
+  NetworkTailscale {
+    id: tailscale
+    active: root.active
+  }
+
   NetworkPanelBridge {
     id: bridge
     bar: root.bar
@@ -427,6 +444,7 @@ Item {
         if (!record.traffic) telemetry.release(owner)
         return false
       }
+      tailscale.acquire(owner)
       record = { owner: owner, session: true, traffic: record.traffic }
       if (index < 0) {
         const next = ownerRecords.slice()
@@ -442,6 +460,7 @@ Item {
       if (index < 0 || !ownerRecords[index].session) return false
       const record = ownerRecords[index]
       speedTest.cancel(owner)
+      tailscale.release(owner)
       scanner.release(owner)
       reachability.release(owner)
       catalog.release(owner)

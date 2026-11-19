@@ -65,10 +65,19 @@ Ui.Panel {
     : stateIcon === "network_wifi_2_bar" ? "\uEBD6"
     : stateIcon === "network_wifi_3_bar" ? "\uEBE1"
     : stateIcon === "signal_wifi_4_bar" ? "\uF065" : "\uE1DA"
-  readonly property string tooltipText: !networkReady ? "Network unavailable"
+  readonly property var tailscale: networkValue(null,
+    service => service.tailscaleSnapshot)
+  readonly property string tailscaleTooltip: tailscale
+    && tailscale.running === true
+    ? "Tailscale · " + (tailscale.selfIp || "connected")
+      + (tailscale.exitNodeName ? " · via " + tailscale.exitNodeName : "")
+    : ""
+  readonly property string connectionTooltip: !networkReady ? "Network unavailable"
     : mode === "wifi" ? (label || "Wi-Fi") + " · " + signal + "%"
     : mode === "ethernet" ? "Ethernet · " + (label || "connected")
     : backendAvailable ? "Offline" : "NetworkManager unavailable"
+  readonly property string tooltipText: tailscaleTooltip !== ""
+    ? connectionTooltip + "\n" + tailscaleTooltip : connectionTooltip
   readonly property var panelItem: popupLoader.item
   readonly property bool panelLoaded: panelItem !== null
   readonly property var interactionTarget: actionButton

@@ -34,7 +34,7 @@ Each plugin's `manifest.json` defines its Omarchy kinds and entry points.
 | `hancore.shibumi.center` | G8 | Clock, weather, calendar, and update presentation |
 | `hancore.shibumi.media` | G9 | Media controls and visualization |
 | `hancore.shibumi.quick-access` | G10 | Theme, wallpaper, and picker workflows |
-| `hancore.shibumi.network` | G11 | Network widget and panel |
+| `hancore.shibumi.network` | G11 | Network widget and panel, including Tailscale status, machines, and exit nodes |
 | `hancore.shibumi.battery` | G12 | Battery widget and panel |
 | `hancore.shibumi.brightness` | G13 | Monitor brightness widget and panel |
 | `hancore.shibumi.power-profile` | G14 | Power-profile widget and panel |
