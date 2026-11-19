@@ -681,7 +681,6 @@ fi
 for ai_contract in \
   'readonly property int providerIconSlotWidth: 20' \
   'readonly property int providerIconSlotHeight: 16' \
-  'readonly property int claudeGlyphPixelSize: 15' \
   'width: root.providerIconSlotWidth' \
   'height: root.providerIconSlotHeight' \
   'width: root.providerGlyphWidth' \
@@ -691,18 +690,11 @@ for ai_contract in \
   'anchors.horizontalCenterOffset: root.providerContentHorizontalOffset' \
   'anchors.horizontalCenterOffset: root.providerGlyphHorizontalOffset' \
   '? Qt.size(20, 12) : Qt.size(56, 56)' \
+  ': claudeMark ? [Qt.resolvedUrl("assets/claude.svg")] : []' \
   'readonly property color baseIconColor: customFillActive' \
   'readonly property color usageIconColor: widgetInk' \
   'readonly property bool customFillActive:' \
   'readonly property real baseIconOpacity:' \
-  'readonly property bool claudeLayersAligned:' \
-  'color: Qt.rgba(root.baseIconColor.r,' \
-  'color: root.usageIconColor' \
-  'font.pixelSize: root.claudeGlyphPixelSize' \
-  'x: claudeGlyphBase.x' \
-  'y: claudeGlyphBase.y - claudeUsageClip.y' \
-  'width: claudeGlyphBase.width' \
-  'height: claudeGlyphBase.height' \
   'tint: Qt.rgba(root.baseIconColor.r,' \
   'root.baseIconOpacity)' \
   'tint: root.usageIconColor' \
@@ -711,9 +703,6 @@ for ai_contract in \
   rg -Fq "$ai_contract" hancore.shibumi.ai/BarWidget.qml \
     || fail "AI icon contract drifted from V1: $ai_contract"
 done
-[[ $(rg -Fc 'font.pixelSize: root.claudeGlyphPixelSize' \
-  hancore.shibumi.ai/BarWidget.qml) -eq 2 ]] \
-  || fail "Claude base/fill layers do not share the 15px glyph size"
 if rg -Fq 'tint: root.widgetInk' hancore.shibumi.ai/BarWidget.qml \
     || rg -Uq 'text: "\\udb85\\ude7a"\n[[:space:]]+color: (Qt\.rgba\(root\.widgetInk|root\.widgetInk)' \
       hancore.shibumi.ai/BarWidget.qml; then

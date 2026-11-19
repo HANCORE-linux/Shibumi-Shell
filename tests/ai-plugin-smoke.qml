@@ -716,7 +716,6 @@ ShellRoot {
     return widget.providerId === expected.providerId
       && widget.providerIconSlotWidth === 20
       && widget.providerIconSlotHeight === 16
-      && widget.claudeGlyphPixelSize === 15
       && widget.providerGlyphWidth === glyphWidth
       && widget.providerGlyphHeight === glyphHeight
       && widget.providerGlyphHorizontalOffset === glyphOffset
@@ -729,8 +728,6 @@ ShellRoot {
       && Qt.colorEqual(widget.baseIconColor, expectedBase)
       && Qt.colorEqual(widget.usageIconColor, expectedUsage)
       && (!customFillActive || customBaseContrast >= 3)
-      && (expected.providerId !== "claude"
-        || widget.claudeLayersAligned === true)
   }
 
   QtObject {
