@@ -20,6 +20,9 @@ Ui.Panel {
   readonly property var provider: aiService ? aiService.selectedProvider : null
   readonly property string providerId: provider
     ? String(provider.providerId || "") : ""
+  // Extra Claude Code profiles (for example `claude-personal`) share the mark.
+  readonly property bool claudeMark: providerId === "claude"
+    || providerId.indexOf("claude-") === 0
   readonly property int usagePercent: aiService
     ? aiService.usagePercent(provider) : -1
   readonly property int steppedPercent: usagePercent < 0
@@ -42,7 +45,7 @@ Ui.Panel {
       ? tokens.ink : (bar ? bar.foreground : Commons.Color.foreground)
   readonly property color usageIconColor: widgetInk
   readonly property real baseIconOpacity: customFillActive ? 0.65
-    : providerId === "claude" ? 0.25
+    : claudeMark ? 0.25
       : providerId === "opencode" ? 0.5 : 0.65
   readonly property bool claudeLayersAligned:
     Math.abs(claudeGlyphBase.x
@@ -60,12 +63,12 @@ Ui.Panel {
   readonly property int providerIconSlotHeight: 16
   readonly property int claudeGlyphPixelSize: 15
   readonly property int providerGlyphWidth: providerId === "opencode" ? 15
-    : providerId === "claude" ? 15 : 14
+    : claudeMark ? 15 : 14
   readonly property int providerGlyphHeight: providerId === "opencode" ? 10
-    : providerId === "claude" ? 15 : 14
+    : claudeMark ? 15 : 14
   readonly property int providerGlyphHorizontalOffset: 0
   readonly property int providerContentHorizontalOffset:
-    providerId !== "claude" && providerId !== "opencode" && displayMode !== "text" ? -1 : 0
+    !claudeMark && providerId !== "opencode" && displayMode !== "text" ? -1 : 0
   readonly property var interactionTarget: actionButton
   readonly property bool panelLoaded: panelLoader.item !== null
   readonly property var panelItem: panelLoader.item
@@ -78,7 +81,7 @@ Ui.Panel {
   implicitHeight: visible ? (bar ? bar.barSize : Commons.Style.space(35)) : 0
 
   readonly property var markCandidates: {
-    if (!providerId || providerId === "claude" || providerId === "opencode") return []
+    if (!providerId || claudeMark || providerId === "opencode") return []
     const path = aiService && "omarchyPath" in aiService ? String(aiService.omarchyPath || "") : ""
     const candidates = providerId === "codex" ? [Qt.resolvedUrl("assets/codex.svg")] : []
     const surface = bar ? bar.background : Commons.Color.background
@@ -171,9 +174,9 @@ Ui.Panel {
         anchors.verticalCenter: parent.verticalCenter
         width: root.providerIconSlotWidth
         height: root.providerIconSlotHeight
-        readonly property real inkLeft: providerGlyph.x + (root.providerId === "claude"
+        readonly property real inkLeft: providerGlyph.x + (root.claudeMark
           ? claudeGlyphBase.x + claudeGlyphBase.inkLeft : 0)
-        readonly property real inkRight: providerGlyph.x + (root.providerId === "claude"
+        readonly property real inkRight: providerGlyph.x + (root.claudeMark
           ? claudeGlyphBase.x + claudeGlyphBase.inkRight : providerGlyph.width)
 
         Item {
@@ -186,7 +189,7 @@ Ui.Panel {
           Item {
             id: claudeIcon
             anchors.fill: parent
-            visible: root.providerId === "claude"
+            visible: root.claudeMark
 
             Presentation.BarGlyph {
               id: claudeGlyphBase
@@ -241,7 +244,7 @@ Ui.Panel {
           Item {
             id: providerImage
             anchors.fill: parent
-            visible: root.providerId !== "claude" && root.providerId !== "opencode"
+            visible: !root.claudeMark && root.providerId !== "opencode"
             Presentation.BarInk { id: imageInk; target: providerImage }
             transform: Translate {
               x: imageInk.enabled ? imageInk.snapX(0) : 0
