@@ -162,8 +162,68 @@ probe_drm() {
   done
 }
 
+# Apple silicon under Asahi Linux: the GPU is a platform device, not PCI, and
+# reports busy time (agx_stats busy_ns, cumulative) rather than a percentage.
+# Utilization is the busy-time delta over the wall-clock delta since the
+# previous call, kept in a small per-user state file; the first call reads 0.
+probe_agx() {
+  local device card_node resolved id driver_path driver key value now_ns
+  local busy_ns prev_busy prev_ns util used_bytes total_bytes used_mib total_mib
+  local state_dir state_file version
+  state_dir=${SHIBUMI_GPU_STATE_DIR:-${XDG_RUNTIME_DIR:-/tmp}}
+
+  for device in "$sys_root"/class/drm/card+([0-9])/device; do
+    [[ -r $device/agx_stats ]] || continue
+    card_node=${device%/device}
+    card_node=${card_node##*/}
+    resolved=$(readlink -f "$device" 2>/dev/null) || continue
+    id="platform:${resolved##*/}"
+    [[ -z ${seen_devices[$id]+x} ]] || continue
+    driver_path=$(readlink -f "$device/driver" 2>/dev/null) || driver_path=asahi
+    driver=${driver_path##*/}
+
+    busy_ns=""
+    while read -r key value; do
+      [[ $key == busy_ns ]] && busy_ns=$(integer_field "$value")
+    done <"$device/agx_stats"
+    [[ -n $busy_ns ]] || continue
+
+    now_ns=${SHIBUMI_GPU_NOW_NS:-${EPOCHREALTIME/[.,]/}000}
+    util=0
+    state_file="$state_dir/shibumi-gpu-agx-$card_node"
+    if [[ -r $state_file ]] && read -r prev_busy prev_ns <"$state_file" \
+      && (( now_ns > prev_ns && busy_ns >= prev_busy )); then
+      util=$(( (busy_ns - prev_busy) * 100 / (now_ns - prev_ns) ))
+    fi
+    (( util > 100 )) && util=100
+    printf '%s %s\n' "$busy_ns" "$now_ns" >"$state_file" 2>/dev/null || true
+
+    used_bytes=0
+    total_bytes=0
+    if [[ -r $device/gpu_memory ]]; then
+      while read -r key value; do
+        value=$(integer_field "$value") || continue
+        case $key in
+          user_resident|kernel_resident) used_bytes=$((used_bytes + value)) ;;
+          limit) total_bytes=$value ;;
+        esac
+      done <"$device/gpu_memory"
+    fi
+    used_mib=$((used_bytes / 1048576))
+    total_mib=$((total_bytes / 1048576))
+
+    version=""
+    [[ -r $sys_root/module/$driver/version ]] \
+      && IFS= read -r version <"$sys_root/module/$driver/version"
+
+    emit_device "$id" sysfs "$util" 0 "$used_mib" "$total_mib" \
+      "Apple GPU" "$driver" "$version" "$card_node"
+  done
+}
+
 probe_nvidia
 probe_drm
+probe_agx
 if (( found == 0 )); then
   printf 'none|0|0|0|0\n'
 fi
