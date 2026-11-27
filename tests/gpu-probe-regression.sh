@@ -137,4 +137,28 @@ if grep -Eq '^(proc|counter)\|' <<<"$intel_output"; then
   fail "Intel probe still emits process details"
 fi
 
+# Apple silicon (Asahi): a platform device with cumulative busy time.
+agx_sys="$fixture_root/agx-sys"
+agx_dev="$agx_sys/devices/platform/soc/206400000.gpu"
+agx_state="$fixture_root/agx-state"
+mkdir -p "$agx_sys/class/drm/card0" "$agx_dev" "$agx_sys/bus/platform/drivers/asahi" "$agx_state"
+ln -s "$agx_dev" "$agx_sys/class/drm/card0/device"
+ln -s "$agx_sys/bus/platform/drivers/asahi" "$agx_dev/driver"
+printf 'busy_ns 1000000000\njobs 10\npower_mw 5000\n' >"$agx_dev/agx_stats"
+printf 'user_resident 2147483648\nkernel_resident 1073741824\nlimit 8589934592\n' >"$agx_dev/gpu_memory"
+agx_run() {
+  env PATH="/usr/bin" SHIBUMI_GPU_SYS_ROOT="$agx_sys" \
+    SHIBUMI_GPU_STATE_DIR="$agx_state" SHIBUMI_GPU_DISABLE_NVIDIA=1 \
+    SHIBUMI_GPU_NOW_NS="$1" "$helper"
+}
+agx_output=$(agx_run 10000000000)
+grep -Fxq 'device|platform:206400000.gpu|sysfs|0|0|3072|8192|Apple GPU|asahi||card0' \
+  <<<"$agx_output" || fail "first Apple GPU sample changed"
+printf 'busy_ns 1500000000\n' >"$agx_dev/agx_stats"
+agx_output=$(agx_run 11000000000)
+grep -Fxq 'device|platform:206400000.gpu|sysfs|50|0|3072|8192|Apple GPU|asahi||card0' \
+  <<<"$agx_output" || fail "Apple GPU utilization is not the busy-time delta"
+[[ $(grep -c '^device|' <<<"$agx_output") -eq 1 ]] \
+  || fail "Apple GPU was reported more than once"
+
 printf 'GPU probe regression passed\n'
